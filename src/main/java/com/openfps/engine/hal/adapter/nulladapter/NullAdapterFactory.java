@@ -8,6 +8,7 @@ package com.openfps.engine.hal.adapter.nulladapter;
 import com.openfps.engine.hal.port.I_FilePort;
 import com.openfps.engine.hal.port.I_InputPort;
 import com.openfps.engine.hal.port.I_NetworkPort;
+import com.openfps.engine.hal.port.I_SystemInfoPort;
 import com.openfps.engine.hal.port.I_TimePort;
 
 import org.slf4j.Logger;
@@ -25,6 +26,7 @@ public final class NullAdapterFactory
     private final NullInputPort inputPort = new NullInputPort();
     private final NullNetworkPort networkPort = new NullNetworkPort();
     private final NullFilePort filePort = new NullFilePort();
+    private final NullSystemInfoPort systemInfo = new NullSystemInfoPort();
 
     public void init()
     {
@@ -32,6 +34,7 @@ public final class NullAdapterFactory
         timePort.init();
         inputPort.init();
         networkPort.init();
+        systemInfo.init();
     }
 
     public void shutdown()
@@ -40,6 +43,7 @@ public final class NullAdapterFactory
         timePort.shutdown();
         inputPort.shutdown();
         networkPort.shutdown();
+        systemInfo.shutdown();
     }
 
     public I_TimePort getTimePort()
@@ -60,5 +64,10 @@ public final class NullAdapterFactory
     public I_FilePort getFilePort()
     {
         return filePort;
+    }
+
+    public I_SystemInfoPort getSystemInfoPort()
+    {
+        return systemInfo;
     }
 }
