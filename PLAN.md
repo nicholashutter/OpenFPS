@@ -1,9 +1,9 @@
 # OpenFPS — Project Plan
 
-> **Status**: Pre-alpha — Architecture definition phase
+> **Status**: Pre-alpha — Phase 1.3 complete. Event-driven engine, unified memory, multi-threaded worker pool, configurable 30/60/120 Hz.
 > **Engine Version**: 0.1.0-SNAPSHOT
-> **Target JVM**: 21 LTS
-> **Platforms**: Windows, Linux, Android, JVM-compatible targets
+> **Target JVM**: 17 LTS (Java 17 source/target, runs on 17+)
+> **Platforms**: Windows, Linux, Android (planned), JVM-compatible targets
 
 ---
 
@@ -13,49 +13,76 @@ OpenFPS is a ground-up FPS game engine written in Java targeting the JVM runtime
 
 The engine draws direct inspiration from the original Doom (id Software, 1993) subsystem layout — not as cargo culting, but because that architecture genuinely separates concerns well for a real-time game loop. We borrow the letter-prefix convention (D_, P_, R_, S_, G_, W_, Z_, I_) as a loving homage and a clear naming signal.
 
+The engine is now an **event queue processor**: subsystems communicate exclusively by publishing events to a shared bus, and a pool of N dedicated worker threads (where N = logical CPU count / 2) consumes events and dispatches them to the target subsystem.
+
 ---
 
-## 2. Architecture Overview
+## 2. Architecture Overview — event-driven
 
 ```
-+-------------------------------------------------------------------+
-|  MAIN GAME LOOP (com.openfps.engine.core)                         |
-|  Maintains game state, tics, and timing                          |
-+-------------------------------------------------------------------+
-|                                                                   |
-|  v  v  v  v                                                     |
-+--------+  +-----------+  +--------+  +--------+  +------------+   |
-|  P_    |  |    R_     |  |   S_   |  |   G_   |  |    W_      |  |
-| Game-  |  |  Render   |  | Audio  |  |  Net   |  | Resource  |  |
-| play   |  | (stubbed) |  |(stubbed|  |  P2P   |  |  / WAD    |  |
-+--------+  +-----------+  +--------+  +--------+  +------------+  |
-|  Core  |  |           |  |         |  |         |  |           |  |
-|  Game  |<-|---------->|<-|-------->|<-|-------->|<-|----------|  |
-| Loop   |  |           |  |         |  |         |  |           |  |
-+--------+  +-----------+  +--------+  +--------+  +------------+  |
-                          |           |           |               |
-                   +------+           +-----------+               |
-                   |                                           |
-+------------------|-------------------------------------------|---+
-|  MEMORY / ZONE ALLOCATOR  (com.openfps.engine.memory)         |   |
-|  W_ WAD Manager           (com.openfps.engine.resource)      |   |
-+-----------------------------------------------------------------+---+
-|  v                                                             |
-+-------------------------------------------------------------------+
-|  HARDWARE ABSTRACTION LAYER  (com.openfps.engine.hal)          |
-|  Ports = interfaces, Adapters = platform implementations       |
-|                                                                   |
-|  I_InitGraphics()  I_GetTimeMs()  I_SubmitAudio()  I_NetSend()  |
-|  I_NetRecv()       I_ReadInput()  I_AllocBuffer()               |
-+-------------------------------------------------------------------+
-|  v                                                             |
-+-------------------------------------------------------------------+
-|  PLATFORM ADAPTERS                                               |
-|  desktop/   — LWJGL3 + OpenAL + NIO sockets (Windows/Linux)     |
-|  mobile/    — Android Canvas + AudioTrack + DatagramSocket       |
-|  null/      — headless stubs for unit testing                    |
-+-------------------------------------------------------------------+
++----------------------------------------------------------------+
+|  ENGINE ENTRY   com.openfps.engine.core.EngineMain             |
+|  Wires memory, HAL, bus, pool, subsystems                      |
++----------------------------------------------------------------+
+                              |
+                              v
++----------------------------------------------------------------+
+|  D_ GAME LOOP   com.openfps.engine.core.GameLoop               |
+|  Single thread, 30/60/120 Hz, produces events:                 |
+|    TickEvent, ShutdownEvent                                   |
++----------------------------------------------------------------+
+                              |
+                              v
++----------------------------------------------------------------+
+|  EVENT BUS      com.openfps.engine.core.eventbus.SharedEventBus|
+|  LinkedBlockingQueue, blocking put (backpressure)              |
++----------------------------------------------------------------+
+                              |
+                              v
++----------------------------------------------------------------+
+|  WORKER POOL    com.openfps.engine.core.pool.WorkerPool        |
+|  N = logicalProcessorCount / 2 hot threads, pre-started        |
+|  Each: take() -> dispatch() -> loop                            |
++----------------------------------------------------------------+
+                              |
+                              v
++----------------------------------------------------------------+
+|  SUBSYSTEMS     com.openfps.engine.core.subsystem.impl.*       |
+|  Per-subsystem state machine (UNINIT -> READY -> SHUTDOWN)     |
+|                                                                  |
+|  P_ Gameplay   R_ Render   S_ Audio   G_ Net   W_ Resource   |
+|  Z_ Memory    I_ Hardware Abstraction                          |
++----------------------------------------------------------------+
+                              |
+                              v
++----------------------------------------------------------------+
+|  HARDWARE ABSTRACTION  com.openfps.engine.hal                   |
+|  Ports = interfaces, Adapters = platform impls                  |
+|  desktop/  mobile/  null/                                       |
++----------------------------------------------------------------+
 ```
+
+### Module dependency graph (no cycles)
+
+```
+core  ──►  core.event       (event types, factory)
+      ──►  core.eventbus    (I_EventBusPort, SharedEventBus, factory)
+      ──►  core.pool        (I_ThreadPoolPort, WorkerPool, factory)
+      ──►  core.subsystem   (ISubsystem, base class, registry, impls)
+      ──►  common           (FixedMath, Constants)
+      ──►  gameplay/port
+      ──►  render/port
+      ──►  audio/port
+      ──►  net/port
+      ──►  resource/port
+      ──►  memory/port
+      ──►  hal/port
+
+memory  ──►  common
+hal     ──►  common
+```
+
+`core` is the only package that knows about the bus, the pool, and the subsystem state machine. The subsystem ports stay minimal (`init/shutdown/port-specific-methods`); the `Subsystem` wrapper in `core.subsystem` adds the state machine and event dispatch.
 
 ---
 
@@ -65,110 +92,181 @@ Each subsystem lives in its own package under `com.openfps.engine.<name>`.
 Every subsystem has:
 - **port/** — interfaces (the "port" side of hexagonal arch)
 - **adapter/** — concrete implementations (the "adapter" side)
+- The subsystem itself (state machine + event handling) is in `core/subsystem/impl/`
 
-### 3.1 Core — `com.openfps.engine.core`
-**D_ Game Loop**
+### 3.1 Core — `com.openfps.engine.core` — **Phase 1.3 complete**
 
-- Maintains a fixed 35 Hz tic rate (Doom standard, adjustable)
-- Manages `GameState`: current map, player list, entity list, tic number
-- Calls each subsystem in order: `P_Ticker`, `G_Ticker`, `W_Ticker`, `R_Ticker`, `S_Ticker`
-- Provides `TicCounter`, `TimeSource`, `GameConfig`
-- Implements `Runnable`; can be embedded or run standalone
+**D_ Game Loop & Engine**
 
-### 3.2 Gameplay — `com.openfps.engine.gameplay`
+- `EngineMain` — bootstrap: memory → HAL → system info → bus → registry → pool → loop
+- `GameLoop` — single-threaded event producer at the configured rate (30/60/120 Hz)
+- `FrameRate` — closed enum: `FPS_30`, `FPS_60`, `FPS_120` (120 is the cap)
+- `GameConfig` — immutable (rate, maxTics) with factory methods
+- `EventFactory` — sequence numbers + timestamps for events
+- `EngineState` — engine-level state enum
+
+**Event flow** (Phase 1.2):
+- `I_EngineEvent` — base event interface (target subsystem, sequence, timestamp)
+- Concrete events: `TickEvent`, `RenderFrameEvent`, `ShutdownEvent`, `MapLoadEvent`, `InputSampledEvent`, `NetworkPacketEvent`
+- `I_EventBusPort` — bus port (single shared queue, blocking backpressure)
+- `SharedEventBus` — `LinkedBlockingQueue` implementation
+- `I_ThreadPoolPort` — pool port (N hot threads, pre-started)
+- `WorkerPool` — drains the bus, dispatches to subsystems
+- `EventBusFactory`, `ThreadPoolFactory` — system-level selectors
+
+**Subsystem state machine** (Phase 1.2):
+- `ISubsystem` — interface (id, state, init, shutdown, processEvent)
+- `Subsystem` — base class with state machine + thread-safe `processEvent`
+- `SubsystemId` — `CORE`, `P_`, `R_`, `S_`, `G_`, `W_`, `Z_`, `I_`
+- `SubsystemState` — `UNINITIALIZED`, `READY`, `ERROR`, `SHUTDOWN`
+- `SubsystemException` — invalid transitions throw
+- `SubsystemRegistry` — lookup by ID, dispatch routing
+
+### 3.2 Gameplay — `com.openfps.engine.gameplay` — **stub**
+
 **P_ Player & World Logic**
 
 - `PlayerState`: position (fixed-point), velocity, angle, pitch, health, inventory
 - `Entity`: abstract base for all game objects (players, projectiles, pickups, doors)
 - `PhysicsWorld`: collision detection, gravity, sliding along walls (BSP-assisted)
 - `MapSubsector`: sector adjacency, portal handling
-- Ports: `PlayerController`, `EntityFactory`, `PhysicsPort`
+- `I_GameplayPort` — `tick(int)`, `loadMap(String)`, `spawnEntity(...)`, `removeEntity(...)`
+- `NullGameplayPort` — stub
 
-### 3.3 Render — `com.openfps.engine.render`
-**R_ Rendering** (stubbed initially)
+**Subsystem wrapper**: `GameplaySubsystem` — routes `TickEvent` to `port.tick()`, `MapLoadEvent` to `port.loadMap()`.
+
+### 3.3 Render — `com.openfps.engine.render` — **stub**
+
+**R_ Rendering**
 
 - `BspTraverser`: walks the BSP tree front-to-back
-- `WallClipper`: portal-based wall rendering
+- `WallClipper`: Sutherland-Hodgman clipping against view frustum
 - `VisplaneBuilder`: screen-space horizontal band management
-- Ports: `RendererPort`, `TexturePort`, `FrameBufferPort`
-- Adapters initially null; wire up LWJGL3 later
+- `I_RenderPort` — `renderFrame(int)`
+- `NullRenderPort` — stub
 
-### 3.4 Audio — `com.openfps.engine.audio`
+**Subsystem wrapper**: `RenderSubsystem` — routes `RenderFrameEvent` to `port.renderFrame()`.
+
+### 3.4 Audio — `com.openfps.engine.audio` — **stub**
+
 **S_ Sound**
 
-- `SoundEngine`: manages SFX and music playback
-- `SoundEmitter`: 3D-positioned sound sources
-- Ports: `AudioPort`, `MusicPort`
-- Adapters initially null; wire up OpenAL / AudioTrack later
+- `SoundEngine`: voice allocation, mix loop
+- `SoundEmitter`: 3D position + velocity
+- `I_AudioPort` — `playSfx`, `playMusic`, `stopAll`
+- `NullAudioPort` — stub
 
-### 3.5 Network — `com.openfps.engine.net`
+**Subsystem wrapper**: `AudioSubsystem` — init/shutdown only for now (event types for SFX/music are Phase 6 work).
+
+### 3.5 Network — `com.openfps.engine.net` — **stub**
+
 **G_ Peer-to-Peer Networking**
 
-- `PeerConnection`: UDP socket per connected peer
-- `TicCmdBuffer`: ring buffer of player inputs per tic
-- `NetState`: authoritative list of connected peers, latency tracking
-- `ProtocolHandshake`: NAT punch-through signaling (initial: LAN broadcast discovery)
-- `SnapshotDelta`: diff-based state serialization between tics
-- Ports: `NetworkPort`, `DiscoveryPort`
-- Target: Java NIO `DatagramChannel` for non-blocking I/O
+- `PeerConnection` — UDP socket per connected peer
+- `TicCmdBuffer` — ring buffer of `TicCmd` per peer, indexed by tic number
+- `SnapshotDelta` — diff-based state serialization between tics
+- `Discovery` — LAN peer discovery via UDP broadcast
+- `LagCompensator` — rewind world state for client-side hit detection
+- `I_NetworkPort` — `connect`, `disconnect`, `broadcastTicCmd`, `pollTicCmd`, `broadcastMapChange`, `discoverPeers`, `connectedPeerCount`
+- `NullNetworkPort` — stub
 
-### 3.6 Resource — `com.openfps.engine.resource`
+**Subsystem wrapper**: `NetSubsystem` — routes `NetworkPacketEvent` (Phase 3 will wire actual parsing).
+
+### 3.6 Resource — `com.openfps.engine.resource` — **stub**
+
 **W_ WAD File Management**
 
-- `WadReader`: reads `.wad` lumps (textures, maps, flats, sprites)
-- `LumpCache`: demand-loaded, reference-counted lump cache
-- `MapLumpParser`: parses DOOM-format map lumps (GL_VERT, THINGS, LINEDEFS, etc.)
-- Ports: `ResourcePort`, `LumpPort`
+- `WadReader` — opens `.wad`, reads lump directory
+- `LumpCache` — demand-loaded, reference-counted
+- `MapLumpParser` — THINGS, LINEDEFS, SECTORS, etc.
+- `ImageDecoder` — DOOM-format patches and flats
+- `I_WadPort` — `open`, `close`, `readLump`, `precacheLump`, `flushCache`, `lumpCount`
+- `NullWadPort` — stub
 
-### 3.7 Memory — `com.openfps.engine.memory`
-**Z_ Zone Allocator**
+### 3.7 Memory — `com.openfps.engine.memory` — **Phase 1.1 complete**
 
-- Custom slab allocator for frequently allocated game objects
-- Configurable zone heap size; bypasses JVM GC for hot-path allocations
-- `Z_Alloc`, `Z_Free`, `Z_Realloc` equivalents
-- Provides `Z_Tag` for bulk free on level change
-- Ports: `MemoryPort`
+**Z_ Unified Memory Port**
 
-### 3.8 HAL — `com.openfps.engine.hal`
+- **One interface, multiple backends** — engine never instantiates a port directly
+- `I_MemoryPort` — `init(int)`, `shutdown`, `reset`, `allocate(int, int)`, `free(int)`, `freeByTag(int)`, `totalBytes`, `allocatedBytes`, `freeBytes`, `maxAllocatable`, `handleCount`, `sizeOf`
+- `State` enum: `UNINITIALIZED`, `READY`, `ACTIVE`, `SHUTDOWN`, `ERROR`
+- All operations validate state and throw `MemoryException` on invalid transition
+- Returns `int` handles (not raw pointers) — engine never dereferences
+- `NULL_HANDLE = -1` for failed allocations
+
+**Backends:**
+- `JvmMemoryPort` (default) — `new byte[size]` + slot tracking, O(N) freeByTag
+- `ZoneMemoryPort` — bump pointer on a pre-reserved heap + `boolean[] live` bitmap for handle validation
+- `MemoryPortFactory` — `createJvm(int)`, `createZone(int)`, `createSlab(int, int)` (Phase 2+)
+- `MemoryException` — dedicated exception
+
+**Subsystem wrapper**: `MemorySubsystem` — passes through to port shutdown.
+
+### 3.8 HAL — `com.openfps.engine.hal` — **Phase 1.1 complete**
+
 **I_ Hardware Abstraction Layer**
 
-- `TimeSource`: monotonic millisecond counter
-- `InputSource`: keyboard + mouse + gamepad abstraction
-- `GraphicsPort`: framebuffer surface
-- `AudioHAL`: raw audio buffer submission
-- `NetworkHAL`: raw send/receive
-- `FileSource`: file I/O abstraction for WAD loading
-- `ThreadPort`: managed thread creation for audio/render/net threads
+- `I_TimePort` — `millis()`, `nanos()`, `init()`, `shutdown()`, `state()`
+- `I_InputPort` — `sampleInput(int)`, `isShutdownRequested()`, `init()`, `shutdown()`
+- `I_NetworkPort` — `send`, `receive`, `bind`, `close`, `processTic`, `init`, `shutdown`
+- `I_FilePort` — `open`, `exists` + nested `I_FileHandle`
+- `I_SystemInfoPort` (Phase 1.2) — `logicalProcessorCount`, `physicalProcessorCount`, `totalMemoryBytes`, `freeMemoryBytes`, `osName`, `osVersion`, `javaVersion`
+
+**Adapters** (in `hal/adapter/`):
+- `nulladapter/` — headless stubs, used by all CI / smoke tests
+- `desktop/` — LWJGL3 + OpenAL + NIO sockets (Phase 2+)
+- `mobile/` — Android Canvas + AudioTrack + DatagramSocket (Phase 3+)
+
+**NullSystemInfoPort** returns `Runtime.availableProcessors()` (logical cores). Worker pool size = `max(1, logicalCores / 2)`.
 
 ---
 
 ## 4. Data Layout Conventions
 
-- **Fixed-point arithmetic**: `FIXED` = `int` storing value × 65536 (1.0 = 0x10000)
-- **Angles**: stored as `int` in degrees × 65536 (360° = 0x10000 * 360 ≈ 23592960)
+- **Fixed-point arithmetic**: `int` storing value × 65536 (1.0 = 0x10000). See `common/FixedMath.java`.
+- **Angles**: degrees × 65536 in `int` (360° = 360 × 65536 = 23,592,960)
 - **Coordinates**: `x`, `y`, `z` each `int` fixed-point
 - **Entity ID**: `int` — unique per-level, rolled over on map load
 - **Tic number**: `int` — monotonically increasing from game start, no cap
-- **Player slot**: `int` — max 4 players initially, 8 later
+- **Frame budget**: `long` nanos, computed from `FrameRate` enum, NOT a constant
 
 ---
 
-## 5. Module Dependency Graph
+## 5. Frame Rate Configuration (Phase 1.3)
 
+The engine runs at one of three rates: **30, 60, or 120 Hz**. Anything else is rejected.
+
+### Per-rate frame budget
+
+| FPS | nanos/frame | drift/frame | use case |
+|---|---|---|---|
+| 30  | 33,333,333  | 0.33 ns     | console, low-power |
+| 60  | 16,666,666  | 0.67 ns     | default, standard PC |
+| 120 | 8,333,333   | 0.33 ns     | high-refresh gaming |
+
+### Drift correction (the math)
+
+Naive additive wait (`nextDeadline += budget`) accumulates per-frame rounding error and breaks P2P lockstep determinism. Instead, every iteration computes the deadline absolutely from a fixed origin:
+
+```java
+final long startNanos = timePort.nanos();
+for (int tic = 0; running; tic++) {
+    long deadlineNanos = startNanos + ((long) tic * nanosPerTic);
+    long waitNanos = deadlineNanos - timePort.nanos();
+    if (waitNanos > 0) waitNanos(waitNanos);
+    publishTickEvent(tic, nanosPerTic);
+}
 ```
-core ──────────────┬──► gameplay
-                   ├──► render
-                   ├──► audio
-                   ├──► net
-                   ├──► resource ──► memory
-                   └──► hal
 
-hal ───────────────┼──► adapter/desktop  (LWJGL3)
-                   ├──► adapter/mobile   (Android)
-                   └──► adapter/null     (testing)
+This is verified by `GameConfigTest.shouldNotDriftAt120Fps` and `shouldNotDriftAt30Fps` — both simulate 1000 iterations and assert total drift < 1 microsecond. Reference: Glenn Fiedler, "Fix Your Timestep" — https://gafferongames.com/post/fix_your_timestep/
+
+### CLI
+
+```powershell
+.\gradlew.bat run --args="--fps=30"
+.\gradlew.bat run --args="--fps=60"   # default
+.\gradlew.bat run --args="--fps=120"
 ```
-
-No cyclic dependencies. Core depends on ports only. Adapters depend on nothing above them.
 
 ---
 
@@ -176,71 +274,138 @@ No cyclic dependencies. Core depends on ports only. Adapters depend on nothing a
 
 | Target | Toolchain | Notes |
 |---|---|---|
-| Desktop (Win/Linux) | Java 21 + LWJGL 3.3.4 | OpenGL 2.1 / OpenAL |
-| Android | Java 21 source, Android SDK 34 | Uses `-Pandroid` profile |
-| Headless / Test | Java 21 only | null HAL adapter |
+| Desktop (Win/Linux) | Java 17 + Gradle 8.10 | Java 17 source/target; runs on JVM 17+ |
+| Android | Java 17 source, Android SDK 34 | Planned (Phase 3+) |
+| Headless / Test | Java 17 only | null HAL adapter |
 
-Gradle is the single build tool. See `BUILD.md` for commands.
+### Dependencies
+
+| Library | Version | Purpose |
+|---|---|---|
+| Gradle | 8.10 | Build |
+| SLF4J | 2.0.16 | Logging facade (industry standard) |
+| Logback | 1.5.12 | Logging backend |
+| JUnit Jupiter | 5.11.4 | Testing |
+| AssertJ | 3.26.3 | Test assertions |
+| Checkstyle | 10.18.0 | Style enforcement (enforces STYLE.md) |
+| LWJGL | 3.3.4 (planned) | Desktop graphics/audio/net |
 
 ---
 
 ## 7. Project Roadmap
 
-### Phase 0 — Scaffolding (this commit)
+### Phase 0 — Scaffolding — **done**
 - [x] Git repo, project plan, style guide
-- [x] Gradle build (desktop + android profile)
+- [x] Gradle build (Kotlin DSL)
 - [x] Package skeleton with port/adapter stubs
 - [x] Checkstyle config
 
-### Phase 1 — Core Loop + HAL Ports (TBD)
-- [x] `EngineMain` entry point
-- [x] `GameLoop` with 35 Hz ticker
-- [x] HAL port interfaces (Time, Input, File)
-- [x] Null adapter for testing
-- [ ] Desktop adapter (basic LWJGL3 window + time)
+### Phase 0.5 — Per-subsystem docs + math demystification — **done**
+- [x] README.md in every subsystem package (2-line pitch + full design)
+- [x] Math references (DOOM source, Quake 3 source, original papers)
+- [x] All port interfaces have inline Javadoc citing sources
 
-### Phase 2 — Memory + Resource (TBD)
-- [x] `ZoneAllocator`
-- [x] `WadReader`
-- [ ] WAD format coverage: headers, lumps, caching
+### Phase 1.1 — Unified Memory Port — **done**
+- [x] `I_MemoryPort` state machine (`UNINITIALIZED → READY → ACTIVE → SHUTDOWN/ERROR`)
+- [x] `JvmMemoryPort` (default) + `ZoneMemoryPort` (bulk-free)
+- [x] `MemoryPortFactory` (system-level selector)
+- [x] `MemoryException` for all invalid state
+- [x] 43 tests across both backends (positive, negative, random, overflow, underflow, state machine, tags)
 
-### Phase 3 — Networking (TBD)
-- [ ] `PeerConnection` UDP
-- [ ] `TicCmdBuffer` ring buffer
-- [ ] `DiscoveryPort` LAN broadcast
-- [ ] Snapshot delta serialization
+### Phase 1.2 — Event-driven engine + multi-threaded worker pool — **done**
+- [x] `I_EngineEvent` base + 6 concrete events
+- [x] `SharedEventBus` (single shared queue, blocking backpressure)
+- [x] `WorkerPool` (N = logicalCores / 2 hot threads, pre-started)
+- [x] `Subsystem` state machine + `SubsystemRegistry`
+- [x] `I_SystemInfoPort` (logical core count from HAL)
+- [x] `EngineMain` full event-driven bootstrap
+- [x] 27 new tests (10 bus + 7 pool + 10 state)
 
-### Phase 4 — Gameplay (TBD)
-- [ ] `PlayerState`, `Entity`
-- [ ] `PhysicsWorld` (collision + sliding)
-- [ ] Map loading from WAD lumps
+### Phase 1.3 — Configurable frame rate (30/60/120) — **done**
+- [x] `FrameRate` enum (closed set, 120 cap)
+- [x] `GameConfig` (immutable, factory methods)
+- [x] Drift-correction math (absolute deadline)
+- [x] CLI `--fps=N` parsing
+- [x] 19 new tests (9 FrameRate + 10 GameConfig including drift tests)
 
-### Phase 5 — Render (TBD)
-- [ ] BSP traversal
-- [ ] Wall clipper
-- [ ] Visplane builder
+### Phase 1.4 — Desktop HAL adapter (LWGJL3) — **next**
+- [ ] `DesktopTimePort` using LWJGL3 `GLFW.glfwGetTime()`
+- [ ] `DesktopInputPort` using LWJGL3 Keyboard/Mouse callbacks
+- [ ] `DesktopNetworkPort` using `java.nio.channels.DatagramChannel`
+- [ ] Basic OpenGL window for render testing
+- [ ] Confirm event-driven architecture handles real input timing
 
-### Phase 6 — Audio (TBD)
-- [ ] OpenAL adapter
-- [ ] Sound emitter system
+### Phase 2 — WAD file loader — **planned**
+- [ ] `WadReader` — header + directory parse
+- [ ] `LumpCache` — demand-loaded, ref-counted
+- [ ] `MapLumpParser` — THINGS / LINEDEFS / SECTORS
+- [ ] `ImageDecoder` — patch + flat decode
+- [ ] `BlockmapBuilder` — pre-compute BLOCKMAP from LINEDEFS
+
+### Phase 3 — Networking — **planned**
+- [ ] `PeerConnection` (UDP, non-blocking, ring buffer)
+- [ ] `TicCmdBuffer` (lockstep) — fixed 60 Hz sim tick, decoupled from render
+- [ ] `SnapshotDelta` (encode/decode)
+- [ ] `Discovery` (LAN broadcast)
+- [ ] `LagCompensator` (rewind for hits)
+
+### Phase 4 — Gameplay — **planned**
+- [ ] `PlayerState` data class
+- [ ] `Entity` base + concrete types (monster, projectile, pickup, door)
+- [ ] `PhysicsWorld.moveWithSlide(player, dx, dy)` — collision + slide
+- [ ] `MapLoader` — read THINGS / LINEDEFS / SECTORS from WAD
+- [ ] `BspTraverser` — leaf lookup, reused in both gameplay and render
+
+### Phase 5 — Render — **planned**
+- [ ] `BspTraverser.walk(rootNode, playerPos, clipBox)`
+- [ ] `WallClipper.clipSides(seg, clipBox)` — Sutherland-Hodgman
+- [ ] `VisplaneBuilder.open/close/spans`
+- [ ] `ColumnRenderer.drawColumn(x, y1, y2, texture, texX)`
+- [ ] `FrameBuffer.blit(palette)` — for adapter upload
+
+### Phase 6 — Audio — **planned**
+- [ ] `SoundEngine` — voice allocation, mix loop
+- [ ] `SoundEmitter` — 3D position + velocity
+- [ ] `MusicPlayer` — OGG/MIDI streaming
+- [ ] `PcmLoader` — read SFX from WAD lumps
 
 ---
 
-## 8. Contribution Guidelines
+## 8. Test Coverage Summary
 
-1. All PRs must pass `checkstyle` and `gradle build`
+**87 tests, all passing.**
+
+| Suite | Tests | Coverage |
+|---|---|---|
+| `FrameRateTest` | 9 | per-rate math, parser, rejection |
+| `GameConfigTest` | 10 | factories, drift correction (1000-tic sim) |
+| `SharedEventBusTest` | 10 | FIFO, backpressure, drain, lifecycle |
+| `WorkerPoolTest` | 7 | hot threads, parallel dispatch, error recovery |
+| `SubsystemStateTest` | 10 | transitions, error handling, thread-safety |
+| `FixedMathTest` | 6 | fixed-point arithmetic |
+| `MemoryPortTest` | 43 | both backends: positive, negative, random, overflow, underflow, state machine, tags |
+
+Run with: `.\gradlew.bat test`
+
+---
+
+## 9. Contribution Guidelines
+
+1. All PRs must pass `gradle build` (Checkstyle + tests)
 2. New subsystems require port interfaces before any adapter implementation
-3. No subsystem may import from another subsystem's adapter package
-4. All public API must be documented with Javadoc
-5. Breaking changes to public API require a major version bump
+3. Core engine never imports from `adapter/` packages
+4. Each subsystem has its own state machine — no shared state machines
+5. New frame rates require a new `FrameRate` enum value (not runtime config)
+6. All public API must be documented with Javadoc citing sources
+7. Breaking changes to public API require a major version bump
 
 ---
 
-## 9. Document-to-Code Mapping
+## 10. Document-to-Code Mapping
 
 This plan is the source of truth. When code is written:
 - Update the relevant subsystem section with implementation notes
 - Mark `[x]` items in the roadmap as they complete
 - Keep section numbers stable; append `-impl` notes below the specification
 
-When in doubt, the module owner (document owner) resolves ambiguity.
+Per-package READMEs in `src/main/java/com/openfps/engine/<subsystem>/README.md` are the FDE entry point for that subsystem — read them in order: `core → common → hal → gameplay → render → audio → net → resource → memory`.
