@@ -5,7 +5,6 @@
 
 package com.openfps.engine.core;
 
-import com.openfps.engine.common.Constants;
 import com.openfps.engine.core.event.EventFactory;
 import com.openfps.engine.core.event.I_EngineEvent;
 import com.openfps.engine.core.event.ShutdownEvent;
@@ -17,18 +16,28 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * D_ Game loop — now a thin event PRODUCER.
+ * D_ Game loop — produces events at a configurable rate.
  *
  * The loop runs on a single dedicated thread. Each iteration:
- *   1. Sleeps until the next tic deadline (spin-wait for sub-ms precision)
- *   2. Builds a {@link TickEvent} with the current tic number and delta
- *   3. Publishes the event to the bus (blocks if the bus is full)
+ *   1. Computes the absolute deadline for this tic:
+ *          deadlineNanos = startNanos + (tic * nanosPerFrame)
+ *      This is the drift-correction technique — see FrameRate.java.
+ *   2. Sleeps / spin-waits until the deadline.
+ *   3. Builds a {@link TickEvent} and publishes it to the bus.
  *
- * On shutdown, the loop publishes a {@link ShutdownEvent} and exits. It
- * no longer calls any subsystem directly — the worker pool does that.
+ * The loop self-terminates after {@code config.maxTics()} tics, at
+ * which point it publishes a {@link ShutdownEvent} so the engine can
+ * drain and stop.
  *
- * This design lets the engine scale: the loop produces events at a
- * fixed cadence; workers consume and dispatch them in parallel.
+ * For production, pass {@code GameConfig.unbounded(rate)} and trigger
+ * shutdown via an external {@code ShutdownEvent} (UI close, signal,
+ * or programmatic).
+ *
+ * Threading note: the loop sleeps via {@link Thread#sleep(long, int)}
+ * for the bulk of the wait (good for power and CPU temperature), then
+ * uses {@link Thread#onSpinWait()} for the sub-millisecond remainder
+ * (Windows sleep granularity is ~15 ms, so spin-wait is required for
+ * 120 fps and below).
  */
 public final class GameLoop implements Runnable
 {
@@ -37,24 +46,36 @@ public final class GameLoop implements Runnable
     private final I_TimePort timePort;
     private final I_EventBusPort bus;
     private final EventFactory eventFactory;
-
-    /** Current tic number, monotonically increasing. */
-    private int currentTic;
-
-    /** Max tics before auto-shutdown. {@code <= 0} means run forever. */
-    private final int maxTics;
+    private final GameConfig config;
 
     /** True once shutdown() has been called or maxTics reached. */
     private volatile boolean running;
 
-    public GameLoop(final I_TimePort timePort, final I_EventBusPort bus,
-                    final EventFactory eventFactory, final int maxTics)
+    public GameLoop(final I_TimePort timePort,
+                    final I_EventBusPort bus,
+                    final EventFactory eventFactory,
+                    final GameConfig config)
     {
+        if (timePort == null)
+        {
+            throw new IllegalArgumentException("timePort must not be null");
+        }
+        if (bus == null)
+        {
+            throw new IllegalArgumentException("bus must not be null");
+        }
+        if (eventFactory == null)
+        {
+            throw new IllegalArgumentException("eventFactory must not be null");
+        }
+        if (config == null)
+        {
+            throw new IllegalArgumentException("config must not be null");
+        }
         this.timePort = timePort;
         this.bus = bus;
         this.eventFactory = eventFactory;
-        this.maxTics = maxTics;
-        this.currentTic = 0;
+        this.config = config;
         this.running = false;
     }
 
@@ -62,35 +83,37 @@ public final class GameLoop implements Runnable
     public void run()
     {
         running = true;
-        long nextDeadlineNanos = timePort.nanos() + Constants.NANOS_PER_TIC;
 
-        LOG.info("GameLoop started: TIC_RATE={} Hz, maxTics={}",
-            Constants.TIC_RATE, maxTics <= 0 ? "infinite" : maxTics);
+        // Origin for absolute deadline math. Captured once; every
+        // subsequent deadline is computed from this.
+        final long startNanos = timePort.nanos();
+        final long nanosPerTic = config.nanosPerTic();
 
+        LOG.info("GameLoop started: rate={} ({}ns/tic), maxTics={}",
+            config.rate(), nanosPerTic, config.maxTics());
+
+        int tic = 0;
         while (running)
         {
-            final long now = timePort.nanos();
-            if (now < nextDeadlineNanos)
+            // -- 1. Compute absolute deadline for this tic
+            final long deadlineNanos = startNanos + (tic * nanosPerTic);
+
+            // -- 2. Sleep + spin-wait until deadline
+            final long waitNanos = deadlineNanos - timePort.nanos();
+            if (waitNanos > 1_000_000L)
             {
-                final long waitNanos = nextDeadlineNanos - now;
-                if (waitNanos > 1_000_000L)
-                {
-                    sleepNanos(waitNanos - 1_000_000L);
-                }
-                while (timePort.nanos() < nextDeadlineNanos)
-                {
-                    Thread.onSpinWait();
-                }
+                sleepNanos(waitNanos - 1_000_000L);
+            }
+            while (timePort.nanos() < deadlineNanos)
+            {
+                Thread.onSpinWait();
             }
 
-            final int thisTic = currentTic++;
-            final long ticStartNanos = timePort.nanos();
-            final long deltaNanos = ticStartNanos - (nextDeadlineNanos - Constants.NANOS_PER_TIC);
-
-            final TickEvent tick = eventFactory.newTick(thisTic, deltaNanos);
+            // -- 3. Build and publish the tick event
+            final TickEvent tickEvent = eventFactory.newTick(tic, nanosPerTic);
             try
             {
-                bus.publish(tick);
+                bus.publish(tickEvent);
             }
             catch (final InterruptedException e)
             {
@@ -99,19 +122,20 @@ public final class GameLoop implements Runnable
                 break;
             }
 
-            nextDeadlineNanos += Constants.NANOS_PER_TIC;
+            tic++;
 
-            // Check auto-shutdown
-            if (maxTics > 0 && thisTic + 1 >= maxTics)
+            // -- 4. Auto-shutdown at maxTics
+            if (tic >= config.maxTics())
             {
-                LOG.info("GameLoop reached maxTics={} — emitting SHUTDOWN", maxTics);
+                LOG.info("GameLoop reached maxTics={} — emitting SHUTDOWN",
+                    config.maxTics());
                 publishShutdown("maxTics reached");
                 break;
             }
         }
 
         running = false;
-        LOG.info("GameLoop stopped at tic {}", currentTic);
+        LOG.info("GameLoop stopped at tic {}", tic);
     }
 
     /** Signals the loop to stop. Called from another thread. */
@@ -134,11 +158,7 @@ public final class GameLoop implements Runnable
         }
     }
 
-    public int currentTic()
-    {
-        return currentTic;
-    }
-
+    /** Returns true if the loop is running. */
     public boolean isRunning()
     {
         return running;

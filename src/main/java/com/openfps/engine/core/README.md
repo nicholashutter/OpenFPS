@@ -140,7 +140,9 @@ The `Subsystem` wrapper adds the state machine and event dispatch.
 
 ## Tests
 
-68 tests across the engine:
+87 tests across the engine:
+- 9 FrameRate — per-rate math, parser, rejection of unsupported rates
+- 10 GameConfig — factory methods, drift correction over 1000 tics
 - 10 SharedEventBus — publish, take, FIFO, blocking, backpressure, drain
 - 7 WorkerPool — hot threads, parallel dispatch, recovery, lifecycle
 - 10 SubsystemState — transitions, error recovery, thread-safety
@@ -148,3 +150,56 @@ The `Subsystem` wrapper adds the state machine and event dispatch.
 - 43 MemoryPort — unchanged from earlier (covers both backends)
 
 Run with: `.\gradlew.bat test`
+
+## Running at different rates
+
+The engine supports three frame rates: **30 Hz**, **60 Hz**, **120 Hz**. The
+rate is set at startup via the `--fps` CLI flag. Default is 60.
+
+```powershell
+.\gradlew.bat run --args="--fps=30"
+.\gradlew.bat run --args="--fps=60"   # default
+.\gradlew.bat run --args="--fps=120"
+```
+
+Anything else is rejected with a friendly error. See
+`core/FrameRate.java` for the rationale and the math.
+
+### Why these three rates only?
+
+- **30 Hz** — console target, low-power / laptop mode
+- **60 Hz** — standard PC display, default for headless tests
+- **120 Hz** — high-refresh gaming displays
+- 144/240 Hz are niche esports, excluded by design
+
+### Drift correction (the math)
+
+The frame budget in nanoseconds is computed once at construction:
+`nanosPerFrame = 1,000,000,000 / fps`. Since 10⁹ doesn't divide evenly by
+any of our rates, there's a sub-nanosecond rounding error per frame:
+
+| FPS | nanos/frame | drift/frame |
+|---|---|---|
+| 30  | 33,333,333  | 0.33 ns |
+| 60  | 16,666,666  | 0.67 ns |
+| 120 | 8,333,333   | 0.33 ns |
+
+Naive additive wait (`nextDeadline += budget`) accumulates this error. We
+don't do that. Instead, every iteration computes the deadline
+**absolutely** from a fixed origin:
+
+```java
+final long startNanos = timePort.nanos();
+for (int tic = 0; running; tic++) {
+    long deadlineNanos = startNanos + ((long) tic * nanosPerTic);
+    long waitNanos = deadlineNanos - timePort.nanos();
+    if (waitNanos > 0) waitNanos(waitNanos);
+    publishTickEvent(tic, nanosPerTic);
+}
+```
+
+Two machines running this code at the same time reach the same deadline
+at the same tic — required for P2P lockstep determinism. See
+`core/FrameRate.java` for the full derivation and overflow analysis.
+
+Reference: Glenn Fiedler, "Fix Your Timestep" — https://gafferongames.com/post/fix_your_timestep/

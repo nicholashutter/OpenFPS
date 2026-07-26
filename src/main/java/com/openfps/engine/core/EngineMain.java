@@ -8,7 +8,6 @@ package com.openfps.engine.core;
 import com.openfps.engine.audio.adapter.NullAudioPort;
 import com.openfps.engine.common.Constants;
 import com.openfps.engine.core.event.EventFactory;
-import com.openfps.engine.core.event.I_EngineEvent;
 import com.openfps.engine.core.eventbus.EventBusFactory;
 import com.openfps.engine.core.eventbus.I_EventBusPort;
 import com.openfps.engine.core.pool.I_ThreadPoolPort;
@@ -43,9 +42,13 @@ import org.slf4j.LoggerFactory;
  *   6. Worker pool — N = cores/2 hot threads
  *   7. Start the pool
  *   8. Start GameLoop on its own thread (event producer)
- *   9. Wait for SHUTDOWN event
+ *   9. Wait for the loop to finish (it self-terminates after maxTics)
  *  10. Drain the bus, stop the pool, shut down subsystems
  *  11. Shut down HAL and memory port
+ *
+ * CLI args:
+ *   --fps=N   Frame rate: 30, 60, or 120. Default 60. Anything else is
+ *             rejected with a friendly error message.
  */
 public final class EngineMain
 {
@@ -54,19 +57,50 @@ public final class EngineMain
     /** Default event-bus capacity. */
     private static final int DEFAULT_BUS_CAPACITY = 1024;
 
-    /** Default max tics for the headless run (avoids running forever in CI). */
-    private static final int DEFAULT_MAX_TICS = 70;  // ~2 seconds at 35 Hz
-
     /**
-     * Boots the engine. Replaces the previous main with a full event-
-     * driven bootstrap.
-     *
-     * @param args CLI args (none currently consumed)
+     * Boots the engine. CLI args:
+     *   --fps=N  Rate: 30, 60, or 120 (default 60)
      */
     public static void main(final String[] args)
     {
         LOG.info("OpenFPS engine booting...");
-        new EngineMain().runHeadless();
+        final FrameRate rate;
+        try
+        {
+            rate = parseFpsArg(args);
+        }
+        catch (final IllegalArgumentException e)
+        {
+            LOG.error("Failed to parse --fps argument: {}", e.getMessage());
+            System.err.println("ERROR: " + e.getMessage());
+            System.err.println("Usage: java -jar openfps.jar [--fps=30|60|120]");
+            System.exit(1);
+            return;
+        }
+        LOG.info("Engine version 0.1.0-SNAPSHOT, target rate={} Hz, java={}",
+            rate.fps(), System.getProperty("java.version"));
+        new EngineMain().runHeadless(GameConfig.headless(rate));
+    }
+
+    /** Parses the --fps=N argument. Defaults to 60 if not present. */
+    static FrameRate parseFpsArg(final String[] args)
+    {
+        if (args == null)
+        {
+            return FrameRate.FPS_60;
+        }
+        for (final String arg : args)
+        {
+            if (arg == null)
+            {
+                continue;
+            }
+            if (arg.startsWith("--fps="))
+            {
+                return FrameRate.fromString(arg.substring("--fps=".length()));
+            }
+        }
+        return FrameRate.FPS_60;
     }
 
     /**
@@ -74,7 +108,7 @@ public final class EngineMain
      * — for development, CI, and smoke tests. Production launch wires
      * a platform-specific adapter factory.
      */
-    public void runHeadless()
+    public void runHeadless(final GameConfig config)
     {
         // -- 1. Memory port
         final I_MemoryPort memory = MemoryPortFactory.createJvm(Constants.ZONE_HEAP_SIZE);
@@ -88,8 +122,8 @@ public final class EngineMain
         // -- 3. Worker count from HAL
         final int logicalCores = sysinfo.logicalProcessorCount();
         final int workerCount = Math.max(1, logicalCores / 2);
-        LOG.info("System: {} logical cores, {} workers, java={}",
-            logicalCores, workerCount, sysinfo.javaVersion());
+        LOG.info("System: {} logical cores, {} workers, target rate={} Hz",
+            logicalCores, workerCount, config.rate().fps());
 
         // -- 4. Event bus
         final I_EventBusPort bus = EventBusFactory.createShared();
@@ -112,14 +146,13 @@ public final class EngineMain
 
         // -- 7. Event factory + GameLoop (producer)
         final EventFactory eventFactory = new EventFactory(timeOriginNanos());
-        final GameLoop loop = new GameLoop(hal.getTimePort(), bus, eventFactory, DEFAULT_MAX_TICS);
+        final GameLoop loop = new GameLoop(hal.getTimePort(), bus, eventFactory, config);
         final Thread loopThread = new Thread(loop, "GameLoop");
         loopThread.setDaemon(true);
         loopThread.start();
 
         try
         {
-            // -- 8. Wait for the loop to finish (it self-terminates after maxTics)
             loopThread.join();
         }
         catch (final InterruptedException e)
@@ -128,7 +161,7 @@ public final class EngineMain
             Thread.currentThread().interrupt();
         }
 
-        // -- 9. Drain and stop
+        // -- 8. Drain and stop
         try
         {
             pool.shutdown();

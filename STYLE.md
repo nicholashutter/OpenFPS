@@ -319,6 +319,14 @@ is implemented, the implementer updates `PLAN.md` section 7 roadmap.
 | JUnit 5 | 5.11.x | Testing |
 | LWJGL | 3.3.4 | Desktop graphics/audio/net (future) |
 
+## Frame rate configuration
+
+Frame rate is **not** a static constant. The engine supports three rates:
+30, 60, 120 Hz, selected at startup via `--fps=N`. See
+`core/FrameRate.java` and `core/GameConfig.java` for the math and
+factory methods. The Constants class does **not** contain any rate
+constants — that was removed in Phase 1.3.
+
 ---
 
 *This style guide is a living document. Changes require a PR with rationale and Checkstyle config update.*

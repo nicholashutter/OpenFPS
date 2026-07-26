@@ -8,6 +8,11 @@ package com.openfps.engine.common;
 /**
  * Global constants for the OpenFPS engine.
  * All values are static final primitives to avoid any boxing.
+ *
+ * Note: frame rate constants (TIC_RATE, MS_PER_TIC, NANOS_PER_TIC) were
+ * removed in Phase 1.3. The engine now runs at a configurable rate
+ * via {@code com.openfps.engine.core.FrameRate} (30, 60, or 120 Hz).
+ * See core/FrameRate.java for the math.
  */
 public final class Constants
 {
@@ -15,17 +20,6 @@ public final class Constants
     {
         // utility class
     }
-
-    // ---- Game Loop ----
-
-    /** Target game tics per second (Doom standard). */
-    public static final int TIC_RATE = 35;
-
-    /** Milliseconds per tic (approx, derived from TIC_RATE). */
-    public static final int MS_PER_TIC = 1000 / TIC_RATE;
-
-    /** Nanos per tic. */
-    public static final long NANOS_PER_TIC = 1_000_000_000L / TIC_RATE;
 
     // ---- Networking ----
 
@@ -63,10 +57,10 @@ public final class Constants
     // ---- Physics ----
 
     /** Gravity acceleration per tic (fixed-point). */
-    public static final int GRAVITY = 8 * MAP_SCALE / TIC_RATE / TIC_RATE;
+    public static final int GRAVITY = 8 * MAP_SCALE / 120 / 120;
 
-    /** Player movement speed (fixed-point units per tic). */
-    public static final int PLAYER_SPEED = 256 * MAP_SCALE / TIC_RATE;
+    /** Player movement speed (fixed-point units per tic, at 120 Hz). */
+    public static final int PLAYER_SPEED = 256 * MAP_SCALE / 120;
 
     /** Maximum velocity magnitude before clamping. */
     public static final int MAX_VELOCITY = 50 * MAP_SCALE;
