@@ -7,12 +7,13 @@ package com.openfps.engine.hal.adapter.nulladapter;
 
 import com.openfps.engine.hal.port.I_FilePort;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 /**
  * Null implementation of I_FilePort.
@@ -20,7 +21,7 @@ import java.util.logging.Logger;
  */
 public final class NullFilePort implements I_FilePort
 {
-    private static final Logger LOG = Logger.getLogger(NullFilePort.class.getName());
+    private static final Logger LOG = LoggerFactory.getLogger(NullFilePort.class);
 
     @Override
     public I_FileHandle open(final String path)
@@ -32,7 +33,7 @@ public final class NullFilePort implements I_FilePort
         }
         catch (final FileNotFoundException e)
         {
-            LOG.log(Level.WARNING, "NullFilePort: file not found: {0}", path);
+            LOG.warn("NullFilePort: file not found: {}", path);
             return null;
         }
     }

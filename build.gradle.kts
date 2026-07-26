@@ -11,8 +11,18 @@ repositories {
 }
 
 dependencies {
-    testImplementation("org.junit.jupiter:junit-jupiter:5.11.0")
+    // Logging — industry standard: SLF4J facade + Logback backend
+    // SLF4J 2.0.x is the modern line (no more javax.*)
+    // Logback 1.5.x is the canonical backend
+    implementation("org.slf4j:slf4j-api:2.0.16")
+    implementation("ch.qos.logback:logback-classic:1.5.12")
+
+    // JUnit 5.11.4 — latest in the 5.11 LTS line
+    testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+
+    // AssertJ for more readable test assertions
+    testImplementation("org.assertj:assertj-core:3.26.3")
 }
 
 java {
@@ -35,4 +45,9 @@ tasks.withType<JavaCompile> {
 
 tasks.withType<Test> {
     useJUnitPlatform()
+    testLogging {
+        events("passed", "skipped", "failed")
+        showExceptions = true
+        showCauses = true
+    }
 }

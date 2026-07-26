@@ -6,12 +6,12 @@
 package com.openfps.engine.core;
 
 import com.openfps.engine.common.Constants;
-import com.openfps.engine.hal.port.I_TimePort;
 import com.openfps.engine.hal.port.I_InputPort;
 import com.openfps.engine.hal.port.I_NetworkPort;
+import com.openfps.engine.hal.port.I_TimePort;
 
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * D_ Main game loop.
@@ -20,7 +20,7 @@ import java.util.logging.Logger;
  */
 public final class GameLoop implements Runnable
 {
-    private static final Logger LOG = Logger.getLogger(GameLoop.class.getName());
+    private static final Logger LOG = LoggerFactory.getLogger(GameLoop.class);
 
     private final I_TimePort timePort;
     private final I_InputPort inputPort;
@@ -58,7 +58,8 @@ public final class GameLoop implements Runnable
         running = true;
         nextTicDeadlineNanos = timePort.nanos() + Constants.NANOS_PER_TIC;
 
-        LOG.log(Level.INFO, "Game loop started, TIC_RATE={0} Hz", Constants.TIC_RATE);
+        LOG.info("Game loop started, TIC_RATE={} Hz, NANOS_PER_TIC={}",
+            Constants.TIC_RATE, Constants.NANOS_PER_TIC);
 
         while (running)
         {
@@ -99,13 +100,12 @@ public final class GameLoop implements Runnable
             final long ticElapsed = timePort.nanos() - ticStartNanos;
             if (ticElapsed > Constants.NANOS_PER_TIC)
             {
-                LOG.log(Level.WARNING,
-                    "Tic {0} took {1} ns (budget: {2} ns) — budget exceeded!",
-                    new Object[]{ thisTic, ticElapsed, Constants.NANOS_PER_TIC });
+                LOG.warn("Tic {} took {} ns (budget {} ns) — budget exceeded",
+                    thisTic, ticElapsed, Constants.NANOS_PER_TIC);
             }
         }
 
-        LOG.log(Level.INFO, "Game loop stopped at tic {0}", currentTic);
+        LOG.info("Game loop stopped at tic {}", currentTic);
     }
 
     /**
@@ -114,7 +114,7 @@ public final class GameLoop implements Runnable
     public void shutdown()
     {
         running = false;
-        LOG.log(Level.INFO, "Shutdown requested.");
+        LOG.info("Shutdown requested.");
     }
 
     /** Returns the current tic number. Thread-safe read. */

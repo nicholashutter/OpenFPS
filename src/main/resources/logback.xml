@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Per-subsystem log levels. Tweak here to debug a specific area. -->
+    <logger name="com.openfps.engine.core" level="INFO"/>
+    <logger name="com.openfps.engine.hal" level="INFO"/>
+    <logger name="com.openfps.engine.memory" level="INFO"/>
+    <logger name="com.openfps.engine.net" level="INFO"/>
+    <logger name="com.openfps.engine.gameplay" level="WARN"/>
+    <logger name="com.openfps.engine.render" level="WARN"/>
+    <logger name="com.openfps.engine.audio" level="WARN"/>
+
+    <root level="INFO">
+        <appender-ref ref="STDOUT"/>
+    </root>
+</configuration>

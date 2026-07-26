@@ -5,13 +5,13 @@
 
 package com.openfps.engine.hal.adapter.nulladapter;
 
-import com.openfps.engine.hal.port.I_TimePort;
+import com.openfps.engine.hal.port.I_FilePort;
 import com.openfps.engine.hal.port.I_InputPort;
 import com.openfps.engine.hal.port.I_NetworkPort;
-import com.openfps.engine.hal.port.I_FilePort;
+import com.openfps.engine.hal.port.I_TimePort;
 
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Headless adapter factory for unit testing and CI.
@@ -19,7 +19,7 @@ import java.util.logging.Logger;
  */
 public final class NullAdapterFactory
 {
-    private static final Logger LOG = Logger.getLogger(NullAdapterFactory.class.getName());
+    private static final Logger LOG = LoggerFactory.getLogger(NullAdapterFactory.class);
 
     private final NullTimePort timePort = new NullTimePort();
     private final NullInputPort inputPort = new NullInputPort();
@@ -28,7 +28,7 @@ public final class NullAdapterFactory
 
     public void init()
     {
-        LOG.log(Level.INFO, "Initializing null HAL adapter (headless / testing)");
+        LOG.info("Initializing null HAL adapter (headless / testing)");
         timePort.init();
         inputPort.init();
         networkPort.init();
@@ -36,7 +36,7 @@ public final class NullAdapterFactory
 
     public void shutdown()
     {
-        LOG.log(Level.INFO, "Shutting down null HAL adapter");
+        LOG.info("Shutting down null HAL adapter");
         timePort.shutdown();
         inputPort.shutdown();
         networkPort.shutdown();

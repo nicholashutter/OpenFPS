@@ -7,8 +7,8 @@ package com.openfps.engine.hal.adapter.nulladapter;
 
 import com.openfps.engine.hal.port.I_NetworkPort;
 
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Null implementation of I_NetworkPort.
@@ -17,7 +17,7 @@ import java.util.logging.Logger;
  */
 public final class NullNetworkPort implements I_NetworkPort
 {
-    private static final Logger LOG = Logger.getLogger(NullNetworkPort.class.getName());
+    private static final Logger LOG = LoggerFactory.getLogger(NullNetworkPort.class);
 
     private volatile boolean bound;
     private int localPort;
@@ -25,9 +25,7 @@ public final class NullNetworkPort implements I_NetworkPort
     @Override
     public void send(final byte[] data, final String address)
     {
-        // silently drop
-        LOG.log(Level.FINE, "NullNetworkPort: dropped {0} bytes to {1}",
-            new Object[]{ data.length, address });
+        LOG.debug("NullNetworkPort: dropped {} bytes to {}", data.length, address);
     }
 
     @Override
@@ -41,7 +39,7 @@ public final class NullNetworkPort implements I_NetworkPort
     {
         localPort = port;
         bound = true;
-        LOG.log(Level.INFO, "NullNetworkPort: bound to port {0} (no-op)", port);
+        LOG.info("NullNetworkPort: bound to port {} (no-op)", port);
     }
 
     @Override

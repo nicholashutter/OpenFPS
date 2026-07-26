@@ -6,123 +6,209 @@
 package com.openfps.engine.memory.port;
 
 /**
- * Z_ Port interface — zone memory allocator.
- * Bypasses JVM GC for hot-path game object allocations.
+ * Z_ Port interface — unified memory allocation.
+ *
+ * The engine allocates memory through THIS interface exclusively. The
+ * rest of the application does not know — and must not know — whether
+ * the backing store is the JVM heap, a custom zone heap, or a slab
+ * allocator. That choice lives behind a factory (see
+ * {@code MemoryPortFactory}).
  *
  * ====================================================================
- *  ZONE ALLOCATOR STRATEGY (Phase 2+ — references below)
+ *  STATE MACHINE
  * ====================================================================
  *
- *  Full design in src/main/java/com/openfps/engine/memory/README.md.
- *  Summary:
+ *   UNINITIALIZED ──init()──► READY ──first allocate()──► ACTIVE
+ *                                                  ▲
+ *                                                  │ all operations
+ *                                                  │
+ *   ACTIVE ──shutdown()──► SHUTDOWN  (terminal)
+ *   ACTIVE ──reset()─────► ACTIVE   (frees all, re-arms for new allocations)
+ *   any   ──fatal error─► ERROR     (terminal, requires restart)
  *
- *  1. BUMP POINTER (Phase 0 stub):
- *       offset = used
- *       used += aligned(size)
- *       return (long)offset
- *     O(1) allocate, no per-allocation metadata.
- *     No individual free — only full reset.
+ *  All transitions are explicit and validated. Invalid state requests
+ *  throw {@link com.openfps.engine.memory.MemoryException} — never silent.
  *
- *  2. SLAB ALLOCATOR (Phase 2, for fixed-size objects):
- *       Pre-allocate N objects of size S at startup.
- *       free-list: each object has a header pointing to the next free one.
- *       alloc: pop from head, O(1)
- *       free: push to head, O(1)
- *     Used for entities, tic commands, sound channels.
- *     Source: Jeff Bonwick, "The Slab Allocator", USENIX 1994
- *     https://www.usenix.org/legacy/publications/library/proceedings/bos94/full_papers/bonwick.ps
+ *  Why a state machine? The engine will eventually be event-loop driven.
+ *  An allocator that's always callable is impossible to reason about
+ *  during lifecycle events (engine start, map change, shutdown). The
+ *  state machine makes the lifecycle explicit and testable.
  *
- *  3. TAG-BASED BULK FREE:
- *       Every allocation carries a tag (TAG_STATIC, TAG_GAME, etc.)
- *       On map change: freeByTag(TAG_GAME) frees all game-level data.
- *       Implemented either via:
- *         a) Per-tag free lists (slab per tag)
- *         b) Header-walk + skip pattern on the bump heap
- *     The DOOM approach is (a) — separate free lists per tag.
- *     Source: DOOM source z_zone.c
- *     https://github.com/id-Software/DOOM/blob/master/linuxdoom-1.10/z_zone.c
+ * ====================================================================
+ *  HANDLE SEMANTICS
+ * ====================================================================
  *
- *  4. ALIGNMENT:
- *       All allocations aligned to ZONE_ALIGN (= 8) bytes.
- *       Why 8? Matches long on 64-bit JVMs, so primitive array elements
- *       don't span cache lines unnecessarily.
+ *  Allocations return int handles. Handles are NOT raw pointers; the
+ *  client does not dereference them. The client passes the handle back
+ *  to {@link #free(int)} or {@link #freeByTag(int)}. This abstraction
+ *  lets the backend be either:
+ *    - JVM heap (handle is a slot index into a tracking array)
+ *    - Zone heap (handle is a heap offset)
+ *    - Slab pool (handle is a slot index in a fixed-size array)
  *
- *  5. WHY NOT JUST new?
- *       JVM allocation goes through the GC heap. The GC can stop the
- *       world at any moment, including mid-tic. For a 35 Hz game with
- *       a 28.5 ms budget, even a 1 ms GC pause is noticeable.
- *       Zone allocations are pointer bumps, not GC allocations, so
- *       they don't trigger GC. They live in a pre-reserved byte[].
+ *  Handle values are backend-internal. The only operations defined on
+ *  a handle are the ones on this interface.
  *
- *  WHEN TO USE WHAT:
- *    Zone:    map data, entities, decoded textures
- *    new:     short-lived temps, exception objects, lambdas
- *    Off-heap (Phase 3+):  large buffers, native interop
+ *  The special handle {@link #NULL_HANDLE} is reserved for "no allocation"
+ *  and is the return value of failed allocations.
+ *
+ * ====================================================================
+ *  WHEN TO USE WHAT (Phase 2+ recommendations)
+ * ====================================================================
+ *
+ *  Through this port (always):
+ *    - Map data, entities, decoded textures
+ *    - Hot-path pools
+ *
+ *  Through plain `new` (acceptable):
+ *    - Engine boot (one-time)
+ *    - Test code
+ *    - Exception objects
+ *    - Lambdas (always stack-allocated or JIT-scalarized)
+ *
+ *  The default factory in {@code MemoryPortFactory.createJvm()} is
+ *  the right choice for most code. Switch to
+ *  {@code MemoryPortFactory.createZone(...)} when you need:
+ *    - Guaranteed bounded memory
+ *    - Bulk-free on map change
+ *    - Deterministic allocation timing for P2P
  *
  *  References:
+ *    - DOOM source z_zone.c:  https://github.com/id-Software/DOOM/blob/master/linuxdoom-1.10/z_zone.c
+ *    - Bonwick, "The Slab Allocator" (USENIX 1994):
+ *      https://www.usenix.org/legacy/publications/library/proceedings/bos94/full_papers/bonwick.ps
  *    - Fabian Giesen, "The Ubiquitous Bump Allocator":
  *      https://fgiesen.wordpress.com/2012/04/03/the-ubiquitous-bump-allocator/
- *    - DOOM source z_zone.c (Z_Malloc, Z_Free, Z_FreeTags)
- *    - JEP 454 (Foreign Function & Memory API) for future off-heap work:
- *      https://openjdk.org/jeps/454
+ *    - OpenJDK ZGC:
+ *      https://wiki.openjdk.org/display/zgc/Main
  */
 public interface I_MemoryPort
 {
-    /** Allocation tag — static data, never freed. */
-    int TAG_STATIC = 0;
-    /** Allocation tag — game entities, freed on map change. */
+    // ===============================================================
+    //  Allocation tags — for bulk-free grouping
+    // ===============================================================
+
+    /** Static data, never freed (engine globals, ROM-style data). */
+    int TAG_STATIC  = 0;
+    /** Map-level data, freed on map change (entities, level geometry). */
     int TAG_GAME    = 1;
-    /** Allocation tag — dynamically allocated, freed individually. */
+    /** Dynamic per-tic data, freed individually. */
     int TAG_DYNAMIC = 2;
-    /** Allocation tag — lump cache, freed on flush. */
+    /** Lump cache, freed on flush (decoded textures, sounds). */
     int TAG_CACHE   = 3;
 
-    /**
-     * Allocates a block from the zone heap.
-     *
-     * @param sizeBytes minimum size in bytes (aligned to ZONE_ALIGN = 8)
-     * @param tag allocation tag for bulk-free grouping
-     * @return pointer-like long (raw address on native, offset in heap on JVM);
-     *         returns 0L on allocation failure
-     */
-    long allocate(int sizeBytes, int tag);
+    /** Sentinel handle meaning "no allocation". */
+    int NULL_HANDLE = -1;
+
+    // ===============================================================
+    //  State machine
+    // ===============================================================
 
     /**
-     * Frees a previously allocated block.
-     *
-     * @param pointer the value returned by allocate()
+     * Allocator lifecycle states. Transitions are validated — see the
+     * state diagram in the class Javadoc.
      */
-    void free(long pointer);
+    enum State
+    {
+        /** Default state at construction. Must call init() to advance. */
+        UNINITIALIZED,
+        /** Heap allocated, ready for the first allocation. */
+        READY,
+        /** At least one allocation has been made; the allocator is in use. */
+        ACTIVE,
+        /** Terminal state. All operations throw. */
+        SHUTDOWN,
+        /** Terminal error state. The engine must be restarted. */
+        ERROR
+    }
+
+    // ===============================================================
+    //  Lifecycle (state machine transitions)
+    // ===============================================================
 
     /**
-     * Frees all allocations with the given tag.
-     * Used to clear level-specific data on map change.
-     *
-     * @param tag the tag to purge
-     */
-    void freeByTag(int tag);
-
-    /**
-     * Frees all allocations — full heap reset.
-     */
-    void reset();
-
-    /**
-     * Returns the number of bytes currently allocated.
-     *
-     * @return allocated bytes
-     */
-    int allocatedBytes();
-
-    /**
-     * Initializes the zone allocator with the given heap size.
+     * UNINITIALIZED → READY. Allocates the backing heap.
+     * Must be called exactly once before any other operation.
      *
      * @param heapSizeBytes total heap size in bytes
+     * @throws com.openfps.engine.memory.MemoryException if state is not UNINITIALIZED
      */
     void init(int heapSizeBytes);
 
     /**
-     * Shuts down and releases the zone heap.
+     * ACTIVE → SHUTDOWN. Releases the backing heap. After this call,
+     * every other method on this port throws.
      */
     void shutdown();
+
+    /**
+     * ACTIVE → ACTIVE. Frees all live allocations. The allocator is
+     * rearmed for new allocations. Tags and state are preserved.
+     */
+    void reset();
+
+    /**
+     * Returns the current state.
+     */
+    State state();
+
+    // ===============================================================
+    //  Allocation
+    // ===============================================================
+
+    /**
+     * Allocates a block of memory.
+     *
+     * @param sizeBytes minimum size in bytes (will be aligned)
+     * @param tag allocation tag for bulk-free grouping
+     * @return a handle to the allocation, or {@link #NULL_HANDLE} if the
+     *         allocator cannot satisfy the request
+     * @throws com.openfps.engine.memory.MemoryException if state is not ACTIVE
+     */
+    int allocate(int sizeBytes, int tag);
+
+    /**
+     * Frees a previously allocated block by handle.
+     *
+     * @param handle the value returned by allocate()
+     * @throws com.openfps.engine.memory.MemoryException if handle is invalid
+     *         or state is not ACTIVE
+     */
+    void free(int handle);
+
+    /**
+     * Frees all allocations with the given tag.
+     *
+     * @param tag the tag to purge
+     * @return number of allocations freed
+     * @throws com.openfps.engine.memory.MemoryException if state is not ACTIVE
+     */
+    int freeByTag(int tag);
+
+    // ===============================================================
+    //  Introspection (for tests and diagnostics)
+    // ===============================================================
+
+    /** Total backing-store size in bytes. */
+    int totalBytes();
+
+    /** Number of bytes currently allocated. */
+    int allocatedBytes();
+
+    /** Number of bytes currently free in the backing store. */
+    int freeBytes();
+
+    /**
+     * Returns the largest payload size (in bytes) that could be successfully
+     * allocated right now. Accounts for backend-specific overhead (e.g.
+     * zone port's per-allocation header). Use this for capacity checks
+     * before calling {@link #allocate(int, int)}.
+     */
+    int maxAllocatable();
+
+    /** Number of live allocations. */
+    int handleCount();
+
+    /** Returns the size in bytes of the allocation behind a handle, or 0 if invalid. */
+    int sizeOf(int handle);
 }
