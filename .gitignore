@@ -1,0 +1,39 @@
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
+
+# Eclipse / VS Code / IntelliJ
+*.class
+*.jar
+*.war
+*.ear
+*.log
+*.iml
+.idea/
+.vscode/
+*.ipr
+*.iws
+*.iws.local
+out/
+.DS_Store
+Thumbs.db
+
+# OS
+*.bak
+*.tmp
+*~
+
+# Checkstyle
+build/reports/checkstyle/
+build/checkstyle-cache
+
+# Javadoc
+apidocs/
+
+# Android / Mobile
+*.apk
+*.aab
+build/intermediates/
+build/outputs/
