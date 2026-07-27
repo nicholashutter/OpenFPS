@@ -18,6 +18,26 @@ persona (Mavis) and the global system prompt.
 
 ## Critical Conventions
 
+### Use the Services and Constants We Already Have
+**This is the #1 rule.** Before writing new code, check whether the
+service or constant already exists. If it does, USE IT. Do not
+reimplement.
+
+Full list in `STYLE.md` § 13. Short version:
+
+- All allocation → `I_MemoryPort` (via `MemoryPortFactory`)
+- All inter-component comms → `I_EventBusPort` (via `EventBusFactory`)
+- All parallel work → `WorkerPool` (via `ThreadPoolFactory`)
+- All time reads → `I_TimePort` (never `System.nanoTime()`)
+- All system info → `I_SystemInfoPort`
+- All fixed-point math → `FixedMath`
+- All config (rate, maxTics) → `GameConfig` / `FrameRate`
+- All subsystem classes → extend `Subsystem` (don't implement `Runnable`)
+- All primitive constants → `Constants` (don't redeclare magic numbers)
+- All logging → SLF4J (don't use `System.out`, `System.Logger`, etc.)
+
+Anti-patterns in `STYLE.md` § 13.4 are instant review failures.
+
 ### Immutability-First
 - All instance fields MUST be `final`
 - All method parameters MUST be `final`
@@ -131,12 +151,17 @@ public final class PlayerState
 
 ### Zone Allocator Usage
 ```java
-private final I_MemoryPort memory = MemoryPortFactory.get();
+private final I_MemoryPort memory = MemoryPortFactory.createJvm(Constants.ZONE_HEAP_SIZE);
+memory.init(Constants.ZONE_HEAP_SIZE);
 
-public void spawnEntity(final int entityId)
+public void spawnEntity(final int entityType)
 {
-    final long ptr = memory.allocate(ZoneTag.GAME_ENTITY);
-    // ...
+    final int handle = memory.allocate(128, I_MemoryPort.TAG_GAME);
+    if (handle == I_MemoryPort.NULL_HANDLE)
+    {
+        // OOM — never silent
+    }
+    // ... use handle, then memory.free(handle) when done
 }
 ```
 
@@ -146,10 +171,20 @@ public void spawnEntity(final int entityId)
 
 - Do NOT add external libraries without discussion
 - Do NOT create `public static void main()` in non-core packages
-- Do NOT write to `System.out` / `System.err` in production code — use `System.Logger`
+- Do NOT write to `System.out` / `System.err` in production code — use **SLF4J** (`LoggerFactory.getLogger`)
+- Do NOT use `System.Logger` or `java.util.logging` — they're banned in favor of SLF4J
 - Do NOT import `java.util.List<Integer>` or any boxed collection in hot paths
 - Do NOT add Android-specific code outside `hal.adapter.mobile`
 - Do NOT skip updating `PLAN.md` section 7 when completing a roadmap item
+- Do NOT `new byte[]` outside a memory port adapter
+- Do NOT `System.nanoTime()` / `System.currentTimeMillis()` in engine code — use `I_TimePort`
+- Do NOT `new Thread(...)` in engine code — use `WorkerPool`
+- Do NOT add magic numbers — use `Constants` or `FrameRate`
+- Do NOT implement `Runnable` for a subsystem — extend `Subsystem`
+- Do NOT instantiate `JvmMemoryPort` / `SharedEventBus` / `WorkerPool` directly — use the factories
+- Do NOT add a new frame rate value — extend the `FrameRate` enum
+- Do NOT skip writing tests for new code
+- Do NOT skip the documentation-to-code map in `STYLE.md` § 11.5 when adding a new service
 
 ---
 
@@ -157,14 +192,16 @@ public void spawnEntity(final int entityId)
 
 | Subsystem | Package | Status |
 |---|---|---|
-| Core Loop | `core` | Pre-alpha |
+| Core Loop | `core` | Phase 1.3 — event-driven, multi-threaded, configurable rate |
 | Gameplay | `gameplay` | Stub |
 | Render | `render` | Stub |
 | Audio | `audio` | Stub |
 | Network | `net` | Stub |
 | Resource | `resource` | Stub |
-| Memory | `memory` | Stub |
-| HAL | `hal` | Ports defined, adapters stubbed |
+| Memory | `memory` | Phase 1.1 — state machine, two backends, factory |
+| HAL | `hal` | Ports defined, null adapter, system info port |
+
+87 tests passing (see `BUILD.md` for run instructions).
 
 ---
 

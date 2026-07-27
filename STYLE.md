@@ -329,4 +329,91 @@ constants — that was removed in Phase 1.3.
 
 ---
 
+## 13. Code Reuse — Use the Services We Already Have
+
+**Rule: before writing new code, check whether the service or constant
+already exists. If it does, USE IT. Do not reimplement.**
+
+The engine has a small, fixed set of shared services and constants.
+Every module uses them. New code that bypasses them is a bug.
+
+### 13.1 The shared services (use these, don't reinvent)
+
+| Service | Where it lives | When to use it |
+|---|---|---|
+| `I_MemoryPort` (port + factory + backends) | `com.openfps.engine.memory` | Every allocation. **Never** `new byte[]` outside a port implementation. |
+| `I_EventBusPort` (port + factory) | `com.openfps.engine.core.eventbus` | All inter-subsystem / inter-component communication. |
+| `WorkerPool` (via `I_ThreadPoolPort`) | `com.openfps.engine.core.pool` | All parallel work. **Never** `new Thread(...)` for engine work. |
+| `I_SystemInfoPort` | `com.openfps.engine.hal.port` | Anything that depends on hardware — core count, memory, OS, JVM version. |
+| `I_TimePort` | `com.openfps.engine.hal.port` | Anything that reads time. **Never** `System.nanoTime()` / `System.currentTimeMillis()` in engine code. |
+| `I_InputPort`, `I_NetworkPort`, `I_FilePort` | `com.openfps.engine.hal.port` | HAL capabilities. |
+| `Subsystem` base class | `com.openfps.engine.core.subsystem` | Every new subsystem. **Don't** implement `Runnable` or your own state machine. |
+| `SubsystemRegistry` | `com.openfps.engine.core.subsystem` | Registering / looking up / dispatching to subsystems. |
+| `EventFactory` | `com.openfps.engine.core.event` | Building events with sequence numbers and timestamps. |
+| `GameConfig` | `com.openfps.engine.core` | Holding rate + maxTics. **Don't** carry these as separate parameters. |
+| `FrameRate` | `com.openfps.engine.core` | All frame-rate config. Closed enum — no other values. |
+| `FixedMath` | `com.openfps.engine.common` | All 16.16 fixed-point arithmetic. |
+| `NullAdapterFactory` | `com.openfps.engine.hal.adapter.nulladapter` | Default HAL for tests and headless. |
+| `EngineMain.runHeadless(GameConfig)` | `com.openfps.engine.core` | Standard bootstrap. |
+| `MemoryPortFactory` | `com.openfps.engine.memory.factory` | Picking a memory backend. **Don't** instantiate `JvmMemoryPort` directly. |
+| `EventBusFactory` | `com.openfps.engine.core.eventbus` | Picking an event bus. |
+| `ThreadPoolFactory` | `com.openfps.engine.core.pool` | Picking a worker pool. |
+
+### 13.2 The shared constants (use these, don't redeclare)
+
+The `com.openfps.engine.common.Constants` class holds the engine-wide
+static primitives. New code must read from it, not redeclare.
+
+| Constant | Value | Use it for |
+|---|---|---|
+| `Constants.MAX_PLAYERS` | 8 | Player slot bounds, net code, lobby. |
+| `Constants.DEFAULT_NET_PORT` | 5021 | Default P2P port. |
+| `Constants.TIC_BUFFER_SIZE` | 64 | Tic cmd ring buffer depth. |
+| `Constants.MAX_LATENCY_TICS` | 5 | Latency tracking cap. |
+| `Constants.ZONE_HEAP_SIZE` | 16 MB | Default zone heap (used by `MemoryPortFactory` calls). |
+| `Constants.ZONE_ALIGN` | 8 | Per-allocation alignment. |
+| `Constants.MAP_SCALE` | 65536 | 16.16 fixed-point scale for map coords. |
+| `Constants.PLAYER_RADIUS` | 16 × MAP_SCALE | Collision radius. |
+| `Constants.MAX_OPEN_HEIGHT` | 128 × MAP_SCALE | Sector ceiling cap. |
+| `Constants.GRAVITY` | 8 × MAP_SCALE / 120² | Per-tic gravity. |
+| `Constants.PLAYER_SPEED` | 256 × MAP_SCALE / 120 | Player movement speed (per tic, at 120 Hz). |
+| `Constants.MAX_VELOCITY` | 50 × MAP_SCALE | Velocity clamp. |
+| `Constants.MAX_ENTITIES` | 4096 | Per-map entity cap. |
+| `Constants.NULL_ENTITY` | -1 | Sentinel for "no entity". |
+| `Constants.ENTITY_EMPTY` | 0 | Sentinel for "empty slot". |
+
+### 13.3 How to add a new constant or service
+
+1. **Don't.** Search `Constants.java` and the existing ports first.
+2. If you really need one, add it to `Constants` (for a primitive)
+   or define a new port interface in the right package.
+3. Update `STYLE.md` § 13 to include it in the table above.
+4. Add a test that verifies the constant is used (not a magic number).
+5. Update `PLAN.md` to mark it in the subsystem spec.
+
+### 13.4 Anti-patterns (instant review failure)
+
+- `new byte[size]` in engine code (use the memory port)
+- `System.nanoTime()` / `System.currentTimeMillis()` in engine code (use `I_TimePort`)
+- `new Thread(...)` in engine code (use `WorkerPool`)
+- `new HashMap<>()` / `new ArrayList<>()` in hot paths (primitive arrays or `I_MemoryPort` allocations)
+- Magic numbers like `60`, `65536`, `4096` in engine code (use `Constants` or `FrameRate`)
+- `new JvmMemoryPort(...)` in engine code (use `MemoryPortFactory`)
+- `new SharedEventBus()` in engine code (use `EventBusFactory`)
+- A subsystem class that `implements Runnable` (extend `Subsystem` instead)
+- A new fixed-point math constant outside `FixedMath`
+- A new frame rate value outside the `FrameRate` enum
+- A new "memory pool" or "thread pool" class (extend what's there)
+
+### 13.5 Why this rule exists
+
+The engine is small enough that every service and constant is a
+deliberate architectural choice. A second copy of a fixed-point
+constant, a second time source, a second thread allocator — each
+one is a divergence waiting to happen. The factory pattern (memory,
+event bus, thread pool) exists precisely so the engine has exactly
+one of each thing. Honor that.
+
+---
+
 *This style guide is a living document. Changes require a PR with rationale and Checkstyle config update.*
