@@ -49,7 +49,7 @@
 |---|---|---|
 | `D_` | `core` | Runs the game at a configurable 30/60/120 Hz tic rate and publishes events to the bus; a worker pool dispatches them to subsystems. |
 | `P_` | `gameplay` | Holds player state, entities, map logic, and physics (collision, sliding, BSP-assisted movement). |
-| `R_` | `render` | (Stub) Draws the world via BSP traversal, wall clipping, and visplanes. Adapter-agnostic. |
+| `R_` | `render` | (Stub) Multi-threaded software triangle rasterizer — z-buffer, perspective-correct interpolation, mipmapped bilinear sampling. Produces a framebuffer; the platform adapter presents it. |
 | `S_` | `audio` | (Stub) Plays 3D-positioned SFX and background music. Adapter-agnostic. |
 | `G_` | `net` | P2P tic distribution, peer discovery (LAN), snapshot delta, and latency compensation. |
 | `W_` | `resource` | Reads `.wad` files (maps, textures, flats, sprites) and caches lumps by name and index. |
