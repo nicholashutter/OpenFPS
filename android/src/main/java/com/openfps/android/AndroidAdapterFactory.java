@@ -5,8 +5,10 @@
 
 package com.openfps.android;
 
+import android.content.Context;
 import android.util.Log;
 
+import com.openfps.android.persistence.RoomUserProfilePort;
 import com.openfps.engine.hal.adapter.AdapterFactorySelector;
 import com.openfps.engine.hal.adapter.HalBackend;
 import com.openfps.engine.hal.adapter.I_AdapterFactory;
@@ -35,10 +37,10 @@ import com.openfps.engine.hal.port.I_WindowPort;
  * <b>Why the NULL backend underneath, not SQLITE.</b> {@code sqlite-jdbc} is
  * excluded from this module — it ships ~20 desktop native triplets Android
  * will never load — so selecting {@code HalBackend.SQLITE} here would fail
- * with {@code NoClassDefFoundError} at first use. The profile is therefore
- * in-memory and does NOT survive the app being killed. That is a real
- * limitation, not an oversight: persistence needs a Room-backed
- * {@link I_UserProfilePort}, which is its own piece of work.
+ * with {@code NoClassDefFoundError} at first use. Profile persistence comes
+ * from {@link RoomUserProfilePort} instead, overridden below: Room wraps the
+ * SQLite already in the OS, so the profile survives process death without
+ * shipping a second database engine.
  *
  * <b>Threading:</b> {@link #init()} and {@link #shutdown()} are main-thread
  * only, inherited from {@link I_AdapterFactory} and required by the Activity
@@ -52,31 +54,41 @@ public final class AndroidAdapterFactory implements I_AdapterFactory
     /** Logcat tag. Android has no SLF4J binding, so platform code logs here. */
     private static final String TAG = "OpenFPS";
 
-    /** Every port except the window. */
+    /** Every port except the window and the profile. */
     private final I_AdapterFactory delegate;
 
     /** The real Android window. */
     private final AndroidWindowPort windowPort;
 
+    /** Room-backed profile persistence. */
+    private final I_UserProfilePort userProfilePort;
+
     /**
-     * Creates the factory over the null HAL backend.
+     * Creates the factory over the null HAL backend with Room persistence.
      *
      * @param windowPort the Android window port; must not be null
+     * @param context any context, used to open the Room database; must not
+     *     be null
      */
-    public AndroidAdapterFactory(final AndroidWindowPort windowPort)
+    public AndroidAdapterFactory(final AndroidWindowPort windowPort, final Context context)
     {
-        this(AdapterFactorySelector.create(HalBackend.NULL), windowPort);
+        this(AdapterFactorySelector.create(HalBackend.NULL),
+            windowPort,
+            new RoomUserProfilePort(context));
     }
 
     /**
-     * Creates the factory over an explicit delegate. Exists so a test can
-     * substitute a different backend.
+     * Creates the factory over explicit collaborators. Exists so a test can
+     * substitute an in-memory profile port and stay off disk.
      *
-     * @param delegate supplies every port except the window; must not be null
+     * @param delegate supplies every port except the window and profile;
+     *     must not be null
      * @param windowPort the Android window port; must not be null
+     * @param userProfilePort profile persistence; must not be null
      */
     public AndroidAdapterFactory(final I_AdapterFactory delegate,
-                                 final AndroidWindowPort windowPort)
+                                 final AndroidWindowPort windowPort,
+                                 final I_UserProfilePort userProfilePort)
     {
         if (delegate == null)
         {
@@ -86,15 +98,21 @@ public final class AndroidAdapterFactory implements I_AdapterFactory
         {
             throw new IllegalArgumentException("windowPort must not be null");
         }
+        if (userProfilePort == null)
+        {
+            throw new IllegalArgumentException("userProfilePort must not be null");
+        }
         this.delegate = delegate;
         this.windowPort = windowPort;
+        this.userProfilePort = userProfilePort;
     }
 
     @Override
     public void init()
     {
-        Log.i(TAG, "Initializing Android HAL (libGDX AndroidApplication window)");
+        Log.i(TAG, "Initializing Android HAL (libGDX window, Room profile)");
         delegate.init();
+        userProfilePort.init();
         // The window port is initialized and created by AndroidLauncher
         // before the engine starts, because the Activity owns that ordering
         // and initialize() must happen inside onCreate.
@@ -103,6 +121,10 @@ public final class AndroidAdapterFactory implements I_AdapterFactory
     @Override
     public void shutdown()
     {
+        // Profile first: EngineSession.stop() saves the profile through this
+        // port and only then calls hal.shutdown(), so closing the database
+        // any earlier would lose the write it just made.
+        userProfilePort.shutdown();
         // The Activity owns the window's teardown in onDestroy — doing it
         // here too would be a double shutdown.
         delegate.shutdown();
@@ -142,7 +164,7 @@ public final class AndroidAdapterFactory implements I_AdapterFactory
     @Override
     public I_UserProfilePort getUserProfilePort()
     {
-        return delegate.getUserProfilePort();
+        return userProfilePort;
     }
 
     @Override

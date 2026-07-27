@@ -81,7 +81,7 @@ public final class AndroidLauncher extends AndroidApplication
         // user leaves, not after a tic count.
         session = new EngineMain().start(
             GameConfig.unbounded(EngineMain.parseFpsArg(null)),
-            new AndroidAdapterFactory(windowPort));
+            new AndroidAdapterFactory(windowPort, this));
 
         // The port takes one callback, and two things need the frame: the
         // engine (which watches for the loop ending) and the menu (which

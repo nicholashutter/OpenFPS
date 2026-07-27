@@ -22,6 +22,7 @@ repositories {
 }
 
 val gdxVersion = "1.14.2"
+val roomVersion = "2.8.4"
 
 android {
     namespace = "com.openfps.android"
@@ -29,9 +30,13 @@ android {
 
     defaultConfig {
         applicationId = "com.openfps.android"
-        // 21 covers ~99% of active devices and is libGDX's practical floor
-        // for OpenGL ES 3.0.
-        minSdk = 21
+        // 23 (Android 6.0) is forced by androidx.room 2.8.x, which declares
+        // it as its own floor. libGDX would be happy at 21, but API 21-22 is
+        // Android 5.x — a fraction of a percent of active devices — and
+        // pinning Room back to reach them would mean carrying an old
+        // persistence library forever. Raising the floor is the cheaper side
+        // of that trade.
+        minSdk = 23
         targetSdk = 36
         versionCode = 1
         versionName = project.version.toString()
@@ -40,6 +45,18 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+
+        // :engine is Java 17 and its port contracts use java.util.Optional —
+        // I_UserProfilePort.findById returns one. Optional arrived in the
+        // Android platform at API 24, so below that it simply does not exist
+        // on the device. Desugaring backports it (and streams, java.time,
+        // java.util.function) into the APK.
+        //
+        // This is not optional in any real sense: without it, minSdk would
+        // have to be 24+ AND every future engine API using a modern JDK type
+        // would be a new compatibility decision. With it, :engine stays free
+        // to be ordinary Java 17.
+        isCoreLibraryDesugaringEnabled = true
     }
 
     buildTypes {
@@ -87,6 +104,18 @@ dependencies {
 
     implementation("com.badlogicgames.gdx:gdx:$gdxVersion")
     implementation("com.badlogicgames.gdx:gdx-backend-android:$gdxVersion")
+
+    // Room — the Android side of I_UserProfilePort. This is the counterpart
+    // to sqlite-jdbc on desktop, and the reason that one is excluded above:
+    // each module carries the persistence engine its platform can actually
+    // load. The port keeps the engine unaware of either.
+    implementation("androidx.room:room-runtime:$roomVersion")
+    annotationProcessor("androidx.room:room-compiler:$roomVersion")
+
+    // Backports java.util.Optional, streams, java.time and friends so the
+    // Java 17 engine runs below API 24. Paired with
+    // isCoreLibraryDesugaringEnabled above; neither works alone.
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 
     // Per-ABI natives. Unlike desktop, Android needs each architecture
     // listed explicitly; AGP packages them into the APK per split.
