@@ -40,23 +40,82 @@ properties of software rendering.
 > and § 7 Phase 5 track it. Where any of those disagree with this section, this
 > section wins and the other document is the bug.
 
-### Per-frame budget
+### Per-frame budget — MEASURED
 
-Estimates, from first principles. **Not yet measured — see §9.**
+The original estimates in this section were derived from first principles and have
+now been **measured**. They were optimistic by roughly 2–3×. The measured numbers
+replace them; the estimates are kept alongside so the size of the error stays visible.
 
-| Quantity | Estimate |
+Hardware: Intel Core Ultra 7 155H (16 physical / 22 logical), Temurin OpenJDK 17,
+1080p at a measured 2.00× overdraw. Span figures are min-of-9 at single-thread turbo.
+
+| Quantity | Estimated | **Measured** | Verdict |
+|---|---|---|---|
+| Perspective-correct, mipmapped, bilinear span | ~3–8 ns/px | **17–21 ns/px** (8.2 best case, L2-resident) | Optimistic 1.5–3× |
+| 1080p @ 2× overdraw, single core | ~20 ms | **46–48 ms** | Optimistic 2.4× |
+| 1080p @ 2× overdraw, 8 workers | ~3–4 ms | **8.2 ms** | Optimistic 2.3× |
+| Triangle setup | 200–500 ns | **26–64 ns** | Pessimistic 4–8× |
+| Per-triangle raster-phase cost | not estimated | **~600–900 ns** | The real per-triangle cost |
+
+**The clock is the thing to understand before reading any of this.** The test
+machine runs 4.75–5.44 GHz on one thread but averages ~3.1 GHz across all 22
+(P-cores ~4.0, E-cores ~2.3). Every per-core figure degrades ~40% the moment the
+renderer actually goes wide, and naive speedup ratios are meaningless — an early
+run showed "162% efficiency", which is impossible and was pure clock artifact.
+**Cycles/pixel is the portable number**: it held stable across runs where ns/pixel
+moved 35%. Clock-adjusted, tiled scaling measures at ~100% efficiency, so the
+decomposition is sound — the hardware simply does not provide 22 full-speed cores.
+
+### What actually fits in 60 Hz
+
+Allowing a 10 ms renderer budget inside a 16.7 ms frame:
+
+| Target | Triangle budget |
 |---|---|
-| Perspective-correct, mipmapped, bilinear textured span | ~3–8 ns/pixel |
-| 1080p @ 2× overdraw (~4.1M px) | ~20 ms single core, **~3–4 ms across 8 workers** |
-| Triangle setup | ~200–500 ns each |
-| **Practical ceiling** | **~50–100k triangles/frame** |
+| **1080p, 8–12 threads** | **~10–20k triangles** — 50k does not fit |
+| **720p, 12 threads** | **~40–60k triangles** |
+| **720p, 4-core minimum spec** | **~5–15k triangles** |
+| 1080p, 4-core minimum spec | Untenable — 20k triangles costs 20.6 ms |
 
-That lands near Quake 3 / early-2000s fidelity at 1080p.
+**The old "~50–100k triangles/frame" ceiling is real, but it is a 30 Hz 1080p
+figure or a 60 Hz 720p figure — not 60 Hz 1080p.** That is the single most
+important correction on this page.
+
+### The one big lever
+
+| Variant | ns/px | vs full |
+|---|---|---|
+| Full: perspective + mip + bilinear + z | 21.4 | — |
+| **Nearest-neighbour instead of bilinear** | **7.3** | **2.9× faster** |
+| Affine instead of perspective-correct | 19.7 | 8% faster |
+| Single L2-resident texture | 8.2 | 2.6× faster |
+| Material-sorted spans | 17.7 | 17% faster |
+
+**Bilinear filtering costs 2.9× the entire rest of the inner loop.** It is the only
+large quality/performance knob, which makes it the natural setting to expose to
+players and the obvious first sacrifice on weak hardware.
+
+Perspective correction is nearly free at 8%, so it is never worth trading. The
+per-8-pixel divide optimisation buys nothing measurable — the FP divider is not
+the bottleneck, memory and the bilinear load/ALU work are. **The headroom is in
+memory layout, not arithmetic**: storing textures pre-swizzled in 2×2 blocks so a
+bilinear quad lands in one cache line is where the 2.6× single-texture gap points.
 
 **Permanently out of reach**, regardless of optimisation effort: real-time shadow maps,
 many per-pixel dynamic lights, post-processing stacks (bloom / SSAO / TAA), and 4K.
 Normal mapping is borderline — roughly 3× per-pixel cost; possibly affordable at 720p,
 not at 1080p.
+
+> **Caveats the benchmark author flagged, which keep these numbers honest.** The
+> harness's front end (setup and binning) ran single-threaded, overstating frame
+> time by up to ~7 ms at 100k triangles — the raster-phase figures are the
+> trustworthy ones, and the triangle budgets above may improve once that is
+> parallel. Its span-extent code did three float divides per scanline where a
+> production rasterizer steps edges incrementally, so part of the 600–900 ns
+> per-triangle cost is the harness. The 50%-z-reject result showing *no* saving
+> used random per-pixel depths, which defeats branch prediction; real occlusion is
+> spatially coherent and early-z should do better. Run-to-run spread is ±20–40% at
+> high triangle counts.
 
 ### What that means for assets
 
@@ -177,7 +236,7 @@ Enforced by the converter. Derived from §2.
 | Budget | Cap | Rationale |
 |---|---|---|
 | Texture resolution | **512²** (256² for Kenney atlases) | Cache locality dominates the inner loop. Poly Haven's 8K source must be downsampled |
-| Triangles per model | **~5,000** | Keeps scene totals inside the 50–100k/frame ceiling |
+| Triangles per model | **~1,500** (was ~5,000) | Tightened by the §2 measurements. A 60 Hz 1080p scene affords ~10–20k triangles *total*, so a 5,000-triangle model meant two to four objects on screen. Kenney's kits sit well under this already — the cap constrains imports from elsewhere, not the primary art direction |
 | Texture channels | **Albedo only** | No per-pixel lighting to consume normal/roughness/metallic/AO |
 | Mipmaps | **Pre-generated, required** | Un-mipmapped minification is both slow and aliased |
 | Total payload | **~20–50 MB** | Byte-identical across platforms; Android ships a trimmed subset |
@@ -260,12 +319,18 @@ repository.
 
 ## 9. Open items
 
-- **Benchmark the textured-span inner loop.** Every number in §2 and §5 is an estimate
-  derived from first principles, not a measurement. A throwaway Java benchmark
-  confirming the ~3–8 ns/pixel figure on real hardware is a few hours of work and
-  de-risks the entire render architecture. **Do this before Phase 5 commits.** It now
-  also validates the 64×64 tile size and the 8/16-pixel span subdivision in
-  `render/README.md` § 7 and § 8, which are equally unmeasured.
+- ~~Benchmark the textured-span inner loop~~ — **done.** §2 now carries measured
+  numbers, and §5's per-model triangle cap was tightened from 5,000 to 1,500 as a
+  direct consequence. The estimates were optimistic by 2–3×; the architecture
+  survives, but 60 Hz at 1080p buys ~10–20k triangles rather than 50–100k.
+  **Still unmeasured**, because the benchmark did not vary them: the 64×64 tile
+  size and the 8/16-pixel span subdivision in `render/README.md` § 7 and § 8. The
+  span subdivision now looks unlikely to matter — the per-8-pixel divide
+  optimisation measured as no better than a per-pixel divide, since the FP divider
+  is not the bottleneck.
+- **Sort draws by material.** Measured at 17% off the span loop, essentially free
+  to implement, and it compounds with the texture-swizzle idea in §2. Worth doing
+  once `Rasterizer` exists.
 - ~~Decide the texture channel order~~ — **decided**: `RGBA8888` end to end, §4. What
   remains is the round-trip test that proves the converter, the sampler and the
   presentation blit agree on the concrete byte layout. Do it in the `Framebuffer` lane.

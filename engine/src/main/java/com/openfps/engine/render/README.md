@@ -884,14 +884,33 @@ and flats destined for a palette-indexed renderer — the planned `ImageDecoder`
 (`PLAN.md` Phase 2) decodes into a pixel format § 3 no longer uses. Do not
 implement `ImageDecoder` until (b) is resolved.
 
-### (c) Every performance number here is an estimate
+### (c) The performance numbers — now measured, and they moved
 
-`docs/ASSETS.md` § 9 already flags this and it applies to this document too: the
-~3–8 ns/pixel span cost, the 50–100k triangle ceiling, the 64×64 tile size, and
-the N = 8/16 span subdivision are all derived from first principles and **none of
-them has been measured**. `docs/ASSETS.md` § 9 asks for a throwaway benchmark of
-the textured-span inner loop **before Phase 5 commits**. That benchmark is the
-cheapest de-risking available and it validates § 7, § 8 and § 9 at once.
+**The benchmark has been run.** `docs/ASSETS.md` § 2 carries the full results and
+is canonical. What matters for the lanes still unwritten:
+
+- **The span loop costs 17–21 ns/pixel, not 3–8.** The architecture survives, but
+  60 Hz at 1080p affords **~10–20k triangles**, not 50–100k. 50–100k is a 30 Hz
+  1080p figure or a 60 Hz 720p one.
+- **Bilinear filtering is 2.9× the entire rest of the inner loop** (21.4 → 7.3
+  ns/px with nearest). It is the only large lever, and therefore the quality
+  setting to expose and the first thing to drop on weak hardware. § 9's sampler is
+  correct as specified — this is a runtime choice, not a spec change.
+- **Perspective correction costs 8%.** Never worth trading away. § 8 is vindicated.
+- **`SpanRenderer`'s segment optimisation is probably not worth writing.** § 8
+  proposes a per-8-or-16-pixel divide over a per-pixel one; measured, the two are
+  indistinguishable, because the FP divider is not the bottleneck — memory and the
+  bilinear load/ALU work are. **Build the reference per-pixel path and measure
+  before writing the segment path.** The § 14 ordering already says reference
+  first; this is the evidence for why that ordering matters.
+- **Tiled scaling is ~100% efficient once clock-adjusted**, so § 7's decomposition
+  is sound. Raw speedup looks worse than it is because the test CPU runs 4.75+ GHz
+  on one thread and ~3.1 GHz across all 22. **Report cycles/pixel, not ns/pixel**,
+  in any future measurement — it held stable across runs where ns/pixel moved 35%.
+- **Still unmeasured: the 64×64 tile size.** The benchmark did not vary it.
+- Two cheap wins the numbers point at, neither of them spec changes: sorting draws
+  by material (17%), and storing textures pre-swizzled in 2×2 blocks so a bilinear
+  quad lands in one cache line (the single-texture case measured 2.6× faster).
 
 ---
 
@@ -943,7 +962,7 @@ Present:
 
 Ordered. Each item is a lane from § 1; the ordering is by dependency.
 
-- [ ] **Benchmark the textured-span inner loop first** — `docs/ASSETS.md` § 9, and § 11(c) above
+- [x] **Benchmark the textured-span inner loop first** — done; results in `docs/ASSETS.md` § 2 and § 11(c) above
 - [x] **Resolve open question § 11(a)** — framebuffer allocation vs. `I_MemoryPort`
 - [x] **Extend `WorkerPool`** with submit-and-await for tile jobs (§ 7 prerequisite)
 - [x] `Framebuffer` — `int[]` colour (RGBA8888), `float[]` depth (1/w), tile geometry, padded stride, `clear()`

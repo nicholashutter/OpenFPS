@@ -437,7 +437,7 @@ Full specification: `engine/src/main/java/com/openfps/engine/render/README.md`.
 Render target: `docs/ASSETS.md` § 2. Ordered by dependency.
 
 **Blockers — resolve before writing code:**
-- [ ] Benchmark the textured-span inner loop and validate the ~3–8 ns/pixel estimate (`docs/ASSETS.md` § 9)
+- [x] Benchmark the textured-span inner loop — done. Measured 17–21 ns/px, not 3–8; 60 Hz 1080p affords ~10–20k triangles, not 50–100k. See `docs/ASSETS.md` § 2
 - [x] Decide framebuffer allocation vs. `I_MemoryPort` (`render/README.md` § 11a) — sanctioned exception, or a typed-slab capability on the port
 - [x] Extend `WorkerPool` with a submit-N-jobs-and-await operation for the tile pass — `submitParallel`, caller-participating
 
