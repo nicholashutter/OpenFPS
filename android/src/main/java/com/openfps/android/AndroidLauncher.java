@@ -9,6 +9,9 @@ import android.os.Bundle;
 import android.util.Log;
 
 import com.badlogic.gdx.backends.android.AndroidApplication;
+import com.openfps.engine.core.EngineMain;
+import com.openfps.engine.core.EngineSession;
+import com.openfps.engine.core.GameConfig;
 
 /**
  * Android entry point — the Activity declared as LAUNCHER in the manifest.
@@ -21,17 +24,18 @@ import com.badlogic.gdx.backends.android.AndroidApplication;
  * {@link MainMenuFrameCallback}, and every decision about how the platform
  * loop is driven lives in the window port.
  *
- * <b>Why the engine is not booted here yet.</b> {@code EngineMain.run()}
- * blocks its calling thread for the whole session — it starts the game loop
- * on {@code openfps-gameloop}, then gives the caller's thread to
- * {@code I_WindowPort.runFrameLoop}. On desktop the caller is {@code main}
- * and that is exactly right. On Android the caller would be the UI thread
- * inside {@code onCreate}, and blocking it is an immediate ANR. Booting the
- * engine from Android needs a split entry point in {@code EngineMain} —
- * "start the subsystems and return" separated from "give me your thread" —
- * which belongs to the module that owns that file. Until it exists this
- * Activity drives the window port directly, which is enough to render the
- * menu and is the same port the engine will drive later.
+ * <b>How the engine boots without blocking.</b> {@code EngineMain.start()}
+ * brings up memory, HAL, bus, subsystems, pool and the game loop thread and
+ * then RETURNS, handing back an {@link EngineSession}. That matters here:
+ * the old {@code run()} blocked its caller for the whole session, which is
+ * correct for a desktop {@code main} and an immediate ANR on the UI thread.
+ * So {@code onCreate} starts the session and returns, and {@code onDestroy}
+ * stops it — the same pair desktop uses, just without
+ * {@code awaitPlatformLoop()} in between, since the Android framework owns
+ * the loop.
+ *
+ * The per-frame callback is a {@link CompositeFrameCallback}: the engine's
+ * own callback plus the menu's, because the window port takes exactly one.
  *
  * <b>Threading.</b> {@code onCreate} and {@code onDestroy} run on the Android
  * main (UI) thread, which is what {@code I_WindowPort} requires of
@@ -58,6 +62,9 @@ public final class AndroidLauncher extends AndroidApplication
     /** The window port. MUTABLE: created in onCreate, released in onDestroy. */
     private AndroidWindowPort windowPort;
 
+    /** The running engine. MUTABLE: started in onCreate, stopped in onDestroy. */
+    private EngineSession session;
+
     @Override
     protected void onCreate(final Bundle savedInstanceState)
     {
@@ -68,9 +75,21 @@ public final class AndroidLauncher extends AndroidApplication
         windowPort.init();
         windowPort.create(NOMINAL_WIDTH, NOMINAL_HEIGHT, TITLE);
 
-        // Does not block — the Android framework owns the loop from here and
-        // drives the GLSurfaceView thread. See AndroidWindowPort's Javadoc.
-        windowPort.runFrameLoop(new MainMenuFrameCallback(windowPort));
+        // start() returns immediately — it never takes this thread. The game
+        // loop runs on openfps-gameloop at a fixed rate; the frame callback
+        // below only draws. unbounded() because a phone session ends when the
+        // user leaves, not after a tic count.
+        session = new EngineMain().start(
+            GameConfig.unbounded(EngineMain.parseFpsArg(null)),
+            new AndroidAdapterFactory(windowPort));
+
+        // The port takes one callback, and two things need the frame: the
+        // engine (which watches for the loop ending) and the menu (which
+        // draws). Engine first — see CompositeFrameCallback on why order
+        // matters on the way down.
+        windowPort.runFrameLoop(new CompositeFrameCallback(
+            session.frameCallback(),
+            new MainMenuFrameCallback(windowPort)));
     }
 
     @Override
@@ -81,6 +100,16 @@ public final class AndroidLauncher extends AndroidApplication
         // so the callback must have released its GL resources before the
         // port is told the window is gone.
         super.onDestroy();
+
+        // Then the engine: stop() halts the game loop, joins it, drains the
+        // bus and saves the profile. It is idempotent, and it deliberately
+        // does not assume the window ever closed gracefully — onDestroy can
+        // arrive with the loop still running.
+        if (session != null)
+        {
+            session.stop();
+            session = null;
+        }
         if (windowPort != null)
         {
             windowPort.shutdown();
