@@ -161,6 +161,23 @@ The view matrix is the inverse of the camera's world transform. For a rigid
 camera (rotation `R`, position `eye`) that inverse is exact and cheap:
 `V = Rᵀ · T(−eye)`. Do not call a general matrix inverse.
 
+**Basis derivation — the operand order is normative:**
+
+```text
+right = normalize(up × forward)
+up    = forward × right
+```
+
+An earlier draft left this unpinned, and it is not recoverable from "left-handed,
++z forward" alone: a reader can write `forward × up` just as naturally and get a
+**mirrored image**, which looks entirely plausible until something asymmetric
+appears on screen. `CameraTest.shouldDeriveLeftHandedBasisWhenLookingDownWorldZ`
+locks it.
+
+**`near` must be positive.** `1/w` is evaluated at `w = near`, so a zero or
+negative near plane is a division by zero or a sign inversion, not merely a bad
+view. Enforced in `Camera.create`.
+
 ### Projection
 
 With vertical field of view `fovY` and `aspect = width / height`, let
@@ -177,6 +194,18 @@ unit consumes a window-space z in [0, 1]. We own the depth unit, we store 1/w,
 and 1/w comes from `w_clip` alone — so the z row of the projection matrix is
 dead weight and is simply not computed. This is a real simplification available
 to a software rasterizer that a GPU pipeline cannot take.
+
+**Consequence: "projection matrix" is a misnomer here, and § 1 keeps the term
+only because it is what a reader searches for.** Once the z row is gone, what
+remains is two scale factors. `Camera` therefore exposes `projectionScaleX()`
+and `projectionScaleY()` and there is deliberately **no `projectionMatrix()`** —
+handing back a `Mat4` with a zeroed row is an invitation to fill it back in.
+
+**Clip space has three components: `x`, `y`, `w`. There is no `z`.** The valid
+range is `-w ≤ x ≤ w` and `-w ≤ y ≤ w`; § 4's viewport formula only implies it,
+so it is stated here. `Camera.CLIP_FLOATS == 3`, and the vertex layout the
+clipper and rasterizer share is a flat `float[]` with stride `3 + attributeCount`
+laid out `[x, y, w, attr...]`.
 
 `Math.tan` is called once per frame here. See § 2 for why that is fine.
 
@@ -287,6 +316,30 @@ Clipping a triangle against one plane yields 0, 3, or 4 vertices:
 
 The output is bounded at 4 vertices, so the clipper needs **no allocation** — a
 fixed 4-vertex scratch buffer per worker is sufficient.
+
+**The boundary rule is strict: a vertex is inside iff `w > near`.** A vertex
+lying *exactly* on the plane is outside.
+
+**A case the table above does not cover.** Because the rule is strict, "3 inside"
+is not the only way to reach an unclipped triangle, and more importantly the
+*2-inside* row is not the only way to reach 4 vertices: a triangle with two
+vertices strictly inside and one exactly **on** the plane also emits 4, two of
+which coincide. Fan-triangulating that gives one good triangle and one
+**degenerate** one. This is harmless — § 7 mandates an `area2 == 0` reject, which
+discards it — but it will look like a clipper bug to whoever hits it first, so it
+is recorded rather than left to be rediscovered. Do not add a de-duplication
+pass: that spends comparisons on every triangle to tidy a measure-zero case the
+rasterizer already handles.
+
+**Trivial reject.** § 6 gave the `min(w) > near` accept fast path; the symmetric
+`max(w) ≤ near` reject costs the same and discards everything behind the camera
+without touching the scratch buffer at all. Implement both.
+
+**Snap the intersection vertex's `w` to exactly `near`.** The lerp produces
+`near` give or take a few ulp, and the sign of that error decides whether a
+freshly clipped vertex satisfies the very predicate that just admitted it.
+Assigning `near` directly is algebraically identical and makes
+`w ≥ near > 0` a guarantee the rasterizer can rely on, so `1/w` is always finite.
 
 **Sources:**
 - Sutherland & Hodgman, "Reentrant Polygon Clipping", *CACM* 17(1), 1974 — https://dl.acm.org/doi/10.1145/360767.360802
@@ -849,14 +902,14 @@ Present:
 Ordered. Each item is a lane from § 1; the ordering is by dependency.
 
 - [ ] **Benchmark the textured-span inner loop first** — `docs/ASSETS.md` § 9, and § 11(c) above
-- [ ] **Resolve open question § 11(a)** — framebuffer allocation vs. `I_MemoryPort`
+- [x] **Resolve open question § 11(a)** — framebuffer allocation vs. `I_MemoryPort`
 - [ ] **Extend `WorkerPool`** with submit-and-await for tile jobs (§ 7 prerequisite)
-- [ ] `Framebuffer` — `int[]` colour (RGBA8888), `float[]` depth (1/w), tile geometry, padded stride, `clear()`
-- [ ] `Camera` — view matrix, projection without a z row, world → clip space
-- [ ] `TriangleClipper` — homogeneous near-plane Sutherland-Hodgman, 4-vertex scratch, fan re-triangulation
+- [x] `Framebuffer` — `int[]` colour (RGBA8888), `float[]` depth (1/w), tile geometry, padded stride, `clear()`
+- [x] `Camera` — view matrix, projection without a z row, world → clip space
+- [x] `TriangleClipper` — homogeneous near-plane Sutherland-Hodgman, 4-vertex scratch, fan re-triangulation
 - [ ] `Rasterizer` — divide, viewport transform, backface cull, edge setup with top-left fill rule, bounding box, per-worker tile binning
 - [ ] `SpanRenderer` — reference per-pixel path first, then N = 8/16 segment path validated against it
-- [ ] `TextureSampler` — bilinear with the −0.5 texel-centre offset, per-segment mip selection
+- [x] `TextureSampler` — bilinear with the −0.5 texel-centre offset, per-segment mip selection
 - [ ] `ModelFormat` — flat binary reader, versioned header
 - [ ] `GltfConverter` — buildscript classpath only; triangulation, mip chains, budget enforcement per `docs/ASSETS.md` § 5
 
