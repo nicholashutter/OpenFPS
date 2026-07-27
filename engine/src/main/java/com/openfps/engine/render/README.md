@@ -63,10 +63,30 @@ render/
 ├── port/
 │   └── I_RenderPort.java     interface — called by core per tic
 └── adapter/
-    └── NullRenderPort.java   stub
+    ├── NullRenderPort.java   stub
+    ├── Rgba.java             the one definition of the 0xRRGGBBAA format
+    ├── Framebuffer.java      colour + depth buffers, tile geometry
+    ├── Vec3.java, Mat4.java  minimal transform math
+    ├── Camera.java           world → clip space
+    ├── TriangleClipper.java  homogeneous near-plane clipping
+    ├── MipChain.java         a texture and its pre-generated mip levels
+    └── TextureSampler.java   bilinear + mip selection
 ```
 
-Only the port and the null adapter exist today. Nothing in § 1 is implemented.
+**Landed:** `Framebuffer`, `Camera`, `TriangleClipper`, `TextureSampler` (and
+the supporting `Rgba`, `Vec3`, `Mat4`, `MipChain`), plus the `WorkerPool`
+prerequisite in § 7.
+
+**Not yet written:** `Rasterizer`, `SpanRenderer`, `ModelFormat`,
+`GltfConverter`. Nothing is wired into `I_RenderPort` yet — the components exist
+and are tested in isolation, but no frame is drawn end to end.
+
+`Rgba` deserves a note, since it is not in the § 1 component table. `Framebuffer`
+and `TextureSampler` were built in parallel and each grew its own identical copy
+of pack/unpack. Two definitions of one pixel format is exactly what `AGENTS.md`
+rule 1 forbids, and had they drifted the symptom would have been a channel swap
+that reads as slightly-wrong colour rather than an error — in the one place every
+pixel passes through both. Use `Rgba`; do not add a third copy.
 
 ---
 
@@ -449,11 +469,17 @@ one invariant:
   the frame.
 
 Exclusivity is a property **of the tile, not of the assignment policy**. Any
-policy that hands each tile to exactly one worker preserves it: a static
-interleave (`worker w takes tiles where index % W == w`) is the simplest;
-claiming tiles from a shared `AtomicInteger` counter load-balances better when
-tile costs are uneven, which they will be. Both are correct. Start with the
-static interleave; move to the atomic counter when a profile shows stragglers.
+policy that hands each tile to exactly one worker preserves it.
+
+**The policy is a shared atomic claim counter. This is forced, not preferred.**
+An earlier draft of this section offered a static interleave (`worker w takes
+tiles where index % W == w`) as the simpler starting point, and that was wrong:
+a static interleave assigns tile sets by *worker id*, and **the participating
+caller has no worker id** — nor is there any guarantee that the worker whose id
+owns a given tile ever shows up. It is directly incompatible with the
+caller-participation requirement below, which is a correctness constraint rather
+than a tuning one. The claim counter is the only policy that satisfies both, and
+it load-balances better anyway when tile costs are uneven, which they will be.
 
 **Binning must not become the shared-write hazard the raster pass avoided.**
 Setup is itself parallel (`docs/ASSETS.md` § 2 budgets 200–500 ns per triangle
@@ -505,13 +531,29 @@ it at this stage.
 **Threading service.** Parallel work goes through the existing `WorkerPool`
 (`AGENTS.md` rule 1 — use the services we have). **Never `new Thread`.**
 
-> **Prerequisite:** `I_ThreadPoolPort` / `WorkerPool` today is exclusively an
-> event-bus drainer — workers loop on `bus.take()` and dispatch to a
-> `SubsystemRegistry`. There is no "submit N jobs and await completion"
-> operation, which is exactly the shape the tile pass needs. `WorkerPool` must
-> grow that capability before Phase 5 can be implemented. Extending the existing
-> pool is the correct move; a second thread pool is a `STYLE.md` § 13.4
-> anti-pattern.
+> **Prerequisite — SATISFIED.** `I_ThreadPoolPort` / `WorkerPool` was exclusively
+> an event-bus drainer: workers looped on `bus.take()` and dispatched to a
+> `SubsystemRegistry`, with no "submit N jobs and await completion" operation.
+> It now has one — `submitParallel(I_ParallelJob, int jobCount)`, index-based so
+> nothing is allocated per tile per frame. Extending the existing pool was the
+> right move; a second thread pool is a `STYLE.md` § 13.4 anti-pattern.
+>
+> **Caller participation was necessary but not sufficient.** The requirement
+> below stops the submitting thread from deadlocking, and it is what makes
+> correctness independent of worker count. It does not, on its own, produce any
+> **parallelism**: at frame time the bus is normally idle, so every other worker
+> is blocked inside `bus.take()` and cannot be reached at all. A caller that
+> merely participates would run all 
+> the tiles itself, correctly and serially.
+>
+> Waking those workers by interrupting them is not acceptable — a worker may be
+> inside subsystem code, and any blocking call in a handler would start seeing
+> `InterruptedException`, which changes dispatch behaviour for every subsystem.
+> `WorkerPool` uses **leader/follower** instead: at most one worker sits in
+> `take()` (the leader) and the rest wait on a pool-owned condition that
+> `submitParallel` can signal. The leader hands leadership on *before* it
+> dispatches, so concurrent dispatch is unaffected — and `take()` was already
+> serialised on the queue's own lock, so nothing was lost.
 >
 > **The submitting thread must participate in the work.** This is a correctness
 > requirement, not a tuning choice. `RenderSubsystem` is dispatched *from* the
@@ -903,7 +945,7 @@ Ordered. Each item is a lane from § 1; the ordering is by dependency.
 
 - [ ] **Benchmark the textured-span inner loop first** — `docs/ASSETS.md` § 9, and § 11(c) above
 - [x] **Resolve open question § 11(a)** — framebuffer allocation vs. `I_MemoryPort`
-- [ ] **Extend `WorkerPool`** with submit-and-await for tile jobs (§ 7 prerequisite)
+- [x] **Extend `WorkerPool`** with submit-and-await for tile jobs (§ 7 prerequisite)
 - [x] `Framebuffer` — `int[]` colour (RGBA8888), `float[]` depth (1/w), tile geometry, padded stride, `clear()`
 - [x] `Camera` — view matrix, projection without a z row, world → clip space
 - [x] `TriangleClipper` — homogeneous near-plane Sutherland-Hodgman, 4-vertex scratch, fan re-triangulation

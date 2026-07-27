@@ -235,7 +235,7 @@ module is named.
 
 | Subsystem | Package | Status |
 |---|---|---|
-| Core Loop | `core` | Phase 1.3 — event-driven, multi-threaded, configurable 30/60/120 Hz |
+| Core Loop | `core` | Phase 1.3 — event-driven, multi-threaded, configurable 30/60/120 Hz; pool also does caller-participating parallel fan-out (`submitParallel`) |
 | Gameplay | `gameplay` | Stub — port + null adapter, registered as `P_` |
 | Render | `render` | Stub — port + null adapter, registered as `R_`. **Design settled, nothing implemented.** Multi-threaded software triangle rasterizer; `docs/ASSETS.md` § 2 is the canonical target and `render/README.md` § 1 is the Phase 5 spec. The 2.5D DOOM renderer (visplanes, column renderer, 8-bit palette) is retired |
 | Audio | `audio` | Stub — port + null adapter, registered as `S_` |
@@ -256,7 +256,7 @@ platform-free. Both implement `I_WindowPort` and drive `I_FrameCallback` —
 which is also the presentation path for the Phase 5 rasterizer. The engine
 produces a finished framebuffer; the adapter uploads it.
 
-**392 tests passing** (354 `:engine`, 38 `:desktop`), Checkstyle clean — see
+**570 tests passing** (529 `:engine`, 41 `:desktop`), Checkstyle clean — see
 `BUILD.md` for run instructions and `PLAN.md` § 8 for the per-suite breakdown.
 
 ---

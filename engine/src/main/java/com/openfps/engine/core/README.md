@@ -197,7 +197,7 @@ The `Subsystem` wrapper adds the state machine and event dispatch.
 
 ## Tests
 
-129 tests across the engine:
+Core-package test coverage:
 - 9 FrameRate — per-rate math, parser, rejection of unsupported rates
 - 10 GameConfig — factory methods, drift correction over 1000 tics
 - 10 SharedEventBus — publish, take, FIFO, blocking, backpressure, drain

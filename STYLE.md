@@ -460,7 +460,7 @@ Every module uses them. New code that bypasses them is a bug.
 |---|---|---|
 | `I_MemoryPort` (port + factory + backends) | `com.openfps.engine.memory` | Every allocation. **Never** `new byte[]` outside a port implementation. |
 | `I_EventBusPort` (port + factory) | `com.openfps.engine.core.eventbus` | All inter-subsystem / inter-component communication. |
-| `WorkerPool` (via `I_ThreadPoolPort`) | `com.openfps.engine.core.pool` | All parallel work. **Never** `new Thread(...)` for engine work. |
+| `WorkerPool` (via `I_ThreadPoolPort`) | `com.openfps.engine.core.pool` | All parallel work. Event dispatch drains the bus; `submitParallel(I_ParallelJob, jobCount)` is the index-based fan-out for data-parallel passes such as the renderer's tiles — the submitting thread participates, so it is safe to call from a worker and from `workerCount == 1`. **Never** `new Thread(...)` for engine work. |
 | `I_SystemInfoPort` | `com.openfps.engine.hal.port` | Anything that depends on hardware — core count, memory, OS, JVM version. |
 | `I_TimePort` | `com.openfps.engine.hal.port` | Anything that reads time. `nanos()`/`millis()` are monotonic (tic timing, durations); `epochMillis()` is wall clock (persisted timestamps). **Never** `System.nanoTime()` / `System.currentTimeMillis()` in engine code — and never store a monotonic reading as a date. |
 | `I_InputPort`, `I_DatagramPort`, `I_FilePort` | `com.openfps.engine.hal.port` | HAL capabilities. |

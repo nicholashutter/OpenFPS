@@ -439,7 +439,7 @@ Render target: `docs/ASSETS.md` § 2. Ordered by dependency.
 **Blockers — resolve before writing code:**
 - [ ] Benchmark the textured-span inner loop and validate the ~3–8 ns/pixel estimate (`docs/ASSETS.md` § 9)
 - [x] Decide framebuffer allocation vs. `I_MemoryPort` (`render/README.md` § 11a) — sanctioned exception, or a typed-slab capability on the port
-- [ ] Extend `WorkerPool` with a submit-N-jobs-and-await operation for the tile pass
+- [x] Extend `WorkerPool` with a submit-N-jobs-and-await operation for the tile pass — `submitParallel`, caller-participating
 
 **Implementation lanes:**
 - [x] `Framebuffer` — `int[]` colour (RGBA8888, matching libGDX `Pixmap.Format.RGBA8888`), `float[]` depth (1/w), tile geometry, cache-line-padded row stride, `clear()`
