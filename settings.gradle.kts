@@ -27,6 +27,14 @@ rootProject.name = "openfps"
 include(":engine")
 include(":desktop")
 
+// :tools is BUILD-TIME ONLY. It holds the glTF -> ModelFormat converter and
+// depends on :engine one way, so it can compile against ModelFormat's layout
+// constants. Nothing depends on :tools, which is exactly what keeps it — and
+// the JSON library it uses — off every shipped runtime classpath. The root
+// `verifyToolsIsolation` task fails the build if that ever stops being true.
+// Included after :engine and :desktop so those are evaluated first.
+include(":tools")
+
 // :android needs an Android SDK, so it is only included when one is present.
 // Without this guard, `gradlew :engine:build` on a machine with no SDK fails
 // during settings evaluation — before it can reach the module that does not
