@@ -50,6 +50,10 @@ assets/cache/
 # Android / Mobile
 *.apk
 *.aab
+# Unpacked by `copyAndroidNatives` from the classified gdx-platform jars on
+# every build. Generated output, one .so per ABI — not source, and it grows
+# with each architecture added.
+android/src/main/jniLibs/
 build/intermediates/
 build/outputs/
 
