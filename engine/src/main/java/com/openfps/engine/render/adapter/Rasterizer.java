@@ -622,7 +622,16 @@ public final class Rasterizer
         return binEnd(tileIndex) - binStart[tileIndex];
     }
 
-    /** Which screen-space winding {@link Rasterizer} discards. */
+    /**
+     * Which screen-space winding {@link Rasterizer} discards.
+     *
+     * <p><b>The project's answer is
+     * {@link SoftwareRenderPort#BACKFACE_CULL_MODE}.</b> This enum stays
+     * open — a rasterizer is not the place to hard-code an art-pipeline
+     * convention — but the pipeline that consumes {@code ModelFormat} has one,
+     * it is {@link #COUNTER_CLOCKWISE}, and the empirical evidence for it is
+     * recorded on that field. Do not re-derive it from handedness.</p>
+     */
     public enum CullMode
     {
         /** Draw both windings; only zero-area triangles are rejected. */

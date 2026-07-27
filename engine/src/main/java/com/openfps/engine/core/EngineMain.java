@@ -34,6 +34,8 @@ import com.openfps.engine.memory.factory.MemoryPortFactory;
 import com.openfps.engine.memory.port.I_MemoryPort;
 import com.openfps.engine.net.adapter.NullNetworkPort;
 import com.openfps.engine.render.adapter.NullRenderPort;
+import com.openfps.engine.render.port.I_RenderPort;
+import com.openfps.engine.render.port.I_RenderPortFactory;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -186,9 +188,38 @@ public final class EngineMain
      */
     public void run(final GameConfig config, final I_AdapterFactory hal)
     {
-        final EngineSession session = start(config, hal);
+        run(config, hal, EngineMain::nullRenderPort);
+    }
+
+    /**
+     * Runs the engine against a caller-supplied HAL factory and renderer.
+     *
+     * @param config the game config (rate + maxTics)
+     * @param hal    the uninitialized HAL factory to boot against
+     * @param renderPortFactory builds the render port once the worker pool and
+     *     the clock exist
+     */
+    public void run(final GameConfig config, final I_AdapterFactory hal,
+                    final I_RenderPortFactory renderPortFactory)
+    {
+        final EngineSession session = start(config, hal, renderPortFactory);
         session.awaitPlatformLoop();
         session.stop();
+    }
+
+    /**
+     * The default renderer: a null port that draws nothing.
+     *
+     * A method reference rather than a lambda body so the headless default
+     * reads the same as any other {@code I_RenderPortFactory}.
+     *
+     * @param pool ignored — the null port does no work
+     * @param time ignored — the null port measures nothing
+     * @return a fresh {@link NullRenderPort}
+     */
+    private static I_RenderPort nullRenderPort(final I_ThreadPoolPort pool, final I_TimePort time)
+    {
+        return new NullRenderPort();
     }
 
     /**
@@ -213,9 +244,35 @@ public final class EngineMain
      */
     public EngineSession start(final GameConfig config, final I_AdapterFactory hal)
     {
+        return start(config, hal, EngineMain::nullRenderPort);
+    }
+
+    /**
+     * Boots the engine with a caller-supplied renderer and RETURNS.
+     *
+     * <b>Why the renderer arrives as a factory.</b> The software rasterizer
+     * needs the worker pool ({@code render/README.md} § 7 makes parallel tile
+     * dispatch a correctness property) and {@code I_TimePort}, and both are
+     * created here. A launcher therefore cannot construct the port before
+     * calling in, and binding the pool afterwards would race the game loop
+     * thread that step 8 starts. One small interface removes both problems —
+     * see {@link I_RenderPortFactory}.
+     *
+     * @param config the game config (rate + maxTics)
+     * @param hal    the uninitialized HAL factory to boot against
+     * @param renderPortFactory builds the render port; must not be null
+     * @return a live session; call {@link EngineSession#stop()} to tear it down
+     */
+    public EngineSession start(final GameConfig config, final I_AdapterFactory hal,
+                               final I_RenderPortFactory renderPortFactory)
+    {
         if (hal == null)
         {
             throw new IllegalArgumentException("hal must not be null");
+        }
+        if (renderPortFactory == null)
+        {
+            throw new IllegalArgumentException("renderPortFactory must not be null");
         }
 
         // -- 1. Memory port
@@ -245,20 +302,31 @@ public final class EngineMain
         final I_EventBusPort bus = EventBusFactory.createShared();
         bus.init(DEFAULT_BUS_CAPACITY);
 
-        // -- 6. Subsystem registry
+        // -- 6. Worker pool, sized but not yet started.
+        //
+        // Created BEFORE the subsystems, not after, because the render port
+        // needs it: the software rasterizer fans its tile pass out through
+        // submitParallel (render/README.md § 7). The registry is handed over
+        // empty and filled below — the pool only walks it once start() has run,
+        // and that is still the last step here.
         final SubsystemRegistry subsystems = new SubsystemRegistry();
+        final I_ThreadPoolPort pool = ThreadPoolFactory.createFixed(bus, subsystems);
+        pool.init(workerCount);
+
+        // -- 7. Subsystem registry
+        final I_RenderPort renderPort = renderPortFactory.createRenderPort(pool, timePort);
+        if (renderPort == null)
+        {
+            throw new IllegalStateException("renderPortFactory returned null");
+        }
         subsystems.register(new CoreSubsystem());
         subsystems.register(new MemorySubsystem(memory));
         subsystems.register(new HalSubsystem(inputPort));
         subsystems.register(new NetSubsystem(new NullNetworkPort()));
         subsystems.register(new GameplaySubsystem(new NullGameplayPort()));
-        subsystems.register(new RenderSubsystem(new NullRenderPort()));
+        subsystems.register(new RenderSubsystem(renderPort));
         subsystems.register(new AudioSubsystem(new NullAudioPort()));
         subsystems.initAll();
-
-        // -- 7. Worker pool
-        final I_ThreadPoolPort pool = ThreadPoolFactory.createFixed(bus, subsystems);
-        pool.init(workerCount);
         pool.start();
 
         // -- 8. Event factory + GameLoop (producer) on its own thread

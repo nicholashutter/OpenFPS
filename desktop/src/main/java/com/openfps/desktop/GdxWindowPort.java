@@ -12,6 +12,7 @@ import com.badlogic.gdx.backends.lwjgl3.Lwjgl3ApplicationConfiguration;
 
 import com.openfps.engine.hal.port.I_FrameCallback;
 import com.openfps.engine.hal.port.I_WindowPort;
+import com.openfps.engine.render.adapter.SoftwareRenderPort;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -94,6 +95,13 @@ public final class GdxWindowPort implements I_WindowPort
     /** Requested title bar text. MUTABLE: set by {@link #create}. */
     private volatile String title = DEFAULT_TITLE;
 
+    /**
+     * The software renderer whose frames this window presents, or null for a
+     * menu-only window. MUTABLE: set by {@link #attachRenderer} before
+     * {@link #runFrameLoop}.
+     */
+    private volatile SoftwareRenderPort renderer;
+
     @Override
     public void init()
     {
@@ -156,7 +164,7 @@ public final class GdxWindowPort implements I_WindowPort
         try
         {
             new Lwjgl3Application(
-                new GdxFrameLoopListener(callback, new DefaultMenuActions(this)),
+                new GdxFrameLoopListener(callback, new DefaultMenuActions(this), presenter()),
                 buildConfiguration());
         }
         finally
@@ -168,6 +176,51 @@ public final class GdxWindowPort implements I_WindowPort
             state = State.CREATED;
             LOG.info("LWJGL3 frame loop exited");
         }
+    }
+
+    /**
+     * Names the renderer whose finished frames this window should present.
+     *
+     * <b>This is not a new port and it is not a presentation hook.</b>
+     * {@code render/README.md} § 12 keeps presentation on the platform side and
+     * out of {@code I_RenderPort}, so the adapter needs some way to reach the
+     * finished {@code int[]}. That is all this does: it names the object whose
+     * {@code copyColorInto} the presenter will call. The engine still never
+     * learns a window exists, and {@code I_WindowPort} is unchanged — this
+     * method is on the concrete class, not on the interface.
+     *
+     * <p>Call before {@link #runFrameLoop}; the listener that holds the
+     * presenter is constructed inside it. Passing null leaves a menu-only
+     * window, which is what every windowless test gets.</p>
+     *
+     * @param softwareRenderer the renderer to present, or null for none
+     */
+    public void attachRenderer(final SoftwareRenderPort softwareRenderer)
+    {
+        if (state == State.RUNNING)
+        {
+            throw new IllegalStateException("attachRenderer() while the frame loop is running");
+        }
+        this.renderer = softwareRenderer;
+    }
+
+    /** Returns the renderer named by {@link #attachRenderer}, or null. */
+    public SoftwareRenderPort renderer()
+    {
+        return renderer;
+    }
+
+    // Builds the presenter for one run, or null when no renderer was attached.
+    // Built here rather than held as a field because it owns GPU resources and
+    // there is no context until Lwjgl3Application starts.
+    private FramebufferPresenter presenter()
+    {
+        final SoftwareRenderPort attached = renderer;
+        if (attached == null)
+        {
+            return null;
+        }
+        return new FramebufferPresenter(attached);
     }
 
     // Translates the recorded geometry into an LWJGL3 configuration.

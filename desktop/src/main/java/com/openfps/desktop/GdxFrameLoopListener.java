@@ -27,11 +27,20 @@ import com.openfps.engine.hal.port.I_FrameCallback;
  *   dispose() -&gt; onSurfaceLost()
  * </pre>
  *
- * Presentation is split by owner: this class draws the menu (a platform
- * concern — Scene2D is a libGDX type and must never reach {@code :engine}),
- * then hands the same frame to the engine callback, which watches for the
- * game loop dying so the window can follow it down. The engine gets its
- * frame notification either way, so the split is invisible to it.
+ * Presentation is split by owner: this class draws the world and then the menu
+ * (both platform concerns — a GL texture and Scene2D are libGDX types and must
+ * never reach {@code :engine}), then hands the same frame to the engine
+ * callback, which watches for the game loop dying so the window can follow it
+ * down. The engine gets its frame notification either way, so the split is
+ * invisible to it.
+ *
+ * <b>Draw order is load-bearing.</b> The world goes down first, as an opaque
+ * fullscreen quad, and the menu is composited on top. Before the rasterizer was
+ * wired the menu also owned the screen <i>clear</i>; now the presenter covers
+ * every pixel, so the menu draws as an overlay and the clear would erase the
+ * frame that had just been uploaded. With no presenter attached — every
+ * existing test, and any run without a renderer — the old clear-and-draw path
+ * is unchanged.
  *
  * <b>Threading:</b> every method runs on the LWJGL3 main/render thread, not
  * the game loop thread.
@@ -46,6 +55,12 @@ public final class GdxFrameLoopListener implements ApplicationListener
     /** What the menu buttons do. */
     private final MenuActions actions;
 
+    /** Draws the software rasterizer's frame, or null when there is no renderer. */
+    private final FramebufferPresenter presenter;
+
+    /** Opt-in window capture; disabled unless its system property is set. */
+    private final GdxScreenshot screenshot;
+
     /**
      * The menu UI.
      * MUTABLE: built in {@link #create()}, released in {@link #dispose()}.
@@ -54,13 +69,28 @@ public final class GdxFrameLoopListener implements ApplicationListener
     private MainMenuScreen menu;
 
     /**
-     * Creates the bridge.
+     * Creates the bridge with no world presentation — menu only.
      *
      * @param callback the engine callback to forward lifecycle to; must not
      *     be null
      * @param actions what the menu buttons do; must not be null
      */
     public GdxFrameLoopListener(final I_FrameCallback callback, final MenuActions actions)
+    {
+        this(callback, actions, null);
+    }
+
+    /**
+     * Creates the bridge.
+     *
+     * @param callback the engine callback to forward lifecycle to; must not
+     *     be null
+     * @param actions what the menu buttons do; must not be null
+     * @param framePresenter draws the rasterizer's finished frame under the
+     *     menu, or null for a menu-only window
+     */
+    public GdxFrameLoopListener(final I_FrameCallback callback, final MenuActions actions,
+        final FramebufferPresenter framePresenter)
     {
         if (callback == null)
         {
@@ -72,6 +102,8 @@ public final class GdxFrameLoopListener implements ApplicationListener
         }
         this.callback = callback;
         this.actions = actions;
+        this.presenter = framePresenter;
+        this.screenshot = new GdxScreenshot();
     }
 
     @Override
@@ -80,6 +112,10 @@ public final class GdxFrameLoopListener implements ApplicationListener
         final int width = Gdx.graphics.getWidth();
         final int height = Gdx.graphics.getHeight();
         menu = new MainMenuScreen(actions);
+        if (presenter != null)
+        {
+            presenter.resize(width, height);
+        }
         callback.onSurfaceReady(width, height);
     }
 
@@ -87,11 +123,37 @@ public final class GdxFrameLoopListener implements ApplicationListener
     public void render()
     {
         final float deltaSeconds = Gdx.graphics.getDeltaTime();
+        drawWorldAndMenu(deltaSeconds);
+        callback.onFrame(deltaSeconds);
+        screenshot.afterFrame();
+    }
+
+    // World first, menu on top. Which of the two owns the clear depends on
+    // whether a presenter is attached — see the class Javadoc.
+    private void drawWorldAndMenu(final float deltaSeconds)
+    {
+        if (presenter == null)
+        {
+            if (menu != null)
+            {
+                menu.render(deltaSeconds);
+            }
+            return;
+        }
+        if (!presenter.present())
+        {
+            // No frame yet: the game loop has not published one. Fall back to
+            // the menu's own clear so the window is not left showing garbage.
+            if (menu != null)
+            {
+                menu.render(deltaSeconds);
+            }
+            return;
+        }
         if (menu != null)
         {
-            menu.render(deltaSeconds);
+            menu.drawOverlay(deltaSeconds);
         }
-        callback.onFrame(deltaSeconds);
     }
 
     @Override
@@ -100,6 +162,10 @@ public final class GdxFrameLoopListener implements ApplicationListener
         if (menu != null)
         {
             menu.resize(width, height);
+        }
+        if (presenter != null)
+        {
+            presenter.resize(width, height);
         }
         callback.onResize(width, height);
     }
@@ -123,6 +189,10 @@ public final class GdxFrameLoopListener implements ApplicationListener
         {
             menu.dispose();
             menu = null;
+        }
+        if (presenter != null)
+        {
+            presenter.dispose();
         }
         callback.onSurfaceLost();
     }

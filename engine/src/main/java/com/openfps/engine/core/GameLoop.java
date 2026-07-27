@@ -7,6 +7,7 @@ package com.openfps.engine.core;
 
 import com.openfps.engine.core.event.EventFactory;
 import com.openfps.engine.core.event.I_EngineEvent;
+import com.openfps.engine.core.event.RenderFrameEvent;
 import com.openfps.engine.core.event.ShutdownEvent;
 import com.openfps.engine.core.event.TickEvent;
 import com.openfps.engine.core.eventbus.I_EventBusPort;
@@ -109,11 +110,22 @@ public final class GameLoop implements Runnable
                 Thread.onSpinWait();
             }
 
-            // -- 3. Build and publish the tick event
+            // -- 3. Build and publish the tick event, then ask for a frame.
+            //
+            // RenderFrameEvent had a factory method and an event class and a
+            // subsystem waiting for it, and nothing ever published one — so
+            // R_ was never invoked at all. The loop is the right producer:
+            // it is the simulation clock, and render/README.md § 12 makes the
+            // platform's onFrame presentation only ("it draws the latest
+            // state; it never advances it"). So the frame is produced here,
+            // per tic, and the platform uploads whatever the newest finished
+            // one is, at whatever rate its display runs.
             final TickEvent tickEvent = eventFactory.newTick(tic, nanosPerTic);
+            final RenderFrameEvent renderEvent = eventFactory.newRenderFrame(tic);
             try
             {
                 bus.publish(tickEvent);
+                bus.publish(renderEvent);
             }
             catch (final InterruptedException e)
             {

@@ -176,6 +176,23 @@ public final class MainMenuScreen
     public void render(final float deltaSeconds)
     {
         ScreenUtils.clear(BACKGROUND);
+        drawOverlay(deltaSeconds);
+    }
+
+    /**
+     * Draws the menu <b>without</b> clearing, so it composites over whatever
+     * is already on screen.
+     *
+     * This is the path used once the software rasterizer has a frame to
+     * present: the presenter covers every pixel with the world, and clearing
+     * again here would erase it. {@link #render} remains the standalone path
+     * for a menu-only window.
+     *
+     * @param deltaSeconds wall time since the previous frame, used for
+     *     widget animation only — this never advances the simulation
+     */
+    public void drawOverlay(final float deltaSeconds)
+    {
         stage.act(deltaSeconds);
         stage.draw();
     }
