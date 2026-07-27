@@ -52,20 +52,38 @@ class CameraTest
     class Conventions
     {
         @Test
-        @DisplayName("derives a left-handed basis with +x right, +y up, +z forward")
-        void shouldDeriveLeftHandedBasisWhenLookingDownWorldZ()
+        @DisplayName("derives the basis as right = forward x up, not up x forward")
+        void shouldDeriveBasisFromForwardCrossUpWhenLookingDownWorldZ()
         {
-            final Camera camera = reference();
+            // THE OPERAND ORDER IS THE WHOLE TEST. Getting it backwards is a
+            // horizontal mirror: every model renders flipped left-to-right,
+            // which is invisible on symmetric geometry. Work it by hand.
+            //
+            // The clearest case is the standard front view — a camera on the
+            // +z axis looking back at the origin, so forward = (0,0,-1),
+            // up = (0,1,0), in a right-handed world:
+            //
+            //   up x forward = (1*(-1) - 0*0, 0*0 - 0*(-1), 0*0 - 1*0) = (-1,0,0)
+            //   forward x up = (0*0 - (-1)*1, (-1)*0 - 0*0, 0*1 - 0*0) = (+1,0,0)
+            //
+            // World +x must be on the right of a front view, so forward x up
+            // is the correct one and up x forward is the mirror.
+            final Camera front = Camera.create(
+                Vec3.ZERO, new Vec3(0.0f, 0.0f, -1.0f), WORLD_UP, FOV_90, 1.0f, NEAR);
+            assertThat(front.right().x()).isCloseTo(1.0f, within(EPSILON));
 
+            // The reference camera looks the OTHER way, down +z, which is the
+            // back view — so world +x is on the left and right.x is -1. Both
+            // cases are asserted because a sign error that happened to please
+            // one of them would fail the other.
+            final Camera camera = reference();
             assertThat(camera.forward().z()).isCloseTo(1.0f, within(EPSILON));
-            // The operand order of the cross product is what fixes handedness.
-            // The other order would put right at -x here.
-            assertThat(camera.right().x()).isCloseTo(1.0f, within(EPSILON));
+            assertThat(camera.right().x()).isCloseTo(-1.0f, within(EPSILON));
             assertThat(camera.up().y()).isCloseTo(1.0f, within(EPSILON));
         }
 
         @Test
-        @DisplayName("keeps the basis orthonormal with right x up == forward")
+        @DisplayName("keeps the basis orthonormal and left-handed: right x up == -forward")
         void shouldKeepBasisOrthonormalWhenUpIsNotPerpendicularToForward()
         {
             // up leans out of the plane; the camera must re-orthogonalise it.
@@ -82,8 +100,12 @@ class CameraTest
             assertThat(up.dot(forward)).isCloseTo(0.0f, within(EPSILON));
             assertThat(forward.dot(right)).isCloseTo(0.0f, within(EPSILON));
 
+            // -1, not +1. "View space is left-handed" (+x right, +y up, +z INTO
+            // the screen) is precisely the statement that right x up points
+            // BACKWARDS along forward. The old +1 here described a right-handed
+            // triple, which is the mirror this test now guards against.
             final Vec3 cross = right.cross(up);
-            assertThat(cross.dot(forward)).isCloseTo(1.0f, within(EPSILON));
+            assertThat(cross.dot(forward)).isCloseTo(-1.0f, within(EPSILON));
         }
 
         @Test
@@ -100,14 +122,25 @@ class CameraTest
         }
 
         @Test
-        @DisplayName("puts world +x on the right of the screen")
-        void shouldPutWorldRightOnScreenRightWhenLookingDownWorldZ()
+        @DisplayName("puts world +x on the right of a front view and the left of a back view")
+        void shouldPutWorldRightOnScreenRightWhenLookingDownNegativeWorldZ()
         {
-            final Camera camera = reference();
-            final float[] out = clip(camera, 3.0f, 0.0f, 10.0f);
-
             // ndcX = x_clip / w_clip; positive is the right half of the screen.
-            assertThat(out[0] / out[2]).isCloseTo(0.3f, within(EPSILON));
+            //
+            // Front view: on the +z axis looking back at the origin. This is
+            // the orientation a person means by "looking at the model", and
+            // world +x has to come out on the right.
+            final Camera front = Camera.create(
+                new Vec3(0.0f, 0.0f, 20.0f), new Vec3(0.0f, 0.0f, -1.0f), WORLD_UP,
+                FOV_90, 1.0f, NEAR);
+            final float[] ahead = clip(front, 3.0f, 0.0f, 10.0f);
+            assertThat(ahead[0] / ahead[2]).isCloseTo(0.3f, within(EPSILON));
+
+            // The reference camera faces the other way, so the same world point
+            // is on the left. Not a quirk — walking round behind an object does
+            // put its right-hand side on your left.
+            final float[] behind = clip(reference(), 3.0f, 0.0f, 10.0f);
+            assertThat(behind[0] / behind[2]).isCloseTo(-0.3f, within(EPSILON));
         }
     }
 
@@ -122,11 +155,14 @@ class CameraTest
             final Camera camera = reference();
 
             // f = 1, so at depth z the visible extent is exactly +/- z.
+            // The reference camera looks down +z, which is the back view, so
+            // world +x sits at ndc -1. What this test is about is the
+            // magnitude: the frustum edge maps to the edge of the screen.
             final float[] rightEdge = clip(camera, 10.0f, 0.0f, 10.0f);
             final float[] topEdge = clip(camera, 0.0f, 10.0f, 10.0f);
             final float[] centre = clip(camera, 0.0f, 0.0f, 10.0f);
 
-            assertThat(rightEdge[0] / rightEdge[2]).isCloseTo(1.0f, within(EPSILON));
+            assertThat(rightEdge[0] / rightEdge[2]).isCloseTo(-1.0f, within(EPSILON));
             assertThat(topEdge[1] / topEdge[2]).isCloseTo(1.0f, within(EPSILON));
             assertThat(centre[0]).isCloseTo(0.0f, within(EPSILON));
             assertThat(centre[1]).isCloseTo(0.0f, within(EPSILON));
@@ -161,9 +197,10 @@ class CameraTest
             assertThat(camera.projectionScaleY()).isCloseTo(1.0f, within(EPSILON));
 
             // Twice as wide, so the same world x lands at half the ndc x, while
-            // ndc y is untouched.
+            // ndc y is untouched. Negative because the reference direction is
+            // the back view; the aspect divide is what this asserts.
             final float[] out = clip(camera, 10.0f, 10.0f, 10.0f);
-            assertThat(out[0] / out[2]).isCloseTo(0.5f, within(EPSILON));
+            assertThat(out[0] / out[2]).isCloseTo(-0.5f, within(EPSILON));
             assertThat(out[1] / out[2]).isCloseTo(1.0f, within(EPSILON));
         }
 
@@ -197,9 +234,11 @@ class CameraTest
             final float[] packed = new float[Camera.WORLD_TO_CLIP_FLOATS];
             reference().copyWorldToClipInto(packed, 0);
 
-            // Reference camera: identity basis at the origin, both scales 1.
+            // Reference camera: at the origin looking down +z, both scales 1.
+            // The x row is negated because that is the back view — right is
+            // world -x there. See the basis test above.
             assertThat(packed).containsExactly(new float[] {
-                1.0f, 0.0f, 0.0f, 0.0f,
+                -1.0f, 0.0f, 0.0f, 0.0f,
                 0.0f, 1.0f, 0.0f, 0.0f,
                 0.0f, 0.0f, 1.0f, 0.0f,
             }, within(EPSILON));
@@ -273,21 +312,26 @@ class CameraTest
         }
 
         @Test
-        @DisplayName("rotates so that looking down +x puts world -z on the right")
+        @DisplayName("rotates so that looking down +x puts world +z on the right")
         void shouldRotateBasisWhenLookingDownWorldX()
         {
             final Camera camera = Camera.create(
                 Vec3.ZERO, new Vec3(1.0f, 0.0f, 0.0f), WORLD_UP, FOV_90, 1.0f, NEAR);
 
-            // right = up x forward = (0,1,0) x (1,0,0) = (0,0,-1).
-            assertThat(camera.right().z()).isCloseTo(-1.0f, within(EPSILON));
+            // right = forward x up = (1,0,0) x (0,1,0) = (0,0,1).
+            //
+            // Physically: in a right-handed world with +x east and +y up, +z is
+            // south (point east, curl up, the thumb goes south). Face east and
+            // your right hand points south. So right = +z is the answer a
+            // person standing there would give.
+            assertThat(camera.right().z()).isCloseTo(1.0f, within(EPSILON));
 
             final float[] ahead = clip(camera, 10.0f, 0.0f, 0.0f);
             assertThat(ahead[2]).isCloseTo(10.0f, within(EPSILON));
             assertThat(ahead[0] / ahead[2]).isCloseTo(0.0f, within(EPSILON));
 
             final float[] offset = clip(camera, 10.0f, 0.0f, -3.0f);
-            assertThat(offset[0] / offset[2]).isCloseTo(0.3f, within(EPSILON));
+            assertThat(offset[0] / offset[2]).isCloseTo(-0.3f, within(EPSILON));
         }
     }
 

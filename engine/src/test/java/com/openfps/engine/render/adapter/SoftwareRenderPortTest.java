@@ -65,27 +65,27 @@ final class SoftwareRenderPortTest
     class Winding
     {
         @Test
-        @DisplayName("COUNTER_CLOCKWISE reproduces the no-cull image exactly")
-        void shouldMatchTheOracleWhenCullingCounterClockwise()
+        @DisplayName("CLOCKWISE reproduces the no-cull image exactly")
+        void shouldMatchTheOracleWhenCullingClockwise()
+        {
+            final int[] oracle = render(Rasterizer.CullMode.NONE, null);
+            final int[] clockwise = render(Rasterizer.CullMode.CLOCKWISE, null);
+
+            // A z-buffer resolves a closed mesh correctly with no culling, so
+            // the NONE image is what the cube must look like whatever the
+            // winding convention turns out to be. Culling may only remove work.
+            assertThat(clockwise).isEqualTo(oracle);
+        }
+
+        @Test
+        @DisplayName("COUNTER_CLOCKWISE renders the cube inside-out — the trap, made visible")
+        void shouldRenderInsideOutWhenCullingCounterClockwise()
         {
             final int[] oracle = render(Rasterizer.CullMode.NONE, null);
             final int[] counterClockwise =
                 render(Rasterizer.CullMode.COUNTER_CLOCKWISE, null);
 
-            // A z-buffer resolves a closed mesh correctly with no culling, so
-            // the NONE image is what the cube must look like whatever the
-            // winding convention turns out to be. Culling may only remove work.
-            assertThat(counterClockwise).isEqualTo(oracle);
-        }
-
-        @Test
-        @DisplayName("CLOCKWISE renders the cube inside-out — the trap, made visible")
-        void shouldRenderInsideOutWhenCullingClockwise()
-        {
-            final int[] oracle = render(Rasterizer.CullMode.NONE, null);
-            final int[] clockwise = render(Rasterizer.CullMode.CLOCKWISE, null);
-
-            assertThat(clockwise).isNotEqualTo(oracle);
+            assertThat(counterClockwise).isNotEqualTo(oracle);
         }
 
         @Test
@@ -107,7 +107,8 @@ final class SoftwareRenderPortTest
         @DisplayName("the inverted convention shows only the far faces' interiors")
         void shouldShowOnlyFarFacesWhenTheConventionIsInverted()
         {
-            final Set<Integer> drawn = colorsIn(render(Rasterizer.CullMode.CLOCKWISE, null));
+            final Set<Integer> drawn =
+                colorsIn(render(Rasterizer.CullMode.COUNTER_CLOCKWISE, null));
 
             assertThat(drawn).contains(CubeFixture.MINUS_X, CubeFixture.MINUS_Y,
                 CubeFixture.MINUS_Z);
@@ -116,13 +117,20 @@ final class SoftwareRenderPortTest
         }
 
         @Test
-        @DisplayName("the project convention is COUNTER_CLOCKWISE")
-        void shouldPinCounterClockwiseAsTheProjectConvention()
+        @DisplayName("the project convention is CLOCKWISE")
+        void shouldPinClockwiseAsTheProjectConvention()
         {
             // Guards the constant itself: the tests above prove which mode is
             // right, this one proves the shipped pipeline uses it.
+            //
+            // This value is NOT independent of Camera's basis order. It was
+            // COUNTER_CLOCKWISE while Camera derived right = up x forward,
+            // which mirrored every frame horizontally; correcting that to
+            // forward x up negates screen x, negates area2, and flips this.
+            // If a change to Camera breaks this test, re-run the oracle above
+            // rather than editing this line to match.
             assertThat(SoftwareRenderPort.BACKFACE_CULL_MODE)
-                .isEqualTo(Rasterizer.CullMode.COUNTER_CLOCKWISE);
+                .isEqualTo(Rasterizer.CullMode.CLOCKWISE);
         }
     }
 

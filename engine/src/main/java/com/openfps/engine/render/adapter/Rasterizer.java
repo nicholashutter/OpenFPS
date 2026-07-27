@@ -629,8 +629,10 @@ public final class Rasterizer
      * {@link SoftwareRenderPort#BACKFACE_CULL_MODE}.</b> This enum stays
      * open — a rasterizer is not the place to hard-code an art-pipeline
      * convention — but the pipeline that consumes {@code ModelFormat} has one,
-     * it is {@link #COUNTER_CLOCKWISE}, and the empirical evidence for it is
-     * recorded on that field. Do not re-derive it from handedness.</p>
+     * it is {@link #CLOCKWISE}, and the empirical evidence for it is recorded
+     * on that field. Do not re-derive it from handedness: it depends on
+     * {@link Camera}'s basis order as much as on the model data, and it has
+     * already flipped once when that order was corrected.</p>
      */
     public enum CullMode
     {
