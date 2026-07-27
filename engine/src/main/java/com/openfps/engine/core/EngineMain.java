@@ -68,8 +68,15 @@ public final class EngineMain
     /** Default event-bus capacity. */
     private static final int DEFAULT_BUS_CAPACITY = 1024;
 
-    /** How long the windowed path waits for the game loop to stop, in ms. */
-    private static final long LOOP_JOIN_TIMEOUT_MS = 2000L;
+    /**
+     * How long a shutdown waits for the game loop to stop, in ms.
+     *
+     * Bounded rather than indefinite because {@code SharedEventBus.publish()}
+     * blocks on a full queue — an unbounded join would hang forever if the
+     * workers ever wedged. Package-private: {@link EngineSession} owns
+     * teardown and needs the same bound.
+     */
+    static final long LOOP_JOIN_TIMEOUT_MS = 2000L;
 
     /**
      * Boots the engine.
@@ -179,6 +186,33 @@ public final class EngineMain
      */
     public void run(final GameConfig config, final I_AdapterFactory hal)
     {
+        final EngineSession session = start(config, hal);
+        session.awaitPlatformLoop();
+        session.stop();
+    }
+
+    /**
+     * Boots the engine and RETURNS — the caller keeps its thread.
+     *
+     * This and {@link EngineSession#stop()} are the lifecycle API for every
+     * platform. Nothing here blocks, so a caller that must return promptly
+     * (Android's {@code onCreate}, which ANRs if held) and a caller that is
+     * happy to block (a desktop {@code main}) use the identical pair. The
+     * blocking is factored out into
+     * {@link EngineSession#awaitPlatformLoop()}, which is a property of the
+     * window rather than of the engine — {@link #run} is now just those
+     * three calls in a row.
+     *
+     * The factory is taken uninitialized; the returned session owns its
+     * {@code shutdown()}. Call from the main thread when the factory yields
+     * a real window.
+     *
+     * @param config the game config (rate + maxTics)
+     * @param hal    the uninitialized HAL factory to boot against
+     * @return a live session; call {@link EngineSession#stop()} to tear it down
+     */
+    public EngineSession start(final GameConfig config, final I_AdapterFactory hal)
+    {
         if (hal == null)
         {
             throw new IllegalArgumentException("hal must not be null");
@@ -241,39 +275,12 @@ public final class EngineMain
         final Thread loopThread = new Thread(loop, "openfps-gameloop");
         loopThread.start();
 
-        // -- 9. Main thread: platform event pump (windowed) or just wait
-        runPlatformPump(window, loop, loopThread);
-
-        // -- 10. Drain and stop
-        // Order matters: the loop must be fully stopped before the pool
-        // drains the bus. SharedEventBus.publish() throws once the bus
-        // leaves READY, so a still-running producer would crash here.
-        try
-        {
-            pool.shutdown();
-            pool.awaitTermination(2000);
-        }
-        catch (final InterruptedException e)
-        {
-            Thread.currentThread().interrupt();
-        }
-        subsystems.shutdownAll();
-        bus.shutdown();
-
-        // -- 10. Save profile with updated playtime + last-login
-        saveProfile(userProfile, profile, timePort);
-
-        hal.shutdown();
-        try
-        {
-            memory.shutdown();
-        }
-        catch (final RuntimeException ignored)
-        {
-            // already shut down — fine
-        }
-
-        LOG.info("OpenFPS engine shut down cleanly.");
+        // -- 9. Hand back a live session. Shutdown (drain, pool stop,
+        // subsystem teardown, profile save, HAL and memory release) all
+        // belongs to EngineSession.stop(), so a caller that cannot block
+        // gets the same teardown as one that can.
+        return new EngineSession(memory, hal, bus, subsystems, pool, loop,
+            loopThread, userProfile, profile, timePort, window);
     }
 
     /**
@@ -291,55 +298,6 @@ public final class EngineMain
      * @param loop the game loop, for requesting stop
      * @param loopThread the thread the loop is running on
      */
-    private static void runPlatformPump(final I_WindowPort window,
-                                        final GameLoop loop,
-                                        final Thread loopThread)
-    {
-        if (!window.isRealWindow())
-        {
-            joinLoop(loopThread, 0L);
-            return;
-        }
-
-        // The platform owns the loop from here. This blocks until the user
-        // closes the window (desktop) or the Activity is destroyed
-        // (Android). The callback draws; it never advances the simulation —
-        // GameLoop is still doing that on its own thread at a fixed rate.
-        window.runFrameLoop(new EngineFrameCallback(loopThread, window));
-
-        // Either the loop ended on its own or the user closed the window.
-        // shutdown() is idempotent, so calling it in both cases is fine.
-        loop.shutdown();
-        joinLoop(loopThread, LOOP_JOIN_TIMEOUT_MS);
-    }
-
-    /**
-     * Waits for the game loop thread to exit.
-     *
-     * A bounded wait is used for the windowed path because
-     * {@code SharedEventBus.publish()} blocks on a full queue — an
-     * unbounded join could hang forever if the workers ever wedged.
-     *
-     * @param loopThread the thread to join
-     * @param timeoutMs milliseconds to wait, or 0 to wait indefinitely
-     */
-    private static void joinLoop(final Thread loopThread, final long timeoutMs)
-    {
-        try
-        {
-            loopThread.join(timeoutMs);
-            if (loopThread.isAlive())
-            {
-                LOG.warn("GameLoop did not stop within {} ms — continuing shutdown", timeoutMs);
-            }
-        }
-        catch (final InterruptedException e)
-        {
-            LOG.info("Main thread interrupted — shutting down");
-            Thread.currentThread().interrupt();
-        }
-    }
-
     /**
      * Picks the HAL backend from the CLI flags.
      *
@@ -393,9 +351,13 @@ public final class EngineMain
     /**
      * Saves the profile with the current playtime and last-login
      * timestamp.
+     *
+     * Package-private: {@link EngineSession} owns teardown and this is part
+     * of it. On Android it runs from {@code onDestroy}, which is why the
+     * profile write must not assume a graceful window close ever happened.
      */
-    private static void saveProfile(final I_UserProfilePort port, final UserProfile profile,
-                                    final I_TimePort timePort)
+    static void saveProfile(final I_UserProfilePort port, final UserProfile profile,
+                            final I_TimePort timePort)
     {
         final long now = timePort.epochMillis();
         // Wall clock can jump backwards; clamp so playtime never regresses.

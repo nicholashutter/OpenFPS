@@ -68,7 +68,22 @@ android {
 val natives: Configuration by configurations.creating
 
 dependencies {
-    implementation(project(":engine"))
+    // Excluded at the consumer rather than removed from :engine, so the
+    // engine stays self-sufficient for headless runs and its own tests.
+    //
+    //   logback-classic  — does not work on Android at all. It is a pure
+    //       transitive: nothing in the tree imports ch.qos.logback, only
+    //       the SLF4J facade (STYLE.md § 8). Android platform code logs
+    //       through android.util.Log.
+    //   sqlite-jdbc      — bundles precompiled natives for ~20 desktop
+    //       triplets. Android will use Room via its own I_UserProfilePort
+    //       adapter; HalBackend.SQLITE is never selected here.
+    //
+    // Together these were ~4 MB of an APK that draws a menu.
+    implementation(project(":engine")) {
+        exclude(group = "ch.qos.logback")
+        exclude(group = "org.xerial", module = "sqlite-jdbc")
+    }
 
     implementation("com.badlogicgames.gdx:gdx:$gdxVersion")
     implementation("com.badlogicgames.gdx:gdx-backend-android:$gdxVersion")
