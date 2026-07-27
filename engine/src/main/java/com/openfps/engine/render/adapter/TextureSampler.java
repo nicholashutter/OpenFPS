@@ -306,7 +306,7 @@ public final class TextureSampler
      */
     public static int red(final int texel)
     {
-        return (texel >>> RED_SHIFT) & BYTE_MASK;
+        return Rgba.red(texel);
     }
 
     /**
@@ -316,7 +316,7 @@ public final class TextureSampler
      */
     public static int green(final int texel)
     {
-        return (texel >>> GREEN_SHIFT) & BYTE_MASK;
+        return Rgba.green(texel);
     }
 
     /**
@@ -326,7 +326,7 @@ public final class TextureSampler
      */
     public static int blue(final int texel)
     {
-        return (texel >>> BLUE_SHIFT) & BYTE_MASK;
+        return Rgba.blue(texel);
     }
 
     /**
@@ -336,7 +336,7 @@ public final class TextureSampler
      */
     public static int alpha(final int texel)
     {
-        return texel & BYTE_MASK;
+        return Rgba.alpha(texel);
     }
 
     /**
@@ -352,10 +352,7 @@ public final class TextureSampler
      */
     public static int pack(final int red, final int green, final int blue, final int alpha)
     {
-        return ((red & BYTE_MASK) << RED_SHIFT)
-            | ((green & BYTE_MASK) << GREEN_SHIFT)
-            | ((blue & BYTE_MASK) << BLUE_SHIFT)
-            | (alpha & BYTE_MASK);
+        return Rgba.pack(red, green, blue, alpha);
     }
 
     // Lerps two lane-packed component pairs. Both inputs must already be

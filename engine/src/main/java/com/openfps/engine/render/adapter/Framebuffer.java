@@ -673,10 +673,7 @@ public final class Framebuffer
      */
     public static int packRgba(final int r, final int g, final int b, final int a)
     {
-        return ((r & CHANNEL_MASK) << RED_SHIFT)
-            | ((g & CHANNEL_MASK) << GREEN_SHIFT)
-            | ((b & CHANNEL_MASK) << BLUE_SHIFT)
-            | (a & CHANNEL_MASK);
+        return Rgba.pack(r, g, b, a);
     }
 
     /**
@@ -687,7 +684,7 @@ public final class Framebuffer
      */
     public static int red(final int rgba)
     {
-        return (rgba >>> RED_SHIFT) & CHANNEL_MASK;
+        return Rgba.red(rgba);
     }
 
     /**
@@ -698,7 +695,7 @@ public final class Framebuffer
      */
     public static int green(final int rgba)
     {
-        return (rgba >>> GREEN_SHIFT) & CHANNEL_MASK;
+        return Rgba.green(rgba);
     }
 
     /**
@@ -709,7 +706,7 @@ public final class Framebuffer
      */
     public static int blue(final int rgba)
     {
-        return (rgba >>> BLUE_SHIFT) & CHANNEL_MASK;
+        return Rgba.blue(rgba);
     }
 
     /**
@@ -720,7 +717,7 @@ public final class Framebuffer
      */
     public static int alpha(final int rgba)
     {
-        return rgba & CHANNEL_MASK;
+        return Rgba.alpha(rgba);
     }
 
     /**
