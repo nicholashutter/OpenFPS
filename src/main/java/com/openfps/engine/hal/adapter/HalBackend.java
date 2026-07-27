@@ -28,8 +28,10 @@ public enum HalBackend
     SQLITE,
 
     /**
-     * Real GLFW window and input, plus the SQLite profile. Requires a
-     * display; selected by {@code --window}.
+     * Real JDK-backed desktop ports: monotonic + wall clock, non-blocking
+     * UDP on {@code DatagramChannel}, and the SQLite profile. Window and
+     * input stay null until LWJGL/GLFW becomes a dependency, so this
+     * backend still needs no display.
      */
     DESKTOP
 }

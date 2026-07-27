@@ -26,12 +26,15 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * Every backend must hand back a complete, non-null set of ports so the
  * engine has exactly one code path regardless of which one is selected.
  *
- * DESKTOP is excluded — it needs a display, so it is covered by the
- * {@code displayTest} task instead.
+ * All three backends are covered. DESKTOP used to be excluded on the
+ * assumption it would need a display; as shipped it does not — its window
+ * and input ports are still null adapters, because LWJGL/GLFW is not a
+ * dependency. Only its time, datagram, and profile ports are real, and
+ * none of those touch a display.
  *
- * The SQLITE backend opens a real database file, so these tests redirect
- * it to a temp directory. Without that they would open (and mutate) the
- * developer's own {@code ~/.openfps/profile.db}.
+ * The SQLITE and DESKTOP backends open a real database file, so these
+ * tests redirect it to a temp directory. Without that they would open
+ * (and mutate) the developer's own {@code ~/.openfps/profile.db}.
  */
 class AdapterFactoryTest
 {
@@ -63,11 +66,12 @@ class AdapterFactoryTest
         }
     }
 
-    /** Backends that are safe to construct headlessly. */
+    /** Backends that are safe to construct headlessly — currently all of them. */
     private enum HeadlessBackend
     {
         NULL,
-        SQLITE
+        SQLITE,
+        DESKTOP
     }
 
     private static I_AdapterFactory create(final HeadlessBackend backend)
@@ -140,11 +144,12 @@ class AdapterFactoryTest
     }
 
     @Test
-    @DisplayName("DESKTOP backend fails loudly until Phase 1.5 step 4 lands")
-    void shouldRejectDesktopBackendUntilImplemented()
+    @DisplayName("every HalBackend value maps to a factory — no unhandled enum branch")
+    void shouldResolveEveryBackendValue()
     {
-        assertThatThrownBy(() -> AdapterFactorySelector.create(HalBackend.DESKTOP))
-            .isInstanceOf(UnsupportedOperationException.class)
-            .hasMessageContaining("not implemented yet");
+        for (final HalBackend backend : HalBackend.values())
+        {
+            assertThat(AdapterFactorySelector.create(backend)).isNotNull();
+        }
     }
 }
