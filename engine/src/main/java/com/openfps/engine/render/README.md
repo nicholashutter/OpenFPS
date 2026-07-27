@@ -421,9 +421,28 @@ end of one tile's row and the start of its right-hand neighbour's row land in
 the same 64-byte cache line — two workers writing the same line, which is the
 classic false-sharing stall and would quietly eat most of the parallel win. The
 cheap fix: make the **tile width a multiple of 16 pixels** (16 ints = 64 bytes)
-and pad the framebuffer's **row stride** to a multiple of 16 pixels. Then every
-tile row begins on a cache-line boundary and no line is ever shared. This is why
+and pad the framebuffer's **row stride** to a multiple of 16 pixels. This is why
 § 3 says stride is not necessarily width.
+
+> **Correction — how much this actually guarantees.** An earlier draft of this
+> section claimed "no line is ever shared". That is not achievable in Java and
+> the implementation of `Framebuffer` found it. Padding buys *relative*
+> alignment: every tile row starts a whole number of cache lines from the array's
+> **first element**. Whether that element itself sits on a 64-byte boundary is
+> the JVM's object layout, which Java offers no way to request or even observe.
+>
+> So: if the array base happens to be line-aligned, no line is shared. If it is
+> not, adjacent tile rows share exactly **one** line at their boundary — instead
+> of a number that varies with the window width. The padding is still worth
+> doing, because it converts an unpredictable width-dependent amount of false
+> sharing into a bounded, deterministic one. A hard guarantee needs an aligned
+> allocator, which means native memory. Do not claim more than this in code
+> comments.
+>
+> Second consequence, easy to miss: **the padded columns belong to no tile**, so
+> the presentation adapter must not upload the raw `int[]` to a `width × height`
+> texture — it would shear the image. `Framebuffer.copyColorTo` de-pads for that
+> reason.
 
 The alternative — per-tile contiguous (swizzled) buffers, de-swizzled once at
 present — has better locality still, but it costs a full-frame shuffle before
