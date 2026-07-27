@@ -1,152 +1,821 @@
-# Render (R_) — Rendering Pipeline
+# Render (R_) — Multi-threaded Software Triangle Rasterizer
 
-> R_ takes the current GameState and draws pixels. The actual GPU / window
-> binding lives in `hal/adapter/desktop/` (LWJGL3) and `hal/adapter/mobile/`.
-> R_ itself is pure math + framebuffer operations on primitive arrays.
+> R_ takes the current game state and produces a finished framebuffer. It is
+> pure math over primitive arrays — no window, no graphics API, no GPU. The
+> platform adapter uploads the finished buffer; R_ never presents.
 
-## What lives here (planned)
+**This document is the Phase 5 specification.** `docs/ASSETS.md` § 2 is the
+canonical statement of the render target; this file is its implementation
+spec. Where the two disagree, `docs/ASSETS.md` wins and this file is the bug.
 
-- `BspTraverser` — walks the BSP tree front-to-back, returns visible subsectors
-- `WallClipper` — clips wall segments to the player view frustum
-- `VisplaneBuilder` — manages screen-space horizontal floor/ceiling bands
-- `TextureSampler` — nearest-neighbor texture sampling for column rendering
-- `ColumnRenderer` — draws one vertical column of the screen
+---
 
-## Subsystem layout
+## 0. What this replaces
+
+An earlier draft of this file specified a 1993-era 2.5D renderer: a 320×200
+framebuffer, an 8-bit palette, BSP front-to-back traversal for visibility,
+visplanes, a per-column renderer, and affine texture mapping.
+
+**That design is retired.** It was a set of VGA-era compromises, not properties
+of software rendering, and it cannot consume the art the project has actually
+committed to — a visplane and a column renderer cannot draw a Kenney GLB model.
+`docs/ASSETS.md` § 2 and § 10 record the reasoning and the Freedoom evaluation
+that followed from it.
+
+What survives, and in what form:
+
+| Retired thing | Status |
+|---|---|
+| BSP for renderer visibility | Retired. The z-buffer does this job now. **BSP itself is not deleted** — see § 10 |
+| Sutherland-Hodgman | **Survives, repurposed** — near-plane clipping in homogeneous space, not 2D frustum clipping of wall segments. See § 6 |
+| `TextureSampler` | **Survives, rewritten** — mipmapped bilinear, not nearest-neighbour column sampling |
+| Visplanes, `ColumnRenderer`, `WallClipper`, affine mapping, 8-bit palette, fixed 320×200 | Gone |
+
+---
+
+## 1. Components
+
+These are the Phase 5 implementation lanes. Each owns one thing; the "does not
+own" column is as load-bearing as the "owns" column, because overlapping
+ownership is how a rasterizer turns into an unmaintainable blob.
+
+| Component | Owns | Does not own |
+|---|---|---|
+| `Framebuffer` | Colour buffer, depth buffer, dimensions, tile geometry, `clear()` | Any drawing. It is storage plus a tile map |
+| `Camera` (+ transform math) | View matrix, projection matrix, world → clip-space transform, frustum parameters | Clipping, rasterizing. It produces clip-space vertices and stops |
+| `TriangleClipper` | Near-plane clipping in homogeneous clip space (Sutherland-Hodgman), attribute interpolation along clipped edges, fan re-triangulation | The perspective divide, the viewport transform |
+| `Rasterizer` | Perspective divide, viewport transform, backface cull, edge-function setup, screen-space bounding box, **binning triangles to tiles** | The per-pixel inner loop |
+| `SpanRenderer` | The inner loop: per-pixel or per-segment perspective-correct interpolation, depth test, depth write, colour write | Which triangles it draws, and where. It is handed a triangle and a tile rectangle |
+| `TextureSampler` | Bilinear filtering, mip level selection from UV derivatives, texel fetch and unpack | UV computation. It receives finished `(u, v, lod)` |
+| `ModelFormat` | The flat binary runtime format: layout, versioning, reader. Near-zero parsing at load | Producing that format |
+| `GltfConverter` | **Build time only.** glTF/GLB → `ModelFormat`. Triangulation, mip generation, texture decode, budget enforcement | Anything at runtime. It is never on the runtime classpath |
+
+`GltfConverter` runs on the Gradle **buildscript** classpath, so it may freely
+use a glTF/JSON library without adding a runtime dependency or shipping
+anything — see `docs/ASSETS.md` § 4. Everything expensive moves offline,
+because a software rasterizer's scarcest resource is per-frame CPU and its
+cheapest is build-time CPU.
+
+### Subsystem layout
 
 ```
 render/
 ├── port/
-│   └── I_RenderPort.java   interface — called by core per tic
+│   └── I_RenderPort.java     interface — called by core per tic
 └── adapter/
-    └── NullRenderPort.java stub
+    └── NullRenderPort.java   stub
 ```
 
-## Render math — what's coming
+Only the port and the null adapter exist today. Nothing in § 1 is implemented.
 
-### BSP traversal
+---
 
-The BSP is a binary tree where each node has a partitioning line. Given the
-player's (x, y), at each node we test which side of the partition the player
-is on, then recurse into the **far** child first, then the **near** child.
-This draws things in back-to-front order, so painters' algorithm overdraw
-is correct without a z-buffer.
+## 2. Numeric policy — the renderer uses `float`
 
-**Pseudocode:**
+**The renderer uses `float`. Gameplay and networking stay 16.16 fixed-point
+(`PLAN.md` § 4 is unchanged).**
+
+This looks like an inconsistency and it is not. Record the reasoning here,
+because a future contributor will otherwise "fix" it in one direction or the
+other and break something.
+
+**1. Fixed-point exists for simulation determinism, not for speed.** Peer-to-peer
+lockstep requires that two peers at the same tic hold bit-identical simulation
+state. Fixed-point integer arithmetic guarantees that trivially. That is the
+entire reason `FixedMath` exists. It is not there because floats are slow — on
+any CPU this project targets, `float` multiply is at least as fast as the
+shift-and-`long`-multiply that 16.16 requires.
+
+**2. Rendering never feeds simulation state.** R_ is a pure function from game
+state to pixels. Nothing it computes is ever written back, sent over the wire,
+or read on the next tic. **A fully non-reproducible renderer cannot desync
+lockstep**, so the renderer has no reason to pay fixed-point's cost — neither
+its precision cost (16.16 has ~5 decimal digits, hopeless for a 1/w that spans
+several orders of magnitude across a frame) nor its range cost.
+
+**3. Java 17 floating point is always-strict anyway.** Since **JEP 306**,
+delivered in Java 17, all floating-point expressions are FP-strict IEEE 754;
+`strictfp` became a no-op keyword. So `+ - * /` and `Math.sqrt` are
+bit-reproducible across every conforming JVM and every CPU. This is stronger
+than most people assume and worth knowing even though § 2 above means the
+renderer does not depend on it.
+
+The exception, and it is a real one: **`Math.sin`, `Math.cos`, `Math.tan`,
+`Math.pow`, `Math.exp` and `Math.log` are permitted 1–2 ulp of error and are
+explicitly NOT required to be reproducible between implementations.**
+`StrictMath.*` is defined by fdlibm and is reproducible. The renderer calls
+`Math.tan` once per frame when building the projection matrix (§ 4) — that is
+fine precisely because of § 2. **If a transcendental is ever needed in
+simulation code, it must be `StrictMath`.**
+
+- JEP 306, Restore Always-Strict Floating-Point Semantics — https://openjdk.org/jeps/306
+- JLS 17 § 15.4, FP-strict expressions — https://docs.oracle.com/javase/specs/jls/se17/html/jls-15.html#jls-15.4
+- `java.lang.Math` javadoc, on the 1–2 ulp allowance and `StrictMath` — https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/lang/Math.html
+
+---
+
+## 3. Buffers
+
+### Colour buffer — `int[]`, RGBA8888
+
+One `int` per pixel, packed `0xRRGGBBAA`. The format is chosen to match libGDX
+`Pixmap.Format.RGBA8888` so that a finished frame presents as **a single
+texture upload** with no per-pixel conversion.
+
+Indexing is `y * strideInPixels + x`. The stride is **not** necessarily the
+width — see § 7 on false sharing.
+
+### Depth buffer — separate primitive array
+
+A separate `float[]`, one element per pixel, holding **1/w** (see § 8). Not
+interleaved with colour. Two reasons:
+
+- The two have different element semantics and different clear values, and
+  keeping them separate lets each tile row be cache-line aligned independently.
+- The depth clear value is `0.0f`, whose bit pattern is all zeros, so clearing
+  the depth buffer is a memset the JIT turns into the fastest path available.
+  (1/w = 0 means "infinitely far"; the test is *greater passes* — § 8.)
+
+### Resolution
+
+Not fixed. The framebuffer is allocated at the surface size reported by
+`I_FrameCallback.onSurfaceReady(width, height)` and reallocated on
+`onResize(width, height)`. `docs/ASSETS.md` § 2 budgets 1080p at 2× overdraw;
+rendering at a lower internal resolution and letting the adapter scale is a
+legitimate quality knob, not a fixed constraint.
+
+> **Open question — how the framebuffer gets allocated. See § 11(a).**
+
+---
+
+## 4. Camera and transforms
+
+### View space convention
+
+This spec uses a view space with **+x right, +y up, +z forward**. Forward is
+positive z, which means `w_clip` is positive in front of the camera and the
+near-plane test in § 6 is simply `w > near`. Left-handed, and deliberately so —
+it removes a sign flip from the hottest branch in the pipeline.
+
+The view matrix is the inverse of the camera's world transform. For a rigid
+camera (rotation `R`, position `eye`) that inverse is exact and cheap:
+`V = Rᵀ · T(−eye)`. Do not call a general matrix inverse.
+
+### Projection
+
+With vertical field of view `fovY` and `aspect = width / height`, let
+`f = 1 / tan(fovY / 2)`:
+
+```text
+x_clip = x_view * f / aspect
+y_clip = y_view * f
+w_clip = z_view
 ```
-renderBsp(node, clipBox):
-    if node is leaf (subsector):
-        renderSubsector(node.subsector, clipBox)
-        return
 
-    isOnFront = isPointOnFront(player, node)
-    near, far = (node.back, node.front) if isOnFront else (node.front, node.back)
-    renderBsp(far,  clipBox)        // draw the far side first
-    renderBsp(near, intersectBox(clipBox, node.line))   // clip to near side
+**There is no third row.** A GPU needs `z_clip` because its fixed-function depth
+unit consumes a window-space z in [0, 1]. We own the depth unit, we store 1/w,
+and 1/w comes from `w_clip` alone — so the z row of the projection matrix is
+dead weight and is simply not computed. This is a real simplification available
+to a software rasterizer that a GPU pipeline cannot take.
+
+`Math.tan` is called once per frame here. See § 2 for why that is fine.
+
+### Perspective divide and viewport transform
+
+Applied by `Rasterizer`, **after** `TriangleClipper` (§ 6):
+
+```text
+invW = 1 / w_clip
+sx   = (x_clip * invW * 0.5 + 0.5) * width
+sy   = (0.5 - y_clip * invW * 0.5) * height
 ```
 
-**Source — DOOM source `r_bsp.c`**:
-https://github.com/id-Software/DOOM/blob/master/linuxdoom-1.10/r_bsp.c
+`sy` is flipped because the framebuffer's y grows downward while clip space's
+grows upward. Doing the flip here, once per vertex, is why no later stage has
+to think about it.
 
-**Source — "BSP Tree Rendering" by Daniel Rákos, Atomic Game Engine blog**:
-https://www.rastertek.com/dx11tut11.html (similar algorithm)
+---
 
-### Wall clipping (Sutherland-Hodgman)
+## 5. Pipeline order
 
-We clip each wall segment against the player's view frustum (a trapezoid
-in screen space, or 4 half-planes in world space). The Sutherland-Hodgman
-algorithm clips a polygon against any convex half-plane, one plane at a time,
-in O(n) per plane per polygon.
-
-**Pseudocode:**
+```text
+  model triangles (ModelFormat)
+        │
+        ▼
+  Camera:          world → clip space          (per vertex)
+        │
+        ▼
+  TriangleClipper: near-plane clip             (per triangle → 0, 1 or 2 triangles)
+        │
+        ▼
+  Rasterizer:      divide, viewport, backface cull,
+                   edge setup, bounding box, BIN TO TILES
+        │
+        ▼   ── parallel, one worker per tile, exclusive ownership ──
+        │
+  SpanRenderer:    per tile, per binned triangle, per covered pixel:
+                   interpolate, depth test, sample, write
+        │
+        ▼
+  Framebuffer (finished)  →  adapter uploads  →  screen
 ```
-clip(polygon, plane):
+
+---
+
+## 6. Near-plane clipping (Sutherland-Hodgman, homogeneous)
+
+### Why only the near plane
+
+The perspective divide is `1 / w_clip`. A vertex behind the eye has `w ≤ 0`, and
+dividing by it produces garbage — geometry mirrored through the origin, or an
+infinity. So a triangle crossing the near plane **must** be geometrically clipped
+before the divide. There is no way to fix it up afterwards.
+
+The other five frustum planes need no geometric clip at all. Once a triangle is
+in screen space, left/right/top/bottom rejection is just intersecting its
+bounding box with the screen rectangle — which the tile binning in § 7 does
+anyway, for free. And there is no far plane: with 1/w depth, distant geometry
+converges toward 1/w = 0 rather than overflowing.
+
+So: **one clip plane, applied in homogeneous clip space.** This is why
+Sutherland-Hodgman survives the retirement of the 2.5D design. It was always the
+right algorithm; it was pointed at the wrong plane.
+
+### The algorithm
+
+Sutherland-Hodgman clips a polygon against one half-space in O(n) per plane,
+walking edges and emitting kept vertices plus intersections. Against the plane
+`w = near`, with vertex `a` inside iff `a.w > near`:
+
+```text
+clipNear(polygon, near):
     out = []
-    for each edge (a, b) in polygon:
-        if a is inside plane and b is inside:
-            out.add(b)
-        elif a is inside and b is outside:
-            out.add(intersect(a, b, plane))
-        elif a is outside and b is inside:
-            out.add(intersect(a, b, plane))
-            out.add(b)
+    for each edge (a, b) in polygon:          // b follows a, wrapping
+        aIn = a.w > near
+        bIn = b.w > near
+        if aIn and bIn:
+            out.append(b)
+        else if aIn and not bIn:
+            out.append(lerpVertex(a, b, (near - a.w) / (b.w - a.w)))
+        else if not aIn and bIn:
+            out.append(lerpVertex(a, b, (near - a.w) / (b.w - a.w)))
+            out.append(b)
+        // both outside: emit nothing
     return out
 ```
 
-**Source — Ivan Sutherland's original paper (1974)**:
-https://dl.acm.org/doi/10.1145/360767.360802
+`lerpVertex(a, b, t)` interpolates **every** vertex attribute linearly by `t`:
+`x, y, w` of the clip-space position, and `u, v`, and any baked colour.
 
-**Source — Practical implementation in DOOM source `r_segs.c`**:
-https://github.com/id-Software/DOOM/blob/master/linuxdoom-1.10/r_segs.c
+**Linear interpolation is correct here and would not be correct after the
+divide.** Clip-space position and all vertex attributes are affine functions of
+the parameter along the edge in object space; the divide is what destroys that
+linearity. Clipping before the divide is what lets one `lerp` handle position
+and UVs identically. This is the whole reason the operation lives in homogeneous
+space, and it is the point of the Blinn & Newell paper below.
 
-### Perspective projection (column-based)
+### Output cases
 
-DOOM doesn't use a 3D matrix transform. It computes per-column screen-space
-height of a wall directly:
+Clipping a triangle against one plane yields 0, 3, or 4 vertices:
 
+| Vertices inside | Output |
+|---|---|
+| 0 | 0 vertices — triangle rejected entirely |
+| 1 | 3 vertices — 1 triangle |
+| 2 | 4 vertices — fan-triangulate to 2 triangles: (0,1,2) and (0,2,3) |
+| 3 | unchanged — 1 triangle, and the fast path. Take it with an early-out on `min(w) > near` |
+
+The output is bounded at 4 vertices, so the clipper needs **no allocation** — a
+fixed 4-vertex scratch buffer per worker is sufficient.
+
+**Sources:**
+- Sutherland & Hodgman, "Reentrant Polygon Clipping", *CACM* 17(1), 1974 — https://dl.acm.org/doi/10.1145/360767.360802
+- Blinn & Newell, "Clipping using homogeneous coordinates", *SIGGRAPH '78* — https://dl.acm.org/doi/10.1145/800248.807398
+
+---
+
+## 7. Rasterization and tiling
+
+### Edge functions
+
+For a screen-space triangle with vertices `(x0,y0)`, `(x1,y1)`, `(x2,y2)`, the
+edge function of edge `01` evaluated at a point is:
+
+```text
+E01(x, y) = (x - x0) * (y1 - y0) - (y - y0) * (x1 - x0)
 ```
-screenHeight = (WALL_HEIGHT * FOCAL_LENGTH) / distanceToWall
+
+Its sign says which side of the line `01` the point is on. A point is inside the
+triangle when all three edge functions share a sign. This is Pineda's
+formulation, and the reason it is the right one for this renderer is that it is
+**linear in x and y**, so it steps incrementally:
+
+```text
+∂E01/∂x =  (y1 - y0)        // add this when moving one pixel right
+∂E01/∂y = -(x1 - x0)        // add this when moving one pixel down
 ```
 
-Where:
-- `WALL_HEIGHT` is the height of the wall in world units (typically 128 in DOOM maps)
-- `FOCAL_LENGTH` is a constant tuned to the screen resolution (≈ 0.625 × screenHeight)
-- `distanceToWall` is the perpendicular distance from the player to the wall
+Setup computes `E` once at the top-left corner of the bounding box and then the
+whole traversal is adds. It also parallelizes trivially: `E` can be evaluated at
+any pixel directly, with no dependence on neighbours, which is exactly what lets
+a tile be rasterized independently of every other tile.
 
-This avoids floating-point math entirely when paired with the 16.16 fixed-point.
+**Signed area and barycentrics.** Twice the signed triangle area is `E01`
+evaluated at vertex 2:
 
-**Source — Michael Abrash, *Graphics Programming Black Book*, Chapter 63 ("Building a 3D Engine in a Weekend")**:
-http://www.drdobbs.com/parallel/graphics-programming-black-book/184404919
+```text
+area2 = (x1 - x0) * (y2 - y0) - (y1 - y0) * (x2 - x0)
+```
 
-### Texture mapping (affine)
+`area2` is the backface cull test — one sign check, before any per-pixel work —
+and a degenerate triangle has `area2 == 0` and must be rejected before it
+divides by zero. With `e0 = E12(p)`, `e1 = E20(p)`, `e2 = E01(p)`, the
+barycentric weights are:
 
-DOOM uses **affine** texture mapping (not perspective-correct). For each column,
-the texture V coordinate is computed once and reused for every pixel in that column.
-This produces the famous "sliding textures" effect on angled floors/walls but is
-much cheaper than perspective division per pixel.
+```text
+λ0 = e0 / area2      λ1 = e1 / area2      λ2 = e2 / area2      (λ0 + λ1 + λ2 = 1)
+```
 
-**Source — "Affine Texture Mapping" — Chris Hecker**:
-http://www.chrishecker.com/Miscellaneous_Technical_Articles
+Compute `1 / area2` once at setup and multiply.
 
-### Visplanes
+**Fill rule.** Adjacent triangles share edges. Without a rule, a pixel exactly on
+a shared edge is drawn twice (visible with blending, and wasted work regardless)
+or zero times (a seam of background pixels). Adopt the standard **top-left rule**:
+a pixel on an edge is inside only if that edge is a top edge or a left edge.
+This is a decision made once at setup by biasing each edge's constant term by −1
+where the rule excludes it, so the inner loop stays a plain sign test.
 
-A visplane is a contiguous horizontal band of the screen with the same floor
-and ceiling texture. DOOM tracks up to 128 visplanes per frame. If a new floor
-or ceiling span doesn't match any existing visplane, a new one is created. If
-128 are in use, the renderer forces a "visplane overflow" flush that submits
-all current visplanes to the framebuffer.
+### Bounding box
 
-**Source — DOOM source `r_plane.c`**:
-https://github.com/id-Software/DOOM/blob/master/linuxdoom-1.10/r_plane.c
+```text
+minX = max(0, floor(min(x0, x1, x2)))
+maxX = min(width  - 1, ceil (max(x0, x1, x2)))
+minY = max(0, floor(min(y0, y1, y2)))
+maxY = min(height - 1, ceil (max(y0, y1, y2)))
+```
 
-## Color palette
+Clamping to the screen here is what makes the four side frustum planes free
+(§ 6). An empty box after clamping means the triangle is off-screen — reject.
 
-DOOM uses a 256-color palette (8-bit indexed color). Each entry is an
-RGB triplet. The renderer's framebuffer is `byte[]` with one byte per pixel
-holding the palette index. Pixels are flushed to the GPU at end of frame
-by the adapter as a single texture upload.
+### Tile binning
 
-**Source — "The DOOM Palette"**:
-https://doom.fandom.com/wiki/Playpal
+The screen is divided into fixed-size tiles (**64×64 pixels is the starting
+point**; it is a tuning parameter, and § 11 flags that none of these numbers are
+measured yet). The tile grid is `ceil(width / TILE) × ceil(height / TILE)`.
 
-## Performance constraints
+Setup converts a triangle's clamped bounding box into a tile range and appends
+the triangle's index to each covered tile's bin:
 
-- **Fixed 320×200** internal framebuffer. The adapter scales up to the window
-  size at upload time (nearest-neighbor or integer-multiple).
-- **No per-pixel allocations.** All pixel buffers are pre-allocated `byte[]` in
-  the zone heap.
-- **No `Math.sin`/`Math.cos` per pixel.** Trig is done via lookup table.
-- **Subsector cap**: 256 visible subsectors per frame.
+```text
+tx0 = minX / TILE      tx1 = maxX / TILE
+ty0 = minY / TILE      ty1 = maxY / TILE
+for ty in ty0..ty1:
+    for tx in tx0..tx1:
+        bin[ty * tilesX + tx].append(triangleIndex)
+```
 
-## Files
+Bounding-box binning over-includes: a thin diagonal triangle is binned into
+corner tiles it does not actually touch. Those tiles reject it in one edge-
+function test. Testing the triangle's edges against tile corners at bin time is
+a known refinement — do not do it until the profile says to.
+
+### The parallel model — tiled, exclusive ownership
+
+**This is the design decision that makes the renderer lock-free.**
+
+A pixel belongs to exactly one tile. A tile is drawn by exactly one worker. So
+**two workers never write the same colour or depth address, ever.** From that
+one invariant:
+
+- No lock, no atomic, and no compare-and-swap on the depth buffer. The
+  read-modify-write of the depth test — which is where a naive parallel
+  rasterizer either serializes or races — is a plain array access, because it is
+  provably uncontended.
+- No barrier between triangles within a tile.
+- The only synchronisation in the whole raster pass is one join at the end of
+  the frame.
+
+Exclusivity is a property **of the tile, not of the assignment policy**. Any
+policy that hands each tile to exactly one worker preserves it: a static
+interleave (`worker w takes tiles where index % W == w`) is the simplest;
+claiming tiles from a shared `AtomicInteger` counter load-balances better when
+tile costs are uneven, which they will be. Both are correct. Start with the
+static interleave; move to the atomic counter when a profile shows stragglers.
+
+**Binning must not become the shared-write hazard the raster pass avoided.**
+Setup is itself parallel (`docs/ASSETS.md` § 2 budgets 200–500 ns per triangle
+against a 50–100k triangle ceiling — serial setup alone would consume the whole
+frame). So each worker bins its slice of the triangle stream into its **own**
+per-worker bin arrays, and the raster pass reads tile T by walking the W
+per-worker bins for T in worker order. Lock-free on both sides.
+
+**Determinism.** Bin lists are appended in a fixed triangle order and read in a
+fixed worker order, so a tile's output does not depend on thread scheduling.
+This matters because coplanar triangles at exactly equal depth would otherwise
+resolve differently run to run. It is not required for lockstep — the renderer
+cannot desync anything (§ 2) — but a renderer that flickers between runs is
+miserable to debug.
+
+**False sharing.** Tiles are rectangles in a linearly addressed buffer, so the
+end of one tile's row and the start of its right-hand neighbour's row land in
+the same 64-byte cache line — two workers writing the same line, which is the
+classic false-sharing stall and would quietly eat most of the parallel win. The
+cheap fix: make the **tile width a multiple of 16 pixels** (16 ints = 64 bytes)
+and pad the framebuffer's **row stride** to a multiple of 16 pixels. Then every
+tile row begins on a cache-line boundary and no line is ever shared. This is why
+§ 3 says stride is not necessarily width.
+
+The alternative — per-tile contiguous (swizzled) buffers, de-swizzled once at
+present — has better locality still, but it costs a full-frame shuffle before
+upload and complicates every debug tool that wants to look at a pixel. Not worth
+it at this stage.
+
+**Threading service.** Parallel work goes through the existing `WorkerPool`
+(`AGENTS.md` rule 1 — use the services we have). **Never `new Thread`.**
+
+> **Prerequisite:** `I_ThreadPoolPort` / `WorkerPool` today is exclusively an
+> event-bus drainer — workers loop on `bus.take()` and dispatch to a
+> `SubsystemRegistry`. There is no "submit N jobs and await completion"
+> operation, which is exactly the shape the tile pass needs. `WorkerPool` must
+> grow that capability before Phase 5 can be implemented. Extending the existing
+> pool is the correct move; a second thread pool is a `STYLE.md` § 13.4
+> anti-pattern.
+
+**Sources:**
+- Pineda, "A Parallel Algorithm for Polygon Rasterization", *SIGGRAPH '88*, Computer Graphics 22(4) — https://dl.acm.org/doi/10.1145/378456.378457
+- Fabian Giesen, "A trip through the Graphics Pipeline 2011" — binning, tiling, and the rasterizer's place in the pipeline — https://fgiesen.wordpress.com/2011/07/09/a-trip-through-the-graphics-pipeline-2011-index/
+- Fabian Giesen, "Optimizing the basic rasterizer" — incremental edge functions, fill rules, block traversal — https://fgiesen.wordpress.com/2013/02/10/optimizing-the-basic-rasterizer/
+
+---
+
+## 8. Perspective-correct interpolation and the depth test
+
+### The rule
+
+Screen-space linear interpolation of a texture coordinate is **wrong** — that is
+affine mapping, and it is what produced the sliding-texture artefact the retired
+design lived with. The correct statement is:
+
+> `u/w`, `v/w`, and `1/w` **are** linear in screen space. `u` and `v` are not.
+
+So interpolate the *divided* quantities with the barycentric weights from § 7,
+then undo the division per pixel:
+
+```text
+invW   = λ0 * (1/w0)     + λ1 * (1/w1)     + λ2 * (1/w2)
+uOverW = λ0 * (u0/w0)    + λ1 * (u1/w1)    + λ2 * (u2/w2)
+vOverW = λ0 * (v0/w0)    + λ1 * (v1/w1)    + λ2 * (v2/w2)
+
+w = 1 / invW
+u = uOverW * w
+v = vOverW * w
+```
+
+`1/w0`, `u0/w0`, `v0/w0` and their siblings are computed **once per vertex at
+setup**, never in the loop. All three interpolated quantities are linear in
+screen space, so like the edge functions they step incrementally along a span:
+setup computes `∂/∂x` for each and the inner loop adds.
+
+### The divide, and how to afford it
+
+`w = 1 / invW` is a floating-point reciprocal per pixel. That is the single most
+expensive operation in the inner loop and it is on the critical path of every
+textured pixel.
+
+Two correct strategies:
+
+1. **Per pixel.** Exact. This is the reference implementation — write it first,
+   keep it as the correctness oracle for the fast path, and use it in tests.
+2. **Per span segment (recommended default).** Divide exactly at the two ends of
+   an N-pixel segment (**N = 8 or 16**), and interpolate `u` and `v` linearly
+   between those exact endpoints. The error is bounded by the curvature of the
+   hyperbola over N pixels and is imperceptible at N = 16 for anything but
+   extreme grazing angles. This is the classic Quake span technique and it is
+   what makes the ~3–8 ns/pixel estimate in `docs/ASSETS.md` § 2 plausible at
+   all.
+
+Strategy 2 also gives mip selection its natural cadence — see § 9.
+
+### Depth: store 1/w, test greater
+
+`invW` is already being interpolated, so **using it as the depth value is free**
+— no extra interpolant, no extra setup. Convention:
+
+```text
+clear   depth to 0.0f            // 1/w = 0 is infinitely far; all-zero bit pattern
+test    invW > depth[index]      // greater is nearer
+write   depth[index] = invW      // only when the test passes
+```
+
+1/w also distributes precision hyperbolically, concentrating it near the camera
+where it is wanted — the same property that makes GPU depth buffers nonlinear,
+here for free rather than as a side effect.
+
+Do the **depth test before texture sampling**. Sampling is far more expensive
+than a compare, and at 2× overdraw roughly half of it is thrown away.
+
+**Sources:**
+- Heckbert & Moreton, "Interpolation for Polygon Texture Mapping and Shading" — the derivation of why `u/w` and `1/w` are the screen-linear quantities
+- Paul Heckbert, "Fundamentals of Texture Mapping and Image Warping", UCB/CSD 89/516, 1989 — https://www2.eecs.berkeley.edu/Pubs/TechRpts/1989/CSD-89-516.pdf
+- Jim Blinn, "Hyperbolic Interpolation", *IEEE CG&A* 12(4), 1992 — https://doi.org/10.1109/38.144827
+- Chris Hecker, "Perspective Texture Mapping" series, *Game Developer Magazine* 1995–96 — the practical span-subdivision treatment — https://chrishecker.com/Miscellaneous_Technical_Articles
+- Michael Abrash, *Graphics Programming Black Book*, Part V (the Quake chapters) — span-based rendering and subdivided perspective correction — https://www.jagregory.com/abrash-black-book/
+
+---
+
+## 9. Texture sampling
+
+`docs/ASSETS.md` § 2 specifies **mipmapped bilinear** — bilinear filtering
+*within* one mip level. Trilinear (blending two levels) doubles the sample cost
+and is not in the per-frame budget. Mip chains are pre-generated by
+`GltfConverter` and are **required**, not optional: unmipmapped minification is
+both aliased and slow, because it destroys texture cache locality exactly when
+the texture is being sampled sparsely.
+
+### Bilinear filtering
+
+With `u, v` in [0, 1] and a level of size `w × h`:
+
+```text
+tx = u * w - 0.5          ty = v * h - 0.5
+x0 = floor(tx)            y0 = floor(ty)
+fx = tx - x0              fy = ty - y0
+
+result = lerp( lerp(texel(x0,   y0),   texel(x0+1, y0),   fx),
+               lerp(texel(x0,   y0+1), texel(x0+1, y0+1), fx),
+               fy )
+```
+
+The `- 0.5` is not decorative: it places the sample point at the texel *centre*,
+and omitting it shifts the whole texture by half a texel — a bug that looks like
+a blurry-but-plausible image and survives review for months.
+
+Filtering runs per channel on the unpacked RGBA8888 components. Power-of-two
+level dimensions make the wrap/clamp of `x0+1` and `y0+1` a mask rather than a
+branch; `GltfConverter` should enforce power-of-two textures for that reason
+alone.
+
+### Mip level selection
+
+The level is chosen from how fast UV changes per screen pixel. With `u, v`
+expressed **in texels of level 0**, the scale factor and level of detail are:
+
+```text
+ρ = max( sqrt((∂u/∂x)² + (∂v/∂x)²),
+         sqrt((∂u/∂y)² + (∂v/∂y)²) )
+
+λ = log2(ρ)
+
+level = clamp(floor(λ + 0.5), 0, maxLevel)
+```
+
+This is the OpenGL specification's definition, and matching it means the output
+matches what a GPU would produce, which makes visual comparison against a
+reference renderer meaningful.
+
+**Computing the derivatives cheaply.** Do *not* evaluate `∂u/∂x` per pixel.
+Strategy 2 in § 8 hands them over for free: the segment loop already computes
+exact `u, v` at both ends of an N-pixel segment, so
+
+```text
+∂u/∂x ≈ (uEnd - uStart) / N          ∂v/∂x ≈ (vEnd - vStart) / N
+```
+
+and the same for the vertical direction from the adjacent scanline's segment, or
+from the triangle's setup gradients. That makes **mip selection per segment, not
+per pixel** — the same cadence as the perspective divide, which is the point.
+`log2` reduces to extracting the exponent field of the float, so no `Math.log`
+call is needed in the loop.
+
+Cheap-and-conservative variants (using only the x derivative, or `max(|∂u|,|∂v|)`
+in place of the square root) trade a little over- or under-blurring for speed and
+are legitimate — but implement the specification form first so there is something
+to compare against.
+
+**Sources:**
+- Lance Williams, "Pyramidal Parametrics", *SIGGRAPH '83* — the original mipmap paper — https://dl.acm.org/doi/10.1145/800059.801126
+- OpenGL 4.6 Core Profile Specification, § 8.14 "Texture Minification" — the normative ρ and λ definitions — https://registry.khronos.org/OpenGL/specs/gl/glspec46.core.pdf
+- Heckbert, "Fundamentals of Texture Mapping and Image Warping" (above) — filtering theory
+
+---
+
+## 10. Model format, and what happened to BSP
+
+### `ModelFormat` — the flat binary runtime format
+
+glTF is **not parsed at runtime** (`docs/ASSETS.md` § 4). `GltfConverter`
+produces a flat binary file that `ModelFormat` reads with near-zero parsing:
+fixed-size header, explicit section offsets, arrays laid out exactly as the
+renderer wants to consume them, no per-element decoding.
+
+Shape (indicative, to be pinned down in Phase 5):
+
+- Header: magic, format version, section offsets and counts
+- Interleaved vertex array: position, UV, baked vertex colour
+- Index array
+- Submesh/material table
+- Texture blobs, **already decoded**, with **pre-generated mip chains**
+
+`ModelFormat` owns the layout and its version field. Refusing to load an
+unrecognised version with a clear error is cheaper than debugging a
+mis-parsed vertex array.
+
+> **Channel-order inconsistency to resolve.** `docs/ASSETS.md` § 4 says the
+> converter decodes textures "to raw BGRA", but § 3 of this document fixes the
+> colour buffer at **RGBA8888**. If they differ, `TextureSampler` must swizzle
+> every texel it fetches — a per-pixel cost in the hottest loop, to save nothing.
+> They should almost certainly match, but choosing *which* one is a decision, not
+> an editorial fix, so it is recorded here and in `docs/ASSETS.md` § 9 rather
+> than silently changed.
+
+### BSP — retired as a *renderer* algorithm, not deleted
+
+Be precise about this, because "we dropped BSP" is a half-truth that will
+mislead someone.
+
+**Retired:** BSP as the renderer's *visibility* algorithm. The old design walked
+the tree front-to-back to get a correct draw order without a depth buffer. **The
+z-buffer does that job now**, per-pixel and per-triangle, correctly for arbitrary
+geometry including the interpenetrating meshes a painter's-algorithm order cannot
+resolve at all. R_ does not traverse a BSP tree.
+
+**Kept:** BSP as a *spatial structure for gameplay and collision*. `PLAN.md`
+Phase 4 lists `BspTraverser` for leaf lookup, and `gameplay/README.md` uses it as
+the broad-phase quick-reject for collision. That is a completely different use of
+the same structure and it is unaffected by anything in this document.
+
+So: **BSP is not gone from the project. It is gone from the renderer.**
+
+---
+
+## 11. Open questions — decide these before implementing
+
+These are unresolved. They are recorded rather than resolved because both are
+genuine architectural conflicts with a real cost on each side.
+
+### (a) Framebuffer allocation vs. the memory port
+
+**The conflict.** `AGENTS.md` and `STYLE.md` § 13.4 forbid `new byte[]` outside a
+memory-port adapter: every allocation goes through `I_MemoryPort`. But
+`I_MemoryPort` hands out opaque `int` handles over a `byte[]` backing store and
+has **no read or write operation**. A software rasterizer needs raw typed-array
+access in its inner loop, and the buffers are `int[]` and `float[]`, not `byte[]`.
+Per-pixel handle indirection is not a performance concern to be measured — it is
+a non-starter, several times the cost of the pixel work itself.
+
+The resource subsystem hit the same wall and documented it (`resource/README.md`,
+"The memory-port tension"), resolving it by letting the memory port own the
+*budget and lifecycle* while the bytes come from one sanctioned site. That
+precedent is relevant but not identical: `LumpCache` touches its bytes rarely,
+and the framebuffer is touched millions of times per frame.
+
+**Option 1 — sanctioned exception.** `Framebuffer` allocates its `int[]` and
+`float[]` directly, once at init and again only on resize, and is named in
+`STYLE.md` § 13.4 as an explicit exception alongside the memory-port adapters
+themselves.
+*Cost:* the rule acquires a second exception, and every future "my hot loop is
+special too" argument now has a precedent to point at. The exception must be
+narrow and written down, not just tolerated.
+
+**Option 2 — `I_MemoryPort` grows a typed-slab capability.** Add an operation
+that allocates a typed slab and returns the **array itself** (plus an offset and
+length), tracked by the port for budget and lifecycle, with the caller free to
+index it directly. `MemoryPortFactory.createSlab(int, int)` already exists as a
+Phase 2+ placeholder, so the concept is anticipated.
+*Cost:* real design and test work on the engine's most foundational port, before
+a single pixel is drawn. It also weakens the port's central invariant — that the
+engine never dereferences memory it did not get a handle for — and both backends
+plus their 35 tests must absorb it.
+
+**Recommendation to the decider, not a decision:** option 1 unblocks Phase 5
+immediately and is honest about being an exception; option 2 is the better
+long-term shape *if* other subsystems turn out to need typed slabs too, and
+audio mixing buffers are the obvious second candidate. **Decide before
+implementing `Framebuffer`** — it is the first class in the lane and everything
+else takes its arrays.
+
+### (b) The WAD subsystem has no art left to read
+
+**The situation.** `engine/.../resource/` is **built and working**: `WadReader`,
+`LumpCache`, `MapLumpParser`, `LittleEndian`, `WadFilePort`, backed by 101
+passing tests. It is not a stub and it is not broken.
+
+But `docs/ASSETS.md` moves all art to preprocessed glTF, and § 10 records the
+rejection of Freedoom — the one complete, well-licensed WAD the project had
+identified. The renderer specified in this document consumes neither
+palette-indexed textures nor BSP-compiled 2.5D sector maps. **So the subsystem
+currently has no art to read.**
+
+Plausible remaining roles, none of them chosen:
+
+- **Map/level geometry container.** WAD is a serviceable generic indexed-lump
+  archive, and `MapLumpParser` already reads THINGS / LINEDEFS / SECTORS /
+  VERTEXES. Level *layout* and entity placement are not art and are not
+  superseded by glTF. This is the strongest candidate.
+- **Generic asset container.** Use the lump directory to hold `ModelFormat`
+  blobs and textures — competing directly with just shipping the preprocessed
+  payload as a zip, which `build.gradle.kts` already does.
+- **A format the project drops later.** Keep it, stop investing, revisit if the
+  first two never materialise.
+
+**This is the user's call and is deliberately left open.** Nothing is deleted,
+nothing is declared dead. What *is* stale is the assumption baked into
+`resource/README.md` and `I_WadPort` that the lumps being read are DOOM patches
+and flats destined for a palette-indexed renderer — the planned `ImageDecoder`
+(`PLAN.md` Phase 2) decodes into a pixel format § 3 no longer uses. Do not
+implement `ImageDecoder` until (b) is resolved.
+
+### (c) Every performance number here is an estimate
+
+`docs/ASSETS.md` § 9 already flags this and it applies to this document too: the
+~3–8 ns/pixel span cost, the 50–100k triangle ceiling, the 64×64 tile size, and
+the N = 8/16 span subdivision are all derived from first principles and **none of
+them has been measured**. `docs/ASSETS.md` § 9 asks for a throwaway benchmark of
+the textured-span inner loop **before Phase 5 commits**. That benchmark is the
+cheapest de-risking available and it validates § 7, § 8 and § 9 at once.
+
+---
+
+## 12. Presentation — R_ does not present
+
+The engine produces a finished framebuffer. **The platform adapter uploads it.**
+There is no new window port and none is needed: `I_WindowPort` and
+`I_FrameCallback` already are the hook, and their Javadoc explains why the window
+lives in the HAL rather than behind `I_RenderPort`.
+
+```text
+R_ (worker threads)                 platform adapter (render thread)
+─────────────────────               ────────────────────────────────
+render into Framebuffer
+      │
+      └──── finished int[] ────►    copy into Pixmap (RGBA8888)
+                                    upload as one texture
+                                    draw fullscreen, swap
+```
+
+The two load-bearing facts, both already documented on `I_WindowPort`:
+
+1. **R_ must not know what a window is.** Giving it `swapBuffers()` would put
+   platform knowledge in a subsystem that is otherwise pure math on arrays.
+2. **A graphics context is current on exactly one thread.** `RenderSubsystem`
+   runs on *worker* threads; the context lives on the platform's render thread.
+   Routing graphics calls through `I_RenderPort` would be a crash waiting to
+   happen.
+
+`I_FrameCallback.onFrame(float deltaSeconds)` is presentation, not simulation.
+Platform frame rate is whatever the display and OS decide; the 30/60/120 Hz
+`GameLoop` remains the simulation clock on its own thread. `onFrame` draws the
+latest state — it never advances it.
+
+The colour buffer format in § 3 exists to make this handoff one bulk copy. The
+adapter is responsible for confirming byte order at the `Pixmap` boundary; that
+check belongs in the adapter's tests, not in R_.
+
+---
+
+## 13. Files
+
+Present:
 
 - `port/I_RenderPort.java`
 - `adapter/NullRenderPort.java`
 
-## TODO (Phase 5)
+## 14. TODO (Phase 5)
 
-- `BspTraverser.walk(rootNode, playerPos, clipBox)`
-- `WallClipper.clipSides(seg, clipBox)` — Sutherland-Hodgman
-- `VisplaneBuilder.open/close/spans`
-- `ColumnRenderer.drawColumn(x, y1, y2, texture, texX)`
-- `FrameBuffer.blit(palette)` — for adapter upload
+Ordered. Each item is a lane from § 1; the ordering is by dependency.
+
+- [ ] **Benchmark the textured-span inner loop first** — `docs/ASSETS.md` § 9, and § 11(c) above
+- [ ] **Resolve open question § 11(a)** — framebuffer allocation vs. `I_MemoryPort`
+- [ ] **Extend `WorkerPool`** with submit-and-await for tile jobs (§ 7 prerequisite)
+- [ ] `Framebuffer` — `int[]` colour (RGBA8888), `float[]` depth (1/w), tile geometry, padded stride, `clear()`
+- [ ] `Camera` — view matrix, projection without a z row, world → clip space
+- [ ] `TriangleClipper` — homogeneous near-plane Sutherland-Hodgman, 4-vertex scratch, fan re-triangulation
+- [ ] `Rasterizer` — divide, viewport transform, backface cull, edge setup with top-left fill rule, bounding box, per-worker tile binning
+- [ ] `SpanRenderer` — reference per-pixel path first, then N = 8/16 segment path validated against it
+- [ ] `TextureSampler` — bilinear with the −0.5 texel-centre offset, per-segment mip selection
+- [ ] `ModelFormat` — flat binary reader, versioned header
+- [ ] `GltfConverter` — buildscript classpath only; triangulation, mip chains, budget enforcement per `docs/ASSETS.md` § 5
+
+---
+
+## 15. A note on citations
+
+`docs/ASSETS.md` § 8 rule 1: **cite specifications and papers, not GPL source
+repositories.** DOOM, Chocolate Doom, PrBoom+, DSDA-Doom and SLADE are all
+GPL-2; copying from them into this MIT codebase is a license violation, and
+reading a GPL *implementation* to learn an algorithm is legally murky in a way
+that reading a published *specification* is not.
+
+The previous version of this file cited `id-Software/DOOM` source files
+directly. Those citations have been removed. Every algorithm above is sourced to
+a paper, a standard, or an author's own published prose.
+
+---
+
+## 16. Style note for anyone copying from this document
+
+Every code block above is **pseudocode and non-normative** — it is written for
+clarity of the math, not as Java to paste. Real code in this repository is bound
+by `STYLE.md`: Allman braces, `final` on every parameter, no ternary `?:`, no
+nested lambdas, primitives over boxed types, and no magic numbers outside
+`Constants`.

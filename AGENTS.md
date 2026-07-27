@@ -92,8 +92,17 @@ Anti-patterns in `STYLE.md` § 13.4 are instant review failures.
 | Style guide | `STYLE.md` |
 | Build instructions | `BUILD.md` |
 | Checkstyle config | `config/checkstyle/checkstyle.xml` |
-| Source | `src/main/java/com/openfps/engine/` |
-| Tests | `src/test/java/com/openfps/engine/` |
+| Asset & render-target policy | `docs/ASSETS.md` |
+| Engine source | `engine/src/main/java/com/openfps/engine/` |
+| Engine tests | `engine/src/test/java/com/openfps/engine/` |
+| Desktop launcher (libGDX LWJGL3) | `desktop/src/main/java/com/openfps/desktop/` |
+| Android launcher (libGDX Android) | `android/src/main/java/com/openfps/android/` |
+
+The project is a **three-module Gradle build**: `:engine` (pure Java 17, no
+platform dependencies, builds and tests headless anywhere), `:desktop`, and
+`:android`. `:android` is only included when an Android SDK is present — see
+the guard in `settings.gradle.kts`. Paths were flat `src/main/java/...` before
+the module split; anything still saying that is stale.
 
 ---
 
@@ -109,12 +118,20 @@ Anti-patterns in `STYLE.md` § 13.4 are instant review failures.
 # Checkstyle only
 .\gradlew checkstyleMain
 
-# Run the engine (when main exists)
+# Run the engine headless (2s smoke run, then clean shutdown)
 .\gradlew run
+.\gradlew run --args="--fps=120 --headless"
 
-# Android profile (requires Android SDK)
-.\gradlew build -Pandroid
+# Run the windowed desktop client
+.\gradlew :desktop:run
+
+# Android: there is NO -Pandroid flag. :android is included automatically
+# when ANDROID_HOME / ANDROID_SDK_ROOT / local.properties is present.
+.\gradlew build
 ```
+
+`JAVA_HOME` must point at a JDK 17+. `Unrecognized VM option 'UseZGC'` means
+it is pointing at an old JDK — see `BUILD.md`.
 
 ---
 
@@ -184,7 +201,11 @@ public void spawnEntity(final int entityType)
 - Do NOT import `java.util.List<Integer>` or any boxed collection in hot paths
 - Do NOT add Android-specific code outside `hal.adapter.mobile`
 - Do NOT skip updating `PLAN.md` section 7 when completing a roadmap item
-- Do NOT `new byte[]` outside a memory port adapter
+- Do NOT `new byte[]` outside a memory port adapter. (The Phase 5 framebuffer
+  is an unresolved conflict with this rule — it needs raw `int[]`/`float[]`
+  access in a per-pixel loop, which `I_MemoryPort`'s handle indirection cannot
+  give it. **Open question, not an exemption**: `render/README.md` § 11a states
+  the options. Decide it before implementing `Framebuffer`; do not just do it.)
 - Do NOT `System.nanoTime()` / `System.currentTimeMillis()` in engine code — use
   `I_TimePort` (`nanos()`/`millis()` monotonic, `epochMillis()` wall clock).
   Sanctioned exceptions: the time-port adapters, and shutdown timeouts that
@@ -209,18 +230,34 @@ public void spawnEntity(final int entityType)
 
 ## Subsystem Owners (Living)
 
+All paths below are under `engine/src/main/java/com/openfps/engine/` unless a
+module is named.
+
 | Subsystem | Package | Status |
 |---|---|---|
-| Core Loop | `core` | Phase 1.3 — event-driven, multi-threaded, configurable rate |
+| Core Loop | `core` | Phase 1.3 — event-driven, multi-threaded, configurable 30/60/120 Hz |
 | Gameplay | `gameplay` | Stub — port + null adapter, registered as `P_` |
-| Render | `render` | Stub — port + null adapter, registered as `R_` |
+| Render | `render` | Stub — port + null adapter, registered as `R_`. **Design settled, nothing implemented.** Multi-threaded software triangle rasterizer; `docs/ASSETS.md` § 2 is the canonical target and `render/README.md` § 1 is the Phase 5 spec. The 2.5D DOOM renderer (visplanes, column renderer, 8-bit palette) is retired |
 | Audio | `audio` | Stub — port + null adapter, registered as `S_` |
-| Network | `net` | Stub — port + null adapter, registered as `G_` |
-| Resource | `resource` | Stub — port + null adapter, **not registered**; no `W_` subsystem until Phase 2 |
-| Memory | `memory` | Phase 1.1 — state machine, two backends, factory |
-| HAL | `hal` | Phase 1.4 — ports + null + sqlite adapters + system info + user profile |
+| Network | `net` | Port + null adapter, registered as `G_`. `TicCmd`, `TicCmdBuffer`, `PeerConnection`, `RedundantSender`, `AckWindow` are built (87 tests); no socket wired yet. `net/README.md` has a pending revision — check with the owner before editing it |
+| Resource | `resource` | `WadReader`, `LumpCache`, `MapLumpParser`, `LittleEndian`, `WadFilePort` all built (101 tests). **Not registered** — no `W_` subsystem yet. Its *role* is now an open question: `docs/ASSETS.md` moves all art to preprocessed glTF, so the WAD path has no art left to read. See `render/README.md` § 11b. Do not delete it and do not build `ImageDecoder` until that is resolved |
+| Memory | `memory` | Phase 1.1 — state machine, two backends (`JvmMemoryPort`, `ZoneMemoryPort`), factory |
+| HAL | `hal` | Ports + `nulladapter` + `sqlite` + `desktop` (time, datagram) adapters, system info, user profile |
 
-129 tests passing, Checkstyle clean (see `BUILD.md` for run instructions).
+| Module | Contains |
+|---|---|
+| `:engine` | Everything above. Pure Java 17, **no platform dependencies** — this is what CI builds and tests with no display and no Android SDK. Keep it that way |
+| `:desktop` | libGDX LWJGL3 backend: `GdxWindowPort`, `GdxFrameLoopListener`, `GdxAdapterFactory`, main-menu screen, `DesktopLauncher` |
+| `:android` | libGDX Android backend: `AndroidWindowPort`, `AndroidAdapterFactory`, `AndroidLauncher`, Room-backed `RoomUserProfilePort` |
+
+Window and input adapters live in `:desktop` / `:android` rather than under
+`hal/adapter/` precisely because they need libGDX and `:engine` must stay
+platform-free. Both implement `I_WindowPort` and drive `I_FrameCallback` —
+which is also the presentation path for the Phase 5 rasterizer. The engine
+produces a finished framebuffer; the adapter uploads it.
+
+**392 tests passing** (354 `:engine`, 38 `:desktop`), Checkstyle clean — see
+`BUILD.md` for run instructions and `PLAN.md` § 8 for the per-suite breakdown.
 
 ---
 

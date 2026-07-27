@@ -32,6 +32,14 @@ constraints layered on top of it are not — the 8-bit palette, the 320×200 fra
 the visplane/column renderer, and billboard sprites were VGA-era compromises, not
 properties of software rendering.
 
+> **This section is the canonical render target.** The implementation
+> specification derived from it — pipeline stages, edge functions,
+> perspective-correct interpolation, mip selection, tile binning, every citation,
+> and the open questions — is
+> `engine/src/main/java/com/openfps/engine/render/README.md`. `PLAN.md` § 3.3
+> and § 7 Phase 5 track it. Where any of those disagree with this section, this
+> section wins and the other document is the bug.
+
 ### Per-frame budget
 
 Estimates, from first principles. **Not yet measured — see §9.**
@@ -134,6 +142,16 @@ Moved offline: triangulation, index and vertex-cache optimisation, mipmap chain
 generation, texture decode to raw BGRA, normal computation, bounding-volume precompute,
 material flattening, and lightmap baking.
 
+The converter is `GltfConverter`; the runtime format it emits is `ModelFormat`. Both
+are Phase 5 lanes — see `render/README.md` § 1 and § 10.
+
+> **Unresolved: texture channel order.** This section says the converter decodes to
+> raw **BGRA**, but the renderer's colour buffer is **RGBA8888**, chosen to match
+> libGDX `Pixmap.Format.RGBA8888` so a frame presents as one texture upload. If the
+> two differ, the sampler swizzles every texel it fetches, in the hottest loop in the
+> engine, to save nothing. They should almost certainly match — but which one wins is
+> a decision, so it is recorded in §9 rather than quietly edited here.
+
 ---
 
 ## 5. Asset budget
@@ -229,11 +247,28 @@ repository.
 - **Benchmark the textured-span inner loop.** Every number in §2 and §5 is an estimate
   derived from first principles, not a measurement. A throwaway Java benchmark
   confirming the ~3–8 ns/pixel figure on real hardware is a few hours of work and
-  de-risks the entire render architecture. **Do this before Phase 5 commits.**
+  de-risks the entire render architecture. **Do this before Phase 5 commits.** It now
+  also validates the 64×64 tile size and the 8/16-pixel span subdivision in
+  `render/README.md` § 7 and § 8, which are equally unmeasured.
+- **Decide the texture channel order** — §4's BGRA versus the renderer's RGBA8888
+  colour buffer. Matching them removes a per-texel swizzle from the inner loop.
+  Blocks `GltfConverter` and `TextureSampler`.
 - **Publish the `assets-v1` release.** Until it exists, `fetchAssets` fails with an
   actionable message. See the task's header comment in `build.gradle.kts`.
 - **Curate the initial pack selection** from §3 and record each entry against the §7
   checklist in this file.
+
+Two further open questions belong to the renderer rather than to asset policy, but
+are recorded here because both were surfaced by the §2 render target and one of them
+concerns this document's consequences directly:
+
+- **Framebuffer allocation vs. `I_MemoryPort`** — `render/README.md` § 11a.
+- **What the WAD subsystem is for now.** §10 records why Freedoom was rejected; the
+  consequence is that a built, tested, 101-test WAD subsystem has no art left to read,
+  because this document moves all art to preprocessed glTF. Its remaining role —
+  map/level geometry container, generic asset container, or a format the project drops
+  later — is undecided. Nothing is deleted. `render/README.md` § 11b states the
+  options.
 
 ---
 

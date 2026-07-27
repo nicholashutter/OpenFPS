@@ -3,7 +3,8 @@
 > **Status**: Pre-alpha — Phase 1.4 complete. Event-driven engine, unified memory, multi-threaded worker pool, configurable 30/60/120 Hz, SQLite user-profile persistence.
 > **Engine Version**: 0.1.0-SNAPSHOT
 > **Target JVM**: 17 LTS (Java 17 source/target, runs on 17+)
-> **Platforms**: Windows, Linux, Android (planned), JVM-compatible targets
+> **Platforms**: Windows, Linux, macOS (`:desktop`, libGDX LWJGL3 backend); Android (`:android`, libGDX Android backend). `:engine` is platform-free and runs headless on any JVM 17+.
+> **Renderer**: multi-threaded software triangle rasterizer — no GPU shading path. The platform layer exists to open a window, pump input, and upload one finished framebuffer per frame. See `docs/ASSETS.md` § 2 and `render/README.md`.
 
 ---
 
@@ -140,13 +141,35 @@ warning, because `ShutdownEvent` targets CORE and nothing owned that ID.
 
 ### 3.3 Render — `com.openfps.engine.render` — **stub**
 
-**R_ Rendering**
+**R_ Multi-threaded software triangle rasterizer**
 
-- `BspTraverser`: walks the BSP tree front-to-back
-- `WallClipper`: Sutherland-Hodgman clipping against view frustum
-- `VisplaneBuilder`: screen-space horizontal band management
+z-buffer, perspective-correct interpolation, mipmapped bilinear sampling, 32-bit colour, glTF models with baked lighting. `docs/ASSETS.md` § 2 is the canonical render target; `render/README.md` is the full Phase 5 specification — every formula, citation, and open question. Read it before writing any render code.
+
+The earlier 2.5D design (BSP visibility, visplanes, column renderer, affine mapping, 8-bit palette, fixed 320×200) is **retired**: those were VGA-era compromises, not properties of software rendering, and they cannot draw a glTF model.
+
+| Component | Responsibility |
+|---|---|
+| `Framebuffer` | Colour buffer (`int[]`, RGBA8888) + depth buffer (`float[]`, 1/w), tile geometry, `clear()` |
+| `Camera` | View and projection matrices, world → clip space |
+| `TriangleClipper` | Near-plane clipping in homogeneous clip space (Sutherland-Hodgman) |
+| `Rasterizer` | Perspective divide, viewport transform, backface cull, edge-function setup, bounding box, binning triangles to tiles |
+| `SpanRenderer` | The inner loop — perspective-correct interpolation, depth test/write, colour write |
+| `TextureSampler` | Mipmapped bilinear sampling, mip level selection from UV derivatives |
+| `ModelFormat` | Flat binary runtime format; the engine reads it with near-zero parsing |
+| `GltfConverter` | **Build time only**, on the Gradle buildscript classpath — may use a glTF/JSON library without adding a runtime dependency (`docs/ASSETS.md` § 4) |
+
 - `I_RenderPort` — `renderFrame(int)`
 - `NullRenderPort` — stub
+
+**Numerics**: the renderer uses `float`. Gameplay and networking stay 16.16 fixed-point — **§ 4 below is unchanged and this is not an inconsistency.** Fixed-point exists for lockstep *simulation* determinism; rendering is a pure function from game state to pixels and never feeds simulation state, so it cannot desync a peer regardless. Since JEP 306, Java 17 floating point is always-strict IEEE 754, so basic float arithmetic is bit-reproducible anyway (`Math.*` transcendentals are not; `StrictMath.*` is). Full argument: `render/README.md` § 2.
+
+**Threading**: tiled with exclusive ownership. Triangles are binned to the tiles they touch during setup; each worker owns its tiles outright and is the only writer to those regions of the colour and depth buffers. That invariant is what makes the design lock-free — no synchronisation on the depth buffer, no false sharing between workers. Parallel work goes through the existing `WorkerPool`, never `new Thread`. **Prerequisite**: `WorkerPool` is currently an event-bus drainer only and has no submit-and-await operation; it must grow one before Phase 5.
+
+**Presentation**: not R_'s job. The engine produces a finished framebuffer; the platform adapter uploads it. `I_WindowPort` / `I_FrameCallback` are the hook and already exist — do not design a new window port.
+
+**BSP**: retired as the renderer's *visibility* algorithm — the z-buffer does that job now. It is **not** deleted from the project: Phase 4 keeps `BspTraverser` as a gameplay/collision structure (§ 3.2, `gameplay/README.md`).
+
+**Open questions blocking implementation** — see `render/README.md` § 11: (a) framebuffer allocation vs. `I_MemoryPort`, (b) the role of the WAD subsystem now that art is preprocessed glTF, (c) no performance number in this design has been measured yet.
 
 **Subsystem wrapper**: `RenderSubsystem` — routes `RenderFrameEvent` to `port.renderFrame()`.
 
@@ -184,9 +207,23 @@ warning, because `ShutdownEvent` targets CORE and nothing owned that ID.
 - `WadReader` — opens `.wad`, reads lump directory
 - `LumpCache` — demand-loaded, reference-counted
 - `MapLumpParser` — THINGS, LINEDEFS, SECTORS, etc.
-- `ImageDecoder` — DOOM-format patches and flats
+- `ImageDecoder` — DOOM-format patches and flats — **on hold, see below**
 - `I_WadPort` — `open`, `close`, `readLump`, `precacheLump`, `flushCache`, `lumpCount`
 - `NullWadPort` — stub
+
+> **Open question — what is this subsystem for now?** `WadReader`, `LumpCache`,
+> `MapLumpParser`, `LittleEndian` and `WadFilePort` are **built and working**
+> (101 tests). But `docs/ASSETS.md` moves all art to preprocessed glTF and § 10
+> records Freedoom's rejection, so the WAD path currently has **no art left to
+> read**. Plausible remaining roles — map/level geometry container (the
+> strongest: level layout is not art and `MapLumpParser` already reads it),
+> generic asset container, or a format the project drops later — are all
+> undecided. **Nothing is deleted and the subsystem is not dead.**
+> `render/README.md` § 11b states the options.
+>
+> `ImageDecoder` is **on hold** specifically: it decodes DOOM patches and flats
+> into palette indices, and § 3.3's renderer has no palette. Do not implement it
+> until the question above is answered.
 
 **Subsystem wrapper**: none yet. Resource is the one subsystem with no wrapper
 and no registration in `EngineMain`, so `SubsystemId.W_` is currently unused and
@@ -226,8 +263,16 @@ kept as the Phase 2 design; the wrapper lands with `WadReader`.
 **Adapters** (in `hal/adapter/`):
 - `nulladapter/` — headless stubs, used by all CI / smoke tests. Includes `MemoryUserProfilePort` (in-memory profiles).
 - `sqlite/` — `SqliteAdapterFactory` + `SqliteUserProfilePort` (Xerial SQLite JDBC). Real on-disk profile persistence at `<userHome>/.openfps/profile.db`, overridable via `OPENFPS_PROFILE_DB`. Null ports for everything else.
-- `desktop/` — LWJGL3 + OpenAL + NIO sockets (Phase 1.5+)
-- `mobile/` — Android Canvas + AudioTrack + Room (Phase 3+)
+- `desktop/` — `DesktopTimePort`, `DesktopDatagramPort` (NIO `DatagramChannel`), `DesktopAdapterFactory`
+
+Window and input adapters live in the **`:desktop` and `:android` modules**, not
+under `hal/adapter/`, because they need libGDX and `:engine` must stay
+platform-free: `GdxWindowPort` / `GdxAdapterFactory` (`:desktop`, libGDX LWJGL3
+backend) and `AndroidWindowPort` / `AndroidAdapterFactory` / `RoomUserProfilePort`
+(`:android`, libGDX Android backend). Both implement `I_WindowPort` and drive
+`I_FrameCallback`. This pair is also the presentation path for the Phase 5
+software rasterizer — the engine hands over a finished framebuffer and the
+adapter uploads it (§ 3.3).
 
 **NullSystemInfoPort** returns `Runtime.availableProcessors()` (logical cores). Worker pool size = `max(1, logicalCores / 2)`.
 
@@ -286,7 +331,7 @@ This is verified by `GameConfigTest.shouldNotDriftAt120Fps` and `shouldNotDriftA
 
 | Target | Toolchain | Notes |
 |---|---|---|
-| Desktop (Win/Linux) | Java 17 + Gradle 8.10 | Java 17 source/target; runs on JVM 17+ |
+| Desktop (Win/Linux/macOS) | Java 17 + Gradle 8.13 | Java 17 source/target; runs on JVM 17+ |
 | Android | Java 17 source, Android SDK 34 | Planned (Phase 3+) |
 | Headless / Test | Java 17 only | null HAL adapter |
 
@@ -294,14 +339,17 @@ This is verified by `GameConfigTest.shouldNotDriftAt120Fps` and `shouldNotDriftA
 
 | Library | Version | Purpose |
 |---|---|---|
-| Gradle | 8.10 | Build |
+| Gradle | 8.13 | Build (via wrapper) |
 | SLF4J | 2.0.16 | Logging facade (industry standard) |
 | Logback | 1.5.12 | Logging backend |
 | Xerial SQLite JDBC | 3.46.1.0 | User profile persistence (pure Java, no native deps) |
 | JUnit Jupiter | 5.11.4 | Testing |
 | AssertJ | 3.26.3 | Test assertions |
 | Checkstyle | 10.18.0 | Style enforcement (enforces STYLE.md; wired to `build`, `maxWarnings = 0`) |
-| LWJGL | 3.3.4 (planned) | Desktop graphics/audio/net |
+| libGDX | 1.14.2 | Window, input, and framebuffer presentation. `gdx` + `gdx-backend-lwjgl3` in `:desktop`, `gdx` + `gdx-backend-android` in `:android`. **Not a `:engine` dependency** |
+| Android Gradle Plugin | 8.13.2 | `:android` only, requires Gradle ≥ 8.13 and compileSdk 36 — see the version chain in `settings.gradle.kts` |
+
+The Gradle **wrapper is pinned at 8.13**, not 8.10: `gdx-backend-android 1.14.2 → androidx.core 1.17.0 → compileSdk 36, AGP ≥ 8.9.1 → Gradle ≥ 8.13`. None of those is a free choice.
 
 ---
 
@@ -358,12 +406,14 @@ This is verified by `GameConfigTest.shouldNotDriftAt120Fps` and `shouldNotDriftA
 - [ ] Basic OpenGL window for render testing
 - [ ] Confirm event-driven architecture handles real input timing
 
-### Phase 2 — WAD file loader — **planned**
-- [ ] `WadReader` — header + directory parse
-- [ ] `LumpCache` — demand-loaded, ref-counted
-- [ ] `MapLumpParser` — THINGS / LINEDEFS / SECTORS
-- [ ] `ImageDecoder` — patch + flat decode
+### Phase 2 — WAD file loader — **partly done**
+- [x] `WadReader` — header + directory parse
+- [x] `LumpCache` — demand-loaded, ref-counted
+- [x] `MapLumpParser` — THINGS / LINEDEFS / SECTORS / VERTEXES
+- [x] `LittleEndian` + `WadFilePort` — the real `I_WadPort` (101 tests total)
+- [ ] `ImageDecoder` — patch + flat decode — **on hold**, blocked on the § 3.6 open question (it decodes to palette indices; the renderer has no palette)
 - [ ] `BlockmapBuilder` — pre-compute BLOCKMAP from LINEDEFS
+- [ ] A `W_` subsystem registering `WadFilePort` with the `SubsystemRegistry`
 
 ### Phase 3 — Networking — **planned**
 - [x] Transport decision recorded (`net/README.md` § "Transport decision") — UDP + redundant redelivery, no dependency added
@@ -381,12 +431,27 @@ This is verified by `GameConfigTest.shouldNotDriftAt120Fps` and `shouldNotDriftA
 - [ ] `MapLoader` — read THINGS / LINEDEFS / SECTORS from WAD
 - [ ] `BspTraverser` — leaf lookup, reused in both gameplay and render
 
-### Phase 5 — Render — **planned**
-- [ ] `BspTraverser.walk(rootNode, playerPos, clipBox)`
-- [ ] `WallClipper.clipSides(seg, clipBox)` — Sutherland-Hodgman
-- [ ] `VisplaneBuilder.open/close/spans`
-- [ ] `ColumnRenderer.drawColumn(x, y1, y2, texture, texX)`
-- [ ] `FrameBuffer.blit(palette)` — for adapter upload
+### Phase 5 — Render (software triangle rasterizer) — **planned**
+
+Full specification: `engine/src/main/java/com/openfps/engine/render/README.md`.
+Render target: `docs/ASSETS.md` § 2. Ordered by dependency.
+
+**Blockers — resolve before writing code:**
+- [ ] Benchmark the textured-span inner loop and validate the ~3–8 ns/pixel estimate (`docs/ASSETS.md` § 9)
+- [ ] Decide framebuffer allocation vs. `I_MemoryPort` (`render/README.md` § 11a) — sanctioned exception, or a typed-slab capability on the port
+- [ ] Extend `WorkerPool` with a submit-N-jobs-and-await operation for the tile pass
+
+**Implementation lanes:**
+- [ ] `Framebuffer` — `int[]` colour (RGBA8888, matching libGDX `Pixmap.Format.RGBA8888`), `float[]` depth (1/w), tile geometry, cache-line-padded row stride, `clear()`
+- [ ] `Camera` — view matrix, projection matrix (no z row needed — we store 1/w), world → clip space
+- [ ] `TriangleClipper` — near-plane Sutherland-Hodgman in homogeneous clip space, allocation-free 4-vertex scratch, fan re-triangulation
+- [ ] `Rasterizer` — perspective divide, viewport transform, backface cull, incremental edge functions with the top-left fill rule, screen-space bounding box, per-worker tile binning
+- [ ] `SpanRenderer` — reference per-pixel path first as the correctness oracle, then the 8/16-pixel segment path validated against it
+- [ ] `TextureSampler` — bilinear with the −0.5 texel-centre offset, per-segment mip selection from UV derivatives
+- [ ] `ModelFormat` — flat binary reader, versioned header, near-zero parsing
+- [ ] `GltfConverter` — Gradle buildscript classpath only; triangulation, mip-chain generation, texture decode, `docs/ASSETS.md` § 5 budget enforcement
+
+Retired from this phase and deliberately not listed: `BspTraverser` (moved to Phase 4 as a gameplay/collision structure), `WallClipper`, `VisplaneBuilder`, `ColumnRenderer`, palette blitting.
 
 ### Phase 6 — Audio — **planned**
 - [ ] `SoundEngine` — voice allocation, mix loop
@@ -398,23 +463,41 @@ This is verified by `GameConfigTest.shouldNotDriftAt120Fps` and `shouldNotDriftA
 
 ## 8. Test Coverage Summary
 
-**129 tests, all passing.**
+**392 tests, all passing** — 354 in `:engine`, 38 in `:desktop`.
 
-| Suite | Tests | Coverage |
-|---|---|---|
-| `FrameRateTest` | 9 | per-rate math, parser, rejection |
-| `GameConfigTest` | 10 | factories, drift correction (1000-tic sim) |
-| `SharedEventBusTest` | 10 | FIFO, backpressure, drain, lifecycle |
-| `WorkerPoolTest` | 7 | hot threads, parallel dispatch, error recovery |
-| `SubsystemStateTest` | 10 | transitions, error handling, thread-safety |
-| `FixedMathTest` | 6 | fixed-point arithmetic |
-| `UserProfileTest` | 12 | field validation, withXxx copies, equals/hashCode |
-| `MemoryUserProfilePortTest` | 15 | in-memory CRUD, state machine |
-| `SqliteUserProfilePortTest` | 15 | SQLite CRUD, upsert, persistence, state machine |
-| `MemoryPortTest` | 35 | both backends (7 `@Nested` groups): positive, negative, random, overflow, underflow, state machine, tags |
+| Suite | Module | Tests | Coverage |
+|---|---|---|---|
+| `FixedMathTest` | engine | 6 | fixed-point arithmetic |
+| `UserProfileTest` | engine | 12 | field validation, withXxx copies, equals/hashCode |
+| `FrameRateTest` | engine | 9 | per-rate math, parser, rejection |
+| `GameConfigTest` | engine | 10 | factories, drift correction (1000-tic sim) |
+| `SharedEventBusTest` | engine | 10 | FIFO, backpressure, drain, lifecycle |
+| `WorkerPoolTest` | engine | 7 | hot threads, parallel dispatch, error recovery |
+| `SubsystemStateTest` | engine | 10 | transitions, error handling, thread-safety |
+| `AdapterFactoryTest` | engine | 11 | HAL backend selection |
+| `DesktopAdapterFactoryTest` | engine | 5 | desktop factory wiring |
+| `DesktopTimePortTest` | engine | 7 | monotonic vs. wall clock |
+| `DesktopDatagramPortTest` | engine | 14 | bind, send, receive, direct-buffer reuse |
+| `MemoryUserProfilePortTest` | engine | 15 | in-memory CRUD, state machine |
+| `SqliteUserProfilePortTest` | engine | 15 | SQLite CRUD, upsert, persistence, state machine |
+| `MemoryPortTest` | engine | 35 | both backends (7 `@Nested` groups): positive, negative, random, overflow, underflow, state machine, tags |
+| `TicCmdTest`, `TicCmdBufferTest`, `PeerConnectionTest`, `RedundantSenderTest`, `AckWindowTest` | engine | 87 | lockstep tic buffers, peer state, redundant redelivery, 64-bit ack bitfield |
+| `LittleEndianTest` | engine | 10 | LE primitive readers |
+| `WadReaderTest` | engine | 27 | header + directory parse, lump slicing |
+| `LumpCacheTest` | engine | 21 | demand load, ref counting, pinning, eviction |
+| `MapLumpParserTest` | engine | 16 | THINGS / LINEDEFS / SECTORS / VERTEXES |
+| `WadFilePortTest` | engine | 27 | real `I_WadPort` end to end |
+| `GdxWindowPortTest` | desktop | 18 | `I_WindowPort` lifecycle, frame loop, close requests |
+| `GdxFrameLoopListenerTest` | desktop | 6 | `I_FrameCallback` dispatch |
+| `GdxAdapterFactoryTest` | desktop | 5 | factory wiring |
+| `DefaultMenuActionsTest`, `MenuButtonListenerTest` | desktop | 9 | main-menu actions |
 
 Run with: `.\gradlew.bat test`. `.\gradlew.bat build` additionally runs
 Checkstyle over main and test sources and fails on any violation.
+
+> The `:engine` numbers above cover subsystems whose PLAN sections still read
+> "stub" (net, resource). Those sections are pending their own revisions; the
+> test counts here are measured, not aspirational.
 
 ---
 
