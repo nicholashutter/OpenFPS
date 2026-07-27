@@ -70,16 +70,27 @@ render/
     ├── Camera.java           world → clip space
     ├── TriangleClipper.java  homogeneous near-plane clipping
     ├── MipChain.java         a texture and its pre-generated mip levels
-    └── TextureSampler.java   bilinear + mip selection
+    ├── TextureSampler.java   bilinear + mip selection
+    ├── Rasterizer.java       setup, binning, tile dispatch
+    └── SpanRenderer.java     the per-pixel inner loop
 ```
 
-**Landed:** `Framebuffer`, `Camera`, `TriangleClipper`, `TextureSampler` (and
-the supporting `Rgba`, `Vec3`, `Mat4`, `MipChain`), plus the `WorkerPool`
-prerequisite in § 7.
+**Landed:** `Framebuffer`, `Camera`, `TriangleClipper`, `TextureSampler`,
+`Rasterizer`, `SpanRenderer` (and the supporting `Rgba`, `Vec3`, `Mat4`,
+`MipChain`), plus the `WorkerPool` prerequisite in § 7.
 
-**Not yet written:** `Rasterizer`, `SpanRenderer`, `ModelFormat`,
-`GltfConverter`. Nothing is wired into `I_RenderPort` yet — the components exist
-and are tested in isolation, but no frame is drawn end to end.
+**Binning is per *chunk*, not per worker.** § 7 originally said per-worker; the
+implementation improved on it. A chunk is one `submitParallel` index, so it runs
+exactly once and never concurrently with itself — which makes its bin region
+private without needing any thread identity at all. That matters because the
+participating caller has no worker id, so a per-worker scheme could not have
+been expressed. Counting per (chunk, tile) → serial prefix sum → scatter, with
+the prefix sum walking tiles outermost so a tile's entries form one contiguous
+run in ascending triangle order.
+
+**Not yet written:** `ModelFormat`, `GltfConverter`. Nothing is wired into
+`I_RenderPort` yet — the components exist and are tested in isolation, and the
+rasterizer draws into a `Framebuffer`, but no frame reaches a window.
 
 `Rgba` deserves a note, since it is not in the § 1 component table. `Framebuffer`
 and `TextureSampler` were built in parallel and each grew its own identical copy
@@ -375,7 +386,7 @@ For a screen-space triangle with vertices `(x0,y0)`, `(x1,y1)`, `(x2,y2)`, the
 edge function of edge `01` evaluated at a point is:
 
 ```text
-E01(x, y) = (x - x0) * (y1 - y0) - (y - y0) * (x1 - x0)
+E01(x, y) = (x1 - x0) * (y - y0) - (y1 - y0) * (x - x0)
 ```
 
 Its sign says which side of the line `01` the point is on. A point is inside the
@@ -384,9 +395,20 @@ formulation, and the reason it is the right one for this renderer is that it is
 **linear in x and y**, so it steps incrementally:
 
 ```text
-∂E01/∂x =  (y1 - y0)        // add this when moving one pixel right
-∂E01/∂y = -(x1 - x0)        // add this when moving one pixel down
+∂E01/∂x = -(y1 - y0)        // add this when moving one pixel right
+∂E01/∂y =  (x1 - x0)        // add this when moving one pixel down
 ```
+
+> **Corrected.** An earlier draft wrote this as
+> `E01 = (x - x0)(y1 - y0) - (y - y0)(x1 - x0)`, which is the **negation** of the
+> form above, and the `Rasterizer` implementation caught the contradiction. That
+> version is inconsistent with the `area2` immediately below: evaluated at vertex
+> 2 it yields `−area2`, so `e0 + e1 + e2 = −area2` and the barycentrics would sum
+> to `−1` rather than `1`. Both statements could not be true at once. The form
+> above is the orientation determinant, agrees with `area2`, and makes the λ
+> assignment below correct as written. Verify with the unit triangle
+> `(0,0), (1,0), (0,1)`: `area2 = 1`, `E01 = y`, `E12 = 1 − x − y`, `E20 = x`,
+> summing to exactly `area2`.
 
 Setup computes `E` once at the top-left corner of the bounding box and then the
 whole traversal is adds. It also parallelizes trivially: `E` can be evaluated at
@@ -402,7 +424,14 @@ area2 = (x1 - x0) * (y2 - y0) - (y1 - y0) * (x2 - x0)
 
 `area2` is the backface cull test — one sign check, before any per-pixel work —
 and a degenerate triangle has `area2 == 0` and must be rejected before it
-divides by zero. With `e0 = E12(p)`, `e1 = E20(p)`, `e2 = E01(p)`, the
+divides by zero.
+
+**Which sign is "back" is deliberately not fixed here.** It depends on world
+handedness and on the winding convention of the model data, and `ModelFormat`
+does not exist yet. `Rasterizer` therefore takes a required `CullMode` with no
+default, whose values name the **screen-space** winding (`CLOCKWISE` = positive
+signed area with y growing downward) rather than asserting which one is a back
+face. Whoever lands `ModelFormat` picks, and records the choice here. With `e0 = E12(p)`, `e1 = E20(p)`, `e2 = E01(p)`, the
 barycentric weights are:
 
 ```text
@@ -415,8 +444,31 @@ Compute `1 / area2` once at setup and multiply.
 a shared edge is drawn twice (visible with blending, and wasted work regardless)
 or zero times (a seam of background pixels). Adopt the standard **top-left rule**:
 a pixel on an edge is inside only if that edge is a top edge or a left edge.
-This is a decision made once at setup by biasing each edge's constant term by −1
-where the rule excludes it, so the inner loop stays a plain sign test.
+This is a decision made once at setup by biasing each edge's constant term, so
+the inner loop stays a plain sign test.
+
+**The bias is not −1.** An earlier draft said to bias by −1, which is the
+*fixed-point* subpixel idiom — in 16.16 or 4.8 subpixel coordinates, −1 is one
+subpixel step and excludes exactly the on-edge case. This is a `float`
+rasterizer (§ 2), where −1 is an entire pixel. Use a per-edge bias of `0.0f`
+when the edge is owned and `Float.MIN_VALUE` when it is not; the test `e >= bias`
+is then *exactly* `e >= 0` or `e > 0`, with no epsilon and no tolerance.
+
+Exactness here has a prerequisite that is easy to miss: the two triangles
+sharing an edge must produce edge functions that are **bitwise negations** of one
+another, or the rule stops deciding the pixel and a seam reappears. Two
+consequences follow, both load-bearing:
+
+- Compute the edge constant in the cross-product form `px*qy − qx*py`, because
+  IEEE subtraction is exactly antisymmetric. The algebraically identical
+  `−(dx*px + dy*py)` is not, once rounding enters.
+- **Evaluate** `dx*x + rowConst` per pixel rather than accumulating `e += dx`
+  along the span. Accumulation drifts the two triangles' values apart by a few
+  ulp, which is all it takes.
+
+Assert this directly: a test should check that the shared edge function is
+exactly `0.0f` at a pixel on the edge. Without that assertion, fill-rule tests
+silently degrade into coverage tests and stop testing the rule at all.
 
 ### Bounding box
 
@@ -706,17 +758,25 @@ matches what a GPU would produce, which makes visual comparison against a
 reference renderer meaningful.
 
 **Computing the derivatives cheaply.** Do *not* evaluate `∂u/∂x` per pixel.
-Strategy 2 in § 8 hands them over for free: the segment loop already computes
-exact `u, v` at both ends of an N-pixel segment, so
+
+An earlier draft got these by differencing the two exact endpoints of an N-pixel
+segment — `∂u/∂x ≈ (uEnd − uStart) / N`. **That recipe is obsolete**, because
+§ 11(c) measured the segment path as not worth writing, and the recipe assumed
+segments exist. Use the **quotient rule** instead, which is cheaper, exact, and
+independent of any segmentation:
 
 ```text
-∂u/∂x ≈ (uEnd - uStart) / N          ∂v/∂x ≈ (vEnd - vStart) / N
+∂u/∂x = (udx − u * wdx) * w          where w = 1 / w_clip
 ```
 
-and the same for the vertical direction from the adjacent scanline's segment, or
-from the triangle's setup gradients. That makes **mip selection per segment, not
-per pixel** — the same cadence as the perspective divide, which is the point.
-`log2` reduces to extracting the exponent field of the float, so no `Math.log`
+Every term is already in hand: `udx` and `wdx` are the triangle's setup
+gradients for the `u/w` and `1/w` planes, and `u` and `w` are the values the loop
+just computed for this pixel. The same form gives `∂u/∂y`, `∂v/∂x` and `∂v/∂y`.
+
+Selection still runs **per segment rather than per pixel** — roughly every 16
+pixels — because `log2` and the square root genuinely do not belong in the
+per-pixel path, even though the perspective divide turned out to be affordable
+there. `log2` reduces to extracting the float's exponent field, so no `Math.log`
 call is needed in the loop.
 
 Cheap-and-conservative variants (using only the x derivative, or `max(|∂u|,|∂v|)`
@@ -968,8 +1028,8 @@ Ordered. Each item is a lane from § 1; the ordering is by dependency.
 - [x] `Framebuffer` — `int[]` colour (RGBA8888), `float[]` depth (1/w), tile geometry, padded stride, `clear()`
 - [x] `Camera` — view matrix, projection without a z row, world → clip space
 - [x] `TriangleClipper` — homogeneous near-plane Sutherland-Hodgman, 4-vertex scratch, fan re-triangulation
-- [ ] `Rasterizer` — divide, viewport transform, backface cull, edge setup with top-left fill rule, bounding box, per-worker tile binning
-- [ ] `SpanRenderer` — reference per-pixel path first, then N = 8/16 segment path validated against it
+- [x] `Rasterizer` — divide, viewport transform, backface cull, edge setup with top-left fill rule, bounding box, per-chunk tile binning
+- [x] `SpanRenderer` — reference per-pixel path; segment path deliberately NOT written (§ 11c measured it as no better)
 - [x] `TextureSampler` — bilinear with the −0.5 texel-centre offset, per-segment mip selection
 - [ ] `ModelFormat` — flat binary reader, versioned header
 - [ ] `GltfConverter` — buildscript classpath only; triangulation, mip chains, budget enforcement per `docs/ASSETS.md` § 5

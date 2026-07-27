@@ -21,7 +21,17 @@ package com.openfps.engine.<subsystem>;
 ```
 
 A class in an `*.adapter.*` package must say so in its class Javadoc, and must
-not import from core engine packages:
+not import from core engine packages.
+
+**Scope of that second rule: it governs HAL *platform* adapters** — the classes
+under `hal.adapter.*` and the per-platform modules (`:desktop`, `:android`) whose
+whole purpose is to keep platform APIs out of the engine. It does **not** forbid
+a *subsystem* adapter from using engine services. `resource.adapter.LumpCache`
+and `WadFilePort` import `memory.port.I_MemoryPort` and `common.Constants`;
+`render.adapter.Rasterizer` uses `core.pool` for parallel work. Those are
+correct, and required — `AGENTS.md` rule 1 mandates the shared services for
+exactly this kind of code. A subsystem adapter reimplementing thread management
+to avoid an import would be the actual violation.
 
 ```java
 /**

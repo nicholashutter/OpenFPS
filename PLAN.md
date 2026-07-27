@@ -445,8 +445,8 @@ Render target: `docs/ASSETS.md` § 2. Ordered by dependency.
 - [x] `Framebuffer` — `int[]` colour (RGBA8888, matching libGDX `Pixmap.Format.RGBA8888`), `float[]` depth (1/w), tile geometry, cache-line-padded row stride, `clear()`
 - [x] `Camera` — view matrix, projection matrix (no z row needed — we store 1/w), world → clip space
 - [x] `TriangleClipper` — near-plane Sutherland-Hodgman in homogeneous clip space, allocation-free 4-vertex scratch, fan re-triangulation
-- [ ] `Rasterizer` — perspective divide, viewport transform, backface cull, incremental edge functions with the top-left fill rule, screen-space bounding box, per-worker tile binning
-- [ ] `SpanRenderer` — reference per-pixel path first as the correctness oracle, then the 8/16-pixel segment path validated against it
+- [x] `Rasterizer` — perspective divide, viewport transform, backface cull, edge functions with the top-left fill rule, screen-space bounding box, per-chunk tile binning
+- [x] `SpanRenderer` — reference per-pixel path. The segment path was deliberately not written: measured indistinguishable from per-pixel (`docs/ASSETS.md` § 2)
 - [x] `TextureSampler` — bilinear with the −0.5 texel-centre offset, per-segment mip selection from UV derivatives
 - [ ] `ModelFormat` — flat binary reader, versioned header, near-zero parsing
 - [ ] `GltfConverter` — Gradle buildscript classpath only; triangulation, mip-chain generation, texture decode, `docs/ASSETS.md` § 5 budget enforcement
