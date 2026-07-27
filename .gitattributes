@@ -1,0 +1,41 @@
+# Line-ending normalisation.
+#
+# This project is developed primarily on Windows but builds and runs on Linux,
+# and CI will eventually run on both. Without normalisation, checkouts disagree
+# on line endings and diffs fill with whole-file churn. `text=auto` stores
+# everything as LF in the object database and converts on checkout.
+* text=auto eol=lf
+
+# Shell scripts must stay LF even on a Windows checkout — the Gradle wrapper
+# script is executed by sh on Linux/macOS and CRLF breaks the shebang.
+*.sh        text eol=lf
+gradlew     text eol=lf
+
+# Windows batch files must be CRLF. cmd.exe mis-parses LF-only .bat files.
+*.bat       text eol=crlf
+*.cmd       text eol=crlf
+
+# Explicitly text — these are the formats the project actually contains.
+*.java      text
+*.kts       text
+*.md        text
+*.xml       text
+*.properties text
+*.gltf      text
+
+# Binary. Game data normally lives outside the repo (fetched via `gradlew
+# fetchAssets` — see docs/ASSETS.md), but these markers ensure git never applies
+# line-ending or diff transformation to one that is committed deliberately, such
+# as a small test fixture.
+*.jar       binary
+*.glb       binary
+*.bin       binary
+*.png       binary
+*.jpg       binary
+*.ktx2      binary
+*.dds       binary
+*.wav       binary
+*.ogg       binary
+*.mp3       binary
+*.ttf       binary
+*.otf       binary

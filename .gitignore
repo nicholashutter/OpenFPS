@@ -31,6 +31,22 @@ build/checkstyle-cache
 # Javadoc
 apidocs/
 
+# Game data — never committed. Fetched via `gradlew fetchAssets` and mirrored
+# from our own pinned release. See docs/ASSETS.md.
+#   raw/   — unprocessed upstream downloads
+#   cache/ — the verified, preprocessed payload the engine loads
+assets/raw/
+assets/cache/
+# Belt-and-braces against an accidental multi-megabyte commit. A deliberate
+# small test fixture can still be added with `git add -f`.
+*.glb
+*.gltf
+
+# AI agent worktrees and session state. Each worktree carries a full build/
+# directory; left untracked-but-unignored this is ~120 MB one `git add -A` away
+# from entering history.
+.claude/
+
 # Android / Mobile
 *.apk
 *.aab
