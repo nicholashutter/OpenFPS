@@ -519,6 +519,32 @@ than inventing a magic number.
 ### 13.4 Anti-patterns (instant review failure)
 
 - `new byte[size]` in engine code (use the memory port)
+  - **Sanctioned exception — long-lived engine-owned primitive buffers.**
+    Long-lived, engine-owned primitive buffers whose element type is **not**
+    `byte`, allocated **once at initialisation and released at shutdown**, may
+    be allocated directly. **Named sites only**, listed below. **A hot loop is
+    NOT on its own a qualifying reason.**
+
+    | Sanctioned site | Buffers | Allocated at |
+    |---|---|---|
+    | `render.adapter.Framebuffer` | `int[]` colour (RGBA8888), `float[]` depth (1/w) | `init(w, h)` and `resize(w, h)` only |
+
+    Why the exception exists: `I_MemoryPort` hands out opaque `int` handles
+    over a `byte[]` store and has no read or write operation, so per-pixel
+    handle indirection is not a cost to measure — it is several times the cost
+    of the pixel work itself. The port earns its keep tracking *many, small,
+    short-lived* allocations (that is what tags and `freeByTag` are for); the
+    framebuffer is two arrays allocated once and resized only when the window
+    is. It gets none of the port's benefits and pays its whole cost. The full
+    argument, including the typed-slab alternative that was rejected, is in
+    `engine/src/main/java/com/openfps/engine/render/README.md` § 11(a).
+
+    The wording admits `Framebuffer` and the audio mixing buffers, and excludes
+    per-frame and per-entity allocation — which is what the rule actually
+    exists to prevent. If a third and fourth candidate appear, the pattern is
+    real and `I_MemoryPort` should grow a typed-slab capability instead;
+    revisit § 11(a) at that point rather than lengthening the table.
+
 - `System.nanoTime()` / `System.currentTimeMillis()` in engine code — use
   `I_TimePort`: `nanos()`/`millis()` for monotonic timing, `epochMillis()` for
   persisted timestamps. The only sanctioned direct callers are the time-port
