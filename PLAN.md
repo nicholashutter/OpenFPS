@@ -431,7 +431,7 @@ The Gradle **wrapper is pinned at 8.13**, not 8.10: `gdx-backend-android 1.14.2 
 - [ ] `MapLoader` — read THINGS / LINEDEFS / SECTORS from WAD
 - [ ] `BspTraverser` — leaf lookup, reused in both gameplay and render
 
-### Phase 5 — Render (software triangle rasterizer) — **planned**
+### Phase 5 — Render (software triangle rasterizer) — **done, pending polish**
 
 Full specification: `engine/src/main/java/com/openfps/engine/render/README.md`.
 Render target: `docs/ASSETS.md` § 2. Ordered by dependency.
@@ -450,6 +450,10 @@ Render target: `docs/ASSETS.md` § 2. Ordered by dependency.
 - [x] `TextureSampler` — bilinear with the −0.5 texel-centre offset, per-segment mip selection from UV derivatives
 - [x] `ModelFormat` — flat binary reader, versioned header, near-zero parsing
 - [x] `GltfConverter` — Gradle buildscript classpath only; triangulation, mip-chain generation, texture decode, `docs/ASSETS.md` § 5 budget enforcement
+- [x] **Integration** — `SoftwareRenderPort` implements `I_RenderPort`, `GameLoop` publishes `RenderFrameEvent`, `:desktop` presents via `FramebufferPresenter`. A real Kenney model (368 tris, textured) renders to window and to PNG
+- [x] **Backface winding** — measured against a no-cull oracle: `CullMode.CLOCKWISE`
+- [ ] Fix `EngineSession.stop()` bus-drain ordering (drains after `pool.shutdown()`)
+- [ ] Default to 720p60 and expose bilinear filtering as a quality toggle
 
 Retired from this phase and deliberately not listed: `BspTraverser` (moved to Phase 4 as a gameplay/collision structure), `WallClipper`, `VisplaneBuilder`, `ColumnRenderer`, palette blitting.
 

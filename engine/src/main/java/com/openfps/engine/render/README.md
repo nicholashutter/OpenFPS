@@ -88,11 +88,25 @@ been expressed. Counting per (chunk, tile) → serial prefix sum → scatter, wi
 the prefix sum walking tiles outermost so a tile's entries form one contiguous
 run in ascending triangle order.
 
-**All eight components have landed.** What remains is *integration*: nothing is
-wired into `I_RenderPort`, so the rasterizer draws into a `Framebuffer` and no
-frame reaches a window. Every component is tested in isolation; none has drawn a
-real model. Expect the first end-to-end run to surface something no unit test
-predicted — that is normal, and it is why the wiring is its own step.
+**All eight components have landed, and the pipeline is wired end to end.**
+`SoftwareRenderPort` implements `I_RenderPort`, `GameLoop` drives it, and
+`:desktop` presents the result. A real Kenney model (Blaster Kit, 368 triangles,
+textured) renders correctly both to a window and to a PNG.
+
+**What integration found that unit tests could not.** This section previously
+said to expect exactly this, and it is worth recording what actually turned up,
+because both bugs were invisible to a passing 748-test suite:
+
+1. **`RenderFrameEvent` had no producer.** The event class, `EventFactory`
+   method, `SubsystemId.R_` target and `RenderSubsystem` branch all existed and
+   were tested. Nothing ever published one, so R_ had never been invoked at all.
+   `GameLoop` now publishes one per tic, and `GameLoopRenderEventTest` asserts it.
+2. **The world was mirrored** — see the § 4 correction. A wrong basis order that
+   a unit test had *locked in*.
+
+There is also a live defect this surfaced but did not cause: `EngineSession.stop()`
+drains the bus **after** `pool.shutdown()`, so trailing events reach a dead pool.
+Any fan-out subsystem hits it; it needs its own fix, not a renderer workaround.
 
 `GltfConverter` lives in the separate `:tools` module, never on the runtime
 classpath; `verifyToolsIsolation` proves it mechanically on every build.
@@ -200,15 +214,42 @@ camera (rotation `R`, position `eye`) that inverse is exact and cheap:
 **Basis derivation — the operand order is normative:**
 
 ```text
-right = normalize(up × forward)
-up    = forward × right
+right = normalize(forward × up)      // NOT up × forward
+up    = right × forward
 ```
 
-An earlier draft left this unpinned, and it is not recoverable from "left-handed,
-+z forward" alone: a reader can write `forward × up` just as naturally and get a
-**mirrored image**, which looks entirely plausible until something asymmetric
-appears on screen. `CameraTest.shouldDeriveLeftHandedBasisWhenLookingDownWorldZ`
-locks it.
+> **Corrected twice, and the second correction was found by looking at a
+> rendered image rather than by reasoning.** An early draft left the order
+> unpinned. It was then pinned — to `up × forward`, which is **the mirror**, and
+> a test was written that locked the wrong answer in. It survived every unit
+> test and was caught the first time a real model was drawn.
+>
+> Why `up × forward` is wrong, concretely. Camera at +z looking at the origin
+> gives `forward = (0,0,−1)`, `up = (0,1,0)`:
+>
+> ```text
+> up × forward = (1*(−1) − 0*0,  0*0 − 0*(−1),  0*0 − 1*0) = (−1, 0, 0)
+> ```
+>
+> `right` is world **−X**, so world +x maps to camera-*left* and every model
+> renders horizontally mirrored. With `forward × up` you get `(+1, 0, 0)`.
+>
+> A second case worth checking, because it catches a sign error the first
+> permits: looking down +x, `forward × up = (0,0,+1)`. Physically — right-handed
+> world, +x east, +y up, so +z is south — face east and your right hand points
+> south. `right = +z` is what a person standing there would say.
+>
+> **This also delivers the left-handedness the section claims.** With the
+> corrected order `right × up == −forward`, so `(right, up, forward)` is a
+> left-handed triple in a right-handed world, which is exactly what "+x right,
+> +y up, +z into the screen" means. The old order produced a *right*-handed
+> triple while claiming left — the mirror was the claim failing, not a separate
+> bug.
+>
+> **A mirrored render is nearly invisible.** Most game art is close to
+> symmetric; the blaster that exposed this looked entirely correct until an
+> asymmetric detail *within a single face* was checked. If this order is ever
+> changed again, verify with an asymmetric marker, not with reasoning.
 
 **`near` must be positive.** `1/w` is evaluated at `w = near`, so a zero or
 negative near plane is a division by zero or a sign inversion, not merely a bad
@@ -431,12 +472,31 @@ area2 = (x1 - x0) * (y2 - y0) - (y1 - y0) * (x2 - x0)
 and a degenerate triangle has `area2 == 0` and must be rejected before it
 divides by zero.
 
-**Which sign is "back" is deliberately not fixed here.** It depends on world
-handedness and on the winding convention of the model data, and `ModelFormat`
-does not exist yet. `Rasterizer` therefore takes a required `CullMode` with no
-default, whose values name the **screen-space** winding (`CLOCKWISE` = positive
-signed area with y growing downward) rather than asserting which one is a back
-face. Whoever lands `ModelFormat` picks, and records the choice here. With `e0 = E12(p)`, `e1 = E20(p)`, `e2 = E01(p)`, the
+**Decided by measurement: `CullMode.CLOCKWISE`.** `Rasterizer` still takes a
+required `CullMode` with no default, whose values name the **screen-space**
+winding (`CLOCKWISE` = positive signed area with y growing downward) rather than
+asserting which one is a back face; `SoftwareRenderPort.BACKFACE_CULL_MODE`
+holds the engine's choice.
+
+**How it was settled, because the method matters more than the answer.** A
+z-buffer draws a *closed* mesh correctly with **no culling at all**, so
+`CullMode.NONE` is an oracle that assumes nothing about winding. Render a
+six-coloured cube three ways and the mode whose output is *pixel-identical* to
+`NONE` is correct. The other mode does not error — it renders the cube's
+**interior**, which looks like a perfectly plausible open box. That is why this
+cannot be eyeballed on arbitrary geometry.
+
+> **This value is NOT independent of § 4's basis order.** It was originally
+> measured as `COUNTER_CLOCKWISE`, and flipped to `CLOCKWISE` when the mirrored
+> basis was corrected — because a handedness change reverses screen-space
+> winding. **If `Camera`'s basis ever changes, re-run the oracle. Do not edit
+> the expectation to match.** Both the constant's Javadoc and the pinning test
+> carry this warning.
+>
+> The flip count now resolves to two, cancelling: the view transform is
+> orientation-reversing and the `sy` flip reverses again, so glTF's
+> CCW-from-outside front face stays CCW on screen. That is recorded as a *check*
+> on the measurement, not as its justification. With `e0 = E12(p)`, `e1 = E20(p)`, `e2 = E01(p)`, the
 barycentric weights are:
 
 ```text
@@ -1018,10 +1078,21 @@ check belongs in the adapter's tests, not in R_.
 
 ## 13. Files
 
-Present:
+`engine/.../render/`:
 
-- `port/I_RenderPort.java`
-- `adapter/NullRenderPort.java`
+- `port/I_RenderPort.java`, `port/I_RenderPortFactory.java`
+- `adapter/NullRenderPort.java` — headless stub
+- `adapter/SoftwareRenderPort.java` — the real port; composes the pipeline in § 5 order over four `submitParallel` passes
+- `adapter/Rgba.java`, `Framebuffer.java`, `Vec3.java`, `Mat4.java`, `Camera.java`, `TriangleClipper.java`, `Rasterizer.java`, `SpanRenderer.java`, `MipChain.java`, `TextureSampler.java`, `ModelFormat.java`, `ModelFormatException.java`
+
+`desktop/.../`:
+
+- `FramebufferPresenter.java` — uploads `copyColorTo`'s de-padded copy as an RGBA8888 `Pixmap` (§ 12)
+- `GdxScreenshot.java`
+
+`tools/.../` — build-time only, never on the runtime classpath:
+
+- `gltf/GltfConverter.java` and support, `model/ModelBuilder.java`, `model/MipGenerator.java`, `GltfConverterMain.java`, `RenderPreviewMain.java` (renders one frame to a PNG — the headless verification path)
 
 ## 14. TODO (Phase 5)
 
@@ -1038,6 +1109,11 @@ Ordered. Each item is a lane from § 1; the ordering is by dependency.
 - [x] `TextureSampler` — bilinear with the −0.5 texel-centre offset, per-segment mip selection
 - [x] `ModelFormat` — flat binary reader, versioned header
 - [x] `GltfConverter` — buildscript classpath only; triangulation, mip chains, budget enforcement per `docs/ASSETS.md` § 5
+- [x] **Integration** — `SoftwareRenderPort`, `GameLoop` publishes `RenderFrameEvent`, `:desktop` presents. A real Kenney model renders to window and PNG
+- [x] **Backface winding** — measured, `CullMode.CLOCKWISE` (§ 7)
+- [ ] Fix `EngineSession.stop()` bus-drain ordering — drains after `pool.shutdown()`; affects any fan-out subsystem
+- [ ] Measure the 64×64 tile size — still the one unmeasured constant (§ 11c)
+- [ ] Default to 720p60; expose bilinear as a quality toggle (`docs/ASSETS.md` § 2)
 
 ---
 
