@@ -5,6 +5,7 @@
 
 package com.openfps.engine.hal.adapter;
 
+import com.openfps.engine.hal.adapter.desktop.DesktopAdapterFactory;
 import com.openfps.engine.hal.adapter.nulladapter.NullAdapterFactory;
 import com.openfps.engine.hal.adapter.sqlite.SqliteAdapterFactory;
 
@@ -49,9 +50,7 @@ public final class AdapterFactorySelector
             case SQLITE:
                 return new SqliteAdapterFactory();
             case DESKTOP:
-                // Phase 1.5 step 4 replaces this with DesktopAdapterFactory.
-                throw new UnsupportedOperationException(
-                    "DESKTOP backend is not implemented yet — use NULL or SQLITE");
+                return new DesktopAdapterFactory();
             default:
                 throw new IllegalArgumentException("unknown HAL backend: " + backend);
         }
