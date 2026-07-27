@@ -3,22 +3,66 @@
 > W_ reads resource files (textures, maps, sprites, sounds, etc.) and caches
 > them so the same lump isn't read twice.
 
-## What lives here (planned)
+## What lives here
 
-- `WadReader` — opens a `.wad` file and reads its lump directory
+- `WadReader` — opens a `.wad` file (or an in-memory image) and reads its lump directory
 - `LumpCache` — demand-loaded, reference-counted cache of lump bytes
-- `MapLumpParser` — parses the map lumps (THINGS, LINEDEFS, SECTORS, …)
-- `ImageDecoder` — decodes DOOM-format patches and flats
+- `MapLumpParser` — parses the map lumps (THINGS, LINEDEFS, SECTORS, VERTEXES)
+- `LittleEndian` — the LE primitive readers everything above shares
+- `WadFilePort` — the real `I_WadPort`, wiring the three together
+- `ImageDecoder` — decodes DOOM-format patches and flats *(still planned)*
 
 ## Subsystem layout
 
 ```
 resource/
+├── WadException.java        runtime failure for every malformed container
 ├── port/
-│   └── I_WadPort.java   interface — read + cache lumps
+│   └── I_WadPort.java       interface — read + cache lumps
 └── adapter/
-    └── NullWadPort.java stub
+    ├── LittleEndian.java    little-endian primitive readers
+    ├── WadReader.java       header + directory parse, lump slicing
+    ├── LumpCache.java       demand-loaded, ref-counted, bounded
+    ├── MapLumpParser.java   THINGS / LINEDEFS / SECTORS / VERTEXES
+    ├── WadFilePort.java     real I_WadPort implementation
+    └── NullWadPort.java     stub
 ```
+
+### Endianness
+
+Every WAD field is little-endian. The engine's other byte-packing site,
+`memory/adapter/ZoneMemoryPort`, packs its allocation headers **big**-endian
+because nothing outside the zone heap reads them. Do not copy that code
+here — use `LittleEndian`.
+
+### Reference counting and the port API
+
+`I_WadPort` has no unpin operation, so the three read paths map onto the
+cache like this:
+
+| Call | Effect |
+|---|---|
+| `readLump(...)` | loads the lump, leaves it **unpinned** and evictable |
+| `precacheLump(i)` | loads and **pins** it — never chosen as an eviction victim |
+| `releaseLump(i)` | unpins; the lump is evicted the moment the last reference goes |
+| `flushCache()` | drops everything, pinned or not |
+
+`releaseLump(int)` and `openInMemory(byte[], String)` are additions on
+`WadFilePort` beyond the interface. Callers holding the interface type are
+unaffected.
+
+### The memory-port tension
+
+`STYLE.md` routes every allocation through `I_MemoryPort`, but that port
+hands back opaque int handles and has **no read or write operation** — a
+lump behind a handle could never be parsed or handed to the render and
+audio subsystems. The compromise: the memory port owns the **budget and
+lifecycle** (every resident lump holds a matching
+`allocate(size, TAG_CACHE)` handle; eviction calls `free`), and the bytes
+come from `WadReader.sliceLump` — the single lump-buffer site in the
+subsystem. See the class Javadoc on `LumpCache` for the full argument and
+the one honest gap. If `I_MemoryPort` ever grows a read/write API,
+`LumpCache` and `WadReader.sliceLump` are the only two places to change.
 
 ## WAD file format
 
@@ -142,13 +186,20 @@ https://github.com/flibitijibibo/SDLPoP/blob/master/img2pic.c
 
 ## Files
 
+- `WadException.java`
 - `port/I_WadPort.java`
+- `adapter/LittleEndian.java`
+- `adapter/WadReader.java`
+- `adapter/LumpCache.java`
+- `adapter/MapLumpParser.java`
+- `adapter/WadFilePort.java`
 - `adapter/NullWadPort.java`
 
 ## TODO (Phase 2)
 
-- `WadReader` — header + directory parse
-- `LumpCache` — demand-loaded, ref-counted
-- `MapLumpParser` — read THINGS / LINEDEFS / SECTORS
-- `ImageDecoder` — patch + flat decode
-- `BlockmapBuilder` — pre-compute BLOCKMAP from LINEDEFS
+- [x] `WadReader` — header + directory parse
+- [x] `LumpCache` — demand-loaded, ref-counted
+- [x] `MapLumpParser` — read THINGS / LINEDEFS / SECTORS / VERTEXES
+- [ ] `ImageDecoder` — patch + flat decode
+- [ ] `BlockmapBuilder` — pre-compute BLOCKMAP from LINEDEFS
+- [ ] A `W_` subsystem registering `WadFilePort` with the `SubsystemRegistry`
