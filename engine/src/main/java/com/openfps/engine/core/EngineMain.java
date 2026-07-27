@@ -99,8 +99,17 @@ public final class EngineMain
         new EngineMain().run(GameConfig.headless(rate), useSqlite, headless);
     }
 
-    /** Parses the --fps=N argument. Defaults to 60 if not present. */
-    static FrameRate parseFpsArg(final String[] args)
+    /**
+     * Parses the {@code --fps=N} argument. Defaults to 60 if not present.
+     *
+     * Public so the platform launchers ({@code :desktop}, {@code :android})
+     * can reuse it instead of each growing its own copy of the same parse —
+     * STYLE.md § 13.
+     *
+     * @param args the CLI arguments, may be null
+     * @return the requested frame rate
+     */
+    public static FrameRate parseFpsArg(final String[] args)
     {
         if (args == null)
         {
@@ -146,6 +155,35 @@ public final class EngineMain
      */
     public void run(final GameConfig config, final boolean useSqlite, final boolean headless)
     {
+        run(config, AdapterFactorySelector.create(selectBackend(useSqlite, headless)));
+    }
+
+    /**
+     * Runs the engine against a caller-supplied HAL factory.
+     *
+     * This is the injection point for platform launchers. {@code :engine}
+     * must not depend on {@code :desktop} or {@code :android} — that would
+     * be a module cycle and would drag a windowing toolkit into the module
+     * CI builds headlessly — so {@link AdapterFactorySelector} can never
+     * name a platform factory that lives outside this module. Inverting it
+     * costs one parameter: the launcher constructs its own
+     * {@link I_AdapterFactory} and hands it in, and every other bootstrap
+     * decision stays here where it belongs.
+     *
+     * The factory is taken uninitialized; this method owns its
+     * {@code init()} and {@code shutdown()}, on the calling thread, which
+     * must be the main thread when the factory yields a real window.
+     *
+     * @param config the game config (rate + maxTics)
+     * @param hal    the uninitialized HAL factory to boot against
+     */
+    public void run(final GameConfig config, final I_AdapterFactory hal)
+    {
+        if (hal == null)
+        {
+            throw new IllegalArgumentException("hal must not be null");
+        }
+
         // -- 1. Memory port
         final I_MemoryPort memory = MemoryPortFactory.createJvm(Constants.ZONE_HEAP_SIZE);
         memory.init(Constants.ZONE_HEAP_SIZE);
@@ -153,7 +191,6 @@ public final class EngineMain
         // -- 2. HAL adapters
         // One factory owns every port for the chosen backend. init() and
         // shutdown() are main-thread only — see I_AdapterFactory.
-        final I_AdapterFactory hal = AdapterFactorySelector.create(selectBackend(useSqlite, headless));
         hal.init();
         final I_TimePort timePort = hal.getTimePort();
         final I_InputPort inputPort = hal.getInputPort();
