@@ -190,7 +190,11 @@ public void spawnEntity(final int entityType)
   Sanctioned exceptions: the time-port adapters, and shutdown timeouts that
   never feed simulation state.
 - Do NOT `new Thread(...)` for event handling — use `WorkerPool`. The game loop
-  is the exception: it is the producer and runs on the calling thread.
+  is the exception: it is the producer, so it gets its own dedicated thread
+  (`openfps-gameloop`). It cannot run on the pool it feeds (deadlock at
+  `workerCount == 1`), and it cannot run on main either — **the main thread is
+  reserved for the platform event pump**, because GLFW requires window calls
+  and `glfwPollEvents()` there.
 - Do NOT add magic numbers — use `Constants` or `FrameRate`
 - Do NOT implement `Runnable` for a subsystem — extend `Subsystem`
 - Do NOT instantiate `JvmMemoryPort` / `SharedEventBus` / `WorkerPool` / `SqliteUserProfilePort` directly — use the factories

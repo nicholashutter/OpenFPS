@@ -6,11 +6,19 @@
 package com.openfps.engine.hal.port;
 
 /**
- * I_ Port interface — raw network send/receive.
- * Used by the G_ networking subsystem; abstracts UDP sockets
- * across desktop and mobile targets.
+ * I_ Port interface — raw UDP datagram send/receive.
+ *
+ * This is the HAL-level socket abstraction: bytes in, bytes out, no
+ * knowledge of peers, tics, or the game protocol. The G_ networking
+ * subsystem builds its P2P model on top of this.
+ *
+ * Not to be confused with {@code com.openfps.engine.net.port.I_NetworkPort},
+ * which is the P2P-level port (connect, broadcastTicCmd, discoverPeers).
+ * Both interfaces used to be named {@code I_NetworkPort}; this one was
+ * renamed to {@code I_DatagramPort} because the collision was going to
+ * become actively confusing once a real desktop implementation landed.
  */
-public interface I_NetworkPort
+public interface I_DatagramPort
 {
     /**
      * Sends a raw datagram to the given address.

@@ -22,12 +22,14 @@ import com.openfps.engine.core.subsystem.impl.MemorySubsystem;
 import com.openfps.engine.core.subsystem.impl.NetSubsystem;
 import com.openfps.engine.core.subsystem.impl.RenderSubsystem;
 import com.openfps.engine.gameplay.adapter.NullGameplayPort;
-import com.openfps.engine.hal.adapter.nulladapter.NullAdapterFactory;
-import com.openfps.engine.hal.adapter.sqlite.SqliteAdapterFactory;
+import com.openfps.engine.hal.adapter.AdapterFactorySelector;
+import com.openfps.engine.hal.adapter.HalBackend;
+import com.openfps.engine.hal.adapter.I_AdapterFactory;
 import com.openfps.engine.hal.port.I_InputPort;
 import com.openfps.engine.hal.port.I_SystemInfoPort;
 import com.openfps.engine.hal.port.I_TimePort;
 import com.openfps.engine.hal.port.I_UserProfilePort;
+import com.openfps.engine.hal.port.I_WindowPort;
 import com.openfps.engine.memory.factory.MemoryPortFactory;
 import com.openfps.engine.memory.port.I_MemoryPort;
 import com.openfps.engine.net.adapter.NullNetworkPort;
@@ -65,6 +67,9 @@ public final class EngineMain
 
     /** Default event-bus capacity. */
     private static final int DEFAULT_BUS_CAPACITY = 1024;
+
+    /** How long the windowed path waits for the game loop to stop, in ms. */
+    private static final long LOOP_JOIN_TIMEOUT_MS = 2000L;
 
     /**
      * Boots the engine.
@@ -146,35 +151,15 @@ public final class EngineMain
         memory.init(Constants.ZONE_HEAP_SIZE);
 
         // -- 2. HAL adapters
-        // Both factories use null ports for time / input / network / file
-        // / system info; they differ only on the user profile backend.
-        // This is a stepping stone to the real desktop factory (Phase 1.5).
-        final I_TimePort timePort;
-        final I_InputPort inputPort;
-        final I_SystemInfoPort sysinfo;
-        final I_UserProfilePort userProfile;
-        final AutoCloseable halCloser;
-
-        if (useSqlite && !headless)
-        {
-            final SqliteAdapterFactory sqlite = new SqliteAdapterFactory();
-            sqlite.init();
-            timePort  = sqlite.getTimePort();
-            inputPort = sqlite.getInputPort();
-            sysinfo   = sqlite.getSystemInfoPort();
-            userProfile = sqlite.getUserProfilePort();
-            halCloser = sqlite::shutdown;
-        }
-        else
-        {
-            final NullAdapterFactory nullFactory = new NullAdapterFactory();
-            nullFactory.init();
-            timePort  = nullFactory.getTimePort();
-            inputPort = nullFactory.getInputPort();
-            sysinfo   = nullFactory.getSystemInfoPort();
-            userProfile = nullFactory.getUserProfilePort();
-            halCloser = nullFactory::shutdown;
-        }
+        // One factory owns every port for the chosen backend. init() and
+        // shutdown() are main-thread only — see I_AdapterFactory.
+        final I_AdapterFactory hal = AdapterFactorySelector.create(selectBackend(useSqlite, headless));
+        hal.init();
+        final I_TimePort timePort = hal.getTimePort();
+        final I_InputPort inputPort = hal.getInputPort();
+        final I_SystemInfoPort sysinfo = hal.getSystemInfoPort();
+        final I_UserProfilePort userProfile = hal.getUserProfilePort();
+        final I_WindowPort window = hal.getWindowPort();
 
         // -- 3. Worker count from HAL
         final int logicalCores = sysinfo.logicalProcessorCount();
@@ -205,16 +190,27 @@ public final class EngineMain
         pool.init(workerCount);
         pool.start();
 
-        // -- 8. Event factory + GameLoop (producer)
-        // The loop is the sole event producer and cannot run on the worker
-        // pool — it would occupy a consumer thread for the whole run and
-        // deadlock at workerCount == 1. It runs on this thread instead;
-        // the workers are already hot and draining the bus in parallel.
+        // -- 8. Event factory + GameLoop (producer) on its own thread
+        //
+        // The loop gets a dedicated thread because both other candidates
+        // are ruled out:
+        //   - NOT a worker-pool thread: it would occupy a consumer for the
+        //     whole run and deadlock outright at workerCount == 1.
+        //   - NOT the main thread: GLFW requires window creation and
+        //     glfwPollEvents() on the main thread, so main is reserved for
+        //     the platform pump below.
         final EventFactory eventFactory = new EventFactory(timePort);
         final GameLoop loop = new GameLoop(timePort, bus, eventFactory, config);
-        loop.run();
+        final Thread loopThread = new Thread(loop, "openfps-gameloop");
+        loopThread.start();
 
-        // -- 9. Drain and stop
+        // -- 9. Main thread: platform event pump (windowed) or just wait
+        runPlatformPump(window, loop, loopThread);
+
+        // -- 10. Drain and stop
+        // Order matters: the loop must be fully stopped before the pool
+        // drains the bus. SharedEventBus.publish() throws once the bus
+        // leaves READY, so a still-running producer would crash here.
         try
         {
             pool.shutdown();
@@ -230,14 +226,7 @@ public final class EngineMain
         // -- 10. Save profile with updated playtime + last-login
         saveProfile(userProfile, profile, timePort);
 
-        try
-        {
-            halCloser.close();
-        }
-        catch (final Exception e)
-        {
-            LOG.warn("HAL adapter close threw", e);
-        }
+        hal.shutdown();
         try
         {
             memory.shutdown();
@@ -248,6 +237,89 @@ public final class EngineMain
         }
 
         LOG.info("OpenFPS engine shut down cleanly.");
+    }
+
+    /**
+     * Runs the main thread until the game loop finishes.
+     *
+     * With a real window this is the GLFW event pump: drain OS events,
+     * present a frame, repeat. GLFW requires both on the main thread,
+     * which is exactly why the game loop was given its own.
+     *
+     * Headless there is nothing to pump, so we simply join — no busy-wait
+     * on a no-op window, and the behaviour is identical to before the
+     * window port existed.
+     *
+     * @param window the window port (real or null)
+     * @param loop the game loop, for requesting stop
+     * @param loopThread the thread the loop is running on
+     */
+    private static void runPlatformPump(final I_WindowPort window,
+                                        final GameLoop loop,
+                                        final Thread loopThread)
+    {
+        if (!window.isRealWindow())
+        {
+            joinLoop(loopThread, 0L);
+            return;
+        }
+
+        while (loopThread.isAlive() && !window.isCloseRequested())
+        {
+            window.pumpEvents();
+            window.present();
+        }
+
+        // Either the loop ended on its own or the user closed the window.
+        // shutdown() is idempotent, so calling it in both cases is fine.
+        loop.shutdown();
+        joinLoop(loopThread, LOOP_JOIN_TIMEOUT_MS);
+    }
+
+    /**
+     * Waits for the game loop thread to exit.
+     *
+     * A bounded wait is used for the windowed path because
+     * {@code SharedEventBus.publish()} blocks on a full queue — an
+     * unbounded join could hang forever if the workers ever wedged.
+     *
+     * @param loopThread the thread to join
+     * @param timeoutMs milliseconds to wait, or 0 to wait indefinitely
+     */
+    private static void joinLoop(final Thread loopThread, final long timeoutMs)
+    {
+        try
+        {
+            loopThread.join(timeoutMs);
+            if (loopThread.isAlive())
+            {
+                LOG.warn("GameLoop did not stop within {} ms — continuing shutdown", timeoutMs);
+            }
+        }
+        catch (final InterruptedException e)
+        {
+            LOG.info("Main thread interrupted — shutting down");
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    /**
+     * Picks the HAL backend from the CLI flags.
+     *
+     * {@code --headless} wins over everything: it forces the fully null
+     * backend regardless of the profile choice.
+     */
+    private static HalBackend selectBackend(final boolean useSqlite, final boolean headless)
+    {
+        if (headless)
+        {
+            return HalBackend.NULL;
+        }
+        if (useSqlite)
+        {
+            return HalBackend.SQLITE;
+        }
+        return HalBackend.NULL;
     }
 
     /**

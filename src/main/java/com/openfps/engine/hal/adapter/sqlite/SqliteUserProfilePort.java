@@ -65,6 +65,15 @@ public final class SqliteUserProfilePort implements I_UserProfilePort
     private static final String DEFAULT_DB_FILE = "profile.db";
     private static final String ENV_DB_PATH = "OPENFPS_PROFILE_DB";
 
+    /**
+     * System-property override for the database path, checked before
+     * {@link #ENV_DB_PATH}. Exists because environment variables cannot be
+     * set from inside a running JVM, so an env-only override is
+     * untestable — a test that wanted a scratch database had no way to ask
+     * for one and would open the user's real profile instead.
+     */
+    private static final String PROP_DB_PATH = "openfps.profile.db";
+
     private static final String SCHEMA_SQL = """
         CREATE TABLE IF NOT EXISTS user_profile (
             id                     TEXT    PRIMARY KEY NOT NULL,
@@ -321,6 +330,12 @@ public final class SqliteUserProfilePort implements I_UserProfilePort
 
     private static String resolveDbPath()
     {
+        // Precedence: system property > environment variable > default.
+        final String propOverride = System.getProperty(PROP_DB_PATH);
+        if (propOverride != null && !propOverride.isBlank())
+        {
+            return propOverride;
+        }
         final String override = System.getenv(ENV_DB_PATH);
         if (override != null && !override.isBlank())
         {

@@ -370,7 +370,11 @@ backend stays swappable (Logback on desktop, an Android binding in Phase 3+).
 
 ## 9. Threading
 
-- The game loop runs on a single thread and is the sole event producer
+- The game loop is the sole event producer and runs on its own dedicated
+  thread (`openfps-gameloop`) — never on the worker pool, never on main
+- **The main thread belongs to the platform**: it runs the window event pump
+  (`I_WindowPort.pumpEvents()`), because GLFW requires window calls there.
+  Headless, it simply joins the loop thread
 - All event dispatch happens on the `WorkerPool` (N = logical cores / 2)
 - Audio, network, and render each get their own thread when adapters are wired
 - Cross-thread communication goes through the event bus, backed by a bounded
@@ -459,7 +463,7 @@ Every module uses them. New code that bypasses them is a bug.
 | `WorkerPool` (via `I_ThreadPoolPort`) | `com.openfps.engine.core.pool` | All parallel work. **Never** `new Thread(...)` for engine work. |
 | `I_SystemInfoPort` | `com.openfps.engine.hal.port` | Anything that depends on hardware — core count, memory, OS, JVM version. |
 | `I_TimePort` | `com.openfps.engine.hal.port` | Anything that reads time. `nanos()`/`millis()` are monotonic (tic timing, durations); `epochMillis()` is wall clock (persisted timestamps). **Never** `System.nanoTime()` / `System.currentTimeMillis()` in engine code — and never store a monotonic reading as a date. |
-| `I_InputPort`, `I_NetworkPort`, `I_FilePort` | `com.openfps.engine.hal.port` | HAL capabilities. |
+| `I_InputPort`, `I_DatagramPort`, `I_FilePort` | `com.openfps.engine.hal.port` | HAL capabilities. |
 | `I_UserProfilePort` | `com.openfps.engine.hal.port` | All user-profile reads/writes. The engine never touches SQLite or Room directly. Desktop impl is `SqliteUserProfilePort` (Xerial); Android impl (Phase 3+) will use Room. |
 | `Subsystem` base class | `com.openfps.engine.core.subsystem` | Every new subsystem. **Don't** implement `Runnable` or your own state machine. |
 | `SubsystemRegistry` | `com.openfps.engine.core.subsystem` | Registering / looking up / dispatching to subsystems. |

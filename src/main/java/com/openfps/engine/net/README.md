@@ -501,11 +501,11 @@ Two API consequences, recorded now and executed later:
    per call, and a poor fit for redundant redelivery, which delivers *many* tics
    for one peer in a single packet. Phase 3 should replace it with a
    fill-caller's-buffer form.
-2. **Two interfaces are both named `I_NetworkPort`** — `net.port` (high-level
-   G_) and `hal.port` (low-level UDP). This becomes actively confusing the
-   moment `DesktopNetworkPort` lands in Phase 1.5. Recommend renaming the HAL
-   one to `I_DatagramPort`, which is what it is (`send`/`receive`/`bind`/`close`).
-   Touchpoints: `hal/README.md` port table, `STYLE.md` § 13.1, `NullAdapterFactory`.
+2. ~~**Two interfaces are both named `I_NetworkPort`**~~ — **DONE (Phase 1.5
+   step 0a).** `hal.port.I_NetworkPort` → `I_DatagramPort` and
+   `NullNetworkPort` → `NullDatagramPort`. `net.port.I_NetworkPort` keeps its
+   name — it is the high-level G_ port. Touchpoints updated: `hal/README.md`
+   port table, `STYLE.md` § 13.1, `PLAN.md` § 3.8, both HAL factories.
 
 ## 12. Corrections applied to this file
 

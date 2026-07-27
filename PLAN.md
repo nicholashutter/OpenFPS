@@ -218,7 +218,7 @@ kept as the Phase 2 design; the wrapper lands with `WadReader`.
 
 - `I_TimePort` — `millis()`, `nanos()` (both monotonic), `epochMillis()` (wall clock, for persisted timestamps), `init()`, `shutdown()`
 - `I_InputPort` — `sampleInput(int)`, `isShutdownRequested()`, `init()`, `shutdown()`
-- `I_NetworkPort` — `send`, `receive`, `bind`, `close`, `processTic`, `init`, `shutdown`
+- `I_DatagramPort` — `send`, `receive`, `bind`, `close`, `processTic`, `init`, `shutdown`
 - `I_FilePort` — `open`, `exists` + nested `I_FileHandle`
 - `I_SystemInfoPort` (Phase 1.2) — `logicalProcessorCount`, `physicalProcessorCount`, `totalMemoryBytes`, `freeMemoryBytes`, `osName`, `osVersion`, `javaVersion`, `state()`
 - `I_UserProfilePort` (Phase 1.4) — `findById`, `findAll`, `save` (upsert), `delete`, `count`, `generateNewId`, `init`, `shutdown`, `state()`

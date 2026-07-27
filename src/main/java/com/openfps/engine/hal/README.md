@@ -9,11 +9,14 @@ hal/
 ├── port/                interfaces only — core depends on these
 │   ├── I_TimePort.java
 │   ├── I_InputPort.java
-│   ├── I_NetworkPort.java
-│   └── I_FilePort.java
+│   ├── I_DatagramPort.java
+│   ├── I_FilePort.java
+│   ├── I_SystemInfoPort.java
+│   └── I_UserProfilePort.java
 └── adapter/             platform-specific implementations
-    ├── desktop/         (Phase 1 — LWJGL3 + OpenAL + NIO sockets)
-    ├── mobile/          (Phase 1 — Android Canvas + AudioTrack + DatagramSocket)
+    ├── desktop/         (Phase 1.5 — LWJGL3 window + input)
+    ├── sqlite/          (current — Xerial SQLite user profile)
+    ├── mobile/          (Phase 3+ — Android Canvas + AudioTrack + Room)
     └── nulladapter/     (current — headless / CI)
 ```
 
@@ -23,7 +26,7 @@ hal/
 |---|---|---|
 | `I_TimePort` | Monotonic millisecond / nanosecond counter | `System.nanoTime()` (any), `QueryPerformanceCounter` (Windows), `clock_gettime` (Linux) |
 | `I_InputPort` | Sample keyboard / mouse / gamepad each tic | LWJGL3 Keyboard/Mouse (desktop), Android `MotionEvent` (mobile) |
-| `I_NetworkPort` | Raw UDP send/receive + per-tic tick | `java.nio.channels.DatagramChannel` (any), native sockets |
+| `I_DatagramPort` | Raw UDP send/receive + per-tic tick | `java.nio.channels.DatagramChannel` (any), native sockets |
 | `I_FilePort` | Open + read + size + close files | `java.io.FileInputStream` (any), Android assets |
 
 ## How to write a new adapter

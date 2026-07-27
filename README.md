@@ -147,7 +147,7 @@ openFPS/
 │   ├── resource/              port/I_WadPort       adapter/NullWadPort   (not yet registered — Phase 2)
 │   ├── memory/                port/I_MemoryPort  adapter/{Jvm,Zone}MemoryPort  factory/MemoryPortFactory  MemoryException
 │   └── hal/                   I_ Hardware abstraction
-│       ├── port/              I_TimePort, I_InputPort, I_NetworkPort, I_FilePort, I_SystemInfoPort, I_UserProfilePort
+│       ├── port/              I_TimePort, I_InputPort, I_DatagramPort, I_FilePort, I_SystemInfoPort, I_UserProfilePort
 │       ├── adapter/nulladapter/   headless stubs + MemoryUserProfilePort
 │       └── adapter/sqlite/        SqliteAdapterFactory, SqliteUserProfilePort (Xerial)
 ├── src/main/resources/
