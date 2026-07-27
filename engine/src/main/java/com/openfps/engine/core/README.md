@@ -26,7 +26,9 @@ core/
 ├── pool/                     — fixed worker thread pool
 │   ├── I_ThreadPoolPort.java
 │   ├── WorkerPool.java
-│   └── ThreadPoolFactory.java
+│   ├── ThreadPoolFactory.java
+│   ├── I_ParallelJob.java        — one indexed unit of fan-out work
+│   └── ParallelJobException.java — job failure, rethrown to the submitter
 └── subsystem/                — per-subsystem state machine + registry
     ├── ISubsystem.java
     ├── Subsystem.java         (base class with state machine)
@@ -111,6 +113,55 @@ This is the "half as many dedicated threads as the hardware has" rule
 the user asked for. A Phase 2 desktop adapter can read the TRUE
 physical-core count via oshi/JNA.
 
+## Parallel fan-out — `submitParallel`
+
+Event draining is one-event-per-worker. The renderer needs the other shape:
+split the screen into tiles, run them all, join once at end of frame
+(`render/README.md` § 7). That is `I_ThreadPoolPort.submitParallel(job, jobCount)`
+— run indices `0 .. jobCount-1` and return when every one has completed.
+
+It is deliberately not a general executor. Indices, not tasks; one reusable
+`I_ParallelJob` callback, not a task object per tile. Nothing is allocated per
+job or per submission, because this runs every frame.
+
+### The caller participates — this is the correctness property
+
+Subsystems are dispatched *from the bus*, so **the thread that submits is
+normally itself a pool worker**. A submit-and-block implementation would take a
+worker out of the very pool that has to execute the batch: at
+`workerCount == 1` that is an immediate total deadlock, and above 1 it is a
+latent one that shows up the first time two subsystems fan out in one frame.
+
+So the submitting thread claims and runs jobs itself until the range is
+exhausted, and only then waits on the jobs other threads already claimed.
+Progress is guaranteed by the calling thread alone — correctness no longer
+depends on how many workers exist. This is the standard fork-join "caller
+helps" pattern.
+
+### How idle workers are reached — leader / follower
+
+A worker blocked in `bus.take()` can only be woken by an interrupt, and this
+pool will not interrupt a thread that might be inside subsystem code. So at
+most **one** worker is in `take()` at a time — the leader — and every other
+idle worker waits on a pool-owned condition that `submitParallel` can signal.
+When the leader gets an event it hands leadership over and *then* dispatches,
+so up to N dispatches still run concurrently and bus behaviour is unchanged.
+
+At `workerCount == 1` the sole worker is usually the leader and cannot help;
+the caller runs the whole range. That is the intended degradation, not a bug.
+
+### Failure, reentrancy, ordering
+
+- **Failure**: a throwing job does not abort the batch and cannot hang the
+  join — `Throwable` is caught and the completion counter is bumped in a
+  `finally`. The first failure is rethrown to the submitter as a
+  `ParallelJobException` after the join; later ones are logged.
+- **Reentrancy**: supported. A job may submit its own batch. Slots are
+  pre-allocated (8); when they are all in flight a submission runs its whole
+  range inline on its caller — same guarantee, no parallelism.
+- **Ordering**: indices are claimed in ascending order, complete in no
+  particular order, and are not tied to any thread.
+
 ## State machine — engine level
 
 The engine itself has a simple state:
@@ -151,6 +202,8 @@ The `Subsystem` wrapper adds the state machine and event dispatch.
 - 10 GameConfig — factory methods, drift correction over 1000 tics
 - 10 SharedEventBus — publish, take, FIFO, blocking, backpressure, drain
 - 7 WorkerPool — hot threads, parallel dispatch, recovery, lifecycle
+- 12 WorkerPool parallel fan-out — caller participation at `workerCount == 1`,
+  exactly-once execution, failure propagation, reentrancy, bus coexistence
 - 10 SubsystemState — transitions, error recovery, thread-safety
 - 6 FixedMath — unchanged from earlier
 - 43 MemoryPort — unchanged from earlier (covers both backends)
