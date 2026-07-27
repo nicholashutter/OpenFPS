@@ -96,6 +96,26 @@ tasks.named("check") {
 // If the input directory does not exist the task reports that and stops
 // without failing — an opt-in step should not break a build nobody asked to
 // run it in. A budget violation, by contrast, fails hard: see AssetBudget.
+// Renders one frame of a model to a PNG, with no window and no GL.
+//
+// This is how the software rasterizer is verified where there is no display —
+// see RenderPreviewMain's Javadoc. Every argument passes straight through, so
+// the task adds nothing but a classpath:
+//
+//   gradlew :tools:renderPreview --args="--out=C:\tmp\frame.png"
+//   gradlew :tools:renderPreview --args="--out=C:\tmp\f.png --cull=NONE --width=1920"
+//
+// Deliberately NOT wired into `build`: it writes a file, and the output path is
+// never defaulted into the repository — docs/ASSETS.md § 6 keeps generated art
+// out of git.
+tasks.register<JavaExec>("renderPreview") {
+    group = "openfps"
+    description = "Renders one frame of a ModelFormat model to a PNG. Headless."
+
+    mainClass.set("com.openfps.tools.RenderPreviewMain")
+    classpath = sourceSets["main"].runtimeClasspath
+}
+
 tasks.register<JavaExec>("convertModels") {
     group = "openfps"
     description = "Converts glTF/GLB models to the runtime ModelFormat, enforcing the asset budget."
