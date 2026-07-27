@@ -19,7 +19,7 @@ package com.openfps.engine.net.port;
  *  1. TIC COMMAND ROUND-TRIP TIME (RTT):
  *       rtt = now - sentTimeAtSend
  *     Smoothing: smoothedRtt = 0.7 * smoothedRtt + 0.3 * rtt
- *     (7-tap moving average; same scheme Quake 3 uses)
+ *     (an EWMA — one long of state; the same scheme Quake 3 uses)
  *     Source: qcommon/net_chan.c
  *     https://github.com/id-Software/Quake-III-Arena/blob/master/code/qcommon/net_chan.c
  *
@@ -28,12 +28,15 @@ package com.openfps.engine.net.port;
  *     Use for adaptive throttling — back off send rate if loss > 5%.
  *
  *  3. BANDWIDTH BUDGET:
- *       8 players × 64 bytes/tic × 35 tics/sec = 17,920 bytes/sec
- *     Per peer: 17.92 KB/s up + 17.92 KB/s down = ~36 KB/s total.
- *     Fits in any modern broadband.
- *     For snapshots (Phase 4+), budget grows to ~100 KB/s per peer.
+ *     See README.md "Transport decision" section 6. The figures are
+ *     deliberately NOT duplicated here — the copy that used to live in this
+ *     Javadoc drifted from the README and understated the real cost by
+ *     omitting the 28-byte IPv4+UDP header and the redundancy window.
  *
- *  4. LAG COMPENSATION REWIND:
+ *  4. LAG COMPENSATION REWIND (Phase 4+, NOT Phase 3):
+ *     Under pure lockstep there is nothing to rewind — every peer simulates
+ *     identical inputs at identical tics, so hit results already agree.
+ *     The rewind below applies once prediction/snapshot exists.
  *       To detect a hit from peer P at time t_now:
  *         rewindTo = t_now - peerP.rtt / 2 - 1 tic
  *         snapshot = stateBuffer[rewindTo]
@@ -43,8 +46,8 @@ package com.openfps.engine.net.port;
  *     the shot and us processing it.
  *     Source: Gabriel Gambetta, "Lag Compensation"
  *     https://www.gabrielgambetta.com/lag-compensation.html
- *     Also: Vinnie Lee, "Lag Compensation for Real-Time Games"
- *     http://www.vinnieleer.com/articles/lag-compensation-in-real-time-games/
+ *     Also: Yahn Bernier, "Latency Compensating Methods in Client/Server
+ *     In-game Protocol Design and Optimization" (GDC 2001)
  *
  *  5. LOCKSTEP DETERMINISM RULES:
  *     For all peers to compute the same GameState given the same inputs:
@@ -61,6 +64,17 @@ package com.openfps.engine.net.port;
  *     Bit-mask per entity: which fields are present in this delta.
  *     Only the marked fields follow. Skips zero-delta entities.
  *     Source: Quake 3 net_chan.c
+ *
+ *  7. RELIABILITY MODEL — REDUNDANCY, NOT RETRANSMISSION:
+ *     Transport is UDP. Lockstep needs every input, but retransmit-on-timeout
+ *     costs 2 RTT to recover a loss. Instead every packet carries all cmds
+ *     since the peer's last ack, so a lost packet is covered by the next one
+ *     at zero added latency. Ack = highest contiguous tic + a 64-bit bitfield
+ *     (width == Constants.TIC_BUFFER_SIZE).
+ *     See README.md "Transport decision" sections 3-4 for why TCP cannot do
+ *     this, and section 5 for where dropping stale packets IS correct.
+ *     Source: Glenn Fiedler, "Deterministic Lockstep"
+ *     https://gafferongames.com/post/deterministic_lockstep/
  */
 public interface I_NetworkPort
 {
@@ -70,14 +84,14 @@ public interface I_NetworkPort
      * @param address "host:port" string
      * @return assigned peer ID, or -1 on failure
      */
-    int connect(final String address);
+    int connect(String address);
 
     /**
      * Disconnects the given peer.
      *
      * @param peerId the peer to disconnect
      */
-    void disconnect(final int peerId);
+    void disconnect(int peerId);
 
     /**
      * Broadcasts the local player's tic command to all connected peers.
@@ -85,7 +99,7 @@ public interface I_NetworkPort
      * @param ticIndex the tic number
      * @param cmdBytes serialized TicCmd bytes
      */
-    void broadcastTicCmd(final int ticIndex, final byte[] cmdBytes);
+    void broadcastTicCmd(int ticIndex, byte[] cmdBytes);
 
     /**
      * Polls for received tic commands from peers.
@@ -95,14 +109,14 @@ public interface I_NetworkPort
      * @param peerId the peer ID
      * @return TicCmd bytes, or null
      */
-    byte[] pollTicCmd(final int ticIndex, final int peerId);
+    byte[] pollTicCmd(int ticIndex, int peerId);
 
     /**
      * Broadcasts a map-change announcement.
      *
      * @param mapName the name of the new map
      */
-    void broadcastMapChange(final String mapName);
+    void broadcastMapChange(String mapName);
 
     /**
      * Initiates LAN peer discovery via broadcast.

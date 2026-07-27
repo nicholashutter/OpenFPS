@@ -1,6 +1,6 @@
 # OpenFPS — Project Plan
 
-> **Status**: Pre-alpha — Phase 1.3 complete. Event-driven engine, unified memory, multi-threaded worker pool, configurable 30/60/120 Hz.
+> **Status**: Pre-alpha — Phase 1.4 complete. Event-driven engine, unified memory, multi-threaded worker pool, configurable 30/60/120 Hz, SQLite user-profile persistence.
 > **Engine Version**: 0.1.0-SNAPSHOT
 > **Target JVM**: 17 LTS (Java 17 source/target, runs on 17+)
 > **Platforms**: Windows, Linux, Android (planned), JVM-compatible targets
@@ -122,6 +122,10 @@ Every subsystem has:
 - `SubsystemException` — invalid transitions throw
 - `SubsystemRegistry` — lookup by ID, dispatch routing
 
+**Subsystem wrapper**: `CoreSubsystem` — claims `SubsystemId.CORE` and handles
+`ShutdownEvent`. Without it, every shutdown logged a "no subsystem registered"
+warning, because `ShutdownEvent` targets CORE and nothing owned that ID.
+
 ### 3.2 Gameplay — `com.openfps.engine.gameplay` — **stub**
 
 **P_ Player & World Logic**
@@ -162,13 +166,15 @@ Every subsystem has:
 
 **G_ Peer-to-Peer Networking**
 
-- `PeerConnection` — UDP socket per connected peer
+- `PeerConnection` — per-peer state (address, RTT, ack window, loss stats); no socket
 - `TicCmdBuffer` — ring buffer of `TicCmd` per peer, indexed by tic number
+- `RedundantSender` — packs all cmds since the peer's last ack into every packet
 - `SnapshotDelta` — diff-based state serialization between tics
 - `Discovery` — LAN peer discovery via UDP broadcast
-- `LagCompensator` — rewind world state for client-side hit detection
 - `I_NetworkPort` — `connect`, `disconnect`, `broadcastTicCmd`, `pollTicCmd`, `broadcastMapChange`, `discoverPeers`, `connectedPeerCount`
 - `NullNetworkPort` — stub
+
+**Transport**: UDP over a single non-blocking `java.nio.channels.DatagramChannel`, demultiplexed by source address. Reliability is redundant input redelivery, not retransmission — TCP is ruled out by head-of-line blocking (a 200 ms `TCP_RTO_MIN` stall is 12+ tics at 60 Hz). No dependency added; native options (Valve GameNetworkingSockets) were evaluated and rejected on the Android build matrix. Full rationale and the options table: `net/README.md` § "Transport decision".
 
 **Subsystem wrapper**: `NetSubsystem` — routes `NetworkPacketEvent` (Phase 3 will wire actual parsing).
 
@@ -182,6 +188,11 @@ Every subsystem has:
 - `ImageDecoder` — DOOM-format patches and flats
 - `I_WadPort` — `open`, `close`, `readLump`, `precacheLump`, `flushCache`, `lumpCount`
 - `NullWadPort` — stub
+
+**Subsystem wrapper**: none yet. Resource is the one subsystem with no wrapper
+and no registration in `EngineMain`, so `SubsystemId.W_` is currently unused and
+nothing can route an event to it. The port interface and its WAD-format spec are
+kept as the Phase 2 design; the wrapper lands with `WadReader`.
 
 ### 3.7 Memory — `com.openfps.engine.memory` — **Phase 1.1 complete**
 
@@ -202,20 +213,22 @@ Every subsystem has:
 
 **Subsystem wrapper**: `MemorySubsystem` — passes through to port shutdown.
 
-### 3.8 HAL — `com.openfps.engine.hal` — **Phase 1.1 complete**
+### 3.8 HAL — `com.openfps.engine.hal` — **Phase 1.4 complete**
 
 **I_ Hardware Abstraction Layer**
 
-- `I_TimePort` — `millis()`, `nanos()`, `init()`, `shutdown()`, `state()`
+- `I_TimePort` — `millis()`, `nanos()` (both monotonic), `epochMillis()` (wall clock, for persisted timestamps), `init()`, `shutdown()`
 - `I_InputPort` — `sampleInput(int)`, `isShutdownRequested()`, `init()`, `shutdown()`
 - `I_NetworkPort` — `send`, `receive`, `bind`, `close`, `processTic`, `init`, `shutdown`
 - `I_FilePort` — `open`, `exists` + nested `I_FileHandle`
-- `I_SystemInfoPort` (Phase 1.2) — `logicalProcessorCount`, `physicalProcessorCount`, `totalMemoryBytes`, `freeMemoryBytes`, `osName`, `osVersion`, `javaVersion`
+- `I_SystemInfoPort` (Phase 1.2) — `logicalProcessorCount`, `physicalProcessorCount`, `totalMemoryBytes`, `freeMemoryBytes`, `osName`, `osVersion`, `javaVersion`, `state()`
+- `I_UserProfilePort` (Phase 1.4) — `findById`, `findAll`, `save` (upsert), `delete`, `count`, `generateNewId`, `init`, `shutdown`, `state()`
 
 **Adapters** (in `hal/adapter/`):
-- `nulladapter/` — headless stubs, used by all CI / smoke tests
-- `desktop/` — LWJGL3 + OpenAL + NIO sockets (Phase 2+)
-- `mobile/` — Android Canvas + AudioTrack + DatagramSocket (Phase 3+)
+- `nulladapter/` — headless stubs, used by all CI / smoke tests. Includes `MemoryUserProfilePort` (in-memory profiles).
+- `sqlite/` — `SqliteAdapterFactory` + `SqliteUserProfilePort` (Xerial SQLite JDBC). Real on-disk profile persistence at `<userHome>/.openfps/profile.db`, overridable via `OPENFPS_PROFILE_DB`. Null ports for everything else.
+- `desktop/` — LWJGL3 + OpenAL + NIO sockets (Phase 1.5+)
+- `mobile/` — Android Canvas + AudioTrack + Room (Phase 3+)
 
 **NullSystemInfoPort** returns `Runtime.availableProcessors()` (logical cores). Worker pool size = `max(1, logicalCores / 2)`.
 
@@ -285,9 +298,10 @@ This is verified by `GameConfigTest.shouldNotDriftAt120Fps` and `shouldNotDriftA
 | Gradle | 8.10 | Build |
 | SLF4J | 2.0.16 | Logging facade (industry standard) |
 | Logback | 1.5.12 | Logging backend |
+| Xerial SQLite JDBC | 3.46.1.0 | User profile persistence (pure Java, no native deps) |
 | JUnit Jupiter | 5.11.4 | Testing |
 | AssertJ | 3.26.3 | Test assertions |
-| Checkstyle | 10.18.0 | Style enforcement (enforces STYLE.md) |
+| Checkstyle | 10.18.0 | Style enforcement (enforces STYLE.md; wired to `build`, `maxWarnings = 0`) |
 | LWJGL | 3.3.4 (planned) | Desktop graphics/audio/net |
 
 ---
@@ -341,7 +355,7 @@ This is verified by `GameConfigTest.shouldNotDriftAt120Fps` and `shouldNotDriftA
 ### Phase 1.5 — Desktop HAL adapter (LWGJL3) — **next**
 - [ ] `DesktopTimePort` using LWJGL3 `GLFW.glfwGetTime()`
 - [ ] `DesktopInputPort` using LWJGL3 Keyboard/Mouse callbacks
-- [ ] `DesktopNetworkPort` using `java.nio.channels.DatagramChannel`
+- [ ] `DesktopNetworkPort` using `java.nio.channels.DatagramChannel` — datagram-only, one preallocated **direct** `ByteBuffer` reused per receive (a heap buffer makes the JDK copy through a temporary direct one on every call)
 - [ ] Basic OpenGL window for render testing
 - [ ] Confirm event-driven architecture handles real input timing
 
@@ -353,13 +367,15 @@ This is verified by `GameConfigTest.shouldNotDriftAt120Fps` and `shouldNotDriftA
 - [ ] `BlockmapBuilder` — pre-compute BLOCKMAP from LINEDEFS
 
 ### Phase 3 — Networking — **planned**
-- [ ] `PeerConnection` (UDP, non-blocking, ring buffer)
+- [x] Transport decision recorded (`net/README.md` § "Transport decision") — UDP + redundant redelivery, no dependency added
+- [ ] `PeerConnection` (peer state — address, RTT, ack window; no socket)
 - [ ] `TicCmdBuffer` (lockstep) — fixed 60 Hz sim tick, decoupled from render
+- [ ] `RedundantSender` — redundant input redelivery + 64-bit ack bitfield
 - [ ] `SnapshotDelta` (encode/decode)
 - [ ] `Discovery` (LAN broadcast)
-- [ ] `LagCompensator` (rewind for hits)
 
 ### Phase 4 — Gameplay — **planned**
+- [ ] `LagCompensator` (rewind for hits) — moved from Phase 3; under pure lockstep there is nothing to rewind, so this only becomes meaningful once prediction/snapshot exists
 - [ ] `PlayerState` data class
 - [ ] `Entity` base + concrete types (monster, projectile, pickup, door)
 - [ ] `PhysicsWorld.moveWithSlide(player, dx, dy)` — collision + slide
@@ -383,7 +399,7 @@ This is verified by `GameConfigTest.shouldNotDriftAt120Fps` and `shouldNotDriftA
 
 ## 8. Test Coverage Summary
 
-**87 tests, all passing.**
+**129 tests, all passing.**
 
 | Suite | Tests | Coverage |
 |---|---|---|
@@ -393,9 +409,13 @@ This is verified by `GameConfigTest.shouldNotDriftAt120Fps` and `shouldNotDriftA
 | `WorkerPoolTest` | 7 | hot threads, parallel dispatch, error recovery |
 | `SubsystemStateTest` | 10 | transitions, error handling, thread-safety |
 | `FixedMathTest` | 6 | fixed-point arithmetic |
-| `MemoryPortTest` | 43 | both backends: positive, negative, random, overflow, underflow, state machine, tags |
+| `UserProfileTest` | 12 | field validation, withXxx copies, equals/hashCode |
+| `MemoryUserProfilePortTest` | 15 | in-memory CRUD, state machine |
+| `SqliteUserProfilePortTest` | 15 | SQLite CRUD, upsert, persistence, state machine |
+| `MemoryPortTest` | 35 | both backends (7 `@Nested` groups): positive, negative, random, overflow, underflow, state machine, tags |
 
-Run with: `.\gradlew.bat test`
+Run with: `.\gradlew.bat test`. `.\gradlew.bat build` additionally runs
+Checkstyle over main and test sources and fails on any violation.
 
 ---
 
@@ -403,7 +423,8 @@ Run with: `.\gradlew.bat test`
 
 1. All PRs must pass `gradle build` (Checkstyle + tests)
 2. New subsystems require port interfaces before any adapter implementation
-3. Core engine never imports from `adapter/` packages
+3. Core engine never imports from `adapter/` packages — the sole exception is
+   the composition root, `EngineMain`, which has to pick concrete implementations
 4. Each subsystem has its own state machine — no shared state machines
 5. New frame rates require a new `FrameRate` enum value (not runtime config)
 6. All public API must be documented with Javadoc citing sources
