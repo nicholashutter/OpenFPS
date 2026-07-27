@@ -448,8 +448,8 @@ Render target: `docs/ASSETS.md` § 2. Ordered by dependency.
 - [x] `Rasterizer` — perspective divide, viewport transform, backface cull, edge functions with the top-left fill rule, screen-space bounding box, per-chunk tile binning
 - [x] `SpanRenderer` — reference per-pixel path. The segment path was deliberately not written: measured indistinguishable from per-pixel (`docs/ASSETS.md` § 2)
 - [x] `TextureSampler` — bilinear with the −0.5 texel-centre offset, per-segment mip selection from UV derivatives
-- [ ] `ModelFormat` — flat binary reader, versioned header, near-zero parsing
-- [ ] `GltfConverter` — Gradle buildscript classpath only; triangulation, mip-chain generation, texture decode, `docs/ASSETS.md` § 5 budget enforcement
+- [x] `ModelFormat` — flat binary reader, versioned header, near-zero parsing
+- [x] `GltfConverter` — Gradle buildscript classpath only; triangulation, mip-chain generation, texture decode, `docs/ASSETS.md` § 5 budget enforcement
 
 Retired from this phase and deliberately not listed: `BspTraverser` (moved to Phase 4 as a gameplay/collision structure), `WallClipper`, `VisplaneBuilder`, `ColumnRenderer`, palette blitting.
 

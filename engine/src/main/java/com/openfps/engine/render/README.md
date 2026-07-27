@@ -88,9 +88,14 @@ been expressed. Counting per (chunk, tile) → serial prefix sum → scatter, wi
 the prefix sum walking tiles outermost so a tile's entries form one contiguous
 run in ascending triangle order.
 
-**Not yet written:** `ModelFormat`, `GltfConverter`. Nothing is wired into
-`I_RenderPort` yet — the components exist and are tested in isolation, and the
-rasterizer draws into a `Framebuffer`, but no frame reaches a window.
+**All eight components have landed.** What remains is *integration*: nothing is
+wired into `I_RenderPort`, so the rasterizer draws into a `Framebuffer` and no
+frame reaches a window. Every component is tested in isolation; none has drawn a
+real model. Expect the first end-to-end run to surface something no unit test
+predicted — that is normal, and it is why the wiring is its own step.
+
+`GltfConverter` lives in the separate `:tools` module, never on the runtime
+classpath; `verifyToolsIsolation` proves it mechanically on every build.
 
 `Rgba` deserves a note, since it is not in the § 1 component table. `Framebuffer`
 and `TextureSampler` were built in parallel and each grew its own identical copy
@@ -1031,8 +1036,8 @@ Ordered. Each item is a lane from § 1; the ordering is by dependency.
 - [x] `Rasterizer` — divide, viewport transform, backface cull, edge setup with top-left fill rule, bounding box, per-chunk tile binning
 - [x] `SpanRenderer` — reference per-pixel path; segment path deliberately NOT written (§ 11c measured it as no better)
 - [x] `TextureSampler` — bilinear with the −0.5 texel-centre offset, per-segment mip selection
-- [ ] `ModelFormat` — flat binary reader, versioned header
-- [ ] `GltfConverter` — buildscript classpath only; triangulation, mip chains, budget enforcement per `docs/ASSETS.md` § 5
+- [x] `ModelFormat` — flat binary reader, versioned header
+- [x] `GltfConverter` — buildscript classpath only; triangulation, mip chains, budget enforcement per `docs/ASSETS.md` § 5
 
 ---
 
