@@ -30,6 +30,7 @@ Full list in `STYLE.md` § 13. Short version:
 - All parallel work → `WorkerPool` (via `ThreadPoolFactory`)
 - All time reads → `I_TimePort` (never `System.nanoTime()`)
 - All system info → `I_SystemInfoPort`
+- All user profile reads/writes → `I_UserProfilePort` (never touch SQLite or Room directly)
 - All fixed-point math → `FixedMath`
 - All config (rate, maxTics) → `GameConfig` / `FrameRate`
 - All subsystem classes → extend `Subsystem` (don't implement `Runnable`)
@@ -181,8 +182,9 @@ public void spawnEntity(final int entityType)
 - Do NOT `new Thread(...)` in engine code — use `WorkerPool`
 - Do NOT add magic numbers — use `Constants` or `FrameRate`
 - Do NOT implement `Runnable` for a subsystem — extend `Subsystem`
-- Do NOT instantiate `JvmMemoryPort` / `SharedEventBus` / `WorkerPool` directly — use the factories
+- Do NOT instantiate `JvmMemoryPort` / `SharedEventBus` / `WorkerPool` / `SqliteUserProfilePort` directly — use the factories
 - Do NOT add a new frame rate value — extend the `FrameRate` enum
+- Do NOT touch SQLite or Room directly — go through `I_UserProfilePort`
 - Do NOT skip writing tests for new code
 - Do NOT skip the documentation-to-code map in `STYLE.md` § 11.5 when adding a new service
 
@@ -199,9 +201,9 @@ public void spawnEntity(final int entityType)
 | Network | `net` | Stub |
 | Resource | `resource` | Stub |
 | Memory | `memory` | Phase 1.1 — state machine, two backends, factory |
-| HAL | `hal` | Ports defined, null adapter, system info port |
+| HAL | `hal` | Phase 1.4 — ports + null + sqlite adapters + system info + user profile |
 
-87 tests passing (see `BUILD.md` for run instructions).
+129 tests passing (see `BUILD.md` for run instructions).
 
 ---
 

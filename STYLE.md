@@ -347,6 +347,7 @@ Every module uses them. New code that bypasses them is a bug.
 | `I_SystemInfoPort` | `com.openfps.engine.hal.port` | Anything that depends on hardware — core count, memory, OS, JVM version. |
 | `I_TimePort` | `com.openfps.engine.hal.port` | Anything that reads time. **Never** `System.nanoTime()` / `System.currentTimeMillis()` in engine code. |
 | `I_InputPort`, `I_NetworkPort`, `I_FilePort` | `com.openfps.engine.hal.port` | HAL capabilities. |
+| `I_UserProfilePort` | `com.openfps.engine.hal.port` | All user-profile reads/writes. The engine never touches SQLite or Room directly. Desktop impl is `SqliteUserProfilePort` (Xerial); Android impl (Phase 3+) will use Room. |
 | `Subsystem` base class | `com.openfps.engine.core.subsystem` | Every new subsystem. **Don't** implement `Runnable` or your own state machine. |
 | `SubsystemRegistry` | `com.openfps.engine.core.subsystem` | Registering / looking up / dispatching to subsystems. |
 | `EventFactory` | `com.openfps.engine.core.event` | Building events with sequence numbers and timestamps. |

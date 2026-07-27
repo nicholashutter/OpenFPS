@@ -17,6 +17,11 @@ dependencies {
     implementation("org.slf4j:slf4j-api:2.0.16")
     implementation("ch.qos.logback:logback-classic:1.5.12")
 
+    // SQLite — Xerial SQLite JDBC (pure Java, no native deps, BSD-licensed).
+    // Works on every JVM 17+ platform: Windows, Linux, macOS, Android (with shim).
+    // Source: https://github.com/xerial/sqlite-jdbc
+    implementation("org.xerial:sqlite-jdbc:3.46.1.0")
+
     // JUnit 5.11.4 — latest in the 5.11 LTS line
     testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")

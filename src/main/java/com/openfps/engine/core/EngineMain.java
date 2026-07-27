@@ -7,6 +7,7 @@ package com.openfps.engine.core;
 
 import com.openfps.engine.audio.adapter.NullAudioPort;
 import com.openfps.engine.common.Constants;
+import com.openfps.engine.common.UserProfile;
 import com.openfps.engine.core.event.EventFactory;
 import com.openfps.engine.core.eventbus.EventBusFactory;
 import com.openfps.engine.core.eventbus.I_EventBusPort;
@@ -21,7 +22,12 @@ import com.openfps.engine.core.subsystem.impl.NetSubsystem;
 import com.openfps.engine.core.subsystem.impl.RenderSubsystem;
 import com.openfps.engine.gameplay.adapter.NullGameplayPort;
 import com.openfps.engine.hal.adapter.nulladapter.NullAdapterFactory;
+import com.openfps.engine.hal.adapter.nulladapter.NullInputPort;
+import com.openfps.engine.hal.adapter.nulladapter.NullTimePort;
+import com.openfps.engine.hal.adapter.sqlite.SqliteAdapterFactory;
 import com.openfps.engine.hal.port.I_SystemInfoPort;
+import com.openfps.engine.hal.port.I_TimePort;
+import com.openfps.engine.hal.port.I_UserProfilePort;
 import com.openfps.engine.memory.factory.MemoryPortFactory;
 import com.openfps.engine.memory.port.I_MemoryPort;
 import com.openfps.engine.net.adapter.NullNetworkPort;
@@ -35,20 +41,23 @@ import org.slf4j.LoggerFactory;
  *
  * Bootstrap sequence:
  *   1. Memory port (JvmMemoryPort default)
- *   2. HAL adapters (NullAdapterFactory for headless)
+ *   2. HAL adapters — either NullAdapterFactory (in-memory) or
+ *      SqliteAdapterFactory (real on-disk profile persistence)
  *   3. Read core count from I_SystemInfoPort
- *   4. Event bus (single shared queue, blocking backpressure)
- *   5. Subsystem registry — register all subsystems
- *   6. Worker pool — N = cores/2 hot threads
- *   7. Start the pool
- *   8. Start GameLoop on its own thread (event producer)
- *   9. Wait for the loop to finish (it self-terminates after maxTics)
- *  10. Drain the bus, stop the pool, shut down subsystems
- *  11. Shut down HAL and memory port
+ *   4. Load or create user profile
+ *   5. Event bus (single shared queue, blocking backpressure)
+ *   6. Subsystem registry — register all subsystems
+ *   7. Worker pool — N = cores/2 hot threads
+ *   8. Start the pool
+ *   9. Start GameLoop on its own thread (event producer)
+ *  10. Wait for the loop to finish
+ *  11. Drain the bus, stop the pool, save profile, shut down subsystems
+ *  12. Shut down HAL and memory port
  *
  * CLI args:
- *   --fps=N   Frame rate: 30, 60, or 120. Default 60. Anything else is
- *             rejected with a friendly error message.
+ *   --fps=N     Rate: 30, 60, or 120 (default 60)
+ *   --no-sqlite Use in-memory profile instead of SQLite
+ *   --headless  Use null adapter factory (no real ports)
  */
 public final class EngineMain
 {
@@ -58,28 +67,31 @@ public final class EngineMain
     private static final int DEFAULT_BUS_CAPACITY = 1024;
 
     /**
-     * Boots the engine. CLI args:
-     *   --fps=N  Rate: 30, 60, or 120 (default 60)
+     * Boots the engine.
      */
     public static void main(final String[] args)
     {
         LOG.info("OpenFPS engine booting...");
         final FrameRate rate;
+        final boolean useSqlite;
+        final boolean headless;
         try
         {
             rate = parseFpsArg(args);
+            useSqlite = !hasFlag(args, "--no-sqlite");
+            headless = hasFlag(args, "--headless");
         }
         catch (final IllegalArgumentException e)
         {
-            LOG.error("Failed to parse --fps argument: {}", e.getMessage());
+            LOG.error("Failed to parse arguments: {}", e.getMessage());
             System.err.println("ERROR: " + e.getMessage());
-            System.err.println("Usage: java -jar openfps.jar [--fps=30|60|120]");
+            System.err.println("Usage: java -jar openfps.jar [--fps=30|60|120] [--no-sqlite] [--headless]");
             System.exit(1);
             return;
         }
-        LOG.info("Engine version 0.1.0-SNAPSHOT, target rate={} Hz, java={}",
-            rate.fps(), System.getProperty("java.version"));
-        new EngineMain().runHeadless(GameConfig.headless(rate));
+        LOG.info("Engine version 0.1.0-SNAPSHOT, target rate={} Hz, java={}, sqlite={}, headless={}",
+            rate.fps(), System.getProperty("java.version"), useSqlite, headless);
+        new EngineMain().run(GameConfig.headless(rate), useSqlite, headless);
     }
 
     /** Parses the --fps=N argument. Defaults to 60 if not present. */
@@ -103,21 +115,63 @@ public final class EngineMain
         return FrameRate.FPS_60;
     }
 
+    /** Returns true if {@code args} contains the given flag. */
+    private static boolean hasFlag(final String[] args, final String flag)
+    {
+        if (args == null) return false;
+        for (final String a : args)
+        {
+            if (flag.equals(a)) return true;
+        }
+        return false;
+    }
+
     /**
-     * Runs the engine with the null HAL adapter and a bounded tic count
-     * — for development, CI, and smoke tests. Production launch wires
-     * a platform-specific adapter factory.
+     * Runs the engine with the requested HAL factory and a bounded tic
+     * count.
+     *
+     * @param config    the game config (rate + maxTics)
+     * @param useSqlite if true, use the SqliteAdapterFactory (real
+     *                  on-disk profile persistence). If false, use the
+     *                  NullAdapterFactory (in-memory profile).
+     * @param headless  if true, force the null adapter (overrides
+     *                  useSqlite). Currently both paths use null ports
+     *                  for time / input / network; the difference is
+     *                  the user profile backend.
      */
-    public void runHeadless(final GameConfig config)
+    public void run(final GameConfig config, final boolean useSqlite, final boolean headless)
     {
         // -- 1. Memory port
         final I_MemoryPort memory = MemoryPortFactory.createJvm(Constants.ZONE_HEAP_SIZE);
         memory.init(Constants.ZONE_HEAP_SIZE);
 
         // -- 2. HAL adapters
-        final NullAdapterFactory hal = new NullAdapterFactory();
-        hal.init();
-        final I_SystemInfoPort sysinfo = hal.getSystemInfoPort();
+        // Both factories use null ports for time / input / network / file
+        // / system info; they differ only on the user profile backend.
+        // This is a stepping stone to the real desktop factory (Phase 1.4+).
+        final I_TimePort timePort;
+        final I_SystemInfoPort sysinfo;
+        final I_UserProfilePort userProfile;
+        AutoCloseable halCloser;
+
+        if (useSqlite && !headless)
+        {
+            final SqliteAdapterFactory sqlite = new SqliteAdapterFactory();
+            sqlite.init();
+            timePort  = sqlite.getTimePort();
+            sysinfo   = sqlite.getSystemInfoPort();
+            userProfile = sqlite.getUserProfilePort();
+            halCloser = sqlite::shutdown;
+        }
+        else
+        {
+            final NullAdapterFactory nullFactory = new NullAdapterFactory();
+            nullFactory.init();
+            timePort  = nullFactory.getTimePort();
+            sysinfo   = nullFactory.getSystemInfoPort();
+            userProfile = nullFactory.getUserProfilePort();
+            halCloser = nullFactory::shutdown;
+        }
 
         // -- 3. Worker count from HAL
         final int logicalCores = sysinfo.logicalProcessorCount();
@@ -125,28 +179,31 @@ public final class EngineMain
         LOG.info("System: {} logical cores, {} workers, target rate={} Hz",
             logicalCores, workerCount, config.rate().fps());
 
-        // -- 4. Event bus
+        // -- 4. Load or create user profile
+        final UserProfile profile = loadOrCreateProfile(userProfile);
+
+        // -- 5. Event bus
         final I_EventBusPort bus = EventBusFactory.createShared();
         bus.init(DEFAULT_BUS_CAPACITY);
 
-        // -- 5. Subsystem registry
+        // -- 6. Subsystem registry
         final SubsystemRegistry subsystems = new SubsystemRegistry();
         subsystems.register(new MemorySubsystem(memory));
-        subsystems.register(new HalSubsystem(hal.getInputPort()));
+        subsystems.register(new HalSubsystem(new NullInputPort()));
         subsystems.register(new NetSubsystem(new NullNetworkPort()));
         subsystems.register(new GameplaySubsystem(new NullGameplayPort()));
         subsystems.register(new RenderSubsystem(new NullRenderPort()));
         subsystems.register(new AudioSubsystem(new NullAudioPort()));
         subsystems.initAll();
 
-        // -- 6. Worker pool
+        // -- 7. Worker pool
         final I_ThreadPoolPort pool = ThreadPoolFactory.createFixed(bus, subsystems);
         pool.init(workerCount);
         pool.start();
 
-        // -- 7. Event factory + GameLoop (producer)
+        // -- 8. Event factory + GameLoop (producer)
         final EventFactory eventFactory = new EventFactory(timeOriginNanos());
-        final GameLoop loop = new GameLoop(hal.getTimePort(), bus, eventFactory, config);
+        final GameLoop loop = new GameLoop(new NullTimePort(), bus, eventFactory, config);
         final Thread loopThread = new Thread(loop, "GameLoop");
         loopThread.setDaemon(true);
         loopThread.start();
@@ -161,7 +218,7 @@ public final class EngineMain
             Thread.currentThread().interrupt();
         }
 
-        // -- 8. Drain and stop
+        // -- 9. Drain and stop
         try
         {
             pool.shutdown();
@@ -173,7 +230,18 @@ public final class EngineMain
         }
         subsystems.shutdownAll();
         bus.shutdown();
-        hal.shutdown();
+
+        // -- 10. Save profile with updated playtime + last-login
+        saveProfile(userProfile, profile);
+
+        try
+        {
+            halCloser.close();
+        }
+        catch (final Exception e)
+        {
+            LOG.warn("HAL adapter close threw", e);
+        }
         try
         {
             memory.shutdown();
@@ -184,6 +252,54 @@ public final class EngineMain
         }
 
         LOG.info("OpenFPS engine shut down cleanly.");
+    }
+
+    /**
+     * Loads the most recent user profile, or creates a new one if the
+     * database is empty.
+     */
+    private static UserProfile loadOrCreateProfile(final I_UserProfilePort port)
+    {
+        final var existing = port.findAll();
+        if (existing.isEmpty())
+        {
+            final UserProfile fresh = UserProfile.newDefault()
+                .withLastLogin(System.currentTimeMillis());
+            port.save(fresh);
+            LOG.info("Created new user profile: id={}, name='{}'",
+                fresh.id(), fresh.displayName());
+            return fresh;
+        }
+        UserProfile mostRecent = existing.get(0);
+        for (final UserProfile p : existing)
+        {
+            if (p.lastLoginAtEpochMs() > mostRecent.lastLoginAtEpochMs())
+            {
+                mostRecent = p;
+            }
+        }
+        final UserProfile touched = mostRecent.withLastLogin(System.currentTimeMillis());
+        port.save(touched);
+        LOG.info("Loaded user profile: id={}, name='{}'",
+            touched.id(), touched.displayName());
+        return touched;
+    }
+
+    /**
+     * Saves the profile with the current playtime and last-login
+     * timestamp.
+     */
+    private static void saveProfile(final I_UserProfilePort port, final UserProfile profile)
+    {
+        final long now = System.currentTimeMillis();
+        final long additionalSeconds = (now - profile.lastLoginAtEpochMs()) / 1000L;
+        final UserProfile updated = profile
+            .withAddedPlaytime(additionalSeconds)
+            .withLastLogin(now)
+            .withUpdatedAt(now);
+        port.save(updated);
+        LOG.info("Saved user profile: id={}, playtime={}s",
+            updated.id(), updated.totalPlaytimeSeconds());
     }
 
     /** Returns a reference origin for timestamps. */

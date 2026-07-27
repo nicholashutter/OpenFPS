@@ -328,7 +328,17 @@ This is verified by `GameConfigTest.shouldNotDriftAt120Fps` and `shouldNotDriftA
 - [x] CLI `--fps=N` parsing
 - [x] 19 new tests (9 FrameRate + 10 GameConfig including drift tests)
 
-### Phase 1.4 — Desktop HAL adapter (LWGJL3) — **next**
+### Phase 1.4 — User profile persistence (Xerial SQLite) — **done**
+- [x] `I_UserProfilePort` interface with state machine
+- [x] `UserProfile` immutable record with validation
+- [x] `SqliteUserProfilePort` (Xerial SQLite JDBC 3.46.1.0)
+- [x] `MemoryUserProfilePort` (in-memory, for tests/headless)
+- [x] `SqliteAdapterFactory` (real desktop-ish factory)
+- [x] `EngineMain` loads/saves profile on boot/shutdown
+- [x] 42 new tests (15 in-memory + 15 SQLite + 12 UserProfile validation)
+- [x] Persistence verified: same UUID loaded across restarts, playtime accumulates
+
+### Phase 1.5 — Desktop HAL adapter (LWGJL3) — **next**
 - [ ] `DesktopTimePort` using LWJGL3 `GLFW.glfwGetTime()`
 - [ ] `DesktopInputPort` using LWJGL3 Keyboard/Mouse callbacks
 - [ ] `DesktopNetworkPort` using `java.nio.channels.DatagramChannel`
