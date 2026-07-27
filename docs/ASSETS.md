@@ -139,18 +139,34 @@ dependency or shipping anything** — satisfying the `AGENTS.md` rule against ne
 libraries.
 
 Moved offline: triangulation, index and vertex-cache optimisation, mipmap chain
-generation, texture decode to raw BGRA, normal computation, bounding-volume precompute,
-material flattening, and lightmap baking.
+generation, texture decode to the renderer's texel layout (below), normal computation,
+bounding-volume precompute, material flattening, and lightmap baking.
 
 The converter is `GltfConverter`; the runtime format it emits is `ModelFormat`. Both
 are Phase 5 lanes — see `render/README.md` § 1 and § 10.
 
-> **Unresolved: texture channel order.** This section says the converter decodes to
-> raw **BGRA**, but the renderer's colour buffer is **RGBA8888**, chosen to match
-> libGDX `Pixmap.Format.RGBA8888` so a frame presents as one texture upload. If the
-> two differ, the sampler swizzles every texel it fetches, in the hottest loop in the
-> engine, to save nothing. They should almost certainly match — but which one wins is
-> a decision, so it is recorded in §9 rather than quietly edited here.
+### Texture channel order — decided
+
+**One layout end to end: `RGBA8888`, the same as the colour buffer.** This section
+previously said BGRA, which was written before the colour buffer format was settled.
+
+RGBA wins for an asymmetric reason rather than a preference. The **colour buffer's**
+format is constrained from outside — it has to match what the presentation path
+uploads, and that is libGDX `Pixmap.Format.RGBA8888`. The **texture's** format is
+entirely ours: it is produced by our own build-time converter, so changing it costs
+one line in a tool that has not been written yet. When one side is pinned by an
+external contract and the other is free, the free side moves. Any mismatch would
+otherwise be paid for as a per-texel swizzle in the hottest loop in the engine, to
+buy nothing.
+
+> **Verify this empirically; do not assume it.** A Java `int[]` reaching the GPU as
+> bytes goes through a byte-order step, and whether `0xRRGGBBAA` arrives as R,G,B,A
+> depends on the upload path and the platform's endianness. The converter, the
+> sampler, and the presentation blit must agree on one concrete layout, and the way
+> to establish that is a round-trip test — write a known texel, present it, read it
+> back, assert the colour — not a reading of this paragraph. Do that once, early, in
+> the `Framebuffer` lane; it is a class of bug that otherwise surfaces as
+> everything-looks-slightly-wrong much later.
 
 ---
 
@@ -250,9 +266,9 @@ repository.
   de-risks the entire render architecture. **Do this before Phase 5 commits.** It now
   also validates the 64×64 tile size and the 8/16-pixel span subdivision in
   `render/README.md` § 7 and § 8, which are equally unmeasured.
-- **Decide the texture channel order** — §4's BGRA versus the renderer's RGBA8888
-  colour buffer. Matching them removes a per-texel swizzle from the inner loop.
-  Blocks `GltfConverter` and `TextureSampler`.
+- ~~Decide the texture channel order~~ — **decided**: `RGBA8888` end to end, §4. What
+  remains is the round-trip test that proves the converter, the sampler and the
+  presentation blit agree on the concrete byte layout. Do it in the `Framebuffer` lane.
 - **Publish the `assets-v1` release.** Until it exists, `fetchAssets` fails with an
   actionable message. See the task's header comment in `build.gradle.kts`.
 - **Curate the initial pack selection** from §3 and record each entry against the §7

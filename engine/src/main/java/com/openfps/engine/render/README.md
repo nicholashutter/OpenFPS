@@ -440,6 +440,24 @@ it at this stage.
 > grow that capability before Phase 5 can be implemented. Extending the existing
 > pool is the correct move; a second thread pool is a `STYLE.md` § 13.4
 > anti-pattern.
+>
+> **The submitting thread must participate in the work.** This is a correctness
+> requirement, not a tuning choice. `RenderSubsystem` is dispatched *from* the
+> bus, so the thread that submits the tile jobs **is itself a pool worker**. If
+> it submits W jobs and then blocks waiting for them, it has removed a worker
+> from the pool that has to execute them. At `workerCount == 1` that is an
+> immediate, total deadlock; above 1 it is a latent one that appears the moment
+> two subsystems fan out in the same frame. This is the same hazard `AGENTS.md`
+> already documents for the game loop ("it cannot run on the pool it feeds —
+> deadlock at `workerCount == 1`"), arriving from the other direction.
+>
+> The fix is the standard fork-join one: the caller **runs tiles itself** until
+> the queue is empty, then waits only for tiles other workers already claimed.
+> Progress is then guaranteed by the calling thread alone, so correctness no
+> longer depends on how many workers exist. Tile exclusivity is untouched — the
+> caller claims tiles through the same policy as everyone else. Any submit/await
+> added to `I_ThreadPoolPort` must have this property, and it must be tested at
+> `workerCount == 1`.
 
 **Sources:**
 - Pineda, "A Parallel Algorithm for Polygon Rasterization", *SIGGRAPH '88*, Computer Graphics 22(4) — https://dl.acm.org/doi/10.1145/378456.378457
@@ -620,13 +638,19 @@ Shape (indicative, to be pinned down in Phase 5):
 unrecognised version with a clear error is cheaper than debugging a
 mis-parsed vertex array.
 
-> **Channel-order inconsistency to resolve.** `docs/ASSETS.md` § 4 says the
-> converter decodes textures "to raw BGRA", but § 3 of this document fixes the
-> colour buffer at **RGBA8888**. If they differ, `TextureSampler` must swizzle
-> every texel it fetches — a per-pixel cost in the hottest loop, to save nothing.
-> They should almost certainly match, but choosing *which* one is a decision, not
-> an editorial fix, so it is recorded here and in `docs/ASSETS.md` § 9 rather
-> than silently changed.
+> **Channel order — decided: `RGBA8888` end to end.** `docs/ASSETS.md` § 4 used
+> to say the converter decodes to raw BGRA, which predated the colour buffer
+> decision. RGBA wins because the colour buffer's format is pinned from outside
+> (it must match what the presentation path uploads, libGDX
+> `Pixmap.Format.RGBA8888`) while the texture's format is ours, produced by a
+> build-time converter that does not exist yet. The free side moves. A mismatch
+> would cost a swizzle per texel fetched, in the hottest loop, for nothing.
+>
+> `TextureSampler` therefore never swizzles. But **prove the byte layout, do not
+> assume it** — an `int[]` reaching the GPU passes through a byte-order step, and
+> whether `0xRRGGBBAA` arrives as R,G,B,A depends on the upload path and platform
+> endianness. Round-trip test in the `Framebuffer` lane: write a known texel,
+> present, read back, assert.
 
 ### BSP — retired as a *renderer* algorithm, not deleted
 
@@ -687,12 +711,33 @@ a single pixel is drawn. It also weakens the port's central invariant — that t
 engine never dereferences memory it did not get a handle for — and both backends
 plus their 35 tests must absorb it.
 
-**Recommendation to the decider, not a decision:** option 1 unblocks Phase 5
-immediately and is honest about being an exception; option 2 is the better
-long-term shape *if* other subsystems turn out to need typed slabs too, and
-audio mixing buffers are the obvious second candidate. **Decide before
-implementing `Framebuffer`** — it is the first class in the lane and everything
-else takes its arrays.
+**Decided: option 1, narrowly scoped.**
+
+The memory port earns its keep by tracking and bulk-freeing *many, small,
+short-lived* allocations — that is what tags and `freeByTag` are for. The
+framebuffer is the exact opposite: two or three arrays, allocated once at init,
+freed at shutdown, resized only when the window is. It gets none of the port's
+benefits and pays its whole cost. Growing a typed-slab capability on the engine's
+most foundational port, plus absorbing it into both backends and their 35 tests,
+would be real design work done *before the first pixel is drawn*, to satisfy a
+rule that is not buying anything here.
+
+The exception is **narrow, and the narrowness is the point** — it must not become
+the precedent for every future "my loop is hot too" argument:
+
+> Long-lived, engine-owned primitive buffers whose element type is not `byte`,
+> allocated once at initialisation and released at shutdown, may be allocated
+> directly. Named sites only, listed in `STYLE.md` § 13.4. A hot loop is **not**
+> on its own a qualifying reason.
+
+That wording admits `Framebuffer` and the audio mixing buffers, and excludes
+per-frame and per-entity allocation, which is what the rule actually exists to
+prevent.
+
+Revisit if a third and fourth candidate appear — at that point the pattern is
+real and option 2 becomes the better shape. Record the exception in `STYLE.md`
+§ 13.4 as part of the `Framebuffer` lane, not afterwards; an undocumented
+exception is indistinguishable from a violation.
 
 ### (b) The WAD subsystem has no art left to read
 

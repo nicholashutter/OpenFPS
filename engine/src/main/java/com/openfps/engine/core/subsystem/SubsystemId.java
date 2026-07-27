@@ -15,7 +15,7 @@ public enum SubsystemId
     CORE,
     /** P_ Gameplay: player, entities, physics, map logic. */
     P_,
-    /** R_ Render: BSP traversal, wall clipping, framebuffer. */
+    /** R_ Render: triangle setup, tiled rasterization, framebuffer. */
     R_,
     /** S_ Audio: SFX, music, 3D positional sound. */
     S_,
