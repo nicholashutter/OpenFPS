@@ -16,7 +16,7 @@
                                   v
 +--------------------------------------------------------------------+
 |  CORE GAME LOOP       com.openfps.engine.core.GameLoop (D_)        |
-|  Fixed 35 Hz tic ticker; calls every subsystem once per tic.       |
+|  30/60/120 Hz tic producer; publishes events to the shared bus.    |
 +--------------------------------------------------------------------+
        |            |            |            |            |
        v            v            v            v            v
@@ -47,7 +47,7 @@
 
 | Prefix | Package | What it does |
 |---|---|---|
-| `D_` | `core` | Runs the game at a fixed 35 Hz tic rate, calls every subsystem per tic, and tracks game time / state. |
+| `D_` | `core` | Runs the game at a configurable 30/60/120 Hz tic rate and publishes events to the bus; a worker pool dispatches them to subsystems. |
 | `P_` | `gameplay` | Holds player state, entities, map logic, and physics (collision, sliding, BSP-assisted movement). |
 | `R_` | `render` | (Stub) Draws the world via BSP traversal, wall clipping, and visplanes. Adapter-agnostic. |
 | `S_` | `audio` | (Stub) Plays 3D-positioned SFX and background music. Adapter-agnostic. |

@@ -5,8 +5,6 @@
 
 package com.openfps.engine.core.subsystem.impl;
 
-import com.openfps.engine.core.event.I_EngineEvent;
-import com.openfps.engine.core.event.NetworkPacketEvent;
 import com.openfps.engine.core.subsystem.Subsystem;
 import com.openfps.engine.core.subsystem.SubsystemId;
 import com.openfps.engine.net.port.I_NetworkPort;
@@ -36,16 +34,7 @@ public final class NetSubsystem extends Subsystem
         port.shutdown();
     }
 
-    @Override
-    protected void onEvent(final I_EngineEvent event)
-    {
-        if (event instanceof NetworkPacketEvent pkt)
-        {
-            // Phase 3 will route this through the G_ network layer for
-            // tic command extraction and snapshot delta. For now, we
-            // accept the event and let the port's discovery/tic methods
-            // (called from the game loop) do the actual work.
-            // No-op: just count it.
-        }
-    }
+    // NetworkPacketEvent targets G_, but there is nothing to route it to
+    // until Phase 3 wires tic-command extraction and snapshot delta into
+    // I_NetworkPort. Until then the base-class no-op onEvent is correct.
 }

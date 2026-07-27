@@ -75,10 +75,10 @@ package com.openfps.engine.core;
 public enum FrameRate
 {
     /** 30 Hz — console target, low-power mode. */
-    FPS_30 (30),
+    FPS_30(30),
 
     /** 60 Hz — default for desktop and headless tests. */
-    FPS_60 (60),
+    FPS_60(60),
 
     /** 120 Hz — high-refresh gaming displays. */
     FPS_120(120);

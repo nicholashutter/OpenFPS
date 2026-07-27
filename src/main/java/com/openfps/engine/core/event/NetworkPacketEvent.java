@@ -59,7 +59,12 @@ public final class NetworkPacketEvent implements I_EngineEvent
     @Override
     public String toString()
     {
+        int byteCount = 0;
+        if (payload != null)
+        {
+            byteCount = payload.length;
+        }
         return "NetworkPacketEvent{seq=" + sequenceNumber + ", from='" + peerAddress
-            + "', bytes=" + (payload == null ? 0 : payload.length) + "}";
+            + "', bytes=" + byteCount + "}";
     }
 }

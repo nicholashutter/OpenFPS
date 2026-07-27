@@ -9,8 +9,10 @@ import com.openfps.engine.core.subsystem.SubsystemId;
 
 /**
  * Periodic game-tick event. Produced by the GameLoop at the configured
- * TIC_RATE (default 35 Hz). Routed to the gameplay subsystem which
- * advances player physics, entity AI, and map logic.
+ * {@code FrameRate} (30, 60, or 120 Hz; 60 by default). Routed to the
+ * gameplay subsystem, which advances player physics, entity AI, and map
+ * logic. Carries {@code deltaNanos} — the frame budget for this rate — so
+ * handlers never have to know the rate themselves.
  */
 public final class TickEvent implements I_EngineEvent
 {

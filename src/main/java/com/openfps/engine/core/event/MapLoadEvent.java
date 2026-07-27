@@ -8,8 +8,13 @@ package com.openfps.engine.core.event;
 import com.openfps.engine.core.subsystem.SubsystemId;
 
 /**
- * Map-change event. Routed to the resource and gameplay subsystems.
- * Triggers bulk-free of game-tagged memory and re-loads map data.
+ * Map-change event. Targets the gameplay subsystem (P_), which calls
+ * {@code I_GameplayPort.loadMap}.
+ *
+ * An event carries exactly one target, so the resource subsystem does not
+ * see this one. When W_ is registered in Phase 2, map loading becomes a
+ * two-step flow (W_ reads the lumps, then publishes to P_) rather than one
+ * event with two recipients.
  */
 public final class MapLoadEvent implements I_EngineEvent
 {

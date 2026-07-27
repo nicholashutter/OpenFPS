@@ -230,12 +230,12 @@ public final class SqliteUserProfilePort implements I_UserProfilePort
             ps.setString(2,  profile.displayName());
             ps.setDouble(3,  profile.audioVolume());
             ps.setDouble(4,  profile.mouseSensitivity());
-            ps.setInt   (5,  profile.fieldOfView());
+            ps.setInt(5,  profile.fieldOfView());
             ps.setString(6,  profile.preferredColor());
-            ps.setLong  (7,  profile.lastLoginAtEpochMs());
-            ps.setLong  (8,  profile.totalPlaytimeSeconds());
-            ps.setLong  (9,  profile.createdAtEpochMs());
-            ps.setLong  (10, profile.updatedAtEpochMs());
+            ps.setLong(7,  profile.lastLoginAtEpochMs());
+            ps.setLong(8,  profile.totalPlaytimeSeconds());
+            ps.setLong(9,  profile.createdAtEpochMs());
+            ps.setLong(10, profile.updatedAtEpochMs());
             ps.executeUpdate();
         }
         catch (final SQLException e)

@@ -48,14 +48,15 @@
         </module>
         <module name="RightCurly">
             <property name="option" value="alone"/>
-            <property name="tokens" value="CLASS_DEF,INTERFACE_DEF,METHOD_DEF,CTOR_DEF,SLIST"/>
+            <property name="tokens"
+                value="CLASS_DEF,INTERFACE_DEF,ENUM_DEF,ANNOTATION_DEF,RECORD_DEF,METHOD_DEF,CTOR_DEF,COMPACT_CTOR_DEF,STATIC_INIT,INSTANCE_INIT,LITERAL_IF,LITERAL_ELSE,LITERAL_FOR,LITERAL_WHILE,LITERAL_DO,LITERAL_TRY,LITERAL_CATCH,LITERAL_FINALLY"/>
         </module>
 
         <!-- Whitespace -->
         <module name="GenericWhitespace"/>
         <module name="MethodParamPad"/>
         <module name="NoWhitespaceAfter">
-            <property name="tokens" value="BNOT,BNOT_OPT,DOT,LNOT"/>
+            <property name="tokens" value="BNOT,DOT,LNOT"/>
         </module>
         <module name="NoWhitespaceBefore">
             <property name="tokens" value="SEMI,POST_DEC,POST_INC"/>
@@ -67,17 +68,25 @@
         </module>
         <module name="WhitespaceAround">
             <property name="tokens"
-                value="ASSIGN,BAND,BAND_ASSIGN,BOR,BOR_ASSIGN,BSR,BSR_ASSIGN,BXOR,BXOR_ASSIGN,COLON,DIV,DIV_ASSIGN,EQUAL,GE,GT,LAND,LE,LITERAL_ASSERT,LITERAL_CATCH,LITERAL_DO,LITERAL_ELSE,LITERAL_FINALLY,LITERAL_FOR,LITERAL_IF,LITERAL_RETURN,LITERAL_STATICINIT,LITERAL_SYNCHRONIZED,LITERAL_TRY,LITERAL_WHILE,LPAREN,RPAREN,STAR,STAR_ASSIGN,LAMBDA"/>
+                value="ASSIGN,BAND,BAND_ASSIGN,BOR,BOR_ASSIGN,BSR,BSR_ASSIGN,BXOR,BXOR_ASSIGN,COLON,DIV,DIV_ASSIGN,EQUAL,GE,GT,LAND,LE,LITERAL_ASSERT,LITERAL_CATCH,LITERAL_DO,LITERAL_ELSE,LITERAL_FINALLY,LITERAL_FOR,LITERAL_IF,LITERAL_RETURN,LITERAL_SYNCHRONIZED,LITERAL_TRY,LITERAL_WHILE,STAR,STAR_ASSIGN,LAMBDA"/>
         </module>
 
         <!-- Modifier checks -->
         <module name="ModifierOrder"/>
-        <module name="RedundantModifier"/>
+        <!-- Default tokens minus RESOURCE: STYLE.md § 3.1 asks for `final` on
+             every local, and a try-with-resources variable is a local. The
+             language makes it implicitly final; we still write it. -->
+        <module name="RedundantModifier">
+            <property name="tokens"
+                value="METHOD_DEF,VARIABLE_DEF,ANNOTATION_FIELD_DEF,INTERFACE_DEF,CTOR_DEF,CLASS_DEF,ENUM_DEF"/>
+        </module>
 
         <!-- Blocks -->
         <module name="AvoidNestedBlocks"/>
 
         <!-- Coding -->
+        <!-- STYLE.md § 5.5 — the ternary operator is banned outright -->
+        <module name="AvoidInlineConditionals"/>
         <module name="EmptyStatement"/>
         <module name="EqualsHashCode"/>
         <module name="IllegalInstantiation"/>
@@ -97,10 +106,15 @@
         <module name="ArrayTypeStyle"/>
 
         <!-- Javadoc — required on public/protected members -->
+        <!-- STYLE.md § 5.1 requires a Javadoc block on every non-private
+             method; it does not require exhaustive @param/@return tags.
+             This validates that the tags you DO write are correct and match
+             the signature, without forcing boilerplate onto one-line
+             accessors. Tighten by flipping these to false if § 5.1 changes. -->
         <module name="JavadocMethod">
-            <property name="scope" value="public"/>
-            <property name="allowMissingParamTags" value="false"/>
-            <property name="allowMissingReturnTag" value="false"/>
+            <property name="accessModifiers" value="public"/>
+            <property name="allowMissingParamTags" value="true"/>
+            <property name="allowMissingReturnTag" value="true"/>
         </module>
         <module name="JavadocType">
             <property name="scope" value="public"/>

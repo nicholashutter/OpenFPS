@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Java Version](https://img.shields.io/badge/Java-17%20LTS-ED8B00.svg)](https://adoptium.net/)
 [![Gradle](https://img.shields.io/badge/Gradle-8.10-02303A.svg)](https://gradle.org/)
-[![Tests](https://img.shields.io/badge/tests-87%20passing-brightgreen.svg)](BUILD.md)
+[![Tests](https://img.shields.io/badge/tests-129%20passing-brightgreen.svg)](BUILD.md)
 [![Status](https://img.shields.io/badge/status-pre--alpha-blue.svg)](PLAN.md)
 
 ## Overview
@@ -14,7 +14,7 @@ OpenFPS is a from-scratch FPS game engine written in Java 17, designed around th
 
 The engine is an **event queue processor**: subsystems communicate by publishing events to a shared bus, and a pool of N dedicated worker threads (N = logical CPU count / 2) consumes events and dispatches them to the target subsystem. Each subsystem is its own state machine. Every allocation goes through a single memory port.
 
-**Currently in pre-alpha.** Phase 1.3 complete: 87 tests passing, build clean, ready for the desktop LWJGL3 adapter (Phase 1.4).
+**Currently in pre-alpha.** Phase 1.4 complete: 129 tests passing, Checkstyle clean, build green — ready for the desktop LWJGL3 adapter (Phase 1.5).
 
 ## Key Design Decisions
 
@@ -72,14 +72,15 @@ See [BUILD.md](BUILD.md) for full build instructions, [STYLE.md](STYLE.md) for c
         v
   +-------------------+      +-------------------+
   |   Worker Pool     | ---> | SubsystemRegistry |
-  |  N = cores/2 hot  |      |  + P_ Gameplay    |
-  |  threads, pre-    |      |  + R_ Render      |
-  |  started. Each:   |      |  + S_ Audio       |
-  |  take → dispatch  |      |  + G_ Net         |
-  |  → loop (release  |      |  + W_ Resource    |
+  |  N = cores/2 hot  |      |  + CORE (shutdown)|
+  |  threads, pre-    |      |  + P_ Gameplay    |
+  |  started. Each:   |      |  + R_ Render      |
+  |  take → dispatch  |      |  + S_ Audio       |
+  |  → loop (release  |      |  + G_ Net         |
   |  back to pool)    |      |  + Z_ Memory      |
   +-------------------+      |  + I_ Hardware    |
                               +-------------------+
+                              (W_ Resource lands in Phase 2)
         |
         v
   +-------------------+
@@ -133,25 +134,25 @@ openFPS/
 │   │   ├── eventbus/          I_EventBusPort, SharedEventBus, EventBusFactory
 │   │   ├── pool/              I_ThreadPoolPort, WorkerPool, ThreadPoolFactory
 │   │   ├── subsystem/         ISubsystem, Subsystem, SubsystemRegistry
-│   │   │   └── impl/          GameplaySubsystem, RenderSubsystem, AudioSubsystem, NetSubsystem, HalSubsystem, MemorySubsystem
-│   │   ├── EngineMain.java
+│   │   │   └── impl/          CoreSubsystem, GameplaySubsystem, RenderSubsystem, AudioSubsystem, NetSubsystem, HalSubsystem, MemorySubsystem
+│   │   ├── EngineMain.java    composition root — the only core class that touches adapters
 │   │   ├── GameLoop.java
 │   │   ├── FrameRate.java     enum: FPS_30, FPS_60, FPS_120
-│   │   ├── GameConfig.java    immutable, factory methods
-│   │   └── EngineState.java
-│   ├── common/                FixedMath (16.16 fixed-point), Constants
-│   ├── gameplay/port/         I_GameplayPort, NullGameplayPort
-│   ├── render/port/           I_RenderPort, NullRenderPort
-│   ├── audio/port/            I_AudioPort, NullAudioPort
-│   ├── net/port/              I_NetworkPort, NullNetworkPort
-│   ├── resource/port/         I_WadPort, NullWadPort
-│   ├── memory/                I_MemoryPort, JvmMemoryPort, ZoneMemoryPort, MemoryPortFactory, MemoryException
+│   │   └── GameConfig.java    immutable, factory methods
+│   ├── common/                FixedMath (16.16 fixed-point), Constants, UserProfile
+│   ├── gameplay/              port/I_GameplayPort  adapter/NullGameplayPort
+│   ├── render/                port/I_RenderPort    adapter/NullRenderPort
+│   ├── audio/                 port/I_AudioPort     adapter/NullAudioPort
+│   ├── net/                   port/I_NetworkPort   adapter/NullNetworkPort
+│   ├── resource/              port/I_WadPort       adapter/NullWadPort   (not yet registered — Phase 2)
+│   ├── memory/                port/I_MemoryPort  adapter/{Jvm,Zone}MemoryPort  factory/MemoryPortFactory  MemoryException
 │   └── hal/                   I_ Hardware abstraction
-│       ├── port/              I_TimePort, I_InputPort, I_NetworkPort, I_FilePort, I_SystemInfoPort
-│       └── adapter/nulladapter/   headless stubs for all ports
+│       ├── port/              I_TimePort, I_InputPort, I_NetworkPort, I_FilePort, I_SystemInfoPort, I_UserProfilePort
+│       ├── adapter/nulladapter/   headless stubs + MemoryUserProfilePort
+│       └── adapter/sqlite/        SqliteAdapterFactory, SqliteUserProfilePort (Xerial)
 ├── src/main/resources/
 │   └── logback.xml            SLF4J logging config
-├── src/test/java/             87 JUnit 5 tests
+├── src/test/java/             129 JUnit 5 tests
 ├── PLAN.md                    full project plan, subsystem specs, roadmap
 ├── STYLE.md                   code style guide (enforced by Checkstyle)
 ├── AGENTS.md                  AI agent instructions
@@ -163,7 +164,7 @@ Each subsystem package has its own `README.md` — the FDE entry point. Read in 
 
 ## Test Coverage
 
-**87 tests, all passing.**
+**129 tests, all passing.**
 
 | Suite | Tests | Covers |
 |---|---|---|
@@ -173,15 +174,20 @@ Each subsystem package has its own `README.md` — the FDE entry point. Read in 
 | `WorkerPoolTest` | 7 | hot threads, parallel dispatch, error recovery |
 | `SubsystemStateTest` | 10 | state machine transitions, error handling |
 | `FixedMathTest` | 6 | 16.16 fixed-point arithmetic |
-| `MemoryPortTest` | 43 | both backends: positive, negative, random, overflow, underflow, state, tags |
+| `UserProfileTest` | 12 | field validation, `withXxx` copies, equals/hashCode |
+| `MemoryUserProfilePortTest` | 15 | in-memory CRUD, state machine |
+| `SqliteUserProfilePortTest` | 15 | SQLite CRUD, upsert, persistence, state machine |
+| `MemoryPortTest` | 35 | both backends: positive, negative, random, overflow, underflow, state, tags |
 
-Run with: `.\gradlew.bat test`
+Run with: `.\gradlew.bat test`. `.\gradlew.bat build` also runs Checkstyle over
+main and test sources and fails the build on any violation.
 
 ## Contributing
 
 1. All PRs must pass `gradlew build` (Checkstyle + tests)
 2. New subsystems require port interfaces before any adapter implementation
-3. Core engine never imports from `adapter/` packages
+3. Core engine never imports from `adapter/` packages — except `EngineMain`,
+   the composition root, which must pick concrete implementations
 4. Each subsystem has its own state machine
 5. Frame rate changes require a new `FrameRate` enum value (not runtime config)
 6. All public API must be documented with Javadoc citing sources

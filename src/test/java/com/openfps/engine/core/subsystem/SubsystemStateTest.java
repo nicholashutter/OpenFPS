@@ -8,6 +8,7 @@ package com.openfps.engine.core.subsystem;
 import com.openfps.engine.core.event.EventFactory;
 import com.openfps.engine.core.event.I_EngineEvent;
 import com.openfps.engine.core.event.TickEvent;
+import com.openfps.engine.hal.adapter.nulladapter.NullTimePort;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -19,7 +20,7 @@ import static org.assertj.core.api.Assertions.*;
  */
 class SubsystemStateTest
 {
-    private final EventFactory factory = new EventFactory(0L);
+    private final EventFactory factory = new EventFactory(new NullTimePort());
 
     @Test
     @DisplayName("newly constructed subsystem is UNINITIALIZED")

@@ -15,6 +15,7 @@ import com.openfps.engine.core.pool.I_ThreadPoolPort;
 import com.openfps.engine.core.pool.ThreadPoolFactory;
 import com.openfps.engine.core.subsystem.SubsystemRegistry;
 import com.openfps.engine.core.subsystem.impl.AudioSubsystem;
+import com.openfps.engine.core.subsystem.impl.CoreSubsystem;
 import com.openfps.engine.core.subsystem.impl.GameplaySubsystem;
 import com.openfps.engine.core.subsystem.impl.HalSubsystem;
 import com.openfps.engine.core.subsystem.impl.MemorySubsystem;
@@ -22,9 +23,8 @@ import com.openfps.engine.core.subsystem.impl.NetSubsystem;
 import com.openfps.engine.core.subsystem.impl.RenderSubsystem;
 import com.openfps.engine.gameplay.adapter.NullGameplayPort;
 import com.openfps.engine.hal.adapter.nulladapter.NullAdapterFactory;
-import com.openfps.engine.hal.adapter.nulladapter.NullInputPort;
-import com.openfps.engine.hal.adapter.nulladapter.NullTimePort;
 import com.openfps.engine.hal.adapter.sqlite.SqliteAdapterFactory;
+import com.openfps.engine.hal.port.I_InputPort;
 import com.openfps.engine.hal.port.I_SystemInfoPort;
 import com.openfps.engine.hal.port.I_TimePort;
 import com.openfps.engine.hal.port.I_UserProfilePort;
@@ -148,17 +148,19 @@ public final class EngineMain
         // -- 2. HAL adapters
         // Both factories use null ports for time / input / network / file
         // / system info; they differ only on the user profile backend.
-        // This is a stepping stone to the real desktop factory (Phase 1.4+).
+        // This is a stepping stone to the real desktop factory (Phase 1.5).
         final I_TimePort timePort;
+        final I_InputPort inputPort;
         final I_SystemInfoPort sysinfo;
         final I_UserProfilePort userProfile;
-        AutoCloseable halCloser;
+        final AutoCloseable halCloser;
 
         if (useSqlite && !headless)
         {
             final SqliteAdapterFactory sqlite = new SqliteAdapterFactory();
             sqlite.init();
             timePort  = sqlite.getTimePort();
+            inputPort = sqlite.getInputPort();
             sysinfo   = sqlite.getSystemInfoPort();
             userProfile = sqlite.getUserProfilePort();
             halCloser = sqlite::shutdown;
@@ -168,6 +170,7 @@ public final class EngineMain
             final NullAdapterFactory nullFactory = new NullAdapterFactory();
             nullFactory.init();
             timePort  = nullFactory.getTimePort();
+            inputPort = nullFactory.getInputPort();
             sysinfo   = nullFactory.getSystemInfoPort();
             userProfile = nullFactory.getUserProfilePort();
             halCloser = nullFactory::shutdown;
@@ -175,12 +178,12 @@ public final class EngineMain
 
         // -- 3. Worker count from HAL
         final int logicalCores = sysinfo.logicalProcessorCount();
-        final int workerCount = Math.max(1, logicalCores / 2);
+        final int workerCount = ThreadPoolFactory.recommendedWorkerCount(logicalCores);
         LOG.info("System: {} logical cores, {} workers, target rate={} Hz",
             logicalCores, workerCount, config.rate().fps());
 
         // -- 4. Load or create user profile
-        final UserProfile profile = loadOrCreateProfile(userProfile);
+        final UserProfile profile = loadOrCreateProfile(userProfile, timePort);
 
         // -- 5. Event bus
         final I_EventBusPort bus = EventBusFactory.createShared();
@@ -188,8 +191,9 @@ public final class EngineMain
 
         // -- 6. Subsystem registry
         final SubsystemRegistry subsystems = new SubsystemRegistry();
+        subsystems.register(new CoreSubsystem());
         subsystems.register(new MemorySubsystem(memory));
-        subsystems.register(new HalSubsystem(new NullInputPort()));
+        subsystems.register(new HalSubsystem(inputPort));
         subsystems.register(new NetSubsystem(new NullNetworkPort()));
         subsystems.register(new GameplaySubsystem(new NullGameplayPort()));
         subsystems.register(new RenderSubsystem(new NullRenderPort()));
@@ -202,21 +206,13 @@ public final class EngineMain
         pool.start();
 
         // -- 8. Event factory + GameLoop (producer)
-        final EventFactory eventFactory = new EventFactory(timeOriginNanos());
-        final GameLoop loop = new GameLoop(new NullTimePort(), bus, eventFactory, config);
-        final Thread loopThread = new Thread(loop, "GameLoop");
-        loopThread.setDaemon(true);
-        loopThread.start();
-
-        try
-        {
-            loopThread.join();
-        }
-        catch (final InterruptedException e)
-        {
-            LOG.info("Main thread interrupted — shutting down");
-            Thread.currentThread().interrupt();
-        }
+        // The loop is the sole event producer and cannot run on the worker
+        // pool — it would occupy a consumer thread for the whole run and
+        // deadlock at workerCount == 1. It runs on this thread instead;
+        // the workers are already hot and draining the bus in parallel.
+        final EventFactory eventFactory = new EventFactory(timePort);
+        final GameLoop loop = new GameLoop(timePort, bus, eventFactory, config);
+        loop.run();
 
         // -- 9. Drain and stop
         try
@@ -232,7 +228,7 @@ public final class EngineMain
         bus.shutdown();
 
         // -- 10. Save profile with updated playtime + last-login
-        saveProfile(userProfile, profile);
+        saveProfile(userProfile, profile, timePort);
 
         try
         {
@@ -258,13 +254,13 @@ public final class EngineMain
      * Loads the most recent user profile, or creates a new one if the
      * database is empty.
      */
-    private static UserProfile loadOrCreateProfile(final I_UserProfilePort port)
+    private static UserProfile loadOrCreateProfile(final I_UserProfilePort port,
+                                                   final I_TimePort timePort)
     {
         final var existing = port.findAll();
         if (existing.isEmpty())
         {
-            final UserProfile fresh = UserProfile.newDefault()
-                .withLastLogin(System.currentTimeMillis());
+            final UserProfile fresh = UserProfile.newDefault(timePort.epochMillis());
             port.save(fresh);
             LOG.info("Created new user profile: id={}, name='{}'",
                 fresh.id(), fresh.displayName());
@@ -278,7 +274,7 @@ public final class EngineMain
                 mostRecent = p;
             }
         }
-        final UserProfile touched = mostRecent.withLastLogin(System.currentTimeMillis());
+        final UserProfile touched = mostRecent.withLastLogin(timePort.epochMillis());
         port.save(touched);
         LOG.info("Loaded user profile: id={}, name='{}'",
             touched.id(), touched.displayName());
@@ -289,10 +285,12 @@ public final class EngineMain
      * Saves the profile with the current playtime and last-login
      * timestamp.
      */
-    private static void saveProfile(final I_UserProfilePort port, final UserProfile profile)
+    private static void saveProfile(final I_UserProfilePort port, final UserProfile profile,
+                                    final I_TimePort timePort)
     {
-        final long now = System.currentTimeMillis();
-        final long additionalSeconds = (now - profile.lastLoginAtEpochMs()) / 1000L;
+        final long now = timePort.epochMillis();
+        // Wall clock can jump backwards; clamp so playtime never regresses.
+        final long additionalSeconds = Math.max(0L, (now - profile.lastLoginAtEpochMs()) / 1000L);
         final UserProfile updated = profile
             .withAddedPlaytime(additionalSeconds)
             .withLastLogin(now)
@@ -300,11 +298,5 @@ public final class EngineMain
         port.save(updated);
         LOG.info("Saved user profile: id={}, playtime={}s",
             updated.id(), updated.totalPlaytimeSeconds());
-    }
-
-    /** Returns a reference origin for timestamps. */
-    private static long timeOriginNanos()
-    {
-        return System.nanoTime();
     }
 }

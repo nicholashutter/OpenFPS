@@ -9,8 +9,7 @@
 ```
 core/
 ├── EngineMain.java           — bootstrap: wire memory, HAL, bus, pool, subsystems
-├── GameLoop.java             — D_ event producer (35 Hz tic events + shutdown)
-├── EngineState.java          — engine-level state enum
+├── GameLoop.java             — D_ event producer (30/60/120 Hz tic events + shutdown)
 ├── event/                    — I_EngineEvent + concrete events + factory
 │   ├── I_EngineEvent.java
 │   ├── TickEvent.java
@@ -48,9 +47,9 @@ core/
 
 ```
   +------------+
-  |  GameLoop  |  (single thread, 35 Hz)
+  |  GameLoop  |  (single thread, 30/60/120 Hz)
   +-----+------+
-        |  produces TickEvent every 28.5ms
+        |  produces TickEvent every 33.3/16.7/8.3ms
         v
   +-----+------+      +---------------+      +-------------------+
   |            |  ──> |               | ───> |                   |
@@ -77,14 +76,21 @@ core/
 Each subsystem has a strict lifecycle state machine:
 
 ```
-  +---------------+
-  | UNINITIALIZED |  --init()--->  READY  --shutdown()--->  SHUTDOWN (terminal)
-  +---------------+                    |
-       |                                +-- (init fails) --->  ERROR  --reset()--->  UNINITIALIZED
-       +--reset()---> (re-init)
+  +---------------+                 +-------+                 +----------+
+  | UNINITIALIZED | --init()------> | READY | --shutdown()--> | SHUTDOWN |
+  +---------------+                 +-------+                 +----------+
+          |                             |                       (terminal)
+          | init() throws               | shutdown() throws          ^
+          v                             v                            |
+       +-------+                     +-------+                       |
+       | ERROR | ----------------------------  --shutdown()----------+
+       +-------+
 ```
 
-The state tracks the subsystem's LIFECYCLE, not per-event state.
+There is no `reset()` — once a subsystem reaches SHUTDOWN it is done, and
+ERROR can only be shut down, not revived. The state tracks the subsystem's
+LIFECYCLE, not per-event state: there is no BUSY, because several workers
+can be inside `onEvent` for the same subsystem simultaneously.
 Per-event "is the worker busy?" is implicit: the worker thread is
 released the moment `onEvent()` returns.
 
@@ -95,7 +101,7 @@ The subsystem's `onEvent()` must be thread-safe.
 
 The default thread layout is:
 - **N worker threads** (N = `logicalProcessorCount / 2`, min 1) — pre-started, hot
-- **1 GameLoop thread** — produces events at 35 Hz
+- **1 GameLoop thread** — produces events at the configured rate (30/60/120 Hz)
 - **1 main thread** — blocks on `loopThread.join()`
 
 Total: 1 + 1 + N threads. For a 16-core machine, N = 8, so 10 threads total.
@@ -140,7 +146,7 @@ The `Subsystem` wrapper adds the state machine and event dispatch.
 
 ## Tests
 
-87 tests across the engine:
+129 tests across the engine:
 - 9 FrameRate — per-rate math, parser, rejection of unsupported rates
 - 10 GameConfig — factory methods, drift correction over 1000 tics
 - 10 SharedEventBus — publish, take, FIFO, blocking, backpressure, drain

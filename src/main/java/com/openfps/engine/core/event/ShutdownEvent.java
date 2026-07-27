@@ -8,9 +8,13 @@ package com.openfps.engine.core.event;
 import com.openfps.engine.core.subsystem.SubsystemId;
 
 /**
- * Engine-shutdown event. Treated specially by the bus and worker pool:
- * the bus enters DRAINING mode, workers finish their current event, then
- * exit. No further events are accepted after this is published.
+ * Engine-shutdown event. Published by the producer (normally the
+ * GameLoop, on reaching maxTics) as the last event of a run, and
+ * consumed by {@code CoreSubsystem}, which records the reason.
+ *
+ * Publishing this does NOT by itself stop the engine: the producer stops
+ * producing, and {@code I_ThreadPoolPort.shutdown()} moves the bus to
+ * DRAINING so workers finish the backlog and exit.
  */
 public final class ShutdownEvent implements I_EngineEvent
 {

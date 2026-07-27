@@ -153,12 +153,12 @@ class SqliteUserProfilePortTest
                 ps.setString(2,  displayName);
                 ps.setDouble(3,  0.5);
                 ps.setDouble(4,  1.0);
-                ps.setInt   (5,  95);
+                ps.setInt(5,  95);
                 ps.setString(6,  "#00FF00");
-                ps.setLong  (7,  1000L);
-                ps.setLong  (8,  0L);
-                ps.setLong  (9,  0L);
-                ps.setLong  (10, 0L);
+                ps.setLong(7,  1000L);
+                ps.setLong(8,  0L);
+                ps.setLong(9,  0L);
+                ps.setLong(10, 0L);
                 ps.executeUpdate();
             }
         }

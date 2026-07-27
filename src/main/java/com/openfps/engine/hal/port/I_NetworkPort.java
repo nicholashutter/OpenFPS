@@ -18,7 +18,7 @@ public interface I_NetworkPort
      * @param data bytes to send
      * @param address destination address string (e.g., "192.168.1.10:5021")
      */
-    void send(final byte[] data, final String address);
+    void send(byte[] data, String address);
 
     /**
      * Receives a pending datagram, if any.
@@ -33,7 +33,7 @@ public interface I_NetworkPort
      *
      * @param port local UDP port
      */
-    void bind(final int port);
+    void bind(int port);
 
     /**
      * Closes the socket. Called at engine shutdown.
@@ -45,7 +45,7 @@ public interface I_NetworkPort
      *
      * @param ticIndex the tic being processed
      */
-    void processTic(final int ticIndex);
+    void processTic(int ticIndex);
 
     /**
      * Initializes the network subsystem. Called once at engine startup.

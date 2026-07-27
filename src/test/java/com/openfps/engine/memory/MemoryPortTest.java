@@ -55,7 +55,11 @@ class MemoryPortTest
         return port;
     }
 
-    enum Backend { JVM, ZONE }
+    enum Backend
+    {
+        JVM,
+        ZONE
+    }
 
     /**
      * Run the same test logic against both backends.

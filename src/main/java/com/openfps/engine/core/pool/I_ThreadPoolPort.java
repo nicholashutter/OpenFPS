@@ -50,13 +50,19 @@ public interface I_ThreadPoolPort
     /** Returns the number of workers currently active. */
     int activeWorkerCount();
 
+    /** Returns the pool state. */
     State state();
 
+    /** Pool lifecycle states. See the state diagram in the class Javadoc. */
     enum State
     {
+        /** Default state at construction. Must call init() to advance. */
         UNINITIALIZED,
+        /** Worker count configured; threads not yet started. */
         READY,
+        /** Workers are hot and draining the bus. */
         RUNNING,
+        /** Terminal state. Workers are stopping or stopped. */
         SHUTDOWN
     }
 }

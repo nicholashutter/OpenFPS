@@ -88,10 +88,12 @@ modulo 1024 to get the table index.
 
 ## Constants reference
 
+> **Not here: frame rate.** `TIC_RATE` / `MS_PER_TIC` / `NANOS_PER_TIC` were
+> removed in Phase 1.3. The rate is configuration, not a constant — see
+> `core/FrameRate.java` (closed enum: 30 / 60 / 120 Hz) and `core/GameConfig.java`.
+
 | Constant | Value | Meaning |
 |---|---|---|
-| `TIC_RATE` | 35 | Hz — fixed game tic rate |
-| `NANOS_PER_TIC` | ~28.5M | 1 sec / 35 |
 | `MAX_PLAYERS` | 8 | Per-match player cap |
 | `ZONE_HEAP_SIZE` | 16 MB | Default zone allocator heap |
 | `MAP_SCALE` | 65536 | Fixed-point units per map unit |

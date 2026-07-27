@@ -30,10 +30,14 @@ public interface I_UserProfilePort
     //  State machine
     // ===============================================================
 
+    /** Port lifecycle states. */
     enum State
     {
+        /** Default state at construction. Must call init() to advance. */
         UNINITIALIZED,
+        /** Database open; CRUD operations are valid. */
         READY,
+        /** Terminal state. Database closed; all operations throw. */
         SHUTDOWN
     }
 
@@ -56,7 +60,7 @@ public interface I_UserProfilePort
      * @return the profile, or {@code Optional.empty()} if not found
      * @throws IllegalStateException if not READY
      */
-    Optional<UserProfile> findById(final String id);
+    Optional<UserProfile> findById(String id);
 
     /**
      * Returns all profiles, ordered by {@code createdAtEpochMs} ascending.
@@ -70,12 +74,12 @@ public interface I_UserProfilePort
      * updated — the caller should set it explicitly via
      * {@code withUpdatedAt(now)} before saving.
      */
-    void save(final UserProfile profile);
+    void save(UserProfile profile);
 
     /**
      * Deletes a profile by ID. No-op if the ID is not present.
      */
-    void delete(final String id);
+    void delete(String id);
 
     /**
      * Returns the number of profiles in the database.

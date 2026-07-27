@@ -59,14 +59,14 @@ public interface I_AudioPort
      * @param y fixed-point y
      * @param z fixed-point z
      */
-    void playSfx(final int soundId, final int x, final int y, final int z);
+    void playSfx(int soundId, int x, int y, int z);
 
     /**
      * Starts background music from a lump name.
      *
      * @param lumpName name of the music lump
      */
-    void playMusic(final String lumpName);
+    void playMusic(String lumpName);
 
     /**
      * Stops all audio playback.

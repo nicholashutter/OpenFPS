@@ -103,7 +103,6 @@ Every subsystem has:
 - `FrameRate` — closed enum: `FPS_30`, `FPS_60`, `FPS_120` (120 is the cap)
 - `GameConfig` — immutable (rate, maxTics) with factory methods
 - `EventFactory` — sequence numbers + timestamps for events
-- `EngineState` — engine-level state enum
 
 **Event flow** (Phase 1.2):
 - `I_EngineEvent` — base event interface (target subsystem, sequence, timestamp)

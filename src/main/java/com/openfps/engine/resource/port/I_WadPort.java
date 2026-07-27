@@ -66,7 +66,7 @@ public interface I_WadPort
      * @param path filesystem path to the .wad file
      * @return true if successfully opened
      */
-    boolean open(final String path);
+    boolean open(String path);
 
     /**
      * Closes the currently open WAD file.
@@ -80,7 +80,7 @@ public interface I_WadPort
      * @param lumpIndex zero-based lump index
      * @return lump bytes, or null if not found
      */
-    byte[] readLump(final int lumpIndex);
+    byte[] readLump(int lumpIndex);
 
     /**
      * Reads a lump by name. Searches the WAD's lump name table.
@@ -88,7 +88,7 @@ public interface I_WadPort
      * @param lumpName up to 8-character lump name (padded with \0)
      * @return lump bytes, or null
      */
-    byte[] readLump(final String lumpName);
+    byte[] readLump(String lumpName);
 
     /**
      * Returns the total number of lumps in the open WAD.
@@ -102,7 +102,7 @@ public interface I_WadPort
      *
      * @param lumpIndex the lump to cache
      */
-    void precacheLump(final int lumpIndex);
+    void precacheLump(int lumpIndex);
 
     /**
      * Frees all cached lumps.

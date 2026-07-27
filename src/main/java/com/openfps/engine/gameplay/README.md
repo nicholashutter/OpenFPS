@@ -84,7 +84,7 @@ http://doom.wikia.com/wiki/WAD
 
 ## Performance constraints
 
-- **Hot path**: physics + map logic runs every tic (35 Hz) on the game thread.
+- **Hot path**: physics + map logic runs every tic (30/60/120 Hz) on the game thread.
 - **Entity cap**: 4096 active entities per map. Beyond that, evictions happen.
 - **No `Math.sqrt`** in collision tests — use squared distance, compare to squared radius.
 - **No lambda chains** — see `STYLE.md` section 6.

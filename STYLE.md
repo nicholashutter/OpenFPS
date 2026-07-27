@@ -20,13 +20,21 @@ Every `.java` file must begin with this Javadoc comment (no blank line between `
 package com.openfps.engine.<subsystem>;
 ```
 
-Files in `*.adapter.*` packages additionally include:
+A class in an `*.adapter.*` package must say so in its class Javadoc, and must
+not import from core engine packages:
 
 ```java
 /**
- * Platform adapter — do not import from core engine packages.
+ * Null implementation of I_TimePort.
+ *
+ * Platform adapter — must not import from core engine packages.
  */
+public final class NullTimePort implements I_TimePort
 ```
+
+The one legitimate place core code touches an adapter is the composition root
+(`EngineMain`), which by definition has to pick concrete implementations. No
+other class in `core` may import from an `adapter` package.
 
 ### 1.2 Class and Interface Declarations
 
@@ -66,7 +74,7 @@ No wildcard imports except for `static` imports of constants.
 | Class / Interface | PascalCase | `ZoneAllocator`, `RendererPort` |
 | Method | camelCase | `allocateBlock`, `submitFrame` |
 | Field (instance) | camelCase | `currentTic`, `playerList` |
-| Field (static final) | SCREAMING_SNAKE_CASE | `TIC_RATE`, `MAX_PLAYERS` |
+| Field (static final) | SCREAMING_SNAKE_CASE | `MAX_PLAYERS`, `ZONE_HEAP_SIZE` |
 | Local variable | camelCase | `sectorIndex`, `deltaTime` |
 | Parameter | camelCase | `wadFile`, `peerId` |
 | Package | lowercase | `com.openfps.engine.hal` |
@@ -167,22 +175,31 @@ The `final` keyword is **required on all parameters** and **strongly preferred o
 
 ### 5.1 Method Javadoc
 
-Every non-private method must have a Javadoc comment at the **beginning** of the method body (not above the declaration):
+Every non-private method must have a Javadoc comment **above the declaration**
+— the standard Java position, which is what tooling, IDEs, and Checkstyle all
+expect:
 
 ```java
+/**
+ * Submits a rendered frame to the display.
+ * Blocks until vsync if enabled.
+ *
+ * @param frameNanos monotonic time in nanoseconds from engine start
+ */
 public void submitFrame(final long frameNanos)
 {
-    /**
-     * Submits a rendered frame to the display.
-     * Blocks until vsync if enabled.
-     *
-     * @param frameNanos monotonic time in nanoseconds from engine start
-     */
     // implementation
 }
 ```
 
-For private methods, a one-line `//` comment is acceptable if the method name is self-explanatory.
+`@param` / `@return` tags are encouraged wherever the name alone doesn't carry
+the meaning (units, ranges, sentinel values, null behaviour). They are not
+mechanically required — a one-line `/** Returns the frame rate in Hz. */` on an
+accessor is complete documentation. What Checkstyle does enforce is that any tag
+you *do* write matches the signature.
+
+For private methods, a one-line `//` comment is acceptable if the method name is
+self-explanatory.
 
 ### 5.2 Method Length
 
@@ -190,15 +207,66 @@ Target under 40 lines. If a method grows beyond 60 lines, extract logical blocks
 
 ### 5.3 Parameters
 
-All parameters must be `final`:
+All parameters of a method **with a body** must be `final`:
 
 ```java
 public void registerPeer(final int peerId, final InetAddress address)
 ```
 
+Do **not** write `final` on parameters of an interface or abstract method
+declaration. There is no body, so it has no meaning there, and Checkstyle's
+`RedundantModifier` rejects it:
+
+```java
+// GOOD — interface declaration
+void registerPeer(int peerId, InetAddress address);
+
+// BAD — redundant, fails the build
+void registerPeer(final int peerId, final InetAddress address);
+```
+
 ### 5.4 Return Statements
 
 Prefer early returns. Avoid flag variables when a direct return suffices.
+
+### 5.5 No Ternary Operator
+
+**The `?:` operator is banned.** Use `if`/`else`, an early return, or a
+`switch`. Control flow should read as control flow, not as an expression
+you have to unpack — especially inside a larger expression such as string
+concatenation or an argument list, where the branch is easy to miss.
+
+```java
+// GOOD
+public static int abs(final int value)
+{
+    if (value < 0)
+    {
+        return -value;
+    }
+    return value;
+}
+
+// GOOD — pull the branch out of the expression
+int byteCount = 0;
+if (payload != null)
+{
+    byteCount = payload.length;
+}
+return "NetworkPacketEvent{bytes=" + byteCount + "}";
+
+// BAD
+public static int abs(final int value)
+{
+    return value < 0 ? -value : value;
+}
+
+// BAD — branch buried inside a concatenation
+return "NetworkPacketEvent{bytes=" + (payload == null ? 0 : payload.length) + "}";
+```
+
+Switch *expressions* (`case X -> value`) are not ternaries and are fine —
+they are explicit, exhaustive, and checked by the compiler.
 
 ---
 
@@ -213,9 +281,16 @@ final Runnable onTick = () -> advanceTic();
 executor.submit(onTick);
 ```
 
-### 6.2 No Lambda Chains
+### 6.2 No Lambda Chains, No Nesting
 
-Avoid chaining lambdas. Do not nest lambdas. If you need a lambda with more than one expression, extract it to a named method.
+**Never nest a lambda inside another lambda.** One level is the hard
+limit — a lambda whose body contains another `->` is a review failure, no
+exceptions. Nested closures make capture and control flow nearly
+impossible to follow, and they are the single worst thing to land in a
+stack trace from a worker thread.
+
+Avoid chaining lambdas. If you need a lambda with more than one
+expression, extract it to a named method.
 
 ```java
 // GOOD
@@ -271,42 +346,71 @@ The `-ea` JVM flag is enabled in all test and dev runs.
 
 ## 8. Logging
 
-- Use `System.Logger` (JUL-backed, no external dependency) for all logging
-- Logger named per class: `private static final System.Logger LOG`
+- Use **SLF4J** for all logging (`org.slf4j:slf4j-api`, backed by Logback)
+- Logger named per class: `private static final Logger LOG`
+- Use `{}` placeholders — never string concatenation inside a log call
+- Pass the exception as the LAST argument; it gets no `{}` placeholder
 - Log levels: `DEBUG` (dev), `INFO` (milestones), `WARN` (degraded), `ERROR` (failure)
 
 ```java
-private static final System.Logger LOG = System.getLogger(PlayerState.class.getName());
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-LOG.log(Level.INFO, "Engine initialized, tic rate: {0} Hz", TIC_RATE);
+private static final Logger LOG = LoggerFactory.getLogger(GameLoop.class);
+
+LOG.info("GameLoop started: rate={} ({}ns/tic)", config.rate(), nanosPerTic);
+LOG.error("Subsystem {} init() failed", id, e);   // exception last, no {} for it
 ```
+
+**Banned**: `System.out` / `System.err`, `System.Logger`, `java.util.logging`,
+and Log4j used directly. Everything goes through the SLF4J facade so the
+backend stays swappable (Logback on desktop, an Android binding in Phase 3+).
 
 ---
 
 ## 9. Threading
 
-- The game loop runs on a single dedicated thread by default
+- The game loop runs on a single thread and is the sole event producer
+- All event dispatch happens on the `WorkerPool` (N = logical cores / 2)
 - Audio, network, and render each get their own thread when adapters are wired
-- All cross-thread communication goes through thread-safe queues (`java.util.concurrent.ArrayBlockingQueue`)
-- No `synchronized` blocks; prefer `java.util.concurrent` primitives
+- Cross-thread communication goes through the event bus, backed by a bounded
+  `java.util.concurrent.LinkedBlockingQueue`. The bound IS the backpressure:
+  `publish()` blocks when full rather than dropping events. (`LinkedBlockingQueue`
+  over `ArrayBlockingQueue` because the capacity need not be pre-allocated.)
+- Prefer `java.util.concurrent` primitives over `synchronized`: `AtomicLong` /
+  `AtomicInteger` for counters, `volatile` for state flags, the blocking queue
+  for handoff. A `synchronized` block requires a comment saying why an atomic
+  won't do.
 
 ---
 
 ## 10. Testing Conventions
 
 - Tests live in `src/test/java/com/openfps/engine/`
-- Test class naming: `<Subsystem>Test` (e.g., `ZoneAllocatorTest`)
-- Test method naming: `should<ExpectedBehavior>When<Condition>` (JUnit 5 style)
-- All tests must be deterministic — no `Thread.sleep`, no random data without seed
-- Null HAL adapter is used for all tests; no platform-specific code in tests
+- Test class naming: `<ClassUnderTest>Test` (e.g., `MemoryPortTest`, `FrameRateTest`)
+- Test method naming: `should<ExpectedBehavior>When<Condition>` (JUnit 5 style),
+  or a plain descriptive name plus `@DisplayName`
+- Group variants of one subject with `@Nested` (see `MemoryPortTest`)
+- All tests must be deterministic — no unseeded random data
+- Default to the null HAL adapter. The exception is a test that exists to cover
+  a real adapter (`SqliteUserProfilePortTest`), which uses an in-memory SQLite
+  database — never a file on disk, never a shared one.
 
 ---
 
 ## 11. Documentation to Code Map
 
-Every module's implementation in `PLAN.md` section 3 has a corresponding `PORT.md`
-informal note in its `port/` package (optional, can be inline Javadoc). When a module
-is implemented, the implementer updates `PLAN.md` section 7 roadmap.
+The design notes for a subsystem live in **inline Javadoc on its port
+interface** (see `I_MemoryPort`, `I_WadPort`) and in the package's
+`README.md`. There is no separate `PORT.md` file — an earlier draft of this
+guide referenced one; it never existed.
+
+When you implement or change a module:
+
+1. Update the subsystem's section in `PLAN.md` § 3 with implementation notes
+2. Tick the matching `[x]` in the `PLAN.md` § 7 roadmap
+3. Update the package `README.md` if the design changed
+4. If you added a shared service or constant, add it to § 13 below
 
 ---
 
@@ -314,10 +418,19 @@ is implemented, the implementer updates `PLAN.md` section 7 roadmap.
 
 | Tool | Version | Purpose |
 |---|---|---|
-| Gradle | 8.x | Build |
-| Checkstyle | 10.18.0 | Style enforcement |
-| JUnit 5 | 5.11.x | Testing |
-| LWJGL | 3.3.4 | Desktop graphics/audio/net (future) |
+| Java | 17 LTS | Source/target; runs on JVM 17+ |
+| Gradle | 8.10 | Build (via wrapper) |
+| Checkstyle | 10.18.0 | Style enforcement — wired to `build`, `maxWarnings = 0` |
+| JUnit Jupiter | 5.11.4 | Testing |
+| AssertJ | 3.26.3 | Test assertions |
+| SLF4J | 2.0.16 | Logging facade |
+| Logback | 1.5.12 | Logging backend |
+| Xerial SQLite JDBC | 3.46.1.0 | User profile persistence (desktop) |
+| LWJGL | 3.3.4 | Desktop graphics/audio/net (Phase 1.5, not yet a dependency) |
+
+Checkstyle runs as part of `gradlew build` and fails the build on any
+violation. Run it alone with `gradlew checkstyleMain`; the HTML report lands
+in `build/reports/checkstyle/main.html`.
 
 ## Frame rate configuration
 
@@ -345,7 +458,7 @@ Every module uses them. New code that bypasses them is a bug.
 | `I_EventBusPort` (port + factory) | `com.openfps.engine.core.eventbus` | All inter-subsystem / inter-component communication. |
 | `WorkerPool` (via `I_ThreadPoolPort`) | `com.openfps.engine.core.pool` | All parallel work. **Never** `new Thread(...)` for engine work. |
 | `I_SystemInfoPort` | `com.openfps.engine.hal.port` | Anything that depends on hardware — core count, memory, OS, JVM version. |
-| `I_TimePort` | `com.openfps.engine.hal.port` | Anything that reads time. **Never** `System.nanoTime()` / `System.currentTimeMillis()` in engine code. |
+| `I_TimePort` | `com.openfps.engine.hal.port` | Anything that reads time. `nanos()`/`millis()` are monotonic (tic timing, durations); `epochMillis()` is wall clock (persisted timestamps). **Never** `System.nanoTime()` / `System.currentTimeMillis()` in engine code — and never store a monotonic reading as a date. |
 | `I_InputPort`, `I_NetworkPort`, `I_FilePort` | `com.openfps.engine.hal.port` | HAL capabilities. |
 | `I_UserProfilePort` | `com.openfps.engine.hal.port` | All user-profile reads/writes. The engine never touches SQLite or Room directly. Desktop impl is `SqliteUserProfilePort` (Xerial); Android impl (Phase 3+) will use Room. |
 | `Subsystem` base class | `com.openfps.engine.core.subsystem` | Every new subsystem. **Don't** implement `Runnable` or your own state machine. |
@@ -355,7 +468,8 @@ Every module uses them. New code that bypasses them is a bug.
 | `FrameRate` | `com.openfps.engine.core` | All frame-rate config. Closed enum — no other values. |
 | `FixedMath` | `com.openfps.engine.common` | All 16.16 fixed-point arithmetic. |
 | `NullAdapterFactory` | `com.openfps.engine.hal.adapter.nulladapter` | Default HAL for tests and headless. |
-| `EngineMain.runHeadless(GameConfig)` | `com.openfps.engine.core` | Standard bootstrap. |
+| `SqliteAdapterFactory` | `com.openfps.engine.hal.adapter.sqlite` | Desktop HAL — real on-disk profile persistence, null ports elsewhere. |
+| `EngineMain.run(GameConfig, boolean, boolean)` | `com.openfps.engine.core` | Standard bootstrap (config, useSqlite, headless). |
 | `MemoryPortFactory` | `com.openfps.engine.memory.factory` | Picking a memory backend. **Don't** instantiate `JvmMemoryPort` directly. |
 | `EventBusFactory` | `com.openfps.engine.core.eventbus` | Picking an event bus. |
 | `ThreadPoolFactory` | `com.openfps.engine.core.pool` | Picking a worker pool. |
@@ -364,6 +478,11 @@ Every module uses them. New code that bypasses them is a bug.
 
 The `com.openfps.engine.common.Constants` class holds the engine-wide
 static primitives. New code must read from it, not redeclare.
+
+Most of these are **reserved for the phase that needs them** — only
+`ZONE_HEAP_SIZE` and `ZONE_ALIGN` have callers today. That is deliberate: the
+value is fixed here once so the phase that lands the feature reads it rather
+than inventing a magic number.
 
 | Constant | Value | Use it for |
 |---|---|---|
@@ -389,14 +508,23 @@ static primitives. New code must read from it, not redeclare.
 2. If you really need one, add it to `Constants` (for a primitive)
    or define a new port interface in the right package.
 3. Update `STYLE.md` § 13 to include it in the table above.
-4. Add a test that verifies the constant is used (not a magic number).
+4. Test the *behaviour* that depends on it, reading the constant rather than
+   restating its literal value — so the test breaks if someone forks the value.
 5. Update `PLAN.md` to mark it in the subsystem spec.
 
 ### 13.4 Anti-patterns (instant review failure)
 
 - `new byte[size]` in engine code (use the memory port)
-- `System.nanoTime()` / `System.currentTimeMillis()` in engine code (use `I_TimePort`)
-- `new Thread(...)` in engine code (use `WorkerPool`)
+- `System.nanoTime()` / `System.currentTimeMillis()` in engine code — use
+  `I_TimePort`: `nanos()`/`millis()` for monotonic timing, `epochMillis()` for
+  persisted timestamps. The only sanctioned direct callers are the time-port
+  adapters themselves and shutdown-path timeouts that never feed simulation
+  state (e.g. `WorkerPool.awaitTermination`). If a reading can influence
+  lockstep, it must come from the port.
+- `new Thread(...)` in engine code — event handling belongs on the `WorkerPool`.
+  The producer side is the exception: the game loop cannot run on the pool it
+  feeds (it would hold a consumer thread for the whole run and deadlock at
+  `workerCount == 1`), so `EngineMain` runs it on the calling thread.
 - `new HashMap<>()` / `new ArrayList<>()` in hot paths (primitive arrays or `I_MemoryPort` allocations)
 - Magic numbers like `60`, `65536`, `4096` in engine code (use `Constants` or `FrameRate`)
 - `new JvmMemoryPort(...)` in engine code (use `MemoryPortFactory`)
@@ -405,6 +533,8 @@ static primitives. New code must read from it, not redeclare.
 - A new fixed-point math constant outside `FixedMath`
 - A new frame rate value outside the `FrameRate` enum
 - A new "memory pool" or "thread pool" class (extend what's there)
+- A ternary `?:` anywhere (use `if`/`else` or `switch` — see § 5.5)
+- A lambda nested inside another lambda (see § 6.2)
 
 ### 13.5 Why this rule exists
 

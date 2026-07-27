@@ -17,7 +17,7 @@ package com.openfps.engine.gameplay.port;
  *  Summary of formulas you'll need to implement:
  *
  *  1. GRAVITY (per tic):
- *       v.y -= GRAVITY * deltaT      (deltaT is NANOS_PER_TIC in fixed-point)
+ *       v.y -= GRAVITY * deltaT      (deltaT is TickEvent.deltaNanos in fixed-point)
  *       y   += v.y * deltaT
  *     All values are 16.16 fixed-point. Use common.FixedMath for math.
  *     Source: gameplay/README.md "Gravity" section.
@@ -73,7 +73,7 @@ public interface I_GameplayPort
      *
      * @param ticIndex the current tic number
      */
-    void tick(final int ticIndex);
+    void tick(int ticIndex);
 
     /**
      * Loads a map by name. Frees all tagged game memory.
@@ -81,7 +81,7 @@ public interface I_GameplayPort
      * @param mapName name of the map to load (e.g., "E1M1")
      * @return true if the map was found and loaded
      */
-    boolean loadMap(final String mapName);
+    boolean loadMap(String mapName);
 
     /**
      * Spawns an entity of the given type at the given position.
@@ -92,14 +92,14 @@ public interface I_GameplayPort
      * @param z fixed-point z position
      * @return entity ID, or -1 on failure
      */
-    int spawnEntity(final int entityType, final int x, final int y, final int z);
+    int spawnEntity(int entityType, int x, int y, int z);
 
     /**
      * Removes an entity from the active list.
      *
      * @param entityId the entity to remove
      */
-    void removeEntity(final int entityId);
+    void removeEntity(int entityId);
 
     /**
      * Initializes the gameplay subsystem.

@@ -2,8 +2,6 @@
 .gradle/
 build/
 bin/
-!gradle/wrapper/gradle-wrapper.jar
-!gradle/wrapper/gradle-wrapper.properties
 
 # Eclipse / VS Code / IntelliJ
 *.class
@@ -38,3 +36,10 @@ apidocs/
 *.aab
 build/intermediates/
 build/outputs/
+
+# The Gradle wrapper MUST be committed — a fresh clone has no other way to
+# bootstrap the right Gradle version. These negations have to sit AFTER the
+# `*.jar` rule above: git applies the last matching pattern, so putting them
+# at the top (as they used to be) left the wrapper JAR untracked.
+!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties

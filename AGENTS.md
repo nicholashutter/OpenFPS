@@ -36,6 +36,7 @@ Full list in `STYLE.md` § 13. Short version:
 - All subsystem classes → extend `Subsystem` (don't implement `Runnable`)
 - All primitive constants → `Constants` (don't redeclare magic numbers)
 - All logging → SLF4J (don't use `System.out`, `System.Logger`, etc.)
+- All CORE-targeted events → `CoreSubsystem` (every `SubsystemId` needs an owner)
 
 Anti-patterns in `STYLE.md` § 13.4 are instant review failures.
 
@@ -43,8 +44,14 @@ Anti-patterns in `STYLE.md` § 13.4 are instant review failures.
 - All instance fields MUST be `final`
 - All method parameters MUST be `final`
 - Local variables SHOULD be `final` unless reassigned
-- No chaining of lambdas; single-operation lambdas OK
 - Prefer primitives over boxed types everywhere
+
+### Control Flow
+- **No ternary `?:`** — use `if`/`else`, an early return, or a `switch`
+  (`STYLE.md` § 5.5). Switch *expressions* (`case X -> value`) are fine.
+- **No nested lambdas** — one level is the hard limit; a lambda
+  containing another `->` is a review failure (`STYLE.md` § 6.2).
+  Single-operation lambdas and method references are fine.
 
 ### Brace Style
 - K&R variant: **braces on their own lines**
@@ -178,15 +185,21 @@ public void spawnEntity(final int entityType)
 - Do NOT add Android-specific code outside `hal.adapter.mobile`
 - Do NOT skip updating `PLAN.md` section 7 when completing a roadmap item
 - Do NOT `new byte[]` outside a memory port adapter
-- Do NOT `System.nanoTime()` / `System.currentTimeMillis()` in engine code — use `I_TimePort`
-- Do NOT `new Thread(...)` in engine code — use `WorkerPool`
+- Do NOT `System.nanoTime()` / `System.currentTimeMillis()` in engine code — use
+  `I_TimePort` (`nanos()`/`millis()` monotonic, `epochMillis()` wall clock).
+  Sanctioned exceptions: the time-port adapters, and shutdown timeouts that
+  never feed simulation state.
+- Do NOT `new Thread(...)` for event handling — use `WorkerPool`. The game loop
+  is the exception: it is the producer and runs on the calling thread.
 - Do NOT add magic numbers — use `Constants` or `FrameRate`
 - Do NOT implement `Runnable` for a subsystem — extend `Subsystem`
 - Do NOT instantiate `JvmMemoryPort` / `SharedEventBus` / `WorkerPool` / `SqliteUserProfilePort` directly — use the factories
 - Do NOT add a new frame rate value — extend the `FrameRate` enum
 - Do NOT touch SQLite or Room directly — go through `I_UserProfilePort`
 - Do NOT skip writing tests for new code
-- Do NOT skip the documentation-to-code map in `STYLE.md` § 11.5 when adding a new service
+- Do NOT use a ternary `?:` — use `if`/`else` or `switch` (`STYLE.md` § 5.5)
+- Do NOT nest a lambda inside another lambda (`STYLE.md` § 6.2)
+- Do NOT skip the documentation-to-code map in `STYLE.md` § 11 when adding a new service
 
 ---
 
@@ -195,15 +208,15 @@ public void spawnEntity(final int entityType)
 | Subsystem | Package | Status |
 |---|---|---|
 | Core Loop | `core` | Phase 1.3 — event-driven, multi-threaded, configurable rate |
-| Gameplay | `gameplay` | Stub |
-| Render | `render` | Stub |
-| Audio | `audio` | Stub |
-| Network | `net` | Stub |
-| Resource | `resource` | Stub |
+| Gameplay | `gameplay` | Stub — port + null adapter, registered as `P_` |
+| Render | `render` | Stub — port + null adapter, registered as `R_` |
+| Audio | `audio` | Stub — port + null adapter, registered as `S_` |
+| Network | `net` | Stub — port + null adapter, registered as `G_` |
+| Resource | `resource` | Stub — port + null adapter, **not registered**; no `W_` subsystem until Phase 2 |
 | Memory | `memory` | Phase 1.1 — state machine, two backends, factory |
 | HAL | `hal` | Phase 1.4 — ports + null + sqlite adapters + system info + user profile |
 
-129 tests passing (see `BUILD.md` for run instructions).
+129 tests passing, Checkstyle clean (see `BUILD.md` for run instructions).
 
 ---
 

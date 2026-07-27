@@ -67,11 +67,16 @@ public interface I_EventBusPort
     /** Returns the bus state. */
     State state();
 
+    /** Bus lifecycle states. See the state diagram in the class Javadoc. */
     enum State
     {
+        /** Default state at construction. Must call init() to advance. */
         UNINITIALIZED,
+        /** Accepting publish() and take(). */
         READY,
+        /** No new events accepted; take() returns null once empty. */
         DRAINING,
+        /** Terminal state. All operations throw. */
         SHUTDOWN
     }
 }

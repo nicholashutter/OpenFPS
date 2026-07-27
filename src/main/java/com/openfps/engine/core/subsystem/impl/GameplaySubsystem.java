@@ -6,7 +6,6 @@
 package com.openfps.engine.core.subsystem.impl;
 
 import com.openfps.engine.core.event.I_EngineEvent;
-import com.openfps.engine.core.event.InputSampledEvent;
 import com.openfps.engine.core.event.MapLoadEvent;
 import com.openfps.engine.core.event.TickEvent;
 import com.openfps.engine.core.subsystem.Subsystem;
@@ -59,11 +58,7 @@ public final class GameplaySubsystem extends Subsystem
                 LOG.warn("Map load returned false for '{}'", load.mapName());
             }
         }
-        else if (event instanceof InputSampledEvent sampled)
-        {
-            // Input events are passed through the gameplay port as raw bytes
-            // for the port to interpret. Phase 4 will wire TicCmd decoding.
-            // For now: no-op.
-        }
+        // InputSampledEvent also targets P_, but there is nothing to route
+        // it to until Phase 4 wires TicCmd decoding into I_GameplayPort.
     }
 }

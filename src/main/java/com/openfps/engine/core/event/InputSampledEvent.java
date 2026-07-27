@@ -59,7 +59,12 @@ public final class InputSampledEvent implements I_EngineEvent
     @Override
     public String toString()
     {
+        int byteCount = 0;
+        if (inputBytes != null)
+        {
+            byteCount = inputBytes.length;
+        }
         return "InputSampledEvent{seq=" + sequenceNumber + ", tic=" + ticNumber
-            + ", bytes=" + (inputBytes == null ? 0 : inputBytes.length) + "}";
+            + ", bytes=" + byteCount + "}";
     }
 }

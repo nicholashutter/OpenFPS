@@ -14,7 +14,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -37,7 +36,6 @@ public final class WorkerPool implements I_ThreadPoolPort
     private final SubsystemRegistry registry;
     private int workerCount;
     private final List<WorkerThread> workers = new ArrayList<>();
-    private final CountDownLatch allExited;
     private final AtomicInteger activeWorkers = new AtomicInteger(0);
     private volatile State state;
 
@@ -54,7 +52,6 @@ public final class WorkerPool implements I_ThreadPoolPort
         this.bus = bus;
         this.registry = registry;
         this.state = State.UNINITIALIZED;
-        this.allExited = new CountDownLatch(0);  // re-set in init
     }
 
     @Override
@@ -70,7 +67,6 @@ public final class WorkerPool implements I_ThreadPoolPort
             throw new IllegalArgumentException("workerCount must be >= 1, got " + workerCount);
         }
         this.workerCount = workerCount;
-        // Replace the latch (cannot reset an existing one)
         this.state = State.READY;
         LOG.info("WorkerPool initialized: {} workers", workerCount);
     }
@@ -84,11 +80,9 @@ public final class WorkerPool implements I_ThreadPoolPort
                 + " — only valid from READY");
         }
 
-        final CountDownLatch exitLatch = new CountDownLatch(workerCount);
-
         for (int i = 0; i < workerCount; i++)
         {
-            final WorkerThread w = new WorkerThread(i, bus, registry, exitLatch);
+            final WorkerThread w = new WorkerThread(i, bus, registry);
             workers.add(w);
             activeWorkers.incrementAndGet();
             final Thread t = new Thread(w, "openfps-worker-" + i);
@@ -169,17 +163,15 @@ public final class WorkerPool implements I_ThreadPoolPort
         private final int id;
         private final I_EventBusPort busRef;
         private final SubsystemRegistry registryRef;
-        private final CountDownLatch exitLatch;
         private volatile Thread thread;
         private volatile boolean stopRequested;
 
         WorkerThread(final int id, final I_EventBusPort busRef,
-                     final SubsystemRegistry registryRef, final CountDownLatch exitLatch)
+                     final SubsystemRegistry registryRef)
         {
             this.id = id;
             this.busRef = busRef;
             this.registryRef = registryRef;
-            this.exitLatch = exitLatch;
         }
 
         void setThread(final Thread t)
@@ -238,7 +230,6 @@ public final class WorkerPool implements I_ThreadPoolPort
             finally
             {
                 activeWorkers.decrementAndGet();
-                exitLatch.countDown();
                 LOG.debug("Worker {} exited (active={})", id, activeWorkers.get());
             }
         }

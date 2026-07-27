@@ -5,36 +5,44 @@
 
 package com.openfps.engine.core.event;
 
+import com.openfps.engine.hal.port.I_TimePort;
+
+import java.util.concurrent.atomic.AtomicLong;
+
 /**
- * Singleton factory for creating events with monotonically increasing
- * sequence numbers and a shared timestamp source. Producers ask this
- * factory to build events; the factory stamps the sequence number and
- * timestamp.
+ * Factory for creating events with monotonically increasing sequence
+ * numbers and a shared timestamp source. Producers ask this factory to
+ * build events; the factory stamps the sequence number and timestamp.
+ *
+ * Sequence numbers are per-factory instance, not global — two engines in
+ * one JVM (as in tests) each get their own stream starting at 1.
  */
 public final class EventFactory
 {
-    private static volatile long sequenceCounter = 0L;
+    private final AtomicLong sequenceCounter = new AtomicLong(0L);
+    private final I_TimePort timePort;
     private final long originNanos;
 
-    public EventFactory(final long originNanos)
+    public EventFactory(final I_TimePort timePort)
     {
-        this.originNanos = originNanos;
+        if (timePort == null)
+        {
+            throw new IllegalArgumentException("timePort must not be null");
+        }
+        this.timePort = timePort;
+        this.originNanos = timePort.nanos();
     }
 
     /** Atomically increments and returns the next sequence number. */
     public long nextSequence()
     {
-        synchronized (EventFactory.class)
-        {
-            sequenceCounter++;
-            return sequenceCounter;
-        }
+        return sequenceCounter.incrementAndGet();
     }
 
     /** Current monotonic timestamp relative to the factory's origin. */
     public long now()
     {
-        return System.nanoTime() - originNanos;
+        return timePort.nanos() - originNanos;
     }
 
     public TickEvent newTick(final int ticNumber, final long deltaNanos)

@@ -67,7 +67,7 @@ public interface I_RenderPort
      *
      * @param ticIndex the current tic
      */
-    void renderFrame(final int ticIndex);
+    void renderFrame(int ticIndex);
 
     /**
      * Initializes the renderer.

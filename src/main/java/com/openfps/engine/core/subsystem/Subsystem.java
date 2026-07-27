@@ -14,12 +14,18 @@ import org.slf4j.LoggerFactory;
  * events, and enforces transition validation.
  *
  * Subclasses implement {@link #onEvent(I_EngineEvent)} to handle the
- * events they care about. The state machine transitions around the
- * call:
+ * events they care about.
  *
- *   READY  →  BUSY  →  READY   (normal)
- *   READY  →  BUSY  →  ERROR   (handler threw)
- *   BUSY   →  SHUTDOWN          (shutdown requested during processing)
+ *   UNINITIALIZED  ──init()──►      READY  ──shutdown()──►  SHUTDOWN
+ *   UNINITIALIZED  ──init() throws──► ERROR
+ *   READY          ──shutdown() throws──► ERROR
+ *
+ * There is deliberately NO per-event BUSY state. Multiple workers may be
+ * inside {@code onEvent} for the same subsystem at once, so a single
+ * "currently processing" flag would be wrong — implementations must make
+ * {@code onEvent} thread-safe instead. A handler that throws is logged
+ * and rethrown to the worker, and the subsystem STAYS in READY so the
+ * next event is still processed; one bad event does not kill a subsystem.
  */
 public abstract class Subsystem implements ISubsystem
 {
@@ -130,8 +136,11 @@ public abstract class Subsystem implements ISubsystem
     }
 
     /**
-     * Returns true if the state machine allows a transition from the
-     * current state to {@code target}. Used by the registry and tests.
+     * Returns true if the state machine allows a transition from
+     * {@code from} to {@code to}. This is the declarative statement of the
+     * transition table; the enforcement lives in the guards on
+     * {@code init()} / {@code shutdown()}. Kept public so tests can assert
+     * the table directly.
      */
     public static boolean isValidTransition(final SubsystemState from, final SubsystemState to)
     {

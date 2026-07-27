@@ -16,8 +16,11 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 
 /**
- * Null implementation of I_FilePort.
- * Falls back to real filesystem reads — only the network calls are truly null.
+ * Null implementation of I_FilePort — "null" only in the sense that it is
+ * the headless-default adapter. Reads are backed by the real filesystem,
+ * because WAD loading needs actual bytes even in a headless run.
+ *
+ * Platform adapter — must not import from core engine packages.
  */
 public final class NullFilePort implements I_FilePort
 {

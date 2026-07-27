@@ -5,7 +5,6 @@
 
 package com.openfps.engine.core.subsystem.impl;
 
-import com.openfps.engine.core.event.I_EngineEvent;
 import com.openfps.engine.core.subsystem.Subsystem;
 import com.openfps.engine.core.subsystem.SubsystemId;
 import com.openfps.engine.memory.port.I_MemoryPort;

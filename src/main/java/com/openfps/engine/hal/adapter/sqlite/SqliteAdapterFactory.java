@@ -24,7 +24,7 @@ import org.slf4j.LoggerFactory;
  * Production-ish HAL adapter factory — uses Xerial SQLite for user
  * profile persistence and null adapters for everything else.
  *
- * This is a stepping stone to the real desktop factory (Phase 1.4+).
+ * This is a stepping stone to the real desktop factory (Phase 1.5).
  * For now it provides real on-disk persistence for the user profile
  * while keeping the rest of the ports headless. The engine code is
  * identical to the null-factory case — the only difference is the
@@ -32,6 +32,8 @@ import org.slf4j.LoggerFactory;
  *
  * Future: the real desktop factory will swap in LWJGL3-based
  * implementations for the time, input, and render ports.
+ *
+ * Platform adapter — must not import from core engine packages.
  */
 public final class SqliteAdapterFactory
 {
@@ -64,10 +66,39 @@ public final class SqliteAdapterFactory
         timePort.shutdown();
     }
 
-    public I_TimePort getTimePort()              { return timePort; }
-    public I_InputPort getInputPort()            { return inputPort; }
-    public I_NetworkPort getNetworkPort()        { return networkPort; }
-    public I_FilePort getFilePort()              { return filePort; }
-    public I_SystemInfoPort getSystemInfoPort()  { return systemInfo; }
-    public I_UserProfilePort getUserProfilePort(){ return userProfile; }
+    /** Returns the time port (null adapter — real one lands in Phase 1.5). */
+    public I_TimePort getTimePort()
+    {
+        return timePort;
+    }
+
+    /** Returns the input port (null adapter — real one lands in Phase 1.5). */
+    public I_InputPort getInputPort()
+    {
+        return inputPort;
+    }
+
+    /** Returns the network port (null adapter — real one lands in Phase 1.5). */
+    public I_NetworkPort getNetworkPort()
+    {
+        return networkPort;
+    }
+
+    /** Returns the file port (null adapter, backed by real filesystem reads). */
+    public I_FilePort getFilePort()
+    {
+        return filePort;
+    }
+
+    /** Returns the system info port (null adapter, backed by {@code Runtime}). */
+    public I_SystemInfoPort getSystemInfoPort()
+    {
+        return systemInfo;
+    }
+
+    /** Returns the SQLite-backed user profile port — the real one. */
+    public I_UserProfilePort getUserProfilePort()
+    {
+        return userProfile;
+    }
 }

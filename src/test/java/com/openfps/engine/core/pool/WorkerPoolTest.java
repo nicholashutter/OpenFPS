@@ -12,6 +12,7 @@ import com.openfps.engine.core.eventbus.EventBusFactory;
 import com.openfps.engine.core.eventbus.I_EventBusPort;
 import com.openfps.engine.core.subsystem.SubsystemId;
 import com.openfps.engine.core.subsystem.SubsystemRegistry;
+import com.openfps.engine.hal.adapter.nulladapter.NullTimePort;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -33,7 +34,7 @@ class WorkerPoolTest
     private I_EventBusPort bus;
     private SubsystemRegistry registry;
     private I_ThreadPoolPort pool;
-    private final EventFactory factory = new EventFactory(0L);
+    private final EventFactory factory = new EventFactory(new NullTimePort());
 
     @BeforeEach
     void setUp()

@@ -34,15 +34,15 @@ public final class ThreadPoolFactory
 
     /**
      * Calculates the recommended worker count: half the logical core
-     * count, with a minimum of 1. The engine reads this from the HAL
-     * SystemInfo port.
+     * count, with a minimum of 1. Callers pass the value read from
+     * {@code I_SystemInfoPort.logicalProcessorCount()} — this is the
+     * one place the ratio is defined.
      *
      * @param logicalCoreCount number of logical CPU cores
      * @return recommended worker count
      */
     public static int recommendedWorkerCount(final int logicalCoreCount)
     {
-        final int half = Math.max(1, logicalCoreCount / 2);
-        return half;
+        return Math.max(1, logicalCoreCount / 2);
     }
 }

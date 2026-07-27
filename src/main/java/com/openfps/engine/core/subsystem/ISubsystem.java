@@ -31,18 +31,22 @@ public interface ISubsystem
     void init();
 
     /**
-     * Lifecycle: READY|BUSY → SHUTDOWN (terminal).
+     * Lifecycle: UNINITIALIZED|READY|ERROR → SHUTDOWN (terminal).
      * @throws SubsystemException if state is already SHUTDOWN
      */
     void shutdown();
 
     /**
-     * Dispatch an event to this subsystem. The state machine transitions
-     * READY → BUSY → READY around the dispatch. If the event handler
-     * throws, the subsystem enters the ERROR state.
+     * Dispatches an event to this subsystem. Does not change state: the
+     * subsystem stays READY whether the handler succeeds or throws, so a
+     * single bad event cannot take the subsystem down. A throwing handler
+     * is logged and the exception is rethrown to the calling worker.
+     *
+     * Multiple workers may call this concurrently — implementations must
+     * be thread-safe.
      *
      * @param event the event to process
      * @throws SubsystemException if state is not READY
      */
-    void processEvent(final I_EngineEvent event);
+    void processEvent(I_EngineEvent event);
 }

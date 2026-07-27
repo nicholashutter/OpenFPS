@@ -18,7 +18,7 @@ public interface I_FilePort
      * @param path absolute or classpath-relative path
      * @return a file handle, or null if not found
      */
-    I_FileHandle open(final String path);
+    I_FileHandle open(String path);
 
     /**
      * Checks if a file exists.
@@ -26,7 +26,7 @@ public interface I_FilePort
      * @param path the file path
      * @return true if the file exists
      */
-    boolean exists(final String path);
+    boolean exists(String path);
 
     /**
      * File handle returned by open().
@@ -34,7 +34,7 @@ public interface I_FilePort
      */
     interface I_FileHandle
     {
-        int read(final byte[] buffer, final int offset, final int length);
+        int read(byte[] buffer, int offset, int length);
         long size();
         void close();
         boolean isOpen();

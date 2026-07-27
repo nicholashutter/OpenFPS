@@ -10,8 +10,7 @@ package com.openfps.engine.core.subsystem;
  *
  *   UNINITIALIZED ──init()──► READY ──shutdown()──► SHUTDOWN (terminal)
  *      │                       │
- *      │                       └─exception during init()──► ERROR
- *      └─reset()─────────────────► (re-init)
+ *      └─init() throws──► ERROR ◄─shutdown() throws─┘
  *
  * The state tracks the SUBSYSTEM's lifecycle, not individual events.
  * Per-event tracking happens at the worker level — a worker thread
@@ -26,7 +25,7 @@ public enum SubsystemState
     UNINITIALIZED,
     /** Initialized, accepting events from the worker pool. */
     READY,
-    /** Initialization failed. Must be reset() before re-init. */
+    /** init() or shutdown() threw. Only shutdown() is valid from here. */
     ERROR,
     /** Terminal state. No further operations. */
     SHUTDOWN

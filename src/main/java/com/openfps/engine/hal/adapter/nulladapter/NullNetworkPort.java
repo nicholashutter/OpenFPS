@@ -19,9 +19,6 @@ public final class NullNetworkPort implements I_NetworkPort
 {
     private static final Logger LOG = LoggerFactory.getLogger(NullNetworkPort.class);
 
-    private volatile boolean bound;
-    private int localPort;
-
     @Override
     public void send(final byte[] data, final String address)
     {
@@ -37,15 +34,13 @@ public final class NullNetworkPort implements I_NetworkPort
     @Override
     public void bind(final int port)
     {
-        localPort = port;
-        bound = true;
         LOG.info("NullNetworkPort: bound to port {} (no-op)", port);
     }
 
     @Override
     public void close()
     {
-        bound = false;
+        // no-op
     }
 
     @Override
@@ -57,12 +52,12 @@ public final class NullNetworkPort implements I_NetworkPort
     @Override
     public void init()
     {
-        bound = false;
+        // no-op
     }
 
     @Override
     public void shutdown()
     {
-        bound = false;
+        // no-op
     }
 }

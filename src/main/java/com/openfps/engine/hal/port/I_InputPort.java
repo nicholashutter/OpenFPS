@@ -18,7 +18,7 @@ public interface I_InputPort
      *
      * @param ticIndex the tic being processed
      */
-    void sampleInput(final int ticIndex);
+    void sampleInput(int ticIndex);
 
     /**
      * Returns whether the engine should shut down (e.g., window closed).

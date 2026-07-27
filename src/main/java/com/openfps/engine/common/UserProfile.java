@@ -101,20 +101,45 @@ public final class UserProfile
         this.updatedAtEpochMs = updatedAtEpochMs;
     }
 
-    /** Creates a new profile with sensible defaults and a random UUID. */
+    /**
+     * Creates a new profile with sensible defaults, a random UUID, and
+     * timestamps read from the system wall clock.
+     *
+     * Convenience form for tests and tooling. Engine code should call
+     * {@link #newDefault(String, long)} with
+     * {@code I_TimePort.epochMillis()} so the clock stays injectable.
+     */
     public static UserProfile newDefault()
     {
-        return newDefault(UUID.randomUUID().toString());
+        return newDefault(UUID.randomUUID().toString(), System.currentTimeMillis());
     }
 
     /**
-     * Creates a new profile with sensible defaults and the given ID.
-     * createdAt and updatedAt are set to "now" (caller passes via
-     * I_TimePort if precise control is needed; for now, System.currentTimeMillis()).
+     * Creates a new profile with sensible defaults, a random UUID, and
+     * the given wall-clock timestamp.
+     *
+     * @param nowEpochMs milliseconds since the Unix epoch, from
+     *                   {@code I_TimePort.epochMillis()}
+     * @return a fresh profile
      */
-    public static UserProfile newDefault(final String id)
+    public static UserProfile newDefault(final long nowEpochMs)
     {
-        final long now = System.currentTimeMillis();
+        return newDefault(UUID.randomUUID().toString(), nowEpochMs);
+    }
+
+    /**
+     * Creates a new profile with sensible defaults, the given ID, and the
+     * given wall-clock timestamp. createdAt, updatedAt, and lastLogin are
+     * all set to {@code nowEpochMs}.
+     *
+     * @param id the profile's UUID
+     * @param nowEpochMs milliseconds since the Unix epoch, from
+     *                   {@code I_TimePort.epochMillis()}
+     * @return a fresh profile
+     */
+    public static UserProfile newDefault(final String id, final long nowEpochMs)
+    {
+        final long now = nowEpochMs;
         return new UserProfile(
             id,
             "Player",
@@ -131,16 +156,65 @@ public final class UserProfile
 
     // ---- Accessors ----
 
-    public String id()                { return id; }
-    public String displayName()       { return displayName; }
-    public double audioVolume()       { return audioVolume; }
-    public double mouseSensitivity()  { return mouseSensitivity; }
-    public int    fieldOfView()       { return fieldOfView; }
-    public String preferredColor()     { return preferredColor; }
-    public long   lastLoginAtEpochMs(){ return lastLoginAtEpochMs; }
-    public long   totalPlaytimeSeconds() { return totalPlaytimeSeconds; }
-    public long   createdAtEpochMs()  { return createdAtEpochMs; }
-    public long   updatedAtEpochMs()  { return updatedAtEpochMs; }
+    /** Returns the profile's UUID. */
+    public String id()
+    {
+        return id;
+    }
+
+    /** Returns the display name (1-32 chars). */
+    public String displayName()
+    {
+        return displayName;
+    }
+
+    /** Returns the audio volume, 0.0 (muted) to 1.0 (full). */
+    public double audioVolume()
+    {
+        return audioVolume;
+    }
+
+    /** Returns the mouse sensitivity multiplier, 0.1 to 5.0. */
+    public double mouseSensitivity()
+    {
+        return mouseSensitivity;
+    }
+
+    /** Returns the field of view in degrees, 60 to 120. */
+    public int fieldOfView()
+    {
+        return fieldOfView;
+    }
+
+    /** Returns the preferred color as a "#RRGGBB" string. */
+    public String preferredColor()
+    {
+        return preferredColor;
+    }
+
+    /** Returns the wall-clock time of the last login, in epoch millis. */
+    public long lastLoginAtEpochMs()
+    {
+        return lastLoginAtEpochMs;
+    }
+
+    /** Returns cumulative seconds played across all sessions. */
+    public long totalPlaytimeSeconds()
+    {
+        return totalPlaytimeSeconds;
+    }
+
+    /** Returns when this profile was first persisted, in epoch millis. */
+    public long createdAtEpochMs()
+    {
+        return createdAtEpochMs;
+    }
+
+    /** Returns when this profile was last saved, in epoch millis. */
+    public long updatedAtEpochMs()
+    {
+        return updatedAtEpochMs;
+    }
 
     // ---- withXxx — return new profile with one field changed ----
 

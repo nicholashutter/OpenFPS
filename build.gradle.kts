@@ -1,6 +1,7 @@
 plugins {
     id("java-library")
     id("application")
+    id("checkstyle")
 }
 
 group = "com.openfps"
@@ -37,6 +38,16 @@ java {
 
 application {
     mainClass.set("com.openfps.engine.core.EngineMain")
+}
+
+// Checkstyle enforces STYLE.md. The config lives in config/checkstyle and is
+// wired to `build` via the standard plugin, so `gradlew build` and
+// `gradlew checkstyleMain` both work.
+checkstyle {
+    toolVersion = "10.18.0"
+    configFile = file("config/checkstyle/checkstyle.xml")
+    isIgnoreFailures = false
+    maxWarnings = 0
 }
 
 tasks.withType<JavaCompile> {

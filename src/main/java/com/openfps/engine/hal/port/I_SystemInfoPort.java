@@ -57,10 +57,14 @@ public interface I_SystemInfoPort
     /** Returns the current port state. */
     State state();
 
+    /** Port lifecycle states. */
     enum State
     {
+        /** Default state at construction. Must call init() to advance. */
         UNINITIALIZED,
+        /** Initialized; queries are valid. */
         READY,
+        /** Terminal state. */
         SHUTDOWN
     }
 }

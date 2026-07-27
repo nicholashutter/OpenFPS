@@ -8,6 +8,7 @@ package com.openfps.engine.core.eventbus;
 import com.openfps.engine.core.event.EventFactory;
 import com.openfps.engine.core.event.I_EngineEvent;
 import com.openfps.engine.core.event.TickEvent;
+import com.openfps.engine.hal.adapter.nulladapter.NullTimePort;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -31,7 +32,7 @@ class SharedEventBusTest
     void setUp()
     {
         bus = new SharedEventBus();
-        factory = new EventFactory(0L);
+        factory = new EventFactory(new NullTimePort());
     }
 
     @Test

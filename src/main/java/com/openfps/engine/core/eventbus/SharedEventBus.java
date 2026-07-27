@@ -23,8 +23,9 @@ import java.util.concurrent.LinkedBlockingQueue;
  *   − Contention point at high event rates.
  *   − One slow consumer can block others (mitigated by worker pool size).
  *
- * For 8 workers (cores/2) and 35 Hz tick rate, the expected load is
- * ~280 events/sec across all event types. Way under contention limits.
+ * At the 120 Hz worst case the GameLoop produces 120 events/sec, and even
+ * with render and network events wired the total stays in the low
+ * thousands per second. Way under contention limits for a single queue.
  */
 public final class SharedEventBus implements I_EventBusPort
 {
@@ -66,14 +67,16 @@ public final class SharedEventBus implements I_EventBusPort
         }
         final State prev = state;
         state = State.SHUTDOWN;
-        // Drain remaining events to allow blocked take() calls to exit.
+        // Discard remaining events to allow blocked take() calls to exit.
         // Workers should already be exiting on drain() so this should be small.
+        // Count BEFORE clearing — otherwise the log always reports zero.
+        int discarded = 0;
         if (queue != null)
         {
+            discarded = queue.size();
             queue.clear();
         }
-        LOG.info("SharedEventBus shut down (was {}, drained={} events)", prev,
-            queue == null ? 0 : queue.size());
+        LOG.info("SharedEventBus shut down (was {}, discarded={} events)", prev, discarded);
     }
 
     @Override
@@ -123,7 +126,11 @@ public final class SharedEventBus implements I_EventBusPort
     @Override
     public int pendingCount()
     {
-        return queue == null ? 0 : queue.size();
+        if (queue == null)
+        {
+            return 0;
+        }
+        return queue.size();
     }
 
     @Override

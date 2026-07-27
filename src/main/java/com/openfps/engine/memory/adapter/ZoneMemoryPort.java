@@ -271,7 +271,11 @@ public final class ZoneMemoryPort implements I_MemoryPort
         // than a header, no payload can fit.
         final int free = heapSize - used;
         final int maxPayload = free - HEADER_SIZE;
-        return maxPayload < 0 ? 0 : maxPayload;
+        if (maxPayload < 0)
+        {
+            return 0;
+        }
+        return maxPayload;
     }
 
     @Override
