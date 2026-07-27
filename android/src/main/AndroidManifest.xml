@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Copyright (c) 2026 Nicholas Hutter and contributors.
+  SPDX-License-Identifier: MIT
+
+  The package name is not declared here — AGP 8 takes it from the
+  `namespace` property in build.gradle.kts and errors if both are set.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- LAN peer discovery broadcasts on DEFAULT_NET_PORT. Without
+         INTERNET the UDP socket cannot even bind. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Receiving UDP broadcast on Android requires holding a
+         MulticastLock, which requires this permission. See
+         net/README.md section 9 (NAT traversal). -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+
+    <!-- OpenGL ES 3.0. libGDX's Android backend falls back to 2.0, but the
+         engine's shader path targets 3.0 so it is declared required. -->
+    <uses-feature
+        android:glEsVersion="0x00030000"
+        android:required="true" />
+
+    <application
+        android:label="OpenFPS"
+        android:hardwareAccelerated="true"
+        android:allowBackup="false"
+        android:supportsRtl="true">
+
+        <activity
+            android:name="com.openfps.android.AndroidLauncher"
+            android:exported="true"
+            android:screenOrientation="landscape"
+            android:launchMode="singleTask"
+            android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|screenLayout">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+    </application>
+
+</manifest>
