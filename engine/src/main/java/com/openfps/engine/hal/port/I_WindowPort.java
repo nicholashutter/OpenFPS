@@ -20,10 +20,19 @@ package com.openfps.engine.hal.port;
  *     happen. Keeping the window on a HAL port that only the composition
  *     root drives makes the threading correct by construction.
  *
- * <b>Threading:</b> every method here MUST be called from the main
- * thread. GLFW requires it (strictly, on macOS), and the engine reserves
- * the main thread for exactly this pump — the game loop runs on its own
- * thread precisely so this one stays free.
+ * <b>The platform owns the loop, not the engine.</b> This port used to
+ * expose {@code pumpEvents()} and {@code present()} for the engine to call
+ * in its own while-loop. That is a GLFW shape, and Android cannot satisfy
+ * it: there the framework owns the loop and calls the app when a frame is
+ * due — there is nothing to pump. Rather than have the Android adapter
+ * fake a pump, inverting control twice, {@link #runFrameLoop} hands the
+ * thread to the platform and the engine supplies an
+ * {@link I_FrameCallback}.
+ *
+ * <b>Threading:</b> {@link #init}, {@link #create}, {@link #runFrameLoop}
+ * and {@link #shutdown} MUST be called from the main thread. GLFW requires
+ * it (strictly, on macOS) and Android requires it for Activity lifecycle.
+ * The game loop runs on its own thread precisely so this one stays free.
  */
 public interface I_WindowPort
 {
@@ -41,10 +50,21 @@ public interface I_WindowPort
     void create(int width, int height, String title);
 
     /**
-     * Drains pending OS events, firing input callbacks synchronously on
-     * this thread. Main thread only; call once per pump iteration.
+     * Hands the calling thread to the platform's frame loop and BLOCKS
+     * until the window closes or the app is destroyed. Main thread only.
+     *
+     * Desktop drains OS events, invokes the callback, and swaps buffers in
+     * a loop. Android hands control to the Activity and returns when it is
+     * destroyed. Either way the caller gets its thread back only at the
+     * end, so shutdown sequencing goes after this returns.
+     *
+     * A null-window implementation returns immediately without invoking
+     * the callback at all; check {@link #isRealWindow()} first if the
+     * caller needs to do something else in the headless case.
+     *
+     * @param callback receives surface, frame and lifecycle events
      */
-    void pumpEvents();
+    void runFrameLoop(I_FrameCallback callback);
 
     /**
      * Returns true once the user has asked to close the window (clicked
@@ -54,24 +74,18 @@ public interface I_WindowPort
 
     /**
      * Programmatically requests close. Lets tests and the engine drive
-     * the same shutdown path a real user click would.
+     * the same shutdown path a real user click would. Safe to call from
+     * any thread — the game loop uses it to end a windowed run.
      */
     void requestClose();
-
-    /**
-     * Presents a frame. In Phase 1.5 this is clear + swap — proof of
-     * life only. Phase 5 replaces the body with a framebuffer upload.
-     * Main thread only.
-     */
-    void present();
 
     /**
      * Returns true if this is a real on-screen window.
      *
      * The engine branches on this once at startup: a real window means
-     * the main thread runs the pump loop, no window means it simply
-     * joins the game loop thread. Without this the headless path would
-     * have to busy-wait on a no-op pump.
+     * the main thread is given to {@link #runFrameLoop}, no window means
+     * it simply joins the game loop thread. Without this the headless path
+     * would have to spin on a loop that draws nothing.
      */
     boolean isRealWindow();
 

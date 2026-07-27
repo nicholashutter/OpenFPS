@@ -264,11 +264,11 @@ public final class EngineMain
             return;
         }
 
-        while (loopThread.isAlive() && !window.isCloseRequested())
-        {
-            window.pumpEvents();
-            window.present();
-        }
+        // The platform owns the loop from here. This blocks until the user
+        // closes the window (desktop) or the Activity is destroyed
+        // (Android). The callback draws; it never advances the simulation —
+        // GameLoop is still doing that on its own thread at a fixed rate.
+        window.runFrameLoop(new EngineFrameCallback(loopThread, window));
 
         // Either the loop ended on its own or the user closed the window.
         // shutdown() is idempotent, so calling it in both cases is fine.

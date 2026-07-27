@@ -5,6 +5,7 @@
 
 package com.openfps.engine.hal.adapter.nulladapter;
 
+import com.openfps.engine.hal.port.I_FrameCallback;
 import com.openfps.engine.hal.port.I_WindowPort;
 
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -12,10 +13,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  * Null implementation of I_WindowPort — no window, no graphics, no OS calls.
  *
- * {@link #isRealWindow()} returns false, which tells the engine to skip
- * the main-thread pump loop entirely and just join the game loop thread.
- * So {@link #pumpEvents()} and {@link #present()} are never called in a
- * normal headless run; they are no-ops purely so tests can drive them.
+ * {@link #isRealWindow()} returns false, which tells the engine to skip the
+ * platform frame loop entirely and just join the game loop thread. So
+ * {@link #runFrameLoop} is never reached in a normal headless run; it
+ * returns immediately without invoking the callback, because there is no
+ * surface for a callback to draw on and pretending otherwise would hand
+ * tests a graphics context that does not exist.
  *
  * {@link #requestClose()} is honoured, which lets a headless test exercise
  * the window-close shutdown path with no display attached.
@@ -40,9 +43,11 @@ public final class NullWindowPort implements I_WindowPort
     }
 
     @Override
-    public void pumpEvents()
+    public void runFrameLoop(final I_FrameCallback callback)
     {
-        // no-op: no OS event queue to drain
+        // Returns immediately. There is no surface, so the callback is
+        // deliberately NOT invoked — onSurfaceReady would be a lie and
+        // onFrame would have nothing to draw to.
     }
 
     @Override
@@ -55,12 +60,6 @@ public final class NullWindowPort implements I_WindowPort
     public void requestClose()
     {
         closeRequested.set(true);
-    }
-
-    @Override
-    public void present()
-    {
-        // no-op: no surface to swap
     }
 
     @Override
