@@ -25,6 +25,79 @@ allprojects {
 }
 
 // ---------------------------------------------------------------------------
+// Build-time tooling must never reach a shipped runtime classpath
+// ---------------------------------------------------------------------------
+// :tools holds GltfConverter and, with it, a JSON library. docs/ASSETS.md § 4
+// permits that dependency for exactly one reason: build-time tooling ships
+// nothing. That permission is only worth having if it stays true, and "it
+// stays true because nobody added a dependency" is not a guarantee — it is a
+// hope with a review step in front of it.
+//
+// So it is checked. This configuration resolves the complete transitive
+// runtime graph of everything the project actually distributes, and the task
+// below fails the build if a build-time artifact appears anywhere in it.
+// Adding `implementation(project(":tools"))` to :engine or :desktop turns a
+// silent architectural regression into a named, immediate build failure.
+
+// The root project declares repositories solely so the configuration below can
+// resolve. It still applies no plugins and produces no artifact of its own.
+repositories {
+    mavenCentral()
+}
+
+val shippedRuntimeClasspath: Configuration by configurations.creating {
+    isCanBeConsumed = false
+    isCanBeResolved = true
+    attributes {
+        attribute(Usage.USAGE_ATTRIBUTE, objects.named(Usage::class.java, Usage.JAVA_RUNTIME))
+        attribute(Category.CATEGORY_ATTRIBUTE, objects.named(Category::class.java, Category.LIBRARY))
+        attribute(
+            LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE,
+            objects.named(LibraryElements::class.java, LibraryElements.JAR)
+        )
+        attribute(Bundling.BUNDLING_ATTRIBUTE, objects.named(Bundling::class.java, Bundling.EXTERNAL))
+    }
+}
+
+dependencies {
+    // :android is guarded behind an SDK check in settings.gradle.kts, so it is
+    // not listed here. It depends on :engine and never on :tools; the same
+    // one-way edge protects it.
+    shippedRuntimeClasspath(project(":engine"))
+    shippedRuntimeClasspath(project(":desktop"))
+}
+
+tasks.register("verifyToolsIsolation") {
+    group = "verification"
+    description = "Fails if build-time asset tooling reaches a shipped runtime classpath."
+
+    // Artifact name prefixes that belong to build time only, matched against
+    // jar file names — which carry the module or dependency name before the
+    // version. Held as a local so the task action captures a plain list rather
+    // than a reference to this script, which the configuration cache rejects.
+    val forbidden = listOf("tools-", "gson-")
+
+    // The Provider resolves at execution time, keeping configuration cheap.
+    val shipped = shippedRuntimeClasspath.elements
+    inputs.files(shippedRuntimeClasspath)
+
+    doLast {
+        val names = shipped.get().map { it.asFile.name }.sorted()
+        val offenders = names.filter { name -> forbidden.any(name::startsWith) }
+        if (offenders.isNotEmpty()) {
+            throw GradleException(
+                "Build-time tooling reached a shipped runtime classpath: $offenders\n" +
+                "  :tools and its dependencies are build-time only — docs/ASSETS.md § 4.\n" +
+                "  Remove the dependency on :tools from :engine / :desktop / :android."
+            )
+        }
+        logger.lifecycle(
+            "Runtime classpath clean: ${names.size} artifacts, no build-time tooling."
+        )
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Game data
 // ---------------------------------------------------------------------------
 // Assets are never committed to git — see docs/ASSETS.md for the licensing
