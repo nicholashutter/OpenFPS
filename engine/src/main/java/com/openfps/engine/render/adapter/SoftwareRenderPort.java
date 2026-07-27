@@ -45,15 +45,15 @@ import org.slf4j.LoggerFactory;
  *
  * <h2>The backface winding convention — SETTLED, EMPIRICALLY</h2>
  *
- * <p><b>{@link #BACKFACE_CULL_MODE} is {@link Rasterizer.CullMode#COUNTER_CLOCKWISE}:
- * a front face is <i>clockwise</i> in screen space, and the counter-clockwise
+ * <p><b>{@link #BACKFACE_CULL_MODE} is {@link Rasterizer.CullMode#CLOCKWISE}:
+ * a front face is <i>counter-clockwise</i> in screen space, and the clockwise
  * winding is what gets discarded.</b> {@code render/README.md} § 7 left this
  * deliberately unpinned because {@code ModelFormat} did not exist. It does now,
  * so it is pinned here.</p>
  *
  * <p><b>The evidence, and why it is not an argument about handedness.</b>
  * Getting this wrong renders a closed mesh inside-out, which looks like a
- * plausible model rather than like an error, so it was settled by measurement
+ * plausible model rather than like an error, so it is settled by measurement
  * rather than by reasoning:</p>
  *
  * <ul>
@@ -68,25 +68,31 @@ import org.slf4j.LoggerFactory;
  *       {@code NONE}, once with {@code CLOCKWISE}, once with
  *       {@code COUNTER_CLOCKWISE}. It asserts pixel equality against the
  *       {@code NONE} oracle.</li>
- *   <li>{@code COUNTER_CLOCKWISE} reproduces the oracle exactly.
- *       {@code CLOCKWISE} does not: it keeps only the far faces and shows the
- *       cube's interior. The test asserts both directions, so it fails if
- *       either the convention or the oracle drifts.</li>
+ *   <li>{@code CLOCKWISE} reproduces the oracle exactly.
+ *       {@code COUNTER_CLOCKWISE} does not: it keeps only the far faces and
+ *       shows the cube's interior. The test asserts both directions, so it
+ *       fails if either the convention or the oracle drifts.</li>
  * </ul>
  *
- * <p><b>Why it lands there</b> — recorded after the fact, as a check on the
- * measurement rather than as its justification. The worry in
- * {@code render/README.md} § 7 is that there might be two winding flips that
- * cancel: view space is documented as left-handed, and the viewport transform
- * flips y. There is only one. {@link Camera} derives its basis as
- * {@code right = normalize(up x forward)}, which satisfies {@code x = y x z}
- * and therefore produces a <b>right-handed</b> orthonormal triple in a
- * right-handed world — the "left-handed" label in § 4 describes the +z-forward
- * <i>convention</i>, not a mirror applied to the data. So the view transform
- * preserves orientation, the {@code sy} flip in {@link Rasterizer} reverses it
- * once, and glTF's counter-clockwise front face arrives on screen clockwise.
- * A reader who counts two flips and cancels them gets the wrong answer, which
- * is exactly why the enum value above is asserted and not derived.</p>
+ * <p><b>This answer depends on {@link Camera}'s basis order, and it flipped
+ * once already.</b> An earlier revision of {@code render/README.md} § 4
+ * specified {@code right = normalize(up x forward)}, which is a horizontal
+ * mirror; against that camera the oracle chose
+ * {@link Rasterizer.CullMode#COUNTER_CLOCKWISE}. Correcting the basis to
+ * {@code right = normalize(forward x up)} negates every screen x, hence negates
+ * {@code area2}, hence flips this constant — measured again from scratch, not
+ * assumed. Anyone changing the camera basis must re-run the oracle rather than
+ * reasoning about which way it should go; the two are one decision, and
+ * {@link Camera}'s own Javadoc carries the other half of it.</p>
+ *
+ * <p>The count that {@code render/README.md} § 7 worries about — "two winding
+ * flips that may or may not cancel" — comes out at <b>two</b> with the
+ * corrected basis: the view transform is orientation-reversing (it maps a
+ * right-handed world onto a left-handed view frame, so {@code right x up ==
+ * -forward}), and the {@code sy} flip in {@link Rasterizer} reverses it again.
+ * They cancel, and glTF's counter-clockwise front face stays counter-clockwise
+ * on screen. That agrees with the measurement, which is the only reason it is
+ * written down; it is a check, not the justification.</p>
  *
  * <h2>Shading</h2>
  *
@@ -133,7 +139,7 @@ public final class SoftwareRenderPort implements I_RenderPort
      * re-running {@code SoftwareRenderPortTest}'s cull-mode oracle.
      */
     public static final Rasterizer.CullMode BACKFACE_CULL_MODE =
-        Rasterizer.CullMode.COUNTER_CLOCKWISE;
+        Rasterizer.CullMode.CLOCKWISE;
 
     /** Default vertical field of view, in radians. */
     public static final float DEFAULT_FOV_Y = (float) (Math.PI / 3.0);

@@ -24,6 +24,39 @@ package com.openfps.engine.render.adapter;
  * near-plane test is the single comparison {@code w > near} with no sign flip
  * in the hottest branch of the pipeline ({@code render/README.md} § 4).</p>
  *
+ * <p><b>The basis derivation is normative, and it is not the one an earlier
+ * draft of {@code render/README.md} § 4 specified:</b></p>
+ *
+ * <pre>
+ *   right = normalize(forward x up)
+ *   up    = right x forward
+ * </pre>
+ *
+ * <p><b>Do not swap the operands back.</b> § 4 used to say
+ * {@code right = normalize(up x forward)}, and that is a horizontal mirror —
+ * every model rendered flipped left-to-right, which is invisible on symmetric
+ * geometry and looks entirely plausible on the rest. Work the reference case by
+ * hand rather than trusting either version. A camera on the +z axis looking
+ * back at the origin in a right-handed world has {@code forward = (0,0,-1)} and
+ * {@code up = (0,1,0)}:</p>
+ *
+ * <pre>
+ *   up x forward = (1*(-1) - 0*0,  0*0 - 0*(-1),  0*0 - 1*0) = (-1, 0, 0)   WRONG
+ *   forward x up = (0*0 - (-1)*1,  (-1)*0 - 0*0,  0*1 - 0*0) = (+1, 0, 0)   RIGHT
+ * </pre>
+ *
+ * <p>That is the standard front view: world +x must land on the right of the
+ * screen, and only the second order puts it there. The mirror was found by
+ * rendering a cube whose faces carry a marker at a known model coordinate and
+ * observing it in the wrong corner — {@code SoftwareRenderPort}'s Javadoc has
+ * the rest of that story, because the winding convention depends on this.</p>
+ *
+ * <p>Note what the corrected order does to handedness, since it is easy to
+ * misread: {@code right x up == -forward}, so {@code (right, up, forward)} is a
+ * <b>left-handed</b> triple in a right-handed world. That is exactly what "view
+ * space is left-handed" means — +x right, +y up, +z <i>into</i> the screen —
+ * and it is the property the old order silently lacked while claiming.</p>
+ *
  * <p><b>The view matrix is the exact rigid inverse</b> of the camera's world
  * transform, {@code V = R^T . T(-eye)}, built directly from the orthonormal
  * basis. A general matrix inverse is never called.</p>
@@ -136,11 +169,10 @@ public final class Camera
      * Creates a camera from a position and a viewing direction.
      *
      * The basis is orthonormalised: {@code forward} is normalised, {@code right}
-     * is derived as {@code normalize(up x forward)} — the operand order that
-     * makes the basis left-handed, per {@code render/README.md} § 4 — and the
-     * final {@code up} is recomputed as {@code forward x right} so the three
-     * axes are exactly orthogonal even when the caller's {@code up} is only
-     * approximate.
+     * is derived as {@code normalize(forward x up)} — see the class Javadoc on
+     * why that operand order and not the other — and the final {@code up} is
+     * recomputed as {@code right x forward} so the three axes are exactly
+     * orthogonal even when the caller's {@code up} is only approximate.
      *
      * @param eye the camera position in world space
      * @param forward the viewing direction; need not be unit length
@@ -160,14 +192,14 @@ public final class Camera
         validateFrustum(fovYRadians, aspect, near);
 
         final Vec3 unitForward = forward.normalized();
-        final Vec3 rightAxis = up.cross(unitForward);
+        final Vec3 rightAxis = unitForward.cross(up);
         if (rightAxis.length() == 0.0f)
         {
             throw new IllegalArgumentException(
                 "up is parallel to forward; the camera basis is undefined");
         }
         final Vec3 unitRight = rightAxis.normalized();
-        final Vec3 unitUp = unitForward.cross(unitRight);
+        final Vec3 unitUp = unitRight.cross(unitForward);
 
         return new Camera(eye, unitRight, unitUp, unitForward, fovYRadians, aspect, near);
     }
