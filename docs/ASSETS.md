@@ -51,11 +51,26 @@ Hardware: Intel Core Ultra 7 155H (16 physical / 22 logical), Temurin OpenJDK 17
 
 | Quantity | Estimated | **Measured** | Verdict |
 |---|---|---|---|
-| Perspective-correct, mipmapped, bilinear span | ~3–8 ns/px | **17–21 ns/px** (8.2 best case, L2-resident) | Optimistic 1.5–3× |
-| 1080p @ 2× overdraw, single core | ~20 ms | **46–48 ms** | Optimistic 2.4× |
-| 1080p @ 2× overdraw, 8 workers | ~3–4 ms | **8.2 ms** | Optimistic 2.3× |
+| Perspective-correct, mipmapped, bilinear span | ~3–8 ns/px | **21.1 ns/px** | Optimistic ~3–7× |
+| 1080p @ 2× overdraw, single core | ~20 ms | **87.4 ms** | Optimistic 4.4× |
+| 1080p @ 2× overdraw, 8 workers | ~3–4 ms | **14.9 ms** | Optimistic ~4× |
+| 1080p @ 1× overdraw (culled), 8 workers | — | **10.3 ms** | |
 | Triangle setup | 200–500 ns | **26–64 ns** | Pessimistic 4–8× |
 | Per-triangle raster-phase cost | not estimated | **~600–900 ns** | The real per-triangle cost |
+
+> **These rows were corrected once, and how they were wrong is worth keeping.**
+> The synthetic benchmark first reported 46–48 ms single-core and 8.2 ms at 8
+> workers. Those numbers were **internally inconsistent with its own per-pixel
+> figure**: 2,073,600 px × 2 overdraw × ~19 ns is 79 ms, not 46. The real
+> renderer, measured end to end on the same CPU, reports 87.4 ms and 21.1 ns/px
+> — and 4.147M × 21.1 ns = 87.5 ms, which closes. The per-pixel figure was right
+> all along; the frame-time rows were not, and nobody noticed until an actual
+> frame was drawn.
+>
+> The lesson is cheap to state and was expensive to find: **a benchmark's rows
+> should be checked against each other, not just against expectations.** These
+> figures come from the shipping pipeline drawing a real model, so they are the
+> ones to trust.
 
 **The clock is the thing to understand before reading any of this.** The test
 machine runs 4.75–5.44 GHz on one thread but averages ~3.1 GHz across all 22
@@ -68,18 +83,37 @@ decomposition is sound — the hardware simply does not provide 22 full-speed co
 
 ### What actually fits in 60 Hz
 
-Allowing a 10 ms renderer budget inside a 16.7 ms frame:
+Allowing a 10 ms renderer budget inside a 16.7 ms frame. **Revised downward
+after the end-to-end measurements above replaced the synthetic ones.**
 
-| Target | Triangle budget |
+The governing fact is that a first-person view is nearly 100% screen coverage —
+you are always looking at a wall, a floor or the sky — so pixel fill, not
+triangle count, sets the floor. At 1080p with backface culling that floor is
+**10.3 ms at 8 workers**, which consumes the entire 60 Hz renderer budget before
+a single additional triangle is considered.
+
+| Target | Verdict |
 |---|---|
-| **1080p, 8–12 threads** | **~10–20k triangles** — 50k does not fit |
-| **720p, 12 threads** | **~40–60k triangles** |
-| **720p, 4-core minimum spec** | **~5–15k triangles** |
-| 1080p, 4-core minimum spec | Untenable — 20k triangles costs 20.6 ms |
+| **1080p @ 60 Hz** | **Does not fit.** Fill alone is 10.3 ms culled, 14.9 ms at 2× overdraw |
+| **1080p @ 30 Hz** | Comfortable — 33 ms frame, fill is a third of it |
+| **720p @ 60 Hz** | **The target.** 720p is 44% of 1080p's pixels: ~4.6 ms culled, ~6.6 ms at 2× overdraw, leaving real headroom for geometry |
+| **1080p @ 60 Hz, nearest-neighbour** | Plausible — dropping bilinear cuts the span cost 2.9× |
+| 4-core minimum spec | 720p only |
 
-**The old "~50–100k triangles/frame" ceiling is real, but it is a 30 Hz 1080p
-figure or a 60 Hz 720p figure — not 60 Hz 1080p.** That is the single most
-important correction on this page.
+**720p at 60 Hz is the default the engine should ship**, with 1080p offered at
+30 Hz or with bilinear disabled. That is a materially different conclusion from
+the one this document reached an hour earlier, and it comes from measuring the
+real pipeline rather than a synthetic harness.
+
+The 720p rows are **scaled by pixel count from the 1080p measurements**, not
+measured directly. Scaling is sound here because fill dominates, but confirm it
+before committing.
+
+The old "~50–100k triangles/frame" ceiling was never a 60 Hz 1080p figure and
+now looks optimistic even at 720p. **Kenney's kits remain comfortably inside
+whatever the real budget turns out to be** — a 368-triangle blaster is the
+scale this art direction actually operates at, which is exactly why it was the
+right choice.
 
 ### The one big lever
 

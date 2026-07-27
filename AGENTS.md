@@ -256,7 +256,7 @@ platform-free. Both implement `I_WindowPort` and drive `I_FrameCallback` —
 which is also the presentation path for the Phase 5 rasterizer. The engine
 produces a finished framebuffer; the adapter uploads it.
 
-**570 tests passing** (529 `:engine`, 41 `:desktop`), Checkstyle clean — see
+**770 tests passing** (652 `:engine`, 50 `:desktop`, 68 `:tools`), Checkstyle clean — see
 `BUILD.md` for run instructions and `PLAN.md` § 8 for the per-suite breakdown.
 
 ---
