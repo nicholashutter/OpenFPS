@@ -9,7 +9,7 @@
 |---|---|
 | **State** | PARTIAL |
 | **Phase** | not a numbered phase; PLAN.md § 6 records it as "Built — APK assembles; not yet verified on a device or emulator" |
-| **Tests** | **0** |
+| **Tests** | 64 (plain JVM unit tests; nothing device-backed) |
 | **Registered** | provides the Android HAL (`AndroidAdapterFactory`) and the LAUNCHER Activity |
 | **Verified** | 2026-07-28 |
 
@@ -128,4 +128,16 @@ widen the filter once the launcher's own lines confirm the Activity started.
 - `persistence/` — `RoomUserProfilePort` over `UserProfileEntity`,
   `UserProfileDao` and `OpenFpsDatabase`
 
-**0 tests in this module.**
+**64 tests in this module** — all plain JVM unit tests, no Robolectric and no
+instrumentation. They cover what can honestly be covered off a device: the
+frame-callback fan-out and its load-bearing ordering, the entity mapping in both
+directions, the window port's close-flag and re-arm semantics, the adapter
+factory's delegation and its profile-closed-before-delegate ordering, the
+lifecycle bridge's resize filtering, and the profile port's off-READY refusals.
+
+What they deliberately do **not** cover is anything needing a real device: the
+Room round-trip against platform SQLite, `requestClose()` actually finishing the
+Activity, and `MenuSkinFactory`'s managed-texture claim — whose failure mode is a
+menu that renders as white rectangles after the first task-switch. Those need an
+emulator that can drop an EGL context, and faking them would be worse than
+leaving them uncovered.

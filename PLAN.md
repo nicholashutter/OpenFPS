@@ -1,6 +1,6 @@
 # OpenFPS — Project Plan
 
-> **Status**: Pre-alpha — Phases 0 through 1.5 complete, plus Phase 5 (render). Event-driven engine, unified memory, multi-threaded worker pool, configurable 30/60/120 Hz, SQLite user-profile persistence, desktop HAL with a real window and input, and a multi-threaded software triangle rasterizer driving a playable first-person demo at 1280x720. Phase 2 (WAD) is partly done and unregistered; Phase 3 (net) has its lockstep primitives built but no socket wired. **1000 tests** — 828 `:engine`, 99 `:desktop`, 73 `:tools`.
+> **Status**: Pre-alpha — Phases 0 through 1.5 complete, plus Phase 5 (render). Event-driven engine, unified memory, multi-threaded worker pool, configurable 30/60/120 Hz, SQLite user-profile persistence, desktop HAL with a real window and input, and a multi-threaded software triangle rasterizer driving a playable first-person demo at 1280x720. Phase 2 (WAD) is partly done and unregistered; Phase 3 (net) has its lockstep primitives built but no socket wired. **1064 tests** — 828 `:engine`, 99 `:desktop`, 73 `:tools`, 64 `:android`.
 > **Engine Version**: 0.1.0-SNAPSHOT
 > **Target JVM**: 17 LTS (Java 17 source/target, runs on 17+)
 > **Platforms**: Windows, Linux, macOS (`:desktop`, libGDX LWJGL3 backend); Android (`:android`, libGDX Android backend). `:engine` is platform-free and runs headless on any JVM 17+.
