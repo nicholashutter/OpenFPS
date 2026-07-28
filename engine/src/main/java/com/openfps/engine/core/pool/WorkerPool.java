@@ -74,10 +74,32 @@ public final class WorkerPool implements I_ThreadPoolPort
      */
     private static final int MAX_CONCURRENT_BATCHES = 8;
 
-    /** Spin iterations a joining thread burns before it starts parking. */
+    /** Spin iterations a joining thread burns before it starts yielding. */
     private static final int JOIN_SPIN_LIMIT = 256;
 
-    /** Park interval used by a joining thread once its spin budget is gone. */
+    /**
+     * Yields a joining thread takes before it resorts to parking.
+     *
+     * <b>This is what makes a fine-grained parallel batch viable on Windows,
+     * and it was measured, not guessed.</b> Nothing unparks a joining thread —
+     * {@link ParallelBatch#awaitCompletion} is a polling loop — so its park is
+     * a <i>timed</i> park, and a timed park is rounded up to the system timer
+     * period. That period is 15.6 ms by default on Windows, so a join that
+     * needed 50 microseconds slept for fifteen milliseconds. It showed up as
+     * frame times quantised to exact multiples of 15.6 ms: the software
+     * rasterizer's demo scene posted a best frame of 4 ms and a median of 31 ms
+     * on eight workers, because a typical frame's eight joins caught two ticks
+     * between them.
+     *
+     * <p>{@link Thread#yield()} has no such floor — it is a reschedule, not a
+     * sleep — so the wait now costs what the work costs. The park below is kept
+     * as a backstop for a batch that is genuinely stuck behind a descheduled
+     * worker, where burning a core is the worse option; at that point the extra
+     * millisecond does not matter.</p>
+     */
+    private static final int JOIN_YIELD_LIMIT = 4096;
+
+    /** Park interval used by a joining thread once even its yield budget is gone. */
     private static final long JOIN_PARK_NANOS = 50_000L;
 
     /**
@@ -630,17 +652,26 @@ public final class WorkerPool implements I_ThreadPoolPort
         // Waits for indices claimed by other threads. The caller has already
         // exhausted the claim counter, so this only ever waits on work that is
         // genuinely in flight elsewhere.
+        //
+        // Three stages, cheapest first: spin, yield, park. The yield stage is
+        // the load-bearing one and JOIN_YIELD_LIMIT explains why — a timed park
+        // cannot resolve faster than the platform's timer period, which is
+        // 15.6 ms on Windows, and that is an eternity next to a batch that
+        // takes tens of microseconds.
         private void awaitCompletion(final int target)
         {
-            // MUTABLE: spin budget, and whether we swallowed an interrupt
-            int spins = 0;
+            // MUTABLE: backoff budget, and whether we swallowed an interrupt
+            int waits = 0;
             boolean interrupted = false;
             while (completed.get() < target)
             {
-                if (spins < JOIN_SPIN_LIMIT)
+                if (waits < JOIN_SPIN_LIMIT)
                 {
                     Thread.onSpinWait();
-                    spins++;
+                }
+                else if (waits < JOIN_SPIN_LIMIT + JOIN_YIELD_LIMIT)
+                {
+                    Thread.yield();
                 }
                 else
                 {
@@ -652,6 +683,13 @@ public final class WorkerPool implements I_ThreadPoolPort
                         interrupted = true;
                     }
                     LockSupport.parkNanos(JOIN_PARK_NANOS);
+                }
+                // Saturating, not wrapping: a join that parked two billion
+                // times would otherwise wrap negative and fall back to spinning
+                // on a core it has already decided not to burn.
+                if (waits < JOIN_SPIN_LIMIT + JOIN_YIELD_LIMIT)
+                {
+                    waits++;
                 }
             }
             if (interrupted)

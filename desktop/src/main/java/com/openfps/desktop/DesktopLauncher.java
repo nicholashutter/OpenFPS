@@ -271,24 +271,27 @@ public final class DesktopLauncher
      * afterwards. A four-line holder gives both without a downcast and without
      * a mutable field racing the game loop thread.
      *
-     * <p><b>The pool is passed through unchanged, and a note for whoever
-     * profiles this next.</b> An earlier revision of this class handed the
-     * renderer {@code null} instead, on the strength of a headless measurement:
-     * {@code :tools:demoPreview --frames=300} at 1280x720 renders this scene in
-     * 19.6 ms serially and <b>297 ms with 8 workers</b>, because
-     * {@code SoftwareRenderPort} renders instances one at a time and each
-     * crosses four {@code submitParallel} barriers — about 1,180 of them per
-     * frame for a 295-instance room. That finding is real and reproducible.</p>
+     * <p><b>The pool is passed through, and it is now worth passing.</b> An
+     * earlier revision handed the renderer {@code null} instead, because the
+     * pool genuinely made this scene fifteen times slower. Three faults were
+     * responsible, none of them in this class, and all three are fixed:</p>
      *
-     * <p>It is also <b>not</b> what limits the window, which is why the change
-     * was reverted rather than kept. Measured windowed, both settings present
-     * at roughly 2 frames per second: 2.5 with the pool, 2.0 without. The
-     * limiter is elsewhere — {@code GameLoop} publishes a {@code
-     * RenderFrameEvent} every tic with no coalescing, so the rasterizer spends
-     * every cycle on frames nobody will see, and {@code FramebufferPresenter}
-     * then starves against a non-fair {@code frameLock} that the render workers
-     * keep reacquiring. Both belong to D_ and R_, not to a launcher, and
-     * neither is fixed by choosing a pool here.</p>
+     * <ul>
+     *   <li>{@code SoftwareRenderPort} ran its pipeline once per instance —
+     *       about 1,180 {@code submitParallel} barriers a frame for a
+     *       295-instance room. It batches a whole pass now, and pays eight.</li>
+     *   <li>{@code WorkerPool}'s batch join used a timed park, which on Windows
+     *       cannot resolve faster than the 15.6 ms timer period.</li>
+     *   <li>{@code RenderSubsystem} rendered every {@code RenderFrameEvent}
+     *       {@code GameLoop} published instead of coalescing to the newest, and
+     *       {@code FramebufferPresenter} starved against a frame lock the
+     *       render workers kept reacquiring. Measured windowed at 1280x720, R_
+     *       finished 35 frames a second and the window presented <b>2.9</b>;
+     *       it now presents 60, vsync-limited, at 4.3 ms a frame.</li>
+     * </ul>
+     *
+     * <p>Run {@code gradlew :desktop:run -Dopenfps.fpsLog=2} to see all three
+     * rates for yourself; {@code FramebufferPresenter} documents them.</p>
      */
     private static final class RendererHolder implements I_RenderPortFactory
     {

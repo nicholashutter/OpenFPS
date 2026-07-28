@@ -6,10 +6,12 @@
 package com.openfps.desktop;
 
 import java.nio.ByteBuffer;
+import java.util.Locale;
 
 import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
+import com.badlogic.gdx.utils.TimeUtils;
 
 import com.openfps.engine.render.adapter.SoftwareRenderPort;
 
@@ -68,11 +70,43 @@ import org.slf4j.LoggerFactory;
  * because there is no context until the surface exists — the same reason
  * {@code I_FrameCallback.onSurfaceReady} exists at all.</p>
  *
+ * <h2>The frame-rate log</h2>
+ *
+ * <p>Opt-in and off by default, on the {@link GdxScreenshot} pattern and for
+ * the same reason: <b>the windowed frame rate cannot be measured anywhere
+ * else.</b> A headless tool measures how long the rasterizer takes; only the
+ * window can say how many of those frames actually reach a display, which is a
+ * different number whenever presentation, coalescing or lock contention is the
+ * limiter — and all three have been.</p>
+ *
+ * <pre>
+ *   -Dopenfps.fpsLog=2    log every 2 seconds; absent or 0 disables it
+ * </pre>
+ *
+ * <p>Three rates, because they diverge and the difference is the diagnosis:
+ * <i>platform</i> is how often GLFW called {@code render()}, <i>presented</i>
+ * is how many of those uploaded a frame, and <i>rendered</i> is how many frames
+ * R_ finished. Presented well below platform means the renderer is not keeping
+ * up; rendered well above presented means frames are being drawn that nobody
+ * ever sees.</p>
+ *
  * Platform adapter — must not import from core engine packages.
  */
 public final class FramebufferPresenter
 {
+    /**
+     * System property enabling the frame-rate log. Its value is the interval in
+     * whole seconds; absent, empty, unparseable or non-positive disables it.
+     */
+    public static final String FPS_LOG_PROPERTY = "openfps.fpsLog";
+
     private static final Logger LOG = LoggerFactory.getLogger(FramebufferPresenter.class);
+
+    /** Nanoseconds in a second. */
+    private static final long NANOS_PER_SECOND = 1_000_000_000L;
+
+    /** Nanoseconds in a millisecond, for the last-frame figure. */
+    private static final double NANOS_PER_MILLI = 1_000_000.0;
 
     /** The renderer whose finished frames this presents. */
     private final SoftwareRenderPort renderPort;
@@ -98,18 +132,68 @@ public final class FramebufferPresenter
     /** Surface height in pixels. MUTABLE: set on resize. */
     private int height;
 
+    /** Log interval in nanoseconds, or zero when the frame-rate log is off. */
+    private final long fpsIntervalNanos;
+
+    /** When the current sampling window opened. MUTABLE: reset per window. */
+    private long windowStartNanos;
+
+    /** Platform frames in the current window. MUTABLE. */
+    private int windowPlatformFrames;
+
+    /** Frames actually uploaded in the current window. MUTABLE. */
+    private int windowPresentedFrames;
+
+    /** The renderer's frame count when the window opened. MUTABLE. */
+    private long windowRenderedAtStart;
+
     /**
-     * Creates a presenter for one renderer.
+     * Creates a presenter for one renderer, with the frame-rate log configured
+     * from {@link #FPS_LOG_PROPERTY}.
      *
      * @param port the software renderer to present; must not be null
      */
     public FramebufferPresenter(final SoftwareRenderPort port)
+    {
+        this(port, logIntervalSeconds());
+    }
+
+    /**
+     * Creates a presenter with an explicit frame-rate log interval.
+     *
+     * @param port the software renderer to present; must not be null
+     * @param logIntervalSeconds seconds between frame-rate log lines; zero or
+     *     less disables the log entirely
+     */
+    public FramebufferPresenter(final SoftwareRenderPort port, final int logIntervalSeconds)
     {
         if (port == null)
         {
             throw new IllegalArgumentException("port must not be null");
         }
         this.renderPort = port;
+        this.fpsIntervalNanos = Math.max(0L, (long) logIntervalSeconds * NANOS_PER_SECOND);
+    }
+
+    // The configured interval, or zero for anything absent or unusable. A bad
+    // diagnostic setting must not stop a window opening.
+    private static int logIntervalSeconds()
+    {
+        final String configured = System.getProperty(FPS_LOG_PROPERTY);
+        if (configured == null || configured.isEmpty())
+        {
+            return 0;
+        }
+        try
+        {
+            return Integer.parseInt(configured.trim());
+        }
+        catch (final NumberFormatException e)
+        {
+            LOG.warn("Ignoring -D{}={}: not a whole number of seconds",
+                FPS_LOG_PROPERTY, configured);
+            return 0;
+        }
     }
 
     /**
@@ -173,6 +257,7 @@ public final class FramebufferPresenter
         if (texture == null || renderPort.framesRendered() == 0L
             || !renderPort.copyColorInto(scratch))
         {
+            sampleFrameRate(false);
             return false;
         }
         final ByteBuffer pixels = pixmap.getPixels();
@@ -185,7 +270,57 @@ public final class FramebufferPresenter
         batch.begin();
         batch.draw(texture, 0.0f, 0.0f, width, height);
         batch.end();
+        sampleFrameRate(true);
         return true;
+    }
+
+    // Counts one platform frame and emits a line once per interval. A no-op
+    // unless the log was asked for, so a normal run pays two field reads.
+    private void sampleFrameRate(final boolean presented)
+    {
+        if (fpsIntervalNanos == 0L)
+        {
+            return;
+        }
+        final long now = TimeUtils.nanoTime();
+        windowPlatformFrames++;
+        if (presented)
+        {
+            windowPresentedFrames++;
+        }
+        if (windowStartNanos == 0L)
+        {
+            openWindow(now);
+            return;
+        }
+        final long elapsed = now - windowStartNanos;
+        if (elapsed < fpsIntervalNanos)
+        {
+            return;
+        }
+        final double seconds = (double) elapsed / (double) NANOS_PER_SECOND;
+        LOG.info("windowed {}x{}: {} platform fps, {} presented fps, {} rendered fps,"
+            + " last frame {} ms, {} parallel passes",
+            width, height, rate(windowPlatformFrames, seconds),
+            rate(windowPresentedFrames, seconds),
+            rate(renderPort.framesRendered() - windowRenderedAtStart, seconds),
+            String.format(Locale.ROOT, "%.2f", renderPort.lastFrameNanos() / NANOS_PER_MILLI),
+            renderPort.lastFrameParallelPasses());
+        openWindow(now);
+    }
+
+    // Starts a fresh sampling window at the given instant.
+    private void openWindow(final long now)
+    {
+        this.windowStartNanos = now;
+        this.windowPlatformFrames = 0;
+        this.windowPresentedFrames = 0;
+        this.windowRenderedAtStart = renderPort.framesRendered();
+    }
+
+    private static String rate(final long frames, final double seconds)
+    {
+        return String.format(Locale.ROOT, "%.1f", frames / seconds);
     }
 
     /** Releases the batch and every surface-sized GPU resource. */

@@ -44,7 +44,7 @@ application {
     mainClass.set("com.openfps.desktop.DesktopLauncher")
 }
 
-// Forward GdxScreenshot's opt-in window capture through to the forked JVM.
+// Forward the opt-in diagnostics through to the forked JVM.
 //
 // `run` is a JavaExec, so a -D on the Gradle command line lands on the DAEMON
 // and never reaches the application. That is why the capture properties looked
@@ -54,8 +54,16 @@ application {
 //   gradlew :desktop:run -Dopenfps.screenshot=C:\tmp\window.png `
 //                        -Dopenfps.screenshotFrame=90 -Dopenfps.screenshotExit=true
 //
-// Absent, capture stays off and `run` behaves exactly as before — GdxScreenshot
-// disables itself when no path is set.
+//   gradlew :desktop:run -Dopenfps.fpsLog=2
+//     FramebufferPresenter logs platform, presented and rendered frame rates
+//     every two seconds. It is the ONLY way to measure the windowed frame rate:
+//     a headless tool measures how long a frame takes, not how many reach a
+//     display, and those stopped being the same number the moment coalescing
+//     and the presentation handoff entered the picture.
+//
+// Absent, both stay off and `run` behaves exactly as before — GdxScreenshot
+// disables itself when no path is set, and the frame-rate log when no interval
+// is set.
 tasks.named<JavaExec>("run") {
     // Run from the REPOSITORY ROOT, not from desktop/.
     //
@@ -73,7 +81,7 @@ tasks.named<JavaExec>("run") {
     workingDir = rootProject.projectDir
 
     for (name in listOf("openfps.screenshot", "openfps.screenshotFrame",
-                        "openfps.screenshotExit")) {
+                        "openfps.screenshotExit", "openfps.fpsLog")) {
         val value = providers.systemProperty(name).orNull
         if (value != null) {
             systemProperty(name, value)
