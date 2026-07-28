@@ -83,6 +83,8 @@ public final class Scene
     private final Instance[] world;
     private final Instance[] view;
     private final int maxInstanceTriangles;
+    private final int worldTriangles;
+    private final int viewTriangles;
 
     // Takes ownership of two arrays the builder has already finished with.
     private Scene(final Instance[] worldInstances, final Instance[] viewInstances)
@@ -91,6 +93,8 @@ public final class Scene
         this.view = viewInstances;
         this.maxInstanceTriangles =
             Math.max(largestModel(worldInstances), largestModel(viewInstances));
+        this.worldTriangles = totalTriangles(worldInstances);
+        this.viewTriangles = totalTriangles(viewInstances);
     }
 
     /**
@@ -188,9 +192,10 @@ public final class Scene
      * Returns the triangle count of the largest single instance in the scene,
      * or zero if the scene is empty.
      *
-     * <p>This is the figure the render port sizes its clip-space buffers by:
-     * instances are transformed, clipped and rasterized one at a time, so the
-     * geometry buffers have to hold the biggest one, not the sum.</p>
+     * <p>Descriptive rather than load-bearing: it is what the biggest single
+     * model in the scene costs. {@link #maxPassTriangles()} is the figure the
+     * render port sizes its buffers by, and the two stopped being the same
+     * number when the world pass was batched.</p>
      *
      * @return the largest instance's triangle count
      */
@@ -199,12 +204,42 @@ public final class Scene
         return maxInstanceTriangles;
     }
 
+    /** Returns the triangle count of the whole world pass, summed over its instances. */
+    public int worldTriangleCount()
+    {
+        return worldTriangles;
+    }
+
+    /** Returns the triangle count of the whole view pass, summed over its instances. */
+    public int viewTriangleCount()
+    {
+        return viewTriangles;
+    }
+
+    /**
+     * Returns the triangle count of the larger of the two passes.
+     *
+     * <p><b>This is the figure {@link SoftwareRenderPort} sizes its clip-space
+     * buffers by.</b> A pass is transformed, clipped and rasterized as one
+     * batch, so the geometry stream holds a whole pass at once — the sum over
+     * its instances, not the largest of them. The two passes run one after the
+     * other and share the stream, so the larger of the two is enough for
+     * both.</p>
+     *
+     * @return the larger pass's triangle count, or zero for an empty scene
+     */
+    public int maxPassTriangles()
+    {
+        return Math.max(worldTriangles, viewTriangles);
+    }
+
     /** Returns a debug rendering of the scene's contents. */
     @Override
     public String toString()
     {
         return "Scene{world=" + world.length + ", view=" + view.length
-            + ", maxInstanceTriangles=" + maxInstanceTriangles + "}";
+            + ", maxInstanceTriangles=" + maxInstanceTriangles
+            + ", maxPassTriangles=" + maxPassTriangles() + "}";
     }
 
     // The largest triangle count in one list, or zero for an empty one.
@@ -217,6 +252,20 @@ public final class Scene
             largest = Math.max(largest, instance.model.triangleCount());
         }
         return largest;
+    }
+
+    // Every triangle in one list. Duplicated models count once per instance:
+    // each one is transformed and clipped separately, so each one occupies its
+    // own region of the batched geometry stream.
+    private static int totalTriangles(final Instance[] instances)
+    {
+        // MUTABLE local — running sum.
+        int total = 0;
+        for (final Instance instance : instances)
+        {
+            total += instance.model.triangleCount();
+        }
+        return total;
     }
 
     /**

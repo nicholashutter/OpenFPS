@@ -120,6 +120,13 @@ public final class GameLoop implements Runnable
             // state; it never advances it"). So the frame is produced here,
             // per tic, and the platform uploads whatever the newest finished
             // one is, at whatever rate its display runs.
+            //
+            // Deliberately UNTHROTTLED. The loop has no idea how long a frame
+            // takes and must not wait to find out — blocking here would drag
+            // the simulation down to the frame rate and desync a lockstep
+            // session. Dropping the requests that cannot be served is
+            // RenderSubsystem's job, and it does coalesce them; see its
+            // Javadoc for why the consumer is the only party that can.
             final TickEvent tickEvent = eventFactory.newTick(tic, nanosPerTic);
             final RenderFrameEvent renderEvent = eventFactory.newRenderFrame(tic);
             try

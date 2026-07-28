@@ -38,7 +38,7 @@ import org.slf4j.LoggerFactory;
  *                -&gt;  Framebuffer   finished
  * </pre>
  *
- * <p>Four {@code submitParallel} passes make up an instance: geometry
+ * <p>Four {@code submitParallel} passes make up a <b>pass</b>: geometry
  * (transform and clip), then {@link Rasterizer}'s own setup-and-count and
  * scatter, then the tile raster. Each is separated from the next by the pool's
  * publish/join boundary, so no barrier of ours is needed.</p>
@@ -67,16 +67,52 @@ import org.slf4j.LoggerFactory;
  * alternative — squeezing the world into part of the depth range and the
  * viewmodel into the rest — buys nothing here and costs precision everywhere.</p>
  *
- * <p><b>Instances are rendered one at a time</b>, each through the whole
- * pipeline, sharing the framebuffer's depth buffer. That is what makes the
- * result independent of submission order: the depth test resolves two
- * instances against each other exactly as it resolves two triangles.
- * {@link Rasterizer} is <b>reused</b> across instances — one instance for the
- * whole port — but must be <b>reset per instance</b> with
+ * <h2>A pass is ONE batch, not one batch per instance</h2>
+ *
+ * <p><b>Every instance in a pass is transformed and clipped into a single
+ * shared geometry stream, and that whole stream takes one setup, one bin and
+ * one tile raster.</b> A frame therefore costs <b>eight</b> parallel passes —
+ * four for the world, four for the viewmodel — whatever the instance count.
+ * The alternative, running the four-stage pipeline once per instance, is what
+ * this class used to do, and it is why adding workers used to make the demo
+ * room slower: at 295 instances it paid about 1,180 publish/join boundaries per
+ * frame to distribute a few dozen triangles each, and barrier cost swamped the
+ * work. Measured at 1280x720, that scene went from 20 ms serial and 217 ms on
+ * eight workers to 20 ms serial and 5 ms on eight workers when the pass was
+ * batched. The parallel machinery was never the problem; the granularity
+ * was.</p>
+ *
+ * <p><b>The result is bit-for-bit what rendering instances one at a time
+ * produced</b>, and that is a property of the ordering rather than a hope.
+ * Instances are laid into the stream in submission order, {@link Rasterizer}
+ * bins a tile's triangles in ascending stream index, and the depth test rejects
+ * ties — so each pixel sees exactly the sequence of triangles it saw before,
+ * in exactly the same order. It is asserted against a stored image in
+ * {@code SoftwareRenderPortTest} rather than argued.</p>
+ *
+ * <p>Two things had to become scene-wide for this to work, and both are built
+ * once by {@link #setScene} rather than per frame:</p>
+ *
+ * <ul>
+ *   <li><b>The texture table.</b> One raster pass takes one table, so a
+ *       triangle's material index has to mean something without knowing which
+ *       instance it came from. Every distinct instance's textures are
+ *       concatenated into one scene-wide table and its per-triangle material
+ *       indices are rebased into it. {@link Rasterizer#NO_MATERIAL} stays
+ *       {@link Rasterizer#NO_MATERIAL}.</li>
+ *   <li><b>The packed transforms.</b> The geometry pass now spans instances, so
+ *       it cannot read a single shared scratch transform. Each instance gets
+ *       its own {@link Camera#WORLD_TO_CLIP_FLOATS}-float slice of one array,
+ *       written once per frame — the same once-per-instance concatenation as
+ *       before, into a slot rather than over the top of the last one.</li>
+ * </ul>
+ *
+ * <p>{@link Rasterizer} is <b>reused</b> across passes — one instance for the
+ * whole port — but must be <b>reset per pass</b> with
  * {@link Rasterizer#beginFrame}, because its per-triangle records and tile bins
  * are indexed by position within a single submitted stream. It does not clear
- * the framebuffer, so resetting it between instances composites rather than
- * overwrites.</p>
+ * the framebuffer, so resetting it between the two passes composites rather
+ * than overwrites.</p>
  *
  * <h2>The backface winding convention — SETTLED, EMPIRICALLY</h2>
  *
@@ -145,28 +181,38 @@ import org.slf4j.LoggerFactory;
  * pool runs every pass on the calling thread, which is the serial reference the
  * parallel result is compared against and is what the build-time tools use.</p>
  *
- * <p>{@link #copyColorInto} and {@link #renderFrame} are serialised against one
- * another by one lock. The platform's render thread and the render worker are
- * different threads, and the colour buffer is neither double-buffered nor
- * atomically swapped, so without the lock a presented frame could be half of
- * one frame and half of the next. The presenter therefore blocks for at most
- * one frame time, and pays exactly one copy: the de-padding copy
- * {@link Framebuffer#copyColorTo} has to make anyway.</p>
+ * <p><b>The presentation handoff is double-buffered, not locked.</b> The
+ * renderer finishes a frame, de-pads it into a back buffer it owns outright,
+ * and then takes {@code presentLock} for exactly long enough to swap two
+ * references. {@link #copyColorInto} takes the same lock and copies the front
+ * buffer out. Neither side ever waits on the other's work: the lock is held for
+ * a pointer swap on one side and one {@code arraycopy} on the other, and never
+ * for the 5-20 ms a frame takes.</p>
+ *
+ * <p>That replaces an earlier design in which the presenter and
+ * {@link #renderFrame} shared one non-fair lock. It was correct and it was
+ * unusable: the render workers reacquired that lock every frame and the
+ * presenting thread — a different thread, running the window — mostly lost the
+ * race, so finished frames were rendered and never shown. Arbitrating the lock
+ * more fairly would have made the presenter wait a whole frame instead of
+ * starving; removing the contention makes it wait for a swap. The cost is one
+ * extra full-frame copy, about 0.2 ms at 720p, which is the right trade at any
+ * frame rate worth having.</p>
  *
  * <h2>Allocation</h2>
  *
  * <p>Nothing is allocated per frame except the {@link Camera}, which
  * {@code render/README.md} § 4 explicitly sanctions ("Build one per frame").
- * Every geometry buffer is sized by {@link #setScene}, and the framebuffer only
- * by {@link #resize}.</p>
+ * Every geometry buffer is sized by {@link #setScene}, and the framebuffer and
+ * the two present buffers only by {@link #resize}.</p>
  *
- * <p><b>Sized for the largest instance, not for their sum.</b> Instances go
- * through the pipeline one at a time, so the clip-space stream only ever holds
- * one of them. The buffers therefore grow when a scene arrives containing a
- * model bigger than any seen so far, and never shrink — a scene swap that adds
- * instances of models already sized for allocates nothing at all. The
- * per-instance packed transform is one 12-float scratch reused by every
- * instance in the frame.</p>
+ * <p><b>Sized for the larger whole pass, not for the largest instance.</b> A
+ * pass is transformed and clipped as one batch, so the clip-space stream holds
+ * every triangle in it at once — {@link Scene#maxPassTriangles}, times
+ * {@link #CLIP_EXPANSION} for the worst-case clip. The buffers therefore grow
+ * when a scene arrives whose larger pass is bigger than any seen so far, and
+ * never shrink; a scene swap that stays within the high-water mark allocates
+ * nothing at all.</p>
  */
 public final class SoftwareRenderPort implements I_RenderPort
 {
@@ -245,21 +291,20 @@ public final class SoftwareRenderPort implements I_RenderPort
     private final int chunkCount;
     private final Rasterizer.CullMode cullMode;
 
-    /** Serialises {@link #renderFrame} against {@link #copyColorInto}. */
+    /** Serialises {@link #renderFrame}, {@link #setScene} and {@link #resize}. */
     private final ReentrantLock frameLock = new ReentrantLock();
+
+    /**
+     * Guards the front/back present-buffer swap and nothing else.
+     *
+     * <p>Held for a two-reference swap by the renderer and for one
+     * {@code arraycopy} by the presenter. Deliberately <b>not</b> the lock a
+     * frame is rendered under — see the class Javadoc.</p>
+     */
+    private final ReentrantLock presentLock = new ReentrantLock();
 
     /** The transform-and-clip pass, one index per chunk. Held once; never allocated per frame. */
     private final I_ParallelJob geometryJob = this::runGeometryChunk;
-
-    /**
-     * The packed model-to-clip transform of the instance currently being
-     * transformed. MUTABLE: rewritten once per instance, read by every
-     * geometry chunk of that instance. One scratch serves the whole frame
-     * because instances are rendered strictly one after another, and the
-     * pool's publish/join boundary is what makes the write visible to the
-     * workers.
-     */
-    private final float[] geometryTransform = new float[Camera.WORLD_TO_CLIP_FLOATS];
 
     /** The bound scene, or null before one is set. MUTABLE: rebound by {@link #setScene}. */
     private volatile Scene scene;
@@ -270,16 +315,50 @@ public final class SoftwareRenderPort implements I_RenderPort
     /** Derived tables for the scene's view instances. MUTABLE: rebuilt by {@link #setScene}. */
     private volatile Instance[] viewInstances;
 
-    /** Largest instance the geometry buffers are sized for. MUTABLE: grows, never shrinks. */
+    /**
+     * Every texture in the scene, in one table the whole frame indexes by
+     * material. MUTABLE: rebuilt by {@link #setScene}.
+     */
+    private volatile MipChain[] sceneTextures;
+
+    /**
+     * Where each world instance's triangles begin in the batched stream, with a
+     * terminator holding the pass total. MUTABLE: rebuilt by {@link #setScene}.
+     */
+    private volatile int[] worldStarts;
+
+    /** The same for the view pass. MUTABLE: rebuilt by {@link #setScene}. */
+    private volatile int[] viewStarts;
+
+    /**
+     * One packed model-to-clip transform per world instance,
+     * {@link Camera#WORLD_TO_CLIP_FLOATS} floats each. MUTABLE: every slot is
+     * rewritten once per frame, before the geometry pass reads any of them.
+     */
+    private volatile float[] worldTransforms;
+
+    /** The same for the view pass, packed view-to-clip. MUTABLE: rewritten per frame. */
+    private volatile float[] viewTransforms;
+
+    /** Largest pass the geometry buffers are sized for. MUTABLE: grows, never shrinks. */
     private volatile int sizedForTriangles;
 
-    /** The instance the geometry pass is transforming. MUTABLE: rebound per instance. */
-    private volatile Instance geometryInstance;
+    /** The instances the geometry pass is transforming. MUTABLE: rebound per pass. */
+    private volatile Instance[] geometryInstances;
+
+    /** The stream offsets of those instances. MUTABLE: rebound per pass. */
+    private volatile int[] geometryStarts;
+
+    /** Their packed transforms. MUTABLE: rebound per pass. */
+    private volatile float[] geometryTransforms;
+
+    /** Triangles in the pass being transformed. MUTABLE: rebound per pass. */
+    private volatile int geometryTriangles;
 
     /** The near plane the geometry pass clips against. MUTABLE: rebound per frame. */
     private volatile float geometryNear;
 
-    /** Sized for the largest instance. MUTABLE: rebuilt by {@link #setScene}. */
+    /** Sized for the larger pass. MUTABLE: rebuilt by {@link #setScene}. */
     private volatile Rasterizer rasterizer;
 
     /** One clipper per chunk — its scratch polygon is instance state. MUTABLE. */
@@ -314,6 +393,31 @@ public final class SoftwareRenderPort implements I_RenderPort
 
     /** Frames completed since construction. MUTABLE. */
     private volatile long framesRendered;
+
+    /** Indexed passes the last frame dispatched. MUTABLE: written per frame. */
+    private volatile int lastFrameParallelPasses;
+
+    /** Indexed passes this class has dispatched. MUTABLE: bumped per dispatch. */
+    private volatile long parallelPasses;
+
+    /**
+     * The finished frame the presenter reads, de-padded to
+     * {@code width * height}. MUTABLE: swapped under {@link #presentLock}.
+     */
+    private int[] frontColor;
+
+    /**
+     * The frame being written, de-padded. MUTABLE: owned outright by the
+     * renderer between swaps, which is what lets the de-padding copy happen
+     * outside {@link #presentLock}.
+     */
+    private int[] backColor;
+
+    /** Pixels in each present buffer. MUTABLE: set by {@link #resize}. */
+    private int presentPixels;
+
+    /** Whether a finished frame has been published. MUTABLE: cleared by {@link #resize}. */
+    private boolean framePublished;
 
     /**
      * Creates a render port.
@@ -424,16 +528,45 @@ public final class SoftwareRenderPort implements I_RenderPort
             if (framebuffer.state() == Framebuffer.State.UNINITIALIZED)
             {
                 framebuffer.init(newWidth, newHeight);
+                resizePresentBuffers();
                 return;
             }
             if (framebuffer.state() == Framebuffer.State.READY)
             {
                 framebuffer.resize(newWidth, newHeight);
+                resizePresentBuffers();
             }
         }
         finally
         {
             frameLock.unlock();
+        }
+    }
+
+    // Sizes the two present buffers to the framebuffer's visible rectangle and
+    // drops whatever was in them.
+    //
+    // Dropping is deliberate: a frame captured at the old size is not a frame
+    // at the new one, and handing it to a presenter that has already resized
+    // its texture would shear it. One platform frame falls back to the menu
+    // instead, which is what happens before the first frame anyway.
+    private void resizePresentBuffers()
+    {
+        final int pixels = framebuffer.width() * framebuffer.height();
+        presentLock.lock();
+        try
+        {
+            if (frontColor == null || frontColor.length != pixels)
+            {
+                this.frontColor = new int[pixels];
+                this.backColor = new int[pixels];
+            }
+            this.presentPixels = pixels;
+            this.framePublished = false;
+        }
+        finally
+        {
+            presentLock.unlock();
         }
     }
 
@@ -469,12 +602,15 @@ public final class SoftwareRenderPort implements I_RenderPort
     }
 
     /**
-     * Binds a scene and sizes every geometry buffer for its largest instance.
+     * Binds a scene and sizes every geometry buffer for its larger pass.
      *
-     * <p>This is the only allocation site outside {@link #resize}, and it
-     * allocates nothing when the new scene's largest model is no bigger than
-     * the largest already sized for. Buffers are sized for the worst case —
-     * {@link #CLIP_EXPANSION} output triangles per input triangle — so the
+     * <p>This is the only allocation site outside {@link #resize}. The
+     * clip-space stream and the rasterizer are grow-only and cost nothing when
+     * the new scene's larger pass fits inside the high-water mark; the
+     * per-instance tables — stream offsets, packed transforms and the
+     * scene-wide texture table — are rebuilt every time, because they are
+     * per-scene by definition. Buffers are sized for the worst case,
+     * {@link #CLIP_EXPANSION} output triangles per input triangle, so the
      * per-frame path never grows anything.</p>
      *
      * <p>Serialised against a frame in flight, so a scene may be swapped from
@@ -499,9 +635,11 @@ public final class SoftwareRenderPort implements I_RenderPort
         {
             frameLock.unlock();
         }
-        LOG.info("Scene bound: {} world instances, {} view instances, largest {} triangles",
-            newScene.worldInstanceCount(), newScene.viewInstanceCount(),
-            newScene.maxInstanceTriangles());
+        LOG.info("Scene bound: {} world instances ({} triangles), {} view instances ({}),"
+            + " {} textures, buffers sized for {}",
+            newScene.worldInstanceCount(), newScene.worldTriangleCount(),
+            newScene.viewInstanceCount(), newScene.viewTriangleCount(),
+            sceneTextures.length, sizedForTriangles);
     }
 
     /** Returns the bound scene, or null before {@link #setScene} has been called. */
@@ -514,15 +652,22 @@ public final class SoftwareRenderPort implements I_RenderPort
     // this scene needs more than the last one did. Called under the lock.
     private void bindScene(final Scene newScene)
     {
-        growBuffersFor(newScene.maxInstanceTriangles());
-        this.worldInstances = prepareWorld(newScene);
-        this.viewInstances = prepareView(newScene);
+        growBuffersFor(newScene.maxPassTriangles());
+        final Instance[] world = prepareWorld(newScene);
+        final Instance[] hand = prepareView(newScene);
+        this.sceneTextures = buildSceneTextures(world, hand);
+        this.worldStarts = streamOffsets(world);
+        this.viewStarts = streamOffsets(hand);
+        this.worldTransforms = new float[world.length * Camera.WORLD_TO_CLIP_FLOATS];
+        this.viewTransforms = new float[hand.length * Camera.WORLD_TO_CLIP_FLOATS];
+        this.worldInstances = world;
+        this.viewInstances = hand;
         this.scene = newScene;
     }
 
     // Sizes the clip-space stream, the per-chunk scratch and the rasterizer for
-    // the largest single instance. Grow-only: a smaller scene keeps the bigger
-    // buffers rather than reallocating down and back up on the next swap.
+    // a whole pass. Grow-only: a smaller scene keeps the bigger buffers rather
+    // than reallocating down and back up on the next swap.
     private void growBuffersFor(final int triangles)
     {
         if (triangles <= sizedForTriangles)
@@ -548,6 +693,74 @@ public final class SoftwareRenderPort implements I_RenderPort
 
         this.rasterizer = new Rasterizer(ATTRIBUTE_COUNT, maxOutput, chunkCount, cullMode);
         this.sizedForTriangles = triangles;
+    }
+
+    // Where each instance's triangles begin in the batched stream, plus a
+    // terminator holding the pass total. Every entry is strictly greater than
+    // the one before it, because Scene refuses an instance with no triangles —
+    // which is what lets the geometry chunk walk instances with a single
+    // increment rather than a search per triangle.
+    private static int[] streamOffsets(final Instance[] instances)
+    {
+        final int[] starts = new int[instances.length + 1];
+        for (int index = 0; index < instances.length; index++)
+        {
+            starts[index + 1] = starts[index] + instances[index].model.triangleCount();
+        }
+        return starts;
+    }
+
+    // Concatenates every distinct instance's textures into one scene-wide table
+    // and rebases its per-triangle material indices into it.
+    //
+    // One raster pass takes one texture table, so a material index has to be
+    // meaningful without knowing which instance produced the triangle. The
+    // rebase happens exactly once per distinct instance — instances are shared
+    // by reference between duplicate models, and a second pass over one would
+    // add its base twice.
+    private static MipChain[] buildSceneTextures(final Instance[] world, final Instance[] hand)
+    {
+        final int total = rebase(hand, rebase(world, 0));
+        final MipChain[] table = new MipChain[total];
+        copyTextures(world, table);
+        copyTextures(hand, table);
+        return table;
+    }
+
+    // Assigns each distinct instance its slice of the scene-wide table and
+    // shifts its material indices into it. Returns the next free slot.
+    private static int rebase(final Instance[] instances, final int firstBase)
+    {
+        // MUTABLE local — the next free slot in the scene-wide texture table.
+        int base = firstBase;
+        for (final Instance instance : instances)
+        {
+            if (instance.textureBase != Instance.UNASSIGNED)
+            {
+                continue;
+            }
+            instance.textureBase = base;
+            final int[] materials = instance.triangleMaterial;
+            for (int triangle = 0; triangle < materials.length; triangle++)
+            {
+                if (materials[triangle] != Rasterizer.NO_MATERIAL)
+                {
+                    materials[triangle] += base;
+                }
+            }
+            base += instance.textures.length;
+        }
+        return base;
+    }
+
+    // Copies each distinct instance's textures into the slice it was assigned.
+    private static void copyTextures(final Instance[] instances, final MipChain[] table)
+    {
+        for (final Instance instance : instances)
+        {
+            System.arraycopy(instance.textures, 0, table, instance.textureBase,
+                instance.textures.length);
+        }
     }
 
     // One prepared entry per world instance, in submission order.
@@ -694,6 +907,7 @@ public final class SoftwareRenderPort implements I_RenderPort
     private void drawFrame(final Scene current, final int ticIndex)
     {
         final long started = time.nanos();
+        final long passesBefore = parallelPasses + rasterizerPasses();
         final Camera view = cameraFor(current, ticIndex);
         this.lastCamera = view;
         this.geometryNear = view.near();
@@ -701,14 +915,10 @@ public final class SoftwareRenderPort implements I_RenderPort
 
         framebuffer.clear(DEFAULT_CLEAR_COLOR);
 
-        // MUTABLE local — triangles the whole scene handed the rasterizer.
-        int triangles = 0;
         final Instance[] world = worldInstances;
-        for (int index = 0; index < world.length; index++)
-        {
-            view.packModelToClip(current.worldTransform(index), geometryTransform, 0);
-            triangles += renderInstance(world[index], workers);
-        }
+        packWorld(current, view, world.length);
+        // MUTABLE local — triangles the whole scene handed the rasterizer.
+        int triangles = renderPass(world, worldStarts, worldTransforms, workers);
 
         // The viewmodel is depth-tested only against itself. Colour is NOT
         // cleared: the weapon composites over the world it was just occluded
@@ -717,53 +927,143 @@ public final class SoftwareRenderPort implements I_RenderPort
         if (hand.length > 0)
         {
             framebuffer.clearDepth();
-            for (int index = 0; index < hand.length; index++)
-            {
-                view.packViewToClip(current.viewTransform(index), geometryTransform, 0);
-                triangles += renderInstance(hand[index], workers);
-            }
+            packView(current, view, hand.length);
+            triangles += renderPass(hand, viewStarts, viewTransforms, workers);
         }
 
+        publishFrame();
         this.lastFrameTriangles = triangles;
+        this.lastFrameParallelPasses =
+            (int) (parallelPasses + rasterizerPasses() - passesBefore);
         this.lastFrameNanos = time.nanos() - started;
         this.framesRendered = framesRendered + 1;
     }
 
-    // One instance through the whole pipeline, with its packed transform
-    // already in geometryTransform. Returns the triangles it submitted.
-    //
-    // The rasterizer is reset rather than replaced: beginFrame clears the tile
-    // bins and the triangle count, which is required because records and bins
-    // are indexed by position within one submitted stream. It does not touch
-    // the framebuffer, so the depth buffer carries across instances and
-    // resolves them against one another whatever order they arrive in.
-    private int renderInstance(final Instance instance, final I_ThreadPoolPort workers)
+    // Concatenates every world instance's placement into the camera's packed
+    // transform, one slot each. Once per instance per frame, exactly as before
+    // — the batched geometry pass simply needs them all at once rather than one
+    // at a time, so they go into slots instead of over the top of each other.
+    private void packWorld(final Scene current, final Camera view, final int count)
     {
-        this.geometryInstance = instance;
+        final float[] slots = worldTransforms;
+        for (int index = 0; index < count; index++)
+        {
+            view.packModelToClip(current.worldTransform(index), slots,
+                index * Camera.WORLD_TO_CLIP_FLOATS);
+        }
+    }
+
+    // The same for the viewmodel, which is already in view space and therefore
+    // takes the projection alone.
+    private void packView(final Scene current, final Camera view, final int count)
+    {
+        final float[] slots = viewTransforms;
+        for (int index = 0; index < count; index++)
+        {
+            view.packViewToClip(current.viewTransform(index), slots,
+                index * Camera.WORLD_TO_CLIP_FLOATS);
+        }
+    }
+
+    // One whole pass — every instance in it — through the whole pipeline.
+    // Returns the triangles it submitted.
+    //
+    // Four parallel passes, whatever the instance count: that is the entire
+    // point of batching. The rasterizer is reset rather than replaced:
+    // beginFrame clears the tile bins and the triangle count, which is required
+    // because records and bins are indexed by position within one submitted
+    // stream. It does not touch the framebuffer, so the depth buffer carries
+    // across the two passes.
+    private int renderPass(final Instance[] instances, final int[] starts,
+        final float[] transforms, final I_ThreadPoolPort workers)
+    {
+        final int total = starts[instances.length];
+        if (total == 0)
+        {
+            return 0;
+        }
+        this.geometryInstances = instances;
+        this.geometryStarts = starts;
+        this.geometryTransforms = transforms;
+        this.geometryTriangles = total;
         dispatch(geometryJob, chunkCount, workers);
-        final int triangles = compactChunks(instance.model.triangleCount());
+        final int triangles = compactChunks(total);
+        if (triangles == 0)
+        {
+            return 0;
+        }
 
         final Rasterizer setup = rasterizer;
         setup.beginFrame(framebuffer);
         setup.setupAndBin(clipVertices, triangles, clipMaterials, clipColors, workers);
-        setup.rasterize(spanRenderer, instance.textures, workers);
+        setup.rasterize(spanRenderer, sceneTextures, workers);
         return triangles;
     }
 
-    // Transforms and clips one contiguous slice of the current instance's
-    // triangles.
+    // Transforms and clips one contiguous slice of the pass's flattened
+    // triangle range, crossing instance boundaries as it goes.
     //
     // Chunk c is one submitParallel index, so this body never runs concurrently
     // with itself: its clipper, its scratch and its region of the output stream
     // are all private to it without any thread identity being involved. That is
     // the same argument Rasterizer's binning makes, and it is why a per-worker
     // scheme was never needed.
+    //
+    // The slice is a range of the WHOLE pass, so a chunk may start part way
+    // through one instance and end part way through another. The instance is
+    // found once, by a scan of the offset table, and then advanced by one at
+    // each boundary — an instance always holds at least one triangle, so the
+    // advance always makes progress.
     private void runGeometryChunk(final int chunk)
     {
-        final Instance instance = geometryInstance;
+        final Instance[] instances = geometryInstances;
+        final int[] starts = geometryStarts;
+        final int from = chunkStart(chunk, geometryTriangles);
+        final int to = chunkStart(chunk + 1, geometryTriangles);
+        final int outBase = from * CLIP_EXPANSION;
+
+        // MUTABLE locals — the flat triangle reached, the instance it belongs
+        // to, and the output triangles emitted so far.
+        int flat = from;
+        int index = instanceContaining(starts, instances.length, from);
+        int produced = 0;
+        while (flat < to)
+        {
+            final int instanceEnd = starts[index + 1];
+            final int runEnd = Math.min(to, instanceEnd);
+            produced += clipRun(chunk, instances[index], index, flat - starts[index],
+                runEnd - starts[index], outBase + produced);
+            flat = runEnd;
+            index++;
+        }
+        chunkProduced[chunk] = produced;
+    }
+
+    // The instance owning a flat triangle index. Linear, because it runs once
+    // per chunk per pass — a few hundred comparisons a frame against a few
+    // hundred thousand triangle transforms.
+    private static int instanceContaining(final int[] starts, final int count, final int flat)
+    {
+        for (int index = 0; index < count; index++)
+        {
+            if (flat < starts[index + 1])
+            {
+                return index;
+            }
+        }
+        return Math.max(0, count - 1);
+    }
+
+    // Transforms and clips triangles [localFrom, localTo) of one instance into
+    // the stream, starting at output triangle outBase. Returns how many output
+    // triangles the clip produced.
+    private int clipRun(final int chunk, final Instance instance, final int instanceIndex,
+        final int localFrom, final int localTo, final int outBase)
+    {
         final ModelFormat current = instance.model;
         final float near = geometryNear;
-        final float[] transform = geometryTransform;
+        final float[] transforms = geometryTransforms;
+        final int transformAt = instanceIndex * Camera.WORLD_TO_CLIP_FLOATS;
         final int[] indices = current.indices();
         final float[] scratch = chunkScratch[chunk];
         final TriangleClipper clipper = clippers[chunk];
@@ -773,15 +1073,11 @@ public final class SoftwareRenderPort implements I_RenderPort
         final int[] sourceMaterial = instance.triangleMaterial;
         final int[] sourceColor = instance.triangleColor;
 
-        final int from = chunkStart(chunk, current.triangleCount());
-        final int to = chunkStart(chunk + 1, current.triangleCount());
-        final int outBase = from * CLIP_EXPANSION;
-
-        // MUTABLE local — output triangles this chunk has emitted so far.
+        // MUTABLE local — output triangles this run has emitted so far.
         int produced = 0;
-        for (int triangle = from; triangle < to; triangle++)
+        for (int triangle = localFrom; triangle < localTo; triangle++)
         {
-            gatherTriangle(current, indices, triangle, transform, scratch);
+            gatherTriangle(current, indices, triangle, transforms, transformAt, scratch);
             final int emitted = clipper.clipTriangle(near, scratch, 0, out,
                 (outBase + produced) * TRIANGLE_FLOATS);
             for (int k = 0; k < emitted; k++)
@@ -791,7 +1087,7 @@ public final class SoftwareRenderPort implements I_RenderPort
             }
             produced += emitted;
         }
-        chunkProduced[chunk] = produced;
+        return produced;
     }
 
     // Gathers one model triangle into the clip-space vertex layout the clipper
@@ -805,14 +1101,15 @@ public final class SoftwareRenderPort implements I_RenderPort
     // per instance: model space goes straight to clip space in one three-row
     // multiply, exactly as world space used to.
     private static void gatherTriangle(final ModelFormat source, final int[] indices,
-        final int triangle, final float[] transform, final float[] scratch)
+        final int triangle, final float[] transform, final int transformAt,
+        final float[] scratch)
     {
         final int base = triangle * ModelFormat.INDICES_PER_TRIANGLE;
         for (int corner = 0; corner < TriangleClipper.TRIANGLE_VERTICES; corner++)
         {
             final int vertex = indices[base + corner];
             final int at = corner * VERTEX_STRIDE;
-            Camera.transformToClip(transform, 0, source.positionX(vertex),
+            Camera.transformToClip(transform, transformAt, source.positionX(vertex),
                 source.positionY(vertex), source.positionZ(vertex), scratch, at);
             scratch[at + TriangleClipper.POSITION_FLOATS] = source.texCoordU(vertex);
             scratch[at + TriangleClipper.POSITION_FLOATS + 1] = source.texCoordV(vertex);
@@ -857,9 +1154,10 @@ public final class SoftwareRenderPort implements I_RenderPort
     }
 
     // Runs one indexed pass, serially when there is no pool.
-    private static void dispatch(final I_ParallelJob job, final int jobCount,
+    private void dispatch(final I_ParallelJob job, final int jobCount,
         final I_ThreadPoolPort workers)
     {
+        this.parallelPasses = parallelPasses + 1L;
         if (workers == null)
         {
             for (int index = 0; index < jobCount; index++)
@@ -987,28 +1285,68 @@ public final class SoftwareRenderPort implements I_RenderPort
      * {@code width * height} — <b>not</b> the raw colour buffer, whose stride is
      * padded past the width (§ 7) and which would present sheared.</p>
      *
-     * <p>Blocks until any frame in flight has finished, so the copy is never a
-     * mixture of two frames.</p>
+     * <p>Reads the front buffer of the double-buffered handoff, so it never
+     * blocks on a frame in flight and never sees half of one frame and half of
+     * the next. The only contention is against the reference swap at the end of
+     * a frame, which is two field writes.</p>
      *
      * @param destination array of at least {@code surfaceWidth() *
      *     surfaceHeight()} elements
-     * @return true if a frame was copied, false if there is no surface yet
+     * @return true if a frame was copied, false before the first finished frame
+     *     or after a resize discarded it
+     * @throws IllegalArgumentException if the destination is too small
      */
     public boolean copyColorInto(final int[] destination)
     {
-        frameLock.lock();
+        presentLock.lock();
         try
         {
-            if (framebuffer.state() != Framebuffer.State.READY)
+            if (!framePublished)
             {
                 return false;
             }
-            framebuffer.copyColorTo(destination);
+            if (destination == null || destination.length < presentPixels)
+            {
+                throw new IllegalArgumentException("copyColorInto() needs an int["
+                    + presentPixels + "] for a " + framebuffer.width() + "x"
+                    + framebuffer.height() + " frame");
+            }
+            System.arraycopy(frontColor, 0, destination, 0, presentPixels);
             return true;
         }
         finally
         {
-            frameLock.unlock();
+            presentLock.unlock();
+        }
+    }
+
+    // De-pads the finished frame into the back buffer and swaps it to the
+    // front. Called at the end of every frame, under frameLock.
+    //
+    // The copy is outside presentLock on purpose: the back buffer belongs to
+    // the renderer alone between swaps, because the only way it can become the
+    // front buffer is through the swap below, and the presenter only ever reads
+    // the front buffer while holding the lock the swap needs. So the lock
+    // covers two reference writes and nothing else — see the class Javadoc for
+    // why that mattered enough to add a second buffer.
+    private void publishFrame()
+    {
+        final int[] target = backColor;
+        if (target == null || target.length != presentPixels)
+        {
+            return;
+        }
+        framebuffer.copyColorTo(target);
+        presentLock.lock();
+        try
+        {
+            this.backColor = frontColor;
+            this.frontColor = target;
+            this.framePublished = true;
+        }
+        finally
+        {
+            presentLock.unlock();
         }
     }
 
@@ -1061,6 +1399,37 @@ public final class SoftwareRenderPort implements I_RenderPort
         return framesRendered;
     }
 
+    /**
+     * Returns how many indexed passes the last frame dispatched.
+     *
+     * <p>With a worker pool each one is a {@code submitParallel} publish/join
+     * boundary — a barrier every participating thread pays — so this is the
+     * figure that decides whether adding workers helps or hurts. A batched
+     * frame costs <b>eight</b>: four for the world pass and four for the
+     * viewmodel, independent of the instance count. The per-instance pipeline
+     * this replaced cost four per instance, which is where the demo room's
+     * 1,180 came from.</p>
+     *
+     * @return the last frame's parallel pass count, or zero before the first
+     *     frame
+     */
+    public int lastFrameParallelPasses()
+    {
+        return lastFrameParallelPasses;
+    }
+
+    // The rasterizer's own running dispatch count, or zero before a scene has
+    // sized one.
+    private long rasterizerPasses()
+    {
+        final Rasterizer current = rasterizer;
+        if (current == null)
+        {
+            return 0L;
+        }
+        return current.parallelPasses();
+    }
+
     /** Returns how many chunks the geometry and binning passes split the stream into. */
     public int chunkCount()
     {
@@ -1092,10 +1461,29 @@ public final class SoftwareRenderPort implements I_RenderPort
     // and folding it in per frame is a 12-float write, not a rebuild.
     private static final class Instance
     {
+        /** {@link #textureBase} before the scene-wide texture table is built. */
+        private static final int UNASSIGNED = -1;
+
         private final ModelFormat model;
+
+        /**
+         * One material index per triangle, rebased into the scene-wide texture
+         * table. MUTABLE: built model-local, then shifted by
+         * {@link #textureBase} exactly once, when the scene is bound. It is
+         * shifted in place rather than copied because the array is freshly
+         * built for this scene and nothing else can see it yet.
+         */
         private final int[] triangleMaterial;
+
         private final int[] triangleColor;
         private final MipChain[] textures;
+
+        /**
+         * Where this instance's textures start in the scene-wide table.
+         * MUTABLE: assigned once by {@link #buildSceneTextures}, and the guard
+         * that stops a shared instance being rebased twice.
+         */
+        private int textureBase = UNASSIGNED;
 
         Instance(final ModelFormat instanceModel, final int[] materials, final int[] colors,
             final MipChain[] instanceTextures)

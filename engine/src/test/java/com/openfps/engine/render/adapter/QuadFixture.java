@@ -85,4 +85,55 @@ final class QuadFixture
     {
         return build(halfEdge, halfEdge, colour);
     }
+
+    /**
+     * Builds a square quad that samples a solid texture of its own.
+     *
+     * <p><b>This is the fixture that catches a batched raster pass losing
+     * track of which texture a triangle samples.</b> The untextured
+     * {@link #square} takes the flat-colour path and would go on looking right
+     * even if every instance in a frame shared one texture table entry;
+     * distinct textures on distinct instances are the only way to see the
+     * difference. The texture is solid, and 2x2 with two mip levels so that no
+     * assertion depends on which level the sampler picks.</p>
+     *
+     * @param halfEdge half the edge length
+     * @param bakedColour packed RGBA8888 baked into every vertex — what the
+     *     quad would paint if it lost its texture
+     * @param textureColour packed RGBA8888 filling every texel of every level
+     * @return the file bytes, ready for {@code ModelFormat.read}
+     */
+    static byte[] texturedSquare(final float halfEdge, final int bakedColour,
+        final int textureColour)
+    {
+        final float[] corners =
+        {
+            -halfEdge, -halfEdge,
+            halfEdge, -halfEdge,
+            halfEdge, halfEdge,
+            -halfEdge, halfEdge,
+        };
+        final float[] uv = {0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f};
+
+        final int[] vertices = new int[4 * VERTEX_SLOTS];
+        for (int corner = 0; corner < 4; corner++)
+        {
+            final int at = corner * VERTEX_SLOTS;
+            vertices[at] = ModelFileFixture.bits(corners[corner * 2]);
+            vertices[at + 1] = ModelFileFixture.bits(corners[corner * 2 + 1]);
+            vertices[at + 2] = ModelFileFixture.bits(0.0f);
+            vertices[at + 3] = ModelFileFixture.bits(uv[corner * 2]);
+            vertices[at + 4] = ModelFileFixture.bits(uv[corner * 2 + 1]);
+            vertices[at + 5] = bakedColour;
+        }
+
+        // width, height, levelCount, first texel — then 2x2 plus its 1x1 mip.
+        return ModelFileFixture.build(vertices, new int[] {0, 1, 2, 0, 2, 3},
+            new int[] {0, 6, 0, 0}, new int[] {2, 2, 2, 0},
+            new int[]
+            {
+                textureColour, textureColour, textureColour, textureColour, textureColour,
+            },
+            new float[] {-halfEdge, -halfEdge, 0.0f, halfEdge, halfEdge, 0.0f});
+    }
 }

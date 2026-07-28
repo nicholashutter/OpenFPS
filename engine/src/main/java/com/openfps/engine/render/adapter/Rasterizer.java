@@ -335,6 +335,12 @@ public final class Rasterizer
     private volatile int tileCount;
 
     /**
+     * Indexed passes dispatched since construction. MUTABLE: bumped once per
+     * {@link #dispatch}, only ever by the submitting thread.
+     */
+    private volatile long parallelPasses;
+
+    /**
      * Creates a rasterizer and allocates everything that does not depend on the
      * framebuffer.
      *
@@ -584,6 +590,24 @@ public final class Rasterizer
     public int triangleCount()
     {
         return triangleCount;
+    }
+
+    /**
+     * Returns how many indexed passes this rasterizer has dispatched since it
+     * was constructed.
+     *
+     * <p>Three per frame — setup-and-count, scatter, tile raster. With a pool
+     * each is a {@code submitParallel} publish/join boundary, which is what
+     * makes this number the barrier count the caller pays; without one they are
+     * plain loops on the calling thread. Sampled either side of a frame by
+     * {@link SoftwareRenderPort#lastFrameParallelPasses()}, which is the whole
+     * reason it is exposed.</p>
+     *
+     * @return the running dispatch count
+     */
+    public long parallelPasses()
+    {
+        return parallelPasses;
     }
 
     /**
@@ -986,6 +1010,7 @@ public final class Rasterizer
     private void dispatch(final I_ParallelJob job, final int jobCount,
         final I_ThreadPoolPort pool)
     {
+        this.parallelPasses = parallelPasses + 1L;
         if (pool == null)
         {
             for (int index = 0; index < jobCount; index++)

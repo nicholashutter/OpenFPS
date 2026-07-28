@@ -9,6 +9,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
 
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -121,6 +122,35 @@ final class SoftwareRenderPortTest
 
     /** Colour of the viewmodel in the mixed scene. */
     private static final int VIEW_COLOR = 0x40FF60FF;
+
+    /** Texture colour of the left instance in the batched-material test. */
+    private static final int LEFT_TEXTURE = 0xFF00FFFF;
+
+    /** Texture colour of the right instance in the batched-material test. */
+    private static final int RIGHT_TEXTURE = 0x00FF00FF;
+
+    /**
+     * Baked vertex colour both textured quads carry. Shared on purpose: it is
+     * what a triangle paints when it loses its texture, so a quad falling back
+     * to it is unmistakably not the same as a quad sampling its own texture,
+     * and a quad wearing its neighbour's texture is not this colour either.
+     */
+    private static final int UNTEXTURED_FALLBACK = 0x804020FF;
+
+    /** Parallel passes a one-pass frame costs: geometry, setup, scatter, raster. */
+    private static final int PASSES_PER_PASS = 4;
+
+    /** Instances the barrier-count test puts in the world pass. */
+    private static final int MANY_INSTANCES = 24;
+
+    /** Spacing between those instances, in world units. */
+    private static final float INSTANCE_SPACING = 0.05f;
+
+    /** Frames the tearing test renders while another thread presents. */
+    private static final int TEARING_FRAMES = 200;
+
+    /** How long the tearing test waits for its renderer, in milliseconds. */
+    private static final long TEARING_TIMEOUT_MILLIS = 30_000L;
 
     @Nested
     @DisplayName("backface winding — settled against the no-cull oracle")
@@ -252,6 +282,128 @@ final class SoftwareRenderPortTest
                 pool.shutdown();
                 bus.shutdown();
             }
+        }
+
+        @Test
+        @DisplayName("a many-instance scene is bit-identical serially and in parallel")
+        void shouldBatchManyInstancesIdenticallyInParallel()
+        {
+            // Twenty-four instances is past the point where the batched
+            // geometry pass has to split a chunk across an instance boundary at
+            // this worker count, which is the part of the flattening that a
+            // serial run would never exercise.
+            final int[] serial = frameOf(manyInstanceScene(), sceneCamera(), null);
+            final I_EventBusPort bus = EventBusFactory.createShared();
+            bus.init(BUS_CAPACITY);
+            final I_ThreadPoolPort pool =
+                ThreadPoolFactory.createFixed(bus, new SubsystemRegistry());
+            pool.init(WORKERS);
+            pool.start();
+            try
+            {
+                assertThat(frameOf(manyInstanceScene(), sceneCamera(), pool))
+                    .isEqualTo(serial);
+            }
+            finally
+            {
+                pool.shutdown();
+                bus.shutdown();
+            }
+        }
+    }
+
+    @Nested
+    @DisplayName("batching — one geometry stream per pass, not per instance")
+    class Batching
+    {
+        @Test
+        @DisplayName("a frame costs four parallel passes per pass, whatever the instance count")
+        void shouldCostAFixedNumberOfBarriersPerFrame()
+        {
+            // The regression this exists for: the pipeline used to run once per
+            // instance, so a 295-instance room paid 1,180 publish/join
+            // boundaries a frame and adding workers made it slower rather than
+            // faster. The count is the property; the frame time is downstream
+            // of it and far too noisy to assert.
+            final SoftwareRenderPort port =
+                renderScene(manyInstanceScene(), sceneCamera(), null);
+
+            assertThat(port.scene().worldInstanceCount()).isEqualTo(MANY_INSTANCES);
+            assertThat(port.lastFrameParallelPasses())
+                .as("world pass only — four passes however many instances are in it")
+                .isEqualTo(PASSES_PER_PASS);
+            port.shutdown();
+        }
+
+        @Test
+        @DisplayName("the viewmodel adds a second pass, and only one")
+        void shouldCostOneExtraPassForTheViewmodel()
+        {
+            final SoftwareRenderPort port = renderScene(mixedScene(), sceneCamera(), null);
+
+            assertThat(port.lastFrameParallelPasses()).isEqualTo(2 * PASSES_PER_PASS);
+            port.shutdown();
+        }
+
+        @Test
+        @DisplayName("each instance keeps its own texture through the shared raster pass")
+        void shouldKeepPerInstanceTexturesThroughOneRasterPass()
+        {
+            // One raster pass takes one texture table, so every instance's
+            // material indices are rebased into a scene-wide one. Get that
+            // wrong and both quads sample the first instance's texture — which
+            // looks entirely plausible, because they are the same shape.
+            final ModelFormat left = ModelFormat.read(QuadFixture.texturedSquare(
+                QUAD_HALF, UNTEXTURED_FALLBACK, LEFT_TEXTURE));
+            final ModelFormat right = ModelFormat.read(QuadFixture.texturedSquare(
+                QUAD_HALF, UNTEXTURED_FALLBACK, RIGHT_TEXTURE));
+            final Scene scene = Scene.builder()
+                .addWorldInstance(left, Mat4.translation(-2.0f * QUAD_HALF, 0.0f, 0.0f))
+                .addWorldInstance(right, Mat4.translation(2.0f * QUAD_HALF, 0.0f, 0.0f))
+                .build();
+
+            final int[] frame = frameOf(scene, sceneCamera(), null);
+            final Set<Integer> found = colorsIn(frame);
+
+            assertThat(found)
+                .as("each quad must sample its own texture, and neither may fall"
+                    + " back to the baked colour")
+                .containsExactlyInAnyOrder(LEFT_TEXTURE, RIGHT_TEXTURE);
+        }
+
+        @Test
+        @DisplayName("adding a second instance of a model already in the scene changes nothing else")
+        void shouldShareOneTextureTableSliceBetweenDuplicateModels()
+        {
+            // The same ModelFormat placed twice shares one prepared instance,
+            // so it must be rebased once and only once. Rebasing it twice would
+            // shift its material indices off the end of the table, which shows
+            // up as the duplicate losing its texture.
+            final ModelFormat model = ModelFormat.read(QuadFixture.texturedSquare(
+                QUAD_HALF, UNTEXTURED_FALLBACK, LEFT_TEXTURE));
+            final ModelFormat other = ModelFormat.read(QuadFixture.texturedSquare(
+                QUAD_HALF, UNTEXTURED_FALLBACK, RIGHT_TEXTURE));
+            final Scene scene = Scene.builder()
+                .addWorldInstance(model, Mat4.translation(-2.0f * QUAD_HALF, 0.0f, 0.0f))
+                .addWorldInstance(other, Mat4.identity())
+                .addWorldInstance(model, Mat4.translation(2.0f * QUAD_HALF, 0.0f, 0.0f))
+                .build();
+
+            assertThat(colorsIn(frameOf(scene, sceneCamera(), null)))
+                .containsExactlyInAnyOrder(LEFT_TEXTURE, RIGHT_TEXTURE);
+        }
+
+        @Test
+        @DisplayName("buffers are sized for the whole pass, not the largest instance")
+        void shouldSizeBuffersForTheWholePass()
+        {
+            final Scene scene = manyInstanceScene();
+
+            assertThat(scene.maxPassTriangles())
+                .isEqualTo(MANY_INSTANCES * QuadFixture.TRIANGLES);
+            assertThat(scene.maxInstanceTriangles())
+                .as("still the largest single model, which is now a different number")
+                .isEqualTo(QuadFixture.TRIANGLES);
         }
     }
 
@@ -486,6 +638,72 @@ final class SoftwareRenderPortTest
 
             assertThat(port.copyColorInto(new int[1])).isFalse();
         }
+
+        @Test
+        @DisplayName("copyColorInto reports no frame after a resize discards the last one")
+        void shouldReportNoFrameAfterAResize()
+        {
+            final SoftwareRenderPort port = newPort(null, SoftwareRenderPort.BACKFACE_CULL_MODE);
+            port.resize(WIDTH, HEIGHT);
+            port.loadModel(CubeFixture.build());
+            port.renderFrame(0);
+            assertThat(port.copyColorInto(new int[WIDTH * HEIGHT])).isTrue();
+
+            // A frame captured at the old size is not a frame at the new one,
+            // and a presenter that has already rebuilt its texture would shear
+            // it. One platform frame falls back to the menu instead.
+            port.resize(WIDTH / 2, HEIGHT / 2);
+
+            assertThat(port.copyColorInto(new int[WIDTH * HEIGHT])).isFalse();
+            port.shutdown();
+        }
+
+        @Test
+        @DisplayName("a concurrent presenter never sees half of one frame and half of the next")
+        void shouldNeverPresentATornFrame() throws InterruptedException
+        {
+            // The double buffer's whole job. Two cameras give two frames whose
+            // pixels differ over most of the screen; the renderer alternates
+            // between them as fast as it can while this thread presents as fast
+            // as it can. Every snapshot must be one whole frame or the other —
+            // a torn one is neither, and with a shared colour buffer this test
+            // fails within a few dozen iterations.
+            final Camera left = Camera.lookingAt(new Vec3(-1.0f, 0.0f, CAMERA_Z), ORIGIN, UP,
+                FOV, 1.0f, NEAR);
+            final Camera right = Camera.lookingAt(new Vec3(1.0f, 0.0f, CAMERA_Z), ORIGIN, UP,
+                FOV, 1.0f, NEAR);
+            final int[] fromLeft = frameOf(mixedScene(), left, null);
+            final int[] fromRight = frameOf(mixedScene(), right, null);
+            assertThat(fromLeft).as("the two poses must differ, or this proves nothing")
+                .isNotEqualTo(fromRight);
+
+            final SoftwareRenderPort port = newPort(null, SoftwareRenderPort.BACKFACE_CULL_MODE);
+            port.resize(WIDTH, HEIGHT);
+            port.setScene(mixedScene());
+            final Thread renderer = new Thread(() -> renderAlternating(port, left, right),
+                "tearing-probe-renderer");
+            renderer.setDaemon(true);
+            renderer.start();
+
+            final int[] snapshot = new int[WIDTH * HEIGHT];
+            // MUTABLE local — snapshots that actually carried a frame.
+            int seen = 0;
+            while (renderer.isAlive())
+            {
+                if (port.copyColorInto(snapshot))
+                {
+                    seen++;
+                    assertThat(Arrays.equals(snapshot, fromLeft)
+                        || Arrays.equals(snapshot, fromRight))
+                        .as("a presented frame must be one whole frame, not a mixture")
+                        .isTrue();
+                }
+            }
+            renderer.join(TEARING_TIMEOUT_MILLIS);
+
+            assertThat(seen).as("the probe has to have presented something").isPositive();
+            port.shutdown();
+        }
     }
 
     @Nested
@@ -575,6 +793,40 @@ final class SoftwareRenderPortTest
             .addViewInstance(quad(VIEW_COLOR),
                 Mat4.translation(0.0f, 0.0f, VIEWMODEL_DEPTH))
             .build();
+    }
+
+    // Enough instances that a geometry chunk has to start part way through one
+    // instance and end part way through another, which is the case the
+    // flattened stream introduced and a one-instance scene cannot reach. They
+    // are spread along z so none is hidden behind another.
+    private static Scene manyInstanceScene()
+    {
+        final Scene.Builder builder = Scene.builder();
+        final ModelFormat model = quad(NEAR_COLOR);
+        for (int index = 0; index < MANY_INSTANCES; index++)
+        {
+            builder.addWorldInstance(model,
+                Mat4.translation(0.0f, 0.0f, index * INSTANCE_SPACING));
+        }
+        return builder.build();
+    }
+
+    // Renders alternately from two poses until the frame budget is spent. Runs
+    // on its own thread, opposite a presenter, for the tearing probe.
+    private static void renderAlternating(final SoftwareRenderPort port, final Camera left,
+        final Camera right)
+    {
+        for (int frame = 0; frame < TEARING_FRAMES; frame++)
+        {
+            // MUTABLE local — which pose this frame renders from.
+            Camera pose = left;
+            if (frame % 2 == 1)
+            {
+                pose = right;
+            }
+            port.setCamera(pose);
+            port.renderFrame(frame);
+        }
     }
 
     // Renders one frame of a scene. A null camera leaves the port on its

@@ -7,6 +7,7 @@ package com.openfps.tools;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.Locale;
 
 import com.openfps.engine.core.pool.I_ThreadPoolPort;
@@ -70,30 +71,39 @@ import org.slf4j.LoggerFactory;
  * next to the source tree is one {@code git add -A} away from being committed.
  * Point it somewhere outside.</p>
  *
- * <h2>What {@code --frames} measured, and why {@code --threads} defaults to 0</h2>
+ * <h2>What {@code --frames} measures, and what it caught</h2>
  *
- * <p>At 1280x720 over 300 frames, best-of-N, on a 22-thread host:</p>
+ * <p>At 1280x720 over 400 frames on a 22-thread host, median frame time for
+ * the 295-instance demo room:</p>
  *
  * <pre>
- *   scene                       serial     4 threads   8 threads
- *   demo room, 295 instances    19.6 ms    155 ms      297 ms
- *   fallback room, 1 instance   17.2 ms    --          2.9 ms
+ *   workers      1        2        4        8       16
+ *   before    20.9 ms  30.3 ms  31.1 ms  30.6 ms  31.1 ms
+ *   after     19.8 ms  11.0 ms   6.3 ms   4.7 ms   3.9 ms
  * </pre>
  *
- * <p><b>The parallel path is not broken — it is per-instance.</b> One instance
- * gets a 5.9x speedup from 8 workers, exactly as
- * {@code render/README.md} § 7 intends. But {@code SoftwareRenderPort} renders
- * instances strictly one at a time and each crosses <b>four</b>
- * {@code submitParallel} publish/join boundaries, so a 295-instance room pays
- * roughly 1,180 barriers per frame to distribute a few dozen triangles apiece.
- * The barrier cost swamps the work, and adding workers adds barrier cost.</p>
+ * <p><b>Adding workers used to make the scene slower, and this tool is how
+ * that was found.</b> Two separate faults, both invisible without a
+ * measurement that reports percentiles rather than a best-of-N:</p>
  *
- * <p>Hence the default of {@code --threads=0}: serial is the fastest setting
- * this tool has for a real scene, which is a statement about the scene shape,
- * not about the rasterizer's inner loops. <b>Recorded, not fixed</b> — the fix
- * is to batch world instances into one geometry stream and one raster pass so a
- * frame pays four barriers rather than four per instance, and that is an
- * {@code R_} change.</p>
+ * <ol>
+ *   <li>{@code SoftwareRenderPort} ran its four-stage pipeline once per
+ *       instance, so a 295-instance room paid roughly 1,180
+ *       {@code submitParallel} publish/join boundaries per frame to distribute
+ *       a few dozen triangles apiece. It now batches a whole pass into one
+ *       geometry stream and pays <b>eight</b>.</li>
+ *   <li>{@code WorkerPool}'s batch join fell back to a <i>timed</i> park, and a
+ *       timed park cannot resolve faster than the platform timer period — 15.6
+ *       ms on Windows. The tell was in the distribution and nowhere else: frame
+ *       times sat on exact multiples of 15.6 ms while the best frame was 4 ms.
+ *       That is why {@link #measure} prints p50, p90 and p99, and why quoting
+ *       min-of-N alone would have hidden a 7x error.</li>
+ * </ol>
+ *
+ * <p>{@code --threads} still defaults to 0 — the serial path is the reference
+ * the parallel result is compared against, and a preview tool should produce
+ * the reference by default — but it is no longer the fastest setting for a real
+ * scene, and it has not been since the batching change.</p>
  */
 public final class DemoPreviewMain
 {
@@ -116,6 +126,9 @@ public final class DemoPreviewMain
 
     /** Nanoseconds in a millisecond. */
     private static final double NANOS_PER_MILLI = 1_000_000.0;
+
+    /** Frames discarded from the head of a {@code --frames} sample as JIT warmup. */
+    private static final int WARMUP_FRAMES = 30;
 
     /** Simulation rate the scripted shots are stepped at, in Hz. */
     private static final float SCRIPT_HZ = 60.0f;
@@ -308,33 +321,55 @@ public final class DemoPreviewMain
         }
     }
 
-    // Renders repeatedly and reports best and mean. Min-of-N is the figure
-    // docs/ASSETS.md section 2 quotes, so both are printed rather than one
-    // being chosen here.
+    // Renders repeatedly and reports the whole distribution.
+    //
+    // Min-of-N is the figure docs/ASSETS.md section 2 quotes, and on its own it
+    // is misleading for a threaded renderer: a pool whose workers park between
+    // frames can post a superb best and a median three times worse, and the
+    // median is the one a player feels. So the percentiles are printed too, and
+    // the first WARMUP_FRAMES are discarded — they are JIT, not rendering, and
+    // at these frame counts they visibly move a mean.
     private static void measure(final SoftwareRenderPort renderer, final int frames,
         final int width, final int height, final ToolPool pool)
     {
-        // MUTABLE locals — the running best and total across the sample.
-        long best = Long.MAX_VALUE;
-        long total = 0L;
+        final long[] samples = new long[frames];
         for (int frame = 0; frame < frames; frame++)
         {
             renderer.renderFrame(frame);
-            final long took = renderer.lastFrameNanos();
-            total += took;
-            if (took < best)
-            {
-                best = took;
-            }
+            samples[frame] = renderer.lastFrameNanos();
         }
+        final int from = Math.min(WARMUP_FRAMES, frames - 1);
+        final long[] timed = Arrays.copyOfRange(samples, from, frames);
+        Arrays.sort(timed);
+
+        // MUTABLE local — running total over the timed sample.
+        long total = 0L;
+        for (final long took : timed)
+        {
+            total += took;
+        }
+        final long best = timed[0];
         final double pixels = (double) width * (double) height;
-        LOG.info("Full demo scene at {}x{}: best {} ms, mean {} ms over {} frames,"
-            + " {} worker threads, {} triangles after clipping",
+        LOG.info("Full demo scene at {}x{}: best {} ms, p50 {} ms, p90 {} ms, p99 {} ms,"
+            + " mean {} ms over {} frames ({} warmup discarded), {} worker threads,"
+            + " {} triangles after clipping, {} parallel passes per frame",
             width, height, format(best / NANOS_PER_MILLI),
-            format(total / (double) frames / NANOS_PER_MILLI), frames, pool.workerCount(),
-            renderer.lastFrameTriangles());
-        LOG.info("Best frame: {} ns per screen pixel, {} frames per second sustained",
-            format(best / pixels), format(1e9 / best));
+            format(percentile(timed, 50) / NANOS_PER_MILLI),
+            format(percentile(timed, 90) / NANOS_PER_MILLI),
+            format(percentile(timed, 99) / NANOS_PER_MILLI),
+            format(total / (double) timed.length / NANOS_PER_MILLI), timed.length, from,
+            pool.workerCount(), renderer.lastFrameTriangles(),
+            renderer.lastFrameParallelPasses());
+        LOG.info("Best frame: {} ns per screen pixel, {} fps; median frame: {} fps",
+            format(best / pixels), format(1e9 / best),
+            format(1e9 / percentile(timed, 50)));
+    }
+
+    // One percentile of an already-sorted sample, by nearest rank.
+    private static long percentile(final long[] sorted, final int percent)
+    {
+        final int rank = (int) ((long) sorted.length * percent / 100L);
+        return sorted[Math.min(rank, sorted.length - 1)];
     }
 
     // Radians from degrees, and back — reporting only, never simulation state.
