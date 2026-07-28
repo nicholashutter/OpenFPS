@@ -13,88 +13,113 @@ import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
-import com.badlogic.gdx.scenes.scene2d.ui.Skin;
-import com.badlogic.gdx.scenes.scene2d.ui.Table;
-import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
-import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
 import com.badlogic.gdx.utils.ScreenUtils;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
 
 /**
- * The Scene2D main menu: a title and the Start Game / Settings / Quit
- * buttons.
+ * The welcome screen: a cube-built title over a drifting block field, and four
+ * chunky keys to press.
  *
- * <b>The skin is built in code, on purpose.</b> The usual libGDX route is
- * {@code new Skin(Gdx.files.internal("uiskin.json"))}, which needs a packed
- * atlas, a font, and a JSON file on the classpath. There is no asset
- * pipeline yet — {@code gradlew fetchAssets} deliberately fails until the
- * payload release exists (see {@code docs/ASSETS.md} § 9) — so requiring an
- * asset here would mean the menu could not run at all. Instead
- * {@link #buildSkin()} tints a 1×1 white {@link Pixmap} for the button
- * backgrounds and uses libGDX's built-in default {@link BitmapFont}. Both
- * ship inside the gdx jar, so this menu has zero external file
- * dependencies. Swap in a real skin when the asset payload lands.
+ * <h2>Everything is drawn, nothing is loaded</h2>
  *
- * <b>No logic lives here.</b> Every button forwards to {@link MenuActions},
- * which is what the headless tests cover; this class is layout and nothing
- * else.
+ * <p><b>The screen owns exactly two GPU resources: a 1x1 white texture and
+ * libGDX's built-in font.</b> Every block, every button face, every shadow is
+ * that one white pixel drawn at a size and tinted a colour. The usual libGDX
+ * route — {@code new Skin(Gdx.files.internal("uiskin.json"))} — needs a packed
+ * atlas, a font and a JSON file on the classpath, and this project's asset
+ * pipeline deliberately fails until the payload release exists
+ * ({@code docs/ASSETS.md} § 9). A menu that cannot open on a fresh checkout is
+ * worse than a menu drawn from primitives.</p>
  *
- * <b>The screen does not claim the input processor on construction.</b> It has
- * {@link #attachInputProcessor()} and {@link #detachInputProcessor()} instead,
- * and {@link GdxFrameLoopListener} calls them as {@link UiState} changes.
- * Claiming it in the constructor would mean the stage kept hit-testing,
- * hovering and dispatching clicks through the whole of {@link UiState#PLAYING}
- * — an invisible Quit button still sitting under the crosshair.
+ * <p>It also happens to be the right look. The world behind this screen is
+ * flat-shaded cubes from Kenney's kits; a title made of the same cubes belongs
+ * there in a way a smoothly rendered wordmark would not. See {@link BlockFont}
+ * for why the title is not simply the built-in font scaled up.</p>
  *
- * <b>Threading:</b> constructed and used only on the platform render
- * thread, after the GL context exists. Creating a {@link Texture} before
+ * <h2>No logic lives here</h2>
+ *
+ * <p>Every button forwards to {@link MenuActions} and does nothing else. That is
+ * what the headless tests cover; this class is layout, and layout needs a
+ * window to judge.</p>
+ *
+ * <h2>The screen does not claim the input processor on construction</h2>
+ *
+ * <p>It has {@link #attachInputProcessor()} and {@link #detachInputProcessor()}
+ * instead, and {@link GdxFrameLoopListener} calls them as {@link UiState}
+ * changes. Claiming it in the constructor would mean the stage kept hit-testing,
+ * hovering and dispatching clicks through the whole of {@link UiState#PLAYING} —
+ * an invisible Quit button still sitting under the crosshair.</p>
+ *
+ * <b>Threading:</b> constructed and used only on the platform render thread,
+ * after the GL context exists. Creating a {@link Texture} before
  * {@code create()} would fail.
  *
  * Platform adapter — must not import from core engine packages.
  */
 public final class MainMenuScreen
 {
-    /** Window background. */
-    private static final Color BACKGROUND = new Color(0.08f, 0.09f, 0.12f, 1f);
+    /** The word the title spells. */
+    public static final String TITLE_TEXT = "OPENFPS";
 
-    /** Title text colour. */
-    private static final Color TITLE_COLOR = new Color(0.93f, 0.74f, 0.28f, 1f);
+    /** The line under the title. */
+    public static final String TAGLINE_TEXT = "a software-rendered arena";
 
-    /** Button label colour. */
-    private static final Color LABEL_COLOR = new Color(0.94f, 0.94f, 0.96f, 1f);
+    /** Fraction of the window width the title spans. */
+    private static final float TITLE_WIDTH_FRACTION = 0.66f;
 
-    /** Button background, resting. */
-    private static final Color BUTTON_UP = new Color(0.18f, 0.20f, 0.26f, 1f);
+    /** Where the title's top edge sits, as a fraction of window height from the top. */
+    private static final float TITLE_TOP_FRACTION = 0.10f;
 
-    /** Button background, pressed. */
-    private static final Color BUTTON_DOWN = new Color(0.34f, 0.38f, 0.48f, 1f);
+    /** Gap under the title before the tagline, in pixels. */
+    private static final float TAGLINE_GAP = 26.0f;
 
-    /** Button background, hovered. */
-    private static final Color BUTTON_OVER = new Color(0.26f, 0.29f, 0.37f, 1f);
+    /** Gap under the tagline before the first button, in pixels. */
+    private static final float BUTTON_BLOCK_GAP = 54.0f;
 
-    /** Title font magnification over the 15px built-in font. */
-    private static final float TITLE_FONT_SCALE = 3.0f;
+    /** Button width in pixels. */
+    private static final float BUTTON_WIDTH = 380.0f;
 
-    /** Button label font magnification. */
-    private static final float BUTTON_FONT_SCALE = 1.5f;
+    /** Button height in pixels, base included. */
+    private static final float BUTTON_HEIGHT = 62.0f;
 
-    /** Button width in logical pixels. */
-    private static final float BUTTON_WIDTH = 260f;
+    /** Vertical gap between buttons, in pixels. */
+    private static final float BUTTON_GAP = 16.0f;
 
-    /** Button height in logical pixels. */
-    private static final float BUTTON_HEIGHT = 52f;
+    /** Label font magnification over the 15px built-in font. */
+    private static final float BUTTON_FONT_SCALE = 1.6f;
 
-    /** Vertical gap between buttons. */
-    private static final float BUTTON_GAP = 14f;
+    /** Tagline font magnification. */
+    private static final float TAGLINE_FONT_SCALE = 1.15f;
 
-    /** Gap between the title and the first button. */
-    private static final float TITLE_GAP = 48f;
+    /** Footer font magnification. */
+    private static final float FOOTER_FONT_SCALE = 0.95f;
+
+    /** How far above the bottom edge the footer sits, in pixels. */
+    private static final float FOOTER_MARGIN = 22.0f;
 
     /** The Scene2D stage that owns the widget hierarchy and input. */
     private final Stage stage;
 
-    /** The programmatically built skin. Owns the texture and font. */
-    private final Skin skin;
+    /** The 1x1 white texture every rectangle is drawn from. */
+    private final Texture white;
+
+    /** The built-in font, used for button labels and the footer. */
+    private final BitmapFont font;
+
+    /** The backdrop actor, sized to the window on every resize. */
+    private final MenuBackground background;
+
+    /** The block title, sized and placed on every resize. */
+    private final BlockTitle title;
+
+    /** The line under the title. */
+    private final Label tagline;
+
+    /** The controls hint along the bottom. */
+    private final Label footer;
+
+    /** The menu keys, top to bottom. */
+    private final BlockButton[] buttons;
 
     /**
      * Builds the menu. Requires a live GL context — construct from
@@ -108,68 +133,101 @@ public final class MainMenuScreen
         {
             throw new IllegalArgumentException("actions must not be null");
         }
-        this.skin = buildSkin();
+        this.white = whitePixelTexture();
+        final TextureRegion pixel = new TextureRegion(white);
+        this.font = new BitmapFont();
         this.stage = new Stage(new ScreenViewport());
 
-        final Label title = new Label("OpenFPS", skin.get("title", Label.LabelStyle.class));
-        title.setFontScale(TITLE_FONT_SCALE);
+        this.background = new MenuBackground(pixel);
+        this.title = new BlockTitle(TITLE_TEXT, pixel);
 
-        final Table root = new Table();
-        root.setFillParent(true);
-        root.add(title).padBottom(TITLE_GAP).row();
-        addButton(root, "Start Game", actions::onStartGame);
-        addButton(root, "Settings", actions::onSettings);
-        addButton(root, "Quit", actions::onQuit);
-        stage.addActor(root);
+        this.tagline = label(TAGLINE_TEXT, MenuPalette.HINT, TAGLINE_FONT_SCALE);
+        this.footer = label("W A S D  move    MOUSE  look    LEFT CLICK  fire    SPACE  jump",
+            MenuPalette.HINT, FOOTER_FONT_SCALE);
+
+        this.buttons = new BlockButton[]
+        {
+            new BlockButton("SINGLE PLAYER", MenuPalette.PLAY_FACE, MenuPalette.PLAY_SHADE,
+                pixel, font, BUTTON_FONT_SCALE, actions::onStartGame),
+            new BlockButton("MULTIPLAYER", MenuPalette.NET_FACE, MenuPalette.NET_SHADE,
+                pixel, font, BUTTON_FONT_SCALE, actions::onMultiplayer),
+            new BlockButton("SETTINGS", MenuPalette.NEUTRAL_FACE, MenuPalette.NEUTRAL_SHADE,
+                pixel, font, BUTTON_FONT_SCALE, actions::onSettings),
+            new BlockButton("QUIT", MenuPalette.QUIT_FACE, MenuPalette.QUIT_SHADE,
+                pixel, font, BUTTON_FONT_SCALE, actions::onQuit),
+        };
+
+        // Painter's order: backdrop, then title, then the keys on top.
+        stage.addActor(background);
+        stage.addActor(title);
+        stage.addActor(tagline);
+        for (final BlockButton button : buttons)
+        {
+            button.setSize(BUTTON_WIDTH, BUTTON_HEIGHT);
+            stage.addActor(button);
+        }
+        stage.addActor(footer);
     }
 
-    // Adds one full-width menu button wired to a single action.
-    private void addButton(final Table root, final String text, final Runnable action)
+    /** Returns the menu keys, top to bottom. Never null. */
+    public BlockButton[] buttons()
     {
-        final TextButton button = new TextButton(text, skin.get(TextButton.TextButtonStyle.class));
-        button.getLabel().setFontScale(BUTTON_FONT_SCALE);
-        button.addListener(new MenuButtonListener(action));
-        root.add(button).width(BUTTON_WIDTH).height(BUTTON_HEIGHT).padBottom(BUTTON_GAP).row();
+        return buttons.clone();
+    }
+
+    /** Returns the block title actor. */
+    public BlockTitle title()
+    {
+        return title;
+    }
+
+    /** Returns the drifting backdrop actor. */
+    public MenuBackground background()
+    {
+        return background;
     }
 
     /**
-     * Builds a skin with no external asset files: a 1×1 white texture,
-     * tinted per button state, plus libGDX's built-in default font.
+     * Places everything for a given window size.
      *
-     * The texture and font are registered with the skin so
-     * {@link Skin#dispose()} frees both — they are the only native
-     * resources this screen owns.
+     * <p><b>Absolute placement rather than a {@code Table}</b>, because the
+     * pieces are sized in different terms: the title is a fraction of the window
+     * width so it scales with the window, and the buttons are a fixed pixel size
+     * so they stay finger-and-pointer sized whatever the window does. A single
+     * layout container would have to be told both, one cell at a time, which is
+     * more code than the arithmetic below and harder to read.</p>
      *
-     * @return a ready-to-use skin holding a "title" label style, a default
-     *     label style, and a default text-button style
+     * <p>Exposed and separate from {@link #resize} so a test can drive it
+     * without a viewport.</p>
+     *
+     * @param width window width in pixels
+     * @param height window height in pixels
      */
-    private static Skin buildSkin()
+    public void layoutFor(final float width, final float height)
     {
-        final Skin built = new Skin();
+        background.setBounds(0.0f, 0.0f, width, height);
 
-        final Pixmap pixmap = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
-        pixmap.setColor(Color.WHITE);
-        pixmap.fill();
-        final Texture texture = new Texture(pixmap);
-        pixmap.dispose();
-        built.add("white", texture, Texture.class);
+        final float titleWidth = width * TITLE_WIDTH_FRACTION;
+        final float cell = title.cellSizeFor(titleWidth);
+        final float titleHeight = cell * BlockFont.GLYPH_HEIGHT;
+        final float titleTop = height * (1.0f - TITLE_TOP_FRACTION);
+        title.setBounds((width - titleWidth) * 0.5f, titleTop - titleHeight,
+            titleWidth, titleHeight);
 
-        final BitmapFont font = new BitmapFont();
-        built.add("default", font, BitmapFont.class);
+        tagline.pack();
+        final float taglineTop = titleTop - titleHeight - TAGLINE_GAP;
+        tagline.setPosition((width - tagline.getWidth()) * 0.5f,
+            taglineTop - tagline.getHeight());
 
-        built.add("title", new Label.LabelStyle(font, TITLE_COLOR));
-        built.add("default", new Label.LabelStyle(font, LABEL_COLOR));
+        float nextTop = taglineTop - tagline.getHeight() - BUTTON_BLOCK_GAP;
+        for (final BlockButton button : buttons)
+        {
+            button.setPosition((width - BUTTON_WIDTH) * 0.5f, nextTop - BUTTON_HEIGHT);
+            nextTop = nextTop - BUTTON_HEIGHT - BUTTON_GAP;
+        }
 
-        final TextureRegionDrawable white = new TextureRegionDrawable(new TextureRegion(texture));
-        final TextButton.TextButtonStyle buttonStyle = new TextButton.TextButtonStyle();
-        buttonStyle.font = font;
-        buttonStyle.fontColor = LABEL_COLOR;
-        buttonStyle.up = white.tint(BUTTON_UP);
-        buttonStyle.down = white.tint(BUTTON_DOWN);
-        buttonStyle.over = white.tint(BUTTON_OVER);
-        built.add("default", buttonStyle);
-
-        return built;
+        footer.pack();
+        footer.setPosition((width - footer.getWidth()) * 0.5f, FOOTER_MARGIN);
     }
 
     /**
@@ -179,16 +237,17 @@ public final class MainMenuScreen
      * that drew the menu without clearing, so it could composite over the
      * software rasterizer's frame — and that is precisely the effect
      * {@link UiState} was introduced to remove: the world visibly carrying on
-     * behind the buttons. In {@link UiState#MENU} the presenter is not called
-     * at all, so nothing has covered the window when this runs and clearing is
+     * behind the buttons. In {@link UiState#MENU} the presenter is not called at
+     * all, so nothing has covered the window when this runs and clearing is
      * required rather than merely allowed.</p>
      *
-     * @param deltaSeconds wall time since the previous frame, used for
-     *     widget animation only — this never advances the simulation
+     * @param deltaSeconds wall time since the previous frame, used for the
+     *     backdrop's drift and the title's colour cycle only — this never
+     *     advances the simulation
      */
     public void render(final float deltaSeconds)
     {
-        ScreenUtils.clear(BACKGROUND);
+        ScreenUtils.clear(MenuPalette.BACKDROP);
         stage.act(deltaSeconds);
         stage.draw();
     }
@@ -197,15 +256,14 @@ public final class MainMenuScreen
      * Clears the window to the menu background and draws nothing else.
      *
      * <p>Exists for the one frame shape that has neither a world nor a menu to
-     * put on screen: {@link UiState#PLAYING} before the rasterizer has
-     * published its first frame. Something must own the clear or the window
-     * shows whatever the driver left in the back buffer, and it cannot be
-     * {@link #render} because that would draw the menu the player just
-     * dismissed.</p>
+     * put on screen: {@link UiState#PLAYING} before the rasterizer has published
+     * its first frame. Something must own the clear or the window shows whatever
+     * the driver left in the back buffer, and it cannot be {@link #render}
+     * because that would draw the menu the player just dismissed.</p>
      */
     public static void clearBackground()
     {
-        ScreenUtils.clear(BACKGROUND);
+        ScreenUtils.clear(MenuPalette.BACKDROP);
     }
 
     /**
@@ -229,8 +287,8 @@ public final class MainMenuScreen
      *
      * <p>Called on entering {@link UiState#PLAYING}. This is the difference
      * between a menu that is hidden and a menu that is genuinely gone: without
-     * it the stage still hit-tests every mouse position and a click aimed at
-     * the game would land on whichever invisible button was under the
+     * it the stage still hit-tests every mouse position and a click aimed at the
+     * game would land on whichever invisible button was under the
      * crosshair.</p>
      */
     public void detachInputProcessor()
@@ -251,12 +309,33 @@ public final class MainMenuScreen
     public void resize(final int width, final int height)
     {
         stage.getViewport().update(width, height, true);
+        layoutFor(width, height);
     }
 
     /** Releases the stage, texture and font. Safe to call once. */
     public void dispose()
     {
         stage.dispose();
-        skin.dispose();
+        white.dispose();
+        font.dispose();
+    }
+
+    // One white pixel, which everything on this screen is a tinted rectangle of.
+    private static Texture whitePixelTexture()
+    {
+        final Pixmap pixmap = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
+        pixmap.setColor(Color.WHITE);
+        pixmap.fill();
+        final Texture texture = new Texture(pixmap);
+        pixmap.dispose();
+        return texture;
+    }
+
+    // A scaled label in the built-in font.
+    private Label label(final String text, final Color colour, final float scale)
+    {
+        final Label built = new Label(text, new Label.LabelStyle(font, colour));
+        built.setFontScale(scale);
+        return built;
     }
 }

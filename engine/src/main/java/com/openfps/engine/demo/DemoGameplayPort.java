@@ -150,6 +150,23 @@ public final class DemoGameplayPort implements I_GameplayPort
     private MatchState reportedState = MatchState.IN_PROGRESS;
 
     /**
+     * Whether the match is live, or frozen behind a menu.
+     *
+     * <p><b>Starts false, and that is the important half.</b> The game loop
+     * publishes tics from the moment the engine starts, which is well before the
+     * player has pressed anything — so without this the bots begin patrolling
+     * and shooting the instant the process launches, and a player who reads the
+     * menu for ten seconds arrives in the world already down a fifth of their
+     * health. That is not a subtle bug: it was visible in the very first run of
+     * the packaged build as "took 2 damage" scrolling past while the title
+     * screen was still on screen.</p>
+     *
+     * <p>Volatile: set from the platform's render thread as the UI changes, read
+     * on the game loop thread every tic.</p>
+     */
+    private volatile boolean matchLive;
+
+    /**
      * Creates the demo's gameplay port with nothing to shoot at.
      *
      * @param input the HAL input port to latch each tic; must not be null
@@ -255,6 +272,42 @@ public final class DemoGameplayPort implements I_GameplayPort
     }
 
     /**
+     * Starts or freezes the match.
+     *
+     * <p>The seam between "the engine is running" and "the player is playing".
+     * They are not the same thing and never were: the game loop starts with the
+     * process and keeps a fixed rate whatever is on screen, while a match begins
+     * when somebody presses a button on a menu. Everything that is <i>part of
+     * the match</i> — the bots' patrol, their return fire, the player's trigger —
+     * is gated on this. Everything that is part of the <i>view</i> — latching
+     * input, moving the camera — is not, so the world behind a menu is still
+     * aimed correctly the moment the menu goes away.</p>
+     *
+     * <p>Called from the platform's UI, which is the only thing that knows
+     * whether a menu is in front. Safe from any thread.</p>
+     *
+     * @param live true once the player is in the world
+     */
+    public void setMatchLive(final boolean live)
+    {
+        if (live && !matchLive)
+        {
+            LOG.info("Match live — bots are moving and shooting");
+        }
+        else if (!live && matchLive)
+        {
+            LOG.info("Match frozen — the menu is in front");
+        }
+        this.matchLive = live;
+    }
+
+    /** Returns whether the match is currently advancing. */
+    public boolean isMatchLive()
+    {
+        return matchLive;
+    }
+
+    /**
      * Advances the player by one tic and points the camera at the result.
      *
      * @param ticIndex the tic being processed
@@ -303,7 +356,7 @@ public final class DemoGameplayPort implements I_GameplayPort
     // test for exactly this reason.
     private void fireIfRequested(final boolean triggerDown, final int ticIndex)
     {
-        if (!triggerDown || match == null || match.state().isOver())
+        if (!triggerDown || match == null || !matchLive || match.state().isOver())
         {
             return;
         }
@@ -341,7 +394,7 @@ public final class DemoGameplayPort implements I_GameplayPort
     // the tic it is decided, rather than every tic afterwards.
     private void advanceMatch(final int ticIndex)
     {
-        if (match == null)
+        if (match == null || !matchLive)
         {
             return;
         }

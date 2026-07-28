@@ -8,6 +8,9 @@ package com.openfps.desktop;
 import com.badlogic.gdx.ApplicationListener;
 import com.badlogic.gdx.Gdx;
 
+import java.util.function.Consumer;
+
+import com.openfps.engine.gameplay.MatchMode;
 import com.openfps.engine.hal.port.I_FrameCallback;
 
 /**
@@ -132,6 +135,14 @@ public final class GdxFrameLoopListener implements ApplicationListener
     private UiState appliedState = UiState.MENU;
 
     /**
+     * Told whenever the world comes to the front or goes away, or null.
+     *
+     * MUTABLE: set once by {@link #attachMatchGate} before the loop starts. See
+     * {@link GdxWindowPort#attachMatchGate} for what it is for.
+     */
+    private Consumer<Boolean> matchGate;
+
+    /**
      * Creates the bridge with no world presentation — menu only.
      *
      * @param callback the engine callback to forward lifecycle to; must not
@@ -210,6 +221,27 @@ public final class GdxFrameLoopListener implements ApplicationListener
     }
 
     /**
+     * Names something to be told when the world comes to the front or goes away.
+     *
+     * <p>Called once by {@link GdxWindowPort#runFrameLoop} with whatever the
+     * launcher attached. See {@link GdxWindowPort#attachMatchGate} for what this
+     * is for and why it is a {@code Consumer<Boolean>} rather than a gameplay
+     * reference.</p>
+     *
+     * <p>Setting it fires it immediately with the current state, so a gate
+     * attached while the UI is already in {@link UiState#PLAYING} — which
+     * {@code --start-in-game} produces — is not left believing the match is
+     * frozen for the rest of the run.</p>
+     *
+     * @param gate told true on entering the world and false on leaving, or null
+     */
+    public void attachMatchGate(final Consumer<Boolean> gate)
+    {
+        this.matchGate = gate;
+        notifyMatchGate();
+    }
+
+    /**
      * Returns whether the menu should be drawn and fed events this frame.
      *
      * <p>The single predicate both the draw gate and the input-processor gate
@@ -242,7 +274,13 @@ public final class GdxFrameLoopListener implements ApplicationListener
     {
         final int width = Gdx.graphics.getWidth();
         final int height = Gdx.graphics.getHeight();
+        // Here rather than in the window port's configuration, because libGDX's
+        // setWindowIcon takes file paths and this icon is generated. This is the
+        // first moment a GLFW window handle exists, and it is on the right
+        // thread — see WindowIcon.
+        WindowIcon.apply();
         menu = new MainMenuScreen(actions);
+        menu.layoutFor(width, height);
         appliedState = uiState.state();
         applyMenuInput(appliedState);
         if (presenter != null)
@@ -305,6 +343,19 @@ public final class GdxFrameLoopListener implements ApplicationListener
         }
         appliedState = current;
         applyMenuInput(current);
+        notifyMatchGate();
+    }
+
+    // Tells the gate whether the world is in front. Driven from the UI change
+    // rather than polled every frame, so the simulation side sees exactly one
+    // call per transition.
+    private void notifyMatchGate()
+    {
+        if (matchGate == null)
+        {
+            return;
+        }
+        matchGate.accept(Boolean.valueOf(uiState.isPlaying()));
     }
 
     // The menu holds the Scene2D input processor only while it is on screen.
@@ -413,7 +464,14 @@ public final class GdxFrameLoopListener implements ApplicationListener
         public void onStartGame()
         {
             delegate.onStartGame();
-            uiState.startGame();
+            uiState.startGame(MatchMode.SINGLE_PLAYER);
+        }
+
+        @Override
+        public void onMultiplayer()
+        {
+            delegate.onMultiplayer();
+            uiState.startGame(MatchMode.MULTIPLAYER);
         }
 
         @Override

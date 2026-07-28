@@ -15,6 +15,7 @@ import com.openfps.engine.hal.port.I_WindowPort;
 import com.openfps.engine.render.adapter.SoftwareRenderPort;
 
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -109,6 +110,13 @@ public final class GdxWindowPort implements I_WindowPort
      */
     private volatile GdxInputPort inputPort;
 
+    /**
+     * Told true when the player enters the world and false when they leave it,
+     * or null when nothing cares. MUTABLE: set by {@link #attachMatchGate}
+     * before {@link #runFrameLoop}.
+     */
+    private volatile Consumer<Boolean> matchGate;
+
     @Override
     public void init()
     {
@@ -170,10 +178,10 @@ public final class GdxWindowPort implements I_WindowPort
         LOG.info("Entering LWJGL3 frame loop — the platform owns the thread from here");
         try
         {
-            new Lwjgl3Application(
-                new GdxFrameLoopListener(callback, new DefaultMenuActions(this), presenter(),
-                    inputPort),
-                buildConfiguration());
+            final GdxFrameLoopListener listener = new GdxFrameLoopListener(
+                callback, new DefaultMenuActions(this), presenter(), inputPort);
+            listener.attachMatchGate(matchGate);
+            new Lwjgl3Application(listener, buildConfiguration());
         }
         finally
         {
@@ -243,6 +251,44 @@ public final class GdxWindowPort implements I_WindowPort
     public GdxInputPort inputPort()
     {
         return inputPort;
+    }
+
+    /**
+     * Names something to be told when the player enters or leaves the world.
+     *
+     * <p><b>Why this exists.</b> The game loop starts with the process and ticks
+     * at a fixed rate whatever is on screen — that is the whole design, and it
+     * is correct. But a <i>match</i> starts when somebody presses a button on a
+     * menu, and the two were the same thing until this seam existed: the bots
+     * began patrolling and shooting the moment the window opened, so a player
+     * who read the title screen for ten seconds entered the world already down a
+     * fifth of their health. It was visible in the first run of the packaged
+     * build as "took 2 damage" scrolling past under a menu.</p>
+     *
+     * <p>A {@code Consumer<Boolean>} rather than a typed gameplay reference,
+     * because this class is a window port: it has no business importing the
+     * engine's demo package to hold one method call. The launcher, which is the
+     * composition root and already knows both objects, supplies the lambda.</p>
+     *
+     * <p>Call before {@link #runFrameLoop}; the listener that drives it is
+     * constructed inside. Passing null means nothing is told, which is what
+     * every windowless test gets.</p>
+     *
+     * @param gate told true on entering the world and false on leaving, or null
+     */
+    public void attachMatchGate(final Consumer<Boolean> gate)
+    {
+        if (state == State.RUNNING)
+        {
+            throw new IllegalStateException("attachMatchGate() while the frame loop is running");
+        }
+        this.matchGate = gate;
+    }
+
+    /** Returns the gate named by {@link #attachMatchGate}, or null. */
+    public Consumer<Boolean> matchGate()
+    {
+        return matchGate;
     }
 
     // Builds the presenter for one run, or null when no renderer was attached.

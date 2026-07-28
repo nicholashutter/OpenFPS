@@ -5,6 +5,7 @@
 
 package com.openfps.desktop;
 
+import com.openfps.engine.gameplay.MatchMode;
 import com.openfps.engine.hal.adapter.nulladapter.NullWindowPort;
 
 import org.junit.jupiter.api.DisplayName;
@@ -139,6 +140,36 @@ class GdxFrameLoopListenerTest
 
             assertThat(listener.uiState().state()).isEqualTo(UiState.PLAYING);
             assertThat(listener.isMenuActive()).isFalse();
+        }
+
+        @Test
+        @DisplayName("Single Player and Multiplayer both enter the world, in different modes")
+        void shouldRecordWhichKindOfMatchWasStarted()
+        {
+            // Both buttons make the same UI transition, so the state alone
+            // cannot say which was pressed. The mode is what a networked match
+            // is dispatched on, and reading it back is the only way to tell a
+            // wiring mistake — both buttons on the same handler — from a
+            // working menu, since the screen looks identical either way.
+            final GdxFrameLoopListener single = listenerFor(new RecordingFrameCallback());
+            single.menuActions().onStartGame();
+
+            assertThat(single.uiState().state()).isEqualTo(UiState.PLAYING);
+            assertThat(single.uiState().mode()).isEqualTo(MatchMode.SINGLE_PLAYER);
+
+            final GdxFrameLoopListener networked = listenerFor(new RecordingFrameCallback());
+            networked.menuActions().onMultiplayer();
+
+            assertThat(networked.uiState().state()).isEqualTo(UiState.PLAYING);
+            assertThat(networked.uiState().mode()).isEqualTo(MatchMode.MULTIPLAYER);
+            assertThat(networked.isMenuActive()).isFalse();
+        }
+
+        @Test
+        @DisplayName("a fresh machine reports single player before anything is started")
+        void shouldDefaultToSinglePlayerBeforeAnyMatch()
+        {
+            assertThat(new UiStateMachine().mode()).isEqualTo(MatchMode.SINGLE_PLAYER);
         }
 
         @Test

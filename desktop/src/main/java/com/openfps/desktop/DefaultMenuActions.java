@@ -60,6 +60,12 @@ public final class DefaultMenuActions implements MenuActions
     }
 
     @Override
+    public void onMultiplayer()
+    {
+        LOG.info("Menu: Multiplayer selected — opening a networked match");
+    }
+
+    @Override
     public void onSettings()
     {
         LOG.info("Menu: Settings selected (no settings screen yet)");

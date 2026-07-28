@@ -155,12 +155,25 @@ public final class DesktopLauncher
             AdapterFactorySelector.create(HalBackend.DESKTOP), window);
         final RendererHolder holder = new RendererHolder();
         final GameConfig config = GameConfig.unbounded(rate);
+        // MUTABLE: assigned once on this thread by the factory below, before
+        // the frame loop that reads it starts. There is no race — the engine
+        // bootstrap has returned by then.
+        final DemoGameplayPort[] gameplay = new DemoGameplayPort[1];
 
         final EngineSession session = new EngineMain()
-            .start(config, hal, holder, input -> gameplayPort(input, holder, demo, config));
+            .start(config, hal, holder, input ->
+            {
+                final I_GameplayPort port = gameplayPort(input, holder, demo, config);
+                if (port instanceof DemoGameplayPort)
+                {
+                    gameplay[0] = (DemoGameplayPort) port;
+                }
+                return port;
+            });
         final SoftwareRenderPort renderer = holder.renderer();
         bindWorld(renderer, demo, explicitModel);
         window.attachRenderer(renderer);
+        attachMatchGate(window, gameplay[0]);
 
         session.awaitPlatformLoop();
         session.stop();
@@ -203,6 +216,32 @@ public final class DesktopLauncher
         // itself on every trigger pull.
         return new DemoGameplayPort(input, holder.renderer(), demo.spawnController(), config,
             demo.newMatch(), botInstanceIndices(demo));
+    }
+
+    /**
+     * Connects the UI's notion of "in the world" to the match's notion of
+     * "running".
+     *
+     * <p>The game loop starts with the process and ticks whatever is on screen,
+     * which is right — the simulation clock must not depend on a menu. But the
+     * <b>match</b> must, and until this seam existed it did not: the bots
+     * patrolled and fired from the moment the window opened, so a player who
+     * read the title screen for ten seconds started already down a fifth of
+     * their health. That was visible in the first run of the packaged build as
+     * "took 2 damage" scrolling past under the menu.</p>
+     *
+     * @param window the window whose UI drives the gate; must not be null
+     * @param gameplay the match to freeze and unfreeze, or null when there is no
+     *     match — the {@code --model=} path has none
+     */
+    private static void attachMatchGate(final GdxWindowPort window,
+        final DemoGameplayPort gameplay)
+    {
+        if (gameplay == null)
+        {
+            return;
+        }
+        window.attachMatchGate(live -> gameplay.setMatchLive(live.booleanValue()));
     }
 
     // Where each bot's model sits among the scene's world instances, so the

@@ -5,6 +5,8 @@
 
 package com.openfps.desktop;
 
+import com.openfps.engine.gameplay.MatchMode;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -56,10 +58,36 @@ public final class UiStateMachine
      */
     private volatile UiState state = UiState.MENU;
 
+    /**
+     * Which kind of match the player last asked for.
+     *
+     * <p>MUTABLE: set on the way into {@link UiState#PLAYING} and left alone
+     * afterwards, so it still reports what the last match was while the menu is
+     * back in front. Volatile for the same reason {@link #state} is — the game
+     * loop thread reads it, the render thread writes it.</p>
+     *
+     * <p>It lives here rather than in {@code MenuActions} because it is a
+     * property of <i>which game is running</i>, and this object is already the
+     * one thing that knows whether a game is running at all. Splitting the two
+     * would let them disagree.</p>
+     */
+    private volatile MatchMode mode = MatchMode.SINGLE_PLAYER;
+
     /** Creates a machine parked in {@link UiState#MENU} — a window opens on the menu. */
     public UiStateMachine()
     {
         // The initial state is the field initialiser; nothing else to do.
+    }
+
+    /**
+     * Returns the kind of match last started. Never null, safe from any thread.
+     *
+     * @return the mode passed to the most recent {@link #startGame(MatchMode)},
+     *     or {@link MatchMode#SINGLE_PLAYER} before any match has begun
+     */
+    public MatchMode mode()
+    {
+        return mode;
     }
 
     /**
@@ -83,17 +111,39 @@ public final class UiStateMachine
     }
 
     /**
-     * Enters the game: {@code MENU -> PLAYING}.
-     *
-     * Driven by the menu's Start Game button. The cursor capture and the
-     * discarding of any look banked while the mouse crossed the menu are done
-     * by {@link GdxInputPort} when it next notices the change; this method is
-     * only the decision.
+     * Enters a single-player game: {@code MENU -> PLAYING}.
      *
      * @throws IllegalStateException if the game is already in front
      */
     public void startGame()
     {
+        startGame(MatchMode.SINGLE_PLAYER);
+    }
+
+    /**
+     * Enters a game of a given kind: {@code MENU -> PLAYING}.
+     *
+     * <p>Driven by the menu's Single Player and Multiplayer buttons. The cursor
+     * capture and the discarding of any look banked while the mouse crossed the
+     * menu are done by {@link GdxInputPort} when it next notices the change;
+     * this method is only the decision.</p>
+     *
+     * <p><b>The mode is recorded before the transition, not after.</b> The state
+     * field is what other threads poll, so publishing {@code PLAYING} first
+     * would leave a window in which a reader sees a running game and the
+     * previous match's mode.</p>
+     *
+     * @param matchMode which kind of match is starting; must not be null
+     * @throws IllegalArgumentException if {@code matchMode} is null
+     * @throws IllegalStateException if the game is already in front
+     */
+    public void startGame(final MatchMode matchMode)
+    {
+        if (matchMode == null)
+        {
+            throw new IllegalArgumentException("matchMode must not be null");
+        }
+        this.mode = matchMode;
         transitionTo(UiState.PLAYING);
     }
 

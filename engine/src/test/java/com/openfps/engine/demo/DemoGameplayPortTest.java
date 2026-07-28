@@ -346,12 +346,83 @@ final class DemoGameplayPortTest
             return indices;
         }
 
+        // A port with the match already running. Every test below is about what
+        // a LIVE match does; the frozen case has its own test.
         private static DemoGameplayPort portFor(final DemoScene demo,
             final SoftwareRenderPort render, final Match round)
         {
-            return new DemoGameplayPort(
+            final DemoGameplayPort port = new DemoGameplayPort(
                 new ScriptedInput(InputState.NEUTRAL), render, demo.spawnController(),
                 config(), round, indicesOf(demo));
+            port.setMatchLive(true);
+            return port;
+        }
+
+        @Test
+        @DisplayName("a match does not start until the UI says the player is in the world")
+        void shouldFreezeTheMatchUntilTheWorldIsInFront(@TempDir final Path root)
+            throws IOException
+        {
+            // The game loop starts with the process and ticks whatever is on
+            // screen — that is the design, and it is right. The MATCH must not.
+            // Before this gate existed the bots patrolled and fired from the
+            // moment the window opened, so a player who read the title screen
+            // for ten seconds arrived already down a fifth of their health.
+            final DemoScene demo = world(root);
+            final SoftwareRenderPort render = renderer();
+            render.resize(SURFACE, SURFACE);
+            render.setScene(demo.scene());
+
+            final Match round = demo.newMatch();
+            final DemoGameplayPort port = new DemoGameplayPort(
+                new ScriptedInput(InputState.NEUTRAL), render, demo.spawnController(),
+                config(), round, indicesOf(demo));
+
+            assertThat(port.isMatchLive()).as("a new port starts frozen").isFalse();
+
+            // Long enough that every bot's cadence has come round several times.
+            for (int tic = 0; tic <= Match.BOT_FIRE_INTERVAL_TICS * 3; tic++)
+            {
+                port.tick(tic);
+            }
+
+            assertThat(round.playerHealth())
+                .as("the player was shot while the menu was up")
+                .isEqualTo(Match.PLAYER_MAX_HEALTH);
+            final int walker = firstMover(round);
+            assertThat(round.bots()[walker].positionX())
+                .as("a bot walked its patrol behind the menu")
+                .isEqualTo(0.0f);
+        }
+
+        @Test
+        @DisplayName("the match resumes exactly where it was left")
+        void shouldResumeWhenTheWorldComesBack(@TempDir final Path root) throws IOException
+        {
+            final DemoScene demo = world(root);
+            final SoftwareRenderPort render = renderer();
+            render.resize(SURFACE, SURFACE);
+            render.setScene(demo.scene());
+
+            final Match round = demo.newMatch();
+            final DemoGameplayPort port = new DemoGameplayPort(
+                new ScriptedInput(InputState.NEUTRAL), render, demo.spawnController(),
+                config(), round, indicesOf(demo));
+
+            port.tick(0);
+            port.setMatchLive(true);
+            assertThat(port.isMatchLive()).isTrue();
+            for (int tic = 1; tic <= SETTLE_TICS; tic++)
+            {
+                port.tick(tic);
+            }
+
+            // Positions are a closed-form function of the tic index, so a match
+            // that was frozen for a while does not resume in the past — it
+            // resumes wherever the clock has reached. That is the property that
+            // lets a peer join late and agree with everyone else.
+            final int walker = firstMover(round);
+            assertThat(round.bots()[walker].positionX()).isNotEqualTo(0.0f);
         }
 
         @Test
