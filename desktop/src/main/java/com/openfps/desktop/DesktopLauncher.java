@@ -14,8 +14,15 @@ import com.openfps.engine.core.EngineSession;
 import com.openfps.engine.core.FrameRate;
 import com.openfps.engine.core.GameConfig;
 import com.openfps.engine.core.pool.I_ThreadPoolPort;
+import com.openfps.engine.demo.DemoAssetException;
+import com.openfps.engine.demo.DemoGameplayPort;
+import com.openfps.engine.demo.DemoModels;
+import com.openfps.engine.demo.DemoScene;
+import com.openfps.engine.gameplay.adapter.NullGameplayPort;
+import com.openfps.engine.gameplay.port.I_GameplayPort;
 import com.openfps.engine.hal.adapter.AdapterFactorySelector;
 import com.openfps.engine.hal.adapter.HalBackend;
+import com.openfps.engine.hal.port.I_InputPort;
 import com.openfps.engine.hal.port.I_TimePort;
 import com.openfps.engine.render.adapter.SoftwareRenderPort;
 import com.openfps.engine.render.port.I_RenderPort;
@@ -51,10 +58,16 @@ import org.slf4j.LoggerFactory;
  * calls as the lifecycle API for every platform; this is the first caller that
  * needs the seam between them.
  *
- * <b>Model.</b> {@code --model=<path>} names a {@code .ofm} file produced by
- * {@code gradlew :tools:convertModels} or by {@code RenderPreviewMain}. Without
- * one the rasterizer has nothing to draw and the window falls back to the menu,
- * which is exactly what it did before Phase 5 was wired.
+ * <b>What it draws.</b> By default, the first-person demo: a room assembled by
+ * {@link DemoScene} from the models under {@code --assets=<dir>} (default
+ * {@code assets/models}), with a blaster held in view space and the camera
+ * driven per tic by {@link DemoGameplayPort}. If those models are absent the
+ * launcher says so and exits {@link #EXIT_NO_ASSETS} rather than opening a
+ * window onto nothing.
+ *
+ * {@code --model=<path>} overrides that with a single {@code .ofm} file on the
+ * default orbit camera — the pre-demo behaviour, kept because it is the
+ * quickest way to look at one converted asset in a window.
  *
  * <b>Threading:</b> {@code main} must stay on the process main thread.
  * {@code EngineSession.awaitPlatformLoop} hands it to
@@ -64,6 +77,15 @@ public final class DesktopLauncher
 {
     /** CLI prefix naming the model file to draw. */
     public static final String MODEL_ARG = "--model=";
+
+    /** CLI prefix naming the model root the demo scene loads from. */
+    public static final String ASSETS_ARG = "--assets=";
+
+    /** Where the demo looks for its models when {@code --assets=} is not given. */
+    public static final String DEFAULT_ASSET_ROOT = "assets/models";
+
+    /** Exit status used when the demo has no geometry to stand on. */
+    public static final int EXIT_NO_ASSETS = 3;
 
     private static final Logger LOG = LoggerFactory.getLogger(DesktopLauncher.class);
 
@@ -94,20 +116,102 @@ public final class DesktopLauncher
         LOG.info("OpenFPS desktop launcher: rate={} Hz, java={}",
             rate.fps(), System.getProperty("java.version"));
 
+        // Built BEFORE the window opens, on purpose: missing assets should
+        // report and exit at a console, not behind a black GLFW window the
+        // user then has to close to read the reason.
+        final String explicitModel = modelArg(args);
+        final DemoScene demo;
+        try
+        {
+            demo = buildDemo(explicitModel, assetsArg(args));
+        }
+        catch (final DemoAssetException e)
+        {
+            LOG.error("Cannot start the first-person demo: {}", e.getMessage());
+            System.exit(EXIT_NO_ASSETS);
+            return;
+        }
+
         final GdxWindowPort window = new GdxWindowPort();
         final GdxAdapterFactory hal = new GdxAdapterFactory(
             AdapterFactorySelector.create(HalBackend.DESKTOP), window);
         final RendererHolder holder = new RendererHolder();
+        final GameConfig config = GameConfig.unbounded(rate);
 
         final EngineSession session = new EngineMain()
-            .start(GameConfig.unbounded(rate), hal, holder);
+            .start(config, hal, holder, input -> gameplayPort(input, holder, demo, config));
         final SoftwareRenderPort renderer = holder.renderer();
-        loadModel(renderer, modelArg(args));
+        bindWorld(renderer, demo, explicitModel);
         window.attachRenderer(renderer);
 
         session.awaitPlatformLoop();
         session.stop();
         LOG.info("OpenFPS desktop launcher exited");
+    }
+
+    /**
+     * Loads and assembles the demo world, or nothing when a single model was
+     * named explicitly.
+     *
+     * @param explicitModel the {@code --model=} argument, or null
+     * @param assetRoot where the demo's models live
+     * @return the assembled demo, or null when {@code --model=} was given
+     * @throws DemoAssetException if the demo has no geometry to stand on
+     */
+    private static DemoScene buildDemo(final String explicitModel, final String assetRoot)
+    {
+        if (explicitModel != null && !explicitModel.isEmpty())
+        {
+            LOG.info("--model given — drawing that one model instead of the demo room");
+            return null;
+        }
+        return DemoScene.build(DemoModels.load(Path.of(assetRoot)));
+    }
+
+    // The demo's per-tic loop, or the do-nothing port when a single model was
+    // named. The renderer is read from the holder rather than passed in: the
+    // bootstrap builds the render port before it calls this, which is the
+    // ordering contract I_GameplayPortFactory documents.
+    private static I_GameplayPort gameplayPort(final I_InputPort input,
+        final RendererHolder holder, final DemoScene demo, final GameConfig config)
+    {
+        if (demo == null)
+        {
+            return new NullGameplayPort();
+        }
+        return new DemoGameplayPort(input, holder.renderer(), demo.spawnController(), config);
+    }
+
+    // Hands the renderer the scene it will draw for the rest of the run. Built
+    // once here, never per frame — Scene is immutable and nothing in this demo
+    // moves except the camera.
+    private static void bindWorld(final SoftwareRenderPort renderer, final DemoScene demo,
+        final String explicitModel)
+    {
+        if (demo == null)
+        {
+            loadModel(renderer, explicitModel);
+            return;
+        }
+        renderer.setScene(demo.scene());
+        LOG.info("First-person demo ready: {} — click the window to capture the mouse,"
+            + " WASD to walk, Escape to release", demo);
+    }
+
+    /**
+     * Returns the {@code --assets=} argument, or the default model root.
+     *
+     * @param args the CLI arguments, may be null
+     * @return the directory the demo loads its models from, never null
+     */
+    public static String assetsArg(final String[] args)
+    {
+        final String value = valueOf(args, ASSETS_ARG);
+        if (value == null || value.isEmpty())
+        {
+            return DEFAULT_ASSET_ROOT;
+        }
+        return value;
     }
 
     /**
@@ -118,15 +222,21 @@ public final class DesktopLauncher
      */
     public static String modelArg(final String[] args)
     {
+        return valueOf(args, MODEL_ARG);
+    }
+
+    // The value of the first argument carrying a given prefix, or null.
+    private static String valueOf(final String[] args, final String prefix)
+    {
         if (args == null)
         {
             return null;
         }
         for (final String arg : args)
         {
-            if (arg != null && arg.startsWith(MODEL_ARG))
+            if (arg != null && arg.startsWith(prefix))
             {
-                return arg.substring(MODEL_ARG.length());
+                return arg.substring(prefix.length());
             }
         }
         return null;
@@ -139,8 +249,7 @@ public final class DesktopLauncher
     {
         if (path == null || path.isEmpty())
         {
-            LOG.warn("No --model=<path> given — the window will show the menu only. "
-                + "Produce one with: gradlew :tools:renderPreview");
+            LOG.warn("No --model=<path> given — the window will show the menu only.");
             return;
         }
         try
@@ -161,6 +270,25 @@ public final class DesktopLauncher
      * the worker pool — and the window needs a typed reference to it
      * afterwards. A four-line holder gives both without a downcast and without
      * a mutable field racing the game loop thread.
+     *
+     * <p><b>The pool is passed through unchanged, and a note for whoever
+     * profiles this next.</b> An earlier revision of this class handed the
+     * renderer {@code null} instead, on the strength of a headless measurement:
+     * {@code :tools:demoPreview --frames=300} at 1280x720 renders this scene in
+     * 19.6 ms serially and <b>297 ms with 8 workers</b>, because
+     * {@code SoftwareRenderPort} renders instances one at a time and each
+     * crosses four {@code submitParallel} barriers — about 1,180 of them per
+     * frame for a 295-instance room. That finding is real and reproducible.</p>
+     *
+     * <p>It is also <b>not</b> what limits the window, which is why the change
+     * was reverted rather than kept. Measured windowed, both settings present
+     * at roughly 2 frames per second: 2.5 with the pool, 2.0 without. The
+     * limiter is elsewhere — {@code GameLoop} publishes a {@code
+     * RenderFrameEvent} every tic with no coalescing, so the rasterizer spends
+     * every cycle on frames nobody will see, and {@code FramebufferPresenter}
+     * then starves against a non-fair {@code frameLock} that the render workers
+     * keep reacquiring. Both belong to D_ and R_, not to a launcher, and
+     * neither is fixed by choosing a pool here.</p>
      */
     private static final class RendererHolder implements I_RenderPortFactory
     {

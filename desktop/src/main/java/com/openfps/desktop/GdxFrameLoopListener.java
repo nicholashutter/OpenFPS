@@ -228,6 +228,14 @@ public final class GdxFrameLoopListener implements ApplicationListener
         {
             presenter.dispose();
         }
+        // The last moment at which GLFW is still up: libGDX calls dispose()
+        // before it terminates the library, whereas the engine's own
+        // I_InputPort.shutdown() runs afterwards. See
+        // GdxInputPort.onWindowClosing() for what that cost.
+        if (inputPort != null)
+        {
+            inputPort.onWindowClosing();
+        }
         callback.onSurfaceLost();
     }
 }

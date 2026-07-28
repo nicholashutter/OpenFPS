@@ -161,4 +161,39 @@ class GdxInputPortTest
         port.sampleInput(0);
         assertThat(port.currentInput()).isEqualTo(InputState.NEUTRAL);
     }
+
+    @Test
+    @DisplayName("shutdown does not touch GLFW once the window has gone")
+    void shouldNotReleaseTheCursorAfterTheWindowClosed()
+    {
+        // The bug this guards: Gdx.input outlives the GLFW window, so the null
+        // check inside releaseCursor() passes and the call reaches a
+        // terminated library. It fails with IncompatibleClassChangeError — an
+        // Error, so nothing on the teardown path catches it, and a completely
+        // successful run dies at the very last step.
+        final GdxInputPort port = new GdxInputPort();
+        port.init();
+        assertThat(port.isWindowClosed()).isFalse();
+
+        port.onWindowClosing();
+        assertThat(port.isWindowClosed()).isTrue();
+
+        assertThatCode(port::shutdown).doesNotThrowAnyException();
+        assertThat(port.isWindowClosed()).isTrue();
+    }
+
+    @Test
+    @DisplayName("a re-initialised port is ready for a second window")
+    void shouldClearTheWindowFlagOnInit()
+    {
+        final GdxInputPort port = new GdxInputPort();
+        port.init();
+        port.onWindowClosing();
+        port.shutdown();
+
+        // GdxWindowPort supports SHUTDOWN -> INITIALIZED for a restart, so the
+        // input port must not stay permanently convinced the window is gone.
+        port.init();
+        assertThat(port.isWindowClosed()).isFalse();
+    }
 }

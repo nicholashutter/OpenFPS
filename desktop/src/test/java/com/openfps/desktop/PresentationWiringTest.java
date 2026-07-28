@@ -96,6 +96,32 @@ class PresentationWiringTest
     }
 
     @Nested
+    @DisplayName("demo asset argument")
+    class AssetArgument
+    {
+        @Test
+        @DisplayName("--assets= is read out of the argument list")
+        void shouldReadTheAssetRoot()
+        {
+            assertThat(DesktopLauncher.assetsArg(new String[] {"--fps=60", "--assets=x/y"}))
+                .isEqualTo("x/y");
+        }
+
+        @Test
+        @DisplayName("defaults to the model root the asset tooling writes")
+        void shouldDefaultToTheStandardRoot()
+        {
+            // Must agree with :tools:regenerateDemoAssets' own default, or the
+            // demo looks somewhere the asset pipeline never writes.
+            assertThat(DesktopLauncher.assetsArg(new String[] {"--fps=60"}))
+                .isEqualTo("assets/models");
+            assertThat(DesktopLauncher.assetsArg(null)).isEqualTo("assets/models");
+            assertThat(DesktopLauncher.assetsArg(new String[] {"--assets="}))
+                .isEqualTo("assets/models");
+        }
+    }
+
+    @Nested
     @DisplayName("window capture")
     class Capture
     {
