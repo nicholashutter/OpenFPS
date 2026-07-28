@@ -7,6 +7,7 @@ package com.openfps.engine.render.adapter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.within;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -59,6 +60,67 @@ final class SoftwareRenderPortTest
 
     /** Near plane. */
     private static final float NEAR = 0.05f;
+
+    /** Screen centre column. */
+    private static final int HALF_WIDTH = WIDTH / 2;
+
+    /** Screen centre row. */
+    private static final int HALF_HEIGHT = HEIGHT / 2;
+
+    /**
+     * The projection scale both axes share, {@code 1 / tan(fovY / 2)}, because
+     * the scene tests use a square viewport and therefore an aspect of 1. This
+     * is {@code render/README.md} § 4's formula restated independently of
+     * {@link Camera}, so the assertions are against the specification rather
+     * than against the implementation.
+     */
+    private static final float PROJECTION_SCALE = (float) (1.0 / Math.tan(FOV * 0.5f));
+
+    /**
+     * How far a projected edge may sit from the covered pixels that represent
+     * it. A pixel is covered when its <i>centre</i> is inside the triangle, so
+     * a covered-rectangle boundary lies within <b>half</b> a pixel of the true
+     * edge; one pixel is that bound with a little room. Not a fudge factor: at
+     * 1.0 a real transform error — which moves geometry by tens of pixels —
+     * cannot hide.
+     */
+    private static final float PIXEL_TOLERANCE = 1.0f;
+
+    /** Where the scene tests put the camera on the +z axis. */
+    private static final float CAMERA_Z = 4.0f;
+
+    /** Half-edge of the standard test quad. */
+    private static final float QUAD_HALF = 1.0f;
+
+    /** Long half-edge of the oblong quad the rotation test uses. */
+    private static final float WIDE_HALF = 1.0f;
+
+    /** Short half-edge of that oblong. */
+    private static final float NARROW_HALF = 0.25f;
+
+    /** A quarter turn, in radians. */
+    private static final float QUARTER_TURN = (float) (Math.PI / 2.0);
+
+    /** The scale factor the scale test applies. */
+    private static final float HALF_SCALE = 0.5f;
+
+    /** World z of the wall the viewmodel has to beat: one unit from the eye. */
+    private static final float WALL_Z = CAMERA_Z - 1.0f;
+
+    /** View-space depth of the viewmodel — three times further out than the wall. */
+    private static final float VIEWMODEL_DEPTH = 3.0f;
+
+    /** Half-edge of the viewmodel quad. */
+    private static final float VIEWMODEL_HALF = 0.5f;
+
+    /** Colour of the nearer instance in the depth tests. */
+    private static final int NEAR_COLOR = 0xFF4020FF;
+
+    /** Colour of the farther instance. */
+    private static final int FAR_COLOR = 0x2040FFFF;
+
+    /** Colour of the viewmodel in the mixed scene. */
+    private static final int VIEW_COLOR = 0x40FF60FF;
 
     @Nested
     @DisplayName("backface winding — settled against the no-cull oracle")
@@ -165,6 +227,222 @@ final class SoftwareRenderPortTest
                 bus.shutdown();
             }
         }
+
+        @Test
+        @DisplayName("a pooled multi-instance frame is bit-identical to a serial one")
+        void shouldProduceTheSameSceneInParallelAsSerially()
+        {
+            // Same property as above, now across the per-instance loop: every
+            // instance re-dispatches four passes and resets the rasterizer, so
+            // there is more per-frame state to get wrong.
+            final int[] serial = frameOf(mixedScene(), sceneCamera(), null);
+            final I_EventBusPort bus = EventBusFactory.createShared();
+            bus.init(BUS_CAPACITY);
+            final I_ThreadPoolPort pool =
+                ThreadPoolFactory.createFixed(bus, new SubsystemRegistry());
+            pool.init(WORKERS);
+            pool.start();
+            try
+            {
+                assertThat(frameOf(mixedScene(), sceneCamera(), pool))
+                    .isEqualTo(serial);
+            }
+            finally
+            {
+                pool.shutdown();
+                bus.shutdown();
+            }
+        }
+    }
+
+    @Nested
+    @DisplayName("scenes — many instances, each with its own transform")
+    class Scenes
+    {
+        @Test
+        @DisplayName("loadModel is a one-instance scene, not a second code path")
+        void shouldExpressASingleModelAsAOneInstanceScene()
+        {
+            final SoftwareRenderPort port =
+                newPort(null, SoftwareRenderPort.BACKFACE_CULL_MODE);
+            port.resize(WIDTH, HEIGHT);
+            port.loadModel(CubeFixture.build());
+
+            assertThat(port.scene()).isNotNull();
+            assertThat(port.scene().worldInstanceCount()).isEqualTo(1);
+            assertThat(port.scene().viewInstanceCount()).isZero();
+            port.shutdown();
+        }
+
+        @Test
+        @DisplayName("two instances resolve by depth, whichever order they are submitted in")
+        void shouldResolveInstancesByDepthIndependentlyOfOrder()
+        {
+            final ModelFormat near = quad(NEAR_COLOR);
+            final ModelFormat far = quad(FAR_COLOR);
+            final Mat4 nearAt = Mat4.translation(0.5f, 0.0f, 0.5f);
+            final Mat4 farAt = Mat4.translation(-0.5f, 0.0f, -0.5f);
+
+            final int[] nearFirst = frameOf(Scene.builder()
+                .addWorldInstance(near, nearAt).addWorldInstance(far, farAt).build(),
+                sceneCamera(), null);
+            final int[] farFirst = frameOf(Scene.builder()
+                .addWorldInstance(far, farAt).addWorldInstance(near, nearAt).build(),
+                sceneCamera(), null);
+
+            // The overlap: the nearer instance owns it whatever order the two
+            // arrived in, because the depth buffer carries across instances.
+            assertThat(pixel(nearFirst, HALF_WIDTH, HALF_HEIGHT)).isEqualTo(NEAR_COLOR);
+            assertThat(farFirst)
+                .as("submission order must not change one pixel")
+                .isEqualTo(nearFirst);
+        }
+
+        @Test
+        @DisplayName("a translation lands where the projection says it does")
+        void shouldTranslateAnInstanceToTheProjectedPosition()
+        {
+            final float shiftX = 0.5f;
+            final float shiftY = -0.25f;
+            final int[] frame = frameOf(Scene.builder()
+                .addWorldInstance(quad(NEAR_COLOR),
+                    Mat4.translation(shiftX, shiftY, 0.0f))
+                .build(), sceneCamera(), null);
+
+            final int[] box = boundsOf(frame, NEAR_COLOR);
+            assertProjected(box, shiftX, shiftY, QUAD_HALF, QUAD_HALF, CAMERA_Z);
+        }
+
+        @Test
+        @DisplayName("a quarter turn about z swaps the projected width and height")
+        void shouldRotateAnInstanceAboutItsOwnOrigin()
+        {
+            // A 4:1 quad, so the rotation is unmistakable in the numbers: the
+            // projected box must come back transposed, not merely different.
+            final ModelFormat oblong =
+                ModelFormat.read(QuadFixture.build(WIDE_HALF, NARROW_HALF, NEAR_COLOR));
+            final int[] upright = frameOf(
+                Scene.of(oblong), sceneCamera(), null);
+            final int[] turned = frameOf(Scene.builder()
+                .addWorldInstance(oblong, TransformFixture.rotationZ(QUARTER_TURN))
+                .build(), sceneCamera(), null);
+
+            assertProjected(boundsOf(upright, NEAR_COLOR), 0.0f, 0.0f, WIDE_HALF,
+                NARROW_HALF, CAMERA_Z);
+            assertProjected(boundsOf(turned, NEAR_COLOR), 0.0f, 0.0f, NARROW_HALF,
+                WIDE_HALF, CAMERA_Z);
+        }
+
+        @Test
+        @DisplayName("a uniform scale halves the projected extent")
+        void shouldScaleAnInstanceAboutItsOwnOrigin()
+        {
+            final int[] frame = frameOf(Scene.builder()
+                .addWorldInstance(quad(NEAR_COLOR), TransformFixture.uniformScale(HALF_SCALE))
+                .build(), sceneCamera(), null);
+
+            assertProjected(boundsOf(frame, NEAR_COLOR), 0.0f, 0.0f, QUAD_HALF * HALF_SCALE,
+                QUAD_HALF * HALF_SCALE, CAMERA_Z);
+        }
+
+        @Test
+        @DisplayName("a view instance draws over world geometry that is nearer")
+        void shouldDrawTheViewmodelOverNearerWorldGeometry()
+        {
+            // The wall is at view depth 1 and fills the frame; the viewmodel is
+            // at view depth 3, three times FURTHER away, and must still win.
+            // Only the depth reset between the passes can produce that.
+            final int[] frame = frameOf(Scene.builder()
+                .addWorldInstance(quad(FAR_COLOR), Mat4.translation(0.0f, 0.0f, WALL_Z))
+                .addViewInstance(ModelFormat.read(QuadFixture.square(VIEWMODEL_HALF,
+                    NEAR_COLOR)), Mat4.translation(0.0f, 0.0f, VIEWMODEL_DEPTH))
+                .build(), sceneCamera(), null);
+
+            assertThat(pixel(frame, HALF_WIDTH, HALF_HEIGHT))
+                .as("the viewmodel is not occluded by the wall in front of it")
+                .isEqualTo(NEAR_COLOR);
+            assertThat(pixel(frame, 1, 1))
+                .as("colour is not cleared between the passes, so the wall survives")
+                .isEqualTo(FAR_COLOR);
+            assertProjected(boundsOf(frame, NEAR_COLOR), 0.0f, 0.0f, VIEWMODEL_HALF,
+                VIEWMODEL_HALF, VIEWMODEL_DEPTH);
+        }
+
+        @Test
+        @DisplayName("an empty scene renders a cleared frame")
+        void shouldRenderAnEmptyScene()
+        {
+            final SoftwareRenderPort port = renderScene(Scene.EMPTY, sceneCamera(), null);
+
+            assertThat(port.framesRendered()).isEqualTo(1L);
+            assertThat(port.lastFrameTriangles()).isZero();
+            assertThat(colorsIn(copy(port))).isEmpty();
+            port.shutdown();
+        }
+
+        @Test
+        @DisplayName("a scene of nothing but a viewmodel renders without a camera being set")
+        void shouldRenderAViewOnlyScene()
+        {
+            // No camera and no world instance: the default orbit has nothing to
+            // frame, so the port falls back to a frustum at the origin. A view
+            // instance never uses the view matrix anyway, which is the point.
+            final SoftwareRenderPort port = renderScene(Scene.builder()
+                .addViewInstance(quad(NEAR_COLOR),
+                    Mat4.translation(0.0f, 0.0f, VIEWMODEL_DEPTH))
+                .build(), null, null);
+
+            assertThat(port.lastFrameTriangles()).isEqualTo(QuadFixture.TRIANGLES);
+            assertThat(colorsIn(copy(port))).containsExactly(NEAR_COLOR);
+            port.shutdown();
+        }
+
+        @Test
+        @DisplayName("the triangle count is the scene total, across both passes")
+        void shouldCountTrianglesAcrossEveryInstance()
+        {
+            final SoftwareRenderPort port = renderScene(mixedScene(), sceneCamera(), null);
+
+            assertThat(port.lastFrameTriangles()).isEqualTo(3 * QuadFixture.TRIANGLES);
+            port.shutdown();
+        }
+
+        @Test
+        @DisplayName("scenes may be swapped in either size order")
+        void shouldSwapScenesWithoutResizingDownAndBackUp()
+        {
+            // Geometry buffers grow to the largest instance ever seen and never
+            // shrink, so a big scene followed by a small one must still be
+            // correct — and so must the other order, which does reallocate.
+            final SoftwareRenderPort port =
+                newPort(null, SoftwareRenderPort.BACKFACE_CULL_MODE);
+            port.resize(WIDTH, HEIGHT);
+            port.setCamera(sceneCamera());
+
+            port.setScene(Scene.of(ModelFormat.read(CubeFixture.build())));
+            port.renderFrame(0);
+            final int cubeTriangles = port.lastFrameTriangles();
+
+            port.setScene(Scene.of(quad(NEAR_COLOR)));
+            port.renderFrame(1);
+            assertThat(port.lastFrameTriangles()).isEqualTo(QuadFixture.TRIANGLES);
+
+            port.setScene(Scene.of(ModelFormat.read(CubeFixture.build())));
+            port.renderFrame(2);
+            assertThat(port.lastFrameTriangles()).isEqualTo(cubeTriangles);
+            port.shutdown();
+        }
+
+        @Test
+        @DisplayName("a null scene is refused")
+        void shouldRefuseANullScene()
+        {
+            final SoftwareRenderPort port =
+                newPort(null, SoftwareRenderPort.BACKFACE_CULL_MODE);
+
+            assertThatThrownBy(() -> port.setScene(null))
+                .isInstanceOf(IllegalArgumentException.class);
+        }
     }
 
     @Nested
@@ -268,6 +546,126 @@ final class SoftwareRenderPortTest
             assertThatThrownBy(() -> port.loadModel(ModelFormat.read(ModelFileFixture.empty())))
                 .isInstanceOf(IllegalArgumentException.class);
         }
+    }
+
+    // ---- scene helpers ----
+
+    // One flat, untextured quad of a given colour, parsed.
+    private static ModelFormat quad(final int colour)
+    {
+        return ModelFormat.read(QuadFixture.square(QUAD_HALF, colour));
+    }
+
+    // The camera the scene tests project against: on the +z axis looking back
+    // at the origin, square viewport. World x then maps straight to view x and
+    // world y to view y, which is what makes the expected coordinates below
+    // readable.
+    private static Camera sceneCamera()
+    {
+        return Camera.lookingAt(new Vec3(0.0f, 0.0f, CAMERA_Z), ORIGIN, UP, FOV, 1.0f, NEAR);
+    }
+
+    // Two world instances at different depths plus a viewmodel — the smallest
+    // scene that exercises both passes and the depth reset between them.
+    private static Scene mixedScene()
+    {
+        return Scene.builder()
+            .addWorldInstance(quad(NEAR_COLOR), Mat4.translation(0.5f, 0.0f, 0.5f))
+            .addWorldInstance(quad(FAR_COLOR), Mat4.translation(-0.5f, 0.0f, -0.5f))
+            .addViewInstance(quad(VIEW_COLOR),
+                Mat4.translation(0.0f, 0.0f, VIEWMODEL_DEPTH))
+            .build();
+    }
+
+    // Renders one frame of a scene. A null camera leaves the port on its
+    // default, which is what the view-only case wants to exercise.
+    private static SoftwareRenderPort renderScene(final Scene scene, final Camera camera,
+        final I_ThreadPoolPort pool)
+    {
+        final SoftwareRenderPort port = newPort(pool, SoftwareRenderPort.BACKFACE_CULL_MODE);
+        port.resize(WIDTH, HEIGHT);
+        if (camera != null)
+        {
+            port.setCamera(camera);
+        }
+        port.setScene(scene);
+        port.renderFrame(0);
+        return port;
+    }
+
+    // Renders one frame of a scene and returns the pixels.
+    private static int[] frameOf(final Scene scene, final Camera camera,
+        final I_ThreadPoolPort pool)
+    {
+        final SoftwareRenderPort port = renderScene(scene, camera, pool);
+        final int[] frame = copy(port);
+        port.shutdown();
+        return frame;
+    }
+
+    private static int pixel(final int[] frame, final int x, final int y)
+    {
+        return frame[y * WIDTH + x];
+    }
+
+    // The inclusive screen rectangle one colour covers: minX, minY, maxX, maxY.
+    private static int[] boundsOf(final int[] frame, final int colour)
+    {
+        // MUTABLE locals — the running extremes of the covered pixels.
+        int minX = WIDTH;
+        int minY = HEIGHT;
+        int maxX = -1;
+        int maxY = -1;
+        for (int y = 0; y < HEIGHT; y++)
+        {
+            for (int x = 0; x < WIDTH; x++)
+            {
+                if (pixel(frame, x, y) != colour)
+                {
+                    continue;
+                }
+                minX = Math.min(minX, x);
+                maxX = Math.max(maxX, x);
+                minY = Math.min(minY, y);
+                maxY = Math.max(maxY, y);
+            }
+        }
+        assertThat(maxX).as("the instance must actually be on screen").isNotNegative();
+        return new int[] {minX, minY, maxX, maxY};
+    }
+
+    // Asserts that a covered rectangle matches where README § 4's projection
+    // puts an axis-aligned quad of the given half-extents, centred at
+    // (centreX, centreY) in view space at the given depth.
+    private static void assertProjected(final int[] box, final float centreX,
+        final float centreY, final float halfWidth, final float halfHeight,
+        final float depth)
+    {
+        // The bounds are inclusive pixel indices and the projected edges are
+        // continuous coordinates. A pixel is covered when its centre is inside,
+        // so the first covered index sits within half a pixel of the near edge
+        // and the first UNcovered index — one past the last covered one —
+        // within half a pixel of the far edge. Comparing maxima without the
+        // +1 would be comparing a pixel index against an edge one pixel away.
+        assertThat((float) box[0]).as("left edge")
+            .isCloseTo(screenX(centreX - halfWidth, depth), within(PIXEL_TOLERANCE));
+        assertThat((float) (box[2] + 1)).as("right edge")
+            .isCloseTo(screenX(centreX + halfWidth, depth), within(PIXEL_TOLERANCE));
+        // Screen y grows downward, so the top edge is the LARGER view y.
+        assertThat((float) box[1]).as("top edge")
+            .isCloseTo(screenY(centreY + halfHeight, depth), within(PIXEL_TOLERANCE));
+        assertThat((float) (box[3] + 1)).as("bottom edge")
+            .isCloseTo(screenY(centreY - halfHeight, depth), within(PIXEL_TOLERANCE));
+    }
+
+    private static float screenX(final float viewX, final float depth)
+    {
+        return (viewX * PROJECTION_SCALE / depth * 0.5f + 0.5f) * WIDTH;
+    }
+
+    private static float screenY(final float viewY, final float depth)
+    {
+        return (0.5f - viewY * PROJECTION_SCALE / depth * 0.5f) * HEIGHT;
     }
 
     // ---- helpers ----

@@ -266,10 +266,122 @@ public final class Camera
     public void transformToClip(final float x, final float y, final float z,
         final float[] out, final int outOffset)
     {
-        final float[] t = worldToClip;
-        out[outOffset] = t[ROW_X] * x + t[ROW_X + 1] * y + t[ROW_X + 2] * z + t[ROW_X + 3];
-        out[outOffset + 1] = t[ROW_Y] * x + t[ROW_Y + 1] * y + t[ROW_Y + 2] * z + t[ROW_Y + 3];
-        out[outOffset + 2] = t[ROW_W] * x + t[ROW_W + 1] * y + t[ROW_W + 2] * z + t[ROW_W + 3];
+        transformToClip(worldToClip, 0, x, y, z, out, outOffset);
+    }
+
+    /**
+     * Transforms a point through any packed three-row transform in this
+     * class's layout — the camera's own, or a per-instance one built by
+     * {@link #packModelToClip} or {@link #packViewToClip}.
+     *
+     * <p>Writes exactly {@link #CLIP_FLOATS} floats and allocates nothing.
+     * <b>The per-vertex cost is the same twelve multiplies and nine adds
+     * whichever transform is passed</b>, which is the whole reason a scene
+     * concatenates {@code modelToWorld} into the packed rows once per instance
+     * rather than applying a second matrix per vertex.</p>
+     *
+     * @param transform packed transform, {@link #WORLD_TO_CLIP_FLOATS} floats:
+     *     the x row, the y row and the w row, row-major
+     * @param transformOffset index of the transform's first float
+     * @param x the point's x coordinate, in the transform's source space
+     * @param y the point's y coordinate
+     * @param z the point's z coordinate
+     * @param out the destination buffer
+     * @param outOffset index of the first of the three floats to write
+     */
+    public static void transformToClip(final float[] transform, final int transformOffset,
+        final float x, final float y, final float z, final float[] out, final int outOffset)
+    {
+        final float[] t = transform;
+        final int b = transformOffset;
+        out[outOffset] = t[b + ROW_X] * x + t[b + ROW_X + 1] * y
+            + t[b + ROW_X + 2] * z + t[b + ROW_X + 3];
+        out[outOffset + 1] = t[b + ROW_Y] * x + t[b + ROW_Y + 1] * y
+            + t[b + ROW_Y + 2] * z + t[b + ROW_Y + 3];
+        out[outOffset + 2] = t[b + ROW_W] * x + t[b + ROW_W + 1] * y
+            + t[b + ROW_W + 2] * z + t[b + ROW_W + 3];
+    }
+
+    /**
+     * Concatenates an instance's model-to-world transform into this camera's
+     * packed world-to-clip transform, giving one packed model-to-clip
+     * transform.
+     *
+     * <p>Called <b>once per instance per frame</b>, not per vertex: 48
+     * multiplies here buy a per-vertex cost identical to the untransformed
+     * case. Composition is {@code clip = worldToClip . modelToWorld}, so the
+     * model transform is applied to a point first.</p>
+     *
+     * <p>The result has no fourth row, so a {@code modelToWorld} whose bottom
+     * row is not {@code (0, 0, 0, 1)} loses it. {@link Scene} refuses such a
+     * transform rather than letting it be silently dropped.</p>
+     *
+     * @param modelToWorld the instance's placement in the world
+     * @param dest the destination buffer
+     * @param destOffset index of the first of {@link #WORLD_TO_CLIP_FLOATS}
+     *     floats to write
+     */
+    public void packModelToClip(final Mat4 modelToWorld, final float[] dest,
+        final int destOffset)
+    {
+        packConcatenatedRow(worldToClip, ROW_X, modelToWorld, dest, destOffset + ROW_X);
+        packConcatenatedRow(worldToClip, ROW_Y, modelToWorld, dest, destOffset + ROW_Y);
+        packConcatenatedRow(worldToClip, ROW_W, modelToWorld, dest, destOffset + ROW_W);
+    }
+
+    // One row of (packed 3x4) . (Mat4), as four dot products against the
+    // matrix's columns.
+    private static void packConcatenatedRow(final float[] packed, final int row,
+        final Mat4 rhs, final float[] dest, final int destOffset)
+    {
+        for (int column = 0; column < Mat4.ORDER; column++)
+        {
+            // MUTABLE local — accumulator for one dot product.
+            float sum = 0.0f;
+            for (int k = 0; k < Mat4.ORDER; k++)
+            {
+                sum += packed[row + k] * rhs.get(k, column);
+            }
+            dest[destOffset + column] = sum;
+        }
+    }
+
+    /**
+     * Builds a packed clip transform for geometry that is <b>already in view
+     * space</b> — a first-person viewmodel ({@link Scene}).
+     *
+     * <p>The view matrix is skipped entirely and only the projection is
+     * applied, which for this pipeline is two scalars and an identity w row
+     * ({@code render/README.md} § 4): {@code x_clip = x_view * scaleX},
+     * {@code y_clip = y_view * scaleY}, {@code w_clip = z_view}. The result is
+     * in the same packed layout as {@link #packModelToClip}, so the per-vertex
+     * path cannot tell the two apart.</p>
+     *
+     * <p>Only the camera's frustum is used, never its position or orientation:
+     * that is exactly what makes a viewmodel stay welded to the eye however
+     * the player turns.</p>
+     *
+     * @param modelToView the viewmodel's placement relative to the eye
+     * @param dest the destination buffer
+     * @param destOffset index of the first of {@link #WORLD_TO_CLIP_FLOATS}
+     *     floats to write
+     */
+    public void packViewToClip(final Mat4 modelToView, final float[] dest,
+        final int destOffset)
+    {
+        packScaledRow(modelToView, 0, scaleX, dest, destOffset + ROW_X);
+        packScaledRow(modelToView, 1, scaleY, dest, destOffset + ROW_Y);
+        packScaledRow(modelToView, 2, 1.0f, dest, destOffset + ROW_W);
+    }
+
+    // One row of the source matrix, multiplied by its projection scale.
+    private static void packScaledRow(final Mat4 source, final int row, final float scale,
+        final float[] dest, final int destOffset)
+    {
+        for (int column = 0; column < Mat4.ORDER; column++)
+        {
+            dest[destOffset + column] = source.get(row, column) * scale;
+        }
     }
 
     /**
