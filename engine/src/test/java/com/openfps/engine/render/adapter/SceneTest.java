@@ -1,0 +1,210 @@
+/*
+ * Copyright (c) 2026 Nicholas Hutter and contributors.
+ * SPDX-License-Identifier: MIT
+ */
+
+package com.openfps.engine.render.adapter;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+
+/**
+ * Tests for the scene description: what it holds, and what it refuses.
+ *
+ * <p>The refusals are the interesting half. A mirrored transform renders a
+ * model inside-out rather than failing, which is exactly the class of defect
+ * {@code render/README.md} § 7 warns "looks like a plausible model, not like an
+ * error" — so it is rejected at build time, where it can carry a message.</p>
+ */
+@DisplayName("Scene")
+final class SceneTest
+{
+    /** A quad's colour; irrelevant to these tests, which never rasterize. */
+    private static final int COLOUR = 0xFF8040FF;
+
+    /** Half-edge of the test quad. */
+    private static final float HALF = 1.0f;
+
+    /** A right angle, for the rotation case. */
+    private static final float QUARTER_TURN = (float) (Math.PI / 2.0);
+
+    /** A scale factor that is not one. */
+    private static final float SCALE = 2.0f;
+
+    @Nested
+    @DisplayName("contents")
+    class Contents
+    {
+        @Test
+        @DisplayName("of() is one untransformed world instance")
+        void shouldWrapASingleModelAsOneWorldInstance()
+        {
+            final ModelFormat model = quad();
+            final Scene scene = Scene.of(model);
+
+            assertThat(scene.worldInstanceCount()).isEqualTo(1);
+            assertThat(scene.viewInstanceCount()).isZero();
+            assertThat(scene.worldModel(0)).isSameAs(model);
+            assertThat(scene.worldTransform(0).get(0, 0)).isEqualTo(1.0f);
+            assertThat(scene.worldTransform(0).get(0, 3)).isZero();
+        }
+
+        @Test
+        @DisplayName("the two lists are kept apart and in submission order")
+        void shouldKeepWorldAndViewInstancesSeparate()
+        {
+            final ModelFormat world = quad();
+            final ModelFormat hand = quad();
+            final Scene scene = Scene.builder()
+                .addWorldInstance(world, Mat4.translation(1.0f, 0.0f, 0.0f))
+                .addViewInstance(hand, Mat4.translation(0.0f, 0.0f, 1.0f))
+                .addWorldInstance(world, Mat4.identity())
+                .build();
+
+            assertThat(scene.worldInstanceCount()).isEqualTo(2);
+            assertThat(scene.viewInstanceCount()).isEqualTo(1);
+            assertThat(scene.instanceCount()).isEqualTo(3);
+            assertThat(scene.worldTransform(0).get(0, 3)).isEqualTo(1.0f);
+            assertThat(scene.worldTransform(1).get(0, 3)).isZero();
+            assertThat(scene.viewModel(0)).isSameAs(hand);
+            assertThat(scene.viewTransform(0).get(2, 3)).isEqualTo(1.0f);
+        }
+
+        @Test
+        @DisplayName("the empty scene holds nothing and sizes nothing")
+        void shouldDescribeAnEmptyScene()
+        {
+            assertThat(Scene.EMPTY.worldInstanceCount()).isZero();
+            assertThat(Scene.EMPTY.viewInstanceCount()).isZero();
+            assertThat(Scene.EMPTY.instanceCount()).isZero();
+            assertThat(Scene.EMPTY.maxInstanceTriangles()).isZero();
+            assertThat(Scene.EMPTY.toString()).contains("world=0");
+        }
+
+        @Test
+        @DisplayName("maxInstanceTriangles is the largest single instance, across both passes")
+        void shouldReportTheLargestInstance()
+        {
+            // The render port sizes its clip-space buffers by this figure, and
+            // it is a maximum rather than a sum precisely because instances go
+            // through the pipeline one at a time.
+            final ModelFormat small = quad();
+            final ModelFormat large = ModelFormat.read(CubeFixture.build());
+            final Scene scene = Scene.builder()
+                .addWorldInstance(small, Mat4.identity())
+                .addViewInstance(large, Mat4.identity())
+                .build();
+
+            assertThat(large.triangleCount()).isGreaterThan(small.triangleCount());
+            assertThat(scene.maxInstanceTriangles()).isEqualTo(large.triangleCount());
+        }
+
+        @Test
+        @DisplayName("a builder may be reused without the built scene changing")
+        void shouldNotShareStorageWithItsBuilder()
+        {
+            final Scene.Builder builder = Scene.builder().addWorldInstance(quad(),
+                Mat4.identity());
+            final Scene first = builder.build();
+            builder.addWorldInstance(quad(), Mat4.identity());
+
+            assertThat(first.worldInstanceCount()).isEqualTo(1);
+            assertThat(builder.build().worldInstanceCount()).isEqualTo(2);
+        }
+    }
+
+    @Nested
+    @DisplayName("transforms it refuses")
+    class Refusals
+    {
+        @Test
+        @DisplayName("a mirror is refused, because it would invert backface culling")
+        void shouldRefuseANegativeDeterminant()
+        {
+            final Scene.Builder builder = Scene.builder();
+
+            assertThatThrownBy(() -> builder.addWorldInstance(quad(),
+                TransformFixture.mirrorX()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("negative determinant")
+                .hasMessageContaining("winding");
+        }
+
+        @Test
+        @DisplayName("a view instance is held to the same winding rule")
+        void shouldRefuseANegativeDeterminantOnAViewInstance()
+        {
+            final Scene.Builder builder = Scene.builder();
+
+            assertThatThrownBy(() -> builder.addViewInstance(quad(),
+                TransformFixture.mirrorX()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("modelToView");
+        }
+
+        @Test
+        @DisplayName("a singular transform is refused")
+        void shouldRefuseAZeroDeterminant()
+        {
+            final Scene.Builder builder = Scene.builder();
+
+            assertThatThrownBy(() -> builder.addWorldInstance(quad(),
+                TransformFixture.flattenZ()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("singular");
+        }
+
+        @Test
+        @DisplayName("a projective bottom row is refused rather than silently dropped")
+        void shouldRefuseANonAffineTransform()
+        {
+            // The packed clip transform has three rows. A fourth-row term
+            // would be ignored, and a transform that is quietly not the one
+            // you asked for is worse than one that is refused.
+            final Scene.Builder builder = Scene.builder();
+
+            assertThatThrownBy(() -> builder.addWorldInstance(quad(),
+                TransformFixture.projective()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("affine");
+        }
+
+        @Test
+        @DisplayName("rotation, uniform scale and translation are all accepted")
+        void shouldAcceptOrientationPreservingTransforms()
+        {
+            final Scene scene = Scene.builder()
+                .addWorldInstance(quad(), TransformFixture.rotationZ(QUARTER_TURN))
+                .addWorldInstance(quad(), TransformFixture.uniformScale(SCALE))
+                .addWorldInstance(quad(), Mat4.translation(1.0f, 2.0f, 3.0f))
+                .build();
+
+            assertThat(scene.worldInstanceCount()).isEqualTo(3);
+        }
+
+        @Test
+        @DisplayName("a null model, a null transform and an empty model are all refused")
+        void shouldRefuseUnusableInstances()
+        {
+            final Scene.Builder builder = Scene.builder();
+            final ModelFormat empty = ModelFormat.read(ModelFileFixture.empty());
+
+            assertThatThrownBy(() -> builder.addWorldInstance(null, Mat4.identity()))
+                .isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> builder.addWorldInstance(quad(), null))
+                .isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> builder.addViewInstance(empty, Mat4.identity()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("no triangles");
+        }
+    }
+
+    private static ModelFormat quad()
+    {
+        return ModelFormat.read(QuadFixture.square(HALF, COLOUR));
+    }
+}

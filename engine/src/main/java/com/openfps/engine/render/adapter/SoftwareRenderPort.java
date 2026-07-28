@@ -30,7 +30,7 @@ import org.slf4j.LoggerFactory;
  * table draws:
  *
  * <pre>
- *   ModelFormat  -&gt;  Camera        world to clip           per vertex
+ *   ModelFormat  -&gt;  Camera        model to world to clip  per vertex
  *                -&gt;  TriangleClipper  near-plane clip      per triangle
  *                -&gt;  Rasterizer    divide, viewport, cull,
  *                                   edge setup, bin to tiles
@@ -38,10 +38,45 @@ import org.slf4j.LoggerFactory;
  *                -&gt;  Framebuffer   finished
  * </pre>
  *
- * <p>Four {@code submitParallel} passes make up a frame: geometry (transform
- * and clip), then {@link Rasterizer}'s own setup-and-count and scatter, then
- * the tile raster. Each is separated from the next by the pool's publish/join
- * boundary, so no barrier of ours is needed.</p>
+ * <p>Four {@code submitParallel} passes make up an instance: geometry
+ * (transform and clip), then {@link Rasterizer}'s own setup-and-count and
+ * scatter, then the tile raster. Each is separated from the next by the pool's
+ * publish/join boundary, so no barrier of ours is needed.</p>
+ *
+ * <h2>The scene, and the two passes</h2>
+ *
+ * <p>{@link Scene} holds two instance lists, and a frame renders them in this
+ * order:</p>
+ *
+ * <ol>
+ *   <li>Clear colour and depth.</li>
+ *   <li><b>World instances</b>, each with its own {@code modelToWorld}
+ *       concatenated into the camera's packed transform — once per instance,
+ *       so the per-vertex cost is identical to the untransformed case
+ *       ({@link Camera#packModelToClip}).</li>
+ *   <li><b>Clear depth, not colour.</b></li>
+ *   <li><b>View instances</b> — the first-person viewmodel — which are already
+ *       in view space and take the projection alone
+ *       ({@link Camera#packViewToClip}).</li>
+ * </ol>
+ *
+ * <p>The depth reset in step 3 is the classic FPS solution to the weapon
+ * clipping through a wall the player is standing against: the viewmodel is
+ * depth-tested only against itself, so nothing in the world can occlude it,
+ * and it still composites over the world because colour is left alone. The
+ * alternative — squeezing the world into part of the depth range and the
+ * viewmodel into the rest — buys nothing here and costs precision everywhere.</p>
+ *
+ * <p><b>Instances are rendered one at a time</b>, each through the whole
+ * pipeline, sharing the framebuffer's depth buffer. That is what makes the
+ * result independent of submission order: the depth test resolves two
+ * instances against each other exactly as it resolves two triangles.
+ * {@link Rasterizer} is <b>reused</b> across instances — one instance for the
+ * whole port — but must be <b>reset per instance</b> with
+ * {@link Rasterizer#beginFrame}, because its per-triangle records and tile bins
+ * are indexed by position within a single submitted stream. It does not clear
+ * the framebuffer, so resetting it between instances composites rather than
+ * overwrites.</p>
  *
  * <h2>The backface winding convention — SETTLED, EMPIRICALLY</h2>
  *
@@ -122,8 +157,16 @@ import org.slf4j.LoggerFactory;
  *
  * <p>Nothing is allocated per frame except the {@link Camera}, which
  * {@code render/README.md} § 4 explicitly sanctions ("Build one per frame").
- * Every buffer is sized once by {@link #loadModel}, and the framebuffer only by
- * {@link #resize}.</p>
+ * Every geometry buffer is sized by {@link #setScene}, and the framebuffer only
+ * by {@link #resize}.</p>
+ *
+ * <p><b>Sized for the largest instance, not for their sum.</b> Instances go
+ * through the pipeline one at a time, so the clip-space stream only ever holds
+ * one of them. The buffers therefore grow when a scene arrives containing a
+ * model bigger than any seen so far, and never shrink — a scene swap that adds
+ * instances of models already sized for allocates nothing at all. The
+ * per-instance packed transform is one 12-float scratch reused by every
+ * instance in the frame.</p>
  */
 public final class SoftwareRenderPort implements I_RenderPort
 {
@@ -186,6 +229,12 @@ public final class SoftwareRenderPort implements I_RenderPort
     /** World up used by the default orbit camera. */
     private static final Vec3 WORLD_UP = new Vec3(0.0f, 1.0f, 0.0f);
 
+    /** World origin, where the fallback camera for a world-less scene sits. */
+    private static final Vec3 ORIGIN = new Vec3(0.0f, 0.0f, 0.0f);
+
+    /** The direction that fallback camera looks in; view space is +z forward. */
+    private static final Vec3 VIEW_FORWARD = new Vec3(0.0f, 0.0f, 1.0f);
+
     /** Nanoseconds in a millisecond, for the frame-time log. */
     private static final double NANOS_PER_MILLI = 1_000_000.0;
 
@@ -202,19 +251,41 @@ public final class SoftwareRenderPort implements I_RenderPort
     /** The transform-and-clip pass, one index per chunk. Held once; never allocated per frame. */
     private final I_ParallelJob geometryJob = this::runGeometryChunk;
 
-    /** The loaded model, or null. MUTABLE: rebound by {@link #loadModel}. */
-    private volatile ModelFormat model;
+    /**
+     * The packed model-to-clip transform of the instance currently being
+     * transformed. MUTABLE: rewritten once per instance, read by every
+     * geometry chunk of that instance. One scratch serves the whole frame
+     * because instances are rendered strictly one after another, and the
+     * pool's publish/join boundary is what makes the write visible to the
+     * workers.
+     */
+    private final float[] geometryTransform = new float[Camera.WORLD_TO_CLIP_FLOATS];
 
-    /** Textures indexed by material. MUTABLE: rebuilt by {@link #loadModel}. */
-    private volatile MipChain[] textures;
+    /** The bound scene, or null before one is set. MUTABLE: rebound by {@link #setScene}. */
+    private volatile Scene scene;
 
-    /** Sized for the loaded model. MUTABLE: rebuilt by {@link #loadModel}. */
+    /** Derived tables for the scene's world instances. MUTABLE: rebuilt by {@link #setScene}. */
+    private volatile Instance[] worldInstances;
+
+    /** Derived tables for the scene's view instances. MUTABLE: rebuilt by {@link #setScene}. */
+    private volatile Instance[] viewInstances;
+
+    /** Largest instance the geometry buffers are sized for. MUTABLE: grows, never shrinks. */
+    private volatile int sizedForTriangles;
+
+    /** The instance the geometry pass is transforming. MUTABLE: rebound per instance. */
+    private volatile Instance geometryInstance;
+
+    /** The near plane the geometry pass clips against. MUTABLE: rebound per frame. */
+    private volatile float geometryNear;
+
+    /** Sized for the largest instance. MUTABLE: rebuilt by {@link #setScene}. */
     private volatile Rasterizer rasterizer;
 
     /** One clipper per chunk — its scratch polygon is instance state. MUTABLE. */
     private volatile TriangleClipper[] clippers;
 
-    /** One input-triangle scratch per chunk. MUTABLE: rebuilt by {@link #loadModel}. */
+    /** One input-triangle scratch per chunk. MUTABLE: rebuilt by {@link #setScene}. */
     private volatile float[][] chunkScratch;
 
     /** Clip-space output stream, worst case {@link #CLIP_EXPANSION} per input triangle. MUTABLE. */
@@ -225,12 +296,6 @@ public final class SoftwareRenderPort implements I_RenderPort
 
     /** Per-output-triangle flat colour. MUTABLE. */
     private volatile int[] clipColors;
-
-    /** Per-model-triangle material index, precomputed from the submesh table. MUTABLE. */
-    private volatile int[] triangleMaterial;
-
-    /** Per-model-triangle flat colour, from the first vertex's baked colour. MUTABLE. */
-    private volatile int[] triangleColor;
 
     /** Output triangles each chunk produced this frame. MUTABLE: written per frame. */
     private volatile int[] chunkProduced;
@@ -372,11 +437,11 @@ public final class SoftwareRenderPort implements I_RenderPort
         }
     }
 
-    // ---- model ----
+    // ---- the scene ----
 
     /**
-     * Loads a model from a {@link ModelFormat} file image and sizes every
-     * per-frame buffer for it.
+     * Loads a model from a {@link ModelFormat} file image and binds it as a
+     * one-instance scene.
      *
      * @param fileImage the whole {@code .ofm} file, as the converter wrote it
      * @throws ModelFormatException if the image is not a readable model
@@ -387,44 +452,83 @@ public final class SoftwareRenderPort implements I_RenderPort
     }
 
     /**
-     * Binds an already-parsed model and sizes every per-frame buffer for it.
+     * Binds an already-parsed model as a scene of one untransformed world
+     * instance.
      *
-     * <p>This is the only allocation site outside {@link #resize}. Buffers are
-     * sized for the worst case — {@link #CLIP_EXPANSION} output triangles per
-     * input triangle — so the per-frame path never grows anything.</p>
+     * <p>Exactly {@code setScene(Scene.of(newModel))}, and it exists because
+     * one model at the origin is what the preview tool and the windowed run
+     * want. The single-model behaviour is <b>not</b> a second code path
+     * through the renderer — it is the general path with one instance.</p>
      *
      * @param newModel the model to draw; must not be null
      * @throws IllegalArgumentException if the model is null or has no triangles
      */
     public void loadModel(final ModelFormat newModel)
     {
-        if (newModel == null)
-        {
-            throw new IllegalArgumentException("model must not be null");
-        }
-        final int triangles = newModel.triangleCount();
-        if (triangles <= 0)
-        {
-            throw new IllegalArgumentException("model has no triangles");
-        }
+        setScene(Scene.of(newModel));
+    }
 
+    /**
+     * Binds a scene and sizes every geometry buffer for its largest instance.
+     *
+     * <p>This is the only allocation site outside {@link #resize}, and it
+     * allocates nothing when the new scene's largest model is no bigger than
+     * the largest already sized for. Buffers are sized for the worst case —
+     * {@link #CLIP_EXPANSION} output triangles per input triangle — so the
+     * per-frame path never grows anything.</p>
+     *
+     * <p>Serialised against a frame in flight, so a scene may be swapped from
+     * any thread.</p>
+     *
+     * @param newScene the scene to draw; must not be null. {@link Scene#EMPTY}
+     *     is legal and renders a cleared frame
+     * @throws IllegalArgumentException if the scene is null
+     */
+    public void setScene(final Scene newScene)
+    {
+        if (newScene == null)
+        {
+            throw new IllegalArgumentException("scene must not be null");
+        }
         frameLock.lock();
         try
         {
-            bindModel(newModel, triangles);
+            bindScene(newScene);
         }
         finally
         {
             frameLock.unlock();
         }
-        LOG.info("Model loaded: {} triangles, {} vertices, {} submeshes, {} textures",
-            triangles, newModel.vertexCount(), newModel.submeshCount(),
-            newModel.textureCount());
+        LOG.info("Scene bound: {} world instances, {} view instances, largest {} triangles",
+            newScene.worldInstanceCount(), newScene.viewInstanceCount(),
+            newScene.maxInstanceTriangles());
     }
 
-    // Sizes every buffer the pipeline needs for one model. Called under the lock.
-    private void bindModel(final ModelFormat newModel, final int triangles)
+    /** Returns the bound scene, or null before {@link #setScene} has been called. */
+    public Scene scene()
     {
+        return scene;
+    }
+
+    // Prepares each instance's derived tables and grows the geometry buffers if
+    // this scene needs more than the last one did. Called under the lock.
+    private void bindScene(final Scene newScene)
+    {
+        growBuffersFor(newScene.maxInstanceTriangles());
+        this.worldInstances = prepareWorld(newScene);
+        this.viewInstances = prepareView(newScene);
+        this.scene = newScene;
+    }
+
+    // Sizes the clip-space stream, the per-chunk scratch and the rasterizer for
+    // the largest single instance. Grow-only: a smaller scene keeps the bigger
+    // buffers rather than reallocating down and back up on the next swap.
+    private void growBuffersFor(final int triangles)
+    {
+        if (triangles <= sizedForTriangles)
+        {
+            return;
+        }
         final int maxOutput = triangles * CLIP_EXPANSION;
 
         this.clipVertices = new float[maxOutput * TRIANGLE_FLOATS];
@@ -442,11 +546,50 @@ public final class SoftwareRenderPort implements I_RenderPort
         this.clippers = newClippers;
         this.chunkScratch = newScratch;
 
-        this.triangleMaterial = buildTriangleMaterials(newModel, triangles);
-        this.triangleColor = buildTriangleColors(newModel, triangles);
-        this.textures = buildTextures(newModel);
         this.rasterizer = new Rasterizer(ATTRIBUTE_COUNT, maxOutput, chunkCount, cullMode);
-        this.model = newModel;
+        this.sizedForTriangles = triangles;
+    }
+
+    // One prepared entry per world instance, in submission order.
+    private static Instance[] prepareWorld(final Scene source)
+    {
+        final Instance[] out = new Instance[source.worldInstanceCount()];
+        for (int index = 0; index < out.length; index++)
+        {
+            out[index] = prepare(source.worldModel(index), out, index);
+        }
+        return out;
+    }
+
+    // One prepared entry per view instance, in submission order.
+    private static Instance[] prepareView(final Scene source)
+    {
+        final Instance[] out = new Instance[source.viewInstanceCount()];
+        for (int index = 0; index < out.length; index++)
+        {
+            out[index] = prepare(source.viewModel(index), out, index);
+        }
+        return out;
+    }
+
+    // Flattening the submesh table and building the mip chains costs one pass
+    // over the model, so the same model appearing more than once in a pass
+    // reuses the first entry rather than repeating it. Reference identity is
+    // the right test: ModelFormat is immutable and one parsed file is one
+    // object.
+    private static Instance prepare(final ModelFormat source, final Instance[] done,
+        final int upTo)
+    {
+        for (int index = 0; index < upTo; index++)
+        {
+            if (done[index].model == source)
+            {
+                return done[index];
+            }
+        }
+        final int triangles = source.triangleCount();
+        return new Instance(source, buildTriangleMaterials(source, triangles),
+            buildTriangleColors(source, triangles), buildTextures(source));
     }
 
     // Flattens the submesh table into one material index per triangle. A
@@ -499,8 +642,10 @@ public final class SoftwareRenderPort implements I_RenderPort
     /**
      * Renders one frame into the framebuffer.
      *
-     * <p>A no-op until both a surface ({@link #resize}) and a model
-     * ({@link #loadModel}) exist. Runs on whatever thread the event bus
+     * <p>A no-op until both a surface ({@link #resize}) and a scene
+     * ({@link #setScene} or {@link #loadModel}) exist. A scene with no
+     * instances in it is not the same thing as no scene: it renders, and
+     * produces a cleared frame. Runs on whatever thread the event bus
      * dispatched {@code RenderFrameEvent} on, and fans out from there.</p>
      *
      * @param ticIndex the current tic, which drives the default orbit camera
@@ -508,15 +653,14 @@ public final class SoftwareRenderPort implements I_RenderPort
     @Override
     public void renderFrame(final int ticIndex)
     {
-        final ModelFormat current = model;
-        if (current == null || framebuffer.state() != Framebuffer.State.READY)
+        if (scene == null || framebuffer.state() != Framebuffer.State.READY)
         {
             return;
         }
         frameLock.lock();
         try
         {
-            drawFrame(current, ticIndex);
+            drawFrame(scene, ticIndex);
         }
         catch (final IllegalStateException e)
         {
@@ -545,31 +689,69 @@ public final class SoftwareRenderPort implements I_RenderPort
         LOG.debug("Frame {} abandoned: the worker pool stopped mid-frame", ticIndex);
     }
 
-    // The four passes of a frame. Called under the lock, with a model bound and
-    // the framebuffer READY.
-    private void drawFrame(final ModelFormat current, final int ticIndex)
+    // One frame: the world pass, the depth reset, the view pass. Called under
+    // the lock, with a scene bound and the framebuffer READY.
+    private void drawFrame(final Scene current, final int ticIndex)
     {
         final long started = time.nanos();
         final Camera view = cameraFor(current, ticIndex);
         this.lastCamera = view;
+        this.geometryNear = view.near();
         final I_ThreadPoolPort workers = activePool();
 
         framebuffer.clear(DEFAULT_CLEAR_COLOR);
 
-        dispatch(geometryJob, chunkCount, workers);
-        final int triangles = compactChunks();
+        // MUTABLE local — triangles the whole scene handed the rasterizer.
+        int triangles = 0;
+        final Instance[] world = worldInstances;
+        for (int index = 0; index < world.length; index++)
+        {
+            view.packModelToClip(current.worldTransform(index), geometryTransform, 0);
+            triangles += renderInstance(world[index], workers);
+        }
 
-        final Rasterizer setup = rasterizer;
-        setup.beginFrame(framebuffer);
-        setup.setupAndBin(clipVertices, triangles, clipMaterials, clipColors, workers);
-        setup.rasterize(spanRenderer, textures, workers);
+        // The viewmodel is depth-tested only against itself. Colour is NOT
+        // cleared: the weapon composites over the world it was just occluded
+        // by. See the class Javadoc.
+        final Instance[] hand = viewInstances;
+        if (hand.length > 0)
+        {
+            framebuffer.clearDepth();
+            for (int index = 0; index < hand.length; index++)
+            {
+                view.packViewToClip(current.viewTransform(index), geometryTransform, 0);
+                triangles += renderInstance(hand[index], workers);
+            }
+        }
 
         this.lastFrameTriangles = triangles;
         this.lastFrameNanos = time.nanos() - started;
         this.framesRendered = framesRendered + 1;
     }
 
-    // Transforms and clips one contiguous slice of the model's triangles.
+    // One instance through the whole pipeline, with its packed transform
+    // already in geometryTransform. Returns the triangles it submitted.
+    //
+    // The rasterizer is reset rather than replaced: beginFrame clears the tile
+    // bins and the triangle count, which is required because records and bins
+    // are indexed by position within one submitted stream. It does not touch
+    // the framebuffer, so the depth buffer carries across instances and
+    // resolves them against one another whatever order they arrive in.
+    private int renderInstance(final Instance instance, final I_ThreadPoolPort workers)
+    {
+        this.geometryInstance = instance;
+        dispatch(geometryJob, chunkCount, workers);
+        final int triangles = compactChunks(instance.model.triangleCount());
+
+        final Rasterizer setup = rasterizer;
+        setup.beginFrame(framebuffer);
+        setup.setupAndBin(clipVertices, triangles, clipMaterials, clipColors, workers);
+        setup.rasterize(spanRenderer, instance.textures, workers);
+        return triangles;
+    }
+
+    // Transforms and clips one contiguous slice of the current instance's
+    // triangles.
     //
     // Chunk c is one submitParallel index, so this body never runs concurrently
     // with itself: its clipper, its scratch and its region of the output stream
@@ -578,17 +760,18 @@ public final class SoftwareRenderPort implements I_RenderPort
     // scheme was never needed.
     private void runGeometryChunk(final int chunk)
     {
-        final ModelFormat current = model;
-        final Camera view = lastCamera;
-        final float near = view.near();
+        final Instance instance = geometryInstance;
+        final ModelFormat current = instance.model;
+        final float near = geometryNear;
+        final float[] transform = geometryTransform;
         final int[] indices = current.indices();
         final float[] scratch = chunkScratch[chunk];
         final TriangleClipper clipper = clippers[chunk];
         final float[] out = clipVertices;
         final int[] materials = clipMaterials;
         final int[] colors = clipColors;
-        final int[] sourceMaterial = triangleMaterial;
-        final int[] sourceColor = triangleColor;
+        final int[] sourceMaterial = instance.triangleMaterial;
+        final int[] sourceColor = instance.triangleColor;
 
         final int from = chunkStart(chunk, current.triangleCount());
         final int to = chunkStart(chunk + 1, current.triangleCount());
@@ -598,7 +781,7 @@ public final class SoftwareRenderPort implements I_RenderPort
         int produced = 0;
         for (int triangle = from; triangle < to; triangle++)
         {
-            gatherTriangle(current, indices, triangle, view, scratch);
+            gatherTriangle(current, indices, triangle, transform, scratch);
             final int emitted = clipper.clipTriangle(near, scratch, 0, out,
                 (outBase + produced) * TRIANGLE_FLOATS);
             for (int k = 0; k < emitted; k++)
@@ -617,16 +800,20 @@ public final class SoftwareRenderPort implements I_RenderPort
     // measures triangle setup at 26-64 ns against 600-900 ns of raster phase,
     // so the redundant transform is far below the noise floor and a separate
     // per-vertex pass would cost an extra parallel barrier to save it.
+    //
+    // The transform is the instance's packed model-to-clip, concatenated once
+    // per instance: model space goes straight to clip space in one three-row
+    // multiply, exactly as world space used to.
     private static void gatherTriangle(final ModelFormat source, final int[] indices,
-        final int triangle, final Camera view, final float[] scratch)
+        final int triangle, final float[] transform, final float[] scratch)
     {
         final int base = triangle * ModelFormat.INDICES_PER_TRIANGLE;
         for (int corner = 0; corner < TriangleClipper.TRIANGLE_VERTICES; corner++)
         {
             final int vertex = indices[base + corner];
             final int at = corner * VERTEX_STRIDE;
-            view.transformToClip(source.positionX(vertex), source.positionY(vertex),
-                source.positionZ(vertex), scratch, at);
+            Camera.transformToClip(transform, 0, source.positionX(vertex),
+                source.positionY(vertex), source.positionZ(vertex), scratch, at);
             scratch[at + TriangleClipper.POSITION_FLOATS] = source.texCoordU(vertex);
             scratch[at + TriangleClipper.POSITION_FLOATS + 1] = source.texCoordV(vertex);
         }
@@ -639,12 +826,11 @@ public final class SoftwareRenderPort implements I_RenderPort
     // starts at CLIP_EXPANSION times its first triangle, and every earlier
     // chunk emitted at most CLIP_EXPANSION per triangle. System.arraycopy is
     // memmove, so the overlapping case is defined regardless.
-    private int compactChunks()
+    private int compactChunks(final int triangles)
     {
         final float[] out = clipVertices;
         final int[] materials = clipMaterials;
         final int[] colors = clipColors;
-        final int triangles = model.triangleCount();
 
         // MUTABLE local — the compacted output cursor, in triangles.
         int cursor = 0;
@@ -722,17 +908,29 @@ public final class SoftwareRenderPort implements I_RenderPort
         return lastCamera;
     }
 
-    // An explicit camera wins; otherwise frame the model's bounding box and
-    // orbit it, so that a windowed run shows the model is genuinely 3D rather
-    // than a flat silhouette.
-    private Camera cameraFor(final ModelFormat current, final int ticIndex)
+    // An explicit camera wins; otherwise frame the first world instance's model
+    // and orbit it, so that a windowed run shows the model is genuinely 3D
+    // rather than a flat silhouette.
+    //
+    // The orbit reads the model's own bounding box and ignores its transform,
+    // which is exact for the one-instance scene loadModel builds and is only a
+    // default for anything richer. A real scene sets a camera.
+    private Camera cameraFor(final Scene current, final int ticIndex)
     {
         final Camera fixed = camera;
         if (fixed != null)
         {
             return fixed;
         }
-        return orbitCamera(current, aspect(), ticIndex * ORBIT_RADIANS_PER_TIC);
+        if (current.worldInstanceCount() == 0)
+        {
+            // Nothing to frame — a view-only scene needs a frustum, not a
+            // placement, because view instances never use the view matrix.
+            return Camera.create(ORIGIN, VIEW_FORWARD, WORLD_UP, DEFAULT_FOV_Y, aspect(),
+                DEFAULT_NEAR);
+        }
+        return orbitCamera(current.worldModel(0), aspect(),
+            ticIndex * ORBIT_RADIANS_PER_TIC);
     }
 
     private float aspect()
@@ -846,7 +1044,12 @@ public final class SoftwareRenderPort implements I_RenderPort
         return lastFrameNanos;
     }
 
-    /** Returns how many triangles the last frame handed the rasterizer, after clipping. */
+    /**
+     * Returns how many triangles the last frame handed the rasterizer, after
+     * clipping, summed over every instance in both passes.
+     *
+     * @return the scene total for the last frame
+     */
     public int lastFrameTriangles()
     {
         return lastFrameTriangles;
@@ -876,7 +1079,31 @@ public final class SoftwareRenderPort implements I_RenderPort
     {
         return "SoftwareRenderPort{" + framebuffer.width() + "x" + framebuffer.height()
             + ", chunks=" + chunkCount + ", cull=" + cullMode
+            + ", scene=" + scene
             + ", lastFrame=" + (lastFrameNanos / NANOS_PER_MILLI) + " ms"
             + ", triangles=" + lastFrameTriangles + "}";
+    }
+
+    // Everything the pipeline needs for one model, derived once when a scene is
+    // bound rather than per frame: the submesh table flattened to one material
+    // per triangle, the fallback flat colours, and the mip chains the span loop
+    // indexes by material. Two instances of the same model share one of these,
+    // and the transform is deliberately NOT in here — it belongs to the Scene,
+    // and folding it in per frame is a 12-float write, not a rebuild.
+    private static final class Instance
+    {
+        private final ModelFormat model;
+        private final int[] triangleMaterial;
+        private final int[] triangleColor;
+        private final MipChain[] textures;
+
+        Instance(final ModelFormat instanceModel, final int[] materials, final int[] colors,
+            final MipChain[] instanceTextures)
+        {
+            this.model = instanceModel;
+            this.triangleMaterial = materials;
+            this.triangleColor = colors;
+            this.textures = instanceTextures;
+        }
     }
 }
