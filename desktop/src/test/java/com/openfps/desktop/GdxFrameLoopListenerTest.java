@@ -21,7 +21,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * {@code pause/resume/resize/dispose} touch nothing but the engine
  * callback when the menu has not been built. {@code create()} and
  * {@code render()} read {@code Gdx.graphics}, which does not exist without
- * a display, so they are left to the manual windowed run.
+ * a display, so they are left to the manual windowed run — including the
+ * per-frame {@link GdxInputPort#pollDevice()} call {@code render()} makes.
  */
 class GdxFrameLoopListenerTest
 {
@@ -75,6 +76,21 @@ class GdxFrameLoopListenerTest
         final RecordingFrameCallback callback = new RecordingFrameCallback();
         listenerFor(callback).resize(1024, 768);
         assertThat(callback.resizeCount()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("an input port is optional — the listener still validates its other arguments")
+    void shouldAcceptAnOptionalInputPort()
+    {
+        final RecordingFrameCallback callback = new RecordingFrameCallback();
+        final DefaultMenuActions actions = new DefaultMenuActions(new NullWindowPort());
+        assertThat(new GdxFrameLoopListener(callback, actions, null, new GdxInputPort()))
+            .isNotNull();
+        assertThat(new GdxFrameLoopListener(callback, actions, null, null)).isNotNull();
+        assertThatThrownBy(
+            () -> new GdxFrameLoopListener(null, actions, null, new GdxInputPort()))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("callback");
     }
 
     @Test

@@ -102,6 +102,13 @@ public final class GdxWindowPort implements I_WindowPort
      */
     private volatile SoftwareRenderPort renderer;
 
+    /**
+     * The input port the frame loop should poll, or null for a window that
+     * reads no input. MUTABLE: set by {@link #attachInput} before
+     * {@link #runFrameLoop}.
+     */
+    private volatile GdxInputPort inputPort;
+
     @Override
     public void init()
     {
@@ -164,7 +171,8 @@ public final class GdxWindowPort implements I_WindowPort
         try
         {
             new Lwjgl3Application(
-                new GdxFrameLoopListener(callback, new DefaultMenuActions(this), presenter()),
+                new GdxFrameLoopListener(callback, new DefaultMenuActions(this), presenter(),
+                    inputPort),
                 buildConfiguration());
         }
         finally
@@ -208,6 +216,33 @@ public final class GdxWindowPort implements I_WindowPort
     public SoftwareRenderPort renderer()
     {
         return renderer;
+    }
+
+    /**
+     * Names the input port the frame loop should poll each frame.
+     *
+     * Same shape and same reasoning as {@link #attachRenderer}: reading the
+     * mouse is a GLFW call and so belongs to the thread that owns the window,
+     * but the port itself is a HAL adapter the engine holds. This is how the
+     * two are introduced, without {@code I_WindowPort} growing an input
+     * method. Passing null leaves a window that reads no input, which is what
+     * every windowless test gets.
+     *
+     * @param desktopInput the port to poll, or null for none
+     */
+    public void attachInput(final GdxInputPort desktopInput)
+    {
+        if (state == State.RUNNING)
+        {
+            throw new IllegalStateException("attachInput() while the frame loop is running");
+        }
+        this.inputPort = desktopInput;
+    }
+
+    /** Returns the input port named by {@link #attachInput}, or null. */
+    public GdxInputPort inputPort()
+    {
+        return inputPort;
     }
 
     // Builds the presenter for one run, or null when no renderer was attached.
