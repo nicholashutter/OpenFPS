@@ -81,7 +81,25 @@ core  ──►  core.event       (event types, factory)
 
 memory  ──►  common
 hal     ──►  common
+
+gameplay ──►  hal/port          (InputState — the latched input snapshot)
+         ──►  render/adapter    (Camera, Vec3 — PlayerController.camera())
+         ──►  core              (FrameRate — derives move speed from the tic rate)
 ```
+
+The three `gameplay` edges were added with `PlayerController` and are worth a
+note, because the middle one looks wrong at a glance. `STYLE.md` § 1.1 forbids
+an **adapter** importing core engine packages; it does not forbid a subsystem
+using another subsystem's public types, and there is precedent —
+`render.adapter` imports `core.pool` and `hal.port`, and `resource.adapter`
+imports `memory.port`. `camera(...)` is the only method carrying the render
+edge; the float accessors expose the same state without it, so the edge can be
+cut later if it ever becomes awkward.
+
+The direction that must **not** invert is `hal → gameplay`. `InputState` lives
+in `hal.port` and `I_PlayerInput` in `gameplay.port` with identical accessor
+names, so declaring `InputState implements I_PlayerInput` is tempting and
+wrong. `gameplay.PlayerInputView` adapts between them in the correct direction.
 
 `core` is the only package that knows about the bus, the pool, and the subsystem state machine. The subsystem ports stay minimal (`init/shutdown/port-specific-methods`); the `Subsystem` wrapper in `core.subsystem` adds the state machine and event dispatch.
 
@@ -126,10 +144,16 @@ Every subsystem has:
 `ShutdownEvent`. Without it, every shutdown logged a "no subsystem registered"
 warning, because `ShutdownEvent` targets CORE and nothing owned that ID.
 
-### 3.2 Gameplay — `com.openfps.engine.gameplay` — **stub**
+### 3.2 Gameplay — `com.openfps.engine.gameplay` — **first-person controller done, rest stub**
 
 **P_ Player & World Logic**
 
+- `PlayerController` — **done.** First-person movement: yaw/pitch from look
+  deltas, yaw-relative movement, pitch clamped to ±89°, wrapping yaw, eye-height
+  offset, and `camera(aspect)` producing a `render.adapter.Camera`. See the
+  determinism note in § 4.
+- `I_PlayerInput` — the four movement channels the controller consumes
+- `PlayerInputView` — adapts `hal.port.InputState` onto `I_PlayerInput`
 - `PlayerState`: position (fixed-point), velocity, angle, pitch, health, inventory
 - `Entity`: abstract base for all game objects (players, projectiles, pickups, doors)
 - `PhysicsWorld`: collision detection, gravity, sliding along walls (BSP-assisted)
@@ -286,6 +310,33 @@ adapter uploads it (§ 3.3).
 - **Entity ID**: `int` — unique per-level, rolled over on map load
 - **Tic number**: `int` — monotonically increasing from game start, no cap
 - **Frame budget**: `long` nanos, computed from `FrameRate` enum, NOT a constant
+
+### Recorded deviation — `PlayerController` uses `float`, not 16.16
+
+`PlayerController` holds player position, yaw and pitch in `float`. That is
+simulation state, so by the letter of this section it should be fixed-point.
+The deviation is deliberate and satisfies the *intent* of the rule, which is
+bit-identical simulation state across peers in lockstep:
+
+- **Since JEP 306, all Java 17 floating-point arithmetic is FP-strict IEEE 754.**
+  `+ − × ÷` and `sqrt` are bit-reproducible on every conforming JVM and CPU.
+  Fixed-point buys nothing here that the language does not already guarantee.
+- **The real hazard is the transcendentals.** `Math.sin` / `Math.cos` are
+  permitted 1–2 ulp of error and are explicitly *not* required to agree between
+  implementations. `StrictMath` is fdlibm-defined and is reproducible.
+
+So every trig call in the controller's update path is `StrictMath`, never
+`Math`. This is enforced by a test that reads the compiled class's constant
+pool and fails if `java/lang/Math` appears in it at all.
+
+That guard is not belt-and-braces. A 1-ulp heading error is sub-micron per step
+and invisible for minutes of play, and it **cannot reproduce in a single-process
+test**, because one process is self-consistent with itself. The desync only
+appears between two machines, which is exactly where it is most expensive to
+diagnose. Review alone would not catch a `Math.cos` slipping in.
+
+`FixedMath` remains correct for anything that must interoperate with the
+existing fixed-point map and entity data.
 
 ---
 
