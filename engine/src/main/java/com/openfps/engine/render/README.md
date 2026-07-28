@@ -100,7 +100,8 @@ textured) renders correctly both to a window and to a PNG.
 
 **What integration found that unit tests could not.** This section previously
 said to expect exactly this, and it is worth recording what actually turned up,
-because both bugs were invisible to a passing 748-test suite:
+because both bugs were invisible to a passing suite (748 tests at the time; 828
+in `:engine` and 1000 overall now):
 
 1. **`RenderFrameEvent` had no producer.** The event class, `EventFactory`
    method, `SubsystemId.R_` target and `RenderSubsystem` branch all existed and
@@ -204,7 +205,9 @@ Not fixed. The framebuffer is allocated at the surface size reported by
 rendering at a lower internal resolution and letting the adapter scale is a
 legitimate quality knob, not a fixed constraint.
 
-> **Open question — how the framebuffer gets allocated. See § 11(a).**
+> **Decided — `Framebuffer` allocates its own `int[]` and `float[]` directly,
+> once at `init` and again only on `resize`, not through `I_MemoryPort`.
+> See § 11(a) and the sanctioned-site table in `STYLE.md` § 13.4.**
 
 ---
 
@@ -1005,12 +1008,20 @@ So: **BSP is not gone from the project. It is gone from the renderer.**
 
 ---
 
-## 11. Open questions — decide these before implementing
+## 11. Open questions — one of the three is still open
 
-These are unresolved. They are recorded rather than resolved because both are
-genuine architectural conflicts with a real cost on each side.
+**(b) is the only unresolved item.** (a) was decided and (c) was measured; both
+stay here, with their answers marked in place, because the argument is what
+makes the answer defensible — deleting the losing option would leave a bare
+assertion that the next reader has to re-litigate.
 
-### (a) Framebuffer allocation vs. the memory port
+| | Status |
+|---|---|
+| (a) Framebuffer allocation vs. the memory port | **Decided** — option 1, narrowly scoped |
+| (b) The WAD subsystem's remaining role | **Open** — the user's call |
+| (c) The performance numbers | **Measured** — and they moved |
+
+### (a) Framebuffer allocation vs. the memory port — **DECIDED**
 
 **The conflict.** `AGENTS.md` and `STYLE.md` § 13.4 forbid `new byte[]` outside a
 memory-port adapter: every allocation goes through `I_MemoryPort`. But
@@ -1072,7 +1083,7 @@ real and option 2 becomes the better shape. Record the exception in `STYLE.md`
 § 13.4 as part of the `Framebuffer` lane, not afterwards; an undocumented
 exception is indistinguishable from a violation.
 
-### (b) The WAD subsystem has no art left to read
+### (b) The WAD subsystem has no art left to read — **STILL OPEN**
 
 **The situation.** `engine/.../resource/` is **built and working**: `WadReader`,
 `LumpCache`, `MapLumpParser`, `LittleEndian`, `WadFilePort`, backed by 101
@@ -1103,7 +1114,7 @@ and flats destined for a palette-indexed renderer — the planned `ImageDecoder`
 (`PLAN.md` Phase 2) decodes into a pixel format § 3 no longer uses. Do not
 implement `ImageDecoder` until (b) is resolved.
 
-### (c) The performance numbers — now measured, and they moved
+### (c) The performance numbers — **RESOLVED BY MEASUREMENT**, and they moved
 
 **The benchmark has been run.** `docs/ASSETS.md` § 2 carries the full results and
 is canonical. What matters for the lanes still unwritten:
@@ -1200,6 +1211,7 @@ check belongs in the adapter's tests, not in R_.
 - `port/I_RenderPort.java`, `port/I_RenderPortFactory.java`
 - `adapter/NullRenderPort.java` — headless stub
 - `adapter/SoftwareRenderPort.java` — the real port; composes the pipeline in § 5 order over four `submitParallel` passes
+- `adapter/Scene.java` — the immutable draw list: world instances plus view instances, each with its own `modelToWorld` (§ 5)
 - `adapter/Rgba.java`, `Framebuffer.java`, `Vec3.java`, `Mat4.java`, `Camera.java`, `TriangleClipper.java`, `Rasterizer.java`, `SpanRenderer.java`, `MipChain.java`, `TextureSampler.java`, `ModelFormat.java`, `ModelFormatException.java`
 
 `desktop/.../`:
@@ -1209,7 +1221,15 @@ check belongs in the adapter's tests, not in R_.
 
 `tools/.../` — build-time only, never on the runtime classpath:
 
-- `gltf/GltfConverter.java` and support, `model/ModelBuilder.java`, `model/MipGenerator.java`, `GltfConverterMain.java`, `RenderPreviewMain.java` (renders one frame to a PNG — the headless verification path)
+- `gltf/GltfConverter.java` and support, `model/ModelBuilder.java`, `model/MipGenerator.java`, `GltfConverterMain.java`
+- `AssetBudgetException.java` — thrown when an asset breaks a `docs/ASSETS.md` § 5 budget; fails the build rather than silently decimating the mesh
+- `model/CubeModel.java` — a hand-built textured cube, for exercising the pipeline with no third-party asset at all
+- `model/ProceduralRoom.java` — the generated greybox room used when no level kit has been staged (60 triangles; `docs/DEMO_ASSETS.md` § 5)
+- `DemoAssetsMain.java` — stages and converts the demo's models, reading every result back and reporting it against the budget
+- `RenderPreviewMain.java` — renders one frame to a PNG; the headless verification path
+- `DemoPreviewMain.java` — renders the whole demo scene, viewmodel included, to PNGs with no window and no graphics API
+- `FramePng.java` — writes a finished frame out, converting `Rgba`'s `0xRRGGBBAA` to `TYPE_INT_ARGB`
+- `ToolPool.java` — a standalone `WorkerPool` for a build-time tool, built through the engine's own `ThreadPoolFactory`
 
 ## 14. TODO (Phase 5)
 

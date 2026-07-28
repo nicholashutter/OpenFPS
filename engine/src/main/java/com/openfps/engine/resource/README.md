@@ -1,7 +1,12 @@
 # Resource (W_) — WAD File Loading
 
-> W_ reads resource files (textures, maps, sprites, sounds, etc.) and caches
-> them so the same lump isn't read twice.
+> W_ reads resource files and caches them so the same lump isn't read twice.
+
+**Read [Open question: what is this subsystem for now?](#open-question-what-is-this-subsystem-for-now)
+before acting on anything below it.** The container, the cache and the map
+parser are built and tested. What is *stale* is the assumption running through
+the rest of this file that the lumps being read are DOOM patches and flats bound
+for a palette-indexed renderer.
 
 ## What lives here
 
@@ -10,7 +15,59 @@
 - `MapLumpParser` — parses the map lumps (THINGS, LINEDEFS, SECTORS, VERTEXES)
 - `LittleEndian` — the LE primitive readers everything above shares
 - `WadFilePort` — the real `I_WadPort`, wiring the three together
-- `ImageDecoder` — decodes DOOM-format patches and flats *(still planned)*
+- `ImageDecoder` — decodes DOOM-format patches and flats *(on hold — see the open question)*
+
+## Status
+
+Everything in the list above except `ImageDecoder` is **built and working**,
+covered by **101 passing tests**. It is not a stub and it is not broken.
+
+It also has **no consumer**. `WadFilePort` and `MapLumpParser` are referenced
+only by their own tests. There is no `W_` subsystem, nothing is registered with
+the `SubsystemRegistry`, and `SubsystemId.W_` is unused — this is the one
+subsystem with no wrapper, so nothing can route an event to it. The seven
+registered subsystems are Audio, Core, Gameplay, Hal, Memory, Net and Render.
+
+## Open question: what is this subsystem for now?
+
+`docs/ASSETS.md` moves **all** art to preprocessed glTF, converted at build time
+into a flat binary format, and § 10 of that document records the rejection of
+Freedoom — the one complete, well-licensed WAD the project had identified. The
+renderer specified in `render/README.md` consumes neither palette-indexed
+textures nor BSP-compiled 2.5D sector maps.
+
+**So the WAD path currently has no art left to read.**
+
+Plausible remaining roles, none of them chosen:
+
+- **Map / level geometry container.** WAD is a serviceable generic indexed-lump
+  archive, and `MapLumpParser` already reads THINGS / LINEDEFS / SECTORS /
+  VERTEXES. Level *layout* and entity placement are not art and are not
+  superseded by glTF. This is the strongest candidate.
+- **Generic asset container.** Use the lump directory to hold model and texture
+  blobs — competing directly with just shipping the preprocessed payload as a
+  zip, which `build.gradle.kts` already does.
+- **A format the project drops later.** Keep it, stop investing, revisit if the
+  first two never materialise.
+
+**This is the user's call and is deliberately left open. Nothing is deleted and
+the subsystem is not dead.** The same question is recorded in
+`render/README.md` § 11(b), `PLAN.md` § 3.6, and `docs/ASSETS.md`; it is
+restated here because this is the file a reader of *this* package opens first.
+
+What it means for the sections below: the WAD **container** format — header,
+directory, lump slicing, endianness, the cache contract — is settled and shipped
+and is described as fact. The **content** conventions — flats, patches, sprite
+and sound namespaces, the palette — are DOOM's, and this project has no DOOM
+content and no palette. Treat them as a specification of the format we can read,
+not as a description of what we will load. They are kept because deleting them
+would throw away the format knowledge the answer to the open question may need.
+
+> **`ImageDecoder` is on hold. Do not implement it until this question is
+> resolved.** It decodes patches and flats into palette indices, and the
+> renderer has no palette — the pixel format it targets is one
+> `render/README.md` § 3 no longer uses. Writing it now produces working,
+> tested, unusable code. `render/README.md` states the same embargo.
 
 ## Subsystem layout
 
@@ -110,15 +167,28 @@ To find a lump by name, we scan the directory linearly, comparing each name
 byte-by-byte. For a typical WAD with 1000–2000 lumps this is fast enough.
 For larger WADs we build a `Map<String, Integer>` cache at first lookup.
 
-**Source — DOOM WAD format spec (unofficial)**:
-http://doom.wikia.com/wiki/WAD
+**Source — Matthew S Fell, "The Unofficial DOOM Specs" v1.666 (1994)**, chapter
+[2] "The WAD Format" — the container layout above, field for field:
+https://www.gamers.org/dhs/helpdocs/dmsp1666.html
 
-**Source — slade (open-source WAD editor) source for reference parsing**:
-https://github.com/sirjuddington/SLADE
+> **On citations.** This file used to cite the SLADE editor's source and a wiki
+> mirror. Both are gone. The project cites **specifications and papers, not
+> source repositories** — a GPL-2 codebase is not a reference an MIT project can
+> read while writing an implementation of the same format, and a wiki is not a
+> spec. `render/README.md` stripped its own source-repo citations for the same
+> reason.
 
-## Lump name conventions
+## Lump name conventions — DOOM's, for reference
 
-DOOM uses these name conventions:
+Everything in this section describes how *DOOM* organised a WAD. This project
+ships no DOOM content (`docs/ASSETS.md` § 10: "No IWADs, ever"), so none of these
+namespaces are currently produced or consumed. Whether any of them survive
+depends on the [open question](#open-question-what-is-this-subsystem-for-now):
+if the answer is "map/level container", the map-data row is the only one that
+matters; if it is "generic asset container", the project invents its own
+namespaces and this table becomes prior art rather than a target.
+
+DOOM's conventions:
 
 | Prefix | Type |
 |---|---|
@@ -132,7 +202,18 @@ DOOM uses these name conventions:
 `F_START` / `F_END` and `S_START` / `S_END` are markers that delimit a range
 of lumps. The count between them is variable.
 
-## Image format (patches and flats)
+## Image format (patches and flats) — specification only, nothing decodes this
+
+**No code in this repository reads either format, and `ImageDecoder` is on
+hold.** Both formats below decode to **palette indices**, and the renderer has
+no palette: `render/README.md` § 3 specifies 32-bit colour with mipmapped
+bilinear sampling, and `docs/ASSETS.md` routes every texture through the
+build-time glTF converter instead. Decoding a patch would therefore produce
+bytes with nowhere to go, plus a palette lookup table this project does not
+ship.
+
+The layouts are recorded so that whoever answers the open question does not have
+to rediscover them.
 
 ### Flat (64 × 64)
 
@@ -170,19 +251,32 @@ column:
         uint8 pad2;        // unused
 ```
 
-**Source — "DOOM Picture Format" — Encyclopedia**:
-https://doom.fandom.com/wiki/Picture_format
+**Source — Matthew S Fell, "The Unofficial DOOM Specs" v1.666 (1994)**, chapter
+[5] "Graphics" — the patch column format and the 64×64 flat:
+https://www.gamers.org/dhs/helpdocs/dmsp1666.html
 
-**Source — Ethan Lee's "img2pic" source code**:
-https://github.com/flibitijibibo/SDLPoP/blob/master/img2pic.c
+*(The two citations that stood here — a wiki article and an `img2pic.c` from an
+unrelated Prince of Persia port — are removed. Neither was a specification and
+the second was not even the right format.)*
 
 ## Caching strategy
 
-- **Static lumps** (textures, sprites): loaded on first read, kept forever.
-  Tag: `I_MemoryPort.TAG_CACHE`.
-- **Map lumps**: loaded on map start, freed on map end. Tag: `I_MemoryPort.TAG_GAME`.
-- **Audio lumps**: streamed, never fully resident. The audio adapter holds its
-  own pointers.
+`LumpCache` as shipped is **bounded and evict-on-release**. An earlier draft of
+this section said static lumps are "loaded on first read, kept forever"; that
+was never true of the implementation and contradicted the port table above,
+which is the accurate description of pinning. Nothing is kept forever.
+
+What the table does not cover is the budget. The cache has a byte ceiling.
+Making room evicts the least-recently-used **unpinned** entry first; if every
+resident lump is pinned and the ceiling still cannot be met, the load **fails
+loudly** rather than silently overcommitting. Every resident lump holds a
+matching `allocate(size, TAG_CACHE)` handle, and eviction calls `free`, so the
+memory port's accounting sees the cache as if the bytes lived inside it.
+
+The tag policy — `TAG_CACHE` for long-lived resources, `TAG_GAME` for per-map
+data freed at map end — is the intended split, but only `TAG_CACHE` is exercised
+today because nothing loads a map through this path yet. Streaming audio is
+unimplemented; no lump is streamed.
 
 ## Files
 
@@ -197,9 +291,13 @@ https://github.com/flibitijibibo/SDLPoP/blob/master/img2pic.c
 
 ## TODO (Phase 2)
 
-- [x] `WadReader` — header + directory parse
-- [x] `LumpCache` — demand-loaded, ref-counted
+- [x] `WadReader` — header + directory parse, lump slicing
+- [x] `LumpCache` — demand-loaded, ref-counted, bounded
 - [x] `MapLumpParser` — read THINGS / LINEDEFS / SECTORS / VERTEXES
-- [ ] `ImageDecoder` — patch + flat decode
-- [ ] `BlockmapBuilder` — pre-compute BLOCKMAP from LINEDEFS
-- [ ] A `W_` subsystem registering `WadFilePort` with the `SubsystemRegistry`
+- [x] `LittleEndian` + `WadFilePort` — the real `I_WadPort` (101 tests across the package)
+- [ ] `ImageDecoder` — patch + flat decode — **on hold**, blocked on the
+      [open question](#open-question-what-is-this-subsystem-for-now). Do not start it.
+- [ ] `BlockmapBuilder` — pre-compute BLOCKMAP from LINEDEFS. Same blocker if the
+      answer turns out not to be "map/level container".
+- [ ] A `W_` subsystem registering `WadFilePort` with the `SubsystemRegistry` —
+      genuinely still open, and the reason the package has no consumer today

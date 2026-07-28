@@ -4,23 +4,52 @@
 
 ## What lives here
 
+Built and tested today:
+
+- `PlayerController` — first-person look and movement in `float`, produces the `Camera`
+- `PlayerInputView` — presents the HAL's `InputState` as an `I_PlayerInput`
+- `I_GameplayPort` / `I_GameplayPortFactory` — what the core calls per tic, and
+  how a launcher builds one after the HAL exists
+
+**Planned — Phase 4. None of the following exist yet**, and the design sections
+below them are specification written ahead of the code rather than a description
+of it:
+
 - `PlayerState` — position (16.16 fixed-point), velocity, angle, pitch, health, armor
 - `Entity` — abstract base for all game objects: players, monsters, projectiles, pickups, doors
 - `PhysicsWorld` — collision detection, gravity, sliding along walls
 - `MapSubsector` / `Sector` — sector data with portal adjacency for movement
-- `MapLoader` — parses WAD map lumps (`THINGS`, `LINEDEFS`, `SECTORS`, `SSECTORS`, `NODES`)
+- `MapLoader` — parses map lumps (`THINGS`, `LINEDEFS`, `SECTORS`, `SSECTORS`, `NODES`).
+  Where those lumps come from is *not* settled — `render/README.md` § 11(b) has
+  the WAD subsystem's remaining role open, and map geometry is the strongest
+  candidate for it. Do not treat "from a WAD" as decided.
+
+`audio/README.md` and `net/README.md` mark their planned classes the same way;
+this file used not to, and read as an inventory of code that does not exist.
 
 ## Subsystem layout
 
 ```
 gameplay/
-├── PlayerController.java     first-person look + movement, produces the Camera
+├── PlayerController.java          first-person look + movement, produces the Camera
+├── PlayerInputView.java           adapts the HAL InputState onto I_PlayerInput
 ├── port/
-│   ├── I_GameplayPort.java   interface — called by core per tic
-│   └── I_PlayerInput.java    the four floats PlayerController consumes
+│   ├── I_GameplayPort.java        interface — called by core per tic
+│   ├── I_GameplayPortFactory.java builds the port once the HAL is initialised
+│   └── I_PlayerInput.java         the four floats PlayerController consumes
 └── adapter/
-    └── NullGameplayPort.java stub
+    └── NullGameplayPort.java      stub
 ```
+
+### The only live implementation
+
+`NullGameplayPort` is a stub and `PhysicsWorld` does not exist, so the one
+`I_GameplayPort` that actually plays anything is **`demo/DemoGameplayPort.java`**
+— it latches input, drives a `PlayerController` and aims the software renderer's
+camera, once per tic, under a lock. It is also the only place `PlayerController`
+is driven outside its own tests, which makes it the first thing to read when a
+change here needs to be seen rather than asserted. See
+`engine/src/main/java/com/openfps/engine/demo/README.md`.
 
 ## `PlayerController` — input to camera
 
@@ -82,7 +111,24 @@ compiled class's constant pool and fails if `java/lang/Math` appears in it.
 `I_PlayerInput` declares exactly the four floats the controller consumes:
 `forwardAxis`, `strafeAxis` (dimensionless, nominally −1..1) and `yawDelta`,
 `pitchDelta` (radians, already accumulated for the tic). The HAL's richer
-`InputState` — which also carries action flags — adapts onto it in one class.
+`InputState` — which also carries action flags — adapts onto it in
+`PlayerInputView`, and that one class is the whole adapter.
+
+Two things about it are deliberate and easy to undo by accident:
+
+- **It is not `InputState implements I_PlayerInput`.** The four accessors match
+  name for name, so the inheritance looks free. It is not: `InputState` lives in
+  `hal.port`, the contract every platform adapter compiles against, and making
+  the HAL implement a gameplay interface inverts the dependency `PLAN.md` § 2
+  draws (`hal` depends on `common` and nothing else). Gameplay knows about the
+  HAL; never the reverse.
+- **It is mutable on purpose.** `InputState` is immutable and a fresh one is
+  latched every tic, so a per-tic wrapper would allocate forever in the
+  simulation path. One view is created at startup and re-pointed with `wrap`.
+
+The action flags (`fire`, `jump`, `sprint`) are not forwarded — the controller
+has no use for them. Whatever consumes them later should read the `InputState`
+directly rather than widening this seam.
 **Do not grow a second copy of `InputState` here.**
 
 ## Physics math — what's coming
@@ -157,16 +203,20 @@ http://doom.wikia.com/wiki/WAD
 ## Files
 
 - `PlayerController.java` — first-person look and movement (72 tests)
-- `port/I_GameplayPort.java` — interface
+- `PlayerInputView.java` — the HAL `InputState` adapter (5 tests)
+- `port/I_GameplayPort.java` — interface, called by core per tic
+- `port/I_GameplayPortFactory.java` — deferred construction, mirroring `I_RenderPortFactory`
 - `port/I_PlayerInput.java` — the controller's input seam
 - `adapter/NullGameplayPort.java` — null impl
 
+**77 tests in this package.** Run with `.\gradlew.bat test`.
+
 ## TODO (Phase 4)
 
-- Adapt the HAL `InputState` onto `I_PlayerInput`
 - `PhysicsWorld` wraps `PlayerController` and rejects the blocked part of a move
 - `PlayerState` data class
 - `Entity` base + concrete types (monster, projectile, pickup, door)
 - `PhysicsWorld.moveWithSlide(player, dx, dy)` — collision + slide
-- `MapLoader` — read THINGS / LINEDEFS / SECTORS from WAD
+- `MapLoader` — read THINGS / LINEDEFS / SECTORS, once `render/README.md`
+  § 11(b) settles what the map container is
 - `BspTraverser` — leaf lookup, reused in both gameplay and render

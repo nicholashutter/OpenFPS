@@ -237,18 +237,20 @@ module is named.
 |---|---|---|
 | Core Loop | `core` | Phase 1.3 — event-driven, multi-threaded, configurable 30/60/120 Hz; pool also does caller-participating parallel fan-out (`submitParallel`) |
 | Gameplay | `gameplay` | `PlayerController` (first-person movement, StrictMath-deterministic) + `I_PlayerInput` / `PlayerInputView`; rest stub, registered as `P_` |
-| Render | `render` | Stub — port + null adapter, registered as `R_`. **Design settled, nothing implemented.** Multi-threaded software triangle rasterizer; `docs/ASSETS.md` § 2 is the canonical target and `render/README.md` § 1 is the Phase 5 spec. The 2.5D DOOM renderer (visplanes, column renderer, 8-bit palette) is retired |
+| Render | `render` | **Built and shipping** (316 tests), registered as `R_`. Multi-threaded software triangle rasterizer: `Framebuffer`, `Camera`, `TriangleClipper`, `Rasterizer`, `SpanRenderer`, `TextureSampler`, `MipChain`, `ModelFormat`, `Scene`, `SoftwareRenderPort`. Two passes per frame (world, then view-space viewmodel with a depth clear between). Measured p50 4.9 ms at 1280x720 on 8 workers. `docs/ASSETS.md` § 2 is the canonical target; `render/README.md` is the full spec — read it before touching any render code. The 2.5D DOOM renderer (visplanes, column renderer, 8-bit palette) is retired |
 | Audio | `audio` | Stub — port + null adapter, registered as `S_` |
 | Network | `net` | Port + null adapter, registered as `G_`. `TicCmd`, `TicCmdBuffer`, `PeerConnection`, `RedundantSender`, `AckWindow` are built (87 tests); no socket wired yet. `net/README.md` has a pending revision — check with the owner before editing it |
 | Resource | `resource` | `WadReader`, `LumpCache`, `MapLumpParser`, `LittleEndian`, `WadFilePort` all built (101 tests). **Not registered** — no `W_` subsystem yet. Its *role* is now an open question: `docs/ASSETS.md` moves all art to preprocessed glTF, so the WAD path has no art left to read. See `render/README.md` § 11b. Do not delete it and do not build `ImageDecoder` until that is resolved |
 | Memory | `memory` | Phase 1.1 — state machine, two backends (`JvmMemoryPort`, `ZoneMemoryPort`), factory |
 | HAL | `hal` | Ports + `nulladapter` + `sqlite` + `desktop` (time, datagram) adapters, system info, user profile |
+| *(not a subsystem)* | `demo` | `DemoScene`, `DemoGameplayPort` (35 tests) — the playable first-person demo's room layout, kit scale and weapon pose. Platform-free so `:tools` can render it headlessly and `:desktop` can run it live. Not registered with `SubsystemRegistry` |
 
 | Module | Contains |
 |---|---|
 | `:engine` | Everything above. Pure Java 17, **no platform dependencies** — this is what CI builds and tests with no display and no Android SDK. Keep it that way |
 | `:desktop` | libGDX LWJGL3 backend: `GdxWindowPort`, `GdxFrameLoopListener`, `GdxAdapterFactory`, main-menu screen, `DesktopLauncher` |
-| `:android` | libGDX Android backend: `AndroidWindowPort`, `AndroidAdapterFactory`, `AndroidLauncher`, Room-backed `RoomUserProfilePort` |
+| `:android` | libGDX Android backend: `AndroidWindowPort`, `AndroidAdapterFactory`, `AndroidLauncher`, Room-backed `RoomUserProfilePort`. Only included in the build when an Android SDK is present (`ANDROID_HOME` / `ANDROID_SDK_ROOT` / `local.properties`) — otherwise `settings.gradle.kts` silently skips it, so a green `gradlew build` does **not** imply `:android` compiles |
+| `:tools` | **Build-time only, never shipped.** glTF → `ModelFormat` converter (`GltfConverter`), `ModelBuilder`, `MipGenerator`, `ProceduralRoom`, and the headless `DemoPreviewMain` / `RenderPreviewMain` harnesses. Depends on `:engine` one way; nothing depends on it. The root `verifyToolsIsolation` task fails the build if it ever reaches a runtime classpath |
 
 Window and input adapters live in `:desktop` / `:android` rather than under
 `hal/adapter/` precisely because they need libGDX and `:engine` must stay

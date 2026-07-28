@@ -102,6 +102,14 @@ dependencies {
         exclude(group = "org.xerial", module = "sqlite-jdbc")
     }
 
+    // SLF4J -> android.util.Log. This is the replacement for the logback
+    // excluded above, NOT an extra: SLF4J 2.x with no provider on the
+    // classpath binds to the NOP logger and silently discards every engine
+    // log line — including LOG.error from worker dispatch failures. The
+    // failure mode is an app that looks fine and reports nothing, which is
+    // the worst possible one to debug an emulator bring-up against.
+    implementation("uk.uuid.slf4j:slf4j-android:2.0.17-0")
+
     implementation("com.badlogicgames.gdx:gdx:$gdxVersion")
     implementation("com.badlogicgames.gdx:gdx-backend-android:$gdxVersion")
 

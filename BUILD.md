@@ -8,9 +8,9 @@
 
 | Requirement | Version | Notes |
 |---|---|---|
-| Java JDK | 17 LTS | Required. Use Eclipse Temurin / Adoptium. `java -version` must show 17 or higher — a JDK 8 `JAVA_HOME` will fail to start the Gradle daemon |
-| Gradle | 8.x | Bundled via wrapper — no install needed |
-| Android SDK | 34+ | Optional. Only for `-Pandroid` profile |
+| Java JDK | 17 LTS or newer | Required. Use Eclipse Temurin / Adoptium. `java -version` must show 17+ — a JDK 8 `JAVA_HOME` will fail to start the Gradle daemon |
+| Gradle | 8.13 | Bundled via wrapper — no install needed. **Do not downgrade**, see [Gradle wrapper](#gradle-wrapper) |
+| Android SDK | **36** | Optional, `:android` only. SDK 34 will *not* build — androidx.core 1.17.0 forces compileSdk 36 |
 | Git | Any recent | For version control |
 
 ### Installing the JDK (if needed)
@@ -65,7 +65,29 @@ $env:JAVA_HOME = "C:\Program Files\Eclipse Adoptium\jdk-21.0.11.10-hotspot"
 
 ---
 
-## Standard Build (Desktop — Windows/Linux)
+## The modules
+
+OpenFPS is a four-module Gradle build. Knowing which is which is the difference
+between `run` doing what you meant and `run` opening a window you didn't want.
+
+| Module | Included when | What it is |
+|---|---|---|
+| `:engine` | always | The engine. Platform-free — builds and tests headless with no display |
+| `:desktop` | always | libGDX LWJGL3 window, input, presentation, `DesktopLauncher` |
+| `:tools` | always | Build-time only: glTF conversion and headless render previews |
+| `:android` | **only when an Android SDK is present** | libGDX Android backend |
+
+> **The `:android` trap.** `settings.gradle.kts` includes `:android` only if
+> `ANDROID_HOME`, `ANDROID_SDK_ROOT`, or `local.properties` is present. Without
+> one, the module is **silently skipped** and `gradlew build` exits 0 having
+> compiled no Android code at all. Worse, the configuration cache is on by
+> default, so the "No Android SDK found — skipping :android" notice is not even
+> printed on a cached run. **A green build is not evidence that `:android`
+> compiles.** Set `ANDROID_HOME` and check for `:android:` tasks in the output.
+
+---
+
+## Standard Build (Desktop — Windows/Linux/macOS)
 
 ```powershell
 # From the project root:
@@ -80,32 +102,86 @@ $env:JAVA_HOME = "C:\Program Files\Eclipse Adoptium\jdk-21.0.11.10-hotspot"
 
 ### What `build` Does
 
-1. Compiles all Java source (`src/main/java`)
-2. Runs Checkstyle style checks
-3. Compiles and runs all JUnit 5 tests
+1. Compiles all Java source across `:engine`, `:desktop` and `:tools`
+2. Runs Checkstyle over main *and* test sources (`maxWarnings = 0` — one warning fails the build)
+3. Compiles and runs all JUnit 5 tests — **1000** of them (828 `:engine`, 99 `:desktop`, 73 `:tools`)
 4. Assembles JAR artifacts
-5. Generates Checkstyle HTML reports in `build/reports/checkstyle/`
+5. Runs `verifyToolsIsolation`, which fails the build if `:tools` or its Gson
+   dependency ever reaches a shipped runtime classpath
+6. Generates Checkstyle and test HTML reports **per module** (see paths below)
 
 ### Run the Engine
 
+Both `:engine` and `:desktop` apply the `application` plugin, so **bare
+`gradlew run` matches both tasks and launches both** — a headless smoke test
+*and* a GLFW window. Always name the module.
+
 ```powershell
-.\gradlew run                                  # 60 Hz, SQLite profile, ~2s
-.\gradlew run --args="--fps=30"                # 30 or 120 Hz
-.\gradlew run --args="--no-sqlite"             # in-memory profile instead of SQLite
-.\gradlew run --args="--headless"              # null adapters throughout
+# Headless smoke test: boots the full stack, runs rate x 2 tics (~2s), shuts down
+.\gradlew :engine:run
+.\gradlew :engine:run --args="--fps=30"
+.\gradlew :engine:run --args="--no-sqlite"
+.\gradlew :engine:run --args="--headless"
+
+# The playable demo, in a window (needs art — see below)
+.\gradlew :desktop:run
 ```
 
-| Flag | Effect |
-|---|---|
-| `--fps=30\|60\|120` | Tic rate. Anything else is rejected at startup. Default 60. |
-| `--no-sqlite` | Use the in-memory profile port instead of on-disk SQLite. |
-| `--headless` | Force the null adapter factory (implies `--no-sqlite`). |
+| Flag | Effect | Honoured by |
+|---|---|---|
+| `--fps=30\|60\|120` | Tic rate. Anything else is rejected at startup. Default 60 | both |
+| `--no-sqlite` | Use the in-memory profile port instead of on-disk SQLite | `:engine:run` only |
+| `--headless` | Force the null adapter factory (implies `--no-sqlite`) | `:engine:run` only |
+| `--assets=<dir>` | Model root. Default `assets/models` | `:desktop:run` only |
 
-The engine boots the full event-driven stack — memory port, HAL, event bus,
-worker pool, subsystems — runs `rate × 2` tics (~2 seconds), then drains and
-shuts down cleanly. With SQLite enabled it creates or loads a profile at
+`:desktop:run` hard-selects the desktop HAL backend, so `--no-sqlite` and
+`--headless` do nothing there — a windowed launcher cannot be headless.
+
+With SQLite enabled the engine creates or loads a profile at
 `~/.openfps/profile.db` and accumulates playtime across runs; override the path
 with the `OPENFPS_PROFILE_DB` environment variable.
+
+---
+
+## Demo assets — required before `:desktop:run` will show anything
+
+**Demo art is not in the repository.** `assets/gltf/` and `assets/models/` are
+gitignored; the repo records provenance, licences and SHA-256s in
+`docs/DEMO_ASSETS.md`, not the art itself. A fresh clone has no models, and
+`:desktop:run` will report that and exit with code **3** rather than open an
+empty window.
+
+```powershell
+# 1. Download and unzip the two CC0 Kenney packs listed in docs/DEMO_ASSETS.md,
+#    then convert them to the runtime .ofm format:
+.\gradlew :tools:regenerateDemoAssets -PkenneyRaw=C:\path\to\unzipped\packs
+
+# 2. Run the demo
+.\gradlew :desktop:run
+```
+
+Without `-PkenneyRaw` the task still succeeds, but staging is skipped and you
+get **only a 60-triangle greybox room and no weapon** — the deliberate fallback
+for when no pack has been staged. It is a room to stand in, not the demo.
+
+| Task | Effect |
+|---|---|
+| `:tools:regenerateDemoAssets -PkenneyRaw=<dir>` | Stage the packs, convert everything, verify budgets |
+| `:tools:regenerateDemoAssets` | No staging; emits the generated fallback room only |
+| `:tools:verifyModels` | Re-check an existing `assets/models` without reconverting |
+| `:tools:demoPreview -PdemoOut=<dir>` | Render the four demo shots to PNGs, headless |
+| `:tools:demoPreview -PdemoOut=<dir> -PdemoThreads=8 -PdemoFrames=300` | Same, plus p50/p90/p99 frame timing |
+| `:tools:renderPreview "--args=--model=<f>.ofm --out=<f>.png"` | Render a single model |
+
+Point `-PdemoOut` **outside** the repository — `docs/ASSETS.md` § 6 keeps
+generated art out of git, and the task refuses to run without it.
+
+> The root `fetchAssets` task — which would download a pinned, SHA-256-verified
+> asset payload and remove the manual step above — **fails on purpose today**.
+> The `assets-v1` release has not been published, so its digest is still a
+> placeholder and the task refuses to download something it cannot verify. See
+> `docs/ASSETS.md` § 9. Until that release exists, the manual path above is the
+> only one.
 
 ---
 
@@ -115,43 +191,73 @@ with the `OPENFPS_PROFILE_DB` environment variable.
 .\gradlew checkstyleMain
 ```
 
-HTML report: `build/reports/checkstyle/main.html`
+HTML reports are **per module**:
+`engine\build\reports\checkstyle\main.html`,
+`desktop\build\reports\checkstyle\main.html`,
+`tools\build\reports\checkstyle\main.html`.
+
+(A stale `build/reports/` directory may still exist at the repo root from before
+the module split. Ignore it — nothing writes there any more.)
 
 ---
 
 ## Tests Only
 
 ```powershell
-.\gradlew test
+.\gradlew test                 # all modules
+.\gradlew :engine:test         # one module
 ```
 
-HTML report: `build/reports/tests/test/index.html`
+HTML reports, again per module: `engine\build\reports\tests\test\index.html`.
 
 ---
 
 ## Android Build
 
-Requires Android SDK 34 installed. Set `ANDROID_HOME`:
+Requires **Android SDK 36** and `ANDROID_HOME`. Gradle must run on JDK 17+
+(21 recommended).
 
 ```powershell
 $env:ANDROID_HOME = "C:\Users\<you>\AppData\Local\Android\Sdk"
-.\gradlew build -Pandroid
+$env:JAVA_HOME = "C:\Program Files\Eclipse Adoptium\jdk-21.0.11.10-hotspot"
+
+# Build the APK
+.\gradlew :android:assembleDebug
+
+# Install and launch on a connected device or running emulator
+adb install -r android\build\outputs\apk\debug\android-debug.apk
+adb shell am start -n com.openfps.android/com.openfps.android.AndroidLauncher
+
+# Engine logs
+adb logcat -s OpenFPS:V
 ```
 
-The Android profile compiles all engine source into an AAR library.
-Application code (game client, server) would live in a separate Android module.
+`adb` ships in `<SDK>\platform-tools`, which is not on `PATH` by default.
+
+`:android` is a real **application** module (`com.android.application`,
+namespace `com.openfps.android`) whose launcher activity is `AndroidLauncher` —
+not a library. Plain `.\gradlew build` builds it too, provided the SDK is
+visible. There is no `-Pandroid` flag; no build script reads that property.
+
+> **Screenshots:** use `adb shell screencap -p /sdcard/x.png` followed by
+> `adb pull`. PowerShell's `>` redirection corrupts `adb exec-out screencap -p`
+> output by injecting a BOM and mangling CRLF.
 
 ---
 
-## Gradle Wrapper — Quick Refresh
+## Gradle wrapper
 
-If the wrapper JAR is missing or stale:
+The wrapper is **pinned at 8.13 and must not be downgraded**. The version chain
+is forced, not chosen:
 
-```powershell
-.\gradlew wrapper --gradle-version=8.10
+```
+gdx-backend-android 1.14.2 → androidx.core 1.17.0 → compileSdk 36, AGP >= 8.9.1
+AGP 8.13.x → Gradle >= 8.13
 ```
 
-Or download a fresh one manually from the Gradle releases.
+Running `gradlew wrapper --gradle-version=8.10` drops below the AGP floor and
+breaks `:android`. If the wrapper JAR is genuinely missing, restore it from git
+rather than regenerating at a lower version.
 
 ---
 
@@ -197,8 +303,13 @@ Or download a fresh one manually from the Gradle releases.
 
 ### `Could not find toolchain`
 
+`gradle.properties` already enables toolchain auto-detection, so this is rarely
+the real problem — check `JAVA_HOME` first. If you do pass the flag explicitly,
+**quote it**, or PowerShell 5.1 splits the argument and Gradle reports a
+nonexistent task name:
+
 ```powershell
-.\gradlew build -Dorg.gradle.java.installations.auto-detect=true
+.\gradlew build "-Dorg.gradle.java.installations.auto-detect=true"
 ```
 
 ### Checkstyle errors
@@ -207,19 +318,29 @@ Or download a fresh one manually from the Gradle releases.
 .\gradlew checkstyleMain 2>&1 | Select-String "error"
 ```
 
+### `verifyToolsIsolation` failed
+
+Something added a dependency edge from a shipped module to `:tools`, or pulled
+Gson onto a runtime classpath. Both are build-breaking by design — see the task
+in the root `build.gradle.kts`.
+
 ### Build is slow
 
-```powershell
-.\gradlew build --parallel --build-cache
-```
+`gradle.properties` already turns on the parallel executor, the build cache and
+the configuration cache, so `--parallel --build-cache` adds nothing. If a build
+is unexpectedly slow, suspect the configuration cache being invalidated — it
+prints the reason.
 
 ---
 
-## CI/CD (GitHub Actions)
+## CI/CD
 
-See `.github/workflows/` (add this directory when CI is set up). The workflow should:
+**There is no CI yet.** `.github/workflows/` does not exist. When it is set up,
+the workflow should:
 - Run `gradlew build` on push to `main` and all PRs
-- Upload Checkstyle HTML report as artifact
+- Set `ANDROID_HOME` and build `:android:assembleDebug` explicitly, since a
+  build without the SDK skips the module silently and proves nothing
+- Upload Checkstyle HTML reports (per module) as artifacts
 - Upload test results
 
 ---

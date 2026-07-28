@@ -493,10 +493,12 @@ Every module uses them. New code that bypasses them is a bug.
 The `com.openfps.engine.common.Constants` class holds the engine-wide
 static primitives. New code must read from it, not redeclare.
 
-Most of these are **reserved for the phase that needs them** — only
-`ZONE_HEAP_SIZE` and `ZONE_ALIGN` have callers today. That is deliberate: the
-value is fixed here once so the phase that lands the feature reads it rather
-than inventing a magic number.
+This was once a table of values reserved for future phases; most of them now
+have real callers. `MAX_PLAYERS`, `TIC_BUFFER_SIZE`, `MAX_LATENCY_TICS`,
+`DEFAULT_NET_PORT`, `MAP_SCALE`, `PLAYER_SPEED`, `ZONE_HEAP_SIZE` and
+`ZONE_ALIGN` are all read by net, gameplay, resource or memory code today. The
+few that remain unused are still fixed here on purpose, so the phase that lands
+the feature reads the value rather than inventing a magic number.
 
 | Constant | Value | Use it for |
 |---|---|---|

@@ -129,7 +129,7 @@ public final class DemoScene
     public static final int WALL_COURSES = 2;
 
     /**
-     * Scale applied to the weapon, model units to view-space units — 2.2.
+     * Scale applied to the weapon, model units to view-space units — 1.9.
      *
      * <p>Nothing to do with {@link #KIT_WORLD_SCALE}; see the class Javadoc.
      * The blaster is 0.42 model units long and 0.31 tall
@@ -166,7 +166,7 @@ public final class DemoScene
     public static final float WEAPON_VIEW_YAW_DEGREES = 174.0f;
 
     /**
-     * How far in front of the eye the weapon sits, in view-space units — 1.8.
+     * How far in front of the eye the weapon sits, in view-space units — 1.85.
      *
      * <p>Must clear the near plane, and does so with room to spare: the
      * weapon's nearest vertex lands at about 1.43 view units against

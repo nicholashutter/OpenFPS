@@ -3,29 +3,70 @@
 > G_ is the network layer. The engine is P2P-first — no dedicated server required
 > for small matches. Authority is distributed: every player is a peer.
 
-**Read [Transport decision](#transport-decision) at the bottom of this file first.**
-It records the protocol choice and supersedes several numbers in the sections
-above it.
+[Transport decision](#transport-decision), at the bottom of this file, is the
+ADR that settled the protocol. Its conclusions have since been folded back into
+the sections above it — § 12 lists every correction that was applied — so the
+two halves now agree and can be read in either order.
 
-## What lives here (planned)
+## What lives here
 
-- `PeerConnection` — per-peer state (address, RTT, ack window, loss stats).
-  Holds no socket; one shared `DatagramChannel` lives in the adapter.
-- `TicCmdBuffer` — ring buffer of `TicCmd` per peer, indexed by tic number
-- `SnapshotDelta` — diff-based state serialization between tics
-- `Discovery` — LAN peer discovery via UDP broadcast
+Six classes are built and tested. **None of them is wired to a socket** — see
+[Library-only](#library-only-nothing-in-the-running-engine-uses-these) below,
+which is the single most important thing to know about this package.
+
+| Class | What it is |
+|---|---|
+| `TicCmd` | The 12-byte lockstep input command, immutable, with a non-allocating codec |
+| `TicCmdBuffer` | Preallocated 64 × 8 input ring indexed by tic number |
+| `AckWindow` | Receive-side ack state: highest tic, 64-bit bitfield, highest contiguous tic |
+| `PeerConnection` | Per-peer state — address, EWMA RTT, ack window, loss stats. **No socket.** |
+| `RedundantSender` | Packs and unpacks the redundant-input packet — the § 4 reliability layer |
+| `NetBytes` | Package-private big-endian primitive codec; the one byte-order site |
+
+Still to write: `SnapshotDelta` (diff-based state serialization between tics)
+and `Discovery` (LAN peer discovery via UDP broadcast).
 
 ## Subsystem layout
 
 ```
 net/
+├── TicCmd.java              12-byte input command + non-allocating codec
+├── TicCmdBuffer.java        64 x 8 preallocated ring, indexed by tic number
+├── AckWindow.java           64-bit ack bitfield + highest contiguous tic
+├── PeerConnection.java      per-peer state; holds no socket
+├── RedundantSender.java     packet pack/unpack (static; the format is stateless)
+├── NetBytes.java            package-private big-endian primitives
 ├── port/
 │   └── I_NetworkPort.java   interface — called by core per tic
 └── adapter/
-    └── NullNetworkPort.java stub
+    └── NullNetworkPort.java stub — and still the only implementation
 ```
 
-## P2P model — what's coming
+87 tests cover the six classes. They are unit tests with no I/O at all, which is
+a direct consequence of `PeerConnection` holding no socket: every packet in the
+test suite is a `byte[]` that never leaves the JVM.
+
+## Library-only: nothing in the running engine uses these
+
+`EngineMain` registers `NetSubsystem(new NullNetworkPort())`. Nothing in the
+running engine constructs a `PeerConnection`, a `TicCmdBuffer` or a
+`RedundantSender`; outside the six classes themselves, their only callers are
+their own tests. No socket is opened, no datagram is sent, and no tic command
+crosses a wire.
+
+So the six classes are a **correct, tested implementation of a protocol nobody
+speaks yet**. The next real Phase 3 step is wiring them to
+`hal.adapter.desktop.DesktopDatagramPort` behind a real `I_NetworkPort` — at
+which point `NetSubsystem.onEvent`, which is currently the base-class no-op,
+starts routing `NetworkPacketEvent`.
+
+Read every "ships", "sends" and "receives" below with that in mind: they
+describe the protocol these classes implement, not traffic the engine currently
+produces.
+
+## P2P model
+
+The primitives below are built; the topology they serve is not yet running.
 
 ### Topology
 
@@ -50,7 +91,8 @@ https://www.gabrielgambetta.com/lag-compensation.html
 
 ### TicCmd structure
 
-Each tic, each peer sends a **12-byte** `TicCmd`:
+**Implemented — `TicCmd.java`.** Each tic, each peer sends a **12-byte**
+`TicCmd`, big-endian (network byte order) on every field:
 ```
 offset  size  field
 0       4     ticNumber
@@ -80,6 +122,30 @@ not the 64 an earlier draft of this file claimed.
 **Source — DOOM source `d_ticcmd.h`**:
 https://github.com/id-Software/DOOM/blob/master/linuxdoom-1.10/d_ticcmd.h
 
+Byte order is fixed in exactly one place: `NetBytes`, a package-private
+big-endian primitive codec. It is package-private precisely so that
+`TicCmd` and `RedundantSender` cannot drift into disagreeing about endianness —
+there is no second implementation to disagree with. Every method there writes
+into a caller-supplied array and allocates nothing, so the whole encode/decode
+path is safe on the per-tic path (`STYLE.md` § 13.4).
+
+Two forms of decode exist, and the distinction is deliberate. `TicCmd.encode`
+and the `decodeXxx` field accessors read and write a caller's array and
+allocate nothing — that is the hot path. `TicCmd.decode` materialises one
+immutable value and is for tests and cold paths. Hot code goes through
+`TicCmdBuffer`, which never materialises a `TicCmd` at all: it stores the
+fields unpacked in three preallocated `int[]` rings, packing forward and strafe
+into one int and yaw, pitch and buttons into another. That is what keeps the
+ring at exactly the 12 bytes per command § 6 budgets while honouring the
+"no `new byte[]` outside a memory port" rule — ints, not bytes, and allocated
+once in the constructor.
+
+The ring is indexed by `ticNumber % TIC_BUFFER_SIZE`, which is what makes a
+re-delivered command an idempotent overwrite needing no dedup bookkeeping. Each
+slot also stores the tic number it holds, so the staleness check comes free: a
+command older than the one already in its slot is a wrapped-around straggler and
+is rejected rather than applied.
+
 ### Network timing math
 
 **RTT (round-trip time):** measured as `now - sentTime` on every received packet,
@@ -92,6 +158,12 @@ smoothedRtt = 0.7 × smoothedRtt + 0.3 × rtt
 One `long` of state, no ring buffer, and it is what Quake 3 actually does. (An
 earlier draft called this a "7-tap moving average" — that is a different
 algorithm, and it would cost a 7-slot buffer per peer for no benefit.)
+
+**Implemented — `PeerConnection.java`**, and evaluated in *integer* arithmetic
+as `(7 × smoothed + 3 × sample) / 10` so the result is bit-identical on x86 and
+ARM. That matters even though RTT never feeds the simulation directly: it sizes
+the redundancy window, and two peers disagreeing about window size is a bug that
+only surfaces under packet loss, which is the worst possible time to find it.
 
 **Packet loss rate:** count received vs. sent per peer over a 64-packet window.
 
@@ -187,8 +259,10 @@ https://developer.apple.com/library/archive/documentation/Networking/Conceptual/
 > **Dependency outcome**: **none added** — this document is the discussion
 > `AGENTS.md` requires before adding a library. `PLAN.md` § 6 and `STYLE.md` § 12
 > are unchanged; the options were evaluated, not overlooked.
-> **Supersedes**: the reliability model, cmd layout, RTT smoothing and bandwidth
-> figures in the sections above.
+> **Superseded**: the reliability model, cmd layout, RTT smoothing and bandwidth
+> figures that were in the sections above. Those sections have since been
+> corrected in place — § 12 is the list — so nothing above this line contradicts
+> anything below it any more.
 
 ## 1. Decision
 
@@ -283,6 +357,73 @@ Mechanics:
 
 Cost: roughly 200 lines of pure Java. No dependency.
 
+#### `AckWindow` — where the bitfield hangs off, and why
+
+**Implemented — `AckWindow.java`, one instance per peer.** The sentence above
+packs two numbers that are anchored differently, and getting them confused makes
+the field useless:
+
+```
+highestTic            newest tic number seen from this peer
+bitfield bit i        set when tic (highestTic - 1 - i) was seen, i = 0..63
+highestContiguousTic  the highest T with every tic up to T seen
+```
+
+The bitfield has to hang off `highestTic`, **not** off the contiguous tic.
+Anchored on the contiguous tic every bit would be set by definition and the
+field would carry no information at all. Anchored on the newest tic, the holes
+in it are exactly the losses the sender has to cover.
+
+`highestContiguousTic` is the other half: it is the point below which the peer
+provably needs nothing, so it is what bounds the redundancy window.
+
+One floor is needed. A tic more than `TIC_BUFFER_SIZE` behind `highestTic` can
+never be acked again — its bit has shifted out — so if the contiguous tic were
+allowed to stay pinned below that, it would never advance and `W` would grow
+without bound. It is therefore floored at `highestTic - TIC_BUFFER_SIZE`. In
+practice lockstep stalls at `MAX_LATENCY_TICS` long before a peer falls 64 tics
+behind, so the floor is a safety net, not a policy.
+
+#### The two directions of ack
+
+`PeerConnection` carries both, and conflating them re-sends the wrong range:
+
+| | Means | Used for |
+|---|---|---|
+| `ackWindow()` | tics we have received **from** this peer | what we put in the packets we send them; what loss stats are measured over |
+| `remoteAckedTic()` | what they told us they have received **from us** | bounds *our* redundancy window when sending to them |
+
+#### Packet layout as built — a deliberate 20-byte header
+
+`RedundantSender` implements the packet, and it **deviates from the line above**
+on purpose:
+
+```
+offset  size  field
+0       4     playerId       sender; the reason TicCmd has no playerId
+4       4     latestTic      newest command in this packet
+8       4     ackTic         highest contiguous tic received FROM the peer
+12      8     ackBitfield    64 tics below the sender's newest received tic
+20      ...   cmd[]          ascending, 12 bytes each
+```
+
+The sketch `playerId | latestTic | ackBitfield | cmd[...]` is 4 + 4 + 8 = 16
+bytes and **omits the ack's anchor tic**. A bitfield is meaningless without the
+tic number bit 0 hangs off, and that number cannot be inferred from `latestTic`:
+`latestTic` is the sender's own newest *input*, which has nothing to do with
+what it has *received*. So `ackTic` is a real field and the header is 20 bytes,
+not 16. The § 6 table below still assumes 16 — add 4 bytes per datagram to every
+row, about 1.7 KB/s at 60 Hz across 7 peers. Noise against the correctness it
+buys.
+
+The command count is deliberately **not** a header field. It is implied by the
+datagram length, and each command carries its own tic number, which makes a
+packet self-describing under both reordering and truncation.
+
+`RedundantSender` is a utility class with no instance state — the packet format
+is stateless, and every method reads from or writes into a caller-supplied
+array, so neither the send nor the receive path allocates.
+
 **Source — Glenn Fiedler, "Deterministic Lockstep"**:
 https://gafferongames.com/post/deterministic_lockstep/
 
@@ -321,6 +462,12 @@ assumed zero redundancy, which § 4 makes mandatory. Actual cost per datagram:
 bytes = 28 (IPv4 20 + UDP 8) + 16 (header) + cmdSize × W
 KB/s  = bytes × 7 peers × rate ÷ 1000
 ```
+
+> The shipped `RedundantSender` header is **20 bytes, not 16** — it carries an
+> explicit `ackTic`, for the reason given in § 4. Every row below is therefore
+> 4 bytes light per datagram: about 1.7 KB/s at 60 Hz across 7 peers, which
+> changes no verdict in the table. The rows are left at 16 so the arithmetic
+> stays checkable against the formula.
 
 At 60 Hz, 8 players, per peer, **each direction**:
 
@@ -476,13 +623,16 @@ dedicated server" premise.
 
 ## 11. What this commits Phase 3 to
 
-| Component | Consequence of this decision |
-|---|---|
-| `PeerConnection` | Peer *state* only — address, RTT (EWMA), ack window, loss stats. **No socket.** |
-| `TicCmdBuffer` | `int[]`/`byte[]` ring, `TIC_BUFFER_SIZE` deep × `MAX_PLAYERS` wide, allocated once |
-| `RedundantSender` | Packs `[lastAcked+1 .. latest]` per packet; the § 4 layer |
-| `Discovery` | Unchanged — LAN broadcast, `DEFAULT_NET_PORT` |
-| `DesktopNetworkPort` | Phase 1.5, **datagram-only**. One direct `ByteBuffer`, reused. |
+| Component | Consequence of this decision | Status |
+|---|---|---|
+| `PeerConnection` | Peer *state* only — address, RTT (EWMA), ack window, loss stats. **No socket.** | Built |
+| `TicCmdBuffer` | `int[]` ring, `TIC_BUFFER_SIZE` deep × `MAX_PLAYERS` wide, allocated once | Built |
+| `AckWindow` | The 64-bit ack bitfield of § 4, anchored on the newest tic seen | Built |
+| `RedundantSender` | Packs `[lastAcked+1 .. latest]` per packet; the § 4 layer | Built |
+| `TicCmd` / `NetBytes` | The 12-byte command and the one big-endian codec behind it | Built |
+| `Discovery` | Unchanged — LAN broadcast, `DEFAULT_NET_PORT` | Not started |
+| `SnapshotDelta` | Phase 4+ state sync, per § 5 | Not started |
+| `DesktopNetworkPort` | **Datagram-only**. One direct `ByteBuffer`, reused. | `hal.adapter.desktop.DesktopDatagramPort` exists; **nothing in `net/` is wired to it** |
 
 Reserved constants that become load-bearing:
 
@@ -521,6 +671,17 @@ Two API consequences, recorded now and executed later:
 | `PeerConnection` = "UDP socket per peer" | Peer state; one shared socket in the adapter |
 | Citation `vinnieleer.com` | Dead domain (does not resolve). Replaced with Bernier, GDC 2001 |
 
+Second round, after the six classes were written:
+
+| Was | Now |
+|---|---|
+| "What lives here (**planned**)" and a 2-file layout | Six classes built and tested; the layout lists all eight files |
+| `AckWindow`, `NetBytes`, `TicCmd` undocumented | Documented — `AckWindow` is the § 4 bitfield the doc already specified |
+| TODO left `PeerConnection` / `TicCmdBuffer` / `RedundantSender` unchecked | All three shipped. Only `SnapshotDelta` and `Discovery` remain unwritten |
+| A banner claiming this file's ADR "supersedes several numbers" above it | The corrections in the table above were applied in place; the banner was describing work already done |
+| § 6 "16 (header)" | Shipped header is **20 bytes** — the ack needs an explicit anchor tic (§ 4) |
+| Nothing said the classes are unwired | [Library-only](#library-only-nothing-in-the-running-engine-uses-these) says it up front |
+
 ## 13. Revisit triggers
 
 - Player count needs to exceed 8 → topology change, not tuning
@@ -530,13 +691,24 @@ Two API consequences, recorded now and executed later:
 
 ## Files
 
+- `TicCmd.java`
+- `TicCmdBuffer.java`
+- `AckWindow.java`
+- `PeerConnection.java`
+- `RedundantSender.java`
+- `NetBytes.java` *(package-private)*
 - `port/I_NetworkPort.java`
 - `adapter/NullNetworkPort.java`
 
 ## TODO (Phase 3)
 
-- `PeerConnection` (peer state — address, RTT, ack window; no socket)
-- `TicCmdBuffer` (lockstep ring, preallocated)
-- `RedundantSender` (redundant input redelivery — § 4)
-- `SnapshotDelta` (encode/decode)
-- `Discovery` (LAN broadcast)
+- [x] Transport decision recorded — UDP + redundant redelivery, no dependency added
+- [x] `TicCmd` + `NetBytes` (12-byte command, big-endian, non-allocating codec)
+- [x] `TicCmdBuffer` (lockstep ring, 64 × 8, preallocated)
+- [x] `AckWindow` (64-bit ack bitfield + highest contiguous tic)
+- [x] `PeerConnection` (peer state — address, EWMA RTT, ack window; no socket)
+- [x] `RedundantSender` (redundant input redelivery — § 4)
+- [ ] **Wire the above to `DesktopDatagramPort`** behind a real `I_NetworkPort`.
+      This is the next step, and until it happens all six classes are library-only.
+- [ ] `SnapshotDelta` (encode/decode)
+- [ ] `Discovery` (LAN broadcast)

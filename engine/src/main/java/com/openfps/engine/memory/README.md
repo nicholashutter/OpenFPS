@@ -28,7 +28,8 @@ in this application."* This is enforced by:
 1. **One interface** — `I_MemoryPort` is the only memory API the engine calls.
 2. **One factory** — `MemoryPortFactory` is the only thing that picks a backend.
 3. **No `new byte[]` outside the port** — every allocation in engine code
-   goes through `port.allocate(size, tag)`.
+   goes through `port.allocate(size, tag)`, with exactly one written-down
+   exception (below).
 
 The factory hides the choice. Production launch can swap the JVM backend
 for the zone backend with a single line change at boot:
@@ -46,6 +47,53 @@ int handle = memory.allocate(1024, I_MemoryPort.TAG_GAME);
 memory.free(handle);
 memory.shutdown();
 ```
+
+## The one sanctioned bypass — `render.adapter.Framebuffer`
+
+Rule 3 has exactly one exception, and it is recorded here rather than only in
+the renderer's docs because a reader who reads this file alone would otherwise
+finish it believing there are none. `STYLE.md` § 13.4 names the site:
+`render.adapter.Framebuffer` takes its `int[]` colour buffer and `float[]` depth
+buffer straight from the JVM, at `init(w, h)` and `resize(w, h)` and nowhere
+else.
+
+**The reason is not that the rasterizer is hot.** A hot loop is explicitly *not*
+a qualifying reason — if it were, the rule would have no force left. The reason
+is that `I_MemoryPort` hands out opaque `int` handles over a `byte[]` store and
+has **no read or write operation at all**. There is no way to touch a pixel
+through this API; the buffers are `int[]` and `float[]` rather than `byte[]`;
+and per-pixel handle indirection would cost several times the pixel work it
+wraps. Meanwhile everything this port is *for* — tags, `freeByTag`, bulk release
+of many small short-lived allocations — applies to nothing the framebuffer does.
+It is two arrays that live from init to shutdown. It gets none of the port's
+benefit and pays its whole cost.
+
+So the exception is scoped to that *shape*, not to that class:
+
+> Long-lived, engine-owned primitive buffers whose element type is not `byte`,
+> allocated once at initialisation and released at shutdown, may be allocated
+> directly. Named sites only, listed in `STYLE.md` § 13.4. A hot loop is **not**
+> on its own a qualifying reason.
+
+That wording admits `Framebuffer` and the future audio mixing buffers, and
+excludes per-frame and per-entity allocation — which is what rule 3 actually
+exists to prevent.
+
+**The alternative that was rejected is the one this package would have grown.**
+`I_MemoryPort` could gain a typed-slab operation returning the array itself,
+with the port keeping the budget and lifecycle; `MemoryPortFactory.createSlab`
+already exists as a Phase 2+ placeholder, so the concept is anticipated. It was
+rejected on cost and timing: it weakens the port's central invariant — that the
+engine never dereferences memory it did not get a handle for — and both backends
+plus their 35 tests would have to absorb it, before a single pixel had been
+drawn. If a third and fourth candidate ever appear, the pattern is real and the
+typed slab becomes the better shape.
+
+The full argument, including the option that lost, is at
+`engine/src/main/java/com/openfps/engine/render/README.md` § 11(a). The
+normative list of sanctioned sites is `STYLE.md` § 13.4 — an undocumented
+exception is indistinguishable from a violation, so nothing may bypass this port
+without appearing in that table.
 
 ## State machine
 
@@ -179,7 +227,7 @@ References:
 
 ## Tests
 
-43 tests cover (both backends, parameterized):
+35 tests cover (both backends, parameterized):
 
 - **State machine** — every transition, every invalid transition
 - **Positive** — happy-path allocate/free/freeByTag/reset

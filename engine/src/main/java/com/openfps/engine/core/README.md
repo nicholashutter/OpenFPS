@@ -9,7 +9,11 @@
 ```
 core/
 ├── EngineMain.java           — bootstrap: wire memory, HAL, bus, pool, subsystems
+├── EngineSession.java        — a running engine + stop(); what start() hands back
+├── EngineFrameCallback.java  — the engine's side of the PLATFORM frame loop
 ├── GameLoop.java             — D_ event producer (30/60/120 Hz tic events + shutdown)
+├── FrameRate.java            — closed enum 30/60/120 Hz, per-rate math, arg parsing
+├── GameConfig.java           — immutable run config: rate + maxTics
 ├── event/                    — I_EngineEvent + concrete events + factory
 │   ├── I_EngineEvent.java
 │   ├── TickEvent.java
@@ -36,14 +40,22 @@ core/
     ├── SubsystemState.java
     ├── SubsystemException.java
     ├── SubsystemRegistry.java
-    └── impl/                  (concrete subsystems)
+    └── impl/                  (seven concrete subsystems)
         ├── GameplaySubsystem.java
         ├── RenderSubsystem.java
         ├── AudioSubsystem.java
         ├── NetSubsystem.java
         ├── HalSubsystem.java
-        └── MemorySubsystem.java
+        ├── MemorySubsystem.java
+        └── CoreSubsystem.java    — events aimed at the engine itself
 ```
+
+`CoreSubsystem` is the odd one out: it wraps no port. `ShutdownEvent` targets
+`SubsystemId.CORE`, and before it existed every shutdown logged
+"No subsystem registered for event". It claims that ID and records the shutdown
+reason next to the events that preceded it. It does not drive the drain — the
+producer stops publishing and `I_ThreadPoolPort.shutdown()` moves the bus to
+DRAINING.
 
 ## How it works — the event flow
 
@@ -170,9 +182,14 @@ The engine itself has a simple state:
   BOOTING → BUSY → SHUTTING_DOWN → SHUTDOWN
 ```
 
-Tracked implicitly by the order of operations in `EngineMain.runHeadless()`.
-No dedicated `EngineStateMachine` class — the bootstrap code is the
-state machine.
+Tracked implicitly by the order of operations in `EngineMain.start(...)` on the
+way up and `EngineSession.stop()` on the way down. No dedicated
+`EngineStateMachine` class — the bootstrap code is the state machine.
+
+`start` returning a session rather than blocking is the whole point: the three
+`EngineMain.run(...)` overloads are just `start` + wait + `stop` for a desktop
+`main()`, while a platform whose caller must not block (Android's `onCreate`)
+holds the session and calls `stop()` later. See the `EngineSession` Javadoc.
 
 ## Why event-driven?
 
@@ -197,16 +214,25 @@ The `Subsystem` wrapper adds the state machine and event dispatch.
 
 ## Tests
 
-Core-package test coverage:
+**68 tests** in `com.openfps.engine.core` and below:
+
 - 9 FrameRate — per-rate math, parser, rejection of unsupported rates
 - 10 GameConfig — factory methods, drift correction over 1000 tics
+- 1 GameLoopRenderEvent — every tic publishes a render frame alongside the tick
 - 10 SharedEventBus — publish, take, FIFO, blocking, backpressure, drain
 - 7 WorkerPool — hot threads, parallel dispatch, recovery, lifecycle
-- 12 WorkerPool parallel fan-out — caller participation at `workerCount == 1`,
-  exactly-once execution, failure propagation, reentrancy, bus coexistence
+- 15 WorkerPool parallel fan-out — caller participation at `workerCount == 1`,
+  exactly-once execution, failure propagation, reentrancy, bus coexistence,
+  and fan-out during the drain window
 - 10 SubsystemState — transitions, error recovery, thread-safety
-- 6 FixedMath — unchanged from earlier
-- 43 MemoryPort — unchanged from earlier (covers both backends)
+- 6 RenderSubsystem — request coalescing (newest wins, no double render, none
+  lost) and lifecycle reaching the port
+
+This list is the core package only, which is what it claims to be. Two suites
+that earlier drafts counted here belong to other packages and are covered by
+their own READMEs: **6 FixedMath** (`engine/src/test/.../FixedMathTest.java`,
+which sits at the test root rather than under `common/`) and **35 MemoryPort**
+(`memory/`, both backends). Neither number moves core's total.
 
 Run with: `.\gradlew.bat test`
 
@@ -249,10 +275,14 @@ don't do that. Instead, every iteration computes the deadline
 
 ```java
 final long startNanos = timePort.nanos();
-for (int tic = 0; running; tic++) {
-    long deadlineNanos = startNanos + ((long) tic * nanosPerTic);
-    long waitNanos = deadlineNanos - timePort.nanos();
-    if (waitNanos > 0) waitNanos(waitNanos);
+for (int tic = 0; running; tic++)
+{
+    final long deadlineNanos = startNanos + ((long) tic * nanosPerTic);
+    final long waitNanos = deadlineNanos - timePort.nanos();
+    if (waitNanos > 0)
+    {
+        waitNanos(waitNanos);
+    }
     publishTickEvent(tic, nanosPerTic);
 }
 ```

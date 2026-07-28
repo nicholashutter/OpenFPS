@@ -1,6 +1,6 @@
 # OpenFPS — Project Plan
 
-> **Status**: Pre-alpha — Phase 1.4 complete. Event-driven engine, unified memory, multi-threaded worker pool, configurable 30/60/120 Hz, SQLite user-profile persistence.
+> **Status**: Pre-alpha — Phases 0 through 1.5 complete, plus Phase 5 (render). Event-driven engine, unified memory, multi-threaded worker pool, configurable 30/60/120 Hz, SQLite user-profile persistence, desktop HAL with a real window and input, and a multi-threaded software triangle rasterizer driving a playable first-person demo at 1280x720. Phase 2 (WAD) is partly done and unregistered; Phase 3 (net) has its lockstep primitives built but no socket wired. **1000 tests** — 828 `:engine`, 99 `:desktop`, 73 `:tools`.
 > **Engine Version**: 0.1.0-SNAPSHOT
 > **Target JVM**: 17 LTS (Java 17 source/target, runs on 17+)
 > **Platforms**: Windows, Linux, macOS (`:desktop`, libGDX LWJGL3 backend); Android (`:android`, libGDX Android backend). `:engine` is platform-free and runs headless on any JVM 17+.
@@ -30,7 +30,7 @@ The engine is now an **event queue processor**: subsystems communicate exclusive
 +----------------------------------------------------------------+
 |  D_ GAME LOOP   com.openfps.engine.core.GameLoop               |
 |  Single thread, 30/60/120 Hz, produces events:                 |
-|    TickEvent, ShutdownEvent                                   |
+|    TickEvent, RenderFrameEvent, ShutdownEvent                  |
 +----------------------------------------------------------------+
                               |
                               v
@@ -59,7 +59,7 @@ The engine is now an **event queue processor**: subsystems communicate exclusive
 +----------------------------------------------------------------+
 |  HARDWARE ABSTRACTION  com.openfps.engine.hal                   |
 |  Ports = interfaces, Adapters = platform impls                  |
-|  desktop/  mobile/  null/                                       |
+|  desktop/  nulladapter/  sqlite/                                 |
 +----------------------------------------------------------------+
 ```
 
@@ -81,6 +81,11 @@ core  ──►  core.event       (event types, factory)
 
 memory  ──►  common
 hal     ──►  common
+
+demo    ──►  core            (FrameRate)
+        ──►  gameplay        (PlayerController, I_PlayerInput)
+        ──►  hal/port        (InputState)
+        ──►  render/adapter  (Scene, ModelFormat, Camera)
 
 gameplay ──►  hal/port          (InputState — the latched input snapshot)
          ──►  render/adapter    (Camera, Vec3 — PlayerController.camera())
@@ -113,7 +118,7 @@ Every subsystem has:
 - **adapter/** — concrete implementations (the "adapter" side)
 - The subsystem itself (state machine + event handling) is in `core/subsystem/impl/`
 
-### 3.1 Core — `com.openfps.engine.core` — **Phase 1.3 complete**
+### 3.1 Core — `com.openfps.engine.core` — **built**
 
 **D_ Game Loop & Engine**
 
@@ -163,7 +168,7 @@ warning, because `ShutdownEvent` targets CORE and nothing owned that ID.
 
 **Subsystem wrapper**: `GameplaySubsystem` — routes `TickEvent` to `port.tick()`, `MapLoadEvent` to `port.loadMap()`.
 
-### 3.3 Render — `com.openfps.engine.render` — **stub**
+### 3.3 Render — `com.openfps.engine.render` — **built** (316 tests)
 
 **R_ Multi-threaded software triangle rasterizer**
 
@@ -187,7 +192,7 @@ The earlier 2.5D design (BSP visibility, visplanes, column renderer, affine mapp
 
 **Numerics**: the renderer uses `float`. Gameplay and networking stay 16.16 fixed-point — **§ 4 below is unchanged and this is not an inconsistency.** Fixed-point exists for lockstep *simulation* determinism; rendering is a pure function from game state to pixels and never feeds simulation state, so it cannot desync a peer regardless. Since JEP 306, Java 17 floating point is always-strict IEEE 754, so basic float arithmetic is bit-reproducible anyway (`Math.*` transcendentals are not; `StrictMath.*` is). Full argument: `render/README.md` § 2.
 
-**Threading**: tiled with exclusive ownership. Triangles are binned to the tiles they touch during setup; each worker owns its tiles outright and is the only writer to those regions of the colour and depth buffers. That invariant is what makes the design lock-free — no synchronisation on the depth buffer, no false sharing between workers. Parallel work goes through the existing `WorkerPool`, never `new Thread`. **Prerequisite**: `WorkerPool` is currently an event-bus drainer only and has no submit-and-await operation; it must grow one before Phase 5.
+**Threading**: tiled with exclusive ownership. Triangles are binned to the tiles they touch during setup; each worker owns its tiles outright and is the only writer to those regions of the colour and depth buffers. That invariant is what makes the design lock-free — no synchronisation on the depth buffer, no false sharing between workers. Parallel work goes through the existing `WorkerPool`, never `new Thread`. The submit-and-await operation this needed (`submitParallel`, caller-participating) landed with Phase 5, along with a `DRAINING` pool state so a shutdown in flight cannot strand a tile pass.
 
 **Presentation**: not R_'s job. The engine produces a finished framebuffer; the platform adapter uploads it. `I_WindowPort` / `I_FrameCallback` are the hook and already exist — do not design a new window port.
 
@@ -224,7 +229,7 @@ The earlier 2.5D design (BSP visibility, visplanes, column renderer, affine mapp
 
 **Subsystem wrapper**: `NetSubsystem` — routes `NetworkPacketEvent` (Phase 3 will wire actual parsing).
 
-### 3.6 Resource — `com.openfps.engine.resource` — **stub**
+### 3.6 Resource — `com.openfps.engine.resource` — **built but unregistered** (101 tests)
 
 **W_ WAD File Management**
 
@@ -383,8 +388,17 @@ This is verified by `GameConfigTest.shouldNotDriftAt120Fps` and `shouldNotDriftA
 | Target | Toolchain | Notes |
 |---|---|---|
 | Desktop (Win/Linux/macOS) | Java 17 + Gradle 8.13 | Java 17 source/target; runs on JVM 17+ |
-| Android | Java 17 source, Android SDK 34 | Planned (Phase 3+) |
+| Android | Java 17 source, compileSdk/targetSdk 36, minSdk 23 | Built — APK assembles; not yet verified on a device or emulator |
 | Headless / Test | Java 17 only | null HAL adapter |
+
+### Modules
+
+| Module | Included when | Purpose |
+|---|---|---|
+| `:engine` | always | The engine. Platform-free; builds and tests with no display and no Android SDK |
+| `:desktop` | always | libGDX LWJGL3 window, input, presentation, launcher |
+| `:tools` | always | **Build-time only.** glTF → `ModelFormat` conversion and headless preview harnesses. Depends on `:engine` one way; nothing depends on it |
+| `:android` | **only when an Android SDK is present** | libGDX Android backend. `settings.gradle.kts` checks `ANDROID_HOME` / `ANDROID_SDK_ROOT` / `local.properties` and *silently skips* the module otherwise — so a green `gradlew build` on a machine without the SDK does **not** mean `:android` compiles. With the configuration cache on (the default), even the "skipping :android" notice is suppressed on cached runs |
 
 ### Dependencies
 
@@ -393,12 +407,16 @@ This is verified by `GameConfigTest.shouldNotDriftAt120Fps` and `shouldNotDriftA
 | Gradle | 8.13 | Build (via wrapper) |
 | SLF4J | 2.0.16 | Logging facade (industry standard) |
 | Logback | 1.5.12 | Logging backend |
-| Xerial SQLite JDBC | 3.46.1.0 | User profile persistence (pure Java, no native deps) |
+| Xerial SQLite JDBC | 3.46.1.0 | User profile persistence. **NOT pure Java** — bundles precompiled natives for ~20 platform triplets and is most of the ~15 MB desktop distribution. Excluded from `:android`, which uses Room instead |
 | JUnit Jupiter | 5.11.4 | Testing |
 | AssertJ | 3.26.3 | Test assertions |
 | Checkstyle | 10.18.0 | Style enforcement (enforces STYLE.md; wired to `build`, `maxWarnings = 0`) |
 | libGDX | 1.14.2 | Window, input, and framebuffer presentation. `gdx` + `gdx-backend-lwjgl3` in `:desktop`, `gdx` + `gdx-backend-android` in `:android`. **Not a `:engine` dependency** |
 | Android Gradle Plugin | 8.13.2 | `:android` only, requires Gradle ≥ 8.13 and compileSdk 36 — see the version chain in `settings.gradle.kts` |
+| androidx.room | 2.8.4 | `:android` only — the Android side of `I_UserProfilePort`, standing in for the excluded sqlite-jdbc |
+| desugar_jdk_libs | 2.1.5 | `:android` only — core-library desugaring so Java 17 APIs resolve on minSdk 23 |
+| slf4j-android | 2.0.17-0 | `:android` only. **Not optional**: logback is excluded on Android, and SLF4J 2.x with no provider binds to the NOP logger and silently discards every engine log line, errors included |
+| Gson | 2.11.0 | `:tools` only — glTF JSON parsing in `GltfConverter`. Apache-2.0. Never reaches a shipped runtime classpath; `verifyToolsIsolation` enforces that |
 
 The Gradle **wrapper is pinned at 8.13**, not 8.10: `gdx-backend-android 1.14.2 → androidx.core 1.17.0 → compileSdk 36, AGP ≥ 8.9.1 → Gradle ≥ 8.13`. None of those is a free choice.
 
@@ -422,7 +440,7 @@ The Gradle **wrapper is pinned at 8.13**, not 8.10: `gdx-backend-android 1.14.2 
 - [x] `JvmMemoryPort` (default) + `ZoneMemoryPort` (bulk-free)
 - [x] `MemoryPortFactory` (system-level selector)
 - [x] `MemoryException` for all invalid state
-- [x] 43 tests across both backends (positive, negative, random, overflow, underflow, state machine, tags)
+- [x] 35 tests across both backends (positive, negative, random, overflow, underflow, state machine, tags)
 
 ### Phase 1.2 — Event-driven engine + multi-threaded worker pool — **done**
 - [x] `I_EngineEvent` base + 6 concrete events
@@ -450,12 +468,18 @@ The Gradle **wrapper is pinned at 8.13**, not 8.10: `gdx-backend-android 1.14.2 
 - [x] 42 new tests (15 in-memory + 15 SQLite + 12 UserProfile validation)
 - [x] Persistence verified: same UUID loaded across restarts, playtime accumulates
 
-### Phase 1.5 — Desktop HAL adapter (LWGJL3) — **next**
-- [ ] `DesktopTimePort` using LWJGL3 `GLFW.glfwGetTime()`
-- [ ] `DesktopInputPort` using LWJGL3 Keyboard/Mouse callbacks
-- [ ] `DesktopNetworkPort` using `java.nio.channels.DatagramChannel` — datagram-only, one preallocated **direct** `ByteBuffer` reused per receive (a heap buffer makes the JDK copy through a temporary direct one on every call)
-- [ ] Basic OpenGL window for render testing
-- [ ] Confirm event-driven architecture handles real input timing
+### Phase 1.5 — Desktop HAL adapter (LWGJL3) — **done**
+
+Three of these shipped under different names than planned; the names below are
+what actually exists, with the original intent noted where it diverged.
+
+- [x] `DesktopTimePort` — monotonic time. **Uses `System.nanoTime()`, not `GLFW.glfwGetTime()`**: the port is constructed before any window exists and must work headless, which rules out a GLFW-backed clock
+- [x] `GdxInputPort` + `InputAccumulator` (in `:desktop`, not `hal/adapter/desktop/`) — polls `Gdx.input` per frame rather than binding raw GLFW callbacks. Accumulates on the render thread and latches on the game-loop thread with `getAndSet(0)`
+- [x] `DesktopDatagramPort` using `java.nio.channels.DatagramChannel` — datagram-only, non-blocking, one preallocated **direct** `ByteBuffer` per direction allocated at `init()` (a heap buffer makes the JDK copy through a temporary direct one on every call)
+- [x] Window for render testing — `GdxWindowPort` (LWJGL3, 1280x720 default), presenting through `FramebufferPresenter`
+- [x] Confirm event-driven architecture handles real input timing — the accumulate/latch split above is that confirmation
+
+**Known seam**: `DesktopAdapterFactory` still returns `NullInputPort` / `NullWindowPort`. This is deliberate, not an oversight — the real window and input adapters need libGDX, and `:engine` must stay platform-free, so they live in `:desktop`'s `GdxAdapterFactory` instead.
 
 ### Phase 2 — WAD file loader — **partly done**
 - [x] `WadReader` — header + directory parse
@@ -466,13 +490,15 @@ The Gradle **wrapper is pinned at 8.13**, not 8.10: `gdx-backend-android 1.14.2 
 - [ ] `BlockmapBuilder` — pre-compute BLOCKMAP from LINEDEFS
 - [ ] A `W_` subsystem registering `WadFilePort` with the `SubsystemRegistry`
 
-### Phase 3 — Networking — **planned**
+### Phase 3 — Networking — **primitives built, nothing wired**
 - [x] Transport decision recorded (`net/README.md` § "Transport decision") — UDP + redundant redelivery, no dependency added
-- [ ] `PeerConnection` (peer state — address, RTT, ack window; no socket)
-- [ ] `TicCmdBuffer` (lockstep) — fixed 60 Hz sim tick, decoupled from render
-- [ ] `RedundantSender` — redundant input redelivery + 64-bit ack bitfield
+- [x] `PeerConnection` (peer state — address, EWMA RTT, ack window; no socket)
+- [x] `TicCmdBuffer` (lockstep) — 64x8 preallocated ring, zero per-tic allocation, decoupled from render. Note the sim rate is configurable 30/60/120, not fixed at 60
+- [x] `RedundantSender` + `AckWindow` — redundant input redelivery, 64-bit ack bitfield
 - [ ] `SnapshotDelta` (encode/decode)
 - [ ] `Discovery` (LAN broadcast)
+
+**These six classes are library-only.** `EngineMain` still registers `NullNetworkPort`; nothing in the running engine constructs a `PeerConnection`, `TicCmdBuffer` or `RedundantSender`, and no socket is opened. 87 tests cover them in isolation. Wiring them to `DesktopDatagramPort` is the next real Phase 3 step.
 
 ### Phase 4 — Gameplay — **planned**
 - [ ] `LagCompensator` (rewind for hits) — moved from Phase 3; under pure lockstep there is nothing to rewind, so this only becomes meaningful once prediction/snapshot exists
@@ -504,7 +530,9 @@ Render target: `docs/ASSETS.md` § 2. Ordered by dependency.
 - [x] **Integration** — `SoftwareRenderPort` implements `I_RenderPort`, `GameLoop` publishes `RenderFrameEvent`, `:desktop` presents via `FramebufferPresenter`. A real Kenney model (368 tris, textured) renders to window and to PNG
 - [x] **Backface winding** — measured against a no-cull oracle: `CullMode.CLOCKWISE`
 - [x] Fix the drain-window defect — `WorkerPool` gained a `DRAINING` state; `submitParallel` is legal there
-- [ ] Default to 720p60 and expose bilinear filtering as a quality toggle
+- [x] Default to 720p60 — `GdxWindowPort` 1280x720, `GameConfig` `FPS_60`, `DemoPreviewMain` and `AndroidLauncher` agree. Measured p50 4.9 ms at 8 workers on the 295-instance demo room
+- [ ] Expose bilinear filtering as a quality toggle — **not started**. `TextureSampler` is unconditionally bilinear and no configuration field for it exists anywhere. Worth doing: bilinear alone is 2.9x the rest of the span loop, so disabling it is the cheapest path to 1080p60
+- [ ] Cap the internal render resolution independently of window size — a `RenderResolution` policy class was written but never landed; it is preserved as a patch and needs re-applying against the batched pipeline
 
 Retired from this phase and deliberately not listed: `BspTraverser` (moved to Phase 4 as a gameplay/collision structure), `WallClipper`, `VisplaneBuilder`, `ColumnRenderer`, palette blitting.
 

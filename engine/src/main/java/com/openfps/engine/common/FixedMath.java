@@ -18,9 +18,17 @@ package com.openfps.engine.common;
  *
  *  1. JVM boxing cost  — every Float / Double allocates. int does not.
  *  2. JIT inlining     — int math inlines better, fewer spills.
- *  3. Determinism      — int * int is the same on x86 and ARM. float * float
- *                        can differ in the last bit, which breaks P2P
- *                        lockstep. See net/README.md for why this matters.
+ *  3. Determinism      — int * int is trivially identical everywhere, with no
+ *                        rule to remember. NOTE: the older claim here, that
+ *                        float * float can differ in the last bit between x86
+ *                        and ARM, is WRONG for Java. JEP 306 (Java 17) makes
+ *                        float and double +, -, *, / and sqrt always strict
+ *                        IEEE 754, so they are bit-reproducible across
+ *                        platforms. Only the transcendentals differ: Math.sin
+ *                        and friends are permitted 1-2 ulp of slack, which is
+ *                        why simulation code uses StrictMath instead. See
+ *                        gameplay/README.md for the determinism policy that
+ *                        actually governs lockstep.
  *  4. Cache locality   — int[] is half the size of float[].
  *  5. SIMD-friendly    — Vector API (JEP 438) packs ints 4x denser.
  *
