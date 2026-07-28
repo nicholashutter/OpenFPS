@@ -503,7 +503,7 @@ Render target: `docs/ASSETS.md` § 2. Ordered by dependency.
 - [x] `GltfConverter` — Gradle buildscript classpath only; triangulation, mip-chain generation, texture decode, `docs/ASSETS.md` § 5 budget enforcement
 - [x] **Integration** — `SoftwareRenderPort` implements `I_RenderPort`, `GameLoop` publishes `RenderFrameEvent`, `:desktop` presents via `FramebufferPresenter`. A real Kenney model (368 tris, textured) renders to window and to PNG
 - [x] **Backface winding** — measured against a no-cull oracle: `CullMode.CLOCKWISE`
-- [ ] Fix `EngineSession.stop()` bus-drain ordering (drains after `pool.shutdown()`)
+- [x] Fix the drain-window defect — `WorkerPool` gained a `DRAINING` state; `submitParallel` is legal there
 - [ ] Default to 720p60 and expose bilinear filtering as a quality toggle
 
 Retired from this phase and deliberately not listed: `BspTraverser` (moved to Phase 4 as a gameplay/collision structure), `WallClipper`, `VisplaneBuilder`, `ColumnRenderer`, palette blitting.

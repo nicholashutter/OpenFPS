@@ -41,6 +41,7 @@ ownership is how a rasterizer turns into an unmaintainable blob.
 
 | Component | Owns | Does not own |
 |---|---|---|
+| `Scene` | The immutable draw list: world instances (`model` + `modelToWorld`) and view instances (`model` + `modelToView`). Built once, never per frame | Drawing, culling, ordering. It is data |
 | `Framebuffer` | Colour buffer, depth buffer, dimensions, tile geometry, `clear()` | Any drawing. It is storage plus a tile map |
 | `Camera` (+ transform math) | View matrix, projection matrix, world → clip-space transform, frustum parameters | Clipping, rasterizing. It produces clip-space vertices and stops |
 | `TriangleClipper` | Near-plane clipping in homogeneous clip space (Sutherland-Hodgman), attribute interpolation along clipped edges, fan re-triangulation | The perspective divide, the viewport transform |
@@ -72,12 +73,16 @@ render/
     ├── MipChain.java         a texture and its pre-generated mip levels
     ├── TextureSampler.java   bilinear + mip selection
     ├── Rasterizer.java       setup, binning, tile dispatch
-    └── SpanRenderer.java     the per-pixel inner loop
+    ├── SpanRenderer.java     the per-pixel inner loop
+    ├── Scene.java            world + view instance draw list
+    └── SoftwareRenderPort.java  the real I_RenderPort
 ```
 
-**Landed:** `Framebuffer`, `Camera`, `TriangleClipper`, `TextureSampler`,
-`Rasterizer`, `SpanRenderer` (and the supporting `Rgba`, `Vec3`, `Mat4`,
-`MipChain`), plus the `WorkerPool` prerequisite in § 7.
+**Landed:** every component in § 1 — `Scene`, `Framebuffer`, `Camera`,
+`TriangleClipper`, `Rasterizer`, `SpanRenderer`, `TextureSampler`,
+`ModelFormat`, `GltfConverter` — plus `SoftwareRenderPort` tying them together
+and the supporting `Rgba`, `Vec3`, `Mat4`, `MipChain`, and the `WorkerPool`
+prerequisite in § 7.
 
 **Binning is per *chunk*, not per worker.** § 7 originally said per-worker; the
 implementation improved on it. A chunk is one `submitParallel` index, so it runs
@@ -104,9 +109,14 @@ because both bugs were invisible to a passing 748-test suite:
 2. **The world was mirrored** — see the § 4 correction. A wrong basis order that
    a unit test had *locked in*.
 
-There is also a live defect this surfaced but did not cause: `EngineSession.stop()`
-drains the bus **after** `pool.shutdown()`, so trailing events reach a dead pool.
-Any fan-out subsystem hits it; it needs its own fix, not a renderer workaround.
+3. **A pool defect the renderer surfaced but did not cause — now fixed.**
+   `pool.shutdown()` drained the bus and *immediately* declared the pool
+   terminal. But draining **delivers** the queued events rather than discarding
+   them, so trailing `RenderFrameEvent`s were dispatched to a pool that had
+   already refused further work, and every clean exit threw twice. The fix was a
+   missing state, not a renderer workaround: `WorkerPool` now has `DRAINING`
+   between `RUNNING` and `SHUTDOWN`, and `submitParallel` is legal there. Any
+   fan-out subsystem would have hit this; the renderer was simply the first.
 
 `GltfConverter` lives in the separate `:tools` module, never on the runtime
 classpath; `verifyToolsIsolation` proves it mechanically on every build.
@@ -304,11 +314,28 @@ to think about it.
 
 ## 5. Pipeline order
 
+A frame is **two passes over the same buffers**: world geometry, then a depth
+clear, then view-space geometry. The second pass is what a first-person weapon
+is drawn in.
+
 ```text
+  Scene
+    ├── world instances  (ModelFormat + modelToWorld)
+    └── view  instances  (ModelFormat + modelToView)
+
+  clear colour + depth
+        │
+        ▼
+  ── WORLD PASS ── for each world instance ──────────────────
+        │
+        ▼
+  Camera.packModelToClip(modelToWorld)         (once per INSTANCE)
+        │                                       48 multiplies, not per vertex
+        ▼
   model triangles (ModelFormat)
         │
         ▼
-  Camera:          world → clip space          (per vertex)
+  Camera:          model → clip space          (per vertex, 12 mul + 9 add)
         │
         ▼
   TriangleClipper: near-plane clip             (per triangle → 0, 1 or 2 triangles)
@@ -323,8 +350,32 @@ to think about it.
                    interpolate, depth test, sample, write
         │
         ▼
+  ── CLEAR DEPTH ONLY ───────────────────────────────────────
+        │            colour is NOT cleared: the world stays
+        │
+        ▼
+  ── VIEW PASS ── for each view instance ────────────────────
+        │            Camera.packViewToClip — projection only,
+        │            no view matrix: these are already in view space
+        ▼
+        (same clip → raster → span path)
+        │
+        ▼
   Framebuffer (finished)  →  adapter uploads  →  screen
 ```
+
+**Why the depth clear rather than a compressed depth range.** A first-person
+weapon is bolted to the camera, so it is naturally expressed in view space —
+which makes its transform a fixed constant and skips the view matrix entirely.
+But it sits centimetres from the eye and the world does not, so with a shared
+depth buffer it punches through walls the moment the player stands near one.
+Clearing depth between the passes makes the weapon unconditionally nearest,
+costs one `Arrays.fill` of a buffer that is about to be written anyway, and is
+what shipped first-person renderers have always done. A compressed depth range
+would work too and is strictly more complex for no benefit here.
+
+The view pass is skipped entirely when a scene has no view instances, so a
+scene that is only world geometry pays nothing for this.
 
 ---
 
@@ -1111,7 +1162,8 @@ Ordered. Each item is a lane from § 1; the ordering is by dependency.
 - [x] `GltfConverter` — buildscript classpath only; triangulation, mip chains, budget enforcement per `docs/ASSETS.md` § 5
 - [x] **Integration** — `SoftwareRenderPort`, `GameLoop` publishes `RenderFrameEvent`, `:desktop` presents. A real Kenney model renders to window and PNG
 - [x] **Backface winding** — measured, `CullMode.CLOCKWISE` (§ 7)
-- [ ] Fix `EngineSession.stop()` bus-drain ordering — drains after `pool.shutdown()`; affects any fan-out subsystem
+- [x] `Scene` — world + view instances with per-instance `modelToWorld`; view pass after a depth clear (§ 5)
+- [x] Fix the drain-window defect — `WorkerPool` gained `DRAINING`; `submitParallel` is legal there. Clean exits no longer throw
 - [ ] Measure the 64×64 tile size — still the one unmeasured constant (§ 11c)
 - [ ] Default to 720p60; expose bilinear as a quality toggle (`docs/ASSETS.md` § 2)
 
