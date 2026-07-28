@@ -11,7 +11,7 @@
 |---|---|
 | **State** | SHIPPING |
 | **Phase** | 1.4, 1.5 complete |
-| **Tests** | 91 |
+| **Tests** | 110 |
 | **Registered** | I_ via `HalSubsystem` |
 | **Verified** | 2026-07-28 |
 

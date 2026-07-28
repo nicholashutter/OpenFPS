@@ -7,11 +7,35 @@
 
 | Field | Value |
 |---|---|
-| **State** | BUILT-UNWIRED |
-| **Phase** | `PLAN.md` Phase 3 — primitives built, nothing wired (§ 3.5) |
-| **Tests** | 87 |
-| **Registered** | G_ via `NetSubsystem`, but with `NullNetworkPort` — no real port |
+| **State** | PARTIAL |
+| **Phase** | `PLAN.md` Phase 3 — transport wired and measured; lockstep simulation not started |
+| **Tests** | 129 |
+| **Registered** | G_ via `NetSubsystem` with `NullNetworkPort`; the live path is `NetSession`, attached by `DesktopLauncher` |
 | **Verified** | 2026-07-28 |
+
+### The transport ships. The simulation does not.
+
+`NetSession` opens a real socket and drives the primitives that were already
+here. It has been verified twice over, deliberately at two different levels:
+
+- **A loopback test over two real UDP sockets.** A scripted socket can produce
+  a lost packet and a hostile one, which a real socket cannot — but it also
+  cannot fail in the ways a real socket fails, and every one of those is a way
+  this could be broken while every unit test passed: an address string this
+  code builds that the port cannot parse, a receive buffer that silently
+  truncates a full window, a channel left blocking so the first empty read
+  hangs the game loop.
+- **Two live game processes.** They exchanged 77 KB, 338 packets out and 223
+  in, 2,460 commands accepted, with **zero malformed and zero from strangers**.
+  The asymmetry is the second process starting later, and the wide commands
+  per packet is the redundancy window adapting to the loss that caused.
+
+**What is not done: a remote player is not simulated into a body.** The inputs
+arrive and the ack state is live; nothing turns them into someone you can see
+and shoot. That needs a `PlayerController` per peer driven from the received
+ring, plus a rule for what to do when a peer's tics have not arrived. Stated
+plainly here because a session that exchanges packets perfectly and shows
+nobody looks exactly like a session that is broken.
 
 **Built.** Six classes — `TicCmd`, `TicCmdBuffer`, `AckWindow`,
 `PeerConnection`, `RedundantSender`, `NetBytes` — implementing the 12-byte

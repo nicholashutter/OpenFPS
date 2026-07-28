@@ -10,7 +10,7 @@
 |---|---|
 | **State** | SHIPPING |
 | **Phase** | `PLAN.md` Phase 5 — done, pending polish (§ 3.3) |
-| **Tests** | 316 |
+| **Tests** | 409 |
 | **Registered** | R_ via `RenderSubsystem`. Which port it gets depends on the caller: `EngineMain`'s own default is `NullRenderPort` (the headless path), and the real `SoftwareRenderPort` is supplied through `I_RenderPortFactory` by `DesktopLauncher`. So the running desktop app renders; `EngineMain.main` alone does not |
 | **Verified** | 2026-07-28 |
 

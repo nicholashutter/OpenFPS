@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Java Version](https://img.shields.io/badge/Java-17%20LTS-ED8B00.svg)](https://adoptium.net/)
 [![Gradle](https://img.shields.io/badge/Gradle-8.13-02303A.svg)](https://gradle.org/)
-[![Tests](https://img.shields.io/badge/tests-1239%20passing-brightgreen.svg)](BUILD.md)
+[![Tests](https://img.shields.io/badge/tests-1516%20passing-brightgreen.svg)](BUILD.md)
 [![Status](https://img.shields.io/badge/status-pre--alpha-blue.svg)](PLAN.md)
 
 ## Overview
@@ -14,7 +14,9 @@ OpenFPS is a from-scratch FPS game engine written in Java 17, designed around th
 
 The engine is an **event queue processor**: subsystems communicate by publishing events to a shared bus, and a pool of N dedicated worker threads (N = logical CPU count / 2) consumes events and dispatches them to the target subsystem. Each subsystem is its own state machine. Every allocation goes through a single memory port.
 
-**Currently in pre-alpha.** The renderer is built and the demo is playable: a first-person view of a room with a held weapon, at 1280x720. 1239 tests passing, Checkstyle clean, build green.
+**Currently in pre-alpha, and it is a game now rather than a demo.** A blocky title screen, a single-player match against seven bots that patrol and shoot back, hitscan combat with a crosshair and outlined opponents, and a UDP transport that two live processes have been measured exchanging. 1516 tests passing, Checkstyle clean, build green.
+
+What is *not* yet true: remote players are not simulated into bodies you can see, and the Android build boots the engine but never puts the world on screen. Both are stated precisely in [AGENTS.md](AGENTS.md).
 
 ## Key Design Decisions
 
@@ -261,7 +263,7 @@ audio → net → resource → memory`.
 
 ## Test Coverage
 
-**1239 tests, all passing.**
+**1516 tests, all passing** — 1120 `:engine`, 195 `:desktop`, 73 `:tools`, 128 `:android`.
 
 | Module | Tests | Largest suites |
 |---|---|---|

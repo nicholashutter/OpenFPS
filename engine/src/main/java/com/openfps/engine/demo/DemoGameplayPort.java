@@ -15,6 +15,9 @@ import com.openfps.engine.gameplay.PlayerController;
 import com.openfps.engine.gameplay.PlayerInputView;
 import com.openfps.engine.gameplay.port.I_GameplayPort;
 import com.openfps.engine.hal.port.I_InputPort;
+import com.openfps.engine.hal.port.InputState;
+import com.openfps.engine.net.NetSession;
+import com.openfps.engine.net.TicCmdEncoder;
 import com.openfps.engine.render.adapter.SoftwareRenderPort;
 import com.openfps.engine.render.adapter.Vec3;
 
@@ -142,6 +145,15 @@ public final class DemoGameplayPort implements I_GameplayPort
      * addresses world instances by position.</p>
      */
     private final int[] botInstances;
+
+    /**
+     * The networked half of the match, or null for a local one.
+     *
+     * <p>MUTABLE: attached by the launcher before the loop starts, or left null.
+     * When present, every tic's input is encoded as a {@link TicCmd} and sent to
+     * every peer, and everyone else's arrives in the same call.</p>
+     */
+    private volatile NetSession net;
 
     /** MUTABLE: tic index of the last shot, for the cooldown. Under the lock. */
     private long lastFireTic = Long.MIN_VALUE;
@@ -308,6 +320,42 @@ public final class DemoGameplayPort implements I_GameplayPort
     }
 
     /**
+     * Attaches a network session, making this a multiplayer match.
+     *
+     * <p>Once attached, every tic's input is quantised to a {@link TicCmd} and
+     * sent to every peer, and everything they have sent arrives in the same
+     * call. Attaching null returns the port to a purely local match.</p>
+     *
+     * <p><b>What this does and does not yet do.</b> It carries inputs both ways
+     * and keeps the acknowledgement and loss state that a lockstep simulation
+     * needs — the transport is real and tested over a real socket. It does
+     * <b>not</b> yet simulate remote players into bodies you can see and shoot:
+     * that needs a {@code PlayerController} per peer driven from the received
+     * ring, plus a stall rule for a peer whose tics have not arrived, and both
+     * are the next piece of work rather than part of this one. Saying so here
+     * because a session that exchanges packets perfectly and shows nobody looks
+     * exactly like a session that is broken.</p>
+     *
+     * @param session the session to drive, or null for a local match
+     */
+    public void attachNetwork(final NetSession session)
+    {
+        this.net = session;
+        if (session == null)
+        {
+            LOG.info("Network detached — this is a local match");
+            return;
+        }
+        LOG.info("Network attached: {}", session);
+    }
+
+    /** Returns the network session, or null for a local match. */
+    public NetSession network()
+    {
+        return net;
+    }
+
+    /**
      * Advances the player by one tic and points the camera at the result.
      *
      * @param ticIndex the tic being processed
@@ -330,6 +378,7 @@ public final class DemoGameplayPort implements I_GameplayPort
             // registers as "the hit detection is off" without being able to say
             // why.
             advanceMatch(ticIndex);
+            exchangeNetwork(ticIndex, inputPort.currentInput());
             fireIfRequested(inputPort.currentInput().fire(), ticIndex);
             publishBotPlacements();
             aimCamera();
@@ -388,6 +437,33 @@ public final class DemoGameplayPort implements I_GameplayPort
             return;
         }
         LOG.info("HIT entity {} (tic {})", struck, ticIndex);
+    }
+
+    // Puts this tic's input on the wire and takes off whatever has arrived.
+    //
+    // AFTER the controller has been updated, so the yaw and pitch sent are the
+    // ones this tic's look deltas produced rather than the previous tic's. A
+    // peer receiving the earlier pair would see the sender's aim lag their own
+    // by one tic — which is exactly the discrepancy that makes a networked
+    // shooter feel like it is not registering hits.
+    //
+    // Allocation-free: the axes and angles are quantised to ints and handed
+    // straight to the ring, so a tic that changes nothing still costs no
+    // garbage. TicCmdEncoder explains what each field costs on the wire.
+    private void exchangeNetwork(final int ticIndex, final InputState input)
+    {
+        final NetSession session = net;
+        if (session == null || !session.isOpen())
+        {
+            return;
+        }
+        session.recordLocalCommand(ticIndex,
+            TicCmdEncoder.encodeAxis(input.forwardAxis()),
+            TicCmdEncoder.encodeAxis(input.strafeAxis()),
+            TicCmdEncoder.encodeAngle(controller.yawRadians()),
+            TicCmdEncoder.encodePitch(controller.pitchRadians()),
+            TicCmdEncoder.encodeButtons(input));
+        session.tick(ticIndex);
     }
 
     // Moves the opponents and lets them shoot back. Reports the result once,

@@ -6,11 +6,29 @@
 
 | Field | Value |
 |---|---|
-| **State** | PARTIAL |
-| **Phase** | 4 — planned (§ 3.2, § 7); the controller landed ahead of it |
-| **Tests** | 77 |
+| **State** | SHIPPING |
+| **Phase** | 4 — the match layer landed ahead of its phase, as the controller did |
+| **Tests** | 192 |
 | **Registered** | P_ via `GameplaySubsystem` |
 | **Verified** | 2026-07-28 |
+
+### The match layer
+
+`Bot`, `BotPattern`, `Match`, `MatchState` and `MatchMode` turn a room with
+bodies in it into a game. Two decisions are worth knowing before touching any
+of it:
+
+**A bot's position at tic *n* is a pure function of *n*.** Not an integration.
+It cannot drift over a long match, a peer that joins late computes the same
+answer without replaying history, and — the actual requirement — a player can
+watch one for two seconds and know where it will be. These are target
+practice; a bot that flanks makes the shooting impossible to evaluate.
+
+**Return fire goes through the same `Hitscan` as the player's own weapon.** A
+bot standing in the line of fire genuinely blocks the shot and takes no damage
+for it. That was worth more than the emergent cover it produces: it means
+seven opponents a second are exercising the same slab test the player's
+trigger uses.
 
 **Built.** `PlayerController` — first-person look and movement, `StrictMath`
 throughout so lockstep peers stay bit-identical, pitch clamped to ±89°, eye at

@@ -133,9 +133,59 @@ Both `:engine` and `:desktop` apply the `application` plugin, so **bare
 | `--no-sqlite` | Use the in-memory profile port instead of on-disk SQLite | `:engine:run` only |
 | `--headless` | Force the null adapter factory (implies `--no-sqlite`) | `:engine:run` only |
 | `--assets=<dir>` | Model root. Default `assets/models` | `:desktop:run` only |
+| `--start-in-game` | Skip the menu and open straight into the world | `:desktop:run` only |
+| `--net=<id>:<port>` | Be player `<id>`, listen on UDP `<port>`. `0` asks the OS for a free port | `:desktop:run` only |
+| `--peer=<id>@<host>:<port>` | Connect to a peer. May be given more than once | `:desktop:run` only |
 
 `:desktop:run` hard-selects the desktop HAL backend, so `--no-sqlite` and
 `--headless` do nothing there — a windowed launcher cannot be headless.
+
+### Two peers on one machine
+
+Neither half of `--net` has a safe default and both are required. Two peers
+sharing a player id would each read the other's packets as coming from
+themselves and drop them silently — the game would open, connect, and show
+nobody. A default port cannot work for two instances on one machine, which is
+the first thing anyone tries.
+
+```powershell
+# terminal 1
+.\gradlew :desktop:run --args="--start-in-game --net=1:5021 --peer=2@127.0.0.1:5022"
+
+# terminal 2
+.\gradlew :desktop:run --args="--start-in-game --net=2:5022 --peer=1@127.0.0.1:5021"
+```
+
+Each process logs a `Network summary` line on exit — packets and bytes both
+ways, commands accepted, and counts of malformed packets and packets from
+unknown senders. A measured run of the above exchanged 77 KB with both of the
+last two at zero.
+
+**What this does and does not do.** The transport carries inputs both ways and
+keeps the acknowledgement and loss state a lockstep simulation needs. It does
+**not** yet turn a remote player into a body you can see and shoot. A session
+that exchanges packets perfectly and shows nobody looks exactly like a broken
+one, so check the summary line rather than the screen.
+
+---
+
+## A native Windows launcher
+
+`gradlew :desktop:run` is a JVM, so Task Manager lists `java.exe` whatever the
+window title says. `jpackage` is what changes that:
+
+```powershell
+.\gradlew :desktop:packageWindows
+.\desktop\build\dist\OpenFPS\OpenFPS.exe
+```
+
+The result is an app-image — a directory holding `OpenFPS.exe`, the classes and
+a trimmed runtime — rather than an installer, which would need WiX on `PATH`.
+The `.ico` is generated at build time from `WindowIcon`'s design, so there is no
+icon file in the repository and none to keep in step.
+
+The **window** icon needs none of this: it is generated in code and applied
+through GLFW every run, including under `:desktop:run`.
 
 With SQLite enabled the engine creates or loads a profile at
 `~/.openfps/profile.db` and accumulates playtime across runs; override the path

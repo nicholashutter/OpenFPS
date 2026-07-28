@@ -21,6 +21,8 @@ import com.openfps.engine.demo.DemoScene;
 import com.openfps.engine.gameplay.adapter.NullGameplayPort;
 import com.openfps.engine.gameplay.port.I_GameplayPort;
 import com.openfps.engine.hal.adapter.AdapterFactorySelector;
+import com.openfps.engine.hal.adapter.desktop.DesktopDatagramPort;
+import com.openfps.engine.net.NetSession;
 import com.openfps.engine.hal.adapter.HalBackend;
 import com.openfps.engine.hal.port.I_InputPort;
 import com.openfps.engine.hal.port.I_TimePort;
@@ -95,8 +97,30 @@ public final class DesktopLauncher
      */
     public static final String START_IN_GAME_ARG = "--start-in-game";
 
+    /**
+     * CLI prefix naming this peer's identity and local UDP port, as
+     * {@code --net=<playerId>:<port>}.
+     *
+     * <p>Both halves are needed and neither has a safe default. The id is what
+     * every packet is matched on, so two peers sharing one would each drop the
+     * other's traffic as coming from themselves; and the port cannot default
+     * for two instances on one machine, which is exactly the case anyone
+     * testing this will hit first. {@code 0} as a port asks the OS for a free
+     * one.</p>
+     */
+    public static final String NET_ARG = "--net=";
+
+    /**
+     * CLI prefix naming a peer to connect to, as
+     * {@code --peer=<playerId>@<host>:<port>}. May be given more than once.
+     */
+    public static final String PEER_ARG = "--peer=";
+
     /** Exit status used when the demo has no geometry to stand on. */
     public static final int EXIT_NO_ASSETS = 3;
+
+    /** Exit status used when the network arguments cannot be honoured. */
+    public static final int EXIT_BAD_NETWORK = 4;
 
     private static final Logger LOG = LoggerFactory.getLogger(DesktopLauncher.class);
 
@@ -127,6 +151,21 @@ public final class DesktopLauncher
         }
         LOG.info("OpenFPS desktop launcher: rate={} Hz, java={}",
             rate.fps(), System.getProperty("java.version"));
+
+        // Parsed BEFORE anything is opened, for the same reason the assets are
+        // loaded early: a typo in an address should be a console message, not a
+        // failure behind a window the user has to close to read.
+        final NetArgs netArgs;
+        try
+        {
+            netArgs = NetArgs.parse(args);
+        }
+        catch (final IllegalArgumentException e)
+        {
+            LOG.error("Bad network arguments: {}", e.getMessage());
+            System.exit(EXIT_BAD_NETWORK);
+            return;
+        }
 
         // Built BEFORE the window opens, on purpose: missing assets should
         // report and exit at a console, not behind a black GLFW window the
@@ -175,7 +214,25 @@ public final class DesktopLauncher
         window.attachRenderer(renderer);
         attachMatchGate(window, gameplay[0]);
 
+        final NetSession netSession;
+        try
+        {
+            netSession = openNetwork(netArgs, gameplay[0], config);
+        }
+        catch (final RuntimeException e)
+        {
+            LOG.error("Cannot open the network session: {}", e.getMessage());
+            session.stop();
+            System.exit(EXIT_BAD_NETWORK);
+            return;
+        }
+
         session.awaitPlatformLoop();
+        if (netSession != null)
+        {
+            LOG.info("Network summary: {}", netSession);
+            netSession.close();
+        }
         session.stop();
         LOG.info("OpenFPS desktop launcher exited");
     }
@@ -216,6 +273,43 @@ public final class DesktopLauncher
         // itself on every trigger pull.
         return new DemoGameplayPort(input, holder.renderer(), demo.spawnController(), config,
             demo.newMatch(), botInstanceIndices(demo));
+    }
+
+    /**
+     * Opens the network session, if one was asked for, and hands it to the
+     * match.
+     *
+     * <p>Its own socket rather than the HAL's shared one: {@code EngineMain}
+     * builds an {@code I_DatagramPort} for the networking subsystem, and two
+     * owners of one socket would race over {@code receive()} — each draining
+     * packets the other needed. A second {@link DesktopDatagramPort} costs one
+     * file descriptor and removes the question entirely.</p>
+     *
+     * @param netArgs the parsed command line
+     * @param gameplay the match to attach the session to, or null when there is
+     *     no match to network
+     * @param config the running configuration, whose tic duration sizes the
+     *     redundancy window
+     * @return the open session, or null when networking was not requested
+     */
+    private static NetSession openNetwork(final NetArgs netArgs,
+        final DemoGameplayPort gameplay, final GameConfig config)
+    {
+        if (!netArgs.isRequested() || gameplay == null)
+        {
+            return null;
+        }
+        final NetSession netSession = new NetSession(new DesktopDatagramPort(),
+            netArgs.playerId(), config.nanosPerTic());
+        netSession.open(netArgs.port());
+        for (final NetArgs.Peer peer : netArgs.peers())
+        {
+            netSession.addPeer(peer.id(), peer.address());
+        }
+        gameplay.attachNetwork(netSession);
+        LOG.info("Multiplayer: {} — the transport carries inputs both ways;"
+            + " remote bodies are not simulated into the world yet", netArgs);
+        return netSession;
     }
 
     /**

@@ -8,10 +8,30 @@
 | Field | Value |
 |---|---|
 | **State** | PARTIAL |
-| **Phase** | not a numbered phase; PLAN.md § 6 records it as "Built — APK assembles; not yet verified on a device or emulator" |
-| **Tests** | 64 (plain JVM unit tests; nothing device-backed) |
+| **Phase** | not a numbered phase |
+| **Tests** | 64 unique (128 executions — the suite runs against the debug and release variants). Plain JVM only; nothing device-backed |
 | **Registered** | provides the Android HAL (`AndroidAdapterFactory`) and the LAUNCHER Activity |
-| **Verified** | 2026-07-28 |
+| **Verified** | 2026-07-28 — **run on the OpenFPS_API36 emulator for the first time** |
+
+### What the emulator run established, and what it did not
+
+The APK builds, installs, launches, and stays up. The engine genuinely runs on
+the device: `EngineMain` boots, the Room profile loads, `SharedEventBus` comes
+up, `WorkerPool` sizes itself to the emulator's 6 cores and starts 3 workers,
+and `GameLoop` runs at a fixed 60 Hz. The Scene2D menu draws. Nothing crashed.
+
+**The game is not on screen, and that is the honest headline.** `AndroidLauncher`
+calls the two-argument `EngineMain.start`, which means the null render port and
+the null gameplay port — so the software rasterizer is never attached to a
+surface, there is no match, no bots, no input beyond the menu buttons. Android
+today is the engine core running on a phone behind a menu, which is a real
+milestone and is not a playable build.
+
+The three things that stand between here and a playable one, in order: a
+GLES presenter for the framebuffer (the desktop equivalent is
+`FramebufferPresenter`), an `ActionBindings` table bound to touch regions
+(`InputBinding.Source.TOUCH_REGION` exists for exactly this), and a gameplay
+port wired the way `DesktopLauncher` wires one.
 
 **Built.** `AndroidLauncher` (the Activity), `AndroidWindowPort` (registers with
 the framework loop rather than blocking), `AndroidAdapterFactory` (the null

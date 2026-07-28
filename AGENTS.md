@@ -246,8 +246,9 @@ public void spawnEntity(final int entityType)
 > surface exists), `STUB` (port + null adapter only), `NOT STARTED`. Keep to
 > those five so the blocks stay greppable.
 >
-> `BUILT-UNWIRED` is not a synonym for "done". Two packages are in that state
-> and between them hold 188 tests that no running code exercises.
+> `BUILT-UNWIRED` is not a synonym for "done". `resource` is in that state and
+> holds 101 tests that no running code exercises. `net` left it — a socket is
+> opened now, and two live processes have been measured exchanging tics.
 
 All paths below are under `engine/src/main/java/com/openfps/engine/` unless a
 module is named. `:desktop`, `:tools` and `:android` carry the same block in
@@ -256,14 +257,14 @@ their module-root `README.md`.
 | Subsystem | Package | Status |
 |---|---|---|
 | Core Loop | `core` | Phase 1.3 — event-driven, multi-threaded, configurable 30/60/120 Hz; pool also does caller-participating parallel fan-out (`submitParallel`) |
-| Gameplay | `gameplay` | `PlayerController` (first-person movement, StrictMath-deterministic) + `I_PlayerInput` / `PlayerInputView`; rest stub, registered as `P_` |
-| Render | `render` | **Built and shipping** (316 tests), registered as `R_`. Multi-threaded software triangle rasterizer: `Framebuffer`, `Camera`, `TriangleClipper`, `Rasterizer`, `SpanRenderer`, `TextureSampler`, `MipChain`, `ModelFormat`, `Scene`, `SoftwareRenderPort`. Two passes per frame (world, then view-space viewmodel with a depth clear between). Measured p50 4.9 ms at 1280x720 on 8 workers. `docs/ASSETS.md` § 2 is the canonical target; `render/README.md` is the full spec — read it before touching any render code. The 2.5D DOOM renderer (visplanes, column renderer, 8-bit palette) is retired |
+| Gameplay | `gameplay` | **SHIPPING**, registered as `P_`. `PlayerController` (first-person movement + gravity and a jump, StrictMath-deterministic), `Hitscan` / `Target` / `HitResult`, and the match layer: `Bot`, `BotPattern`, `Match`, `MatchState`, `MatchMode`. Bots walk closed-form routes — position at tic *n* is a pure function of *n*, so they cannot drift and a late-joining peer computes the same answer without replaying history — and shoot back through the same `Hitscan` the player's own weapon uses, so one bot genuinely blocks another's shot |
+| Render | `render` | **Built and shipping** (409 tests), registered as `R_`. Multi-threaded software triangle rasterizer: `Framebuffer`, `Camera`, `TriangleClipper`, `Rasterizer`, `SpanRenderer`, `TextureSampler`, `MipChain`, `ModelFormat`, `Scene`, `SoftwareRenderPort`. Two passes per frame (world, then view-space viewmodel with a depth clear between). Measured p50 4.9 ms at 1280x720 on 8 workers. `docs/ASSETS.md` § 2 is the canonical target; `render/README.md` is the full spec — read it before touching any render code. The 2.5D DOOM renderer (visplanes, column renderer, 8-bit palette) is retired |
 | Audio | `audio` | STUB — port + null adapter, registered as `S_`. **0 tests.** Blocked on the audio source-format question: `docs/ASSETS.md` says "No IWADs, ever", so the old plan to read `DS*` lumps from a WAD is dead and the accepted-sources table has no audio row at all |
-| Network | `net` | **BUILT-UNWIRED.** `TicCmd`, `TicCmdBuffer`, `AckWindow`, `PeerConnection`, `RedundantSender`, `NetBytes` are built and tested (87 tests) — but `EngineMain` registers `NullNetworkPort` and their only callers are their own tests. **No socket is ever opened.** Next step is wiring them to `DesktopDatagramPort`, which exists and is tested |
+| Network | `net` | **PARTIAL — the transport ships, the simulation does not.** `NetSession` opens a real socket over `DesktopDatagramPort` and drives the primitives that were already built (`TicCmd`, `TicCmdBuffer`, `AckWindow`, `PeerConnection`, `RedundantSender`, `NetBytes`), plus `TicCmdEncoder` for the float-to-wire quantisation. Verified two ways: a loopback test over two real UDP sockets, and two live game processes, which exchanged 77 KB with zero malformed packets and zero strangers. **What is NOT done: remote players are not simulated into bodies.** That needs a `PlayerController` per peer driven from the received ring, plus a stall rule for a peer whose tics have not arrived. A session that exchanges packets perfectly and shows nobody looks exactly like a broken one, so do not read "multiplayer works" as more than the transport |
 | Resource | `resource` | `WadReader`, `LumpCache`, `MapLumpParser`, `LittleEndian`, `WadFilePort` all built (101 tests). **Not registered** — no `W_` subsystem yet. Its *role* is now an open question: `docs/ASSETS.md` moves all art to preprocessed glTF, so the WAD path has no art left to read. See `render/README.md` § 11b. Do not delete it and do not build `ImageDecoder` until that is resolved |
 | Memory | `memory` | Phase 1.1 — state machine, two backends (`JvmMemoryPort`, `ZoneMemoryPort`), factory |
-| HAL | `hal` | Ports + `nulladapter` + `sqlite` + `desktop` (time, datagram) adapters, system info, user profile |
-| *(not a subsystem)* | `demo` | `DemoScene`, `DemoGameplayPort` (35 tests) — the playable first-person demo's room layout, kit scale and weapon pose. Platform-free so `:tools` can render it headlessly and `:desktop` can run it live. Not registered with `SubsystemRegistry` |
+| HAL | `hal` | Ports + `nulladapter` + `sqlite` + `desktop` (time, datagram) adapters, system info, user profile. Also `GameAction` / `InputBinding` / `ActionBindings` — the controls table. The engine owns which actions exist and deliberately ships **no default key codes**: a key code is a platform number and `:engine` may not import a toolkit that defines one, so each platform supplies its own table |
+| *(not a subsystem)* | `demo` | `DemoScene`, `DemoModels`, `DemoGameplayPort` — the playable match: room layout, kit scale, weapon pose, and seven bots with their routes. Drives `Match` per tic and publishes each bot's placement to the renderer. Platform-free so `:tools` can render it headlessly and `:desktop` can run it live. Not registered with `SubsystemRegistry` |
 
 | Module | Contains |
 |---|---|
@@ -278,7 +279,7 @@ platform-free. Both implement `I_WindowPort` and drive `I_FrameCallback` —
 which is also the presentation path for the Phase 5 rasterizer. The engine
 produces a finished framebuffer; the adapter uploads it.
 
-**1239 tests passing** (977 `:engine`, 125 `:desktop`, 73 `:tools`, 64 `:android`), Checkstyle clean — see
+**1516 tests passing** (1120 `:engine`, 195 `:desktop`, 73 `:tools`, 128 `:android`), Checkstyle clean — see
 `BUILD.md` for run instructions and `PLAN.md` § 8 for the per-suite breakdown.
 
 ---

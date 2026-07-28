@@ -9,7 +9,7 @@
 |---|---|
 | **State** | SHIPPING |
 | **Phase** | not a phase item — this is the playable demo content |
-| **Tests** | 35 |
+| **Tests** | 58 |
 | **Registered** | not registered — not a subsystem; it is a composition root that consumes the engine |
 | **Verified** | 2026-07-28 |
 
