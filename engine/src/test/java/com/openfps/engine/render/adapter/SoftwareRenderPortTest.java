@@ -152,6 +152,40 @@ final class SoftwareRenderPortTest
     /** How long the tearing test waits for its renderer, in milliseconds. */
     private static final long TEARING_TIMEOUT_MILLIS = 30_000L;
 
+    /** One player's entity id. */
+    private static final int PLAYER_ID = 7;
+
+    /** A second player's entity id. */
+    private static final int SECOND_PLAYER_ID = 9;
+
+    /** Colour of the untagged wall that occludes a tagged entity. */
+    private static final int OCCLUDER_COLOR = 0x20FF80FF;
+
+    /** Half-edge of that occluder — small, so the entity shows around it. */
+    private static final float OCCLUDER_HALF = 0.4f;
+
+    /** World z of the occluder: one unit nearer the camera than the entity. */
+    private static final float OCCLUDER_Z = 1.0f;
+
+    /**
+     * A column inside the tagged quad but outside the occluder in front of it.
+     * The quad spans roughly x 55..145 on screen and the occluder x 76..124,
+     * so 65 sees the entity and only the entity.
+     */
+    private static final int ENTITY_ONLY_X = 65;
+
+    /** How far along x the ghost test moves its entity, in world units. */
+    private static final float GHOST_SHIFT = 0.6f;
+
+    /**
+     * A column the entity covers before the ghost test moves it and not after.
+     * The quad spans x 27..118 in the first frame and x 82..173 in the second.
+     */
+    private static final int VACATED_X = 40;
+
+    /** Every column left of the moved entity's outline, for the ghost sweep. */
+    private static final int VACATED_SWEEP_MAX_X = 70;
+
     @Nested
     @DisplayName("backface winding — settled against the no-cull oracle")
     class Winding
@@ -598,6 +632,233 @@ final class SoftwareRenderPortTest
     }
 
     @Nested
+    @DisplayName("entity ids and outlines")
+    class EntityIds
+    {
+        @Test
+        @DisplayName("a tagged instance writes its id where it is visible")
+        void shouldRecordAnEntityIdWhereTheEntityIsVisible()
+        {
+            final SoftwareRenderPort port = renderScene(Scene.builder()
+                .addWorldInstance(quad(NEAR_COLOR), Mat4.identity(), PLAYER_ID)
+                .build(), sceneCamera(), null);
+
+            assertThat(port.framebuffer().entityIdAt(HALF_WIDTH, HALF_HEIGHT))
+                .isEqualTo(PLAYER_ID);
+            assertThat(port.framebuffer().entityIdAt(1, 1))
+                .as("the background belongs to no entity")
+                .isEqualTo(Scene.UNTAGGED);
+            port.shutdown();
+        }
+
+        @Test
+        @DisplayName("untagged geometry occluding a tagged entity resets the id to UNTAGGED")
+        void shouldClearTheIdWhereUntaggedGeometryOccludesTheEntity()
+        {
+            // The bug this exists for. The obvious reading of "only tagged
+            // instances write ids" leaves the entity's id at pixels an
+            // untagged wall drawn LATER has taken over, and the outline is
+            // then drawn through the wall. The id buffer has to track the
+            // depth buffer exactly, so a depth-passing untagged pixel writes
+            // its zero.
+            final SoftwareRenderPort port = renderScene(occludedEntity(true),
+                sceneCamera(), null);
+
+            assertThat(port.framebuffer().entityIdAt(HALF_WIDTH, HALF_HEIGHT))
+                .as("the occluder owns the centre, so the entity does not")
+                .isEqualTo(Scene.UNTAGGED);
+            assertThat(port.framebuffer().pixel(HALF_WIDTH, HALF_HEIGHT))
+                .as("and the occluder is genuinely in front — otherwise this proves nothing")
+                .isEqualTo(OCCLUDER_COLOR);
+            assertThat(port.framebuffer().entityIdAt(ENTITY_ONLY_X, HALF_HEIGHT))
+                .as("beside the occluder the entity is still visible and still tagged")
+                .isEqualTo(PLAYER_ID);
+            port.shutdown();
+        }
+
+        @Test
+        @DisplayName("that holds whichever order the two instances are submitted in")
+        void shouldClearTheIdRegardlessOfSubmissionOrder()
+        {
+            // Drawing the occluder first hides the bug: the entity then loses
+            // the depth test and never writes the id in the first place. It is
+            // the other order that matters, so both are asserted.
+            final SoftwareRenderPort entityFirst =
+                renderScene(occludedEntity(true), sceneCamera(), null);
+            final SoftwareRenderPort occluderFirst =
+                renderScene(occludedEntity(false), sceneCamera(), null);
+
+            assertThat(entityFirst.framebuffer().entityIdAt(HALF_WIDTH, HALF_HEIGHT))
+                .isEqualTo(Scene.UNTAGGED);
+            assertThat(occluderFirst.framebuffer().entityIdAt(HALF_WIDTH, HALF_HEIGHT))
+                .isEqualTo(Scene.UNTAGGED);
+            entityFirst.shutdown();
+            occluderFirst.shutdown();
+        }
+
+        @Test
+        @DisplayName("a tagged entity is outlined, and the outline is inside its silhouette")
+        void shouldOutlineATaggedEntity()
+        {
+            final SoftwareRenderPort port = renderScene(Scene.builder()
+                .addWorldInstance(quad(NEAR_COLOR), Mat4.identity(), PLAYER_ID)
+                .build(), sceneCamera(), null);
+            final int[] frame = copy(port);
+
+            assertThat(colorsIn(frame))
+                .as("the entity's own colour and the outline, and nothing else")
+                .containsExactlyInAnyOrder(NEAR_COLOR, OutlinePass.OUTLINE_COLOR);
+            assertThat(pixel(frame, HALF_WIDTH, HALF_HEIGHT))
+                .as("the middle of the entity is not an edge")
+                .isEqualTo(NEAR_COLOR);
+            port.shutdown();
+        }
+
+        @Test
+        @DisplayName("the viewmodel writes no ids and is never outlined")
+        void shouldNeverTagOrOutlineTheViewmodel()
+        {
+            // Scene refuses to tag a view instance, so the view pass is handed
+            // no id table at all and cannot touch the buffer. The viewmodel
+            // also draws AFTER the outline, so it covers outlines rather than
+            // being covered by them.
+            final SoftwareRenderPort port = renderScene(Scene.builder()
+                .addWorldInstance(quad(NEAR_COLOR), Mat4.identity(), PLAYER_ID)
+                .addViewInstance(quad(VIEW_COLOR),
+                    Mat4.translation(0.0f, 0.0f, VIEWMODEL_DEPTH))
+                .build(), sceneCamera(), null);
+            final int[] frame = copy(port);
+
+            assertThat(pixel(frame, HALF_WIDTH, HALF_HEIGHT))
+                .as("the weapon is on top of the entity, not outlined by it")
+                .isEqualTo(VIEW_COLOR);
+            assertThat(port.framebuffer().entityIdAt(HALF_WIDTH, HALF_HEIGHT))
+                .as("the view pass left the id the world pass wrote exactly as it was")
+                .isEqualTo(PLAYER_ID);
+            port.shutdown();
+        }
+
+        @Test
+        @DisplayName("two tagged entities that touch are outlined apart, not merged")
+        void shouldOutlineBetweenTwoOverlappingEntities()
+        {
+            // Two players standing in a line. A naive "is my neighbour
+            // untagged" edge test finds nothing along their junction and draws
+            // one blob; comparing ids finds it.
+            final SoftwareRenderPort port = renderScene(Scene.builder()
+                .addWorldInstance(quad(NEAR_COLOR),
+                    Mat4.translation(-QUAD_HALF, 0.0f, 0.0f), PLAYER_ID)
+                .addWorldInstance(quad(FAR_COLOR),
+                    Mat4.translation(QUAD_HALF, 0.0f, -0.5f), SECOND_PLAYER_ID)
+                .build(), sceneCamera(), null);
+            final int[] frame = copy(port);
+
+            // The junction runs down the middle of the frame, where the two
+            // silhouettes meet. Somewhere on that column there must be paint.
+            assertThat(columnHasOutline(frame, HALF_WIDTH))
+                .as("an outline between the two entities")
+                .isTrue();
+            port.shutdown();
+        }
+
+        @Test
+        @DisplayName("an entity that moves leaves no ghost outline in the next frame")
+        void shouldNotLeaveAGhostWhenTheEntityMoves()
+        {
+            // The id buffer is cleared at the start of every frame. Without
+            // that, the previous frame's ids survive where this frame draws
+            // nothing, and the pass outlines where the entity WAS.
+            final SoftwareRenderPort port =
+                newPort(null, SoftwareRenderPort.BACKFACE_CULL_MODE);
+            port.resize(WIDTH, HEIGHT);
+            port.setCamera(sceneCamera());
+
+            port.setScene(taggedAt(-GHOST_SHIFT));
+            port.renderFrame(0);
+            assertThat(port.framebuffer().entityIdAt(VACATED_X, HALF_HEIGHT))
+                .as("the entity really was here in frame 0")
+                .isEqualTo(PLAYER_ID);
+
+            port.setScene(taggedAt(GHOST_SHIFT));
+            port.renderFrame(1);
+
+            assertThat(port.framebuffer().entityIdAt(VACATED_X, HALF_HEIGHT))
+                .as("and is not here any more")
+                .isEqualTo(Scene.UNTAGGED);
+            final int[] frame = copy(port);
+            for (int x = 0; x <= VACATED_SWEEP_MAX_X; x++)
+            {
+                assertThat(columnHasOutline(frame, x))
+                    .as("column %d is behind the moved entity and must be clean", x)
+                    .isFalse();
+            }
+            port.shutdown();
+        }
+
+        @Test
+        @DisplayName("a scene with nothing tagged never touches the id buffer or the outline")
+        void shouldCostAnUntaggedSceneNothing()
+        {
+            // The gate. An untagged scene skips the id clear, hands the
+            // rasterizer no id table, compacts no id stream and dispatches no
+            // outline pass — so the buffer stays exactly as allocated and the
+            // barrier count is the one it always was.
+            final SoftwareRenderPort port = renderScene(mixedScene(), sceneCamera(), null);
+
+            assertThat(port.scene().hasTaggedEntities()).isFalse();
+            assertThat(port.framebuffer().entityIdBuffer()).containsOnly(Scene.UNTAGGED);
+            assertThat(colorsIn(copy(port))).doesNotContain(OutlinePass.OUTLINE_COLOR);
+            assertThat(port.lastFrameParallelPasses())
+                .as("eight, exactly as before the feature existed")
+                .isEqualTo(2 * PASSES_PER_PASS);
+            port.shutdown();
+        }
+
+        @Test
+        @DisplayName("a tagged scene costs exactly one more parallel pass")
+        void shouldCostOneExtraPassWhenSomethingIsTagged()
+        {
+            final SoftwareRenderPort port = renderScene(Scene.builder()
+                .addWorldInstance(quad(NEAR_COLOR), Mat4.identity(), PLAYER_ID)
+                .build(), sceneCamera(), null);
+
+            assertThat(port.lastFrameParallelPasses()).isEqualTo(PASSES_PER_PASS + 1);
+            port.shutdown();
+        }
+
+        @Test
+        @DisplayName("a pooled tagged frame is bit-identical to a serial one, at every worker count")
+        void shouldRenderTaggedScenesIdenticallyAtEveryWorkerCount()
+        {
+            // Both new writers have to hold: the span loop's id store, which
+            // is per-tile and exclusive like colour and depth, and the outline
+            // pass, which reads across tile boundaries and would break this if
+            // it were ever fused into the raster pass.
+            final int[] serialFrame = taggedFrameAndIds(null);
+            for (final int workers : new int[] {1, 2, 3, 4, 8})
+            {
+                final I_EventBusPort bus = EventBusFactory.createShared();
+                bus.init(BUS_CAPACITY);
+                final I_ThreadPoolPort pool =
+                    ThreadPoolFactory.createFixed(bus, new SubsystemRegistry());
+                pool.init(workers);
+                pool.start();
+                try
+                {
+                    assertThat(taggedFrameAndIds(pool))
+                        .as("%d workers", workers)
+                        .isEqualTo(serialFrame);
+                }
+                finally
+                {
+                    pool.shutdown();
+                    bus.shutdown();
+                }
+            }
+        }
+    }
+
+    @Nested
     @DisplayName("presentation handoff")
     class Presentation
     {
@@ -809,6 +1070,78 @@ final class SoftwareRenderPortTest
                 Mat4.translation(0.0f, 0.0f, index * INSTANCE_SPACING));
         }
         return builder.build();
+    }
+
+    // A tagged quad at the origin with an untagged, nearer, smaller quad in
+    // front of the middle of it. The flag chooses which of the two is
+    // submitted first — only the entity-first order can catch an id that is
+    // written and never overwritten.
+    private static Scene occludedEntity(final boolean entityFirst)
+    {
+        final Scene.Builder builder = Scene.builder();
+        if (!entityFirst)
+        {
+            builder.addWorldInstance(occluder(), Mat4.translation(0.0f, 0.0f, OCCLUDER_Z));
+        }
+        builder.addWorldInstance(quad(NEAR_COLOR), Mat4.identity(), PLAYER_ID);
+        if (entityFirst)
+        {
+            builder.addWorldInstance(occluder(), Mat4.translation(0.0f, 0.0f, OCCLUDER_Z));
+        }
+        return builder.build();
+    }
+
+    private static ModelFormat occluder()
+    {
+        return ModelFormat.read(QuadFixture.square(OCCLUDER_HALF, OCCLUDER_COLOR));
+    }
+
+    // One tagged quad, shifted along x. The ghost test renders two of these in
+    // succession and looks at where the first one used to be.
+    private static Scene taggedAt(final float shiftX)
+    {
+        return Scene.builder()
+            .addWorldInstance(quad(NEAR_COLOR), Mat4.translation(shiftX, 0.0f, 0.0f),
+                PLAYER_ID)
+            .build();
+    }
+
+    // Renders two tagged, touching entities and returns the colour frame
+    // followed by the visible entity ids, so one comparison covers both the
+    // span loop's per-pixel id write and the outline pass that reads it.
+    private static int[] taggedFrameAndIds(final I_ThreadPoolPort pool)
+    {
+        final SoftwareRenderPort port = renderScene(Scene.builder()
+            .addWorldInstance(quad(NEAR_COLOR), Mat4.translation(-QUAD_HALF, 0.0f, 0.0f),
+                PLAYER_ID)
+            .addWorldInstance(quad(FAR_COLOR), Mat4.translation(QUAD_HALF, 0.0f, -0.5f),
+                SECOND_PLAYER_ID)
+            .addWorldInstance(occluder(), Mat4.translation(0.0f, 0.0f, OCCLUDER_Z))
+            .build(), sceneCamera(), pool);
+        final int[] frame = copy(port);
+        final int[] both = Arrays.copyOf(frame, frame.length + WIDTH * HEIGHT);
+        for (int y = 0; y < HEIGHT; y++)
+        {
+            for (int x = 0; x < WIDTH; x++)
+            {
+                both[frame.length + y * WIDTH + x] = port.framebuffer().entityIdAt(x, y);
+            }
+        }
+        port.shutdown();
+        return both;
+    }
+
+    // Whether any pixel in one screen column carries the outline colour.
+    private static boolean columnHasOutline(final int[] frame, final int x)
+    {
+        for (int y = 0; y < HEIGHT; y++)
+        {
+            if (pixel(frame, x, y) == OutlinePass.OUTLINE_COLOR)
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     // Renders alternately from two poses until the frame budget is spent. Runs

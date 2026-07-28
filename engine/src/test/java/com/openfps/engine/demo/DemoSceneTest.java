@@ -14,9 +14,13 @@ import java.io.IOException;
 import java.nio.file.Path;
 
 import com.openfps.engine.common.Constants;
+import com.openfps.engine.gameplay.HitResult;
+import com.openfps.engine.gameplay.Hitscan;
 import com.openfps.engine.gameplay.PlayerController;
+import com.openfps.engine.gameplay.Target;
 import com.openfps.engine.render.adapter.Mat4;
 import com.openfps.engine.render.adapter.Scene;
+import com.openfps.engine.render.adapter.Vec3;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -82,6 +86,151 @@ final class DemoSceneTest
         DemoModelFixture.write(root.resolve(DemoModels.WEAPON_DIRECTORY)
             .resolve(DemoModels.WEAPON_MODEL));
         return DemoModels.load(root);
+    }
+
+    /** Builds a full kit plus the three character models, so targets are placed. */
+    private static DemoModels kitWithCharacters(final Path root) throws IOException
+    {
+        for (final String person : new String[] {"character-a.ofm", "character-d.ofm",
+            "character-h.ofm"})
+        {
+            DemoModelFixture.write(root.resolve(DemoModels.CHARACTER_DIRECTORY)
+                .resolve(person));
+        }
+        return kit(root);
+    }
+
+    @Nested
+    @DisplayName("shootable targets")
+    final class Targets
+    {
+        @Test
+        @DisplayName("the model scale and the hitbox height cannot drift apart")
+        void shouldScaleTheModelToTheHitbox()
+        {
+            // CHARACTER_WORLD_SCALE sizes what you SEE; Constants.PLAYER_HEIGHT
+            // sizes what you HIT. They are consumed in different files by
+            // different subsystems, and a disagreement between them is
+            // invisible — shots pass through a visible chest, or connect beside
+            // a shoulder, and no screenshot shows either. This is the same
+            // guard, and for the same reason, as the KIT_WORLD_SCALE ==
+            // MAX_OPEN_HEIGHT assertion below.
+            assertThat(DemoScene.CHARACTER_WORLD_SCALE * DemoScene.CHARACTER_MODEL_HEIGHT)
+                .as("a character model scaled into the world stands exactly one player tall")
+                .isCloseTo(DemoScene.PLAYER_HEIGHT_UNITS, within(EPSILON));
+
+            // And that the world-unit conversions are the fixed-point
+            // constants, not numbers that happen to look like them.
+            assertThat(DemoScene.PLAYER_HEIGHT_UNITS)
+                .isCloseTo((float) Constants.PLAYER_HEIGHT / (float) Constants.MAP_SCALE,
+                    within(EPSILON));
+            assertThat(DemoScene.PLAYER_RADIUS_UNITS)
+                .isCloseTo(PLAYER_RADIUS_UNITS, within(EPSILON));
+        }
+
+        @Test
+        @DisplayName("the player box keeps DOOM's proportions, which the room was built for")
+        void shouldKeepTheInheritedPlayerProportions()
+        {
+            // 16 radius, 56 tall, 41 to the eye are DOOM's numbers, and the
+            // whole room is scaled around them (see KIT_WORLD_SCALE). Pin the
+            // relationship rather than the literals: the eye must be inside the
+            // body, and the body must fit through a 64-unit doorway.
+            assertThat(PlayerController.EYE_HEIGHT_UNITS)
+                .as("the eye is inside the head, not above it")
+                .isLessThan(DemoScene.PLAYER_HEIGHT_UNITS);
+            assertThat(DemoScene.PLAYER_RADIUS_UNITS * 2.0f)
+                .as("a player fits through a one-cell doorway with clearance")
+                .isLessThan(DemoScene.KIT_WORLD_SCALE);
+        }
+
+        @Test
+        @DisplayName("what the crosshair covers is what the shot hits")
+        void shouldHitTheTargetTheSpawnIsAimedAt(@TempDir final Path root) throws IOException
+        {
+            // The guarantee this whole feature rests on, and the one no
+            // screenshot can establish: the body you SEE under the reticle and
+            // the box the simulation TESTS are the same object. They are built
+            // from two different things — a scaled model transform and an
+            // axis-aligned box — so nothing but an assertion keeps them
+            // together. If they drift you see a target, shoot it, and nothing
+            // happens.
+            final DemoScene demo = DemoScene.build(kitWithCharacters(root));
+            final PlayerController player = demo.spawnController();
+            final Vec3 eye = player.eyePosition();
+            final Vec3 aim = player.forwardVector();
+
+            final HitResult result = new HitResult();
+            final boolean connected = Hitscan.fire(eye.x(), eye.y(), eye.z(),
+                aim.x(), aim.y(), aim.z(), demo.targets(), demo.targetCount(), result);
+
+            assertThat(connected)
+                .as("the spawn faces +z down the room, and a target is placed on that bearing")
+                .isTrue();
+            assertThat(result.entityId())
+                .as("the nearest target on the spawn bearing is the first one placed")
+                .isEqualTo(DemoScene.FIRST_TARGET_ID);
+            assertThat(result.distance())
+                .as("hit somewhere in front of the shooter, not behind or at zero")
+                .isGreaterThan(0.0f);
+        }
+
+        @Test
+        @DisplayName("the shooter is never among its own targets")
+        void shouldNotPlaceATargetOnTheSpawn(@TempDir final Path root) throws IOException
+        {
+            // Hitscan treats a ray origin inside a box as a hit at distance
+            // zero — a deliberate decision, since standing inside someone is
+            // reachable with no inter-player collision. The consequence is that
+            // a shooter listed among its own targets shoots itself every tic,
+            // so the spawn must be clear of every box.
+            final DemoScene demo = DemoScene.build(kitWithCharacters(root));
+            for (final Target target : demo.targets())
+            {
+                final boolean spawnInside = demo.spawnX() >= target.minX()
+                    && demo.spawnX() <= target.maxX()
+                    && demo.spawnZ() >= target.minZ()
+                    && demo.spawnZ() <= target.maxZ();
+                assertThat(spawnInside)
+                    .as("target %d must not contain the spawn point", target.entityId())
+                    .isFalse();
+            }
+        }
+
+        @Test
+        @DisplayName("every placed target is tagged, and the room around it is not")
+        void shouldTagOnlyTheCharacters(@TempDir final Path root) throws IOException
+        {
+            final DemoScene demo = DemoScene.build(kitWithCharacters(root));
+            final Scene scene = demo.scene();
+
+            int tagged = 0;
+            for (int index = 0; index < scene.worldInstanceCount(); index++)
+            {
+                if (scene.worldEntityId(index) != Scene.UNTAGGED)
+                {
+                    tagged++;
+                }
+            }
+            assertThat(tagged)
+                .as("one tagged instance per hitbox — the outline and the shot agree on count")
+                .isEqualTo(demo.targetCount());
+        }
+
+        @Test
+        @DisplayName("no character art means no targets and nothing to outline")
+        void shouldPlaceNoTargetsWithoutCharacterArt(@TempDir final Path root)
+            throws IOException
+        {
+            // The staged-art question is independent of the level, exactly as
+            // the weapon's is. A demo with no people is still a demo.
+            final DemoScene demo = DemoScene.build(kit(root));
+
+            assertThat(demo.targetCount()).isZero();
+            assertThat(demo.scene().hasTaggedEntities())
+                .as("an untagged scene skips the outline pass entirely")
+                .isFalse();
+        }
     }
 
     @Nested

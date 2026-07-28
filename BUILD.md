@@ -104,7 +104,7 @@ between `run` doing what you meant and `run` opening a window you didn't want.
 
 1. Compiles all Java source across `:engine`, `:desktop` and `:tools`
 2. Runs Checkstyle over main *and* test sources (`maxWarnings = 0` — one warning fails the build)
-3. Compiles and runs all JUnit 5 tests — **1064** of them (828 `:engine`, 99 `:desktop`, 73 `:tools`, 64 `:android` when an SDK is present)
+3. Compiles and runs all JUnit 5 tests — **1239** of them (977 `:engine`, 125 `:desktop`, 73 `:tools`, 64 `:android` when an SDK is present)
 4. Assembles JAR artifacts
 5. Runs `verifyToolsIsolation`, which fails the build if `:tools` or its Gson
    dependency ever reaches a shipped runtime classpath

@@ -78,6 +78,23 @@ package com.openfps.engine.render.adapter;
  * fails it. A NaN interpolant then discards the pixel instead of writing an
  * undefined colour.</p>
  *
+ * <h2>Entity ids</h2>
+ *
+ * <p>When the caller supplies an id buffer, every pixel that <i>passes</i> the
+ * depth test writes the triangle's entity id beside its colour and depth —
+ * including {@link Scene#UNTAGGED}, which is most of them.</p>
+ *
+ * <p><b>Untagged geometry must write its zero; skipping the write is a bug.</b>
+ * A tagged entity drawn early in the pass and then covered by an untagged wall
+ * drawn later would otherwise keep its id at pixels it no longer owns, and
+ * {@link OutlinePass} would draw its silhouette through the wall. The id
+ * buffer has to track the depth buffer exactly, and the only way to do that is
+ * to write it wherever depth is written.</p>
+ *
+ * <p>The cost is paid only when the buffer is non-null. A scene with nothing
+ * tagged passes null, and the per-pixel cost collapses to a compare against a
+ * loop-invariant local that is always false.</p>
+ *
  * <h2>Why the edge functions are evaluated, not accumulated</h2>
  *
  * <p>Each edge value is computed as {@code dx * x + rowConstant}, where the row
@@ -169,6 +186,42 @@ public final class SpanRenderer
         final MipChain[] textures, final int tileMinX, final int tileMinY,
         final int tileMaxX, final int tileMaxY)
     {
+        renderTriangle(target, records, recordOffset, material, flatColor, textures,
+            null, Scene.UNTAGGED, tileMinX, tileMinY, tileMaxX, tileMaxY);
+    }
+
+    /**
+     * Fills one triangle's coverage inside one tile, recording an entity id.
+     *
+     * <p>Identical to {@link #renderTriangle(Framebuffer, float[], int, int,
+     * int, MipChain[], int, int, int, int)} except that every pixel passing the
+     * depth test also stores {@code entityId} in {@code entityIds}. Passing a
+     * null buffer is how a caller says "no scene in this frame is tagged"; that
+     * is the common case and it costs one loop-invariant null compare.</p>
+     *
+     * @param target the framebuffer; must be READY
+     * @param records the {@link Rasterizer} record array
+     * @param recordOffset offset of this triangle's record within it
+     * @param material index into {@code textures}, or
+     *     {@link Rasterizer#NO_MATERIAL} for an untextured triangle
+     * @param flatColor packed RGBA8888 used by {@link ShadingMode#FLAT}, and by
+     *     {@link ShadingMode#TEXTURED} when no texture is bound
+     * @param textures textures indexed by material, or null
+     * @param entityIds {@link Framebuffer#entityIdBuffer()}, or null to write
+     *     no ids at all
+     * @param entityId this triangle's owning entity, or {@link Scene#UNTAGGED};
+     *     written even when it is {@link Scene#UNTAGGED}, because the id buffer
+     *     must track the depth buffer — see the class Javadoc
+     * @param tileMinX inclusive left edge of the tile
+     * @param tileMinY inclusive top edge of the tile
+     * @param tileMaxX inclusive right edge of the tile
+     * @param tileMaxY inclusive bottom edge of the tile
+     */
+    public void renderTriangle(final Framebuffer target, final float[] records,
+        final int recordOffset, final int material, final int flatColor,
+        final MipChain[] textures, final int[] entityIds, final int entityId,
+        final int tileMinX, final int tileMinY, final int tileMaxX, final int tileMaxY)
+    {
         final int minX = Math.max(tileMinX, (int) records[recordOffset + Rasterizer.BOUND_MIN_X]);
         final int maxX = Math.min(tileMaxX, (int) records[recordOffset + Rasterizer.BOUND_MAX_X]);
         if (minX > maxX)
@@ -186,13 +239,16 @@ public final class SpanRenderer
         {
             if (mode == ShadingMode.VERTEX_COLOR)
             {
-                renderVertexColor(target, records, recordOffset, minX, minY, maxX, maxY);
+                renderVertexColor(target, records, recordOffset, entityIds, entityId,
+                    minX, minY, maxX, maxY);
                 return;
             }
-            renderFlat(target, records, recordOffset, flatColor, minX, minY, maxX, maxY);
+            renderFlat(target, records, recordOffset, flatColor, entityIds, entityId,
+                minX, minY, maxX, maxY);
             return;
         }
-        renderTextured(target, records, recordOffset, texture, minX, minY, maxX, maxY);
+        renderTextured(target, records, recordOffset, texture, entityIds, entityId,
+            minX, minY, maxX, maxY);
     }
 
     /** Returns the shading mode this renderer was built for. */
@@ -246,7 +302,8 @@ public final class SpanRenderer
     // Coverage plus depth, one constant colour. Also the fallback for a
     // textured triangle whose material resolves to nothing.
     private void renderFlat(final Framebuffer target, final float[] records, final int base,
-        final int flatColor, final int minX, final int minY, final int maxX, final int maxY)
+        final int flatColor, final int[] ids, final int entityId, final int minX,
+        final int minY, final int maxX, final int maxY)
     {
         final int[] color = target.colorBuffer();
         final float[] depth = target.depthBuffer();
@@ -281,13 +338,18 @@ public final class SpanRenderer
                 }
                 depth[index] = invW;
                 color[index] = flatColor;
+                if (ids != null)
+                {
+                    ids[index] = entityId;
+                }
             }
         }
     }
 
     // Attributes 0, 1 and 2 interpolated perspective-correctly as R, G and B.
     private void renderVertexColor(final Framebuffer target, final float[] records,
-        final int base, final int minX, final int minY, final int maxX, final int maxY)
+        final int base, final int[] ids, final int entityId, final int minX, final int minY,
+        final int maxX, final int maxY)
     {
         final int[] color = target.colorBuffer();
         final float[] depth = target.depthBuffer();
@@ -331,6 +393,10 @@ public final class SpanRenderer
                 color[index] = Rgba.pack(channel(records[redPlane] * px + rowR, w),
                     channel(records[greenPlane] * px + rowG, w),
                     channel(records[bluePlane] * px + rowB, w), (int) CHANNEL_MAX);
+                if (ids != null)
+                {
+                    ids[index] = entityId;
+                }
             }
         }
     }
@@ -340,7 +406,8 @@ public final class SpanRenderer
     // segment, which is guaranteed to be inside the triangle and so to have a
     // positive 1/w.
     private void renderTextured(final Framebuffer target, final float[] records, final int base,
-        final MipChain texture, final int minX, final int minY, final int maxX, final int maxY)
+        final MipChain texture, final int[] ids, final int entityId, final int minX,
+        final int minY, final int maxX, final int maxY)
     {
         final int[] color = target.colorBuffer();
         final float[] depth = target.depthBuffer();
@@ -391,6 +458,10 @@ public final class SpanRenderer
                 }
                 depth[index] = invW;
                 color[index] = TextureSampler.sampleLevel(texture, u, v, level);
+                if (ids != null)
+                {
+                    ids[index] = entityId;
+                }
             }
         }
     }

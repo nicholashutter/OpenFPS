@@ -102,6 +102,15 @@ tasks.register<JavaExec>("renderPreview") {
 
     mainClass.set("com.openfps.tools.RenderPreviewMain")
     classpath = sourceSets["main"].runtimeClasspath
+
+    // JavaExec defaults its working directory to the SUBPROJECT directory, so
+    // an unqualified `--model=assets/models/x.ofm` resolved against tools/ and
+    // failed with a NoSuchFileException naming a path the user never typed.
+    // Every other task here builds absolute paths through
+    // `rootProject.layout.projectDirectory`; this one passes `--args` straight
+    // through, so it needs the working directory moved instead. Relative paths
+    // now mean what the docs say they mean — relative to the repository root.
+    workingDir = rootProject.projectDir
 }
 
 // Renders the WHOLE first-person demo — room, props and held weapon — to PNGs

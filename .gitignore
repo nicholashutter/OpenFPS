@@ -53,6 +53,10 @@ assets/models/
 .claude/
 
 # Android / Mobile
+# Machine-local SDK path. settings.gradle.kts reads this (or ANDROID_HOME) to
+# decide whether to include :android at all — so it must exist locally and must
+# never be committed, since the absolute path is valid on exactly one machine.
+local.properties
 *.apk
 *.aab
 # Unpacked by `copyAndroidNatives` from the classified gdx-platform jars on

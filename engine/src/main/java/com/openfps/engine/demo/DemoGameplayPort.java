@@ -8,11 +8,15 @@ package com.openfps.engine.demo;
 import java.util.concurrent.locks.ReentrantLock;
 
 import com.openfps.engine.core.GameConfig;
+import com.openfps.engine.gameplay.HitResult;
+import com.openfps.engine.gameplay.Hitscan;
 import com.openfps.engine.gameplay.PlayerController;
 import com.openfps.engine.gameplay.PlayerInputView;
+import com.openfps.engine.gameplay.Target;
 import com.openfps.engine.gameplay.port.I_GameplayPort;
 import com.openfps.engine.hal.port.I_InputPort;
 import com.openfps.engine.render.adapter.SoftwareRenderPort;
+import com.openfps.engine.render.adapter.Vec3;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -107,6 +111,38 @@ public final class DemoGameplayPort implements I_GameplayPort
     private volatile long ticsApplied;
 
     /**
+     * Tics between shots — the weapon's rate of fire.
+     *
+     * <p>A cooldown is not decoration here. {@code InputState.fire()} is true
+     * on every tic the button is held, so without one a held trigger fires once
+     * per tic: 60 hitscans a second at the default rate and 120 at
+     * {@code FPS_120} — a weapon whose rate of fire depends on the configured
+     * tic rate, which is precisely the coupling the fixed-timestep loop exists
+     * to prevent. Twelve tics is five shots a second at 60 Hz.</p>
+     */
+    public static final int FIRE_INTERVAL_TICS = 12;
+
+    /** The shootable bodies. Never contains the shooter — see {@link #fireIfRequested}. */
+    private final Target[] targets;
+
+    /**
+     * Reused across shots so firing allocates nothing per shot.
+     *
+     * <p>Confined to {@link #tick}, which holds {@link #tickLock}, so this
+     * single instance is never read or written by two threads at once.</p>
+     */
+    private final HitResult hit = new HitResult();
+
+    /** MUTABLE: tic index of the last shot, for the cooldown. Under the lock. */
+    private long lastFireTic = Long.MIN_VALUE;
+
+    /** MUTABLE: shots fired, for the shutdown summary. */
+    private volatile long shotsFired;
+
+    /** MUTABLE: shots that connected, for the shutdown summary. */
+    private volatile long shotsHit;
+
+    /**
      * Creates the demo's gameplay port.
      *
      * @param input the HAL input port to latch each tic; must not be null
@@ -118,6 +154,29 @@ public final class DemoGameplayPort implements I_GameplayPort
     public DemoGameplayPort(final I_InputPort input, final SoftwareRenderPort renderPort,
         final PlayerController playerController, final GameConfig config)
     {
+        this(input, renderPort, playerController, config, new Target[0]);
+    }
+
+    /**
+     * Creates the demo gameplay port with shootable targets.
+     *
+     * @param input the HAL input port to latch each tic; must not be null
+     * @param renderPort the renderer to aim; must not be null
+     * @param playerController the player to move; must not be null
+     * @param config the running configuration; must not be null
+     * @param shootable the bodies this player can hit. Must not be null and
+     *     <b>must not contain a box around this player</b>: a ray origin inside
+     *     a box is a hit at distance zero, so a shooter listed among its own
+     *     targets shoots itself on every trigger pull
+     */
+    public DemoGameplayPort(final I_InputPort input, final SoftwareRenderPort renderPort,
+        final PlayerController playerController, final GameConfig config,
+        final Target[] shootable)
+    {
+        if (shootable == null)
+        {
+            throw new IllegalArgumentException("shootable must not be null");
+        }
         if (input == null)
         {
             throw new IllegalArgumentException("input must not be null");
@@ -138,6 +197,7 @@ public final class DemoGameplayPort implements I_GameplayPort
         this.renderer = renderPort;
         this.controller = playerController;
         this.deltaSeconds = (float) (config.nanosPerTic() / NANOS_PER_SECOND);
+        this.targets = shootable.clone();
     }
 
     @Override
@@ -149,7 +209,8 @@ public final class DemoGameplayPort implements I_GameplayPort
     @Override
     public void shutdown()
     {
-        LOG.info("Demo gameplay stopped after {} tics at {}", ticsApplied, controller);
+        LOG.info("Demo gameplay stopped after {} tics at {}; {} shots fired, {} hit",
+            ticsApplied, controller, shotsFired, shotsHit);
     }
 
     /**
@@ -168,6 +229,7 @@ public final class DemoGameplayPort implements I_GameplayPort
             inputPort.sampleInput(ticIndex);
             inputView.wrap(inputPort.currentInput());
             controller.update(inputView, deltaSeconds);
+            fireIfRequested(inputPort.currentInput().fire(), ticIndex);
             aimCamera();
             this.ticsApplied = ticsApplied + 1;
         }
@@ -175,6 +237,51 @@ public final class DemoGameplayPort implements I_GameplayPort
         {
             tickLock.unlock();
         }
+    }
+
+    // Fires a hitscan shot if the trigger is down and the weapon is ready.
+    //
+    // Called under tickLock from tick(), so lastFireTic and the shared
+    // HitResult are single-threaded here.
+    //
+    // The shot is resolved from GEOMETRY, deliberately, and not by sampling the
+    // renderer's entity-id buffer at the centre pixel — which would be
+    // pixel-exact and free, and would also make hit detection a function of
+    // resolution and worker count. Two peers rendering the same tic at
+    // different sizes would disagree about who was hit, and under the lockstep
+    // model in net/README.md that is a desync rather than a rounding
+    // difference. Hitscan uses StrictMath and is guarded by a constant-pool
+    // test for exactly this reason.
+    private void fireIfRequested(final boolean triggerDown, final int ticIndex)
+    {
+        if (!triggerDown || targets.length == 0)
+        {
+            return;
+        }
+        if (ticIndex - lastFireTic < FIRE_INTERVAL_TICS)
+        {
+            return;
+        }
+        this.lastFireTic = ticIndex;
+        this.shotsFired = shotsFired + 1;
+
+        // Two Vec3 allocations per SHOT, not per tic. The alternative is to
+        // recompute the view basis here from yaw and pitch, duplicating the
+        // one piece of maths in this engine that has already been wrong once
+        // (the mirrored basis, commit 1776548). Reusing the accessor that the
+        // camera also uses keeps a single definition of "forward".
+        final Vec3 eye = controller.eyePosition();
+        final Vec3 aim = controller.forwardVector();
+        final boolean connected = Hitscan.fire(eye.x(), eye.y(), eye.z(),
+            aim.x(), aim.y(), aim.z(), targets, targets.length, hit);
+        if (connected)
+        {
+            this.shotsHit = shotsHit + 1;
+            LOG.info("HIT entity {} at {} units (tic {})", hit.entityId(), hit.distance(),
+                ticIndex);
+            return;
+        }
+        LOG.debug("miss (tic {})", ticIndex);
     }
 
     // Points the renderer at the player's eye.

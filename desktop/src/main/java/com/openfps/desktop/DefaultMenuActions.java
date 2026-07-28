@@ -18,9 +18,14 @@ import org.slf4j.LoggerFactory;
  * engine uses, so "Quit" walks the exact shutdown path a window-manager
  * close would, and a headless test can verify it with a fake port.
  *
- * Start Game and Settings only record intent for now — there is no map
- * loader and no settings screen yet. They are wired so the menu is complete
- * and the seam exists for the phase that fills them in.
+ * <b>Start Game does not itself start anything here.</b> The
+ * {@code MENU -> PLAYING} transition belongs to the {@link UiStateMachine}, and
+ * {@code GdxFrameLoopListener} wraps this object to perform it — see
+ * {@code GdxFrameLoopListener.StartGameTransition}. This class stays the
+ * "what does the application do about it" half, which for now is a log line:
+ * there is no map loader yet, so the world the player drops into is the demo
+ * scene the launcher already built. Settings is the same shape with nothing
+ * behind it.
  *
  * Platform adapter — must not import from core engine packages.
  */
@@ -48,9 +53,10 @@ public final class DefaultMenuActions implements MenuActions
     @Override
     public void onStartGame()
     {
-        // Phase 2 lands the WAD loader; until a map can be loaded there is
-        // nothing to start, so this records intent rather than pretending.
-        LOG.info("Menu: Start Game selected (no map loader yet)");
+        // Phase 2 lands the WAD loader; until a map can be chosen, "start"
+        // means "show the demo scene the launcher already built" and the only
+        // thing that changes is the UI state, which the caller applies.
+        LOG.info("Menu: Start Game selected — entering the demo world (no map loader yet)");
     }
 
     @Override

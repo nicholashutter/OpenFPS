@@ -310,6 +310,23 @@ public final class Rasterizer
     /** Per-triangle flat colours, or null. MUTABLE: rebound per frame. */
     private volatile int[] flatColors;
 
+    /**
+     * Per-triangle entity ids, or null when this pass writes none. MUTABLE:
+     * rebound per frame.
+     *
+     * <p>Null is the switch for the whole feature: it means the raster pass
+     * never touches {@link Framebuffer#entityIdBuffer()}, which is what makes a
+     * scene with nothing tagged cost nothing.</p>
+     */
+    private volatile int[] entityIds;
+
+    /**
+     * The id buffer the raster pass writes, or null. MUTABLE: derived from
+     * {@link #entityIds} once per rasterize call so the per-pixel loop is
+     * handed an array reference rather than a framebuffer to interrogate.
+     */
+    private volatile int[] entityIdTarget;
+
     /** The span renderer for the raster pass. MUTABLE: rebound per rasterize call. */
     private volatile SpanRenderer spanRenderer;
 
@@ -455,7 +472,7 @@ public final class Rasterizer
     public void setupAndBin(final float[] vertices, final int triangles,
         final int[] materialIndices, final int[] triangleColors)
     {
-        setupAndBin(vertices, triangles, materialIndices, triangleColors, null);
+        setupAndBin(vertices, triangles, materialIndices, triangleColors, null, null);
     }
 
     /**
@@ -482,6 +499,35 @@ public final class Rasterizer
     public void setupAndBin(final float[] vertices, final int triangles,
         final int[] materialIndices, final int[] triangleColors, final I_ThreadPoolPort pool)
     {
+        setupAndBin(vertices, triangles, materialIndices, triangleColors, null, pool);
+    }
+
+    /**
+     * Transforms, culls and bins a frame's triangles, carrying an entity id per
+     * triangle.
+     *
+     * <p>Everything the five-argument overload says still holds. The one
+     * addition is {@code triangleEntityIds}: <b>null means this pass writes no
+     * entity ids at all</b> and {@link Framebuffer#entityIdBuffer()} is never
+     * touched, which is the state every scene with nothing tagged renders in.
+     * Non-null means every pixel that passes the depth test records its
+     * triangle's id, {@link Scene#UNTAGGED} included — see
+     * {@link SpanRenderer}'s class Javadoc for why skipping the zeroes is a
+     * bug rather than an optimisation.</p>
+     *
+     * @param vertices clip-space vertices, three per triangle
+     * @param triangles number of triangles in {@code vertices}
+     * @param materialIndices per-triangle material index, or null for none
+     * @param triangleColors per-triangle flat colour, or null for the default
+     * @param triangleEntityIds per-triangle entity id, or null to write none
+     * @param pool the worker pool, or null to run on the calling thread
+     * @throws IllegalStateException if {@link #beginFrame} has not been called
+     * @throws IllegalArgumentException if the counts or buffer sizes disagree
+     */
+    public void setupAndBin(final float[] vertices, final int triangles,
+        final int[] materialIndices, final int[] triangleColors,
+        final int[] triangleEntityIds, final I_ThreadPoolPort pool)
+    {
         requireFrame();
         if (triangles < 0 || triangles > maxTriangles)
         {
@@ -495,10 +541,12 @@ public final class Rasterizer
         }
         requireTable(materialIndices, triangles, "materialIndices");
         requireTable(triangleColors, triangles, "triangleColors");
+        requireTable(triangleEntityIds, triangles, "triangleEntityIds");
 
         this.clipVertices = vertices;
         this.materials = materialIndices;
         this.flatColors = triangleColors;
+        this.entityIds = triangleEntityIds;
         this.triangleCount = triangles;
 
         dispatch(setupJob, chunkCount, pool);
@@ -551,6 +599,7 @@ public final class Rasterizer
         }
         this.spanRenderer = renderer;
         this.textures = textureTable;
+        this.entityIdTarget = idTargetFor(framebuffer);
         dispatch(tileJob, tileCount, pool);
     }
 
@@ -961,6 +1010,10 @@ public final class Rasterizer
         final Framebuffer target = framebuffer;
         final SpanRenderer renderer = spanRenderer;
         final MipChain[] textureTable = textures;
+        // Null unless this pass carries entity ids. Hoisted here, once per
+        // tile, so the per-pixel test is against a local rather than a
+        // volatile read.
+        final int[] idTarget = entityIdTarget;
         final int minX = target.tileMinX(tile);
         final int minY = target.tileMinY(tile);
         final int maxX = target.tileMaxX(tile);
@@ -971,8 +1024,31 @@ public final class Rasterizer
             final int triangle = binEntries[entry];
             renderer.renderTriangle(target, records, triangle * recordStride,
                 materialOf(triangle), flatColorOf(triangle), textureTable,
-                minX, minY, maxX, maxY);
+                idTarget, entityIdOf(triangle), minX, minY, maxX, maxY);
         }
+    }
+
+    // The id buffer this pass writes, or null when it writes none. A pass with
+    // no per-triangle id table never touches the third buffer at all, and that
+    // is the whole cost model: an untagged scene pays one null compare per
+    // tile, not one store per pixel.
+    private int[] idTargetFor(final Framebuffer target)
+    {
+        if (entityIds == null)
+        {
+            return null;
+        }
+        return target.entityIdBuffer();
+    }
+
+    private int entityIdOf(final int triangle)
+    {
+        final int[] table = entityIds;
+        if (table == null)
+        {
+            return Scene.UNTAGGED;
+        }
+        return table[triangle];
     }
 
     // The last chunk's cursor is the end of the tile's single contiguous run.

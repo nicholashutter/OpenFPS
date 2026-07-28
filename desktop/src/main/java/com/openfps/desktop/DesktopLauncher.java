@@ -84,6 +84,17 @@ public final class DesktopLauncher
     /** Where the demo looks for its models when {@code --assets=} is not given. */
     public static final String DEFAULT_ASSET_ROOT = "assets/models";
 
+    /**
+     * CLI flag that skips the main menu and drops straight into the world.
+     *
+     * A flag rather than a system property because {@code -Dopenfps.x} on a
+     * Gradle command line lands on the daemon and never reaches the forked
+     * application, whereas {@code --args} is passed through verbatim. This
+     * translates one into the other. See
+     * {@link GdxFrameLoopListener#START_IN_GAME_PROPERTY}.
+     */
+    public static final String START_IN_GAME_ARG = "--start-in-game";
+
     /** Exit status used when the demo has no geometry to stand on. */
     public static final int EXIT_NO_ASSETS = 3;
 
@@ -98,8 +109,9 @@ public final class DesktopLauncher
      * Boots the engine with a real window and blocks until it closes.
      *
      * @param args CLI arguments; {@code --fps=30|60|120} selects the
-     *     simulation rate, defaulting to 60, and {@code --model=<path>} names
-     *     the {@code .ofm} model to draw
+     *     simulation rate, defaulting to 60, {@code --model=<path>} names
+     *     the {@code .ofm} model to draw, and {@code --start-in-game} opens
+     *     past the menu
      */
     public static void main(final String[] args)
     {
@@ -130,6 +142,12 @@ public final class DesktopLauncher
             LOG.error("Cannot start the first-person demo: {}", e.getMessage());
             System.exit(EXIT_NO_ASSETS);
             return;
+        }
+
+        if (startInGameArg(args))
+        {
+            System.setProperty(GdxFrameLoopListener.START_IN_GAME_PROPERTY, "true");
+            LOG.info("{}: opening straight into the world, no menu", START_IN_GAME_ARG);
         }
 
         final GdxWindowPort window = new GdxWindowPort();
@@ -179,7 +197,12 @@ public final class DesktopLauncher
         {
             return new NullGameplayPort();
         }
-        return new DemoGameplayPort(input, holder.renderer(), demo.spawnController(), config);
+        // demo.targets() is the OTHER bodies. The local player is deliberately
+        // absent from it: Hitscan treats a ray origin inside a box as a hit at
+        // distance zero, so a shooter listed among its own targets would shoot
+        // itself on every trigger pull.
+        return new DemoGameplayPort(input, holder.renderer(), demo.spawnController(), config,
+            demo.targets());
     }
 
     // Hands the renderer the scene it will draw for the rest of the run. Built
@@ -194,8 +217,13 @@ public final class DesktopLauncher
             return;
         }
         renderer.setScene(demo.scene());
-        LOG.info("First-person demo ready: {} — click the window to capture the mouse,"
-            + " WASD to walk, Escape to release", demo);
+        // Furniture of a first-person game, so the first-person game asks for
+        // it. Off by default so :tools:renderPreview can inspect a model and
+        // the render tests can assert exact pixels without a reticle through
+        // the middle of every frame.
+        renderer.setCrosshairEnabled(true);
+        LOG.info("First-person demo ready: {} — pick Start Game to enter it, WASD to walk,"
+            + " mouse to look, left click to fire, Escape to return to the menu", demo);
     }
 
     /**
@@ -212,6 +240,28 @@ public final class DesktopLauncher
             return DEFAULT_ASSET_ROOT;
         }
         return value;
+    }
+
+    /**
+     * Returns whether {@link #START_IN_GAME_ARG} was given.
+     *
+     * @param args the CLI arguments, may be null
+     * @return true if the run should skip the menu
+     */
+    public static boolean startInGameArg(final String[] args)
+    {
+        if (args == null)
+        {
+            return false;
+        }
+        for (final String arg : args)
+        {
+            if (START_IN_GAME_ARG.equals(arg))
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

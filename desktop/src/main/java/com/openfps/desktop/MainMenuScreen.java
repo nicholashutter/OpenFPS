@@ -39,6 +39,13 @@ import com.badlogic.gdx.utils.viewport.ScreenViewport;
  * which is what the headless tests cover; this class is layout and nothing
  * else.
  *
+ * <b>The screen does not claim the input processor on construction.</b> It has
+ * {@link #attachInputProcessor()} and {@link #detachInputProcessor()} instead,
+ * and {@link GdxFrameLoopListener} calls them as {@link UiState} changes.
+ * Claiming it in the constructor would mean the stage kept hit-testing,
+ * hovering and dispatching clicks through the whole of {@link UiState#PLAYING}
+ * — an invisible Quit button still sitting under the crosshair.
+ *
  * <b>Threading:</b> constructed and used only on the platform render
  * thread, after the GL context exists. Creating a {@link Texture} before
  * {@code create()} would fail.
@@ -114,8 +121,6 @@ public final class MainMenuScreen
         addButton(root, "Settings", actions::onSettings);
         addButton(root, "Quit", actions::onQuit);
         stage.addActor(root);
-
-        Gdx.input.setInputProcessor(stage);
     }
 
     // Adds one full-width menu button wired to a single action.
@@ -168,7 +173,15 @@ public final class MainMenuScreen
     }
 
     /**
-     * Clears the screen and draws the menu.
+     * Clears the window and draws the menu over it.
+     *
+     * <p><b>The clear belongs here.</b> There was briefly a second entry point
+     * that drew the menu without clearing, so it could composite over the
+     * software rasterizer's frame — and that is precisely the effect
+     * {@link UiState} was introduced to remove: the world visibly carrying on
+     * behind the buttons. In {@link UiState#MENU} the presenter is not called
+     * at all, so nothing has covered the window when this runs and clearing is
+     * required rather than merely allowed.</p>
      *
      * @param deltaSeconds wall time since the previous frame, used for
      *     widget animation only — this never advances the simulation
@@ -176,25 +189,57 @@ public final class MainMenuScreen
     public void render(final float deltaSeconds)
     {
         ScreenUtils.clear(BACKGROUND);
-        drawOverlay(deltaSeconds);
+        stage.act(deltaSeconds);
+        stage.draw();
     }
 
     /**
-     * Draws the menu <b>without</b> clearing, so it composites over whatever
-     * is already on screen.
+     * Clears the window to the menu background and draws nothing else.
      *
-     * This is the path used once the software rasterizer has a frame to
-     * present: the presenter covers every pixel with the world, and clearing
-     * again here would erase it. {@link #render} remains the standalone path
-     * for a menu-only window.
-     *
-     * @param deltaSeconds wall time since the previous frame, used for
-     *     widget animation only — this never advances the simulation
+     * <p>Exists for the one frame shape that has neither a world nor a menu to
+     * put on screen: {@link UiState#PLAYING} before the rasterizer has
+     * published its first frame. Something must own the clear or the window
+     * shows whatever the driver left in the back buffer, and it cannot be
+     * {@link #render} because that would draw the menu the player just
+     * dismissed.</p>
      */
-    public void drawOverlay(final float deltaSeconds)
+    public static void clearBackground()
     {
-        stage.act(deltaSeconds);
-        stage.draw();
+        ScreenUtils.clear(BACKGROUND);
+    }
+
+    /**
+     * Gives the Scene2D stage the input processor, so the buttons respond.
+     *
+     * <p>Called on entering {@link UiState#MENU}. Headless — in tests, before
+     * the application starts — {@code Gdx.input} is null and this does
+     * nothing.</p>
+     */
+    public void attachInputProcessor()
+    {
+        if (Gdx.input == null)
+        {
+            return;
+        }
+        Gdx.input.setInputProcessor(stage);
+    }
+
+    /**
+     * Takes the input processor away, so the menu consumes nothing.
+     *
+     * <p>Called on entering {@link UiState#PLAYING}. This is the difference
+     * between a menu that is hidden and a menu that is genuinely gone: without
+     * it the stage still hit-tests every mouse position and a click aimed at
+     * the game would land on whichever invisible button was under the
+     * crosshair.</p>
+     */
+    public void detachInputProcessor()
+    {
+        if (Gdx.input == null)
+        {
+            return;
+        }
+        Gdx.input.setInputProcessor(null);
     }
 
     /**

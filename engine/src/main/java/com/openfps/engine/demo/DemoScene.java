@@ -7,6 +7,7 @@ package com.openfps.engine.demo;
 
 import com.openfps.engine.common.Constants;
 import com.openfps.engine.gameplay.PlayerController;
+import com.openfps.engine.gameplay.Target;
 import com.openfps.engine.render.adapter.Mat4;
 import com.openfps.engine.render.adapter.ModelFormat;
 import com.openfps.engine.render.adapter.Scene;
@@ -235,7 +236,69 @@ public final class DemoScene
         -224.0f,  0.0f, 160.0f,
     };
 
+    /**
+     * Height of a character model in its own units, measured from the asset:
+     * {@code extent 1.60 x 2.70 x 0.80}.
+     *
+     * <p>Read off {@code gradlew :tools:verifyModels}, not guessed. If the
+     * character pack is ever re-exported at a different size this is the one
+     * number that changes, and {@code DemoSceneTest} asserts the scale it
+     * produces still matches the player box.</p>
+     */
+    public static final float CHARACTER_MODEL_HEIGHT = 2.70f;
+
+    /** Player height in world units — {@link Constants#PLAYER_HEIGHT} unscaled. */
+    public static final float PLAYER_HEIGHT_UNITS =
+        Constants.PLAYER_HEIGHT / (float) Constants.MAP_SCALE;
+
+    /** Player radius in world units — {@link Constants#PLAYER_RADIUS} unscaled. */
+    public static final float PLAYER_RADIUS_UNITS =
+        Constants.PLAYER_RADIUS / (float) Constants.MAP_SCALE;
+
+    /**
+     * Scale from character-model units to world units, so a target stands
+     * exactly {@link #PLAYER_HEIGHT_UNITS} tall.
+     *
+     * <p><b>Derived, not chosen</b>, and it corroborates the same way
+     * {@link #KIT_WORLD_SCALE} does. 56 / 2.70 is about 20.74, which puts the
+     * model's 1.60-unit shoulder span at roughly 33 world units against a
+     * player diameter of 32 — two numbers from unrelated sources, Kenney's
+     * proportions and DOOM's collision box, agreeing to within a unit. Nothing
+     * was tuned to make that happen.</p>
+     *
+     * <p>The reason it must be derived rather than eyeballed: this scale sizes
+     * what you SEE and {@link Constants#PLAYER_HEIGHT} sizes what you HIT. Set
+     * them independently and shots pass through a visible chest, or connect
+     * beside a shoulder, and no screenshot would ever show it.</p>
+     */
+    public static final float CHARACTER_WORLD_SCALE =
+        PLAYER_HEIGHT_UNITS / CHARACTER_MODEL_HEIGHT;
+
+    /** First entity id handed to a target. {@link Scene#UNTAGGED} is 0. */
+    public static final int FIRST_TARGET_ID = 1;
+
+    /**
+     * Target feet positions, {x, z} pairs in world units, in id order.
+     *
+     * <p>Chosen to exercise the things that are easy to get wrong rather than
+     * to look tidy: one straight down the spawn bearing to sight along, two
+     * placed so they <b>overlap in screen space from the spawn</b> — the case
+     * where a naive outline merges two people into one blob — and one well off
+     * to the side so turning is needed to find it.</p>
+     */
+    private static final float[] TARGET_PLACEMENTS =
+    {
+        0.0f, 60.0f,
+        -78.0f, 30.0f,
+        -44.0f, 96.0f,
+        142.0f, -46.0f,
+    };
+
+    /** Stride of {@link #TARGET_PLACEMENTS}: x and z. */
+    private static final int TARGET_STRIDE = 2;
+
     private final Scene scene;
+    private final Target[] targets;
     private final float spawnX;
     private final float spawnY;
     private final float spawnZ;
@@ -243,10 +306,12 @@ public final class DemoScene
     private final DemoModels.Source source;
 
     // Takes ownership of a finished scene and the spawn that belongs to it.
-    private DemoScene(final Scene builtScene, final float feetX, final float feetY,
-        final float feetZ, final float yawRadians, final DemoModels.Source modelSource)
+    private DemoScene(final Scene builtScene, final Target[] hitboxes, final float feetX,
+        final float feetY, final float feetZ, final float yawRadians,
+        final DemoModels.Source modelSource)
     {
         this.scene = builtScene;
+        this.targets = hitboxes;
         this.spawnX = feetX;
         this.spawnY = feetY;
         this.spawnZ = feetZ;
@@ -285,6 +350,7 @@ public final class DemoScene
             spawnDepth =
                 FALLBACK_INTERIOR_HALF_EXTENT * FALLBACK_WORLD_SCALE * SPAWN_DEPTH_FRACTION;
         }
+        final Target[] hitboxes = addTargets(builder, models);
         addViewmodel(builder, models.weapon());
 
         final Scene built = builder.build();
@@ -294,7 +360,60 @@ public final class DemoScene
             built.maxInstanceTriangles(), worldScaleOf(models));
         // Facing +z, which is yaw 0 (PlayerController's convention), standing
         // back from the origin so the whole room is ahead rather than around.
-        return new DemoScene(built, 0.0f, 0.0f, -spawnDepth, 0.0f, models.source());
+        return new DemoScene(built, hitboxes, 0.0f, 0.0f, -spawnDepth, 0.0f, models.source());
+    }
+
+    /**
+     * Stands the character models up as tagged targets and returns their
+     * hitboxes.
+     *
+     * <p>Each target gets one scene instance and one {@link Target}, sharing an
+     * entity id, and <b>the two are built here together on purpose</b>. The
+     * model is what the outline pass draws around; the box is what
+     * {@code Hitscan} tests. Building them in separate places is how they come
+     * to disagree, and a disagreement is invisible — you would see a body,
+     * shoot it, and nothing would happen.</p>
+     *
+     * <p>Returns an empty array when no character art is staged, which leaves
+     * the scene untagged and the outline pass entirely un-dispatched.</p>
+     *
+     * @param builder the scene under construction; instances are appended
+     * @param models the loaded model set
+     * @return one hitbox per placed target, in id order, never null
+     */
+    private static Target[] addTargets(final Scene.Builder builder, final DemoModels models)
+    {
+        if (!models.hasCharacters())
+        {
+            return new Target[0];
+        }
+
+        final ModelFormat[] people = models.characters();
+        final int count = TARGET_PLACEMENTS.length / TARGET_STRIDE;
+        final Target[] hitboxes = new Target[count];
+        for (int index = 0; index < count; index++)
+        {
+            final float feetX = TARGET_PLACEMENTS[index * TARGET_STRIDE];
+            final float feetZ = TARGET_PLACEMENTS[index * TARGET_STRIDE + 1];
+            final int entityId = FIRST_TARGET_ID + index;
+
+            // Cycles through however many models were staged, so a partially
+            // staged pack still puts a body at every placement rather than
+            // leaving holes in the arrangement.
+            final ModelFormat model = people[index % people.length];
+            builder.addWorldInstance(model,
+                placement(feetX, 0.0f, feetZ, 0.0f, CHARACTER_WORLD_SCALE), entityId);
+
+            // aroundFeet, not a centre, because the model's origin is at its
+            // feet and PlayerController stores feet too. Centring here would
+            // bury every hitbox half a body into the floor.
+            hitboxes[index] = Target.aroundFeet(entityId, feetX, 0.0f, feetZ,
+                PLAYER_RADIUS_UNITS, PLAYER_HEIGHT_UNITS);
+        }
+        LOG.info("Demo targets: {} characters placed from {} model(s), ids {}..{},"
+            + " {} world units tall, radius {}", count, people.length, FIRST_TARGET_ID,
+            FIRST_TARGET_ID + count - 1, PLAYER_HEIGHT_UNITS, PLAYER_RADIUS_UNITS);
+        return hitboxes;
     }
 
     // The room the demo is actually meant to show: floor, walls, props.
@@ -560,6 +679,31 @@ public final class DemoScene
     public Scene scene()
     {
         return scene;
+    }
+
+    /**
+     * The shootable hitboxes in this scene, in entity-id order.
+     *
+     * <p>Empty when no character art is staged. <b>The local player is not in
+     * this array and must never be added to it</b> — {@code Hitscan} treats a
+     * ray origin inside a box as a hit at distance zero, so a shooter that
+     * appears among its own targets shoots itself on every trigger pull.</p>
+     *
+     * @return a fresh array so a caller cannot mutate the scene's own set
+     */
+    public Target[] targets()
+    {
+        return targets.clone();
+    }
+
+    /**
+     * How many shootable targets this scene placed.
+     *
+     * @return the target count, zero when no character art is staged
+     */
+    public int targetCount()
+    {
+        return targets.length;
     }
 
     /**

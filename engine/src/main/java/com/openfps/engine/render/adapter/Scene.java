@@ -68,9 +68,40 @@ import java.util.ArrayList;
  * that changing where an instance <i>is</i> is a content change, so a moving
  * object does mean a new {@code Scene}. That is one small array of references
  * per rebuild, not per frame per instance.</p>
+ *
+ * <h2>Entity identity</h2>
+ *
+ * <p>A world instance may carry an <b>entity id</b>: an opaque positive
+ * {@code int} the scene's builder assigns, or {@link #UNTAGGED} for ordinary
+ * geometry. It exists for exactly one purpose — {@link OutlinePass} draws a
+ * silhouette around tagged geometry, and it needs a per-pixel answer to "which
+ * entity is this" that only the renderer can produce.</p>
+ *
+ * <p><b>Ids are not indices.</b> Nothing may assume they are dense, ordered,
+ * or related to {@link #worldInstanceCount()}. Two instances may share an id —
+ * a character built from several models is one entity — and that is exactly
+ * what stops {@link OutlinePass} drawing a seam between an entity's own
+ * parts.</p>
+ *
+ * <p><b>Hit detection does not come from here.</b> The per-pixel id buffer
+ * would give pixel-exact hitscan for free and must not be used for it: peers
+ * render at different resolutions and worker counts, so two clients would
+ * disagree about who was hit, and under the lockstep model that is a desync.
+ * Hits are resolved from a deterministic ray in {@code gameplay}.</p>
+ *
+ * <p><b>View instances are always {@link #UNTAGGED}.</b> There is no overload
+ * that says otherwise. The held weapon fills a large part of the screen and
+ * outlining it would be an unbroken band down one side of every frame.</p>
  */
 public final class Scene
 {
+    /**
+     * The entity id of geometry that belongs to no entity — walls, floors,
+     * props, and every view-space instance. Zero, so a freshly cleared
+     * {@link Framebuffer#entityIdBuffer()} already reads "nothing here".
+     */
+    public static final int UNTAGGED = 0;
+
     /**
      * The scene with nothing in it. Renders a cleared frame and no geometry,
      * which is exactly what a renderer with no world loaded should show.
@@ -85,6 +116,7 @@ public final class Scene
     private final int maxInstanceTriangles;
     private final int worldTriangles;
     private final int viewTriangles;
+    private final boolean tagged;
 
     // Takes ownership of two arrays the builder has already finished with.
     private Scene(final Instance[] worldInstances, final Instance[] viewInstances)
@@ -95,6 +127,7 @@ public final class Scene
             Math.max(largestModel(worldInstances), largestModel(viewInstances));
         this.worldTriangles = totalTriangles(worldInstances);
         this.viewTriangles = totalTriangles(viewInstances);
+        this.tagged = anyTagged(worldInstances);
     }
 
     /**
@@ -149,6 +182,38 @@ public final class Scene
     public Mat4 worldTransform(final int index)
     {
         return world[index].transform;
+    }
+
+    /**
+     * Returns one world instance's entity id, or {@link #UNTAGGED}.
+     *
+     * <p>Opaque and positive when tagged. It is not an index into anything and
+     * two instances may legitimately share one — see the class Javadoc.</p>
+     *
+     * @param index instance index in {@code [0, worldInstanceCount())}
+     * @return the entity id, or {@link #UNTAGGED} for ordinary geometry
+     */
+    public int worldEntityId(final int index)
+    {
+        return world[index].entityId;
+    }
+
+    /**
+     * Reports whether any world instance carries an entity id.
+     *
+     * <p>Computed once at build time so the render port can decide, before it
+     * has done any work, whether this frame needs the per-pixel id buffer at
+     * all. A scene with nothing tagged — which is every scene that has no
+     * players in it — then pays no id clear, no per-pixel id write and no
+     * {@link OutlinePass} dispatch. That gate is the entire reason this method
+     * exists, and it is why the outline feature costs an untagged scene
+     * nothing measurable.</p>
+     *
+     * @return true if at least one world instance is tagged
+     */
+    public boolean hasTaggedEntities()
+    {
+        return tagged;
     }
 
     /** Returns how many view-space instances this scene holds. */
@@ -239,7 +304,8 @@ public final class Scene
     {
         return "Scene{world=" + world.length + ", view=" + view.length
             + ", maxInstanceTriangles=" + maxInstanceTriangles
-            + ", maxPassTriangles=" + maxPassTriangles() + "}";
+            + ", maxPassTriangles=" + maxPassTriangles()
+            + ", tagged=" + tagged + "}";
     }
 
     // The largest triangle count in one list, or zero for an empty one.
@@ -252,6 +318,21 @@ public final class Scene
             largest = Math.max(largest, instance.model.triangleCount());
         }
         return largest;
+    }
+
+    // Whether any instance in one list carries an entity id. Decided once, at
+    // build time, so the per-frame path never walks the instance list to find
+    // out — see hasTaggedEntities().
+    private static boolean anyTagged(final Instance[] instances)
+    {
+        for (final Instance instance : instances)
+        {
+            if (instance.entityId != UNTAGGED)
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     // Every triangle in one list. Duplicated models count once per instance:
@@ -304,7 +385,40 @@ public final class Scene
          */
         public Builder addWorldInstance(final ModelFormat model, final Mat4 modelToWorld)
         {
-            world.add(validated(model, modelToWorld, "modelToWorld"));
+            return addWorldInstance(model, modelToWorld, UNTAGGED);
+        }
+
+        /**
+         * Adds a model to the world pass, tagged as part of an entity.
+         *
+         * <p>Every pixel this instance wins the depth test at records
+         * {@code entityId} in {@link Framebuffer#entityIdBuffer()}, and
+         * {@link OutlinePass} draws a silhouette wherever that id borders a
+         * different one. Passing {@link #UNTAGGED} is exactly the two-argument
+         * overload and is not an error — it is how a caller that tags some of
+         * its instances expresses "not this one" without branching.</p>
+         *
+         * <p>The id is <b>not</b> validated for uniqueness, and deliberately:
+         * an entity made of several models shares one id across them, which is
+         * what stops the outline drawing a seam through its own joints.</p>
+         *
+         * @param model the model to draw; same restrictions as
+         *     {@link #addWorldInstance(ModelFormat, Mat4)}
+         * @param modelToWorld where it sits in the world; same restrictions
+         * @param entityId an opaque, positive entity id, or {@link #UNTAGGED}
+         * @return this builder
+         * @throws IllegalArgumentException if the model or the transform is
+         *     unusable, or the id is negative
+         */
+        public Builder addWorldInstance(final ModelFormat model, final Mat4 modelToWorld,
+            final int entityId)
+        {
+            if (entityId < UNTAGGED)
+            {
+                throw new IllegalArgumentException("entityId must be positive, or "
+                    + UNTAGGED + " for untagged geometry; got " + entityId);
+            }
+            world.add(validated(model, modelToWorld, "modelToWorld", entityId));
             return this;
         }
 
@@ -327,7 +441,9 @@ public final class Scene
          */
         public Builder addViewInstance(final ModelFormat model, final Mat4 modelToView)
         {
-            view.add(validated(model, modelToView, "modelToView"));
+            // UNTAGGED, and there is no overload that says otherwise: the
+            // viewmodel must never be outlined. See the class Javadoc.
+            view.add(validated(model, modelToView, "modelToView", UNTAGGED));
             return this;
         }
 
@@ -346,7 +462,7 @@ public final class Scene
 
         // Every rule an instance has to satisfy, in one place.
         private static Instance validated(final ModelFormat model, final Mat4 transform,
-            final String name)
+            final String name, final int entityId)
         {
             if (model == null)
             {
@@ -362,7 +478,7 @@ public final class Scene
             }
             requireAffine(transform, name);
             requireOrientationPreserving(transform, name);
-            return new Instance(model, transform);
+            return new Instance(model, transform, entityId);
         }
 
         // The packed three-row transform has no fourth row, so a projective
@@ -426,11 +542,14 @@ public final class Scene
     {
         private final ModelFormat model;
         private final Mat4 transform;
+        private final int entityId;
 
-        Instance(final ModelFormat instanceModel, final Mat4 instanceTransform)
+        Instance(final ModelFormat instanceModel, final Mat4 instanceTransform,
+            final int instanceEntityId)
         {
             this.model = instanceModel;
             this.transform = instanceTransform;
+            this.entityId = instanceEntityId;
         }
     }
 }

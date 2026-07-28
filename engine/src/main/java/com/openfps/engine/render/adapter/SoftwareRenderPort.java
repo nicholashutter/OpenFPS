@@ -54,11 +54,30 @@ import org.slf4j.LoggerFactory;
  *       concatenated into the camera's packed transform — once per instance,
  *       so the per-vertex cost is identical to the untransformed case
  *       ({@link Camera#packModelToClip}).</li>
+ *   <li><b>{@link OutlinePass}</b>, if and only if the scene has tagged
+ *       entities. It reads the finished world-pass id buffer and paints
+ *       silhouettes into colour.</li>
  *   <li><b>Clear depth, not colour.</b></li>
  *   <li><b>View instances</b> — the first-person viewmodel — which are already
  *       in view space and take the projection alone
  *       ({@link Camera#packViewToClip}).</li>
  * </ol>
+ *
+ * <p>The outline sits between the two passes deliberately: the id buffer is
+ * only complete once the world pass has joined, and the held weapon must draw
+ * over outlines rather than under them.</p>
+ *
+ * <h2>Entity ids cost an untagged scene nothing</h2>
+ *
+ * <p>{@link Scene#hasTaggedEntities()} is decided when the scene is built, and
+ * this class turns it into a single null-or-not array reference,
+ * {@code worldEntityIds}. When it is null — every scene with no players in it,
+ * which includes the whole demo room — the frame skips
+ * {@link Framebuffer#clearEntityIds()}, hands {@link Rasterizer} no id table so
+ * the span loop never stores one, does not compact the id stream, and does not
+ * dispatch {@link OutlinePass}. What remains is one reference compare per
+ * frame and one per tile. That is why the feature does not appear in the
+ * measured frame time of the demo scene.</p>
  *
  * <p>The depth reset in step 3 is the classic FPS solution to the weapon
  * clipping through a wall the player is standing against: the viewmodel is
@@ -288,6 +307,29 @@ public final class SoftwareRenderPort implements I_RenderPort
     private final I_TimePort time;
     private final Framebuffer framebuffer;
     private final SpanRenderer spanRenderer;
+
+    /**
+     * Draws entity silhouettes between the two passes. Constructed once and
+     * only ever dispatched for a scene that has tagged entities.
+     */
+    private final OutlinePass outlinePass = new OutlinePass();
+
+    /**
+     * Whether to draw the aiming reticle over each finished frame.
+     *
+     * <p><b>Off by default, and that default is the important part.</b> This
+     * class is a general render port, not a game: {@code :tools:renderPreview}
+     * uses it to inspect one model, {@code :tools:demoPreview} to produce
+     * reference frames, and the render tests to assert exact pixel content. A
+     * reticle stamped unconditionally through the middle of every frame is
+     * wrong for all three — it is furniture belonging to a first-person game,
+     * so the first-person game asks for it.</p>
+     *
+     * <p>MUTABLE: set once at wiring time before the first frame, read on the
+     * render thread. Volatile because those are different threads.</p>
+     */
+    private volatile boolean crosshairEnabled;
+
     private final int chunkCount;
     private final Rasterizer.CullMode cullMode;
 
@@ -331,6 +373,16 @@ public final class SoftwareRenderPort implements I_RenderPort
     private volatile int[] viewStarts;
 
     /**
+     * One entity id per world instance, or <b>null when the scene has none</b>.
+     * MUTABLE: rebuilt by {@link #setScene}.
+     *
+     * <p>Null is the gate for the entire outline feature, not merely a missing
+     * table — see the class Javadoc. There is no view-pass counterpart because
+     * {@link Scene} refuses to tag a view instance.</p>
+     */
+    private volatile int[] worldEntityIds;
+
+    /**
      * One packed model-to-clip transform per world instance,
      * {@link Camera#WORLD_TO_CLIP_FLOATS} floats each. MUTABLE: every slot is
      * rewritten once per frame, before the geometry pass reads any of them.
@@ -351,6 +403,13 @@ public final class SoftwareRenderPort implements I_RenderPort
 
     /** Their packed transforms. MUTABLE: rebound per pass. */
     private volatile float[] geometryTransforms;
+
+    /**
+     * One entity id per instance in the pass being transformed, or null when
+     * the pass carries none — which the view pass always does. MUTABLE:
+     * rebound per pass.
+     */
+    private volatile int[] geometryEntityIds;
 
     /** Triangles in the pass being transformed. MUTABLE: rebound per pass. */
     private volatile int geometryTriangles;
@@ -375,6 +434,12 @@ public final class SoftwareRenderPort implements I_RenderPort
 
     /** Per-output-triangle flat colour. MUTABLE. */
     private volatile int[] clipColors;
+
+    /**
+     * Per-output-triangle entity id. MUTABLE. Written and compacted only while
+     * a tagged scene is bound; otherwise it is never read.
+     */
+    private volatile int[] clipEntityIds;
 
     /** Output triangles each chunk produced this frame. MUTABLE: written per frame. */
     private volatile int[] chunkProduced;
@@ -658,6 +723,7 @@ public final class SoftwareRenderPort implements I_RenderPort
         this.sceneTextures = buildSceneTextures(world, hand);
         this.worldStarts = streamOffsets(world);
         this.viewStarts = streamOffsets(hand);
+        this.worldEntityIds = worldEntityIdsOf(newScene);
         this.worldTransforms = new float[world.length * Camera.WORLD_TO_CLIP_FLOATS];
         this.viewTransforms = new float[hand.length * Camera.WORLD_TO_CLIP_FLOATS];
         this.worldInstances = world;
@@ -679,6 +745,7 @@ public final class SoftwareRenderPort implements I_RenderPort
         this.clipVertices = new float[maxOutput * TRIANGLE_FLOATS];
         this.clipMaterials = new int[maxOutput];
         this.clipColors = new int[maxOutput];
+        this.clipEntityIds = new int[maxOutput];
         this.chunkProduced = new int[chunkCount];
 
         final TriangleClipper[] newClippers = new TriangleClipper[chunkCount];
@@ -708,6 +775,31 @@ public final class SoftwareRenderPort implements I_RenderPort
             starts[index + 1] = starts[index] + instances[index].model.triangleCount();
         }
         return starts;
+    }
+
+    // One entity id per world instance, or NULL when the scene tags nothing.
+    //
+    // Null rather than an array of zeroes on purpose: it is the single switch
+    // the whole per-frame path tests, so a scene with no players in it cannot
+    // accidentally pay for the id clear, the per-pixel id store, the stream
+    // compaction or the outline dispatch. See the class Javadoc.
+    //
+    // The id belongs to the Scene instance, not to the prepared Instance:
+    // prepare() shares one prepared entry between duplicate ModelFormats, so
+    // two players built from the same model would otherwise collapse onto one
+    // id and stop being outlined apart from each other.
+    private static int[] worldEntityIdsOf(final Scene source)
+    {
+        if (!source.hasTaggedEntities())
+        {
+            return null;
+        }
+        final int[] out = new int[source.worldInstanceCount()];
+        for (int index = 0; index < out.length; index++)
+        {
+            out[index] = source.worldEntityId(index);
+        }
+        return out;
     }
 
     // Concatenates every distinct instance's textures into one scene-wide table
@@ -913,22 +1005,60 @@ public final class SoftwareRenderPort implements I_RenderPort
         this.geometryNear = view.near();
         final I_ThreadPoolPort workers = activePool();
 
-        framebuffer.clear(DEFAULT_CLEAR_COLOR);
+        // Null unless the scene tags something, in which case it is the whole
+        // outline feature's switch.
+        final int[] tagged = worldEntityIds;
+
+        // Spelled out rather than framebuffer.clear(), which would clear the
+        // id buffer unconditionally: that is a third full-frame memset — 3.7 MB
+        // at 720p — and an untagged scene must not pay it.
+        framebuffer.clearColor(DEFAULT_CLEAR_COLOR);
+        framebuffer.clearDepth();
+        if (tagged != null)
+        {
+            framebuffer.clearEntityIds();
+        }
 
         final Instance[] world = worldInstances;
         packWorld(current, view, world.length);
         // MUTABLE local — triangles the whole scene handed the rasterizer.
-        int triangles = renderPass(world, worldStarts, worldTransforms, workers);
+        int triangles = renderPass(world, worldStarts, worldTransforms, tagged, workers);
+
+        // After the world pass, so the id buffer is complete; before the
+        // viewmodel, so the weapon draws over the outlines rather than under
+        // them. OutlinePass's Javadoc explains why fusing it into the raster
+        // pass would break the worker-count invariant.
+        if (tagged != null)
+        {
+            this.parallelPasses = parallelPasses + 1L;
+            outlinePass.draw(framebuffer, workers);
+        }
 
         // The viewmodel is depth-tested only against itself. Colour is NOT
         // cleared: the weapon composites over the world it was just occluded
-        // by. See the class Javadoc.
+        // by. See the class Javadoc. Ids are not cleared either: view
+        // instances are always UNTAGGED, so the pass writes none, and the
+        // outline has already been drawn.
         final Instance[] hand = viewInstances;
         if (hand.length > 0)
         {
             framebuffer.clearDepth();
             packView(current, view, hand.length);
-            triangles += renderPass(hand, viewStarts, viewTransforms, workers);
+            triangles += renderPass(hand, viewStarts, viewTransforms, null, workers);
+        }
+
+        // The reticle is the topmost thing on screen and is not in the world:
+        // after the viewmodel, and never depth-tested. It must also be before
+        // publishFrame(), which de-pads the colour buffer into the present
+        // buffer — anything drawn after that call never reaches a window.
+        //
+        // Runs on the calling thread with every parallel pass already joined.
+        // That is required, not incidental: the crosshair spans tile
+        // boundaries, so drawing it while the raster pass is live would write
+        // into tiles other workers still own.
+        if (crosshairEnabled)
+        {
+            Crosshair.draw(framebuffer);
         }
 
         publishFrame();
@@ -975,7 +1105,8 @@ public final class SoftwareRenderPort implements I_RenderPort
     // stream. It does not touch the framebuffer, so the depth buffer carries
     // across the two passes.
     private int renderPass(final Instance[] instances, final int[] starts,
-        final float[] transforms, final I_ThreadPoolPort workers)
+        final float[] transforms, final int[] instanceEntityIds,
+        final I_ThreadPoolPort workers)
     {
         final int total = starts[instances.length];
         if (total == 0)
@@ -985,6 +1116,7 @@ public final class SoftwareRenderPort implements I_RenderPort
         this.geometryInstances = instances;
         this.geometryStarts = starts;
         this.geometryTransforms = transforms;
+        this.geometryEntityIds = instanceEntityIds;
         this.geometryTriangles = total;
         dispatch(geometryJob, chunkCount, workers);
         final int triangles = compactChunks(total);
@@ -995,9 +1127,22 @@ public final class SoftwareRenderPort implements I_RenderPort
 
         final Rasterizer setup = rasterizer;
         setup.beginFrame(framebuffer);
-        setup.setupAndBin(clipVertices, triangles, clipMaterials, clipColors, workers);
+        setup.setupAndBin(clipVertices, triangles, clipMaterials, clipColors,
+            idStreamFor(instanceEntityIds), workers);
         setup.rasterize(spanRenderer, sceneTextures, workers);
         return triangles;
+    }
+
+    // The per-output-triangle id stream, or null when this pass carries no
+    // ids. Null propagates all the way down to SpanRenderer, where it is the
+    // difference between one store per covered pixel and none.
+    private int[] idStreamFor(final int[] instanceEntityIds)
+    {
+        if (instanceEntityIds == null)
+        {
+            return null;
+        }
+        return clipEntityIds;
     }
 
     // Transforms and clips one contiguous slice of the pass's flattened
@@ -1073,6 +1218,13 @@ public final class SoftwareRenderPort implements I_RenderPort
         final int[] sourceMaterial = instance.triangleMaterial;
         final int[] sourceColor = instance.triangleColor;
 
+        // Null for the viewmodel pass and for every untagged scene, in which
+        // case not one id is written. The id is per SCENE instance, so it is
+        // read here from the instance index rather than from `instance`, whose
+        // prepared entry is shared between duplicate models.
+        final int[] entityOut = passEntityOut();
+        final int entityId = passEntityId(instanceIndex);
+
         // MUTABLE local — output triangles this run has emitted so far.
         int produced = 0;
         for (int triangle = localFrom; triangle < localTo; triangle++)
@@ -1085,9 +1237,45 @@ public final class SoftwareRenderPort implements I_RenderPort
                 materials[outBase + produced + k] = sourceMaterial[triangle];
                 colors[outBase + produced + k] = sourceColor[triangle];
             }
+            if (entityOut != null)
+            {
+                writeEntityIds(entityOut, outBase + produced, emitted, entityId);
+            }
             produced += emitted;
         }
         return produced;
+    }
+
+    // The id stream this pass writes into, or null when it writes none.
+    private int[] passEntityOut()
+    {
+        if (geometryEntityIds == null)
+        {
+            return null;
+        }
+        return clipEntityIds;
+    }
+
+    // The entity id of one instance of the pass being transformed.
+    private int passEntityId(final int instanceIndex)
+    {
+        final int[] ids = geometryEntityIds;
+        if (ids == null)
+        {
+            return Scene.UNTAGGED;
+        }
+        return ids[instanceIndex];
+    }
+
+    // One input triangle's id, copied to each of the output triangles the clip
+    // produced from it. A clipped triangle is still the same entity.
+    private static void writeEntityIds(final int[] out, final int at, final int count,
+        final int entityId)
+    {
+        for (int k = 0; k < count; k++)
+        {
+            out[at + k] = entityId;
+        }
     }
 
     // Gathers one model triangle into the clip-space vertex layout the clipper
@@ -1128,6 +1316,9 @@ public final class SoftwareRenderPort implements I_RenderPort
         final float[] out = clipVertices;
         final int[] materials = clipMaterials;
         final int[] colors = clipColors;
+        // Null when this pass wrote no ids, in which case there is nothing to
+        // close the gaps in.
+        final int[] entityOut = passEntityOut();
 
         // MUTABLE local — the compacted output cursor, in triangles.
         int cursor = 0;
@@ -1141,6 +1332,10 @@ public final class SoftwareRenderPort implements I_RenderPort
                     emitted * TRIANGLE_FLOATS);
                 System.arraycopy(materials, source, materials, cursor, emitted);
                 System.arraycopy(colors, source, colors, cursor, emitted);
+                if (entityOut != null)
+                {
+                    System.arraycopy(entityOut, source, entityOut, cursor, emitted);
+                }
             }
             cursor += emitted;
         }
@@ -1383,6 +1578,30 @@ public final class SoftwareRenderPort implements I_RenderPort
     }
 
     /**
+     * Turns the aiming reticle on or off. Off until asked.
+     *
+     * <p>Set this once at wiring time, from the composition root that knows it
+     * is building a first-person game — {@code DesktopLauncher} does, the
+     * preview tools do not. See the field for why the default is off.</p>
+     *
+     * @param enabled whether finished frames should carry a crosshair
+     */
+    public void setCrosshairEnabled(final boolean enabled)
+    {
+        this.crosshairEnabled = enabled;
+    }
+
+    /**
+     * Whether the aiming reticle is being drawn.
+     *
+     * @return the current setting
+     */
+    public boolean isCrosshairEnabled()
+    {
+        return crosshairEnabled;
+    }
+
+    /**
      * Returns how many triangles the last frame handed the rasterizer, after
      * clipping, summed over every instance in both passes.
      *
@@ -1409,6 +1628,9 @@ public final class SoftwareRenderPort implements I_RenderPort
      * viewmodel, independent of the instance count. The per-instance pipeline
      * this replaced cost four per instance, which is where the demo room's
      * 1,180 came from.</p>
+     *
+     * <p>A scene with tagged entities costs one more — {@link OutlinePass} —
+     * and a scene without them costs exactly the same eight it always did.</p>
      *
      * @return the last frame's parallel pass count, or zero before the first
      *     frame

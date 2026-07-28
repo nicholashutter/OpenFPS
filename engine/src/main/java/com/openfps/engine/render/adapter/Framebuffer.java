@@ -37,6 +37,23 @@ import org.slf4j.LoggerFactory;
  * all-zero clear value is the memset the JIT turns into the fastest path
  * available.
  *
+ * <b>Entity-id buffer — a third {@code int[]}, same length, same stride, same
+ * tiles.</b> Holds {@link Scene#UNTAGGED} or the id of whichever tagged
+ * instance last won the depth test at that pixel. {@link OutlinePass} is its
+ * only reader; it is <b>not</b> a hit-detection oracle, and the reason is not
+ * taste — peers render at different resolutions and worker counts, so two
+ * clients sampling it would disagree about who was hit, and under the lockstep
+ * model that is a desync rather than a rounding difference.
+ *
+ * <b>The id buffer is cleared explicitly, not as part of {@link #clearDepth()}.
+ * </b> {@link #clear(int)} clears all three because it is the frame-start
+ * clear and a stale id there is a ghost outline. {@link #clearDepth()} clears
+ * depth alone, because its one caller is the viewmodel pass separator: the
+ * outline has already been drawn by then and view instances never write ids,
+ * so clearing them again would be a second 3.7 MB memset at 720p for no
+ * observable difference. {@link #clearEntityIds()} exists for anyone who wants
+ * the third clear on its own.
+ *
  * <b>Row stride is padded — {@code stride != width} in general.</b> Indexing
  * is {@code y * strideInPixels() + x}, never {@code y * width() + x}. The
  * stride is rounded up to a multiple of {@link #STRIDE_ALIGNMENT} pixels, and
@@ -73,7 +90,11 @@ import org.slf4j.LoggerFactory;
  * shutdown, named sites only. A hot loop is <b>not</b> on its own a
  * qualifying reason. {@link #init(int, int)} and {@link #resize(int, int)} are
  * the only two allocation sites in this class; in particular {@link #clear()}
- * runs every frame and allocates nothing.
+ * runs every frame and allocates nothing. The entity-id buffer is allocated
+ * unconditionally rather than on demand: it is one more {@code int} per pixel
+ * against the {@code int} of colour and the {@code float} of depth, and a
+ * lazily allocated one would have to be published safely to every raster
+ * worker mid-frame.
  *
  * <b>Threading.</b> This class is not synchronised and does not need to be.
  * The raster pass is safe because a pixel belongs to exactly one tile and a
@@ -155,6 +176,13 @@ public final class Framebuffer
      * MUTABLE: replaced on init and resize, written every frame.
      */
     private float[] depth;
+
+    /**
+     * Entity-id buffer, {@code strideInPixels * height} elements.
+     * MUTABLE: replaced on init and resize; written by the raster pass only
+     * while a tagged scene is bound.
+     */
+    private int[] entityIds;
 
     /** Visible width in pixels. MUTABLE: set on init and resize. */
     private int width;
@@ -278,6 +306,7 @@ public final class Framebuffer
         }
         color = null;
         depth = null;
+        entityIds = null;
         width = 0;
         height = 0;
         strideInPixels = 0;
@@ -370,11 +399,26 @@ public final class Framebuffer
         return depth;
     }
 
+    /**
+     * Returns the entity-id buffer itself, holding {@link Scene#UNTAGGED} or
+     * the id of the tagged instance that owns each pixel. Handed out raw for
+     * the same reason as {@link #colorBuffer()}.
+     *
+     * <p>{@link OutlinePass} is its only intended reader. See the class
+     * Javadoc for why sampling it for hit detection is a desync.</p>
+     *
+     * @return the live entity-id buffer
+     */
+    public int[] entityIdBuffer()
+    {
+        return entityIds;
+    }
+
     // ---- clearing ----
 
     /**
-     * Clears colour to opaque black and depth to {@link #DEPTH_CLEAR}. Runs
-     * every frame and allocates nothing.
+     * Clears colour to opaque black, depth to {@link #DEPTH_CLEAR} and entity
+     * ids to {@link Scene#UNTAGGED}. Runs every frame and allocates nothing.
      */
     public void clear()
     {
@@ -382,8 +426,13 @@ public final class Framebuffer
     }
 
     /**
-     * Clears colour to the given RGBA8888 value and depth to
-     * {@link #DEPTH_CLEAR}. Allocates nothing.
+     * Clears colour to the given RGBA8888 value, depth to
+     * {@link #DEPTH_CLEAR} and entity ids to {@link Scene#UNTAGGED}.
+     * Allocates nothing.
+     *
+     * <p>All three, because this is the frame-start clear: an id surviving
+     * from the previous frame draws an outline around where an entity
+     * <i>was</i>.</p>
      *
      * @param rgba packed {@code 0xRRGGBBAA} clear colour
      */
@@ -391,6 +440,7 @@ public final class Framebuffer
     {
         clearColor(rgba);
         clearDepth();
+        clearEntityIds();
     }
 
     /**
@@ -406,11 +456,38 @@ public final class Framebuffer
         Arrays.fill(color, rgba);
     }
 
-    /** Clears the depth buffer to {@link #DEPTH_CLEAR}. Allocates nothing. */
+    /**
+     * Clears the depth buffer to {@link #DEPTH_CLEAR}, and nothing else.
+     * Allocates nothing.
+     *
+     * <p>Deliberately <b>not</b> an id clear as well. Its one production
+     * caller is the viewmodel pass separator, which runs after
+     * {@link OutlinePass} has already consumed the ids and before a pass whose
+     * instances are all {@link Scene#UNTAGGED}. Clearing them there would be a
+     * second full-frame memset — 3.7 MB at 720p — that no later read could
+     * distinguish from not doing it. Callers that want the third buffer
+     * cleared say {@link #clearEntityIds()}.</p>
+     */
     public void clearDepth()
     {
         requireReady("clearDepth()");
         Arrays.fill(depth, DEPTH_CLEAR);
+    }
+
+    /**
+     * Clears the entity-id buffer to {@link Scene#UNTAGGED}. Allocates
+     * nothing.
+     *
+     * <p>Whole-buffer rather than per-tile. Measured at 1280x720 the fill is
+     * far below the cost of the frame it precedes, and a per-tile clear folded
+     * into the raster pass would be wrong in the one case that matters: a pass
+     * that culls every triangle dispatches no tiles, so the previous frame's
+     * ids would survive and outline an entity that is no longer there.</p>
+     */
+    public void clearEntityIds()
+    {
+        requireReady("clearEntityIds()");
+        Arrays.fill(entityIds, Scene.UNTAGGED);
     }
 
     // ---- single-pixel access (debug, tests, presentation checks) ----
@@ -473,6 +550,36 @@ public final class Framebuffer
     {
         checkPixel(x, y);
         return depth[index(x, y)];
+    }
+
+    /**
+     * Writes one entity id. Bounds-checked; not for the inner loop.
+     *
+     * @param x column, in {@code [0, width)}
+     * @param y row, in {@code [0, height)}
+     * @param entityId the id to store, or {@link Scene#UNTAGGED}
+     * @throws IllegalArgumentException if the coordinate is outside the
+     *     visible rectangle
+     */
+    public void setEntityId(final int x, final int y, final int entityId)
+    {
+        checkPixel(x, y);
+        entityIds[index(x, y)] = entityId;
+    }
+
+    /**
+     * Reads one entity id. Bounds-checked; not for the inner loop.
+     *
+     * @param x column, in {@code [0, width)}
+     * @param y row, in {@code [0, height)}
+     * @return the stored id, or {@link Scene#UNTAGGED}
+     * @throws IllegalArgumentException if the coordinate is outside the
+     *     visible rectangle
+     */
+    public int entityIdAt(final int x, final int y)
+    {
+        checkPixel(x, y);
+        return entityIds[index(x, y)];
     }
 
     // ---- tile geometry ----
@@ -827,6 +934,9 @@ public final class Framebuffer
         // Sanctioned allocation — STYLE.md § 13.4, README § 11(a).
         this.color = new int[(int) elements];
         this.depth = new float[(int) elements];
+        // Java zeroes a fresh int[], and Scene.UNTAGGED is zero, so a
+        // just-allocated id buffer is already cleared.
+        this.entityIds = new int[(int) elements];
         this.width = newWidth;
         this.height = newHeight;
         this.strideInPixels = newStride;

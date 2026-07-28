@@ -35,6 +35,15 @@ final class SceneTest
     /** A scale factor that is not one. */
     private static final float SCALE = 2.0f;
 
+    /** An entity id standing in for one player. */
+    private static final int PLAYER_ID = 7;
+
+    /** A second, unrelated entity id. */
+    private static final int OTHER_ID = 9;
+
+    /** An id far outside any plausible instance-index range. */
+    private static final int SPARSE_HIGH_ID = 1_000_000;
+
     @Nested
     @DisplayName("contents")
     class Contents
@@ -114,6 +123,118 @@ final class SceneTest
 
             assertThat(first.worldInstanceCount()).isEqualTo(1);
             assertThat(builder.build().worldInstanceCount()).isEqualTo(2);
+        }
+    }
+
+    @Nested
+    @DisplayName("entity ids")
+    class EntityIds
+    {
+        @Test
+        @DisplayName("an instance added without an id is UNTAGGED, and the scene knows it")
+        void shouldDefaultToUntagged()
+        {
+            // The gate the whole outline feature hangs off: a scene that tags
+            // nothing must be able to say so before any work is done, so the
+            // renderer can skip the id clear, the per-pixel id write and the
+            // outline dispatch entirely.
+            final Scene scene = Scene.builder()
+                .addWorldInstance(quad(), Mat4.identity())
+                .build();
+
+            assertThat(Scene.UNTAGGED).isZero();
+            assertThat(scene.worldEntityId(0)).isEqualTo(Scene.UNTAGGED);
+            assertThat(scene.hasTaggedEntities()).isFalse();
+        }
+
+        @Test
+        @DisplayName("a tagged instance keeps its id, and untagged neighbours keep zero")
+        void shouldCarryAnEntityIdPerInstance()
+        {
+            final Scene scene = Scene.builder()
+                .addWorldInstance(quad(), Mat4.identity(), PLAYER_ID)
+                .addWorldInstance(quad(), Mat4.translation(1.0f, 0.0f, 0.0f))
+                .addWorldInstance(quad(), Mat4.translation(2.0f, 0.0f, 0.0f), OTHER_ID)
+                .build();
+
+            assertThat(scene.worldEntityId(0)).isEqualTo(PLAYER_ID);
+            assertThat(scene.worldEntityId(1)).isEqualTo(Scene.UNTAGGED);
+            assertThat(scene.worldEntityId(2)).isEqualTo(OTHER_ID);
+            assertThat(scene.hasTaggedEntities()).isTrue();
+        }
+
+        @Test
+        @DisplayName("ids need not be dense or ordered — they are opaque")
+        void shouldNotRequireIdsToBeIndices()
+        {
+            // Explicitly protected because the obvious implementation of an
+            // outline is an array indexed by id, and that would make this
+            // scene allocate a million-entry table.
+            final Scene scene = Scene.builder()
+                .addWorldInstance(quad(), Mat4.identity(), SPARSE_HIGH_ID)
+                .addWorldInstance(quad(), Mat4.translation(1.0f, 0.0f, 0.0f), 1)
+                .build();
+
+            assertThat(scene.worldEntityId(0)).isEqualTo(SPARSE_HIGH_ID);
+            assertThat(scene.worldEntityId(1)).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("two instances may share one id — an entity of several models")
+        void shouldAllowTwoInstancesToShareAnId()
+        {
+            // This is what stops OutlinePass drawing a seam through a
+            // character's own joints, so it must not be rejected as a
+            // duplicate.
+            final Scene scene = Scene.builder()
+                .addWorldInstance(quad(), Mat4.identity(), PLAYER_ID)
+                .addWorldInstance(quad(), Mat4.translation(0.5f, 0.0f, 0.0f), PLAYER_ID)
+                .build();
+
+            assertThat(scene.worldEntityId(0)).isEqualTo(scene.worldEntityId(1));
+        }
+
+        @Test
+        @DisplayName("passing UNTAGGED explicitly is exactly the two-argument overload")
+        void shouldTreatAnExplicitUntaggedAsUntagged()
+        {
+            final Scene scene = Scene.builder()
+                .addWorldInstance(quad(), Mat4.identity(), Scene.UNTAGGED)
+                .build();
+
+            assertThat(scene.hasTaggedEntities()).isFalse();
+        }
+
+        @Test
+        @DisplayName("a view instance can never be tagged, so a viewmodel is never outlined")
+        void shouldNeverTagAViewInstance()
+        {
+            // There is deliberately no addViewInstance overload taking an id.
+            // The held weapon fills a large part of the screen and outlining
+            // it would put an unbroken band down the side of every frame.
+            final Scene scene = Scene.builder()
+                .addViewInstance(quad(), Mat4.translation(0.0f, 0.0f, 1.0f))
+                .build();
+
+            assertThat(scene.hasTaggedEntities()).isFalse();
+        }
+
+        @Test
+        @DisplayName("a negative id is refused — ids are positive or UNTAGGED")
+        void shouldRefuseANegativeEntityId()
+        {
+            final Scene.Builder builder = Scene.builder();
+
+            assertThatThrownBy(() -> builder.addWorldInstance(quad(), Mat4.identity(), -1))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("entityId");
+        }
+
+        @Test
+        @DisplayName("the empty scene tags nothing")
+        void shouldReportTheEmptySceneAsUntagged()
+        {
+            assertThat(Scene.EMPTY.hasTaggedEntities()).isFalse();
         }
     }
 

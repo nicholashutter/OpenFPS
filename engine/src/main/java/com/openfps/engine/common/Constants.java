@@ -51,6 +51,24 @@ public final class Constants
     /** Player radius in map units (fixed-point). */
     public static final int PLAYER_RADIUS = 16 * MAP_SCALE;
 
+    /**
+     * Player height in map units (fixed-point) — the standing box from feet to
+     * crown, 56 units.
+     *
+     * <p>This completes a set rather than introducing a number. DOOM's player
+     * is 16 units in radius, 56 tall, with the view 41 up; this project already
+     * carried the first as {@link #PLAYER_RADIUS} and the third as
+     * {@code PlayerController.EYE_HEIGHT_UNITS}, and the middle one only became
+     * necessary when something other than the local player needed a body — a
+     * hitbox to shoot at, and a character model to scale.
+     *
+     * <p>Both of those consumers must agree. A model scaled to one height and a
+     * hitbox built at another gives shots that pass through a visible chest, or
+     * connect with empty air beside a shoulder, and nothing in a screenshot
+     * would show it. {@code DemoSceneTest} asserts the two agree.
+     */
+    public static final int PLAYER_HEIGHT = 56 * MAP_SCALE;
+
     /** Maximum open space height in map units (fixed-point). */
     public static final int MAX_OPEN_HEIGHT = 128 * MAP_SCALE;
 

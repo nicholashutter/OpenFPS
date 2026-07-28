@@ -48,19 +48,38 @@ import org.slf4j.LoggerFactory;
  * cursor is <b>caught</b> ({@link Input#setCursorCatched}), so capture is not
  * a nicety here — it is the mechanism.</p>
  *
- * <h2>Cursor capture, and getting back out</h2>
+ * <h2>Cursor capture follows the UI state, not the mouse</h2>
  *
- * <p>The window starts <b>uncaught</b>, so the main menu is clickable the
- * moment it appears. A left click inside the window catches the cursor and
- * mouse-look begins. <b>Escape releases it</b> and clicking again re-catches
- * it. A captured cursor with no way out is a window the user cannot close,
- * cannot alt-tab away from cleanly, and cannot reach the Quit button in;
- * Escape is what stops this adapter from being that.</p>
+ * <p>Capture is a consequence of {@link UiState} and nothing else. In
+ * {@link UiState#MENU} the cursor is free and visible so the buttons are
+ * clickable; in {@link UiState#PLAYING} it is caught and hidden so GLFW keeps
+ * reporting relative motion. Every frame this port reconciles the device
+ * against {@link UiStateMachine#state()}, which means the two can never
+ * disagree — the older design inferred "the game is running" from whether the
+ * cursor happened to be caught, so a click anywhere in the window started
+ * mouse-look while the menu was still on screen and still taking clicks.</p>
  *
- * <p>While the cursor is free the accumulator is held at rest, so dragging the
- * mouse across the menu does not bank rotation that fires off the instant the
- * player clicks back in, and a key held at the moment of release does not walk
- * the player into a wall while they are in another application.</p>
+ * <p><b>Escape leaves {@link UiState#PLAYING}</b>, which releases the cursor as
+ * a side effect of the transition. A captured cursor with no way out is a
+ * window the user cannot close, cannot alt-tab away from cleanly, and cannot
+ * reach the Quit button in; Escape is what stops this adapter from being
+ * that.</p>
+ *
+ * <h2>Banked motion across a transition</h2>
+ *
+ * <p>Every state change clears the accumulator, before anything else and
+ * whether or not there is a window. That is the fix for a specific bug: the
+ * mouse moves hundreds of pixels crossing the menu to reach Start Game, and if
+ * those pixels are still banked when {@link UiState#PLAYING} begins, the first
+ * tic of play latches the lot and the player's view snaps round. The clear
+ * happens in {@link #syncUiState()}, which runs before the {@code Gdx.input}
+ * null check precisely so the behaviour is the same in a headless JVM and can
+ * be tested there. The first look sample after capture is discarded on top of
+ * that, because catching the cursor warps the pointer and the warp arrives as
+ * a delta.</p>
+ *
+ * <p>The same clear going the other way stops a key held at the moment of
+ * Escape from walking the player into a wall while they are in the menu.</p>
  *
  * Platform adapter — must not import from core engine packages.
  */
@@ -102,6 +121,22 @@ public final class GdxInputPort implements I_InputPort
      */
     private volatile boolean windowClosed;
 
+    /**
+     * Whether this port is looking at the menu or at the game.
+     *
+     * MUTABLE: replaced by {@link #bindUiState}. Defaults to a private machine
+     * parked in {@link UiState#MENU} so an unbound port — every windowless
+     * test — is never null and never captures anything.
+     */
+    private volatile UiStateMachine uiState = new UiStateMachine();
+
+    /**
+     * The UI state the device has already been reconciled with.
+     * MUTABLE: render thread only, compared against {@link #uiState} once per
+     * {@link #pollDevice()} so the transition work happens exactly once.
+     */
+    private UiState appliedState = UiState.MENU;
+
     /** Creates a port at the default sensitivity. */
     public GdxInputPort()
     {
@@ -130,8 +165,59 @@ public final class GdxInputPort implements I_InputPort
         latched = InputState.NEUTRAL;
         discardNextLook = false;
         windowClosed = false;
-        LOG.info("GdxInputPort initialized — click to capture the cursor, Escape to release "
-            + "(sensitivity {} rad/px)", accumulator.radiansPerPixel());
+        appliedState = uiState.state();
+        LOG.info("GdxInputPort initialized — Start Game captures the cursor, Escape returns to "
+            + "the menu (sensitivity {} rad/px)", accumulator.radiansPerPixel());
+    }
+
+    /**
+     * Names the UI state this port obeys.
+     *
+     * <p>Called once by {@link GdxFrameLoopListener}, which owns the machine
+     * because it is the thing that draws the menu. Until then the port has a
+     * private machine of its own so that a windowless test — and the null
+     * backend's lifecycle — never sees a null here.</p>
+     *
+     * <p>Binding also resets the reconciliation point and drops anything
+     * banked: whatever the previous machine was doing has nothing to say about
+     * the new one.</p>
+     *
+     * @param machine the UI state machine to follow; must not be null
+     */
+    public void bindUiState(final UiStateMachine machine)
+    {
+        if (machine == null)
+        {
+            throw new IllegalArgumentException("machine must not be null");
+        }
+        this.uiState = machine;
+        this.appliedState = machine.state();
+        accumulator.clearAll();
+    }
+
+    /**
+     * Returns the UI state machine this port follows. Never null.
+     *
+     * @return the bound machine, or the private default if none was bound
+     */
+    public UiStateMachine uiState()
+    {
+        return uiState;
+    }
+
+    /**
+     * Returns whether the cursor should currently be caught and hidden.
+     *
+     * <p>This is the port's <i>intent</i>, reconciled onto GLFW by the next
+     * {@link #pollDevice()}. It exists as a separate reading because the GLFW
+     * side needs a window and CI has none — the decision is testable, the
+     * {@code glfwSetInputMode} call is not.</p>
+     *
+     * @return true while {@link UiState#PLAYING} is in force
+     */
+    public boolean isCursorCaptureWanted()
+    {
+        return appliedState.capturesCursor();
     }
 
     @Override
@@ -214,7 +300,7 @@ public final class GdxInputPort implements I_InputPort
      * {@code GdxWindowPort} already owns the close flag, and it hears about
      * the title-bar X, {@code Gdx.app.exit()} and the menu's Quit button.
      * Duplicating that here would give the engine two disagreeing shutdown
-     * signals. Escape releases the cursor; it does not quit.
+     * signals. Escape returns to the menu; it does not quit.
      *
      * @return false
      */
@@ -228,22 +314,42 @@ public final class GdxInputPort implements I_InputPort
      * Reads the device once. Call from the LWJGL3 render thread, once per
      * frame, before the engine's frame callback.
      *
-     * <p>Headless — in tests, or before the application starts — {@code
-     * Gdx.input} is null and this does nothing, which is what leaves the port
-     * usable in a windowless JVM.</p>
+     * <p>The UI reconciliation happens first and unconditionally, so a
+     * transition clears banked input even in a JVM with no window. Everything
+     * after that needs {@code Gdx.input}; headless — in tests, or before the
+     * application starts — it is null and the device half is skipped, which is
+     * what leaves the port usable in a windowless JVM.</p>
      */
     public void pollDevice()
     {
+        syncUiState();
         final Input input = Gdx.input;
         if (input == null)
         {
             return;
         }
-        updateCursorCapture(input);
+        applyCursorMode(input);
+        if (!appliedState.capturesCursor())
+        {
+            // The menu is in front. The pointer belongs to the buttons, so bank
+            // nothing and forget anything still pending.
+            accumulator.clearAll();
+            return;
+        }
+        if (input.isKeyJustPressed(Input.Keys.ESCAPE))
+        {
+            // Leaving play. Do the whole handover now rather than next frame,
+            // so the cursor is free before the menu is drawn over it.
+            uiState.returnToMenu();
+            syncUiState();
+            applyCursorMode(input);
+            LOG.debug("Escape — back to the menu, cursor released");
+            return;
+        }
         if (!input.isCursorCatched())
         {
-            // Free cursor: the player is in the menu or another window. Bank
-            // nothing, and forget anything still pending.
+            // Asked for capture and did not get it: the window is not focused.
+            // Do not read a half-real device.
             accumulator.clearAll();
             return;
         }
@@ -257,28 +363,36 @@ public final class GdxInputPort implements I_InputPort
         return accumulator;
     }
 
-    // Escape lets go, a left click takes hold. Checked before anything else so
-    // a frame never both releases the cursor and banks a delta from it.
-    private void updateCursorCapture(final Input input)
+    // Notices that the UI moved and pays for it once. Deliberately touches no
+    // platform API: this is the half that has to run headless, because it is
+    // the half that stops menu mouse motion reaching the first tic of play.
+    private void syncUiState()
     {
-        if (input.isCursorCatched())
+        final UiState current = uiState.state();
+        if (current == appliedState)
         {
-            if (input.isKeyJustPressed(Input.Keys.ESCAPE))
-            {
-                input.setCursorCatched(false);
-                accumulator.clearAll();
-                LOG.debug("Cursor released — Escape");
-            }
             return;
         }
-        if (input.isButtonJustPressed(Input.Buttons.LEFT))
+        appliedState = current;
+        // Nothing gathered under the previous UI describes what the player
+        // wants under this one. Crossing into PLAYING that is a mouse sweep
+        // across the menu; crossing back it is a key still held at the moment
+        // Escape was pressed.
+        accumulator.clearAll();
+        // Capture warps the pointer to the window centre, so the first delta
+        // reported afterwards is the warp and not a hand movement.
+        discardNextLook = true;
+    }
+
+    // Makes GLFW agree with the UI state. Reconciled rather than toggled on the
+    // edge so a cursor released by something else — an alt-tab, a driver reset
+    // — is retaken on the next frame instead of leaving mouse-look dead.
+    private void applyCursorMode(final Input input)
+    {
+        final boolean shouldCatch = appliedState.capturesCursor();
+        if (input.isCursorCatched() != shouldCatch)
         {
-            input.setCursorCatched(true);
-            // The pointer is warped on capture, so the next frame's delta is
-            // that warp and not the player's hand. Throw it away.
-            discardNextLook = true;
-            accumulator.resetLook();
-            LOG.debug("Cursor captured — click");
+            input.setCursorCatched(shouldCatch);
         }
     }
 

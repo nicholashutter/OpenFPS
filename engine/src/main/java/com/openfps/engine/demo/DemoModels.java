@@ -80,6 +80,9 @@ public final class DemoModels
     /** Subdirectory of the model root holding the level kit. */
     public static final String LEVEL_DIRECTORY = "level";
 
+    /** Subdirectory of the model root holding the character models. */
+    public static final String CHARACTER_DIRECTORY = "character";
+
     /** File name of the viewmodel. */
     public static final String WEAPON_MODEL = "blaster-b.ofm";
 
@@ -99,6 +102,22 @@ public final class DemoModels
         "crate.ofm", "stairs.ofm", "shape-slope.ofm",
     };
 
+    /**
+     * The character models used as stand-in targets, three visibly different
+     * people from the Kenney Blocky Characters pack.
+     *
+     * <p>Three rather than one so the outline can be judged honestly: a single
+     * repeated model tells you nothing about whether two <em>adjacent</em>
+     * bodies read as two, which is the case the outline exists for. Three
+     * rather than eighteen because each one costs a private 1.4 MB copy of the
+     * same 512x512 atlas — {@code ModelFormat} has no shared-texture concept
+     * yet, so the whole pack would be ~25 MB of duplicated pixels.</p>
+     */
+    private static final String[] CHARACTER_FILES =
+    {
+        "character-a.ofm", "character-d.ofm", "character-h.ofm",
+    };
+
     private final Source source;
     private final ModelFormat floor;
     private final ModelFormat wall;
@@ -109,15 +128,18 @@ public final class DemoModels
     private final ModelFormat slope;
     private final ModelFormat room;
     private final ModelFormat weapon;
+    private final ModelFormat[] characters;
 
     // Takes ownership of an already-validated set. One of `floor` (kit) and
     // `room` (fallback) is non-null and the other is null; `source` says which.
     private DemoModels(final Source modelSource, final ModelFormat[] kit,
-        final ModelFormat fallbackRoom, final ModelFormat viewmodel)
+        final ModelFormat fallbackRoom, final ModelFormat viewmodel,
+        final ModelFormat[] people)
     {
         this.source = modelSource;
         this.room = fallbackRoom;
         this.weapon = viewmodel;
+        this.characters = people;
         if (kit == null)
         {
             this.floor = null;
@@ -159,13 +181,15 @@ public final class DemoModels
         }
 
         final ModelFormat viewmodel = loadWeapon(root);
+        final ModelFormat[] people = loadCharacters(root);
         final Path levelDirectory = root.resolve(LEVEL_DIRECTORY);
         final List<String> missing = missingKitFiles(levelDirectory);
         if (missing.isEmpty())
         {
             LOG.info("Demo level: REAL Kenney Prototype Kit, {} pieces from {}",
                 KIT_FILES.length, levelDirectory.toAbsolutePath());
-            return new DemoModels(Source.KENNEY_KIT, loadKit(levelDirectory), null, viewmodel);
+            return new DemoModels(Source.KENNEY_KIT, loadKit(levelDirectory), null, viewmodel,
+                people);
         }
 
         final Path fallback = root.resolve(FALLBACK_MODEL);
@@ -182,7 +206,7 @@ public final class DemoModels
             + " geometry, not Kenney art. The real kit is missing {} piece(s): {}. For the"
             + " intended demo run: {}", fallback.toAbsolutePath(), missing.size(),
             String.join(", ", missing), REGENERATE_COMMAND);
-        return new DemoModels(Source.GENERATED_ROOM, null, read(fallback), viewmodel);
+        return new DemoModels(Source.GENERATED_ROOM, null, read(fallback), viewmodel, people);
     }
 
     // The viewmodel, or null with a WARN. Absent art degrades the demo rather
@@ -198,6 +222,59 @@ public final class DemoModels
         }
         LOG.info("Demo weapon: REAL Kenney Blaster Kit model from {}", path.toAbsolutePath());
         return read(path);
+    }
+
+    /**
+     * The character models available as targets, never null, possibly empty.
+     *
+     * <p>Empty means the character pack was never staged. That degrades the
+     * demo to an empty room rather than ending it, exactly as a missing weapon
+     * does — the level and the characters come from different CC0 packs and
+     * either can be staged without the other.</p>
+     *
+     * @return a fresh array so a caller cannot mutate the shared set
+     */
+    public ModelFormat[] characters()
+    {
+        return characters.clone();
+    }
+
+    /**
+     * True when there is at least one character model to stand up as a target.
+     *
+     * @return whether {@link #characters()} has any entries
+     */
+    public boolean hasCharacters()
+    {
+        return characters.length > 0;
+    }
+
+    // The character models, or an empty array with a WARN. Absent art degrades
+    // the demo rather than ending it, so this never throws for a missing file.
+    // All-or-nothing per file: a partially staged pack loads what it has, since
+    // one target is enough to see the outline and hitscan working.
+    private static ModelFormat[] loadCharacters(final Path root)
+    {
+        final Path directory = root.resolve(CHARACTER_DIRECTORY);
+        final List<ModelFormat> found = new ArrayList<>();
+        for (final String name : CHARACTER_FILES)
+        {
+            final Path path = directory.resolve(name);
+            if (Files.isRegularFile(path))
+            {
+                found.add(read(path));
+            }
+        }
+        if (found.isEmpty())
+        {
+            LOG.warn("Demo characters: NONE. No character model found under {}, so the demo"
+                + " will have nothing to shoot at and the outline pass will not run."
+                + " Produce them with: {}", directory.toAbsolutePath(), REGENERATE_COMMAND);
+            return new ModelFormat[0];
+        }
+        LOG.info("Demo characters: {} of {} Kenney Blocky Characters models from {}",
+            found.size(), CHARACTER_FILES.length, directory.toAbsolutePath());
+        return found.toArray(new ModelFormat[0]);
     }
 
     // Which of the kit's files are not readable regular files, in declared order.

@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Java Version](https://img.shields.io/badge/Java-17%20LTS-ED8B00.svg)](https://adoptium.net/)
 [![Gradle](https://img.shields.io/badge/Gradle-8.13-02303A.svg)](https://gradle.org/)
-[![Tests](https://img.shields.io/badge/tests-1064%20passing-brightgreen.svg)](BUILD.md)
+[![Tests](https://img.shields.io/badge/tests-1239%20passing-brightgreen.svg)](BUILD.md)
 [![Status](https://img.shields.io/badge/status-pre--alpha-blue.svg)](PLAN.md)
 
 ## Overview
@@ -14,7 +14,7 @@ OpenFPS is a from-scratch FPS game engine written in Java 17, designed around th
 
 The engine is an **event queue processor**: subsystems communicate by publishing events to a shared bus, and a pool of N dedicated worker threads (N = logical CPU count / 2) consumes events and dispatches them to the target subsystem. Each subsystem is its own state machine. Every allocation goes through a single memory port.
 
-**Currently in pre-alpha.** The renderer is built and the demo is playable: a first-person view of a room with a held weapon, at 1280x720. 1064 tests passing, Checkstyle clean, build green.
+**Currently in pre-alpha.** The renderer is built and the demo is playable: a first-person view of a room with a held weapon, at 1280x720. 1239 tests passing, Checkstyle clean, build green.
 
 ## Key Design Decisions
 
@@ -261,7 +261,7 @@ audio → net → resource → memory`.
 
 ## Test Coverage
 
-**1064 tests, all passing.**
+**1239 tests, all passing.**
 
 | Module | Tests | Largest suites |
 |---|---|---|

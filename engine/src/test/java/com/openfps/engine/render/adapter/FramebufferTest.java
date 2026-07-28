@@ -316,6 +316,134 @@ final class FramebufferTest
     }
 
     @Nested
+    @DisplayName("entity id buffer")
+    class EntityIdBuffer
+    {
+        /** An entity id with no special bit pattern. */
+        private static final int TAG = 4242;
+
+        @Test
+        @DisplayName("it is a third parallel buffer of the same length and stride")
+        void shouldBeParallelToColourAndDepth()
+        {
+            // Same length and same stride is what lets the span loop reuse the
+            // one index it already computed for colour and depth.
+            final Framebuffer fb = ready(100, 10);
+
+            assertThat(fb.entityIdBuffer()).hasSameSizeAs(fb.colorBuffer());
+            assertThat(fb.entityIdBuffer()).hasSize(fb.pixelCount());
+        }
+
+        @Test
+        @DisplayName("a fresh buffer already reads UNTAGGED everywhere")
+        void shouldStartUntagged()
+        {
+            // Scene.UNTAGGED is zero precisely so that a just-allocated int[]
+            // needs no clear pass before the first frame.
+            assertThat(Scene.UNTAGGED).isZero();
+            assertThat(ready(64, 64).entityIdBuffer()).containsOnly(Scene.UNTAGGED);
+        }
+
+        @Test
+        @DisplayName("clear() clears ids too — a stale id is a ghost outline")
+        void shouldClearIdsWithTheWholeFrame()
+        {
+            // The frame-start clear. An id surviving into the next frame would
+            // outline where the entity WAS.
+            final Framebuffer fb = ready(32, 32);
+            fb.setEntityId(4, 4, TAG);
+            fb.clear(DISTINCT);
+
+            assertThat(fb.entityIdAt(4, 4)).isEqualTo(Scene.UNTAGGED);
+            assertThat(fb.entityIdBuffer()).containsOnly(Scene.UNTAGGED);
+        }
+
+        @Test
+        @DisplayName("clearDepth() leaves ids alone, so the viewmodel reset costs one memset")
+        void shouldNotClearIdsWhenOnlyDepthIsCleared()
+        {
+            // Deliberate, and the one place this implementation departs from
+            // "cleared whenever depth is cleared": clearDepth()'s production
+            // caller is the viewmodel pass separator, which runs AFTER the
+            // outline has consumed the ids and before a pass that writes none.
+            // Clearing them there is a second full-frame memset no later read
+            // can distinguish. The frame-start clear() above is what actually
+            // prevents ghosting.
+            final Framebuffer fb = ready(32, 32);
+            fb.setEntityId(4, 4, TAG);
+            fb.clearDepth();
+
+            assertThat(fb.depthAt(4, 4)).isEqualTo(Framebuffer.DEPTH_CLEAR);
+            assertThat(fb.entityIdAt(4, 4)).isEqualTo(TAG);
+        }
+
+        @Test
+        @DisplayName("clearEntityIds() clears ids and nothing else")
+        void shouldClearIdsOnItsOwn()
+        {
+            final Framebuffer fb = ready(32, 32);
+            fb.setPixel(4, 4, DISTINCT);
+            fb.setDepth(4, 4, 0.25f);
+            fb.setEntityId(4, 4, TAG);
+            fb.clearEntityIds();
+
+            assertThat(fb.entityIdAt(4, 4)).isEqualTo(Scene.UNTAGGED);
+            assertThat(fb.pixel(4, 4)).isEqualTo(DISTINCT);
+            assertThat(fb.depthAt(4, 4)).isEqualTo(0.25f);
+        }
+
+        @Test
+        @DisplayName("clearing repeatedly allocates nothing")
+        void shouldNotAllocateOnRepeatedIdClears()
+        {
+            final Framebuffer fb = ready(200, 120);
+            final int[] ids = fb.entityIdBuffer();
+            for (int frame = 0; frame < 100; frame++)
+            {
+                fb.clearEntityIds();
+            }
+            assertThat(fb.entityIdBuffer()).isSameAs(ids);
+        }
+
+        @Test
+        @DisplayName("single-pixel access round-trips and is bounds-checked")
+        void shouldRoundTripOnePixelAndRejectOutOfBounds()
+        {
+            final Framebuffer fb = ready(16, 16);
+            fb.setEntityId(15, 15, TAG);
+
+            assertThat(fb.entityIdAt(15, 15)).isEqualTo(TAG);
+            assertThat(fb.entityIdAt(0, 0)).isEqualTo(Scene.UNTAGGED);
+            assertThatThrownBy(() -> fb.entityIdAt(16, 0))
+                .isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> fb.setEntityId(0, 16, TAG))
+                .isInstanceOf(IllegalArgumentException.class);
+        }
+
+        @Test
+        @DisplayName("shutdown releases it with the other two")
+        void shouldReleaseTheIdBufferOnShutdown()
+        {
+            final Framebuffer fb = ready(16, 16);
+            fb.shutdown();
+
+            assertThat(fb.entityIdBuffer()).isNull();
+        }
+
+        @Test
+        @DisplayName("a resize reallocates it to the new pixel count")
+        void shouldResizeTheIdBufferWithTheFrame()
+        {
+            final Framebuffer fb = ready(64, 64);
+            fb.setEntityId(1, 1, TAG);
+            fb.resize(128, 32);
+
+            assertThat(fb.entityIdBuffer()).hasSize(fb.pixelCount());
+            assertThat(fb.entityIdBuffer()).containsOnly(Scene.UNTAGGED);
+        }
+    }
+
+    @Nested
     @DisplayName("tile geometry")
     class TileGeometry
     {
