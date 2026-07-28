@@ -84,4 +84,23 @@ public interface I_PlayerInput
      * @return the pitch delta in radians
      */
     float pitchDelta();
+
+    /**
+     * Returns whether the jump control was held during this tic.
+     *
+     * <p><b>This is on the interface because the controller integrates it</b>,
+     * which is the bar the class Javadoc sets — it is not an action flag passed
+     * through for someone else's benefit. Vertical position is part of the same
+     * movement integration as the horizontal axes, and the controller cannot
+     * compute it without knowing whether the player asked to leave the
+     * ground.</p>
+     *
+     * <p>A <i>level</i>, not an edge: true on every tic the control is held.
+     * {@code PlayerController} takes the rising edge itself, by refusing to jump
+     * unless the player is standing on something, so holding the key does not
+     * pogo.</p>
+     *
+     * @return true if the jump control was active during the sampled tic
+     */
+    boolean jump();
 }

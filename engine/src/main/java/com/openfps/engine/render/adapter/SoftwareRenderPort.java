@@ -389,6 +389,36 @@ public final class SoftwareRenderPort implements I_RenderPort
      */
     private volatile float[] worldTransforms;
 
+    /**
+     * Per-instance placement overrides, or null when the scene has none.
+     *
+     * <p>MUTABLE: the array is allocated by {@link #setScene}, and individual
+     * slots are replaced by {@link #setWorldTransform} from the game loop
+     * thread while the render workers read them. A slot holds null until
+     * something moves that instance, and {@link #packWorld} falls back to the
+     * {@link Scene}'s own transform for every null.</p>
+     *
+     * <p><b>This is how anything moves.</b> {@link Scene} is immutable and that
+     * is load-bearing — it is what makes rendering one allocate nothing and what
+     * lets it be shared across workers without a lock. But a bot walks a patrol,
+     * so <i>something</i> has to change per tic, and the two honest options were
+     * to rebuild the whole scene sixty times a second or to let a caller replace
+     * one instance's placement. Rebuilding costs a full {@code bindScene}:
+     * texture table, stream offsets, entity ids, buffer sizing, all of it, for a
+     * 295-instance room in which four bodies moved.</p>
+     *
+     * <p><b>The race is real and is deliberately tolerated.</b> A reference store
+     * into an array slot cannot tear, so a worker reads either the previous
+     * placement or the new one, never a half-written matrix. Which of the two it
+     * gets is a one-frame difference in where a bot is drawn — the same
+     * granularity the camera already has, since {@code setCamera} publishes a
+     * new immutable {@code Camera} on exactly the same terms. Taking
+     * {@code frameLock} to close it would serialise the game loop against
+     * rendering, which is a far worse trade for a frame of latency on a
+     * patrolling body.</p>
+     */
+    private volatile Mat4[] worldOverrides;
+
     /** The same for the view pass, packed view-to-clip. MUTABLE: rewritten per frame. */
     private volatile float[] viewTransforms;
 
@@ -713,6 +743,70 @@ public final class SoftwareRenderPort implements I_RenderPort
         return scene;
     }
 
+    /**
+     * Moves one world instance, without rebuilding the scene.
+     *
+     * <p>The seam that lets a body walk. {@link Scene} is immutable —
+     * deliberately, because that is what makes rendering one allocate nothing
+     * and share safely across workers — so a moving entity has to express itself
+     * somewhere else. This is that somewhere: an override slot the frame's
+     * transform packing consults instead of the scene's own placement.</p>
+     *
+     * <p><b>Cheap on purpose.</b> One reference store. Nothing is re-derived: the
+     * geometry, the texture table, the stream offsets and the entity id all
+     * belong to the instance rather than to its position, and none of them
+     * change when it moves. Compare {@link #setScene}, which rebuilds all of
+     * them and is the right call when the <i>set</i> of instances changes rather
+     * than where one of them is.</p>
+     *
+     * <p><b>Threading:</b> safe to call from the game loop thread while the
+     * render workers are mid-frame. A reference store cannot tear, so a worker
+     * sees either the old placement or the new one — never a partially written
+     * matrix — and the worst case is that one instance is drawn a frame behind.
+     * That is the same guarantee {@link #setCamera} already gives, and for the
+     * same reason: taking the frame lock here would serialise the simulation
+     * against rendering to remove a frame of latency on a walking body.</p>
+     *
+     * @param instanceIndex which world instance to move, in the order
+     *     {@link Scene} holds them
+     * @param modelToWorld its new placement, or null to return it to the
+     *     placement the scene was built with
+     * @throws IllegalStateException if no scene is bound
+     * @throws IndexOutOfBoundsException if the index is not a world instance
+     */
+    public void setWorldTransform(final int instanceIndex, final Mat4 modelToWorld)
+    {
+        final Mat4[] slots = worldOverrides;
+        if (slots == null)
+        {
+            throw new IllegalStateException("setWorldTransform() before setScene()");
+        }
+        if (instanceIndex < 0 || instanceIndex >= slots.length)
+        {
+            throw new IndexOutOfBoundsException("world instance " + instanceIndex
+                + " is outside 0.." + (slots.length - 1));
+        }
+        slots[instanceIndex] = modelToWorld;
+    }
+
+    /**
+     * Returns the override placing a world instance, or null when it still sits
+     * where the scene put it.
+     *
+     * @param instanceIndex which world instance to read
+     * @return the override transform, or null if none has been set
+     * @throws IllegalStateException if no scene is bound
+     */
+    public Mat4 worldTransformOverride(final int instanceIndex)
+    {
+        final Mat4[] slots = worldOverrides;
+        if (slots == null)
+        {
+            throw new IllegalStateException("worldTransformOverride() before setScene()");
+        }
+        return slots[instanceIndex];
+    }
+
     // Prepares each instance's derived tables and grows the geometry buffers if
     // this scene needs more than the last one did. Called under the lock.
     private void bindScene(final Scene newScene)
@@ -725,6 +819,9 @@ public final class SoftwareRenderPort implements I_RenderPort
         this.viewStarts = streamOffsets(hand);
         this.worldEntityIds = worldEntityIdsOf(newScene);
         this.worldTransforms = new float[world.length * Camera.WORLD_TO_CLIP_FLOATS];
+        // One slot per instance, all null: a scene starts entirely static and
+        // pays nothing for the override path until something is actually moved.
+        this.worldOverrides = new Mat4[newScene.worldInstanceCount()];
         this.viewTransforms = new float[hand.length * Camera.WORLD_TO_CLIP_FLOATS];
         this.worldInstances = world;
         this.viewInstances = hand;
@@ -1076,11 +1173,23 @@ public final class SoftwareRenderPort implements I_RenderPort
     private void packWorld(final Scene current, final Camera view, final int count)
     {
         final float[] slots = worldTransforms;
+        final Mat4[] moved = worldOverrides;
         for (int index = 0; index < count; index++)
         {
-            view.packModelToClip(current.worldTransform(index), slots,
+            view.packModelToClip(placementOf(current, moved, index), slots,
                 index * Camera.WORLD_TO_CLIP_FLOATS);
         }
+    }
+
+    // Where one world instance actually is this frame: its override if something
+    // has moved it, otherwise the placement the immutable Scene was built with.
+    private static Mat4 placementOf(final Scene current, final Mat4[] moved, final int index)
+    {
+        if (moved != null && moved[index] != null)
+        {
+            return moved[index];
+        }
+        return current.worldTransform(index);
     }
 
     // The same for the viewmodel, which is already in view space and therefore

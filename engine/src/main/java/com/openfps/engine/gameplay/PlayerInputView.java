@@ -92,6 +92,12 @@ public final class PlayerInputView implements I_PlayerInput
     }
 
     @Override
+    public boolean jump()
+    {
+        return source.jump();
+    }
+
+    @Override
     public String toString()
     {
         return "PlayerInputView{" + source + "}";

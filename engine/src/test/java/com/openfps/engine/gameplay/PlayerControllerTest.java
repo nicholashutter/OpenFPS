@@ -73,13 +73,21 @@ class PlayerControllerTest
         private final float strafe;
         private final float yaw;
         private final float pitch;
+        private final boolean jumping;
 
         private Input(final float forward, final float strafe, final float yaw, final float pitch)
+        {
+            this(forward, strafe, yaw, pitch, false);
+        }
+
+        private Input(final float forward, final float strafe, final float yaw, final float pitch,
+            final boolean jump)
         {
             this.forward = forward;
             this.strafe = strafe;
             this.yaw = yaw;
             this.pitch = pitch;
+            this.jumping = jump;
         }
 
         @Override
@@ -105,9 +113,17 @@ class PlayerControllerTest
         {
             return pitch;
         }
+
+        @Override
+        public boolean jump()
+        {
+            return jumping;
+        }
     }
 
     private static final Input NONE = new Input(0.0f, 0.0f, 0.0f, 0.0f);
+
+    private static final Input JUMP = new Input(0.0f, 0.0f, 0.0f, 0.0f, true);
 
     private static Input move(final float forward, final float strafe)
     {
@@ -553,10 +569,32 @@ class PlayerControllerTest
         @DisplayName("movement never changes the y coordinate")
         void shouldLeaveHeightUnchangedWhenMovingOnTheGroundPlane()
         {
-            final PlayerController player = new PlayerController(0.0f, 12.5f, 0.0f, 0.9f, 0.0f);
-            player.update(move(1.0f, 1.0f), ONE_SECOND);
+            final PlayerController grounded = new PlayerController(0.0f, 0.0f, 0.0f, 0.9f, 0.0f);
+            grounded.update(move(1.0f, 1.0f), ONE_SECOND);
 
-            assertThat(player.positionY()).isEqualTo(12.5f);
+            assertThat(grounded.positionY()).isEqualTo(0.0f);
+        }
+
+        @Test
+        @DisplayName("the walk axes contribute nothing to height, even in mid-air")
+        void shouldLeaveTheVerticalArcUntouchedWhenWalkingWhileAirborne()
+        {
+            // The stronger form of the test above, and the one that survived
+            // gravity landing. Comparing two runs from the same altitude
+            // separates "movement does not touch y" from "gravity does": a fixed
+            // spawn height can no longer be asserted, because falling is now
+            // correct behaviour, but the two arcs must still agree exactly.
+            final PlayerController walking = new PlayerController(0.0f, 200.0f, 0.0f, 0.9f, 0.0f);
+            final PlayerController still = new PlayerController(0.0f, 200.0f, 0.0f, 0.9f, 0.0f);
+
+            for (int tic = 0; tic < 30; tic++)
+            {
+                walking.update(move(1.0f, 1.0f), TIC_60HZ);
+                still.update(NONE, TIC_60HZ);
+            }
+
+            assertThat(walking.positionY()).isEqualTo(still.positionY());
+            assertThat(walking.positionY()).isLessThan(200.0f);
         }
 
         @Test
@@ -839,8 +877,11 @@ class PlayerControllerTest
         @DisplayName("leaves every field bit-identical")
         void shouldLeaveStateBitIdenticalWhenInputIsAllZero()
         {
+            // Feet ON the ground. Above it, zero input is correctly NOT a no-op
+            // any more — the player falls, which is what FallingAndJumping
+            // asserts. The invariant this test is about is horizontal drift.
             final PlayerController player =
-                new PlayerController(13.25f, -4.5f, 91.75f, 2.345f, -0.678f);
+                new PlayerController(13.25f, 0.0f, 91.75f, 2.345f, -0.678f);
             player.update(move(1.0f, 0.7f), TIC_60HZ);
             player.update(look(0.13f, 0.07f), TIC_60HZ);
 
@@ -861,6 +902,190 @@ class PlayerControllerTest
             player.update(NONE, TIC_60HZ);
 
             assertThat(snapshot(player)).isEqualTo(snapshot(new PlayerController()));
+        }
+    }
+
+    @Nested
+    @DisplayName("falling and jumping")
+    class FallingAndJumping
+    {
+        /** Tics of 60 Hz simulation to run — one second, comfortably past a landing. */
+        private static final int ONE_SECOND_OF_TICS = 60;
+
+        @Test
+        @DisplayName("a grounded player who presses jump leaves the floor")
+        void shouldLeaveTheFloorWhenJumpIsPressedOnTheGround()
+        {
+            final PlayerController player = new PlayerController();
+            assertThat(player.isOnGround()).isTrue();
+
+            player.update(JUMP, TIC_60HZ);
+
+            assertThat(player.positionY()).isGreaterThan(0.0f);
+            assertThat(player.isOnGround()).isFalse();
+        }
+
+        @Test
+        @DisplayName("the apex is JUMP_APEX_UNITS, to within one integration step")
+        void shouldReachTheDeclaredApexWhenJumping()
+        {
+            final PlayerController player = new PlayerController();
+            float peak = 0.0f;
+            for (int tic = 0; tic < ONE_SECOND_OF_TICS; tic++)
+            {
+                player.update(NONE, TIC_60HZ);
+                peak = StrictMath.max(peak, player.positionY());
+            }
+            // Jump on the first tic, not before the loop, so the peak search
+            // sees the whole arc.
+            final PlayerController jumper = new PlayerController();
+            jumper.update(JUMP, TIC_60HZ);
+            float jumpPeak = jumper.positionY();
+            for (int tic = 1; tic < ONE_SECOND_OF_TICS; tic++)
+            {
+                jumper.update(NONE, TIC_60HZ);
+                jumpPeak = StrictMath.max(jumpPeak, jumper.positionY());
+            }
+
+            assertThat(peak).as("a player who never jumps never leaves the floor").isEqualTo(0.0f);
+
+            // Semi-implicit Euler UNDERSHOOTS the analytic apex, by at most the
+            // distance one step of the launch velocity covers. Asserting that
+            // two-sided bound rather than a tolerance means the test states the
+            // integrator's actual error budget instead of a number tuned until
+            // it passed.
+            final float stepError = PlayerController.JUMP_SPEED_UNITS_PER_SECOND * TIC_60HZ;
+            assertThat(jumpPeak)
+                .isLessThanOrEqualTo(PlayerController.JUMP_APEX_UNITS)
+                .isGreaterThan(PlayerController.JUMP_APEX_UNITS - stepError);
+        }
+
+        @Test
+        @DisplayName("holding jump does not re-launch in mid-air")
+        void shouldNotRelaunchWhileAirborneWhenJumpIsHeld()
+        {
+            final PlayerController held = new PlayerController();
+            final PlayerController tapped = new PlayerController();
+
+            held.update(JUMP, TIC_60HZ);
+            tapped.update(JUMP, TIC_60HZ);
+            for (int tic = 1; tic < 20; tic++)
+            {
+                held.update(JUMP, TIC_60HZ);
+                tapped.update(NONE, TIC_60HZ);
+            }
+
+            // Identical arcs. If the level-triggered jump were not gated on
+            // being grounded, the held player would be re-launched every tic and
+            // would still be climbing.
+            assertThat(held.positionY()).isEqualTo(tapped.positionY());
+            assertThat(held.velocityY()).isEqualTo(tapped.velocityY());
+        }
+
+        @Test
+        @DisplayName("the player lands exactly on the ground plane, with no residual velocity")
+        void shouldLandExactlyOnTheGroundWhenTheArcCompletes()
+        {
+            final PlayerController player = new PlayerController();
+            player.update(JUMP, TIC_60HZ);
+            for (int tic = 1; tic < ONE_SECOND_OF_TICS; tic++)
+            {
+                player.update(NONE, TIC_60HZ);
+            }
+
+            // Exactly, not approximately. A residual fraction below the floor
+            // would be invisible and would make isOnGround false, silently
+            // refusing the next jump.
+            assertThat(player.positionY()).isEqualTo(PlayerController.GROUND_LEVEL_UNITS);
+            assertThat(player.velocityY()).isEqualTo(0.0f);
+            assertThat(player.isOnGround()).isTrue();
+        }
+
+        @Test
+        @DisplayName("a player spawned above the floor falls to it")
+        void shouldFallToTheFloorWhenSpawnedAboveIt()
+        {
+            final PlayerController player =
+                new PlayerController(5.0f, 500.0f, -9.0f, 0.0f, 0.0f);
+
+            for (int tic = 0; tic < ONE_SECOND_OF_TICS * 2; tic++)
+            {
+                player.update(NONE, TIC_60HZ);
+            }
+
+            assertThat(player.positionY()).isEqualTo(PlayerController.GROUND_LEVEL_UNITS);
+            // Falling is vertical only — nothing about gravity moves the player
+            // sideways, and a basis error here would be very hard to see.
+            assertThat(player.positionX()).isEqualTo(5.0f);
+            assertThat(player.positionZ()).isEqualTo(-9.0f);
+        }
+
+        @Test
+        @DisplayName("jump is refused in mid-air")
+        void shouldRefuseToJumpWhenAirborne()
+        {
+            final PlayerController player = new PlayerController();
+            player.update(JUMP, TIC_60HZ);
+            final float afterLaunch = player.velocityY();
+
+            player.update(JUMP, TIC_60HZ);
+
+            // Strictly slower than the tic before: gravity applied and no second
+            // launch replaced the velocity.
+            assertThat(player.velocityY()).isLessThan(afterLaunch);
+            assertThat(player.velocityY())
+                .isLessThan(PlayerController.JUMP_SPEED_UNITS_PER_SECOND);
+        }
+
+        @Test
+        @DisplayName("jumping does not change where a walk takes the player")
+        void shouldNotAlterHorizontalTravelWhenJumping()
+        {
+            final PlayerController walking = new PlayerController();
+            final PlayerController hopping = new PlayerController();
+
+            for (int tic = 0; tic < ONE_SECOND_OF_TICS; tic++)
+            {
+                walking.update(move(1.0f, 0.0f), TIC_60HZ);
+                hopping.update(new Input(1.0f, 0.0f, 0.0f, 0.0f, tic == 0), TIC_60HZ);
+            }
+
+            // No air control model and no air friction: this engine has neither,
+            // so the horizontal paths must be bit-identical. If one is ever
+            // added, this is the test that will say so.
+            assertThat(hopping.positionX()).isEqualTo(walking.positionX());
+            assertThat(hopping.positionZ()).isEqualTo(walking.positionZ());
+        }
+
+        @Test
+        @DisplayName("the launch speed is derived from the apex, not restated")
+        void shouldDeriveLaunchSpeedFromTheApexWhenComputingJumpSpeed()
+        {
+            final float expected = (float) StrictMath.sqrt(
+                2.0 * PlayerController.GRAVITY_UNITS_PER_SECOND_SQUARED
+                    * PlayerController.JUMP_APEX_UNITS);
+
+            assertThat(PlayerController.JUMP_SPEED_UNITS_PER_SECOND).isEqualTo(expected);
+        }
+
+        @Test
+        @DisplayName("two identical jump scripts give bit-identical arcs")
+        void shouldProduceBitIdenticalArcsWhenTheJumpScriptIsRepeated()
+        {
+            assertThat(jumpArc()).isEqualTo(jumpArc());
+        }
+
+        // One jump, sampled every tic, as raw bits.
+        private int[] jumpArc()
+        {
+            final PlayerController player = new PlayerController();
+            final int[] samples = new int[ONE_SECOND_OF_TICS];
+            for (int tic = 0; tic < ONE_SECOND_OF_TICS; tic++)
+            {
+                player.update(new Input(0.3f, -0.7f, 0.01f, 0.002f, tic == 0), TIC_60HZ);
+                samples[tic] = Float.floatToRawIntBits(player.positionY());
+            }
+            return samples;
         }
     }
 

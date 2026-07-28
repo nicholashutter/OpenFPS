@@ -10,20 +10,27 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
 
+import java.io.IOException;
+import java.nio.file.Path;
+
 import com.openfps.engine.core.FrameRate;
 import com.openfps.engine.core.GameConfig;
+import com.openfps.engine.gameplay.Bot;
+import com.openfps.engine.gameplay.Match;
 import com.openfps.engine.gameplay.PlayerController;
 import com.openfps.engine.hal.adapter.nulladapter.NullTimePort;
 import com.openfps.engine.hal.port.I_InputPort;
 import com.openfps.engine.hal.port.I_TimePort;
 import com.openfps.engine.hal.port.InputState;
+import com.openfps.engine.render.adapter.Mat4;
+import com.openfps.engine.render.adapter.ModelFormat;
 import com.openfps.engine.render.adapter.Scene;
 import com.openfps.engine.render.adapter.SoftwareRenderPort;
-import com.openfps.engine.render.adapter.ModelFormat;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  * Tests for the demo's per-tic loop — the join between input, the player and
@@ -298,6 +305,224 @@ final class DemoGameplayPortTest
             render.renderFrame(1);
 
             assertThat(render.lastCamera().eye().z()).isGreaterThan(first);
+        }
+    }
+
+    @Nested
+    @DisplayName("the bot handoff")
+    final class BotHandoff
+    {
+        /** Tics to run before checking placements. Past a quarter of every route. */
+        private static final int SETTLE_TICS = 130;
+
+        // The demo world, with all seven character models staged.
+        private static DemoScene world(final Path root) throws IOException
+        {
+            for (final String person : new String[] {"character-a.ofm", "character-d.ofm",
+                "character-h.ofm", "character-k.ofm", "character-n.ofm", "character-q.ofm",
+                "character-r.ofm"})
+            {
+                DemoModelFixture.write(
+                    root.resolve(DemoModels.CHARACTER_DIRECTORY).resolve(person));
+            }
+            for (final String piece : new String[] {"floor-square.ofm", "wall.ofm",
+                "wall-doorway.ofm", "column.ofm", "crate.ofm", "stairs.ofm", "shape-slope.ofm"})
+            {
+                DemoModelFixture.write(root.resolve(DemoModels.LEVEL_DIRECTORY).resolve(piece));
+            }
+            DemoModelFixture.write(
+                root.resolve(DemoModels.WEAPON_DIRECTORY).resolve(DemoModels.WEAPON_MODEL));
+            return DemoScene.build(DemoModels.load(root));
+        }
+
+        // The scene index of every bot, exactly as DesktopLauncher builds it.
+        private static int[] indicesOf(final DemoScene demo)
+        {
+            final int[] indices = new int[demo.botCount()];
+            for (int index = 0; index < indices.length; index++)
+            {
+                indices[index] = demo.botInstanceIndex(index);
+            }
+            return indices;
+        }
+
+        private static DemoGameplayPort portFor(final DemoScene demo,
+            final SoftwareRenderPort render, final Match round)
+        {
+            return new DemoGameplayPort(
+                new ScriptedInput(InputState.NEUTRAL), render, demo.spawnController(),
+                config(), round, indicesOf(demo));
+        }
+
+        @Test
+        @DisplayName("each bot's MODEL ends up where that bot's BODY is")
+        void shouldPlaceEveryBotsModelOnItsOwnBody(@TempDir final Path root) throws IOException
+        {
+            // The invariant this whole feature rests on, and the one a
+            // screenshot cannot establish: the body you SEE and the box the
+            // simulation TESTS are the same thing in the same place. They are
+            // joined by a single int — the scene instance index — and if that
+            // index is off by one, every model walks somebody else's patrol
+            // while the hitboxes stay put. You would shoot a visible bot and
+            // hit nothing, and see nothing wrong in any single frame.
+            final DemoScene demo = world(root);
+            final SoftwareRenderPort render = renderer();
+            render.resize(SURFACE, SURFACE);
+            render.setScene(demo.scene());
+
+            final Match round = demo.newMatch();
+            final DemoGameplayPort port = portFor(demo, render, round);
+            for (int tic = 0; tic <= SETTLE_TICS; tic++)
+            {
+                port.tick(tic);
+            }
+
+            final Bot[] roster = round.bots();
+            for (int index = 0; index < roster.length; index++)
+            {
+                final Mat4 placed = render.worldTransformOverride(demo.botInstanceIndex(index));
+                assertThat(placed)
+                    .as("bot %d's model was never placed", index)
+                    .isNotNull();
+                // Column 3 of a placement is its translation.
+                assertThat(placed.get(0, 3))
+                    .as("bot %d's model is not standing on bot %d's feet (x)", index, index)
+                    .isCloseTo(roster[index].positionX(), within(EPSILON));
+                assertThat(placed.get(2, 3))
+                    .as("bot %d's model is not standing on bot %d's feet (z)", index, index)
+                    .isCloseTo(roster[index].positionZ(), within(EPSILON));
+            }
+        }
+
+        @Test
+        @DisplayName("a moving bot's model moves with it")
+        void shouldMoveTheModelWhenTheBotWalks(@TempDir final Path root) throws IOException
+        {
+            final DemoScene demo = world(root);
+            final SoftwareRenderPort render = renderer();
+            render.resize(SURFACE, SURFACE);
+            render.setScene(demo.scene());
+
+            final Match round = demo.newMatch();
+            final DemoGameplayPort port = portFor(demo, render, round);
+
+            port.tick(0);
+            final int walker = firstMover(round);
+            final float startX = render
+                .worldTransformOverride(demo.botInstanceIndex(walker)).get(0, 3);
+
+            for (int tic = 1; tic <= SETTLE_TICS; tic++)
+            {
+                port.tick(tic);
+            }
+            final float laterX = render
+                .worldTransformOverride(demo.botInstanceIndex(walker)).get(0, 3);
+
+            assertThat(laterX)
+                .as("bot %d walks a route but its model never left the spot", walker)
+                .isNotEqualTo(startX);
+        }
+
+        @Test
+        @DisplayName("a sentry's model does not drift")
+        void shouldLeaveASentrysModelWhereItStands(@TempDir final Path root) throws IOException
+        {
+            // The other half of the test above. A model that moves when it
+            // should not is the same index bug seen from the other side.
+            final DemoScene demo = world(root);
+            final SoftwareRenderPort render = renderer();
+            render.resize(SURFACE, SURFACE);
+            render.setScene(demo.scene());
+
+            final Match round = demo.newMatch();
+            final DemoGameplayPort port = portFor(demo, render, round);
+            final int sentry = firstSentry(round);
+
+            port.tick(0);
+            final float startX = render
+                .worldTransformOverride(demo.botInstanceIndex(sentry)).get(0, 3);
+            final float startZ = render
+                .worldTransformOverride(demo.botInstanceIndex(sentry)).get(2, 3);
+
+            for (int tic = 1; tic <= SETTLE_TICS; tic++)
+            {
+                port.tick(tic);
+            }
+
+            assertThat(render.worldTransformOverride(demo.botInstanceIndex(sentry)).get(0, 3))
+                .isEqualTo(startX);
+            assertThat(render.worldTransformOverride(demo.botInstanceIndex(sentry)).get(2, 3))
+                .isEqualTo(startZ);
+        }
+
+        @Test
+        @DisplayName("a killed bot's model lies down")
+        void shouldTopplTheModelWhenABotIsKilled(@TempDir final Path root) throws IOException
+        {
+            final DemoScene demo = world(root);
+            final SoftwareRenderPort render = renderer();
+            render.resize(SURFACE, SURFACE);
+            render.setScene(demo.scene());
+
+            final Match round = demo.newMatch();
+            final DemoGameplayPort port = portFor(demo, render, round);
+            port.tick(0);
+
+            final int victim = firstSentry(round);
+            round.bots()[victim].damage(Bot.MAX_HEALTH);
+            port.tick(1);
+
+            // Column 1 is the image of the model's up axis. Standing, it is
+            // world up; fallen, it is horizontal.
+            final Mat4 down = render.worldTransformOverride(demo.botInstanceIndex(victim));
+            assertThat(down.get(1, 1))
+                .as("the body is still standing up")
+                .isCloseTo(0.0f, within(EPSILON));
+        }
+
+        @Test
+        @DisplayName("does not touch the renderer before a scene is bound")
+        void shouldSurviveTicsBeforeTheSceneExists(@TempDir final Path root) throws IOException
+        {
+            // The game loop publishes tics from the moment it starts, which on
+            // desktop is BEFORE the launcher calls setScene. Moving an instance
+            // then throws, and the throw surfaced as a subsystem error on tic 0
+            // of every run.
+            final DemoScene demo = world(root);
+            final SoftwareRenderPort render = renderer();
+            render.resize(SURFACE, SURFACE);
+
+            final DemoGameplayPort port = portFor(demo, render, demo.newMatch());
+
+            assertThatCode(() -> port.tick(0)).doesNotThrowAnyException();
+        }
+
+        // The first bot with a route that actually goes somewhere.
+        private static int firstMover(final Match round)
+        {
+            final Bot[] roster = round.bots();
+            for (int index = 0; index < roster.length; index++)
+            {
+                if (roster[index].pattern().moves())
+                {
+                    return index;
+                }
+            }
+            throw new IllegalStateException("the roster has no moving bot to test with");
+        }
+
+        // The first bot that holds still.
+        private static int firstSentry(final Match round)
+        {
+            final Bot[] roster = round.bots();
+            for (int index = 0; index < roster.length; index++)
+            {
+                if (!roster[index].pattern().moves())
+                {
+                    return index;
+                }
+            }
+            throw new IllegalStateException("the roster has no sentry to test with");
         }
     }
 }

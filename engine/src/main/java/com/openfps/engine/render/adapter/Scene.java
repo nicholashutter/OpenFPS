@@ -371,6 +371,26 @@ public final class Scene
         }
 
         /**
+         * Returns how many world instances have been added so far — which is
+         * also the index the next one will occupy.
+         *
+         * <p>Exists because an instance's index is the only handle anything has
+         * on it after the scene is built: {@code SoftwareRenderPort.setWorldTransform}
+         * addresses instances by position, so a caller adding a body it intends
+         * to move later has to know where it landed. Reading the count before
+         * the {@code add} call is how you learn that, and it is a great deal
+         * safer than counting the calls by hand — which is a running total in a
+         * loop, and is wrong the first time anyone inserts a floor tile above
+         * it.</p>
+         *
+         * @return the number of world instances collected so far
+         */
+        public int worldInstanceCount()
+        {
+            return world.size();
+        }
+
+        /**
          * Adds a model to the world pass.
          *
          * @param model the model to draw; must not be null and must have at

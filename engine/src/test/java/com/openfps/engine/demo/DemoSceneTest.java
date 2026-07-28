@@ -14,8 +14,11 @@ import java.io.IOException;
 import java.nio.file.Path;
 
 import com.openfps.engine.common.Constants;
+import com.openfps.engine.gameplay.Bot;
 import com.openfps.engine.gameplay.HitResult;
 import com.openfps.engine.gameplay.Hitscan;
+import com.openfps.engine.gameplay.Match;
+import com.openfps.engine.gameplay.MatchState;
 import com.openfps.engine.gameplay.PlayerController;
 import com.openfps.engine.gameplay.Target;
 import com.openfps.engine.render.adapter.Mat4;
@@ -88,11 +91,64 @@ final class DemoSceneTest
         return DemoModels.load(root);
     }
 
-    /** Builds a full kit plus the three character models, so targets are placed. */
+    /**
+     * Enough tics to sweep every bot through a full circuit of its route.
+     *
+     * <p>The longest period in {@code DemoScene} is 480 tics; this is comfortably
+     * past it, so a route that only leaves the room near the end of its cycle
+     * still gets caught.</p>
+     */
+    private static final int LONGEST_ROUTE_TICS = 600;
+
+    /** Every bot's hitbox where it currently stands, for a Hitscan sweep. */
+    private static Target[] hitboxesOf(final DemoScene demo)
+    {
+        final Bot[] roster = demo.bots();
+        final Target[] boxes = new Target[roster.length];
+        for (int index = 0; index < roster.length; index++)
+        {
+            boxes[index] = roster[index].hitbox();
+        }
+        return boxes;
+    }
+
+    // The compass bearing of a bot as seen from the spawn point, in radians.
+    // Two bots on nearly the same bearing overlap in screen space.
+    private static float bearingFromSpawn(final DemoScene demo, final Bot bot)
+    {
+        return (float) StrictMath.atan2(bot.positionX() - demo.spawnX(),
+            bot.positionZ() - demo.spawnZ());
+    }
+
+    // How wide a bot appears from the spawn, in radians, measured from its
+    // centre to its edge. A body is two radii across, so this is the small-angle
+    // ratio of one radius to the viewing distance.
+    private static float angularHalfWidth(final DemoScene demo, final Bot bot)
+    {
+        final float toX = bot.positionX() - demo.spawnX();
+        final float toZ = bot.positionZ() - demo.spawnZ();
+        final float distance = (float) StrictMath.sqrt(toX * toX + toZ * toZ);
+        return DemoScene.PLAYER_RADIUS_UNITS / distance;
+    }
+
+    // The determinant of a transform's upper-left 3x3 — negative means a mirror,
+    // which Scene refuses.
+    private static float determinantOf(final Mat4 matrix)
+    {
+        return matrix.get(0, 0)
+                * (matrix.get(1, 1) * matrix.get(2, 2) - matrix.get(1, 2) * matrix.get(2, 1))
+            - matrix.get(0, 1)
+                * (matrix.get(1, 0) * matrix.get(2, 2) - matrix.get(1, 2) * matrix.get(2, 0))
+            + matrix.get(0, 2)
+                * (matrix.get(1, 0) * matrix.get(2, 1) - matrix.get(1, 1) * matrix.get(2, 0));
+    }
+
+    /** Builds a full kit plus the seven character models, so bots are placed. */
     private static DemoModels kitWithCharacters(final Path root) throws IOException
     {
         for (final String person : new String[] {"character-a.ofm", "character-d.ofm",
-            "character-h.ofm"})
+            "character-h.ofm", "character-k.ofm", "character-n.ofm", "character-q.ofm",
+            "character-r.ofm"})
         {
             DemoModelFixture.write(root.resolve(DemoModels.CHARACTER_DIRECTORY)
                 .resolve(person));
@@ -160,16 +216,17 @@ final class DemoSceneTest
             final Vec3 eye = player.eyePosition();
             final Vec3 aim = player.forwardVector();
 
+            final Target[] boxes = hitboxesOf(demo);
             final HitResult result = new HitResult();
             final boolean connected = Hitscan.fire(eye.x(), eye.y(), eye.z(),
-                aim.x(), aim.y(), aim.z(), demo.targets(), demo.targetCount(), result);
+                aim.x(), aim.y(), aim.z(), boxes, boxes.length, result);
 
             assertThat(connected)
-                .as("the spawn faces +z down the room, and a target is placed on that bearing")
+                .as("the spawn faces +z down the room, and a bot is placed on that bearing")
                 .isTrue();
             assertThat(result.entityId())
-                .as("the nearest target on the spawn bearing is the first one placed")
-                .isEqualTo(DemoScene.FIRST_TARGET_ID);
+                .as("the nearest bot on the spawn bearing is the first one placed")
+                .isEqualTo(Match.FIRST_BOT_ENTITY_ID);
             assertThat(result.distance())
                 .as("hit somewhere in front of the shooter, not behind or at zero")
                 .isGreaterThan(0.0f);
@@ -184,21 +241,29 @@ final class DemoSceneTest
             // reachable with no inter-player collision. The consequence is that
             // a shooter listed among its own targets shoots itself every tic,
             // so the spawn must be clear of every box.
+            //
+            // Bots MOVE, so it is not enough that the spawn is clear at tic 0.
+            // A full circuit of the longest route is swept below.
             final DemoScene demo = DemoScene.build(kitWithCharacters(root));
-            for (final Target target : demo.targets())
+            for (int tic = 0; tic <= LONGEST_ROUTE_TICS; tic++)
             {
-                final boolean spawnInside = demo.spawnX() >= target.minX()
-                    && demo.spawnX() <= target.maxX()
-                    && demo.spawnZ() >= target.minZ()
-                    && demo.spawnZ() <= target.maxZ();
-                assertThat(spawnInside)
-                    .as("target %d must not contain the spawn point", target.entityId())
-                    .isFalse();
+                for (final Bot bot : demo.bots())
+                {
+                    bot.moveTo(tic);
+                    final Target box = bot.hitbox();
+                    final boolean spawnInside = demo.spawnX() >= box.minX()
+                        && demo.spawnX() <= box.maxX()
+                        && demo.spawnZ() >= box.minZ()
+                        && demo.spawnZ() <= box.maxZ();
+                    assertThat(spawnInside)
+                        .as("bot %d walked over the spawn point at tic %d", box.entityId(), tic)
+                        .isFalse();
+                }
             }
         }
 
         @Test
-        @DisplayName("every placed target is tagged, and the room around it is not")
+        @DisplayName("every placed bot is tagged, and the room around it is not")
         void shouldTagOnlyTheCharacters(@TempDir final Path root) throws IOException
         {
             final DemoScene demo = DemoScene.build(kitWithCharacters(root));
@@ -213,12 +278,12 @@ final class DemoSceneTest
                 }
             }
             assertThat(tagged)
-                .as("one tagged instance per hitbox — the outline and the shot agree on count")
-                .isEqualTo(demo.targetCount());
+                .as("one tagged instance per bot — the outline and the shot agree on count")
+                .isEqualTo(demo.botCount());
         }
 
         @Test
-        @DisplayName("no character art means no targets and nothing to outline")
+        @DisplayName("no character art means no opponents and nothing to outline")
         void shouldPlaceNoTargetsWithoutCharacterArt(@TempDir final Path root)
             throws IOException
         {
@@ -226,10 +291,228 @@ final class DemoSceneTest
             // the weapon's is. A demo with no people is still a demo.
             final DemoScene demo = DemoScene.build(kit(root));
 
-            assertThat(demo.targetCount()).isZero();
+            assertThat(demo.botCount()).isZero();
             assertThat(demo.scene().hasTaggedEntities())
                 .as("an untagged scene skips the outline pass entirely")
                 .isFalse();
+            assertThat(demo.newMatch().state())
+                .as("a room with nobody in it is won, not unwinnable")
+                .isEqualTo(MatchState.WON);
+        }
+    }
+
+    @Nested
+    @DisplayName("the bot roster")
+    final class Bots
+    {
+        @Test
+        @DisplayName("places exactly Match.DEFAULT_BOT_COUNT opponents, one per character model")
+        void shouldPlaceTheFullRosterWhenAllArtIsStaged(@TempDir final Path root)
+            throws IOException
+        {
+            final DemoScene demo = DemoScene.build(kitWithCharacters(root));
+
+            assertThat(demo.botCount()).isEqualTo(Match.DEFAULT_BOT_COUNT);
+            assertThat(demo.newMatch().state()).isEqualTo(MatchState.IN_PROGRESS);
+        }
+
+        @Test
+        @DisplayName("gives every bot a distinct entity id, none of them the player's")
+        void shouldGiveEveryBotADistinctIdWhenPlacing(@TempDir final Path root)
+            throws IOException
+        {
+            final DemoScene demo = DemoScene.build(kitWithCharacters(root));
+            final Bot[] roster = demo.bots();
+
+            for (int index = 0; index < roster.length; index++)
+            {
+                assertThat(roster[index].entityId())
+                    .as("no bot may hold the reserved player id")
+                    .isNotEqualTo(Match.PLAYER_ENTITY_ID);
+                for (int other = 0; other < index; other++)
+                {
+                    assertThat(roster[index].entityId()).isNotEqualTo(roster[other].entityId());
+                }
+            }
+            // Match's own constructor enforces this; that it accepts the roster
+            // is the end-to-end statement.
+            assertThat(demo.newMatch().botCount()).isEqualTo(roster.length);
+        }
+
+        @Test
+        @DisplayName("no route leaves the room, at any point in its cycle")
+        void shouldKeepEveryRouteInsideThePerimeter(@TempDir final Path root) throws IOException
+        {
+            // A bot that walks through a wall looks like a physics bug for a
+            // long time before anyone thinks to check the placement table. The
+            // wall is at half the room span and a body is one radius wide, so
+            // this is the exact limit rather than a comfortable margin.
+            final DemoScene demo = DemoScene.build(kitWithCharacters(root));
+            final float wall = DemoScene.ROOM_TILES * DemoScene.KIT_WORLD_SCALE * 0.5f;
+            final float limit = wall - DemoScene.PLAYER_RADIUS_UNITS;
+
+            for (int tic = 0; tic <= LONGEST_ROUTE_TICS; tic++)
+            {
+                for (final Bot bot : demo.bots())
+                {
+                    bot.moveTo(tic);
+                    assertThat(StrictMath.abs(bot.positionX()))
+                        .as("bot %d left the room on x at tic %d", bot.entityId(), tic)
+                        .isLessThanOrEqualTo(limit);
+                    assertThat(StrictMath.abs(bot.positionZ()))
+                        .as("bot %d left the room on z at tic %d", bot.entityId(), tic)
+                        .isLessThanOrEqualTo(limit);
+                }
+            }
+        }
+
+        @Test
+        @DisplayName("no two bots fire on the same tic")
+        void shouldStaggerTheWholeRosterWhenFiring(@TempDir final Path root) throws IOException
+        {
+            // Seven bots on one cadence with no offsets would volley together,
+            // which is both harder to survive and much harder to read than the
+            // same total rate spread out.
+            final DemoScene demo = DemoScene.build(kitWithCharacters(root));
+            final Bot[] roster = demo.bots();
+
+            for (int tic = 0; tic < Match.BOT_FIRE_INTERVAL_TICS * 2; tic++)
+            {
+                int firing = 0;
+                for (final Bot bot : roster)
+                {
+                    if (bot.wantsToFire(tic))
+                    {
+                        firing++;
+                    }
+                }
+                assertThat(firing).as("tic %d had %d bots fire at once", tic, firing)
+                    .isLessThanOrEqualTo(1);
+            }
+        }
+
+        @Test
+        @DisplayName("each bot's recorded scene index really is its own model")
+        void shouldRecordTheCorrectSceneIndexForEachBot(@TempDir final Path root)
+            throws IOException
+        {
+            // The index is the ONLY handle the gameplay port has on a bot's
+            // model. Off by one and every body walks somebody else's patrol,
+            // while the hitboxes stay where they should be — so shots would
+            // connect with thin air next to a visible bot.
+            final DemoScene demo = DemoScene.build(kitWithCharacters(root));
+            final Scene scene = demo.scene();
+
+            for (int index = 0; index < demo.botCount(); index++)
+            {
+                assertThat(scene.worldEntityId(demo.botInstanceIndex(index)))
+                    .as("scene instance %d must carry bot %d's id",
+                        demo.botInstanceIndex(index), index)
+                    .isEqualTo(demo.bots()[index].entityId());
+            }
+        }
+
+        @Test
+        @DisplayName("two bots overlap in screen space from the spawn, which is the outline case")
+        void shouldPlaceTwoBotsThatOverlapFromTheSpawn(@TempDir final Path root)
+            throws IOException
+        {
+            // The case a naive outline merges into one blob. It has to be two
+            // SENTRIES: two moving bodies that happen to overlap on one frame
+            // prove nothing repeatable.
+            final DemoScene demo = DemoScene.build(kitWithCharacters(root));
+            final Bot[] roster = demo.bots();
+
+            assertThat(roster[1].pattern().moves()).isFalse();
+            assertThat(roster[2].pattern().moves())
+                .as("the second of the overlapping pair must also hold still")
+                .isFalse();
+
+            final float bearingOne = bearingFromSpawn(demo, roster[1]);
+            final float bearingTwo = bearingFromSpawn(demo, roster[2]);
+            final float separation = StrictMath.abs(bearingOne - bearingTwo);
+
+            // Overlap is a comparison of angles, not a guess at pixels: two
+            // bodies overlap in screen space exactly when their bearings differ
+            // by less than the sum of their angular half-widths. Deriving the
+            // threshold rather than picking one means it stays correct if the
+            // placements or the player radius move.
+            final float halfWidthOne = angularHalfWidth(demo, roster[1]);
+            final float halfWidthTwo = angularHalfWidth(demo, roster[2]);
+            assertThat(separation)
+                .as("bots 1 and 2 must overlap from the spawn: %f apart, %f + %f wide",
+                    separation, halfWidthOne, halfWidthTwo)
+                .isLessThan(halfWidthOne + halfWidthTwo);
+            // But not so completely that the far one is hidden — a fully
+            // occluded body tests nothing about telling two outlines apart.
+            assertThat(separation).isGreaterThan(0.0f);
+        }
+    }
+
+    @Nested
+    @DisplayName("a fallen body")
+    final class Fallen
+    {
+        @Test
+        @DisplayName("is a rotation, not a reflection, so Scene will accept it")
+        void shouldKeepAPositiveDeterminantWhenToppling()
+        {
+            // Scene refuses a negative determinant outright rather than let an
+            // instance render inside-out. The obvious way to lay a body down —
+            // scaling y by -1 — has determinant -s^3 and is a build failure
+            // waiting for whoever tries it.
+            final Mat4 fallen = DemoScene.fallenPlacement(10.0f, 0.0f, -5.0f, 1.1f, 3.0f);
+
+            assertThat(determinantOf(fallen)).isCloseTo(27.0f, within(1.0e-3f));
+        }
+
+        @Test
+        @DisplayName("puts the head along the heading, not behind it")
+        void shouldFallFaceFirstWhenToppling()
+        {
+            // The sign of the pitch is invisible in the matrix: the opposite
+            // rotation is equally valid, has the same determinant, and drops
+            // every body backwards. Where the head lands is what says it is
+            // right. At yaw 0 a standing model faces world +z, so a face-first
+            // fall puts its up axis — column 1 — along +z.
+            final Mat4 fallen = DemoScene.fallenPlacement(0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
+
+            assertThat(fallen.get(0, 1)).as("head x").isCloseTo(0.0f, within(EPSILON));
+            assertThat(fallen.get(1, 1)).as("head y — flat on the floor")
+                .isCloseTo(0.0f, within(EPSILON));
+            assertThat(fallen.get(2, 1)).as("head z — along the heading")
+                .isCloseTo(1.0f, within(EPSILON));
+        }
+
+        @Test
+        @DisplayName("lifts the body by half its height, so it does not sink into the floor")
+        void shouldLiftTheBodyWhenToppling()
+        {
+            // A model whose origin is at its feet, laid flat, has half its bulk
+            // below y = 0 unless it is raised. The correction is derived from
+            // the same constant the standing scale uses.
+            final Mat4 fallen = DemoScene.fallenPlacement(0.0f, 0.0f, 0.0f, 0.0f,
+                DemoScene.CHARACTER_WORLD_SCALE);
+
+            assertThat(fallen.get(1, 3)).isCloseTo(
+                DemoScene.PLAYER_HEIGHT_UNITS * 0.5f, within(EPSILON));
+        }
+
+        @Test
+        @DisplayName("a dead bot is drawn lying down and a live one standing")
+        void shouldSwitchPlacementWhenABotDies(@TempDir final Path root) throws IOException
+        {
+            final DemoScene demo = DemoScene.build(kitWithCharacters(root));
+            final Bot victim = demo.bots()[0];
+
+            final Mat4 standing = DemoScene.botPlacement(victim);
+            victim.damage(Bot.MAX_HEALTH);
+            final Mat4 down = DemoScene.botPlacement(victim);
+
+            assertThat(standing.get(1, 1)).as("standing: model up is world up")
+                .isCloseTo(DemoScene.CHARACTER_WORLD_SCALE, within(EPSILON));
+            assertThat(down.get(1, 1)).as("fallen: model up is horizontal")
+                .isCloseTo(0.0f, within(EPSILON));
         }
     }
 

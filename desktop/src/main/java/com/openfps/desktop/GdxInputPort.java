@@ -8,22 +8,35 @@ package com.openfps.desktop;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 
+import com.openfps.engine.hal.adapter.ActionBindings;
+import com.openfps.engine.hal.port.GameAction;
 import com.openfps.engine.hal.port.I_InputPort;
+import com.openfps.engine.hal.port.InputBinding;
 import com.openfps.engine.hal.port.InputState;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Real desktop input: mouse-look and WASD over libGDX's LWJGL3 backend.
+ * Real desktop input: mouse-look and movement over libGDX's LWJGL3 backend.
  *
  * <p>The class is deliberately two thin halves. This one knows about
- * {@code Gdx.input} and nothing else — which key constant means "forward",
- * how to catch the cursor, when GLFW's numbers are worth believing. All the
+ * {@code Gdx.input} and nothing else — how to ask GLFW whether a control is
+ * held, how to catch the cursor, when its numbers are worth believing. All the
  * arithmetic and all the cross-thread bookkeeping live in
  * {@link InputAccumulator}, which has no platform imports and is therefore the
  * part CI can actually test. Everything below the seam needs a human at a
  * keyboard.</p>
+ *
+ * <h2>It no longer knows which key means what</h2>
+ *
+ * <p>Every control comes from an {@link ActionBindings} table, looked up by
+ * {@link GameAction}. This class names no key constant at all — the desktop
+ * defaults live in {@link DesktopBindings}, and the table can be replaced at
+ * runtime by {@link #bindActions}. Before that split, "left mouse fires" was a
+ * literal in the middle of the polling loop below: nothing could report the
+ * scheme, nothing could change it, and the Android port would have had to
+ * duplicate this whole method with different numbers in it.</p>
  *
  * <h2>Two threads, two calls</h2>
  *
@@ -137,7 +150,16 @@ public final class GdxInputPort implements I_InputPort
      */
     private UiState appliedState = UiState.MENU;
 
-    /** Creates a port at the default sensitivity. */
+    /**
+     * Which controls trigger which actions.
+     *
+     * MUTABLE: replaced by {@link #bindActions}, read once per action per frame
+     * on the render thread. Volatile because a controls screen may swap the
+     * whole table while the game behind it is still being polled.
+     */
+    private volatile ActionBindings bindings = DesktopBindings.defaults();
+
+    /** Creates a port at the default sensitivity on the default control scheme. */
     public GdxInputPort()
     {
         this(new InputAccumulator(MOUSE_SENSITIVITY_RADIANS_PER_PIXEL));
@@ -158,6 +180,31 @@ public final class GdxInputPort implements I_InputPort
         this.accumulator = inputAccumulator;
     }
 
+    /**
+     * Replaces the control scheme this port reads.
+     *
+     * <p>Takes effect on the next {@link #pollDevice()}. The table is read, never
+     * written, so a caller may keep editing the same instance to rebind a single
+     * action without swapping it back in.</p>
+     *
+     * @param actionBindings the table to poll against; must not be null
+     * @throws IllegalArgumentException if {@code actionBindings} is null
+     */
+    public void bindActions(final ActionBindings actionBindings)
+    {
+        if (actionBindings == null)
+        {
+            throw new IllegalArgumentException("actionBindings must not be null");
+        }
+        this.bindings = actionBindings;
+    }
+
+    /** Returns the control scheme this port polls against. Never null. */
+    public ActionBindings actionBindings()
+    {
+        return bindings;
+    }
+
     @Override
     public void init()
     {
@@ -166,8 +213,16 @@ public final class GdxInputPort implements I_InputPort
         discardNextLook = false;
         windowClosed = false;
         appliedState = uiState.state();
-        LOG.info("GdxInputPort initialized — Start Game captures the cursor, Escape returns to "
-            + "the menu (sensitivity {} rad/px)", accumulator.radiansPerPixel());
+        final GameAction unbound = bindings.firstUnbound();
+        if (unbound != null)
+        {
+            // Not fatal — the game is playable with no sprint key. Loud anyway,
+            // because the same gap on LEAVE_MATCH is a captured cursor with no
+            // way out, and nothing else in the system would report it.
+            LOG.warn("No control is bound to {} — that action cannot be triggered", unbound);
+        }
+        LOG.info("GdxInputPort initialized — sensitivity {} rad/px, controls {}",
+            accumulator.radiansPerPixel(), bindings);
     }
 
     /**
@@ -336,7 +391,7 @@ public final class GdxInputPort implements I_InputPort
             accumulator.clearAll();
             return;
         }
-        if (input.isKeyJustPressed(Input.Keys.ESCAPE))
+        if (isJustPressed(input, GameAction.LEAVE_MATCH))
         {
             // Leaving play. Do the whole handover now rather than next frame,
             // so the cursor is free before the menu is drawn over it.
@@ -396,21 +451,119 @@ public final class GdxInputPort implements I_InputPort
         }
     }
 
-    // WASD to the movement axes; mouse-left / space / left-shift to the
-    // actions. Left control is accepted for fire as well so the port is usable
-    // on a trackpad.
+    // Every control this frame, resolved through the bindings table. No key
+    // constant appears here on purpose — see the class Javadoc.
     private void pollKeys(final Input input)
     {
         accumulator.setMovementKeys(
-            input.isKeyPressed(Input.Keys.W),
-            input.isKeyPressed(Input.Keys.S),
-            input.isKeyPressed(Input.Keys.A),
-            input.isKeyPressed(Input.Keys.D));
+            isHeld(input, GameAction.MOVE_FORWARD),
+            isHeld(input, GameAction.MOVE_BACKWARD),
+            isHeld(input, GameAction.STRAFE_LEFT),
+            isHeld(input, GameAction.STRAFE_RIGHT));
         accumulator.setActionKeys(
-            input.isButtonPressed(Input.Buttons.LEFT)
-                || input.isKeyPressed(Input.Keys.CONTROL_LEFT),
-            input.isKeyPressed(Input.Keys.SPACE),
-            input.isKeyPressed(Input.Keys.SHIFT_LEFT));
+            isHeld(input, GameAction.FIRE),
+            isHeld(input, GameAction.JUMP),
+            isHeld(input, GameAction.SPRINT));
+    }
+
+    /**
+     * Answers whether one physical control is currently active.
+     *
+     * <p>The seam that lets {@link #isAnyActive} be tested at all. In production
+     * it closes over {@code Gdx.input} and forwards to {@code isKeyPressed} or
+     * {@code isButtonPressed}; in a test it is two lines that report a fixed set
+     * as down. Without it, "does any bound control trigger this action" — which
+     * is real logic, with a real off-by-one available — would only be
+     * exercisable by a human at a keyboard.</p>
+     */
+    interface ControlProbe
+    {
+        /**
+         * Returns whether the given control is active right now.
+         *
+         * @param binding the control to test; never null
+         * @return true if it is down
+         */
+        boolean isActive(InputBinding binding);
+    }
+
+    /**
+     * Returns whether any control bound to an action is active.
+     *
+     * <p><b>Any, not all.</b> Multiple bindings are alternates rather than a
+     * chord: fire is left mouse <i>or</i> left control, and requiring both would
+     * turn the trackpad alternate from a convenience into a way of making the
+     * mouse stop working.</p>
+     *
+     * <p>An unbound action reads as inactive, which is both the honest answer
+     * and the safe one — a player who has cleared their sprint key simply never
+     * sprints, rather than sprinting always.</p>
+     *
+     * @param table the control scheme; must not be null
+     * @param action the action to test; must not be null
+     * @param probe answers for one control at a time; must not be null
+     * @return true if at least one bound control is active
+     */
+    static boolean isAnyActive(final ActionBindings table, final GameAction action,
+        final ControlProbe probe)
+    {
+        final InputBinding[] bound = table.bindingsFor(action);
+        for (int index = 0; index < bound.length; index++)
+        {
+            if (probe.isActive(bound[index]))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Held: true for every frame the control is down.
+    private boolean isHeld(final Input input, final GameAction action)
+    {
+        return isAnyActive(bindings, action, binding -> isDown(input, binding));
+    }
+
+    // Edge: true on the single frame a control goes down.
+    //
+    // Edge rather than level, because the actions that use this are toggles:
+    // leaving the match on "held" would fire again every frame the key stayed
+    // down and bounce the player straight back out of the menu.
+    private boolean isJustPressed(final Input input, final GameAction action)
+    {
+        return isAnyActive(bindings, action, binding -> wentDown(input, binding));
+    }
+
+    // Dispatches one binding onto the right GLFW query. The two device kinds
+    // this port can answer are keys and mouse buttons; a touch region or a
+    // gamepad binding in a desktop table reads as not-down rather than
+    // throwing, so a shared scheme across platforms degrades instead of
+    // crashing.
+    private static boolean isDown(final Input input, final InputBinding binding)
+    {
+        if (binding.source() == InputBinding.Source.KEY)
+        {
+            return input.isKeyPressed(binding.code());
+        }
+        if (binding.source() == InputBinding.Source.MOUSE_BUTTON)
+        {
+            return input.isButtonPressed(binding.code());
+        }
+        return false;
+    }
+
+    // The edge-triggered counterpart of isDown.
+    private static boolean wentDown(final Input input, final InputBinding binding)
+    {
+        if (binding.source() == InputBinding.Source.KEY)
+        {
+            return input.isKeyJustPressed(binding.code());
+        }
+        if (binding.source() == InputBinding.Source.MOUSE_BUTTON)
+        {
+            return input.isButtonJustPressed(binding.code());
+        }
+        return false;
     }
 
     // One frame of relative motion, in screen orientation. The accumulator

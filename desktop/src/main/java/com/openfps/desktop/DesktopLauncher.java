@@ -197,12 +197,24 @@ public final class DesktopLauncher
         {
             return new NullGameplayPort();
         }
-        // demo.targets() is the OTHER bodies. The local player is deliberately
+        // The match holds the OTHER bodies. The local player is deliberately
         // absent from it: Hitscan treats a ray origin inside a box as a hit at
         // distance zero, so a shooter listed among its own targets would shoot
         // itself on every trigger pull.
         return new DemoGameplayPort(input, holder.renderer(), demo.spawnController(), config,
-            demo.targets());
+            demo.newMatch(), botInstanceIndices(demo));
+    }
+
+    // Where each bot's model sits among the scene's world instances, so the
+    // gameplay port can move it as the bot walks its patrol.
+    private static int[] botInstanceIndices(final DemoScene demo)
+    {
+        final int[] indices = new int[demo.botCount()];
+        for (int index = 0; index < indices.length; index++)
+        {
+            indices[index] = demo.botInstanceIndex(index);
+        }
+        return indices;
     }
 
     // Hands the renderer the scene it will draw for the rest of the run. Built

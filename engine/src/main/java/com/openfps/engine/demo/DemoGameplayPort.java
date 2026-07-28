@@ -8,11 +8,11 @@ package com.openfps.engine.demo;
 import java.util.concurrent.locks.ReentrantLock;
 
 import com.openfps.engine.core.GameConfig;
-import com.openfps.engine.gameplay.HitResult;
-import com.openfps.engine.gameplay.Hitscan;
+import com.openfps.engine.gameplay.Bot;
+import com.openfps.engine.gameplay.Match;
+import com.openfps.engine.gameplay.MatchState;
 import com.openfps.engine.gameplay.PlayerController;
 import com.openfps.engine.gameplay.PlayerInputView;
-import com.openfps.engine.gameplay.Target;
 import com.openfps.engine.gameplay.port.I_GameplayPort;
 import com.openfps.engine.hal.port.I_InputPort;
 import com.openfps.engine.render.adapter.SoftwareRenderPort;
@@ -122,28 +122,35 @@ public final class DemoGameplayPort implements I_GameplayPort
      */
     public static final int FIRE_INTERVAL_TICS = 12;
 
-    /** The shootable bodies. Never contains the shooter — see {@link #fireIfRequested}. */
-    private final Target[] targets;
+    /**
+     * The round in progress, or null when this port is just flying a camera
+     * around a room.
+     *
+     * <p>Null is the {@code --model=} case and the no-art case, and it is a
+     * legitimate state rather than a defect: the demo predates having anything
+     * to shoot at, and looking at one converted model in a window is still the
+     * quickest way to check a conversion.</p>
+     */
+    private final Match match;
 
     /**
-     * Reused across shots so firing allocates nothing per shot.
+     * The scene each bot's model occupies, in the same order as
+     * {@link Match#bots()}, or null when there is no match.
      *
-     * <p>Confined to {@link #tick}, which holds {@link #tickLock}, so this
-     * single instance is never read or written by two threads at once.</p>
+     * <p>This is what turns simulation state into something visible. A bot moves
+     * every tic; its model has to follow, and {@code SoftwareRenderPort}
+     * addresses world instances by position.</p>
      */
-    private final HitResult hit = new HitResult();
+    private final int[] botInstances;
 
     /** MUTABLE: tic index of the last shot, for the cooldown. Under the lock. */
     private long lastFireTic = Long.MIN_VALUE;
 
-    /** MUTABLE: shots fired, for the shutdown summary. */
-    private volatile long shotsFired;
-
-    /** MUTABLE: shots that connected, for the shutdown summary. */
-    private volatile long shotsHit;
+    /** MUTABLE: the match state already reported, so the result is logged once. */
+    private MatchState reportedState = MatchState.IN_PROGRESS;
 
     /**
-     * Creates the demo's gameplay port.
+     * Creates the demo's gameplay port with nothing to shoot at.
      *
      * @param input the HAL input port to latch each tic; must not be null
      * @param renderPort the renderer to aim; must not be null
@@ -154,28 +161,37 @@ public final class DemoGameplayPort implements I_GameplayPort
     public DemoGameplayPort(final I_InputPort input, final SoftwareRenderPort renderPort,
         final PlayerController playerController, final GameConfig config)
     {
-        this(input, renderPort, playerController, config, new Target[0]);
+        this(input, renderPort, playerController, config, null, null);
     }
 
     /**
-     * Creates the demo gameplay port with shootable targets.
+     * Creates the demo gameplay port for a round against bots.
      *
      * @param input the HAL input port to latch each tic; must not be null
      * @param renderPort the renderer to aim; must not be null
      * @param playerController the player to move; must not be null
      * @param config the running configuration; must not be null
-     * @param shootable the bodies this player can hit. Must not be null and
-     *     <b>must not contain a box around this player</b>: a ray origin inside
-     *     a box is a hit at distance zero, so a shooter listed among its own
-     *     targets shoots itself on every trigger pull
+     * @param round the match to drive, or null for a camera-only demo.
+     *     <b>Its bots must not include a box around this player</b>: a ray
+     *     origin inside a box is a hit at distance zero, so a shooter listed
+     *     among its own targets shoots itself on every trigger pull
+     * @param botInstanceIndices where each bot's model sits among the scene's
+     *     world instances, in {@code round.bots()} order; must be non-null and
+     *     at least as long as the roster whenever {@code round} is given
      */
     public DemoGameplayPort(final I_InputPort input, final SoftwareRenderPort renderPort,
         final PlayerController playerController, final GameConfig config,
-        final Target[] shootable)
+        final Match round, final int[] botInstanceIndices)
     {
-        if (shootable == null)
+        if (round != null && botInstanceIndices == null)
         {
-            throw new IllegalArgumentException("shootable must not be null");
+            throw new IllegalArgumentException(
+                "a match needs the scene index of each of its bots");
+        }
+        if (round != null && botInstanceIndices.length < round.botCount())
+        {
+            throw new IllegalArgumentException("got " + botInstanceIndices.length
+                + " scene indices for " + round.botCount() + " bots");
         }
         if (input == null)
         {
@@ -197,20 +213,45 @@ public final class DemoGameplayPort implements I_GameplayPort
         this.renderer = renderPort;
         this.controller = playerController;
         this.deltaSeconds = (float) (config.nanosPerTic() / NANOS_PER_SECOND);
-        this.targets = shootable.clone();
+        this.match = round;
+        if (round == null)
+        {
+            this.botInstances = null;
+        }
+        else
+        {
+            this.botInstances = botInstanceIndices.clone();
+        }
     }
 
     @Override
     public void init()
     {
-        LOG.info("Demo gameplay ready: {} s per tic, spawn {}", deltaSeconds, controller);
+        if (match == null)
+        {
+            LOG.info("Demo gameplay ready: {} s per tic, spawn {} — no opponents, camera only",
+                deltaSeconds, controller);
+            return;
+        }
+        LOG.info("Demo gameplay ready: {} s per tic, spawn {}, {} opponents, {} hp",
+            deltaSeconds, controller, match.botCount(), match.playerHealth());
     }
 
     @Override
     public void shutdown()
     {
-        LOG.info("Demo gameplay stopped after {} tics at {}; {} shots fired, {} hit",
-            ticsApplied, controller, shotsFired, shotsHit);
+        if (match == null)
+        {
+            LOG.info("Demo gameplay stopped after {} tics at {}", ticsApplied, controller);
+            return;
+        }
+        LOG.info("Demo gameplay stopped after {} tics at {}; {}", ticsApplied, controller, match);
+    }
+
+    /** Returns the round in progress, or null for a camera-only demo. */
+    public Match match()
+    {
+        return match;
     }
 
     /**
@@ -229,7 +270,15 @@ public final class DemoGameplayPort implements I_GameplayPort
             inputPort.sampleInput(ticIndex);
             inputView.wrap(inputPort.currentInput());
             controller.update(inputView, deltaSeconds);
+            // Opponents move BEFORE the player shoots, so a shot is resolved
+            // against where the bodies are on this tic rather than where they
+            // were on the last one. The other order makes leading a moving
+            // target feel a frame late, which is the sort of thing a player
+            // registers as "the hit detection is off" without being able to say
+            // why.
+            advanceMatch(ticIndex);
             fireIfRequested(inputPort.currentInput().fire(), ticIndex);
+            publishBotPlacements();
             aimCamera();
             this.ticsApplied = ticsApplied + 1;
         }
@@ -254,7 +303,7 @@ public final class DemoGameplayPort implements I_GameplayPort
     // test for exactly this reason.
     private void fireIfRequested(final boolean triggerDown, final int ticIndex)
     {
-        if (!triggerDown || targets.length == 0)
+        if (!triggerDown || match == null || match.state().isOver())
         {
             return;
         }
@@ -263,7 +312,6 @@ public final class DemoGameplayPort implements I_GameplayPort
             return;
         }
         this.lastFireTic = ticIndex;
-        this.shotsFired = shotsFired + 1;
 
         // Two Vec3 allocations per SHOT, not per tic. The alternative is to
         // recompute the view basis here from yaw and pitch, duplicating the
@@ -272,16 +320,69 @@ public final class DemoGameplayPort implements I_GameplayPort
         // camera also uses keeps a single definition of "forward".
         final Vec3 eye = controller.eyePosition();
         final Vec3 aim = controller.forwardVector();
-        final boolean connected = Hitscan.fire(eye.x(), eye.y(), eye.z(),
-            aim.x(), aim.y(), aim.z(), targets, targets.length, hit);
-        if (connected)
+        final int struck = match.firePlayerShot(eye.x(), eye.y(), eye.z(),
+            aim.x(), aim.y(), aim.z());
+        if (struck == Match.NO_HIT)
         {
-            this.shotsHit = shotsHit + 1;
-            LOG.info("HIT entity {} at {} units (tic {})", hit.entityId(), hit.distance(),
-                ticIndex);
+            LOG.debug("miss (tic {})", ticIndex);
             return;
         }
-        LOG.debug("miss (tic {})", ticIndex);
+        final Bot victim = match.byId(struck);
+        if (victim != null && !victim.isAlive())
+        {
+            LOG.info("KILL entity {} (tic {}) — {} of {} down", struck, ticIndex,
+                match.botsKilled(), match.botCount());
+            return;
+        }
+        LOG.info("HIT entity {} (tic {})", struck, ticIndex);
+    }
+
+    // Moves the opponents and lets them shoot back. Reports the result once,
+    // the tic it is decided, rather than every tic afterwards.
+    private void advanceMatch(final int ticIndex)
+    {
+        if (match == null)
+        {
+            return;
+        }
+        final int damage = match.tick(ticIndex, controller.positionX(), controller.positionY(),
+            controller.positionZ());
+        if (damage > 0)
+        {
+            LOG.info("took {} damage — {} hp left", damage, match.playerHealth());
+        }
+        final MatchState now = match.state();
+        if (now != reportedState)
+        {
+            this.reportedState = now;
+            LOG.info("MATCH {} — {}", now, match);
+        }
+    }
+
+    // Makes each bot's model sit where the simulation says its body is.
+    //
+    // This is the seam between simulation and rendering, and it is one
+    // reference store per bot per tic. The Scene itself is untouched: it is
+    // immutable, and rebuilding it to move seven bodies would re-derive the
+    // texture table, the stream offsets and the entity ids of a 295-instance
+    // room for no reason at all.
+    private void publishBotPlacements()
+    {
+        if (match == null || renderer.scene() == null)
+        {
+            // No scene yet. The game loop publishes tics from the moment it
+            // starts, and on desktop that is BEFORE the launcher has called
+            // setScene — the renderer has no instance table to address, so
+            // there is nothing to move and setWorldTransform would throw. Same
+            // window, and the same reason, as aimCamera's surface check below.
+            return;
+        }
+        final Bot[] roster = match.bots();
+        for (int index = 0; index < roster.length; index++)
+        {
+            renderer.setWorldTransform(botInstances[index],
+                DemoScene.botPlacement(roster[index]));
+        }
     }
 
     // Points the renderer at the player's eye.

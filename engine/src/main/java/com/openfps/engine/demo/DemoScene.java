@@ -6,8 +6,10 @@
 package com.openfps.engine.demo;
 
 import com.openfps.engine.common.Constants;
+import com.openfps.engine.gameplay.Bot;
+import com.openfps.engine.gameplay.BotPattern;
+import com.openfps.engine.gameplay.Match;
 import com.openfps.engine.gameplay.PlayerController;
-import com.openfps.engine.gameplay.Target;
 import com.openfps.engine.render.adapter.Mat4;
 import com.openfps.engine.render.adapter.ModelFormat;
 import com.openfps.engine.render.adapter.Scene;
@@ -274,31 +276,100 @@ public final class DemoScene
     public static final float CHARACTER_WORLD_SCALE =
         PLAYER_HEIGHT_UNITS / CHARACTER_MODEL_HEIGHT;
 
-    /** First entity id handed to a target. {@link Scene#UNTAGGED} is 0. */
-    public static final int FIRST_TARGET_ID = 1;
 
     /**
-     * Target feet positions, {x, z} pairs in world units, in id order.
+     * Where the bots patrol: route centre {x, z} in world units, in id order.
      *
-     * <p>Chosen to exercise the things that are easy to get wrong rather than
-     * to look tidy: one straight down the spawn bearing to sight along, two
-     * placed so they <b>overlap in screen space from the spawn</b> — the case
-     * where a naive outline merges two people into one blob — and one well off
-     * to the side so turning is needed to find it.</p>
+     * <p>Chosen to exercise the things that are easy to get wrong rather than to
+     * look tidy. The first sits straight down the spawn bearing so there is
+     * something to sight along without turning. The second and third are placed
+     * so they <b>overlap in screen space from the spawn</b> — the case where a
+     * naive outline merges two people into one blob. The rest are spread to the
+     * flanks and the back of the room so clearing it needs the player to turn
+     * around, and so that some of them start outside
+     * {@code Match.BOT_RANGE_UNITS} and cannot shoot until they are found.</p>
+     *
+     * <p>All seven stay inside the perimeter once their amplitude is added: the
+     * wall is at 320 and a bot is 16 units in radius, so the furthest legal
+     * centre-plus-reach is 304. {@code DemoSceneTest} asserts that rather than
+     * trusting the arithmetic below, because a bot that walks through a wall is
+     * the sort of thing that looks like a physics bug for a long time before
+     * anyone checks the table.</p>
      */
-    private static final float[] TARGET_PLACEMENTS =
+    private static final float[] BOT_ROUTE_CENTRES =
     {
         0.0f, 60.0f,
         -78.0f, 30.0f,
-        -44.0f, 96.0f,
+        -88.0f, 108.0f,
         142.0f, -46.0f,
+        196.0f, 150.0f,
+        -196.0f, 176.0f,
+        56.0f, 244.0f,
     };
 
-    /** Stride of {@link #TARGET_PLACEMENTS}: x and z. */
-    private static final int TARGET_STRIDE = 2;
+    /** Stride of {@link #BOT_ROUTE_CENTRES}: x and z. */
+    private static final int BOT_STRIDE = 2;
+
+    /**
+     * Which route each bot walks, in id order.
+     *
+     * <p><b>Bots 1 and 2 are sentries, and that is load-bearing.</b> They are the
+     * overlapping pair — the case where a naive outline merges two people into
+     * one blob — and the case only means anything if it is reproducible. Two
+     * <i>moving</i> bodies that happen to overlap on some frame prove nothing;
+     * two that always overlap can be asserted and photographed.</p>
+     *
+     * <p>Bot 0 paces, but with phase zero, so at tic 0 it is exactly on the
+     * spawn bearing where {@code DemoSceneTest} sights along it — and a few
+     * seconds later it is not, which is what makes the demo a demo. No two
+     * adjacent bots move the same way, so the room does not read as a single
+     * mechanism.</p>
+     */
+    private static final BotPattern[] BOT_PATTERNS =
+    {
+        BotPattern.PACE_X,
+        BotPattern.SENTRY,
+        BotPattern.SENTRY,
+        BotPattern.ORBIT,
+        BotPattern.PACE_Z,
+        BotPattern.ORBIT,
+        BotPattern.PACE_X,
+    };
+
+    /** How far each bot's route reaches from its centre, in world units. */
+    private static final float[] BOT_AMPLITUDES =
+    {
+        80.0f, 0.0f, 0.0f, 70.0f, 90.0f, 60.0f, 104.0f,
+    };
+
+    /**
+     * Tics for one full circuit of each route.
+     *
+     * <p>Deliberately not a common multiple of each other. Equal periods would
+     * have the whole room reach its extremes on the same tic and pulse in
+     * unison, which reads as a single machine rather than as several people. The
+     * shortest here is 240 tics — four seconds at 60 Hz — which at 104 units of
+     * reach is a peak speed of about 163 units a second against the player's
+     * 256. Slower than the player on purpose: these are target practice, and a
+     * target that outruns you is not.</p>
+     */
+    private static final int[] BOT_PERIODS =
+    {
+        300, 300, 300, 420, 360, 480, 240,
+    };
+
+    /**
+     * Where in its circuit each bot starts, so two on the same period are not
+     * shoulder to shoulder.
+     */
+    private static final int[] BOT_PHASES =
+    {
+        0, 0, 0, 105, 90, 240, 60,
+    };
 
     private final Scene scene;
-    private final Target[] targets;
+    private final Bot[] bots;
+    private final int[] botInstances;
     private final float spawnX;
     private final float spawnY;
     private final float spawnZ;
@@ -306,12 +377,13 @@ public final class DemoScene
     private final DemoModels.Source source;
 
     // Takes ownership of a finished scene and the spawn that belongs to it.
-    private DemoScene(final Scene builtScene, final Target[] hitboxes, final float feetX,
-        final float feetY, final float feetZ, final float yawRadians,
+    private DemoScene(final Scene builtScene, final Bot[] roster, final int[] instanceIndices,
+        final float feetX, final float feetY, final float feetZ, final float yawRadians,
         final DemoModels.Source modelSource)
     {
         this.scene = builtScene;
-        this.targets = hitboxes;
+        this.bots = roster;
+        this.botInstances = instanceIndices;
         this.spawnX = feetX;
         this.spawnY = feetY;
         this.spawnZ = feetZ;
@@ -350,7 +422,8 @@ public final class DemoScene
             spawnDepth =
                 FALLBACK_INTERIOR_HALF_EXTENT * FALLBACK_WORLD_SCALE * SPAWN_DEPTH_FRACTION;
         }
-        final Target[] hitboxes = addTargets(builder, models);
+        final int[] instanceIndices = new int[BOT_ROUTE_CENTRES.length / BOT_STRIDE];
+        final Bot[] roster = addBots(builder, models, instanceIndices);
         addViewmodel(builder, models.weapon());
 
         final Scene built = builder.build();
@@ -360,60 +433,120 @@ public final class DemoScene
             built.maxInstanceTriangles(), worldScaleOf(models));
         // Facing +z, which is yaw 0 (PlayerController's convention), standing
         // back from the origin so the whole room is ahead rather than around.
-        return new DemoScene(built, hitboxes, 0.0f, 0.0f, -spawnDepth, 0.0f, models.source());
+        return new DemoScene(built, roster, instanceIndices, 0.0f, 0.0f, -spawnDepth, 0.0f,
+            models.source());
     }
 
     /**
-     * Stands the character models up as tagged targets and returns their
-     * hitboxes.
+     * Stands the character models up as bots and records where each one landed
+     * in the scene.
      *
-     * <p>Each target gets one scene instance and one {@link Target}, sharing an
-     * entity id, and <b>the two are built here together on purpose</b>. The
-     * model is what the outline pass draws around; the box is what
+     * <p>Each bot gets one scene instance and one {@link Bot}, sharing an entity
+     * id, and <b>the two are built here together on purpose</b>. The model is
+     * what the outline pass draws around; the bot owns the hitbox
      * {@code Hitscan} tests. Building them in separate places is how they come
-     * to disagree, and a disagreement is invisible — you would see a body,
-     * shoot it, and nothing would happen.</p>
+     * to disagree, and a disagreement is invisible — you would see a body, shoot
+     * it, and nothing would happen.</p>
      *
-     * <p>Returns an empty array when no character art is staged, which leaves
-     * the scene untagged and the outline pass entirely un-dispatched.</p>
+     * <p>The <b>instance index</b> is captured as the bot is added, because that
+     * index is the only handle anything has on a scene instance afterwards:
+     * {@code SoftwareRenderPort.setWorldTransform} is how a bot's model follows
+     * its patrol, and it addresses instances by position. Reading the builder's
+     * count immediately before the {@code add} is what makes that index correct
+     * no matter how much furniture is added above this method.</p>
+     *
+     * <p>Places nothing when no character art is staged, which leaves the scene
+     * untagged, the outline pass entirely un-dispatched, and the match won from
+     * the first check. That is a degraded demo rather than a broken one, and it
+     * is what a checkout with no assets fetched will produce.</p>
      *
      * @param builder the scene under construction; instances are appended
      * @param models the loaded model set
-     * @return one hitbox per placed target, in id order, never null
+     * @param instanceIndices filled with the scene index of each placed bot;
+     *     must be at least as long as the bot roster
+     * @return one bot per placement, in id order, never null
      */
-    private static Target[] addTargets(final Scene.Builder builder, final DemoModels models)
+    private static Bot[] addBots(final Scene.Builder builder, final DemoModels models,
+        final int[] instanceIndices)
     {
         if (!models.hasCharacters())
         {
-            return new Target[0];
+            return new Bot[0];
         }
 
         final ModelFormat[] people = models.characters();
-        final int count = TARGET_PLACEMENTS.length / TARGET_STRIDE;
-        final Target[] hitboxes = new Target[count];
+        final int count = BOT_ROUTE_CENTRES.length / BOT_STRIDE;
+        final Bot[] roster = new Bot[count];
         for (int index = 0; index < count; index++)
         {
-            final float feetX = TARGET_PLACEMENTS[index * TARGET_STRIDE];
-            final float feetZ = TARGET_PLACEMENTS[index * TARGET_STRIDE + 1];
-            final int entityId = FIRST_TARGET_ID + index;
+            final float homeX = BOT_ROUTE_CENTRES[index * BOT_STRIDE];
+            final float homeZ = BOT_ROUTE_CENTRES[index * BOT_STRIDE + 1];
+            final int entityId = Match.FIRST_BOT_ENTITY_ID + index;
+
+            final Bot bot = new Bot(entityId, homeX, 0.0f, homeZ, BOT_PATTERNS[index],
+                BOT_AMPLITUDES[index], BOT_PERIODS[index], BOT_PHASES[index],
+                Match.BOT_FIRE_INTERVAL_TICS, fireOffsetFor(index, count));
 
             // Cycles through however many models were staged, so a partially
             // staged pack still puts a body at every placement rather than
-            // leaving holes in the arrangement.
+            // leaving holes in the arrangement. With the full seven it is one
+            // distinct person each.
             final ModelFormat model = people[index % people.length];
-            builder.addWorldInstance(model,
-                placement(feetX, 0.0f, feetZ, 0.0f, CHARACTER_WORLD_SCALE), entityId);
-
-            // aroundFeet, not a centre, because the model's origin is at its
-            // feet and PlayerController stores feet too. Centring here would
-            // bury every hitbox half a body into the floor.
-            hitboxes[index] = Target.aroundFeet(entityId, feetX, 0.0f, feetZ,
-                PLAYER_RADIUS_UNITS, PLAYER_HEIGHT_UNITS);
+            instanceIndices[index] = builder.worldInstanceCount();
+            builder.addWorldInstance(model, botPlacement(bot), entityId);
+            roster[index] = bot;
         }
-        LOG.info("Demo targets: {} characters placed from {} model(s), ids {}..{},"
-            + " {} world units tall, radius {}", count, people.length, FIRST_TARGET_ID,
-            FIRST_TARGET_ID + count - 1, PLAYER_HEIGHT_UNITS, PLAYER_RADIUS_UNITS);
-        return hitboxes;
+        LOG.info("Demo bots: {} placed from {} model(s), ids {}..{}, {} world units tall,"
+            + " radius {}", count, people.length, Match.FIRST_BOT_ENTITY_ID,
+            Match.FIRST_BOT_ENTITY_ID + count - 1, PLAYER_HEIGHT_UNITS, PLAYER_RADIUS_UNITS);
+        return roster;
+    }
+
+    /**
+     * Returns the placement transform for a bot at its current position.
+     *
+     * <p>Public because it is called every tic from outside — the gameplay port
+     * hands the result to {@code SoftwareRenderPort.setWorldTransform} so a
+     * bot's model follows its patrol. It is the one piece of the scene that is
+     * <b>not</b> built once.</p>
+     *
+     * <p>A dead bot is toppled rather than removed. Removing it would mean
+     * rebuilding the whole {@link Scene} — texture table, stream offsets, entity
+     * ids, buffer sizing — for a set of instances that has not otherwise
+     * changed, and a body left standing would be indistinguishable from one that
+     * was never hit. Falling over costs one transform and reads instantly.</p>
+     *
+     * @param bot the bot to place; must not be null
+     * @return its model-to-world transform this tic
+     */
+    public static Mat4 botPlacement(final Bot bot)
+    {
+        if (bot.isAlive())
+        {
+            return placement(bot.positionX(), bot.positionY(), bot.positionZ(),
+                bot.yawRadians(), CHARACTER_WORLD_SCALE);
+        }
+        return fallenPlacement(bot.positionX(), bot.positionY(), bot.positionZ(),
+            bot.yawRadians(), CHARACTER_WORLD_SCALE);
+    }
+
+    /**
+     * Staggers the bots' firing so seven of them do not volley on the same tic.
+     *
+     * <p>{@code Bot.wantsToFire} is true when {@code (tic + offset)} is a
+     * multiple of the interval, so distinct offsets put distinct bots on
+     * distinct tics. Spreading them evenly across the interval turns one shot
+     * every 150 tics per bot into one shot every 21 tics somewhere in the room —
+     * the same total rate, but a rate the player experiences as pressure rather
+     * than as a periodic broadside.</p>
+     *
+     * @param index which bot, from zero
+     * @param count how many bots there are; must be positive
+     * @return the firing offset in tics
+     */
+    private static int fireOffsetFor(final int index, final int count)
+    {
+        return index * (Match.BOT_FIRE_INTERVAL_TICS / count);
     }
 
     // The room the demo is actually meant to show: floor, walls, props.
@@ -604,6 +737,72 @@ public final class DemoScene
     }
 
     /**
+     * Builds the placement of a body that has fallen over.
+     *
+     * <p>How a kill is made visible. The alternative — removing the instance —
+     * means rebuilding the whole {@link Scene}: texture table, stream offsets,
+     * entity ids and buffer sizing, all re-derived because one body stopped
+     * existing. This costs one transform, and a body on the floor is a clearer
+     * statement than a body that vanished.</p>
+     *
+     * <p><b>The rotation is about the model's own +x axis, applied before the
+     * yaw</b>, so the body falls face-first along whatever direction it was
+     * looking rather than always toward world north. The composition is
+     * {@code T . R_y(yaw) . R_x(+90) . S(scale)}, whose columns are the images
+     * of the model's own axes:</p>
+     *
+     * <pre>
+     *   model +x -&gt; ( cos, 0, -sin)   across the body, unchanged by the pitch
+     *   model +y -&gt; ( sin, 0,  cos)   the head, now along the former heading
+     *   model +z -&gt; (   0, -1,    0)  the face, now pointing at the floor
+     * </pre>
+     *
+     * <p>The sign of that pitch is the whole difference between falling forwards
+     * and falling backwards, and it is invisible in the matrix: {@code R_x(-90)}
+     * is just as valid a rotation, has the same determinant, and drops every
+     * body the wrong way. The head landing along the heading is what says it is
+     * right.</p>
+     *
+     * <p>Both factors are rotations, so the determinant is {@code scale^3} and
+     * stays positive — {@link Scene} rejects a negative one outright rather than
+     * render an instance inside-out, so this is a build failure waiting for
+     * anyone who reaches for a {@code scale(1, -1, 1)} instead.</p>
+     *
+     * <p>The body is also raised by half its own height, because a model whose
+     * origin is at its feet, rotated flat, ends up with half its bulk below the
+     * floor. {@code CHARACTER_MODEL_HEIGHT * scale * 0.5} is exactly the
+     * correction, and it is derived from the same constant the standing scale
+     * uses rather than eyeballed.</p>
+     *
+     * @param x world x translation
+     * @param y world y translation — the floor the body lies on
+     * @param z world z translation
+     * @param yawRadians the heading the body was facing when it fell
+     * @param scale uniform scale; must be positive
+     * @return a placement lying face-down along the heading
+     */
+    public static Mat4 fallenPlacement(final float x, final float y, final float z,
+        final float yawRadians, final float scale)
+    {
+        if (!(scale > 0.0f))
+        {
+            throw new IllegalArgumentException("scale must be positive, got " + scale);
+        }
+        final float sin = (float) StrictMath.sin(yawRadians);
+        final float cos = (float) StrictMath.cos(yawRadians);
+        final float lift = y + CHARACTER_MODEL_HEIGHT * scale * 0.5f;
+        // R_y(yaw) . R_x(+90), scaled. Determinant is scale^3 — both factors are
+        // rotations, so nothing here is a reflection and Scene will accept it.
+        return Mat4.ofRowMajor(new float[]
+        {
+            cos * scale, sin * scale, 0.0f, x,
+            0.0f, 0.0f, -scale, lift,
+            -sin * scale, cos * scale, 0.0f, z,
+            0.0f, 0.0f, 0.0f, 1.0f,
+        });
+    }
+
+    /**
      * Builds a placement that turns a model upside down without mirroring it.
      *
      * <p>A ceiling is a floor tile facing the other way, and the obvious way to
@@ -682,28 +881,59 @@ public final class DemoScene
     }
 
     /**
-     * The shootable hitboxes in this scene, in entity-id order.
+     * The opponents standing in this scene, in entity-id order.
      *
-     * <p>Empty when no character art is staged. <b>The local player is not in
-     * this array and must never be added to it</b> — {@code Hitscan} treats a
-     * ray origin inside a box as a hit at distance zero, so a shooter that
-     * appears among its own targets shoots itself on every trigger pull.</p>
+     * <p>Empty when no character art is staged. <b>The local player is not among
+     * them and must never be added</b> — {@code Hitscan} treats a ray origin
+     * inside a box as a hit at distance zero, so a shooter that appears in its
+     * own target set shoots itself on every trigger pull.</p>
      *
-     * @return a fresh array so a caller cannot mutate the scene's own set
+     * <p>Returns the live objects, not copies, because they are mutable
+     * simulation state that {@link Match} advances — handing out clones would
+     * give the caller a set of bots that never moved and never died. The array
+     * itself is copied so the roster cannot be swapped.</p>
+     *
+     * @return the bots this scene placed
      */
-    public Target[] targets()
+    public Bot[] bots()
     {
-        return targets.clone();
+        return bots.clone();
     }
 
     /**
-     * How many shootable targets this scene placed.
+     * Builds a match against the bots in this scene.
      *
-     * @return the target count, zero when no character art is staged
+     * @return a fresh match, already won if no character art is staged
      */
-    public int targetCount()
+    public Match newMatch()
     {
-        return targets.length;
+        return new Match(bots);
+    }
+
+    /**
+     * Returns the scene instance index of one bot.
+     *
+     * <p>The handle needed to move a bot's model:
+     * {@code SoftwareRenderPort.setWorldTransform} addresses world instances by
+     * position, and this is where each body landed while the scene was being
+     * assembled.</p>
+     *
+     * @param botIndex which bot, in the same order as {@link #bots()}
+     * @return its index among the scene's world instances
+     */
+    public int botInstanceIndex(final int botIndex)
+    {
+        return botInstances[botIndex];
+    }
+
+    /**
+     * How many bots this scene placed.
+     *
+     * @return the bot count, zero when no character art is staged
+     */
+    public int botCount()
+    {
+        return bots.length;
     }
 
     /**

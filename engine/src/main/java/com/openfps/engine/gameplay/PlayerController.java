@@ -184,6 +184,61 @@ public final class PlayerController
         (float) Constants.PLAYER_SPEED / (float) Constants.MAP_SCALE * PLAYER_SPEED_REFERENCE_HZ;
 
     /**
+     * Downward acceleration in world units per second squared — <b>800</b>.
+     *
+     * <p>Not Earth's 9.81 in disguise, and it should not be: a first-person game
+     * that uses real gravity at this scale feels like walking on the Moon,
+     * because the player is 56 units tall and moves at 256 units a second — a
+     * body length every fifth of a second. Every shooter since Quake picks a
+     * gravity that makes the jump land quickly rather than one that matches
+     * physics. 800 gives the arc below a total hang time of about 0.63 s, which
+     * is short enough that a jump reads as a hop rather than a float.</p>
+     */
+    public static final float GRAVITY_UNITS_PER_SECOND_SQUARED = 800.0f;
+
+    /**
+     * How high a jump rises above the floor, in world units — <b>40</b>.
+     *
+     * <p>This is the number with a reason, and {@link #JUMP_SPEED_UNITS_PER_SECOND}
+     * is derived from it rather than the other way round. A demo crate is 32
+     * world units tall once {@code DemoScene.KIT_WORLD_SCALE} is applied, so 40
+     * clears one with 8 units to spare — enough that the player does not have to
+     * be frame-perfect, not so much that the jump overshoots every piece of
+     * level geometry in the room. It also happens to sit just under
+     * {@link #EYE_HEIGHT_UNITS}, so the apex is about "your own eye height",
+     * which is the proportion a jump is judged by.</p>
+     */
+    public static final float JUMP_APEX_UNITS = 40.0f;
+
+    /**
+     * Upward launch speed in world units per second, about 253.
+     *
+     * <p><b>Derived</b> from the two constants above by the standard result
+     * {@code apex = v^2 / 2g}, hence {@code v = sqrt(2 * g * apex)}. Written
+     * that way so that changing the apex changes the jump and nothing has to be
+     * re-tuned by hand — the alternative is two independent magic numbers that
+     * silently stop agreeing the first time either is touched.</p>
+     *
+     * <p>{@code sqrt} is correctly rounded by IEEE 754 and therefore reproducible
+     * on every conforming JVM, so this constant is bit-identical across peers.
+     * {@link StrictMath} is used anyway to keep the "no {@code java.lang.Math} in
+     * this class" guard a single flat rule.</p>
+     */
+    public static final float JUMP_SPEED_UNITS_PER_SECOND =
+        (float) StrictMath.sqrt(2.0 * GRAVITY_UNITS_PER_SECOND_SQUARED * JUMP_APEX_UNITS);
+
+    /**
+     * The floor plane, in world units.
+     *
+     * <p>Zero, and flat, because this controller has no collision — the demo
+     * room's floor tiles are all at {@code y = 0}. When {@code PhysicsWorld}
+     * lands it will replace this with the height of whatever the player is
+     * actually standing on, and the landing test below is the one line that
+     * changes.</p>
+     */
+    public static final float GROUND_LEVEL_UNITS = 0.0f;
+
+    /**
      * The world up axis, +y. Shared with {@link Camera} as the approximate up
      * when building the view basis; the camera re-derives an exact orthogonal
      * up from it.
@@ -231,6 +286,15 @@ public final class PlayerController
 
     /** Elevation in radians, clamped to +-MAX_PITCH_RADIANS. MUTABLE: advanced every update. */
     private float pitchRadians;
+
+    /**
+     * Vertical speed in world units per second, positive up.
+     *
+     * MUTABLE: integrated every update. Zero whenever the player is standing on
+     * the ground, which is how {@link #isOnGround()} can be a comparison rather
+     * than a second flag that could disagree with the position.
+     */
+    private float velocityY;
 
     /**
      * Creates a controller standing at the world origin, facing world +z, level.
@@ -294,6 +358,82 @@ public final class PlayerController
 
         applyLook(input);
         applyMove(input, deltaSeconds);
+        applyJumpAndGravity(input, deltaSeconds);
+    }
+
+    /**
+     * Integrates one tic of vertical motion: launch if asked and able, then
+     * fall, then land.
+     *
+     * <h2>Why the jump is gated on being grounded, not on a key edge</h2>
+     *
+     * <p>{@link I_PlayerInput#jump()} is a level — true on every tic the control
+     * is held — so a naive "jump if asked" would fire again the instant the
+     * player touched down and turn a held key into a pogo stick. Gating on
+     * {@link #isOnGround()} instead of tracking the previous frame's key state
+     * gives the same result with no extra state, and it is the gate that would
+     * be needed anyway: nothing may jump in mid-air.</p>
+     *
+     * <h2>Semi-implicit Euler, and what that costs</h2>
+     *
+     * <p>Velocity is updated before position, which is the standard choice for
+     * game integration because it is stable and cheap. It is <b>not</b>
+     * exactly conservative: the apex reached differs by a fraction of a unit
+     * between tic rates, so a 120 Hz run and a 60 Hz run of the same inputs do
+     * not produce identical heights. That is acceptable here for the reason
+     * lockstep makes it acceptable everywhere else in this class — every peer in
+     * a match runs the same {@code GameConfig}, so every peer integrates with
+     * the same {@code deltaSeconds} and gets bit-identical results. It would
+     * only matter if two peers could disagree about the tic rate, which the
+     * config forbids.</p>
+     *
+     * <p>Every operation here is {@code + - *} and a comparison, all correctly
+     * rounded under JEP 306, so no {@link StrictMath} call is needed and none
+     * appears.</p>
+     */
+    private void applyJumpAndGravity(final I_PlayerInput input, final float deltaSeconds)
+    {
+        if (input.jump() && isOnGround())
+        {
+            this.velocityY = JUMP_SPEED_UNITS_PER_SECOND;
+        }
+        if (isOnGround() && velocityY == 0.0f)
+        {
+            // Standing still on the floor. Skipping the integration keeps a
+            // stationary player bit-for-bit unchanged rather than accumulating
+            // a downward velocity that the landing clamp then throws away.
+            return;
+        }
+        this.velocityY = velocityY - GRAVITY_UNITS_PER_SECOND_SQUARED * deltaSeconds;
+        this.positionY = positionY + velocityY * deltaSeconds;
+        if (positionY <= GROUND_LEVEL_UNITS)
+        {
+            // Landed. Snap rather than leave the player fractionally below the
+            // floor: the residual would be invisible but would make isOnGround
+            // false and quietly refuse the next jump.
+            this.positionY = GROUND_LEVEL_UNITS;
+            this.velocityY = 0.0f;
+        }
+    }
+
+    /**
+     * Returns whether the player is standing on the ground.
+     *
+     * <p>Derived from the position rather than stored as a flag, so the two can
+     * never disagree — a cached "grounded" boolean that outlives a teleport is
+     * the classic way to end up able to jump in mid-air.</p>
+     *
+     * @return true when the feet are at or below {@link #GROUND_LEVEL_UNITS}
+     */
+    public boolean isOnGround()
+    {
+        return positionY <= GROUND_LEVEL_UNITS;
+    }
+
+    /** Returns the vertical speed in world units per second, positive up. */
+    public float velocityY()
+    {
+        return velocityY;
     }
 
     // Integrates the look deltas, then re-establishes both angle invariants.

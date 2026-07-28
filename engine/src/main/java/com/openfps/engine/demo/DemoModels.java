@@ -103,19 +103,30 @@ public final class DemoModels
     };
 
     /**
-     * The character models used as stand-in targets, three visibly different
-     * people from the Kenney Blocky Characters pack.
+     * The character models the bots wear — seven visibly different people from
+     * the Kenney Blocky Characters pack, one per opponent.
      *
-     * <p>Three rather than one so the outline can be judged honestly: a single
-     * repeated model tells you nothing about whether two <em>adjacent</em>
-     * bodies read as two, which is the case the outline exists for. Three
-     * rather than eighteen because each one costs a private 1.4 MB copy of the
-     * same 512x512 atlas — {@code ModelFormat} has no shared-texture concept
-     * yet, so the whole pack would be ~25 MB of duplicated pixels.</p>
+     * <p><b>Seven, matching {@code Match.DEFAULT_BOT_COUNT}</b>, so no two bots
+     * in a room look alike. That is not decoration. The bots move, they shoot
+     * from different places, and they die individually; telling one from another
+     * at a glance is how a player knows which of them they already hit, and how
+     * anyone reading a screenshot knows whether the outline pass has drawn two
+     * silhouettes or merged two bodies into one.</p>
+     *
+     * <p><b>Seven rather than all eighteen</b> because each one costs a private
+     * 1.4 MB copy of a 512x512 atlas — {@code ModelFormat} has no shared-texture
+     * concept yet, so the whole pack would be about 25 MB of largely duplicated
+     * pixels. Seven is 9.8 MB, which is the price of one distinct opponent each
+     * and nothing spent on models nobody sees.</p>
+     *
+     * <p>Spread across the alphabet rather than taken as the first seven,
+     * because the pack is authored in loose families and adjacent letters tend
+     * to share a palette.</p>
      */
     private static final String[] CHARACTER_FILES =
     {
-        "character-a.ofm", "character-d.ofm", "character-h.ofm",
+        "character-a.ofm", "character-d.ofm", "character-h.ofm", "character-k.ofm",
+        "character-n.ofm", "character-q.ofm", "character-r.ofm",
     };
 
     private final Source source;
