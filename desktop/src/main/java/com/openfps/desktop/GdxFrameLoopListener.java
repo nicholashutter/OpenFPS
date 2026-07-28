@@ -62,6 +62,16 @@ public final class GdxFrameLoopListener implements ApplicationListener
     private final GdxScreenshot screenshot;
 
     /**
+     * The input port to poll each frame, or null when nothing reads input.
+     *
+     * This is the render thread's half of the input handoff — see
+     * {@link GdxInputPort}. It has to happen here because GLFW input queries
+     * belong on the thread that owns the window, and because the per-frame
+     * mouse delta is only valid once per frame.
+     */
+    private final GdxInputPort inputPort;
+
+    /**
      * The menu UI.
      * MUTABLE: built in {@link #create()}, released in {@link #dispose()}.
      * It cannot be built earlier — there is no GL context until create().
@@ -92,6 +102,23 @@ public final class GdxFrameLoopListener implements ApplicationListener
     public GdxFrameLoopListener(final I_FrameCallback callback, final MenuActions actions,
         final FramebufferPresenter framePresenter)
     {
+        this(callback, actions, framePresenter, null);
+    }
+
+    /**
+     * Creates the bridge.
+     *
+     * @param callback the engine callback to forward lifecycle to; must not
+     *     be null
+     * @param actions what the menu buttons do; must not be null
+     * @param framePresenter draws the rasterizer's finished frame under the
+     *     menu, or null for a menu-only window
+     * @param desktopInput polled once per frame for mouse and keyboard state,
+     *     or null for a window that reads no input
+     */
+    public GdxFrameLoopListener(final I_FrameCallback callback, final MenuActions actions,
+        final FramebufferPresenter framePresenter, final GdxInputPort desktopInput)
+    {
         if (callback == null)
         {
             throw new IllegalArgumentException("callback must not be null");
@@ -103,6 +130,7 @@ public final class GdxFrameLoopListener implements ApplicationListener
         this.callback = callback;
         this.actions = actions;
         this.presenter = framePresenter;
+        this.inputPort = desktopInput;
         this.screenshot = new GdxScreenshot();
     }
 
@@ -123,6 +151,12 @@ public final class GdxFrameLoopListener implements ApplicationListener
     public void render()
     {
         final float deltaSeconds = Gdx.graphics.getDeltaTime();
+        // Input first: the per-frame mouse delta is only valid once per frame,
+        // and the game loop may latch it at any moment after this returns.
+        if (inputPort != null)
+        {
+            inputPort.pollDevice();
+        }
         drawWorldAndMenu(deltaSeconds);
         callback.onFrame(deltaSeconds);
         screenshot.afterFrame();

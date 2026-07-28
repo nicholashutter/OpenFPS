@@ -6,10 +6,16 @@
 package com.openfps.engine.hal.adapter.nulladapter;
 
 import com.openfps.engine.hal.port.I_InputPort;
+import com.openfps.engine.hal.port.InputState;
 
 /**
  * Null implementation of I_InputPort.
  * All inputs are zero — used for headless testing and AI-controlled tics.
+ *
+ * There is no device to latch, so {@code sampleInput} does nothing and
+ * {@code currentInput} is always {@link InputState#NEUTRAL}. A headless run
+ * therefore stands still and looks straight ahead for every tic, which is the
+ * behaviour every existing test already assumes.
  */
 public final class NullInputPort implements I_InputPort
 {
@@ -19,6 +25,12 @@ public final class NullInputPort implements I_InputPort
     public void sampleInput(final int ticIndex)
     {
         // all inputs are zero — no-op
+    }
+
+    @Override
+    public InputState currentInput()
+    {
+        return InputState.NEUTRAL;
     }
 
     @Override
