@@ -12,6 +12,8 @@ import com.badlogic.gdx.files.FileHandle;
 import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.PixmapIO;
 
+import com.openfps.gdx.FramebufferPresenter;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

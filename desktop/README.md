@@ -10,18 +10,24 @@
 |---|---|
 | **State** | SHIPPING |
 | **Phase** | 1.5 complete (§ 7); presentation landed with Phase 5 |
-| **Tests** | 195 |
+| **Tests** | 118 |
 | **Registered** | provides the windowed HAL (`GdxAdapterFactory`) and the `main` behind `gradlew :desktop:run` |
 | **Verified** | 2026-07-28 |
 
 **Built.** `GdxWindowPort` (LWJGL3, 1280x720 default) with an explicit state
-machine, `GdxInputPort` + `InputAccumulator` for mouse-look and WASD,
-`FramebufferPresenter` uploading R_'s finished `int[]` as a fullscreen quad,
-`GdxFrameLoopListener` bridging libGDX's `ApplicationListener` to the engine's
-`I_FrameCallback`, `GdxScreenshot` for reading the window back off the GPU,
-`GdxAdapterFactory` decorating the headless desktop HAL, the Scene2D menu
-(`MainMenuScreen`, `MenuActions`, `DefaultMenuActions`, `MenuButtonListener`),
-and `DesktopLauncher` on top of all of it.
+machine, `GdxInputPort` for mouse-look and WASD, `DesktopBindings` (the only
+file here that names a key), `GdxFrameLoopListener` bridging libGDX's
+`ApplicationListener` to the engine's `I_FrameCallback`, `GdxScreenshot` for
+reading the window back off the GPU, `WindowIcon` and `IconFileMain` for the
+native launcher's identity, `NetArgs` for `--net=`/`--peer=`, `GdxAdapterFactory`
+decorating the headless desktop HAL, and `DesktopLauncher` on top of all of it.
+
+**Moved out on 2026-07-28.** `FramebufferPresenter`, `InputAccumulator`,
+`UiState`, `UiStateMachine`, the block welcome screen and the menu command
+interface now live in **`:gdxshared`**, because `:android` needs every one of
+them and none of them names a backend. Nothing changed about what they do; the
+test count here dropped from 195 to 118 because 77 tests went with them. See
+`gdxshared/README.md`.
 
 **Not built.** Nothing outstanding for Phases 1.5 and 5. Start Game and Settings
 record intent only — there is no map loader and no settings screen to open yet.

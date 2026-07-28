@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-package com.openfps.desktop;
+package com.openfps.gdx;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;

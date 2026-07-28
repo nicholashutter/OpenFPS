@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-package com.openfps.desktop;
+package com.openfps.gdx;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Color;

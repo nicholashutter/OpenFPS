@@ -6,7 +6,6 @@
 package com.openfps.engine.demo;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -172,7 +171,7 @@ public final class DemoModels
     }
 
     /**
-     * Loads the demo's models from a model root, preferring the real kit.
+     * Loads the demo's models from a directory, preferring the real kit.
      *
      * <p>The root is the directory {@code :tools:regenerateDemoAssets} writes,
      * normally {@code assets/models}. It is expected to contain
@@ -190,49 +189,72 @@ public final class DemoModels
         {
             throw new IllegalArgumentException("root must not be null");
         }
+        return load(new DirectoryModelSource(root));
+    }
 
-        final ModelFormat viewmodel = loadWeapon(root);
-        final ModelFormat[] people = loadCharacters(root);
-        final Path levelDirectory = root.resolve(LEVEL_DIRECTORY);
-        final List<String> missing = missingKitFiles(levelDirectory);
+    /**
+     * Loads the demo's models from anywhere, preferring the real kit.
+     *
+     * <p>The overload that lets the same demo run on a phone: an APK's
+     * {@code assets/} entries are zip entries with no filesystem path, so
+     * Android supplies a {@link ModelSource} over its asset manager rather than
+     * a directory. Every decision below — which of the two asset paths is
+     * taken, what is reported, what degrades and what throws — is identical on
+     * both, which is the point of taking the source rather than the path.</p>
+     *
+     * @param source where to read model files from; must not be null
+     * @return the loaded set, never null
+     * @throws DemoAssetException if neither the level kit nor the generated
+     *     room is readable — the message names {@link #REGENERATE_COMMAND}
+     */
+    public static DemoModels load(final ModelSource source)
+    {
+        if (source == null)
+        {
+            throw new IllegalArgumentException("source must not be null");
+        }
+
+        final ModelFormat viewmodel = loadWeapon(source);
+        final ModelFormat[] people = loadCharacters(source);
+        final List<String> missing = missingKitFiles(source);
         if (missing.isEmpty())
         {
             LOG.info("Demo level: REAL Kenney Prototype Kit, {} pieces from {}",
-                KIT_FILES.length, levelDirectory.toAbsolutePath());
-            return new DemoModels(Source.KENNEY_KIT, loadKit(levelDirectory), null, viewmodel,
+                KIT_FILES.length, source.describe(LEVEL_DIRECTORY));
+            return new DemoModels(Source.KENNEY_KIT, loadKit(source), null, viewmodel,
                 people);
         }
 
-        final Path fallback = root.resolve(FALLBACK_MODEL);
-        if (!Files.isRegularFile(fallback))
+        if (!source.has(FALLBACK_MODEL))
         {
             throw new DemoAssetException("The demo has no geometry to stand on. Neither the"
-                + " Kenney level kit under " + levelDirectory.toAbsolutePath()
+                + " Kenney level kit under " + source.describe(LEVEL_DIRECTORY)
                 + " (missing: " + String.join(", ", missing) + ") nor the generated fallback "
-                + fallback.toAbsolutePath() + " exists. Produce them with: "
+                + source.describe(FALLBACK_MODEL) + " exists. Produce them with: "
                 + REGENERATE_COMMAND);
         }
 
         LOG.warn("Demo level: FALLBACK generated greybox room from {} — this is GENERATED"
             + " geometry, not Kenney art. The real kit is missing {} piece(s): {}. For the"
-            + " intended demo run: {}", fallback.toAbsolutePath(), missing.size(),
+            + " intended demo run: {}", source.describe(FALLBACK_MODEL), missing.size(),
             String.join(", ", missing), REGENERATE_COMMAND);
-        return new DemoModels(Source.GENERATED_ROOM, null, read(fallback), viewmodel, people);
+        return new DemoModels(Source.GENERATED_ROOM, null, read(source, FALLBACK_MODEL),
+            viewmodel, people);
     }
 
     // The viewmodel, or null with a WARN. Absent art degrades the demo rather
     // than ending it, so this never throws for a missing file.
-    private static ModelFormat loadWeapon(final Path root)
+    private static ModelFormat loadWeapon(final ModelSource source)
     {
-        final Path path = root.resolve(WEAPON_DIRECTORY).resolve(WEAPON_MODEL);
-        if (!Files.isRegularFile(path))
+        final String path = WEAPON_DIRECTORY + "/" + WEAPON_MODEL;
+        if (!source.has(path))
         {
             LOG.warn("Demo weapon: NONE. {} is missing, so the first-person viewmodel will not"
-                + " be drawn. Produce it with: {}", path.toAbsolutePath(), REGENERATE_COMMAND);
+                + " be drawn. Produce it with: {}", source.describe(path), REGENERATE_COMMAND);
             return null;
         }
-        LOG.info("Demo weapon: REAL Kenney Blaster Kit model from {}", path.toAbsolutePath());
-        return read(path);
+        LOG.info("Demo weapon: REAL Kenney Blaster Kit model from {}", source.describe(path));
+        return read(source, path);
     }
 
     /**
@@ -264,37 +286,37 @@ public final class DemoModels
     // the demo rather than ending it, so this never throws for a missing file.
     // All-or-nothing per file: a partially staged pack loads what it has, since
     // one target is enough to see the outline and hitscan working.
-    private static ModelFormat[] loadCharacters(final Path root)
+    private static ModelFormat[] loadCharacters(final ModelSource source)
     {
-        final Path directory = root.resolve(CHARACTER_DIRECTORY);
         final List<ModelFormat> found = new ArrayList<>();
         for (final String name : CHARACTER_FILES)
         {
-            final Path path = directory.resolve(name);
-            if (Files.isRegularFile(path))
+            final String path = CHARACTER_DIRECTORY + "/" + name;
+            if (source.has(path))
             {
-                found.add(read(path));
+                found.add(read(source, path));
             }
         }
         if (found.isEmpty())
         {
             LOG.warn("Demo characters: NONE. No character model found under {}, so the demo"
                 + " will have nothing to shoot at and the outline pass will not run."
-                + " Produce them with: {}", directory.toAbsolutePath(), REGENERATE_COMMAND);
+                + " Produce them with: {}", source.describe(CHARACTER_DIRECTORY),
+                REGENERATE_COMMAND);
             return new ModelFormat[0];
         }
         LOG.info("Demo characters: {} of {} Kenney Blocky Characters models from {}",
-            found.size(), CHARACTER_FILES.length, directory.toAbsolutePath());
+            found.size(), CHARACTER_FILES.length, source.describe(CHARACTER_DIRECTORY));
         return found.toArray(new ModelFormat[0]);
     }
 
-    // Which of the kit's files are not readable regular files, in declared order.
-    private static List<String> missingKitFiles(final Path levelDirectory)
+    // Which of the kit's files the source does not have, in declared order.
+    private static List<String> missingKitFiles(final ModelSource source)
     {
         final List<String> missing = new ArrayList<>();
         for (final String name : KIT_FILES)
         {
-            if (!Files.isRegularFile(levelDirectory.resolve(name)))
+            if (!source.has(LEVEL_DIRECTORY + "/" + name))
             {
                 missing.add(name);
             }
@@ -304,33 +326,34 @@ public final class DemoModels
 
     // Reads every kit piece. Only called once every file is known to exist, so
     // anything that fails here is a corrupt model rather than an absent one.
-    private static ModelFormat[] loadKit(final Path levelDirectory)
+    private static ModelFormat[] loadKit(final ModelSource source)
     {
         final ModelFormat[] kit = new ModelFormat[KIT_FILES.length];
         for (int index = 0; index < KIT_FILES.length; index++)
         {
-            kit[index] = read(levelDirectory.resolve(KIT_FILES[index]));
+            kit[index] = read(source, LEVEL_DIRECTORY + "/" + KIT_FILES[index]);
         }
         return kit;
     }
 
-    // One model, with the path in the failure message. A file that exists but
-    // does not parse is a real error and is never downgraded to the fallback:
-    // silently substituting greybox for a corrupt asset would hide the corruption.
-    private static ModelFormat read(final Path path)
+    // One model, with the location in the failure message. A file that exists
+    // but does not parse is a real error and is never downgraded to the
+    // fallback: silently substituting greybox for a corrupt asset would hide
+    // the corruption.
+    private static ModelFormat read(final ModelSource source, final String path)
     {
         try
         {
-            return ModelFormat.read(Files.readAllBytes(path));
+            return ModelFormat.read(source.read(path));
         }
         catch (final IOException e)
         {
-            throw new DemoAssetException("Cannot read " + path.toAbsolutePath()
+            throw new DemoAssetException("Cannot read " + source.describe(path)
                 + " — regenerate with: " + REGENERATE_COMMAND, e);
         }
         catch (final RuntimeException e)
         {
-            throw new DemoAssetException(path.toAbsolutePath()
+            throw new DemoAssetException(source.describe(path)
                 + " does not parse as a model: " + e.getMessage()
                 + " — regenerate with: " + REGENERATE_COMMAND, e);
         }

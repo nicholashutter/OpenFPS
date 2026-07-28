@@ -7,6 +7,10 @@ package com.openfps.desktop;
 
 import com.openfps.engine.gameplay.MatchMode;
 import com.openfps.engine.hal.adapter.nulladapter.NullWindowPort;
+import com.openfps.gdx.DefaultMenuActions;
+import com.openfps.gdx.MenuActions;
+import com.openfps.gdx.UiState;
+import com.openfps.gdx.UiStateMachine;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;

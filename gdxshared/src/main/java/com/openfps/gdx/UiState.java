@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-package com.openfps.desktop;
+package com.openfps.gdx;
 
 /**
  * Which desktop UI the player is in front of.

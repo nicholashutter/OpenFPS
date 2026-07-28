@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-package com.openfps.desktop;
+package com.openfps.gdx;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;

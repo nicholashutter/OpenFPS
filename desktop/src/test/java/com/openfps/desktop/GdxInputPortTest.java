@@ -7,6 +7,9 @@ package com.openfps.desktop;
 
 import com.openfps.engine.hal.port.I_InputPort;
 import com.openfps.engine.hal.port.InputState;
+import com.openfps.gdx.InputAccumulator;
+import com.openfps.gdx.UiState;
+import com.openfps.gdx.UiStateMachine;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;

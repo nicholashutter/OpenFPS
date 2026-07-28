@@ -7,13 +7,62 @@ This product is licensed under the MIT License. See LICENSE.
 THIRD-PARTY SOFTWARE
 ================================================================================
 
-This distribution includes the following third-party libraries.
+This distribution includes the following third-party libraries. They are grouped
+by which build actually ships them, because the two differ substantially: the
+desktop launcher carries LWJGL and SQLite and the APK carries neither, and the
+APK carries AndroidX and the Android backend and the desktop build carries
+neither.
 
+--------------------------------------------------------------------------------
+EVERY BUILD
 --------------------------------------------------------------------------------
 SLF4J (slf4j-api)
     Copyright (c) 2004-2024 QOS.ch Sarl (Switzerland)
     License: MIT
     https://www.slf4j.org/
+
+libGDX (gdx)
+    Copyright (c) 2011-2024 See the libGDX AUTHORS file
+    License: Apache License 2.0
+    https://libgdx.com/
+
+    Used as a HAL backend only — window, GL context, input, and Scene2D for
+    menus. It does not own the simulation clock, does not render the world, and
+    is absent from :engine entirely. See hal/README.md.
+
+    Bundles gdx-jnigen-loader (Apache 2.0, same project).
+
+--------------------------------------------------------------------------------
+DESKTOP LAUNCHER ONLY
+--------------------------------------------------------------------------------
+libGDX LWJGL3 backend (gdx-backend-lwjgl3, gdx-platform natives-desktop)
+    Copyright (c) 2011-2024 See the libGDX AUTHORS file
+    License: Apache License 2.0
+    https://libgdx.com/
+
+LWJGL 3 (lwjgl, lwjgl-glfw, lwjgl-jemalloc, lwjgl-openal, lwjgl-opengl,
+lwjgl-stb)
+    Copyright (c) 2012-2024 Lightweight Java Game Library
+    License: BSD 3-Clause
+    https://www.lwjgl.org/
+
+    Ships precompiled natives for Windows, macOS and Linux. Those natives embed
+    further upstream projects under their own licenses, principally GLFW
+    (zlib/libpng), OpenAL Soft (LGPL 2.1), jemalloc (BSD 2-Clause) and
+    stb (MIT / public domain). See https://www.lwjgl.org/license.
+
+JLayer (jlayer, libGDX fork)
+    Copyright (c) 1999-2010 JavaZOOM
+    License: LGPL 2.1
+    https://github.com/libgdx/jlayer
+
+JOrbis (jorbis)
+    Copyright (c) 2000-2010 ymnk, JCraft, Inc.
+    License: LGPL 2.1
+    http://www.jcraft.com/jorbis/
+
+    JLayer and JOrbis arrive as transitive dependencies of the LWJGL3 backend's
+    audio support. OpenFPS plays no audio and calls neither.
 
 Logback (logback-classic, logback-core)
     Copyright (c) 1999-2024 QOS.ch Sarl (Switzerland)
@@ -29,6 +78,53 @@ SQLite JDBC Driver (sqlite-jdbc)
     and musl), FreeBSD, and Android across x86, x86_64, armv5/6/7, arm64, ppc64,
     and riscv64. SQLite itself is in the public domain
     (https://sqlite.org/copyright.html).
+
+    Logback and sqlite-jdbc are explicitly EXCLUDED from the Android build —
+    see android/build.gradle.kts. Neither works there.
+
+--------------------------------------------------------------------------------
+ANDROID BUILD ONLY
+--------------------------------------------------------------------------------
+libGDX Android backend (gdx-backend-android, gdx-platform natives per ABI)
+    Copyright (c) 2011-2024 See the libGDX AUTHORS file
+    License: Apache License 2.0
+    https://libgdx.com/
+
+    Ships one native library per ABI: armeabi-v7a, arm64-v8a, x86, x86_64.
+
+AndroidX Room (room-runtime, room-compiler)
+    Copyright (c) The Android Open Source Project
+    License: Apache License 2.0
+    https://developer.android.com/jetpack/androidx/releases/room
+
+    The Android side of I_UserProfilePort — the counterpart to sqlite-jdbc on
+    desktop. Room wraps the SQLite already present in the OS, so the APK ships
+    no second database engine.
+
+AndroidX core and its transitive AndroidX dependencies
+    Copyright (c) The Android Open Source Project
+    License: Apache License 2.0
+    https://developer.android.com/jetpack/androidx
+
+slf4j-android (uk.uuid.slf4j:slf4j-android)
+    Copyright (c) Simon Arlott
+    License: Apache License 2.0
+    https://github.com/nomis/slf4j-android
+
+    Binds the SLF4J facade to android.util.Log. Not an extra: SLF4J 2.x with no
+    provider on the classpath binds to the NOP logger and silently discards
+    every engine log line.
+
+Android core library desugaring (com.android.tools:desugar_jdk_libs)
+    Copyright (c) The Android Open Source Project
+    License: GNU General Public License v2.0 with the Classpath Exception
+    https://github.com/google/desugar_jdk_libs
+
+    Backports java.util.Optional, streams and java.time so the Java 17 engine
+    runs below API 24. The Classpath Exception is what makes a GPL-licensed
+    library safe to link from an MIT-licensed application; it is used here
+    exactly as the Android toolchain intends, as a compile-and-package step
+    applied by AGP.
 --------------------------------------------------------------------------------
 
 
@@ -49,12 +145,64 @@ dedication and imposes no attribution requirement. Contributors whose work is
 listed below are credited voluntarily, as a courtesy rather than an obligation.
 
 --------------------------------------------------------------------------------
-No game data ships in this distribution yet.
+SOURCE DISTRIBUTION: no game data.
 
-Assets are fetched separately via `gradlew fetchAssets` and are not part of the
-source tree. Each asset entering the tree is recorded here with its source,
-author, license, and license URL, per the intake checklist in docs/ASSETS.md
-section 7.
+Assets are not part of the source tree — assets/models is gitignored — and a
+clone of this repository contains no third-party art of any kind. They are
+produced locally by `gradlew :tools:regenerateDemoAssets` from packs downloaded
+by hand; see docs/DEMO_ASSETS.md.
+
+--------------------------------------------------------------------------------
+ANDROID APK: Kenney models, CC0 1.0.
+
+This is the one build that ships game data, because it must — an app cannot read
+the developer's filesystem, so the models are packaged into the APK's assets/ by
+the `stageModelAssets` task. An APK built from a fresh clone therefore contains
+no art at all and comes up as a menu; an APK built after staging the packs
+contains the following.
+
+    Kenney Prototype Kit
+        Author:      Kenney (Kenney Vleugels / kenney.nl)
+        Source:      https://kenney.nl/assets/prototype-kit
+        License:     CC0 1.0 Universal
+        License URL: http://creativecommons.org/publicdomain/zero/1.0/
+        Shipped as:  assets/models/level/*.ofm — floor-square, wall,
+                     wall-doorway, wall-corner, column, crate, stairs,
+                     shape-slope. Converted from the pack's GLB models to this
+                     project's .ofm format by :tools; the geometry and textures
+                     are Kenney's, the container is ours.
+
+    Kenney Blaster Kit
+        Author:      Kenney (Kenney Vleugels / kenney.nl)
+        Source:      https://kenney.nl/assets/blaster-kit
+        License:     CC0 1.0 Universal
+        License URL: http://creativecommons.org/publicdomain/zero/1.0/
+        Shipped as:  assets/models/weapon/blaster-b.ofm — the first-person
+                     viewmodel.
+
+    Kenney Blocky Characters
+        Author:      Kenney (Kenney Vleugels / kenney.nl)
+        Source:      https://kenney.nl/assets/blocky-characters
+        License:     CC0 1.0 Universal
+        License URL: http://creativecommons.org/publicdomain/zero/1.0/
+        Shipped as:  assets/models/character/character-*.ofm — the opponents.
+
+CC0 imposes no attribution requirement, and Kenney's own readme says so in as
+many words: "Support by crediting 'Kenney' or 'www.kenney.nl' (this is not a
+requirement)". The credit above is therefore voluntary. It is given anyway,
+prominently and by pack, because this project would have no art at all without
+it — and because a reader of an APK's asset list deserves to know whose work
+they are looking at without having to go and find out.
+
+--------------------------------------------------------------------------------
+The generated greybox room (assets/models/generated-room.ofm) is produced by
+this project's own `com.openfps.tools.model.ProceduralRoom` and is covered by
+this repository's MIT license. It is the fallback for a clone with no Kenney
+packs staged, and it is deliberately reported at WARN so nobody mistakes it for
+Kenney art. See DemoModels.
+
+Each asset entering the tree is recorded here with its source, author, license,
+and license URL, per the intake checklist in docs/ASSETS.md section 7.
 --------------------------------------------------------------------------------
 
 

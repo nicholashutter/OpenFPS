@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-package com.openfps.desktop;
+package com.openfps.gdx;
 
 /**
  * What the main menu can ask the application to do.

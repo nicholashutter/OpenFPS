@@ -13,6 +13,9 @@ import com.badlogic.gdx.backends.lwjgl3.Lwjgl3ApplicationConfiguration;
 import com.openfps.engine.hal.port.I_FrameCallback;
 import com.openfps.engine.hal.port.I_WindowPort;
 import com.openfps.engine.render.adapter.SoftwareRenderPort;
+import com.openfps.gdx.DefaultMenuActions;
+import com.openfps.gdx.FramebufferPresenter;
+import com.openfps.gdx.MenuActions;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;

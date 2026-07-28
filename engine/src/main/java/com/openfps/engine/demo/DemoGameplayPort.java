@@ -155,8 +155,26 @@ public final class DemoGameplayPort implements I_GameplayPort
      */
     private volatile NetSession net;
 
-    /** MUTABLE: tic index of the last shot, for the cooldown. Under the lock. */
-    private long lastFireTic = Long.MIN_VALUE;
+    /**
+     * Tic index of the last shot, for the cooldown.
+     *
+     * <p>MUTABLE, under the lock. It starts at {@code -FIRE_INTERVAL_TICS} —
+     * "the weapon last fired just long enough ago to be ready" — and
+     * <b>emphatically not</b> at {@link Long#MIN_VALUE}, which is the obvious
+     * "never" sentinel and is wrong in a way nothing else would have caught.
+     * The cooldown test is {@code ticIndex - lastFireTic < FIRE_INTERVAL_TICS};
+     * with {@code MIN_VALUE} that subtraction overflows on the very first shot,
+     * wraps to a large negative number, and reads as "not ready yet". Since
+     * {@code lastFireTic} is only assigned <i>after</i> the test passes, it
+     * never passed and the trigger did nothing, for the whole run, on every
+     * platform.</p>
+     *
+     * <p>Found on an Android emulator, where a weapon that never fires is the
+     * only thing you can check by hand. It was equally broken on desktop and
+     * looked exactly like a hit-detection problem.
+     * {@code DemoGameplayPortTest.Trigger} is the regression.</p>
+     */
+    private long lastFireTic = -FIRE_INTERVAL_TICS;
 
     /** MUTABLE: the match state already reported, so the result is logged once. */
     private MatchState reportedState = MatchState.IN_PROGRESS;

@@ -64,6 +64,7 @@ dependencies {
     // not listed here. It depends on :engine and never on :tools; the same
     // one-way edge protects it.
     shippedRuntimeClasspath(project(":engine"))
+    shippedRuntimeClasspath(project(":gdxshared"))
     shippedRuntimeClasspath(project(":desktop"))
 }
 

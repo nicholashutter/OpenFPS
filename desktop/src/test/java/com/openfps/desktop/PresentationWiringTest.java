@@ -11,6 +11,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.openfps.engine.hal.adapter.nulladapter.NullTimePort;
 import com.openfps.engine.hal.port.I_TimePort;
 import com.openfps.engine.render.adapter.SoftwareRenderPort;
+import com.openfps.gdx.FramebufferPresenter;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;

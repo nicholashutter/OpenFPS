@@ -269,8 +269,9 @@ their module-root `README.md`.
 | Module | Contains |
 |---|---|
 | `:engine` | Everything above. Pure Java 17, **no platform dependencies** — this is what CI builds and tests with no display and no Android SDK. Keep it that way |
-| `:desktop` | libGDX LWJGL3 backend: `GdxWindowPort`, `GdxFrameLoopListener`, `GdxAdapterFactory`, main-menu screen, `DesktopLauncher` |
-| `:android` | libGDX Android backend: `AndroidWindowPort`, `AndroidAdapterFactory`, `AndroidLauncher`, Room-backed `RoomUserProfilePort`. Only included in the build when an Android SDK is present (`ANDROID_HOME` / `ANDROID_SDK_ROOT` / `local.properties`) — otherwise `settings.gradle.kts` silently skips it, so a green `gradlew build` does **not** imply `:android` compiles |
+| `:gdxshared` | The libGDX code that is **not** platform-specific: `FramebufferPresenter`, the block welcome screen, `UiState`/`UiStateMachine`, `InputAccumulator`. Depends on libGDX **core** and no backend, which is what lets both launchers use it and keeps it buildable with no display and no Android SDK. Adding a backend dependency here breaks one of the two platforms — see `gdxshared/README.md` |
+| `:desktop` | libGDX LWJGL3 backend: `GdxWindowPort`, `GdxInputPort`, `DesktopBindings`, `GdxFrameLoopListener`, `GdxAdapterFactory`, `WindowIcon`, `NetArgs`, `DesktopLauncher` |
+| `:android` | libGDX Android backend: `AndroidLauncher`, `AndroidWindowPort`, `AndroidAdapterFactory`, `AndroidUiFrameCallback`, the touch control scheme (`AndroidInputPort`, `TouchLayout`, `TouchOverlay`, `AndroidBindings`), `ApkModelSource`, Room-backed `RoomUserProfilePort`. **Playable** as of 2026-07-28. Only included in the build when an Android SDK is present (`ANDROID_HOME` / `ANDROID_SDK_ROOT` / `local.properties`) — otherwise `settings.gradle.kts` silently skips it, so a green `gradlew build` does **not** imply `:android` compiles |
 | `:tools` | **Build-time only, never shipped.** glTF → `ModelFormat` converter (`GltfConverter`), `ModelBuilder`, `MipGenerator`, `ProceduralRoom`, and the headless `DemoPreviewMain` / `RenderPreviewMain` harnesses. Depends on `:engine` one way; nothing depends on it. The root `verifyToolsIsolation` task fails the build if it ever reaches a runtime classpath |
 
 Window and input adapters live in `:desktop` / `:android` rather than under
@@ -279,7 +280,7 @@ platform-free. Both implement `I_WindowPort` and drive `I_FrameCallback` —
 which is also the presentation path for the Phase 5 rasterizer. The engine
 produces a finished framebuffer; the adapter uploads it.
 
-**1516 tests passing** (1120 `:engine`, 195 `:desktop`, 73 `:tools`, 128 `:android`), Checkstyle clean — see
+**1524 tests passing** (1131 `:engine`, 79 `:gdxshared`, 118 `:desktop`, 73 `:tools`, 123 `:android` — distinct tests; `:android:test` runs its suite twice, once per variant), Checkstyle clean — see
 `BUILD.md` for run instructions and `PLAN.md` § 8 for the per-suite breakdown.
 
 ---

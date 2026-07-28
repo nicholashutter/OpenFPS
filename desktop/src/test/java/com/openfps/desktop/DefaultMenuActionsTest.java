@@ -5,72 +5,51 @@
 
 package com.openfps.desktop;
 
-import com.openfps.engine.hal.adapter.nulladapter.NullWindowPort;
+import com.openfps.gdx.DefaultMenuActions;
+import com.openfps.gdx.MenuActions;
+import com.openfps.gdx.MenuButtonListener;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Tests for {@link DefaultMenuActions} — the logic behind the menu buttons.
+ * The menu wiring against the <b>real</b> GLFW window port.
  *
- * This is the whole reason the buttons delegate to an interface instead of
- * calling {@code Gdx.app.exit()} inline: "Quit closes the window" is
- * checkable with no display, using the null window port as the stand-in.
+ * <p>{@code DefaultMenuActions} itself is tested in {@code :gdxshared} against
+ * the null port, which is where the logic lives. What that test cannot cover is
+ * the thing this one does: that {@link GdxWindowPort} — a class with an
+ * {@code Lwjgl3Application} behind it — honours a close request with no window
+ * open at all. It does, because the flag is an {@code AtomicBoolean} owned by
+ * the port rather than a question asked of GLFW, and that property is the
+ * reason Quit works before the first frame and after the last.</p>
  */
 class DefaultMenuActionsTest
 {
-    @Test
-    @DisplayName("a null window is rejected")
-    void shouldRejectNullWindow()
-    {
-        assertThatThrownBy(() -> new DefaultMenuActions(null))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("window");
-    }
-
-    @Test
-    @DisplayName("Quit requests a window close")
-    void shouldRequestCloseOnQuit()
-    {
-        final NullWindowPort window = new NullWindowPort();
-        window.init();
-        final MenuActions actions = new DefaultMenuActions(window);
-        assertThat(window.isCloseRequested()).isFalse();
-
-        actions.onQuit();
-        assertThat(window.isCloseRequested()).isTrue();
-    }
-
     @Test
     @DisplayName("Quit works against the real GLFW port's flag with no window open")
     void shouldRequestCloseOnGdxPort()
     {
         final GdxWindowPort window = new GdxWindowPort();
         window.init();
+
         new DefaultMenuActions(window).onQuit();
+
         assertThat(window.isCloseRequested()).isTrue();
     }
 
     @Test
-    @DisplayName("Start Game does not close the window")
-    void shouldNotCloseOnStartGame()
+    @DisplayName("the Quit button wiring closes a real window when activated")
+    void shouldCloseAWindowThroughTheQuitButtonWiring()
     {
-        final NullWindowPort window = new NullWindowPort();
+        final GdxWindowPort window = new GdxWindowPort();
         window.init();
-        new DefaultMenuActions(window).onStartGame();
-        assertThat(window.isCloseRequested()).isFalse();
-    }
+        final MenuActions actions = new DefaultMenuActions(window);
+        final MenuButtonListener quitButton = new MenuButtonListener(actions::onQuit);
 
-    @Test
-    @DisplayName("Settings does not close the window")
-    void shouldNotCloseOnSettings()
-    {
-        final NullWindowPort window = new NullWindowPort();
-        window.init();
-        new DefaultMenuActions(window).onSettings();
         assertThat(window.isCloseRequested()).isFalse();
+        quitButton.changed(null, null);
+        assertThat(window.isCloseRequested()).isTrue();
     }
 }

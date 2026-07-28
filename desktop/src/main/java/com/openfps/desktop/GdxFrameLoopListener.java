@@ -12,6 +12,12 @@ import java.util.function.Consumer;
 
 import com.openfps.engine.gameplay.MatchMode;
 import com.openfps.engine.hal.port.I_FrameCallback;
+import com.openfps.gdx.DefaultMenuActions;
+import com.openfps.gdx.FramebufferPresenter;
+import com.openfps.gdx.MainMenuScreen;
+import com.openfps.gdx.MenuActions;
+import com.openfps.gdx.UiState;
+import com.openfps.gdx.UiStateMachine;
 
 /**
  * Bridges libGDX's {@link ApplicationListener} to the engine's

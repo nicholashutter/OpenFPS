@@ -11,6 +11,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -171,7 +175,9 @@ final class DemoModelsTest
         @DisplayName("rejects a null root")
         void rejectsNullRoot()
         {
-            assertThatThrownBy(() -> DemoModels.load(null))
+            // Cast because load() is overloaded on Path and ModelSource now,
+            // and a bare null names neither.
+            assertThatThrownBy(() -> DemoModels.load((Path) null))
                 .isInstanceOf(IllegalArgumentException.class);
         }
     }
@@ -196,6 +202,200 @@ final class DemoModelsTest
             assertThatThrownBy(() -> DemoModels.load(root))
                 .isInstanceOf(DemoAssetException.class)
                 .hasMessageContaining("crate.ofm");
+        }
+    }
+
+    /**
+     * A {@link ModelSource} backed by a map, which is what an APK looks like
+     * from here: entries addressed by name, no filesystem path, nothing to
+     * resolve. If the loader works against this it will work against Android's
+     * asset manager, and this test needs no device to say so.
+     */
+    private static final class InMemorySource implements ModelSource
+    {
+        /** Entry bytes by relative path. */
+        private final Map<String, byte[]> entries = new HashMap<>();
+
+        /** Every path {@link #has} was asked about, in order. */
+        private final List<String> asked = new ArrayList<>();
+
+        /** Adds a valid model at a path. */
+        InMemorySource put(final String path)
+        {
+            entries.put(path, DemoModelFixture.quad());
+            return this;
+        }
+
+        /** Adds arbitrary bytes at a path. */
+        InMemorySource putRaw(final String path, final byte[] bytes)
+        {
+            entries.put(path, bytes);
+            return this;
+        }
+
+        /** Returns every path this source was asked about. */
+        List<String> asked()
+        {
+            return asked;
+        }
+
+        @Override
+        public boolean has(final String relativePath)
+        {
+            asked.add(relativePath);
+            return entries.containsKey(relativePath);
+        }
+
+        @Override
+        public byte[] read(final String relativePath) throws IOException
+        {
+            final byte[] bytes = entries.get(relativePath);
+            if (bytes == null)
+            {
+                throw new IOException("no entry " + relativePath);
+            }
+            return bytes;
+        }
+
+        @Override
+        public String describe(final String relativePath)
+        {
+            return "in-memory:" + relativePath;
+        }
+
+        @Override
+        public String describeRoot()
+        {
+            return "in-memory";
+        }
+    }
+
+    /** A map source carrying a complete level kit. */
+    private static InMemorySource sourceWithKit()
+    {
+        final InMemorySource source = new InMemorySource();
+        for (final String piece : KIT)
+        {
+            source.put(DemoModels.LEVEL_DIRECTORY + "/" + piece);
+        }
+        return source;
+    }
+
+    @Nested
+    @DisplayName("from a source that is not a directory")
+    final class FromASource
+    {
+        @Test
+        @DisplayName("loads the kit with no filesystem anywhere in the picture")
+        void loadsTheKitFromAMap()
+        {
+            final DemoModels models = DemoModels.load(sourceWithKit()
+                .put(DemoModels.WEAPON_DIRECTORY + "/" + DemoModels.WEAPON_MODEL)
+                .put(DemoModels.CHARACTER_DIRECTORY + "/character-a.ofm"));
+
+            assertThat(models.source()).isEqualTo(DemoModels.Source.KENNEY_KIT);
+            assertThat(models.floor()).isNotNull();
+            assertThat(models.weapon()).isNotNull();
+            assertThat(models.characters()).hasSize(1);
+        }
+
+        @Test
+        @DisplayName("asks for slash-separated paths, not the platform separator")
+        void usesSlashSeparatedPaths()
+        {
+            // The convention ModelSource fixes, checked where it is load-bearing:
+            // a Windows JVM must still ask for "level/wall.ofm", because a zip
+            // entry has no backslash in it on any platform. Nothing in the
+            // directory implementation would notice — Path.resolve accepts both
+            // — so only a non-filesystem source can catch a regression here.
+            final InMemorySource source = sourceWithKit();
+
+            DemoModels.load(source);
+
+            assertThat(source.asked()).contains("level/wall.ofm")
+                .allSatisfy(path -> assertThat(path).doesNotContain("\\"));
+        }
+
+        @Test
+        @DisplayName("still refuses a source with no geometry at all")
+        void refusesAnEmptySource()
+        {
+            assertThatThrownBy(() -> DemoModels.load(new InMemorySource()))
+                .isInstanceOf(DemoAssetException.class)
+                .hasMessageContaining(DemoModels.REGENERATE_COMMAND);
+        }
+
+        @Test
+        @DisplayName("still fails loudly on a corrupt entry rather than degrading")
+        void refusesACorruptEntry()
+        {
+            final InMemorySource source = sourceWithKit()
+                .putRaw(DemoModels.LEVEL_DIRECTORY + "/crate.ofm", new byte[] {1, 2, 3})
+                .put(DemoModels.FALLBACK_MODEL);
+
+            assertThatThrownBy(() -> DemoModels.load(source))
+                .isInstanceOf(DemoAssetException.class)
+                .hasMessageContaining("crate.ofm");
+        }
+
+        @Test
+        @DisplayName("rejects a null source")
+        void rejectsNullSource()
+        {
+            assertThatThrownBy(() -> DemoModels.load((ModelSource) null))
+                .isInstanceOf(IllegalArgumentException.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("DirectoryModelSource")
+    final class Directory
+    {
+        @Test
+        @DisplayName("accepts a slash-separated path on any platform")
+        void resolvesSlashSeparatedPaths(@TempDir final Path root) throws IOException
+        {
+            DemoModelFixture.write(root.resolve("level").resolve("wall.ofm"));
+            final DirectoryModelSource source = new DirectoryModelSource(root);
+
+            assertThat(source.has("level/wall.ofm")).isTrue();
+            assertThat(source.read("level/wall.ofm")).isNotEmpty();
+            assertThat(source.has("level/missing.ofm")).isFalse();
+        }
+
+        @Test
+        @DisplayName("describes a file as an absolute path, so a log line is actionable")
+        void describesAbsolutely(@TempDir final Path root)
+        {
+            final DirectoryModelSource source = new DirectoryModelSource(root);
+
+            assertThat(source.describe("level/wall.ofm"))
+                .isEqualTo(root.resolve("level").resolve("wall.ofm").toAbsolutePath().toString());
+            assertThat(source.describeRoot()).isEqualTo(root.toAbsolutePath().toString());
+        }
+
+        @Test
+        @DisplayName("a root that does not exist is not an error until something is asked for")
+        void toleratesAnAbsentRoot(@TempDir final Path root)
+        {
+            // A missing model root must reach DemoModels and be reported with
+            // the regenerate command, not die one layer early with a stack
+            // trace about a directory.
+            final DirectoryModelSource source =
+                new DirectoryModelSource(root.resolve("does-not-exist"));
+
+            assertThat(source.has("level/wall.ofm")).isFalse();
+            assertThatThrownBy(() -> DemoModels.load(source))
+                .isInstanceOf(DemoAssetException.class)
+                .hasMessageContaining(DemoModels.REGENERATE_COMMAND);
+        }
+
+        @Test
+        @DisplayName("rejects a null root")
+        void rejectsNullRoot()
+        {
+            assertThatThrownBy(() -> new DirectoryModelSource(null))
+                .isInstanceOf(IllegalArgumentException.class);
         }
     }
 }

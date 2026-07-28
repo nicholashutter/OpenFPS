@@ -23,6 +23,13 @@ val gdxVersion = "1.14.2"
 dependencies {
     implementation(project(":engine"))
 
+    // The presenter, the welcome screen, the UI state machine and the input
+    // accumulator — everything that needs libGDX but not a backend. Shared
+    // with :android rather than duplicated; see gdxshared/build.gradle.kts.
+    // It exposes :engine and libGDX core as `api`, so both remain on this
+    // module's compile classpath through it as well as directly.
+    implementation(project(":gdxshared"))
+
     // libGDX core + the LWJGL3 desktop backend. gdx-platform carries the
     // precompiled natives; without the natives-desktop classifier the backend
     // links but fails at runtime with UnsatisfiedLinkError.

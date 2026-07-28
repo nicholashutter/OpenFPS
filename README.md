@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Java Version](https://img.shields.io/badge/Java-17%20LTS-ED8B00.svg)](https://adoptium.net/)
 [![Gradle](https://img.shields.io/badge/Gradle-8.13-02303A.svg)](https://gradle.org/)
-[![Tests](https://img.shields.io/badge/tests-1516%20passing-brightgreen.svg)](BUILD.md)
+[![Tests](https://img.shields.io/badge/tests-1524%20passing-brightgreen.svg)](BUILD.md)
 [![Status](https://img.shields.io/badge/status-pre--alpha-blue.svg)](PLAN.md)
 
 ## Overview
@@ -14,7 +14,7 @@ OpenFPS is a from-scratch FPS game engine written in Java 17, designed around th
 
 The engine is an **event queue processor**: subsystems communicate by publishing events to a shared bus, and a pool of N dedicated worker threads (N = logical CPU count / 2) consumes events and dispatches them to the target subsystem. Each subsystem is its own state machine. Every allocation goes through a single memory port.
 
-**Currently in pre-alpha, and it is a game now rather than a demo.** A blocky title screen, a single-player match against seven bots that patrol and shoot back, hitscan combat with a crosshair and outlined opponents, and a UDP transport that two live processes have been measured exchanging. 1516 tests passing, Checkstyle clean, build green.
+**Currently in pre-alpha, and it is a game now rather than a demo.** A blocky title screen, a single-player match against seven bots that patrol and shoot back, hitscan combat with a crosshair and outlined opponents, and a UDP transport that two live processes have been measured exchanging. It runs on a phone: the same rasterizer, the same match, driven by a thumbstick. 1524 tests passing, Checkstyle clean, build green.
 
 What is *not* yet true: remote players are not simulated into bodies you can see, and the Android build boots the engine but never puts the world on screen. Both are stated precisely in [AGENTS.md](AGENTS.md).
 
@@ -97,9 +97,10 @@ To look at the renderer without a window, both preview harnesses are headless:
 | Module | Contains | Notes |
 |---|---|---|
 | `:engine` | The whole engine: core, memory, HAL ports, gameplay, render, net, resource, audio, demo | Pure Java 17, **no platform dependencies**. Builds and tests headless anywhere |
-| `:desktop` | libGDX LWJGL3 backend — window, input, framebuffer presentation, main menu, `DesktopLauncher` | |
+| `:gdxshared` | The libGDX code that is not platform-specific — framebuffer presentation, the welcome screen, the UI state machine, the input accumulator | Depends on libGDX **core** and no backend. Both launchers use it; neither writes it twice |
+| `:desktop` | libGDX LWJGL3 backend — window, mouse and keyboard, `DesktopLauncher` | |
 | `:tools` | Build-time only: glTF → `ModelFormat` converter, mip generation, headless preview harnesses | Nothing depends on it. `verifyToolsIsolation` fails the build if it ever reaches a runtime classpath |
-| `:android` | libGDX Android backend — `AndroidLauncher`, `AndroidWindowPort`, Room-backed profile storage | **Only included when an Android SDK is present.** Without `ANDROID_HOME`, `settings.gradle.kts` silently skips it, so a green `gradlew build` does not prove `:android` compiles |
+| `:android` | libGDX Android backend — `AndroidLauncher`, the touch control scheme, Room-backed profile storage | **Playable.** Only included when an Android SDK is present; without `ANDROID_HOME`, `settings.gradle.kts` silently skips it, so a green `gradlew build` does not prove `:android` compiles |
 
 ## Renderer
 
@@ -263,7 +264,10 @@ audio → net → resource → memory`.
 
 ## Test Coverage
 
-**1516 tests, all passing** — 1120 `:engine`, 195 `:desktop`, 73 `:tools`, 128 `:android`.
+**1524 tests, all passing** — 1131 `:engine`, 79 `:gdxshared`, 118 `:desktop`, 73 `:tools`, 123 `:android`.
+These are *distinct* tests. An earlier count said 1516 and was slightly wrong in a
+specific way: `:android:test` builds a debug and a release variant and runs the
+same suite twice, so a raw tally of its XML double-counts every Android test.
 
 | Module | Tests | Largest suites |
 |---|---|---|

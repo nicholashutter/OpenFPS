@@ -24,6 +24,65 @@ repositories {
 val gdxVersion = "1.14.2"
 val roomVersion = "2.8.4"
 
+// ---------------------------------------------------------------------------
+// Model assets — what makes the Android build a game rather than a menu
+// ---------------------------------------------------------------------------
+// The demo's models live at the repository root in assets/models, written by
+// `gradlew :tools:regenerateDemoAssets`. Desktop reads them straight off disk.
+// An APK cannot: the app has no access to the developer's filesystem, so the
+// files have to be INSIDE it, under assets/, where ApkModelSource reads them
+// through the platform AssetManager.
+//
+// Staged into a generated directory rather than committed to
+// android/src/main/assets, because docs/ASSETS.md section 6 keeps upstream art
+// out of git and copying it into a source tree would put it right back in.
+// A fresh clone therefore builds an APK with no models in it — that is the
+// intended outcome, and AndroidLauncher reports it and comes up as a menu.
+//
+// It is a lot of megabytes — about 36 of converted models, against an APK that
+// was 10 without them. Almost all of it is texture: ModelFormat has no shared-
+// atlas concept, so each of the eighteen Kenney characters carries its own
+// private copy of what is very nearly the same 512x512 image. The demo only
+// stands seven of them up, but the choice of WHICH seven lives in DemoModels
+// where it belongs, and repeating that list here would be a second place for it
+// to drift. Shrinking this is a model-format change, not a build-script one.
+//
+// Resolved to plain Files at configuration time: the configuration cache
+// refuses to serialise a task that closes over a Project or a script object.
+val modelAssetsSourceDir = rootProject.layout.projectDirectory.dir("assets/models").asFile
+val modelAssetsStagedDir = layout.buildDirectory.dir("generated/openfpsAssets").get().asFile
+
+/**
+ * Stages the repository's model tree into the APK's assets.
+ *
+ * Sync rather than Copy: a model removed from assets/models must disappear from
+ * the next APK too, and Copy would leave it behind forever. A missing source
+ * directory is not an error — it is the state of every fresh clone — and Sync
+ * simply produces an empty staging directory, which is exactly what an APK with
+ * no world in it should contain.
+ *
+ * The `into("models")` sits on the FROM spec rather than on the task, so the
+ * task's declared output directory is the assets ROOT and the files land one
+ * level down in models/. That is not cosmetic: the source set below registers
+ * this task itself as the srcDir, which is what tells Gradle who produces that
+ * directory. Registering the plain File instead builds and packages correctly
+ * and then fails every task that merely READS the directory — lint, in
+ * practice — with "Gradle detected a problem with the following location",
+ * because nothing had declared a producer for it.
+ */
+val stageModelAssets by tasks.registering(Sync::class) {
+    group = "openfps"
+    description = "Copies assets/models into the APK's assets so the demo has a world."
+    from(modelAssetsSourceDir) {
+        // Converted models only. assets/models also holds the RAW Kenney
+        // downloads the converter reads — .glb, .obj, source textures, licence
+        // files — which are ~17 MB the device would carry and never open.
+        include("**/*.ofm")
+        into("models")
+    }
+    into(modelAssetsStagedDir)
+}
+
 android {
     namespace = "com.openfps.android"
     compileSdk = 36
@@ -65,6 +124,20 @@ android {
             // keep rule set, and there is nothing to ship yet that would
             // justify debugging that now.
             isMinifyEnabled = false
+        }
+    }
+
+    sourceSets {
+        getByName("main") {
+            // The staged models, in addition to the default
+            // src/main/assets — not instead of it, so anything genuinely
+            // committed as an asset later still arrives.
+            //
+            // The TASK, not its output path. srcDir resolves it through
+            // Project.files(), which carries the task dependency with it, so
+            // every consumer of the assets — merge, package, AND lint — knows
+            // what produces them. See stageModelAssets.
+            assets.srcDir(stageModelAssets)
         }
     }
 
@@ -127,6 +200,17 @@ dependencies {
     //
     // Together these were ~4 MB of an APK that draws a menu.
     implementation(project(":engine")) {
+        exclude(group = "ch.qos.logback")
+        exclude(group = "org.xerial", module = "sqlite-jdbc")
+    }
+
+    // The framebuffer presenter, the UI state machine and the input
+    // accumulator — the libGDX code that is not platform-specific, shared with
+    // :desktop rather than written twice. It exposes :engine as `api`, so the
+    // same two exclusions have to be repeated here: an exclusion applies to the
+    // dependency it is declared on, and logback arriving transitively through
+    // this edge would be just as broken on Android as arriving directly.
+    implementation(project(":gdxshared")) {
         exclude(group = "ch.qos.logback")
         exclude(group = "org.xerial", module = "sqlite-jdbc")
     }
@@ -218,3 +302,4 @@ tasks.register<CopyAndroidNativesTask>("copyAndroidNatives") {
 tasks.matching { it.name.contains("merge") && it.name.contains("JniLibFolders") }.configureEach {
     dependsOn("copyAndroidNatives")
 }
+

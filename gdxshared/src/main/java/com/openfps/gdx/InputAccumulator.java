@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-package com.openfps.desktop;
+package com.openfps.gdx;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -129,17 +129,20 @@ public final class InputAccumulator
     /** Sprint seen down since the last latch. MUTABLE: set by poll, cleared by latch. */
     private final AtomicBoolean sprintSeen = new AtomicBoolean();
 
-    /** Forward key level. MUTABLE: overwritten by every poll. */
-    private volatile boolean forwardHeld;
+    /**
+     * Forward/back deflection, −1..1.
+     *
+     * <p>MUTABLE: overwritten by every poll. A single {@code float} rather than
+     * a pair of booleans because a thumbstick genuinely is analog and a key is
+     * simply a stick that only ever reaches its stops —
+     * {@link #setMovementKeys} converts. Volatile is sufficient: a {@code float}
+     * write is atomic, and the two axes are allowed to be read a microsecond
+     * apart for the same reason a key level and a look delta are.</p>
+     */
+    private volatile float forwardAxis;
 
-    /** Back key level. MUTABLE: overwritten by every poll. */
-    private volatile boolean backHeld;
-
-    /** Strafe-left key level. MUTABLE: overwritten by every poll. */
-    private volatile boolean leftHeld;
-
-    /** Strafe-right key level. MUTABLE: overwritten by every poll. */
-    private volatile boolean rightHeld;
+    /** Left/right deflection, −1..1, positive right. MUTABLE: overwritten by every poll. */
+    private volatile float strafeAxis;
 
     /** Fire level. MUTABLE: overwritten by every poll. */
     private volatile boolean fireHeld;
@@ -224,10 +227,29 @@ public final class InputAccumulator
     public void setMovementKeys(final boolean forward, final boolean back,
         final boolean left, final boolean right)
     {
-        forwardHeld = forward;
-        backHeld = back;
-        leftHeld = left;
-        rightHeld = right;
+        setMovementAxes(axis(forward, back), axis(right, left));
+    }
+
+    /**
+     * Records an analog movement deflection seen by this poll.
+     *
+     * <p>What a thumbstick produces, and what {@link #setMovementKeys} reduces
+     * to: a key is a stick that is only ever centred or at its stop. Both write
+     * the same two fields, so a platform may use either and nothing downstream
+     * can tell which.</p>
+     *
+     * <p>Values are stored as given. Clamping to the unit disc happens once, in
+     * {@link InputState#of}, so every adapter present and future obeys the same
+     * rule rather than each remembering to — including the one that stops a
+     * diagonal being 41% faster than a straight line.</p>
+     *
+     * @param forward forward/back deflection, positive forward
+     * @param strafe left/right deflection, positive right
+     */
+    public void setMovementAxes(final float forward, final float strafe)
+    {
+        forwardAxis = forward;
+        strafeAxis = strafe;
     }
 
     /**
@@ -308,8 +330,8 @@ public final class InputAccumulator
         final float yaw = rawYaw * radiansPerPixel;
         final float pitch = -rawPitch * radiansPerPixel;
         return InputState.of(
-            axis(forwardHeld, backHeld),
-            axis(rightHeld, leftHeld),
+            forwardAxis,
+            strafeAxis,
             yaw,
             pitch,
             fireSeen.getAndSet(false) || fireHeld,
@@ -321,6 +343,30 @@ public final class InputAccumulator
     public float radiansPerPixel()
     {
         return radiansPerPixel;
+    }
+
+    /**
+     * Returns the forward/back deflection the last poll recorded.
+     *
+     * <p>A level, not an integral, so reading it does not consume it — unlike
+     * {@link #pendingYawPixels()}, which names pixels that {@link #latch} will
+     * take away.</p>
+     *
+     * @return the deflection, positive forward
+     */
+    public float movementForwardAxis()
+    {
+        return forwardAxis;
+    }
+
+    /**
+     * Returns the left/right deflection the last poll recorded.
+     *
+     * @return the deflection, positive right
+     */
+    public float movementStrafeAxis()
+    {
+        return strafeAxis;
     }
 
     /** Returns the horizontal pixels gathered but not yet latched. For tests and diagnostics. */

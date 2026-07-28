@@ -13,6 +13,9 @@ import com.openfps.engine.hal.port.GameAction;
 import com.openfps.engine.hal.port.I_InputPort;
 import com.openfps.engine.hal.port.InputBinding;
 import com.openfps.engine.hal.port.InputState;
+import com.openfps.gdx.InputAccumulator;
+import com.openfps.gdx.UiState;
+import com.openfps.gdx.UiStateMachine;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

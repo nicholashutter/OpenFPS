@@ -568,6 +568,70 @@ final class DemoGameplayPortTest
             assertThatCode(() -> port.tick(0)).doesNotThrowAnyException();
         }
 
+        @Test
+        @DisplayName("the very first pull of the trigger fires")
+        void shouldFireTheFirstShotOfAMatch(@TempDir final Path root) throws IOException
+        {
+            // The regression for a bug that made the weapon useless on every
+            // platform for the whole of a run. lastFireTic was initialised to
+            // Long.MIN_VALUE — the obvious "has never fired" sentinel — and the
+            // cooldown test is a subtraction: ticIndex - lastFireTic. That
+            // overflows, wraps to a large NEGATIVE number, and compares as
+            // "still cooling down". lastFireTic is only written after the test
+            // passes, so it never passed and the trigger never worked.
+            //
+            // Nothing else would have caught it. Match.firePlayerShot has its
+            // own tests and they pass; Hitscan's pass; the input path's pass.
+            // The defect lives exactly in the join between them, and it took
+            // firing at a bot by hand on a phone to find it.
+            final DemoScene demo = world(root);
+            final SoftwareRenderPort render = renderer();
+            render.resize(SURFACE, SURFACE);
+            render.setScene(demo.scene());
+
+            final Match round = demo.newMatch();
+            final DemoGameplayPort port = new DemoGameplayPort(
+                new ScriptedInput(InputState.of(0.0f, 0.0f, 0.0f, 0.0f, true, false, false)),
+                render, demo.spawnController(), config(), round, indicesOf(demo));
+            port.setMatchLive(true);
+
+            port.tick(0);
+
+            assertThat(round.playerShotsFired())
+                .as("the trigger was held on tic 0 and nothing came out")
+                .isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("a held trigger fires on the weapon's cadence, not once per tic")
+        void shouldRespectTheCooldown(@TempDir final Path root) throws IOException
+        {
+            // The other half of the same arithmetic. With the trigger held for
+            // a whole second at 60 Hz the weapon must fire on its own interval;
+            // a fix that simply removed the cooldown would pass the test above
+            // and turn the blaster into 60 hitscans a second.
+            final DemoScene demo = world(root);
+            final SoftwareRenderPort render = renderer();
+            render.resize(SURFACE, SURFACE);
+            render.setScene(demo.scene());
+
+            final Match round = demo.newMatch();
+            final DemoGameplayPort port = new DemoGameplayPort(
+                new ScriptedInput(InputState.of(0.0f, 0.0f, 0.0f, 0.0f, true, false, false)),
+                render, demo.spawnController(), config(), round, indicesOf(demo));
+            port.setMatchLive(true);
+
+            final int tics = 60;
+            for (int tic = 0; tic < tics; tic++)
+            {
+                port.tick(tic);
+            }
+
+            // Tic 0, then every twelfth: 0, 12, 24, 36, 48 — five shots.
+            assertThat(round.playerShotsFired())
+                .isEqualTo(1 + ((tics - 1) / DemoGameplayPort.FIRE_INTERVAL_TICS));
+        }
+
         // The first bot with a route that actually goes somewhere.
         private static int firstMover(final Match round)
         {

@@ -67,13 +67,14 @@ $env:JAVA_HOME = "C:\Program Files\Eclipse Adoptium\jdk-21.0.11.10-hotspot"
 
 ## The modules
 
-OpenFPS is a four-module Gradle build. Knowing which is which is the difference
+OpenFPS is a five-module Gradle build. Knowing which is which is the difference
 between `run` doing what you meant and `run` opening a window you didn't want.
 
 | Module | Included when | What it is |
 |---|---|---|
 | `:engine` | always | The engine. Platform-free — builds and tests headless with no display |
-| `:desktop` | always | libGDX LWJGL3 window, input, presentation, `DesktopLauncher` |
+| `:gdxshared` | always | libGDX **core** only: framebuffer presentation, the welcome screen, the UI state machine. Shared by both launchers |
+| `:desktop` | always | libGDX LWJGL3 window, input, `DesktopLauncher` |
 | `:tools` | always | Build-time only: glTF conversion and headless render previews |
 | `:android` | **only when an Android SDK is present** | libGDX Android backend |
 
@@ -283,6 +284,39 @@ adb logcat -s OpenFPS:V
 ```
 
 `adb` ships in `<SDK>\platform-tools`, which is not on `PATH` by default.
+
+### It is playable
+
+Tap **Single Player** and you are in the same room the desktop build shows,
+drawn by the same software rasterizer, with the same seven bots shooting back.
+
+| Control | Where |
+|---|---|
+| Move | anywhere on the left half — the stick appears under your thumb |
+| Look | anywhere on the right half — drag to turn |
+| Fire | the large disc, bottom right |
+| Jump | the smaller disc, inboard of fire |
+| Leave the match | the disc top right, or the system back key |
+
+There is no sprint on this platform, deliberately — see `AndroidBindings`.
+
+### The APK needs the models staged first
+
+`stageModelAssets` copies `assets/models/**/*.ofm` into the APK. That directory
+is gitignored, so **a fresh clone builds an APK with no world in it**: the menu
+comes up, Single Player enters an empty room, and logcat says so at `ERROR`
+naming the regenerate command. Produce the models first — see *Demo assets*
+above — then rebuild.
+
+With the models staged the debug APK is about 11 MB; without them, about 7.
+
+### Reading engine logs
+
+`slf4j-android` tags by logger name and Android truncates tags to 23
+characters, so `com.openfps.engine.demo.DemoGameplayPort` appears as
+`coed.DemoGameplayPort`. That looks like corruption and is not. `-s OpenFPS:V`
+filters to the platform classes only; drop it to see the engine.
+
 
 `:android` is a real **application** module (`com.android.application`,
 namespace `com.openfps.android`) whose launcher activity is `AndroidLauncher` —

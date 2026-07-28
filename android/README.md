@@ -1,65 +1,94 @@
 # `:android` — the Android launcher
 
-> libGDX's Android backend, a menu, and the Room half of `I_UserProfilePort`.
-> The APK assembles and installs. **It has never been launched.**
+> libGDX's Android backend, the software rasterizer on a GLSurfaceView, a
+> thumbstick, and the Room half of `I_UserProfilePort`. **It is playable.**
 
 ## Status
 
 | Field | Value |
 |---|---|
-| **State** | PARTIAL |
+| **State** | SHIPPING |
 | **Phase** | not a numbered phase |
-| **Tests** | 64 unique (128 executions — the suite runs against the debug and release variants). Plain JVM only; nothing device-backed |
+| **Tests** | 123 unique (246 executions — the suite runs against the debug and release variants). Plain JVM only; nothing device-backed |
 | **Registered** | provides the Android HAL (`AndroidAdapterFactory`) and the LAUNCHER Activity |
-| **Verified** | 2026-07-28 — **run on the OpenFPS_API36 emulator for the first time** |
+| **Verified** | 2026-07-28 — **played on the OpenFPS_API36 emulator: menu, match, seven bots, a kill** |
 
-### What the emulator run established, and what it did not
+### What the emulator run established
 
-The APK builds, installs, launches, and stays up. The engine genuinely runs on
-the device: `EngineMain` boots, the Room profile loads, `SharedEventBus` comes
-up, `WorkerPool` sizes itself to the emulator's 6 cores and starts 3 workers,
-and `GameLoop` runs at a fixed 60 Hz. The Scene2D menu draws. Nothing crashed.
+The whole loop works on a phone. Measured on the OpenFPS_API36 AVD, API 36,
+2400×1080 landscape at 2.625× density:
 
-**The game is not on screen, and that is the honest headline.** `AndroidLauncher`
-calls the two-argument `EngineMain.start`, which means the null render port and
-the null gameplay port — so the software rasterizer is never attached to a
-surface, there is no match, no bots, no input beyond the menu buttons. Android
-today is the engine core running on a phone behind a menu, which is a real
-milestone and is not a playable build.
+- The menu comes up and fits the screen.
+- **Single Player enters the world**: the software rasterizer's frame is
+  presented as a fullscreen quad, showing the real Kenney room read out of the
+  APK's own assets — `source=KENNEY_KIT`, 301 world instances, GLES 3.0.
+- **The touch controls drive the engine.** A floating thumbstick on the left
+  half walks; a drag on the right half turns; the fire, jump and leave buttons
+  work; the system back key leaves the match.
+- **Combat works end to end**: `HIT entity 2`, `HIT entity 2`,
+  `KILL entity 2 — 1 of 7 down`. Three shots kill a bot, exactly as designed,
+  and the body is drawn lying flat afterwards.
+- The bots patrol and shoot back, and the match gate holds them frozen while the
+  menu is in front.
 
-The three things that stand between here and a playable one, in order: a
-GLES presenter for the framebuffer (the desktop equivalent is
-`FramebufferPresenter`), an `ActionBindings` table bound to touch regions
-(`InputBinding.Source.TOUCH_REGION` exists for exactly this), and a gameplay
-port wired the way `DesktopLauncher` wires one.
+### What that run found, which is the more useful half
 
-**Built.** `AndroidLauncher` (the Activity), `AndroidWindowPort` (registers with
-the framework loop rather than blocking), `AndroidAdapterFactory` (the null
-backend with the real window and a Room profile port substituted),
-`GdxLifecycleBridge`, `CompositeFrameCallback`, `MainMenuFrameCallback`,
-`MenuSkinFactory`, and `persistence/` — `RoomUserProfilePort`,
-`UserProfileEntity`, `UserProfileDao`, `OpenFpsDatabase`.
+Running it by hand found **two defects that no test had**:
 
-**Not built.** No tests of any kind — this is the only module in the repository
-contributing nothing to the suite, and no instrumented (`androidTest`) coverage
-exists either. There is no input port: `AndroidAdapterFactory` takes the null
-one, so nothing on a touchscreen can move a camera yet. And there is no Android
-counterpart to `FramebufferPresenter`, so the software rasterizer's output is
-not presented here.
+1. **The menu did not fit a landscape screen.** Four 72 dp buttons plus a title
+   want 468 dp of height; a landscape phone at 2.625× has 411 dp. The title
+   clipped off the top and Quit clipped off the bottom — on a screen whose only
+   two useful controls are "start" and "leave". `MainMenuFrameCallback
+   .layoutDensity` caps the layout density so the block always fits.
 
-**Blocked on.** Nothing technical. It has simply never been run.
+2. **The trigger never worked. On any platform.** `DemoGameplayPort.lastFireTic`
+   was initialised to `Long.MIN_VALUE` — the obvious "has never fired" sentinel
+   — and the cooldown test is a subtraction, `ticIndex - lastFireTic`. That
+   overflows on the very first shot, wraps to a large negative number, and reads
+   as "still cooling down"; and since `lastFireTic` is only written *after* the
+   test passes, it never passed. Every unit around it was green:
+   `Match.firePlayerShot` had tests, `Hitscan` had tests, the input path had
+   tests. The defect lived exactly in the join, and it took firing at a bot by
+   hand on a phone to find it. `DemoGameplayPortTest.Trigger` is the regression.
 
-**Next step.** Launch it on the emulator and confirm the engine boots and logs.
-Everything below is unverified until that happens.
+**Built.** `AndroidLauncher` (the Activity and composition root),
+`AndroidWindowPort` (registers with the framework loop rather than blocking),
+`AndroidAdapterFactory` (the null backend with the real window, touch input and
+a Room profile port substituted), `AndroidUiFrameCallback` (menu or world, and
+everything that follows), `AndroidInputPort` + `TouchLayout` + `TouchOverlay` +
+`AndroidBindings` (the touch control scheme), `ApkModelSource` (the demo's
+models, out of the APK), `GdxLifecycleBridge`, `CompositeFrameCallback`,
+`MainMenuFrameCallback`, `MenuSkinFactory`, and `persistence/` —
+`RoomUserProfilePort`, `UserProfileEntity`, `UserProfileDao`, `OpenFpsDatabase`.
 
-## The single most important fact
+**Not built.** No instrumented (`androidTest`) coverage — everything here is a
+plain-JVM unit test, and everything that would need a real framework is
+deliberately left uncovered rather than faked. No multiplayer: there is no
+Android equivalent of `--net=`/`--peer=`, so the Multiplayer button enters the
+same local match Single Player does. No sprint control, deliberately — see
+`AndroidBindings`. The Android menu is still its own Scene2D layout rather than
+the shared block welcome screen in `:gdxshared`.
 
-**This module has never executed.** `gradlew :android:assembleDebug` produces an
-APK and `adb install` accepts it, and that is the entire extent of what is
-known. No frame has been drawn, no engine log line has been read off a device,
-and no `onCreate` has returned on real hardware. Treat every claim in the
-Javadoc here — the context-loss handling, the density scaling, the Room
-round-trip — as a well-reasoned prediction rather than an observation.
+**Blocked on.** Nothing.
+
+**Next step.** Two, neither urgent: switch the menu over to `:gdxshared`'s block
+screen so both platforms look the same, and give the touch scheme a settings
+surface — `ActionBindings` is already rebindable at runtime and nothing exposes
+it.
+
+## What is still not verified on a device
+
+Everything above was observed. These were not, and remain well-reasoned
+predictions rather than observations:
+
+- **GL context loss.** Android can destroy and rebuild the EGL context while the
+  process lives. Every GL resource here is managed, so libGDX should re-upload
+  it; that path has not been exercised.
+- **Rotation.** The manifest pins landscape, so no rotation has ever happened.
+- **Real hardware.** The emulator is x86_64 with host GPU. No ARM device has run
+  this, and the software rasterizer's throughput on a real phone is unmeasured.
+- **The Room round trip across process death.** The profile loads; nothing has
+  killed the process and checked that it came back.
 
 ## A green build does not mean this module compiles
 
@@ -120,8 +149,31 @@ excluded because it does not work on Android. SLF4J 2.x with no provider on the
 classpath binds to the **NOP logger** and silently discards every engine log
 line — including `LOG.error` from worker dispatch failures. The failure mode is
 an app that looks fine and reports nothing, which is the worst possible one to
-debug an emulator bring-up against. Since bring-up is exactly the next step,
-this binding is load-bearing.
+debug an emulator bring-up against. It earned its place on the first run: the
+lines that identified the broken trigger — `HIT entity 2`, and their absence
+before the fix — come out of `:engine` through this binding and nowhere else.
+
+## Where the world in the APK comes from
+
+The demo's models live at the repository root in `assets/models`, written by
+`gradlew :tools:regenerateDemoAssets`. Desktop reads them straight off disk. An
+APK cannot: the app has no access to the developer's filesystem, so the files
+have to be **inside** it.
+
+`stageModelAssets` syncs `assets/models/**/*.ofm` into a generated directory
+that is registered as an asset source set, and `ApkModelSource` reads them back
+through the platform `AssetManager`. That is the whole reason
+`DemoModels.load` takes a `ModelSource` rather than a `Path` — an APK entry has
+no filesystem path for `Files.readAllBytes` to open.
+
+`assets/models` is gitignored (`docs/ASSETS.md` § 6 keeps upstream art out of
+git), so **an APK built from a fresh clone contains no models**. That is the
+intended outcome, not a failure: `AndroidLauncher` reports it at `ERROR`, naming
+the regenerate command, and comes up as a menu with nothing behind it.
+
+The staged models are about 36 MB uncompressed and add roughly 4 MB to the APK —
+`.ofm` texture data deflates extremely well. See `android/build.gradle.kts` for
+why all eighteen character models ship when only seven are used.
 
 ## Build, install, run, watch
 
@@ -132,9 +184,31 @@ adb shell am start -n com.openfps.android/com.openfps.android.AndroidLauncher
 adb logcat -s OpenFPS:V
 ```
 
-`OpenFPS` is the logcat tag `AndroidLauncher` uses for platform-side messages;
-engine log lines arrive through `slf4j-android`, which tags by logger name, so
-widen the filter once the launcher's own lines confirm the Activity started.
+`OpenFPS` is the logcat tag the platform classes use. Engine log lines arrive
+through `slf4j-android`, which tags by logger name and **truncates to Android's
+23-character limit** — `com.openfps.engine.demo.DemoGameplayPort` shows up as
+`coed.DemoGameplayPort`, which looks like corruption and is not. Drop the
+`-s OpenFPS:V` filter to see them.
+
+## The controls
+
+| Control | Where |
+|---|---|
+| Move | anywhere on the left half — the stick appears under your thumb |
+| Look | anywhere on the right half — drag to turn |
+| Fire | the large disc, bottom right |
+| Jump | the smaller disc, inboard of fire |
+| Leave the match | the disc top right, or the system back key |
+
+The stick **floats**: it appears wherever the left thumb lands rather than at a
+painted spot. A fixed stick makes the player look at their thumb to find it, and
+on a screen they are also trying to aim at, that is the difference between a
+control and an obstacle.
+
+There is no sprint, deliberately. Screen space beside the fire button is the
+scarcest thing on a phone, and a modifier held while aiming and firing wants a
+thumb nobody has. `AndroidInputPort.init()` says so in logcat rather than
+leaving it to be discovered.
 
 ## Files
 
@@ -143,17 +217,32 @@ widen the filter once the launcher's own lines confirm the Activity started.
 - `AndroidAdapterFactory.java` — null backend, real window, Room profile port
 - `GdxLifecycleBridge.java` — `ApplicationListener` → `I_FrameCallback`
 - `CompositeFrameCallback.java` — one platform frame, two callbacks, in order
-- `MainMenuFrameCallback.java` — the menu, in density-independent pixels
+- `AndroidUiFrameCallback.java` — menu or world, the input processor, the match
+  gate, and leaving a match
+- `MainMenuFrameCallback.java` — the menu, in density-independent pixels, capped
+  so it fits the surface it is given
 - `MenuSkinFactory.java` — the skin built in code, as *managed* GL resources
+- `AndroidInputPort.java` — touch events → `InputState`, one finger at a time
+- `TouchLayout.java` — where the controls are and how far the stick is pushed.
+  **Imports nothing**, so all of it is unit-tested
+- `TouchOverlay.java` — draws the controls, from one generated disc texture
+- `AndroidBindings.java` — the default touch scheme; the only file here that
+  names a control
+- `ApkModelSource.java` — the demo's models, read through the platform
+  `AssetManager` rather than a filesystem path that does not exist
 - `persistence/` — `RoomUserProfilePort` over `UserProfileEntity`,
   `UserProfileDao` and `OpenFpsDatabase`
 
-**64 tests in this module** — all plain JVM unit tests, no Robolectric and no
-instrumentation. They cover what can honestly be covered off a device: the
-frame-callback fan-out and its load-bearing ordering, the entity mapping in both
-directions, the window port's close-flag and re-arm semantics, the adapter
-factory's delegation and its profile-closed-before-delegate ordering, the
-lifecycle bridge's resize filtering, and the profile port's off-READY refusals.
+**123 tests in this module** — all plain JVM unit tests, no Robolectric and no
+instrumentation. They cover what can honestly be covered off a device: the whole
+touch-gesture layer (which control a pixel belongs to, stick deflection and its
+dead zone, two fingers not interfering, a tap shorter than one tic still firing,
+a cancelled touch releasing), the UI transitions and the match gate, the menu's
+fit rule, the frame-callback fan-out and its load-bearing ordering, the entity
+mapping in both directions, the window port's close-flag and re-arm semantics,
+the adapter factory's delegation and its profile-closed-before-delegate
+ordering, the lifecycle bridge's resize filtering, and the profile port's
+off-READY refusals.
 
 What they deliberately do **not** cover is anything needing a real device: the
 Room round-trip against platform SQLite, `requestClose()` actually finishing the

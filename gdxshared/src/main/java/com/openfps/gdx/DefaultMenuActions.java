@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-package com.openfps.desktop;
+package com.openfps.gdx;
 
 import com.openfps.engine.hal.port.I_WindowPort;
 
@@ -11,23 +11,25 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * The desktop wiring behind the main menu buttons.
+ * The default wiring behind the main menu buttons, on every platform.
  *
  * Deliberately holds an {@link I_WindowPort} rather than calling
- * {@code Gdx.app.exit()} directly: closing goes through the same port the
- * engine uses, so "Quit" walks the exact shutdown path a window-manager
- * close would, and a headless test can verify it with a fake port.
+ * {@code Gdx.app.exit()} or {@code Activity.finish()} directly: closing goes
+ * through the same port the engine uses, so "Quit" walks the exact shutdown
+ * path a window-manager close or a back gesture would, and a headless test can
+ * verify it with a fake port. That indirection is also the only reason this
+ * class is shared rather than written twice — the two launchers hand it two
+ * completely different window implementations and it never learns which.
  *
  * <b>Start Game does not itself start anything here.</b> The
  * {@code MENU -> PLAYING} transition belongs to the {@link UiStateMachine}, and
- * {@code GdxFrameLoopListener} wraps this object to perform it — see
- * {@code GdxFrameLoopListener.StartGameTransition}. This class stays the
- * "what does the application do about it" half, which for now is a log line:
- * there is no map loader yet, so the world the player drops into is the demo
- * scene the launcher already built. Settings is the same shape with nothing
- * behind it.
- *
- * Platform adapter — must not import from core engine packages.
+ * each platform's frame callback wraps this object to perform it — see
+ * {@code GdxFrameLoopListener.StartGameTransition} on desktop and
+ * {@code AndroidUiFrameCallback.StartGameTransition} on Android. This class
+ * stays the "what does the application do about it" half, which for now is a
+ * log line: there is no map loader yet, so the world the player drops into is
+ * the demo scene the launcher already built. Settings is the same shape with
+ * nothing behind it.
  */
 public final class DefaultMenuActions implements MenuActions
 {

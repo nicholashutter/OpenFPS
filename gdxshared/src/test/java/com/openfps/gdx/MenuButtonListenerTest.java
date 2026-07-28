@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-package com.openfps.desktop;
+package com.openfps.gdx;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -55,17 +55,8 @@ class MenuButtonListenerTest
         assertThat(runs.get()).isEqualTo(3);
     }
 
-    @Test
-    @DisplayName("the Quit button wiring closes the window when activated")
-    void shouldCloseWindowThroughQuitWiring()
-    {
-        final GdxWindowPort window = new GdxWindowPort();
-        window.init();
-        final MenuActions actions = new DefaultMenuActions(window);
-        final MenuButtonListener quitButton = new MenuButtonListener(actions::onQuit);
-
-        assertThat(window.isCloseRequested()).isFalse();
-        quitButton.changed(null, null);
-        assertThat(window.isCloseRequested()).isTrue();
-    }
+    // The end-to-end case — a Quit button that really closes a real window —
+    // is DefaultMenuActionsTest.shouldCloseAWindowThroughTheQuitButtonWiring,
+    // over in :desktop. It has to live there: this module deliberately knows
+    // no backend, so it has no window to close.
 }

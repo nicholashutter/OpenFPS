@@ -63,8 +63,12 @@ public final class AndroidAdapterFactory implements I_AdapterFactory
     /** Room-backed profile persistence. */
     private final I_UserProfilePort userProfilePort;
 
+    /** Touch input, or null to fall back on the null backend's do-nothing port. */
+    private final I_InputPort inputPort;
+
     /**
-     * Creates the factory over the null HAL backend with Room persistence.
+     * Creates the factory over the null HAL backend with Room persistence and
+     * no input.
      *
      * @param windowPort the Android window port; must not be null
      * @param context any context, used to open the Room database; must not
@@ -72,9 +76,26 @@ public final class AndroidAdapterFactory implements I_AdapterFactory
      */
     public AndroidAdapterFactory(final AndroidWindowPort windowPort, final Context context)
     {
+        this(windowPort, context, null);
+    }
+
+    /**
+     * Creates the factory over the null HAL backend with Room persistence and
+     * real touch input.
+     *
+     * @param windowPort the Android window port; must not be null
+     * @param context any context, used to open the Room database; must not
+     *     be null
+     * @param touchInput the port that reads the on-screen controls, or null for
+     *     a build with nothing to control
+     */
+    public AndroidAdapterFactory(final AndroidWindowPort windowPort, final Context context,
+                                 final I_InputPort touchInput)
+    {
         this(AdapterFactorySelector.create(HalBackend.NULL),
             windowPort,
-            new RoomUserProfilePort(context));
+            new RoomUserProfilePort(context),
+            touchInput);
     }
 
     /**
@@ -89,6 +110,24 @@ public final class AndroidAdapterFactory implements I_AdapterFactory
     public AndroidAdapterFactory(final I_AdapterFactory delegate,
                                  final AndroidWindowPort windowPort,
                                  final I_UserProfilePort userProfilePort)
+    {
+        this(delegate, windowPort, userProfilePort, null);
+    }
+
+    /**
+     * Creates the factory over explicit collaborators, including input.
+     *
+     * @param delegate supplies every port except the window, profile and
+     *     input; must not be null
+     * @param windowPort the Android window port; must not be null
+     * @param userProfilePort profile persistence; must not be null
+     * @param touchInput the port that reads the on-screen controls, or null to
+     *     use the delegate's
+     */
+    public AndroidAdapterFactory(final I_AdapterFactory delegate,
+                                 final AndroidWindowPort windowPort,
+                                 final I_UserProfilePort userProfilePort,
+                                 final I_InputPort touchInput)
     {
         if (delegate == null)
         {
@@ -105,14 +144,22 @@ public final class AndroidAdapterFactory implements I_AdapterFactory
         this.delegate = delegate;
         this.windowPort = windowPort;
         this.userProfilePort = userProfilePort;
+        this.inputPort = touchInput;
     }
 
     @Override
     public void init()
     {
-        Log.i(TAG, "Initializing Android HAL (libGDX window, Room profile)");
+        Log.i(TAG, "Initializing Android HAL (libGDX window, Room profile, "
+            + (inputPort == null ? "no input" : "touch input") + ")");
         delegate.init();
         userProfilePort.init();
+        // The input port is deliberately NOT initialised here. HalSubsystem
+        // owns its lifecycle — it calls init() on whatever getInputPort()
+        // returns, and shutdown() on the way out — so doing it here as well
+        // simply runs both twice. Harmless, because init is idempotent, but it
+        // was visible as a duplicated line in logcat and a duplicated line in
+        // logcat is how you find out something is happening twice.
         // The window port is initialized and created by AndroidLauncher
         // before the engine starts, because the Activity owns that ordering
         // and initialize() must happen inside onCreate.
@@ -125,6 +172,7 @@ public final class AndroidAdapterFactory implements I_AdapterFactory
         // port and only then calls hal.shutdown(), so closing the database
         // any earlier would lose the write it just made.
         userProfilePort.shutdown();
+        // Input is HalSubsystem's, on the way down as well as up — see init().
         // The Activity owns the window's teardown in onDestroy — doing it
         // here too would be a double shutdown.
         delegate.shutdown();
@@ -140,6 +188,10 @@ public final class AndroidAdapterFactory implements I_AdapterFactory
     @Override
     public I_InputPort getInputPort()
     {
+        if (inputPort != null)
+        {
+            return inputPort;
+        }
         return delegate.getInputPort();
     }
 

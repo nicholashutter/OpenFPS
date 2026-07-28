@@ -12,6 +12,7 @@ import com.badlogic.gdx.backends.lwjgl3.Lwjgl3Graphics;
 
 import com.openfps.engine.render.adapter.Crosshair;
 import com.openfps.engine.render.adapter.Rgba;
+import com.openfps.gdx.MainMenuScreen;
 
 import org.lwjgl.glfw.GLFW;
 import org.lwjgl.glfw.GLFWImage;

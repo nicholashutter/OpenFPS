@@ -5,9 +5,12 @@
 
 package com.openfps.android;
 
+import com.openfps.gdx.DefaultMenuActions;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -26,13 +29,20 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class MainMenuFrameCallbackTest
 {
+    /** The menu under test, wired to a window it can genuinely close. */
+    private static MainMenuFrameCallback menu()
+    {
+        return new MainMenuFrameCallback(new DefaultMenuActions(
+            new AndroidWindowPort(new FakeAndroidApplication())));
+    }
+
     @Test
-    @DisplayName("a menu with no window has no way to honour Quit, so it is refused")
-    void shouldRejectNullWindow()
+    @DisplayName("a menu with no actions has no way to honour a press, so it is refused")
+    void shouldRejectNullActions()
     {
         assertThatThrownBy(() -> new MainMenuFrameCallback(null))
             .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("window");
+            .hasMessageContaining("menuActions");
     }
 
     @Test
@@ -42,20 +52,14 @@ class MainMenuFrameCallbackTest
         // The composite hands every frame to the menu unconditionally. There
         // is no GL context in this JVM at all, so reaching the clear-and-draw
         // path would fail outright — surviving the call is the assertion.
-        final MainMenuFrameCallback menu =
-            new MainMenuFrameCallback(new AndroidWindowPort(new FakeAndroidApplication()));
-
-        assertThatCode(() -> menu.onFrame(0.016f)).doesNotThrowAnyException();
+        assertThatCode(() -> menu().onFrame(0.016f)).doesNotThrowAnyException();
     }
 
     @Test
     @DisplayName("a resize arriving before the surface exists has no viewport to update")
     void shouldIgnoreResizesBeforeTheSurfaceExists()
     {
-        final MainMenuFrameCallback menu =
-            new MainMenuFrameCallback(new AndroidWindowPort(new FakeAndroidApplication()));
-
-        assertThatCode(() -> menu.onResize(1080, 2340)).doesNotThrowAnyException();
+        assertThatCode(() -> menu().onResize(1080, 2340)).doesNotThrowAnyException();
     }
 
     @Test
@@ -65,10 +69,57 @@ class MainMenuFrameCallbackTest
         // Android can pause an Activity before its surface is ever ready. The
         // menu persists nothing itself — the profile is saved through
         // I_UserProfilePort — so neither call has anything to guard.
-        final MainMenuFrameCallback menu =
-            new MainMenuFrameCallback(new AndroidWindowPort(new FakeAndroidApplication()));
+        final MainMenuFrameCallback menu = menu();
 
         assertThatCode(menu::onPause).doesNotThrowAnyException();
         assertThatCode(menu::onResume).doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("the menu is scaled down until it fits a short landscape screen")
+    void shouldFitALandscapeScreen()
+    {
+        // The first emulator run showed this failing: at 2400x1080 and 2.625x
+        // the title clipped off the top and Quit clipped off the bottom. On a
+        // screen whose only two useful controls are "start" and "leave", that
+        // is not a cosmetic problem.
+        final float laidOut = MainMenuFrameCallback.layoutDensity(1080, 2.625f);
+
+        assertThat(laidOut).isLessThan(2.625f);
+        assertThat(MainMenuFrameCallback.naturalHeightDp() * laidOut)
+            .isLessThanOrEqualTo(1080.0f);
+    }
+
+    @Test
+    @DisplayName("a screen with room to spare is laid out at its true density")
+    void shouldNotScaleUpOnATallScreen()
+    {
+        // The cap is a maximum, not a target. A tall portrait phone must get
+        // physically correct sizes, not a menu stretched to fill it.
+        assertThat(MainMenuFrameCallback.layoutDensity(2340, 2.625f)).isEqualTo(2.625f);
+    }
+
+    @Test
+    @DisplayName("a surface with no height yet is not divided by")
+    void shouldTolerateAZeroHeightSurface()
+    {
+        assertThat(MainMenuFrameCallback.layoutDensity(0, 2.625f)).isEqualTo(2.625f);
+        assertThat(MainMenuFrameCallback.layoutDensity(1080, 0.0f)).isZero();
+    }
+
+    @Test
+    @DisplayName("the input processor is not claimed until the menu is asked for it")
+    void shouldNotClaimTheInputProcessorBeforeItIsBuilt()
+    {
+        // The menu used to take Gdx.input for itself inside onSurfaceReady.
+        // That is exactly wrong once there is a game to play: a surface rebuilt
+        // mid-match — which Android does on its own schedule — would silently
+        // take every touch away from the player and hand it to invisible menu
+        // buttons. Ownership belongs to whoever knows which half of the UI is
+        // in front, and attach/detach is how it says so.
+        final MainMenuFrameCallback menu = menu();
+
+        assertThatCode(menu::attachInputProcessor).doesNotThrowAnyException();
+        assertThatCode(menu::detachInputProcessor).doesNotThrowAnyException();
     }
 }

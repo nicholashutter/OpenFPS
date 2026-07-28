@@ -25,6 +25,14 @@ rootProject.name = "openfps"
 // :engine is platform-free and must stay that way — it is the module CI can
 // build and test on a machine with no display and no Android SDK.
 include(":engine")
+
+// :gdxshared is the libGDX code that is not platform-specific — the
+// framebuffer presenter, the welcome screen, the UI state machine, the input
+// accumulator. It depends on libGDX CORE and no backend, which is what lets
+// both launchers use it and what keeps it buildable on a machine with neither
+// a display nor an Android SDK. See gdxshared/build.gradle.kts.
+include(":gdxshared")
+
 include(":desktop")
 
 // :tools is BUILD-TIME ONLY. It holds the glTF -> ModelFormat converter and
