@@ -14,11 +14,76 @@
 
 ```
 gameplay/
+├── PlayerController.java     first-person look + movement, produces the Camera
 ├── port/
-│   └── I_GameplayPort.java   interface — called by core per tic
+│   ├── I_GameplayPort.java   interface — called by core per tic
+│   └── I_PlayerInput.java    the four floats PlayerController consumes
 └── adapter/
     └── NullGameplayPort.java stub
 ```
+
+## `PlayerController` — input to camera
+
+The first piece of the first-person work, and pure logic: no rendering, no I/O,
+no collision. It holds a feet position, a yaw and a pitch, integrates one tic of
+`I_PlayerInput` into them, and hands back an `eyePosition()`, a
+`forwardVector()` and a `Camera`.
+
+### Conventions
+
+Right-handed world, **+y up**, matching `render/README.md` § 4.
+
+```
+groundForward = ( sin(yaw), 0, cos(yaw) )
+groundRight   = groundForward x up = ( -cos(yaw), 0, sin(yaw) )
+forward       = ( cos(pitch)*sin(yaw), sin(pitch), cos(pitch)*cos(yaw) )
+```
+
+Yaw 0 faces world +z; yaw increases from +z toward +x; positive pitch looks up.
+
+`groundRight` is `forward x up`, **not** `up x forward` — the same operand order
+`Camera` pins as normative. The mirror is unusually hard to catch here, because
+a mirrored strafe and a mirrored render agree with each other while both being
+wrong. Check it physically: with +x east and +y up, +z is south; facing south,
+your right hand points west, which is `(-1, 0, 0)`.
+
+Movement uses `groundForward`, never `forward`, so looking up cannot fly.
+
+### Invariants
+
+| Invariant | Where | Why |
+|---|---|---|
+| pitch clamped to ±89° | `MAX_PITCH_RADIANS` | at exactly ±90° `forward` is parallel to world up, `forward x up` is the zero vector, and `Camera.create` rejects the basis |
+| yaw wrapped to `[0, 2π)` | `FULL_TURN_RADIANS` | an unbounded angle loses float precision; near 1e7 rad the spacing between floats is about a radian |
+| displacement linear in `deltaSeconds` | `update` | frame-rate independence — invisible until someone plays at a different rate |
+| combined axis magnitude clamped to 1 | `update` | a diagonal must not be 41% faster than a straight line, while a half-deflected stick must still walk rather than run — clamped, not normalised, so the controller never double-normalises input the HAL already normalised |
+
+### Determinism — a documented deviation from `PLAN.md` § 4
+
+§ 4 specifies 16.16 fixed-point for simulation state, and player position is
+simulation state. `PlayerController` is `float`. This satisfies § 4's *intent*
+— bit-identical state across lockstep peers — by a different route, and the
+reasoning is on the class Javadoc in full:
+
+- Since **JEP 306** (Java 17) all floating-point expressions are FP-strict IEEE
+  754, so `+ - * /` and `sqrt` are bit-reproducible on every conforming JVM and
+  CPU. Fixed-point buys nothing the language does not already guarantee.
+- The exception is the transcendentals: `Math.sin` / `Math.cos` are permitted
+  1–2 ulp and are **not** required to agree between implementations.
+  `StrictMath` is fdlibm and is reproducible.
+
+So **every trig call in the update path is `StrictMath`**, and switching one to
+`Math` would desync peers silently — sub-micron per step, invisible for
+minutes, and impossible to reproduce in a single-process test. A test reads the
+compiled class's constant pool and fails if `java/lang/Math` appears in it.
+
+### The input seam
+
+`I_PlayerInput` declares exactly the four floats the controller consumes:
+`forwardAxis`, `strafeAxis` (dimensionless, nominally −1..1) and `yawDelta`,
+`pitchDelta` (radians, already accumulated for the tic). The HAL's richer
+`InputState` — which also carries action flags — adapts onto it in one class.
+**Do not grow a second copy of `InputState` here.**
 
 ## Physics math — what's coming
 
@@ -91,11 +156,15 @@ http://doom.wikia.com/wiki/WAD
 
 ## Files
 
+- `PlayerController.java` — first-person look and movement (72 tests)
 - `port/I_GameplayPort.java` — interface
+- `port/I_PlayerInput.java` — the controller's input seam
 - `adapter/NullGameplayPort.java` — null impl
 
 ## TODO (Phase 4)
 
+- Adapt the HAL `InputState` onto `I_PlayerInput`
+- `PhysicsWorld` wraps `PlayerController` and rejects the blocked part of a move
 - `PlayerState` data class
 - `Entity` base + concrete types (monster, projectile, pickup, door)
 - `PhysicsWorld.moveWithSlide(player, dx, dy)` — collision + slide
