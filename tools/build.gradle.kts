@@ -84,18 +84,6 @@ tasks.named("check") {
     dependsOn(rootProject.tasks.named("verifyToolsIsolation"))
 }
 
-// Converts every .gltf / .glb under the input directory into .ofm models.
-//
-// Deliberately NOT wired into `build`, for the same reason `fetchAssets` is
-// not: there is no asset payload in a clean clone and CI must stay hermetic.
-// Run it explicitly after `fetchAssets`:
-//
-//   .\gradlew.bat :tools:convertModels
-//   .\gradlew.bat :tools:convertModels -PmodelsIn=some/dir -PmodelsOut=other/dir
-//
-// If the input directory does not exist the task reports that and stops
-// without failing — an opt-in step should not break a build nobody asked to
-// run it in. A budget violation, by contrast, fails hard: see AssetBudget.
 // Renders one frame of a model to a PNG, with no window and no GL.
 //
 // This is how the software rasterizer is verified where there is no display —
@@ -116,6 +104,18 @@ tasks.register<JavaExec>("renderPreview") {
     classpath = sourceSets["main"].runtimeClasspath
 }
 
+// Converts every .gltf / .glb under the input directory into .ofm models.
+//
+// Deliberately NOT wired into `build`, for the same reason `fetchAssets` is
+// not: there is no asset payload in a clean clone and CI must stay hermetic.
+// Run it explicitly after `fetchAssets`:
+//
+//   .\gradlew.bat :tools:convertModels
+//   .\gradlew.bat :tools:convertModels -PmodelsIn=some/dir -PmodelsOut=other/dir
+//
+// If the input directory does not exist the task reports that and stops
+// without failing — an opt-in step should not break a build nobody asked to
+// run it in. A budget violation, by contrast, fails hard: see AssetBudget.
 tasks.register<JavaExec>("convertModels") {
     group = "openfps"
     description = "Converts glTF/GLB models to the runtime ModelFormat, enforcing the asset budget."
@@ -132,5 +132,170 @@ tasks.register<JavaExec>("convertModels") {
             rootDir.dir(inputDir.get()).asFile.absolutePath,
             rootDir.dir(outputDir.get()).asFile.absolutePath
         )
+    })
+}
+
+// ---------------------------------------------------------------------------
+// The first-person demo's model set
+// ---------------------------------------------------------------------------
+// One command rebuilds every .ofm the demo needs:
+//
+//   .\gradlew.bat :tools:regenerateDemoAssets -PkenneyRaw=C:\path\to\extracted
+//
+// `kenneyRaw` names a directory holding each CC0 pack UNZIPPED into a
+// subdirectory of its own, matching the pack names below:
+//
+//   <kenneyRaw>/blaster-kit/Models/GLB format/...
+//   <kenneyRaw>/prototype-kit/Models/GLB format/...
+//
+// The download itself is a MANUAL step and stays one. docs/ASSETS.md § 6 forbids
+// build-time third-party fetches outright: those URLs are unpinnable, their
+// uptime is not ours, and CI has to stay hermetic. docs/DEMO_ASSETS.md carries
+// the two URLs, their SHA-256s, and the licence check that must accompany them.
+//
+// Without -PkenneyRaw the staging step warns and skips, and DemoAssetsMain
+// falls through to ProceduralRoom — a generated greybox room, logged loudly as
+// generated, so a clone with no packs still has a floor to stand on.
+
+// Which pieces the demo actually uses, and which pack each comes from. Kept
+// here rather than in Java because it is curation, not logic: changing the
+// selection should not mean recompiling a converter.
+val demoWeaponPack = "blaster-kit"
+val demoWeaponPieces = listOf("blaster-b")
+val demoLevelPack = "prototype-kit"
+val demoLevelPieces = listOf(
+    "floor-square",   // floor tile
+    "wall",           // plain wall segment
+    "wall-corner",    // corner, so a room closes
+    "wall-doorway",   // a way out, which is what makes it read as a place
+    "shape-slope",    // ramp
+    "stairs",
+    "column",
+    "crate"           // prop, for parallax and a scale reference
+)
+
+// Kenney's GLBs reference their atlas by RELATIVE URI — `Textures/colormap.png`
+// — so the atlas must sit beside each .glb or GltfAsset cannot resolve it. That
+// is a staging obligation, not a converter bug: the glTF 2.0 specification
+// resolves a relative URI against the referring document, and honouring that is
+// correct behaviour. Hence every staged directory gets its own copy of the
+// pack's atlas.
+val demoAtlasDirectory = "Textures"
+val demoAtlasFile = "colormap.png"
+
+tasks.register("stageDemoAssets") {
+    group = "openfps"
+    description = "Copies the curated CC0 demo selection out of extracted packs into assets/gltf."
+
+    // Captured at configuration time: the task action must hold no project
+    // reference, because the configuration cache is on.
+    val rawRoot = providers.gradleProperty("kenneyRaw")
+    val stageRoot = rootProject.layout.projectDirectory.dir("assets/gltf").asFile
+    val groups = listOf(
+        Triple("weapon", demoWeaponPack, demoWeaponPieces),
+        Triple("level", demoLevelPack, demoLevelPieces)
+    )
+    val atlasDirectory = demoAtlasDirectory
+    val atlasFile = demoAtlasFile
+
+    doLast {
+        val raw = rawRoot.orNull
+        if (raw == null) {
+            logger.warn(
+                "No -PkenneyRaw given — skipping staging.\n" +
+                "  Download and unzip the CC0 packs listed in docs/DEMO_ASSETS.md, then rerun\n" +
+                "  with -PkenneyRaw=<directory containing the unzipped packs>.\n" +
+                "  Without them the demo falls back to generated greybox geometry."
+            )
+            return@doLast
+        }
+
+        val rawDirectory = File(raw)
+        if (!rawDirectory.isDirectory) {
+            throw GradleException("-PkenneyRaw=$raw is not a directory.")
+        }
+
+        for (group in groups) {
+            val source = File(rawDirectory, "${group.second}/Models/GLB format")
+            if (!source.isDirectory) {
+                throw GradleException(
+                    "Pack '${group.second}' not found at $source.\n" +
+                    "  Unzip it so that '<kenneyRaw>/${group.second}/Models/GLB format' exists.\n" +
+                    "  See docs/DEMO_ASSETS.md for the URL, the SHA-256 and the licence check."
+                )
+            }
+
+            val target = File(stageRoot, group.first)
+            target.mkdirs()
+            for (piece in group.third) {
+                val glb = File(source, "$piece.glb")
+                if (!glb.isFile) {
+                    throw GradleException("'$piece.glb' is not in ${group.second} at $source.")
+                }
+                glb.copyTo(File(target, "$piece.glb"), overwrite = true)
+            }
+
+            val atlas = File(source, "$atlasDirectory/$atlasFile")
+            if (!atlas.isFile) {
+                throw GradleException(
+                    "Atlas $atlas is missing — the staged GLBs reference it by relative URI."
+                )
+            }
+            val atlasTarget = File(target, atlasDirectory)
+            atlasTarget.mkdirs()
+            atlas.copyTo(File(atlasTarget, atlasFile), overwrite = true)
+
+            logger.lifecycle(
+                "Staged ${group.third.size} model(s) from ${group.second} into $target"
+            )
+        }
+    }
+}
+
+// Converts the staged tree, falls back to generated geometry when nothing was
+// staged, then reads every .ofm back through the runtime's own ModelFormat and
+// reports it against the docs/ASSETS.md § 5 budget. Fails the build if any
+// model does not parse, holds no geometry, or is over budget.
+//
+// Deliberately NOT wired into `build`: same reason as convertModels.
+tasks.register<JavaExec>("regenerateDemoAssets") {
+    group = "openfps"
+    description = "Rebuilds and verifies every demo .ofm from its sources."
+
+    dependsOn("stageDemoAssets")
+
+    mainClass.set("com.openfps.tools.DemoAssetsMain")
+    classpath = sourceSets["main"].runtimeClasspath
+
+    val inputDir = providers.gradleProperty("modelsIn").orElse("assets/gltf")
+    val outputDir = providers.gradleProperty("modelsOut").orElse("assets/models")
+    val rootDirectory = rootProject.layout.projectDirectory
+    val forceFallback = providers.gradleProperty("forceFallback").isPresent
+
+    argumentProviders.add(CommandLineArgumentProvider {
+        val arguments = mutableListOf(
+            "--gltf=" + rootDirectory.dir(inputDir.get()).asFile.absolutePath,
+            "--out=" + rootDirectory.dir(outputDir.get()).asFile.absolutePath
+        )
+        if (forceFallback) {
+            arguments.add("--forceFallback")
+        }
+        arguments
+    })
+}
+
+// Verification on its own, for re-checking a payload that is already converted.
+tasks.register<JavaExec>("verifyModels") {
+    group = "openfps"
+    description = "Reads every .ofm back through ModelFormat and reports it against the budget."
+
+    mainClass.set("com.openfps.tools.DemoAssetsMain")
+    classpath = sourceSets["main"].runtimeClasspath
+
+    val outputDir = providers.gradleProperty("modelsOut").orElse("assets/models")
+    val rootDirectory = rootProject.layout.projectDirectory
+
+    argumentProviders.add(CommandLineArgumentProvider {
+        listOf("--out=" + rootDirectory.dir(outputDir.get()).asFile.absolutePath)
     })
 }

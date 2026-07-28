@@ -370,8 +370,19 @@ repository.
   presentation blit agree on the concrete byte layout. Do it in the `Framebuffer` lane.
 - **Publish the `assets-v1` release.** Until it exists, `fetchAssets` fails with an
   actionable message. See the task's header comment in `build.gradle.kts`.
-- **Curate the initial pack selection** from §3 and record each entry against the §7
-  checklist in this file.
+- ~~Curate the initial pack selection from §3 and record each entry against the §7
+  checklist~~ — **done for the first-person demo.** Blaster Kit 2.1 and Prototype
+  Kit 1.0, both CC0, nine models converted and verified. The §7 record lives in
+  `docs/DEMO_ASSETS.md` rather than here, because a per-asset manifest grows and
+  this file is policy. Remaining packs from §3 — Modular Space Kit, Factory Kit,
+  Modular Dungeon Kit, Blocky Characters — are still uncurated.
+- **One atlas per model, not per pack.** The nine demo models total 12.7 MB, of
+  which ~12.6 MB is **nine identical copies of the same 512² atlas and its mip
+  pyramid**. `ModelFormat` has no shared-texture concept, so the one-atlas-per-kit
+  structure §3 praises Kenney for is paid for once per model. Nine models is
+  already a quarter of §5's 20–50 MB payload cap, so this will not survive a real
+  level. The fix is a shared-texture section or an atlas-by-reference indirection
+  in `ModelFormat`. Measured, not estimated — see `docs/DEMO_ASSETS.md` § 4.
 
 Two further open questions belong to the renderer rather than to asset policy, but
 are recorded here because both were surfaced by the §2 render target and one of them
@@ -388,6 +399,31 @@ concerns this document's consequences directly:
 ---
 
 ## 10. History
+
+**2026-07-28 — First art landed: Blaster Kit 2.1 and Prototype Kit 1.0.**
+Both CC0, verified on the download page *and* against the `License.txt` inside
+each archive. Nine models converted and rendered: one blaster as the viewmodel,
+eight Prototype Kit pieces as level geometry. Full §7 provenance — URLs, SHA-256
+digests, retrieval date, triangle and texture counts — is in
+`docs/DEMO_ASSETS.md`, along with the one command that rebuilds every `.ofm`.
+
+Three things this settled, all measured rather than assumed:
+
+1. **The §5 triangle cap does not bind this art direction.** Across the *entire*
+   two packs — 187 models — the worst case is 882 triangles, well under 1,500.
+   §2's claim that "Kenney's kits remain comfortably inside whatever the real
+   budget turns out to be" holds.
+2. **The packs' 512² atlases sit exactly at the §5 texture cap**, power-of-two,
+   and mip cleanly to 10 levels. No downsampling step was needed.
+3. **Payload size, not triangle count, is the constraint that bites first** —
+   see the new §9 item. This was not anticipated by §5, which reasoned about
+   texture *resolution* and never about how many times one texture is stored.
+
+Also recorded because it looks like a converter bug and is not: Kenney's GLBs
+reference their atlas by relative URI (`Textures/colormap.png`) rather than
+embedding it, so the atlas must sit beside each `.glb`. Resolving a relative URI
+against the referring document is what the glTF 2.0 specification requires, so
+the fix belongs in staging, not in `GltfConverter`.
 
 **2026-07-27 — Freedoom evaluated and rejected.**
 [Freedoom](https://freedoom.github.io/) was the leading candidate before the render
