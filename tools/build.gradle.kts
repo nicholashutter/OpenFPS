@@ -104,6 +104,54 @@ tasks.register<JavaExec>("renderPreview") {
     classpath = sourceSets["main"].runtimeClasspath
 }
 
+// Renders the WHOLE first-person demo — room, props and held weapon — to PNGs
+// with no window and no GL.
+//
+// This is how the demo is verified where there is no display, and it is a
+// different question from renderPreview's: that one orbits a single model, this
+// one builds the real DemoScene, places the view-space viewmodel, and drives
+// the camera by feeding InputState through PlayerController. See
+// DemoPreviewMain's Javadoc.
+//
+//   gradlew :tools:demoPreview -PdemoOut=C:\tmp\demo
+//   gradlew :tools:demoPreview -PdemoOut=C:\tmp\demo -PdemoThreads=8 -PdemoFrames=200
+//
+// Deliberately NOT wired into `build`: it writes files, and the output path is
+// never defaulted into the repository — docs/ASSETS.md § 6 keeps generated art
+// out of git.
+tasks.register<JavaExec>("demoPreview") {
+    group = "openfps"
+    description = "Renders the first-person demo scene, viewmodel included, to PNGs. Headless."
+
+    mainClass.set("com.openfps.tools.DemoPreviewMain")
+    classpath = sourceSets["main"].runtimeClasspath
+
+    val outDir = providers.gradleProperty("demoOut")
+    val assetsDir = providers.gradleProperty("demoAssets").orElse("assets/models")
+    val threads = providers.gradleProperty("demoThreads").orElse("0")
+    val frames = providers.gradleProperty("demoFrames").orElse("0")
+    val width = providers.gradleProperty("demoWidth").orElse("1280")
+    val height = providers.gradleProperty("demoHeight").orElse("720")
+    val rootDirectory = rootProject.layout.projectDirectory
+
+    argumentProviders.add(CommandLineArgumentProvider {
+        val target = outDir.orNull
+            ?: throw GradleException(
+                "-PdemoOut=<directory> is required: it is where the PNGs are written.\n" +
+                "  Point it OUTSIDE the repository — docs/ASSETS.md § 6 keeps generated art\n" +
+                "  out of git."
+            )
+        listOf(
+            "--outDir=" + File(target).absolutePath,
+            "--assets=" + rootDirectory.dir(assetsDir.get()).asFile.absolutePath,
+            "--threads=" + threads.get(),
+            "--frames=" + frames.get(),
+            "--width=" + width.get(),
+            "--height=" + height.get()
+        )
+    })
+}
+
 // Converts every .gltf / .glb under the input directory into .ofm models.
 //
 // Deliberately NOT wired into `build`, for the same reason `fetchAssets` is

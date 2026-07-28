@@ -95,6 +95,13 @@ public final class GdxInputPort implements I_InputPort
      */
     private boolean discardNextLook;
 
+    /**
+     * True once the window has gone and no GLFW call is safe any more.
+     * MUTABLE: set by {@link #onWindowClosing()} on the render thread, read by
+     * {@link #shutdown()} on the main thread — hence volatile.
+     */
+    private volatile boolean windowClosed;
+
     /** Creates a port at the default sensitivity. */
     public GdxInputPort()
     {
@@ -122,6 +129,7 @@ public final class GdxInputPort implements I_InputPort
         accumulator.clearAll();
         latched = InputState.NEUTRAL;
         discardNextLook = false;
+        windowClosed = false;
         LOG.info("GdxInputPort initialized — click to capture the cursor, Escape to release "
             + "(sensitivity {} rad/px)", accumulator.radiansPerPixel());
     }
@@ -131,8 +139,47 @@ public final class GdxInputPort implements I_InputPort
     {
         accumulator.clearAll();
         latched = InputState.NEUTRAL;
-        releaseCursor();
+        // Only if the window is still there — see onWindowClosing().
+        if (!windowClosed)
+        {
+            releaseCursor();
+        }
         LOG.info("GdxInputPort shut down");
+    }
+
+    /**
+     * Hands the cursor back while the window still exists, and marks this port
+     * as past the point where GLFW may be called.
+     *
+     * <p><b>This exists because the obvious placement crashes every clean
+     * exit.</b> Releasing the cursor in {@link #shutdown()} looks right — it is
+     * the mirror of {@link #init()} — but {@code shutdown()} runs from
+     * {@code EngineSession.stop()}, which the desktop launcher calls
+     * <i>after</i> {@code awaitPlatformLoop()} has returned. By then
+     * {@code Lwjgl3Application} has terminated GLFW, while {@code Gdx.input} is
+     * still a live non-null object: the null guard in {@link #releaseCursor()}
+     * passes, the call goes through to {@code glfwSetInputMode}, and LWJGL's
+     * JNI dispatch fails against a torn-down library with
+     * {@code IncompatibleClassChangeError}.</p>
+     *
+     * <p><b>An {@code Error}, not an exception</b> — so no {@code catch
+     * (RuntimeException)} anywhere on the teardown path would have contained
+     * it, and the process died after a completely successful run with a stack
+     * trace that pointed at a class-loading problem it did not have.</p>
+     *
+     * <p>{@code GdxFrameLoopListener.dispose()} is the last moment at which the
+     * window is guaranteed alive, so the release happens there instead.</p>
+     */
+    public void onWindowClosing()
+    {
+        releaseCursor();
+        windowClosed = true;
+    }
+
+    /** Returns true once {@link #onWindowClosing()} has run. */
+    public boolean isWindowClosed()
+    {
+        return windowClosed;
     }
 
     /**

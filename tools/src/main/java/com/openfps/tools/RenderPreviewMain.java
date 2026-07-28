@@ -5,19 +5,12 @@
 
 package com.openfps.tools;
 
-import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Locale;
 
-import javax.imageio.ImageIO;
-
-import com.openfps.engine.core.eventbus.EventBusFactory;
-import com.openfps.engine.core.eventbus.I_EventBusPort;
 import com.openfps.engine.core.pool.I_ThreadPoolPort;
-import com.openfps.engine.core.pool.ThreadPoolFactory;
-import com.openfps.engine.core.subsystem.SubsystemRegistry;
 import com.openfps.engine.hal.adapter.desktop.DesktopTimePort;
 import com.openfps.engine.hal.port.I_TimePort;
 import com.openfps.engine.render.adapter.Camera;
@@ -94,20 +87,11 @@ public final class RenderPreviewMain
 
     private static final Logger LOG = LoggerFactory.getLogger(RenderPreviewMain.class);
 
-    /** Bus capacity for the standalone worker pool; nothing is published to it. */
-    private static final int BUS_CAPACITY = 64;
-
     /** Default camera height above the model centre, as a multiple of the radius. */
     public static final float DEFAULT_ELEVATION = 0.9f;
 
     /** Nanoseconds in a millisecond. */
     private static final double NANOS_PER_MILLI = 1_000_000.0;
-
-    /** Shift turning a {@code 0xRRGGBBAA} pixel into {@code 0x00RRGGBB}. */
-    private static final int ALPHA_BITS = 8;
-
-    /** Opaque alpha for the {@code TYPE_INT_ARGB} image. */
-    private static final int OPAQUE_ARGB = 0xFF000000;
 
     private RenderPreviewMain()
     {
@@ -144,7 +128,7 @@ public final class RenderPreviewMain
         final int threads = intOption(args, "--threads=", 0);
         final Rasterizer.CullMode cull = cullOption(args);
 
-        final Pool pool = Pool.open(threads);
+        final ToolPool pool = ToolPool.open(threads);
         try
         {
             render(image, out, width, height, frames, cull, pool.port(),
@@ -256,35 +240,14 @@ public final class RenderPreviewMain
         return covered;
     }
 
-    // Converts the finished RGBA8888 frame into a PNG.
-    //
-    // Rgba is 0xRRGGBBAA and BufferedImage.TYPE_INT_ARGB is 0xAARRGGBB, so the
-    // conversion is one rotate: shift the alpha off the bottom and put opaque
-    // back on the top. Doing it wrong here would produce a plausible but
-    // channel-swapped image, which is exactly the class of bug this tool is
-    // meant to catch, so it is spelled out rather than hidden in a helper.
+    // Converts the finished RGBA8888 frame into a PNG. The channel rotate that
+    // makes it correct lives in FramePng, shared with DemoPreviewMain so the
+    // two tools cannot disagree about the byte order.
     private static void writePng(final SoftwareRenderPort renderer, final String out,
         final int width, final int height) throws IOException
     {
-        final int[] frame = new int[width * height];
-        if (!renderer.copyColorInto(frame))
-        {
-            throw new IOException("renderer produced no frame");
-        }
-        final BufferedImage png = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
-        for (int y = 0; y < height; y++)
-        {
-            for (int x = 0; x < width; x++)
-            {
-                png.setRGB(x, y, (frame[y * width + x] >>> ALPHA_BITS) | OPAQUE_ARGB);
-            }
-        }
         final Path target = Path.of(out);
-        if (target.getParent() != null)
-        {
-            Files.createDirectories(target.getParent());
-        }
-        ImageIO.write(png, "png", target.toFile());
+        FramePng.write(renderer, target, width, height);
         LOG.info("Wrote {} ({}x{}, cull={})", target.toAbsolutePath(), width, height,
             renderer.cullMode());
     }
@@ -373,58 +336,4 @@ public final class RenderPreviewMain
         return Rasterizer.CullMode.valueOf(value.toUpperCase(Locale.ROOT));
     }
 
-    /**
-     * A standalone {@code WorkerPool}, or none.
-     *
-     * The pool is the engine's own — {@code AGENTS.md} rule 1 — which means it
-     * needs an event bus and a subsystem registry even though this tool
-     * publishes nothing to either. They exist only so {@code submitParallel}
-     * has somewhere to live.
-     */
-    private static final class Pool
-    {
-        /** The bus the pool drains, or null in the serial case. */
-        private final I_EventBusPort bus;
-
-        /** The pool, or null in the serial case. */
-        private final I_ThreadPoolPort pool;
-
-        private Pool(final I_EventBusPort eventBus, final I_ThreadPoolPort threadPool)
-        {
-            this.bus = eventBus;
-            this.pool = threadPool;
-        }
-
-        static Pool open(final int threads)
-        {
-            if (threads <= 0)
-            {
-                return new Pool(null, null);
-            }
-            final I_EventBusPort eventBus = EventBusFactory.createShared();
-            eventBus.init(BUS_CAPACITY);
-            final I_ThreadPoolPort threadPool =
-                ThreadPoolFactory.createFixed(eventBus, new SubsystemRegistry());
-            threadPool.init(threads);
-            threadPool.start();
-            return new Pool(eventBus, threadPool);
-        }
-
-        I_ThreadPoolPort port()
-        {
-            return pool;
-        }
-
-        void close()
-        {
-            if (pool != null)
-            {
-                pool.shutdown();
-            }
-            if (bus != null)
-            {
-                bus.shutdown();
-            }
-        }
-    }
 }

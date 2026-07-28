@@ -44,6 +44,43 @@ application {
     mainClass.set("com.openfps.desktop.DesktopLauncher")
 }
 
+// Forward GdxScreenshot's opt-in window capture through to the forked JVM.
+//
+// `run` is a JavaExec, so a -D on the Gradle command line lands on the DAEMON
+// and never reaches the application. That is why the capture properties looked
+// inert when passed the obvious way. Forwarding them explicitly is what makes
+// the windowed path verifiable at all:
+//
+//   gradlew :desktop:run -Dopenfps.screenshot=C:\tmp\window.png `
+//                        -Dopenfps.screenshotFrame=90 -Dopenfps.screenshotExit=true
+//
+// Absent, capture stays off and `run` behaves exactly as before — GdxScreenshot
+// disables itself when no path is set.
+tasks.named<JavaExec>("run") {
+    // Run from the REPOSITORY ROOT, not from desktop/.
+    //
+    // JavaExec defaults its working directory to the subproject, so
+    // DesktopLauncher's default --assets=assets/models resolved to
+    // desktop/assets/models — a directory that has never existed and never
+    // will. The demo failed to find its own models with a perfectly worded
+    // error about the wrong path. assets/ is a root-level directory that
+    // :tools:regenerateDemoAssets writes to, so the root is the correct
+    // working directory for anything that reads it.
+    //
+    // Safe for the profile database: SqliteUserProfilePort resolves against
+    // user.home, not the working directory, so this does not move anyone's
+    // saved profile.
+    workingDir = rootProject.projectDir
+
+    for (name in listOf("openfps.screenshot", "openfps.screenshotFrame",
+                        "openfps.screenshotExit")) {
+        val value = providers.systemProperty(name).orNull
+        if (value != null) {
+            systemProperty(name, value)
+        }
+    }
+}
+
 checkstyle {
     toolVersion = "10.18.0"
     configFile = rootProject.file("config/checkstyle/checkstyle.xml")

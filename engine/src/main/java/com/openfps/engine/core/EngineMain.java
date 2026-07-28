@@ -22,6 +22,8 @@ import com.openfps.engine.core.subsystem.impl.MemorySubsystem;
 import com.openfps.engine.core.subsystem.impl.NetSubsystem;
 import com.openfps.engine.core.subsystem.impl.RenderSubsystem;
 import com.openfps.engine.gameplay.adapter.NullGameplayPort;
+import com.openfps.engine.gameplay.port.I_GameplayPort;
+import com.openfps.engine.gameplay.port.I_GameplayPortFactory;
 import com.openfps.engine.hal.adapter.AdapterFactorySelector;
 import com.openfps.engine.hal.adapter.HalBackend;
 import com.openfps.engine.hal.adapter.I_AdapterFactory;
@@ -266,6 +268,47 @@ public final class EngineMain
     public EngineSession start(final GameConfig config, final I_AdapterFactory hal,
                                final I_RenderPortFactory renderPortFactory)
     {
+        return start(config, hal, renderPortFactory, EngineMain::nullGameplayPort);
+    }
+
+    /**
+     * The default gameplay port: one that does nothing.
+     *
+     * A method reference rather than a lambda body so the headless default
+     * reads the same as any other {@link I_GameplayPortFactory}.
+     *
+     * @param inputPort ignored — the null port reads no input
+     * @return a fresh {@link NullGameplayPort}
+     */
+    private static I_GameplayPort nullGameplayPort(final I_InputPort inputPort)
+    {
+        return new NullGameplayPort();
+    }
+
+    /**
+     * Boots the engine with a caller-supplied renderer and gameplay port.
+     *
+     * <b>Why the gameplay port also arrives as a factory.</b> Same reason the
+     * renderer does: a port that reads input needs {@link I_InputPort}, which
+     * does not exist until {@code hal.init()} has run inside this method, and
+     * binding it after {@code start} returns would race the game loop thread
+     * that step 8 starts. See {@link I_GameplayPortFactory}.
+     *
+     * <b>Ordering, which callers depend on:</b> the render port is built
+     * <em>before</em> the gameplay port, so a launcher may pass the same holder
+     * as both factories and read the renderer out of it. Do not reorder these
+     * two lines.
+     *
+     * @param config the game config (rate + maxTics)
+     * @param hal    the uninitialized HAL factory to boot against
+     * @param renderPortFactory builds the render port; must not be null
+     * @param gameplayPortFactory builds the gameplay port; must not be null
+     * @return a live session; call {@link EngineSession#stop()} to tear it down
+     */
+    public EngineSession start(final GameConfig config, final I_AdapterFactory hal,
+                               final I_RenderPortFactory renderPortFactory,
+                               final I_GameplayPortFactory gameplayPortFactory)
+    {
         if (hal == null)
         {
             throw new IllegalArgumentException("hal must not be null");
@@ -273,6 +316,10 @@ public final class EngineMain
         if (renderPortFactory == null)
         {
             throw new IllegalArgumentException("renderPortFactory must not be null");
+        }
+        if (gameplayPortFactory == null)
+        {
+            throw new IllegalArgumentException("gameplayPortFactory must not be null");
         }
 
         // -- 1. Memory port
@@ -323,7 +370,13 @@ public final class EngineMain
         subsystems.register(new MemorySubsystem(memory));
         subsystems.register(new HalSubsystem(inputPort));
         subsystems.register(new NetSubsystem(new NullNetworkPort()));
-        subsystems.register(new GameplaySubsystem(new NullGameplayPort()));
+        // AFTER the render port, deliberately: see this method's Javadoc.
+        final I_GameplayPort gameplayPort = gameplayPortFactory.createGameplayPort(inputPort);
+        if (gameplayPort == null)
+        {
+            throw new IllegalStateException("gameplayPortFactory returned null");
+        }
+        subsystems.register(new GameplaySubsystem(gameplayPort));
         subsystems.register(new RenderSubsystem(renderPort));
         subsystems.register(new AudioSubsystem(new NullAudioPort()));
         subsystems.initAll();
