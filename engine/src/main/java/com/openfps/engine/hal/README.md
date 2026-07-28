@@ -63,18 +63,23 @@ that needs a device does not.**
 
 | Port | Role | Backends today |
 |---|---|---|
-| `I_TimePort` | Monotonic nanosecond counter + wall clock | `DesktopTimePort` (`System.nanoTime()` + `System.currentTimeMillis()`), `NullTimePort` (injectable, for tests) |
+| `I_TimePort` | Monotonic nanosecond counter + wall clock | `DesktopTimePort` (`System.nanoTime()`, rebased at `init`), `NullTimePort` (also `System.nanoTime()`; tests that need a controlled clock supply their own fake) |
 | `I_InputPort` | Latch keyboard / mouse / gamepad once per tic into an `InputState` | `GdxInputPort` (`:desktop`), `NullInputPort` |
 | `I_DatagramPort` | Raw UDP send/receive + per-tic tick | `DesktopDatagramPort` (`java.nio.channels.DatagramChannel`), `NullDatagramPort` |
 | `I_FilePort` | Open + read + size + close files | `NullFilePort` — which already reads the real filesystem, so desktop needs nothing more |
 | `I_SystemInfoPort` | Logical / physical cores, total + free memory, OS and JVM strings | `NullSystemInfoPort` (answers from `Runtime`) |
 | `I_UserProfilePort` | Persist `UserProfile` records; `UNINITIALIZED → READY → SHUTDOWN` | `SqliteUserProfilePort` (Xerial JDBC), `MemoryUserProfilePort` |
 | `I_WindowPort` | Create the window, own the frame loop, report close requests | `GdxWindowPort` (`:desktop`), `NullWindowPort` |
-| `I_FrameCallback` | What the platform calls back into per frame — engine side, not platform side | implemented by the renderer's presenter in `:desktop` |
+| `I_FrameCallback` | What the platform calls back into per frame — **engine** side, not platform side | `EngineFrameCallback` in `core`, handed to the window by `EngineSession` |
+
+`I_FrameCallback` is the one entry here that is not a thing a platform provides:
+the engine implements it and the platform calls it. It lives in `port/` because
+it is half of the `I_WindowPort` contract, not because an adapter supplies it.
 
 `I_SystemInfoPort` and `I_UserProfilePort` are the two ports the engine queries
-outside the tic: the first sizes the worker pool at startup, the second is read
-and written by menu actions.
+outside the tic: `EngineMain` reads `logicalProcessorCount()` to size the worker
+pool at startup (`ThreadPoolFactory`), and loads or creates the `UserProfile`
+before the session begins.
 
 ## The platform owns the loop
 
@@ -159,14 +164,13 @@ Adapter/port (a.k.a. hexagonal) architecture lets the engine core run:
 - On a server with no graphics (`HalBackend.NULL`, or `SQLITE` for a real profile)
 - On a desktop with a real window (`:desktop`, `GdxAdapterFactory`)
 - On a phone with Android (planned; nothing written yet)
-- In a test JVM with fakes (null adapter + injected time)
+- In a test JVM with fakes (null adapter, plus per-test stubs of any port)
 
 …all from the same compiled core JAR. Adapters are the only things that change.
 
-The 91 tests in this package are almost entirely a check on that claim: they run
-every port through its state machine with no display, no socket peer and no
-database file, which is only possible because none of those things are named in
-`port/`.
+The 91 tests in this package are largely a check on that claim: they run every
+port through its state machine with no display and no peer, which is only
+possible because none of those things are named in `port/`.
 
 **Reference:** Alistair Cockburn, "Hexagonal Architecture" (2005):
 https://alistair.cockburn.us/hexagonal-architecture/

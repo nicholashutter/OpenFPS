@@ -52,7 +52,7 @@ Plausible remaining roles, none of them chosen:
 
 **This is the user's call and is deliberately left open. Nothing is deleted and
 the subsystem is not dead.** The same question is recorded in
-`render/README.md` § 11(b), `PLAN.md` § 3.6, and `docs/ASSETS.md`; it is
+`render/README.md` § 11(b), `PLAN.md` § 3.6, and `docs/ASSETS.md` § 9; it is
 restated here because this is the file a reader of *this* package opens first.
 
 What it means for the sections below: the WAD **container** format — header,
@@ -65,9 +65,10 @@ would throw away the format knowledge the answer to the open question may need.
 
 > **`ImageDecoder` is on hold. Do not implement it until this question is
 > resolved.** It decodes patches and flats into palette indices, and the
-> renderer has no palette — the pixel format it targets is one
-> `render/README.md` § 3 no longer uses. Writing it now produces working,
-> tested, unusable code. `render/README.md` states the same embargo.
+> renderer has no palette: `render/README.md` § 3 specifies 32-bit colour
+> buffers and nothing anywhere loads a `PLAYPAL`. Writing it now produces
+> working, tested, unusable code. `render/README.md` § 11(b) and `PLAN.md`
+> Phase 2 state the same embargo.
 
 ## Subsystem layout
 
@@ -181,7 +182,7 @@ https://www.gamers.org/dhs/helpdocs/dmsp1666.html
 ## Lump name conventions — DOOM's, for reference
 
 Everything in this section describes how *DOOM* organised a WAD. This project
-ships no DOOM content (`docs/ASSETS.md` § 10: "No IWADs, ever"), so none of these
+ships no DOOM content (`docs/ASSETS.md` § 8: "No IWADs, ever"), so none of these
 namespaces are currently produced or consumed. Whether any of them survive
 depends on the [open question](#open-question-what-is-this-subsystem-for-now):
 if the answer is "map/level container", the map-data row is the only one that
@@ -206,11 +207,10 @@ of lumps. The count between them is variable.
 
 **No code in this repository reads either format, and `ImageDecoder` is on
 hold.** Both formats below decode to **palette indices**, and the renderer has
-no palette: `render/README.md` § 3 specifies 32-bit colour with mipmapped
-bilinear sampling, and `docs/ASSETS.md` routes every texture through the
-build-time glTF converter instead. Decoding a patch would therefore produce
-bytes with nowhere to go, plus a palette lookup table this project does not
-ship.
+no palette: `render/README.md` § 3 specifies an RGBA8888 `int[]` colour buffer,
+and `docs/ASSETS.md` § 4 routes every texture through the build-time glTF
+converter instead. Decoding a patch would therefore produce bytes with nowhere
+to go, plus a palette lookup table this project does not ship.
 
 The layouts are recorded so that whoever answers the open question does not have
 to rediscover them.
