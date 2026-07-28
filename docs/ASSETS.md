@@ -111,6 +111,42 @@ demo scene** (294 world instances, 1777 triangles, 1280×720): **4.7 ms at 8
 workers, 3.9 ms at 16**, against a serial 22.1 ms. So 720p60 holds comfortably,
 with roughly 2× headroom inside the 10 ms budget.
 
+### Full resolution and worker sweep — measured 2026-07-28
+
+The demo scene (294 world instances, 1777 triangles after clipping) on an Intel
+Core Ultra 7 155H (16 physical / 22 logical). p50 over 270 timed frames at 720p,
+170 at the higher resolutions. The default pool is `logicalProcessors / 2` = 11
+workers here, which sits between the 8 and 16 columns.
+
+| workers | 0 (serial) | 1 | 2 | 4 | 8 | 16 |
+|---|---|---|---|---|---|---|
+| **1280x720** | 26.1 ms | 25.1 | 16.3 | 8.5 | 5.2 | 4.0 |
+| speed-up | 1.00x | 1.04x | 1.60x | 3.09x | 5.03x | 6.55x |
+
+| resolution | 8 workers | 16 workers | ns per pixel @16 |
+|---|---|---|---|
+| 1280x720 (0.92 Mpx) | 5.2 ms | 4.0 ms | 4.33 |
+| 1920x1080 (2.07 Mpx) | 14.4 ms | 10.2 ms | 4.90 |
+| 2560x1440 (3.69 Mpx) | — | 19.6 ms | 5.31 |
+
+**Per-pixel cost rises 23% from 720p to 1440p**, so the renderer scales slightly
+*worse* than pixel count (2.25x the pixels costs 2.55x the time; 4x costs 4.91x).
+The likely cause is the working set leaving cache: colour + depth is 8 bytes per
+pixel, so the framebuffer alone is 7.4 MB at 720p, 16.6 MB at 1080p and 29.5 MB
+at 1440p, against 24 MB of L3 on this part. 720p fits, 1440p cannot.
+
+**Two conclusions worth acting on:**
+
+1. **1080p60 is genuinely marginal, not merely tight.** 10.2 ms at 16 workers is
+   already the whole 10 ms renderer budget, and p99 was 16.1 ms — inside the
+   16.7 ms frame with nothing left for simulation or presentation. 1080p is a
+   30 Hz option, or a 60 Hz option only once bilinear can be switched off.
+2. **A low-core machine cannot hit 720p60, and this is the portability risk.**
+   At 2 workers the frame is 16.3 ms — it misses 60 Hz outright. Under the
+   `logicalProcessors / 2` rule that is any 4-thread device. A modern 8-core
+   phone gets 4 workers and 8.5 ms, which holds; a 4-core one does not. The
+   Android target should measure before assuming.
+
 All frame-time figures in this document are **p50**. Reproduced independently on
 2026-07-28 at 8 workers over 270 timed frames: best 3.85 ms, **p50 4.86 ms**,
 p90 5.73 ms, p99 7.06 ms, mean 4.97 ms. The 4.7 above and the 4.9 quoted in
