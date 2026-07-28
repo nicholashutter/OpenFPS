@@ -75,6 +75,35 @@ android {
             excludes += "META-INF/*"
         }
     }
+
+    testOptions {
+        unitTests {
+            // The android.jar on a unit test's classpath is a stub: every
+            // method body is `throw new RuntimeException("Stub!")`. Platform
+            // adapters here log through android.util.Log on paths that are
+            // otherwise plain Java — AndroidWindowPort.create() and
+            // AndroidAdapterFactory.init() do nothing else — so without this
+            // flag those methods cannot be called at all, and the module's
+            // pure logic would be untestable for the sake of a log line.
+            //
+            // With it, stubbed platform calls return 0/false/null instead of
+            // throwing. That is a licence to test logic that merely PASSES
+            // THROUGH the framework, never to assert on framework behaviour:
+            // a stub that returns false is not evidence about what Android
+            // does. Anything that needs real framework behaviour belongs in
+            // androidTest, on a device.
+            isReturnDefaultValues = true
+
+            all {
+                it.useJUnitPlatform()
+                it.testLogging {
+                    events("passed", "skipped", "failed")
+                    showExceptions = true
+                    showCauses = true
+                }
+            }
+        }
+    }
 }
 
 // The `natives` configuration is not something AGP provides; libGDX's own
@@ -131,6 +160,15 @@ dependencies {
     "natives"("com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-arm64-v8a")
     "natives"("com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-x86")
     "natives"("com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-x86_64")
+
+    // Same versions as :engine, :desktop and :tools — one JUnit line and one
+    // AssertJ line across the whole build. Local unit tests only; no
+    // Robolectric and no androidTest dependencies, because everything covered
+    // here runs on a plain JVM and everything that would not is deliberately
+    // left uncovered rather than faked. See testOptions above.
+    testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    testImplementation("org.assertj:assertj-core:3.26.3")
 }
 
 // Unpacks each natives-<abi> jar into the ABI folder AGP expects. Without
