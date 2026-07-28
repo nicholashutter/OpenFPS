@@ -3,6 +3,33 @@
 > G_ is the network layer. The engine is P2P-first — no dedicated server required
 > for small matches. Authority is distributed: every player is a peer.
 
+## Status
+
+| Field | Value |
+|---|---|
+| **State** | BUILT-UNWIRED |
+| **Phase** | `PLAN.md` Phase 3 — primitives built, nothing wired (§ 3.5) |
+| **Tests** | 87 |
+| **Registered** | G_ via `NetSubsystem`, but with `NullNetworkPort` — no real port |
+| **Verified** | 2026-07-28 |
+
+**Built.** Six classes — `TicCmd`, `TicCmdBuffer`, `AckWindow`,
+`PeerConnection`, `RedundantSender`, `NetBytes` — implementing the 12-byte
+command, the 64-bit ack bitfield and the § 4 redundant-redelivery packet, under
+87 passing tests. The transport decision is recorded and settled: UDP plus
+redundant redelivery, no dependency added.
+
+**Not built.** `SnapshotDelta` and `Discovery`. And the wiring: `EngineMain`
+registers `NetSubsystem(new NullNetworkPort())`, the six classes' only callers
+outside themselves are their own tests, and **no socket is ever opened**.
+
+**Blocked on.** Nothing. This is wiring work, not a design question — the ADR
+below settled the design.
+
+**Next step.** Wire the six primitives to
+`hal.adapter.desktop.DesktopDatagramPort` behind a real `I_NetworkPort`. That
+port already exists, is tested, and uses a preallocated direct `ByteBuffer`.
+
 [Transport decision](#transport-decision), at the bottom of this file, is the
 ADR that settled the protocol. Its conclusions have since been folded back into
 the sections above it — § 12 lists every correction that was applied — so the

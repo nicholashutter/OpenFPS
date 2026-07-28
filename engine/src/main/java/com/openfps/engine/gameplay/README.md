@@ -2,6 +2,41 @@
 
 > P_ is the gameplay / physics layer. Holds everything that *changes during play*.
 
+## Status
+
+| Field | Value |
+|---|---|
+| **State** | PARTIAL |
+| **Phase** | 4 — planned (§ 3.2, § 7); the controller landed ahead of it |
+| **Tests** | 77 |
+| **Registered** | P_ via `GameplaySubsystem` |
+| **Verified** | 2026-07-28 |
+
+**Built.** `PlayerController` — first-person look and movement, `StrictMath`
+throughout so lockstep peers stay bit-identical, pitch clamped to ±89°, eye at
+`EYE_HEIGHT_UNITS` 41 — plus `PlayerInputView`, the one class that adapts the
+HAL's `InputState` onto `I_PlayerInput`, and the `I_GameplayPort` /
+`I_GameplayPortFactory` pair the core calls per tic. Registration has a nuance
+worth knowing before you go looking for the code that runs: `EngineMain` wraps
+whatever `I_GameplayPort` its factory hands back in `GameplaySubsystem`, and the
+only implementation that plays anything is `demo/DemoGameplayPort`.
+`gameplay/adapter/NullGameplayPort` is the fallback, so P_ is registered whether
+or not anything is happening.
+
+**Not built.** Everything Phase 4 names, and none of it exists in any form:
+`PlayerState`, `Entity`, `PhysicsWorld` (including `moveWithSlide`),
+`MapSubsector` / `Sector`, `MapLoader`, `LagCompensator`. The design sections
+further down this file are specification written ahead of that code.
+
+**Blocked on.** Nothing for movement — `PhysicsWorld` can be written today
+against `PlayerController` alone. `MapLoader` *is* blocked: `render/README.md`
+§ 11(b) leaves the WAD subsystem's remaining role open, and map geometry is the
+strongest candidate for it, so do not assume `MapLoader` reads a WAD until that
+question closes.
+
+**Next step.** `PhysicsWorld.moveWithSlide` — the player currently walks through
+walls, and every other Phase 4 item is easier once collision exists.
+
 ## What lives here
 
 Built and tested today:

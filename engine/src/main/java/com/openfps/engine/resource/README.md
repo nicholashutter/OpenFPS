@@ -2,6 +2,32 @@
 
 > W_ reads resource files and caches them so the same lump isn't read twice.
 
+## Status
+
+| Field | Value |
+|---|---|
+| **State** | BUILT-UNWIRED |
+| **Phase** | `PLAN.md` Phase 2 — partly done (§ 3.6) |
+| **Tests** | 101 |
+| **Registered** | not registered — no `W_` subsystem wrapper |
+| **Verified** | 2026-07-28 |
+
+**Built.** `WadReader`, `LumpCache` (bounded, evict-on-release), `MapLumpParser`,
+`LittleEndian` and `WadFilePort` — the container, the cache and the map parser —
+under 101 passing tests. It is not a stub and it is not broken.
+
+**Not built.** `ImageDecoder` (deliberately on hold), `BlockmapBuilder`, and the
+`W_` subsystem wrapper. `SubsystemId.W_` is declared but nothing registers
+`WadFilePort`; it and `MapLumpParser` are referenced only by their own tests, so
+nothing can route an event here.
+
+**Blocked on.** The role question below — `docs/ASSETS.md` moved all art to
+preprocessed glTF, so the WAD path has no art left to read. Do not implement
+`ImageDecoder` until it is resolved.
+
+**Next step.** A decision from the project owner on whether this package has a
+future. This is the third time it has been raised.
+
 **Read [Open question: what is this subsystem for now?](#open-question-what-is-this-subsystem-for-now)
 before acting on anything below it.** The container, the cache and the map
 parser are built and tested. What is *stale* is the assumption running through
@@ -17,16 +43,8 @@ for a palette-indexed renderer.
 - `WadFilePort` — the real `I_WadPort`, wiring the three together
 - `ImageDecoder` — decodes DOOM-format patches and flats *(on hold — see the open question)*
 
-## Status
-
-Everything in the list above except `ImageDecoder` is **built and working**,
-covered by **101 passing tests**. It is not a stub and it is not broken.
-
-It also has **no consumer**. `WadFilePort` and `MapLumpParser` are referenced
-only by their own tests. There is no `W_` subsystem, nothing is registered with
-the `SubsystemRegistry`, and `SubsystemId.W_` is unused — this is the one
-subsystem with no wrapper, so nothing can route an event to it. The seven
-registered subsystems are Audio, Core, Gameplay, Hal, Memory, Net and Render.
+This is the one subsystem with no wrapper. The seven registered subsystems are
+Audio, Core, Gameplay, Hal, Memory, Net and Render.
 
 ## Open question: what is this subsystem for now?
 

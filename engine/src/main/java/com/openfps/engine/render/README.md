@@ -4,6 +4,34 @@
 > pure math over primitive arrays — no window, no graphics API, no GPU. The
 > platform adapter uploads the finished buffer; R_ never presents.
 
+## Status
+
+| Field | Value |
+|---|---|
+| **State** | SHIPPING |
+| **Phase** | `PLAN.md` Phase 5 — done, pending polish (§ 3.3) |
+| **Tests** | 316 |
+| **Registered** | R_ via `RenderSubsystem`. Which port it gets depends on the caller: `EngineMain`'s own default is `NullRenderPort` (the headless path), and the real `SoftwareRenderPort` is supplied through `I_RenderPortFactory` by `DesktopLauncher`. So the running desktop app renders; `EngineMain.main` alone does not |
+| **Verified** | 2026-07-28 |
+
+**Built.** The full software triangle rasterizer — `Framebuffer`, `Camera`,
+`TriangleClipper`, `Rasterizer`, `SpanRenderer`, `TextureSampler`, `MipChain`,
+`ModelFormat`, `Scene`, `Rgba`, `Mat4`, `Vec3` — drawing two passes per frame:
+world, then the view-space viewmodel after a depth clear. Measured p50 4.9 ms at
+1280×720 on 8 workers, with output bit-identical across every worker count.
+
+**Not built.** Two polish items, both in § 14. (1) A bilinear/nearest quality
+toggle — `TextureSampler` is unconditionally bilinear and no config field
+exists. (2) An internal render-resolution cap independent of window size; a
+`RenderResolution` class was written for it but never landed, and needs
+re-applying against the batched pipeline.
+
+**Blocked on.** Nothing for the renderer itself. § 11(b), the WAD subsystem's
+remaining role, is still open but no longer blocks it.
+
+**Next step.** The bilinear toggle. Bilinear alone costs 2.9× the entire rest of
+the span loop (§ 9, `docs/ASSETS.md` § 2), so it is the cheapest path to 1080p60.
+
 **This document is the Phase 5 specification.** `docs/ASSETS.md` § 2 is the
 canonical statement of the render target; this file is its implementation
 spec. Where the two disagree, `docs/ASSETS.md` wins and this file is the bug.

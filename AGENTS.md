@@ -230,16 +230,36 @@ public void spawnEntity(final int entityType)
 
 ## Subsystem Owners (Living)
 
+> **Every package README opens with a `## Status` block. Read that first —
+> it is the authoritative, dated statement of what is built, what is not, what
+> is blocked, and the single next actionable step.** The table below is a
+> one-line index into those blocks, not a replacement for them. If the two ever
+> disagree, the package README wins, because it sits next to the code.
+>
+> **If you change a subsystem, update its `## Status` block in the same commit.**
+> That block is the handoff to the next agent. A stale one is worse than none:
+> this project has already lost time to a table that called the renderer
+> "nothing implemented" while it had 316 passing tests.
+>
+> The `State` field is a closed set — `SHIPPING` (built, wired, in use),
+> `BUILT-UNWIRED` (tested but nothing calls it), `PARTIAL` (some of the named
+> surface exists), `STUB` (port + null adapter only), `NOT STARTED`. Keep to
+> those five so the blocks stay greppable.
+>
+> `BUILT-UNWIRED` is not a synonym for "done". Two packages are in that state
+> and between them hold 188 tests that no running code exercises.
+
 All paths below are under `engine/src/main/java/com/openfps/engine/` unless a
-module is named.
+module is named. `:desktop`, `:tools` and `:android` carry the same block in
+their module-root `README.md`.
 
 | Subsystem | Package | Status |
 |---|---|---|
 | Core Loop | `core` | Phase 1.3 — event-driven, multi-threaded, configurable 30/60/120 Hz; pool also does caller-participating parallel fan-out (`submitParallel`) |
 | Gameplay | `gameplay` | `PlayerController` (first-person movement, StrictMath-deterministic) + `I_PlayerInput` / `PlayerInputView`; rest stub, registered as `P_` |
 | Render | `render` | **Built and shipping** (316 tests), registered as `R_`. Multi-threaded software triangle rasterizer: `Framebuffer`, `Camera`, `TriangleClipper`, `Rasterizer`, `SpanRenderer`, `TextureSampler`, `MipChain`, `ModelFormat`, `Scene`, `SoftwareRenderPort`. Two passes per frame (world, then view-space viewmodel with a depth clear between). Measured p50 4.9 ms at 1280x720 on 8 workers. `docs/ASSETS.md` § 2 is the canonical target; `render/README.md` is the full spec — read it before touching any render code. The 2.5D DOOM renderer (visplanes, column renderer, 8-bit palette) is retired |
-| Audio | `audio` | Stub — port + null adapter, registered as `S_` |
-| Network | `net` | Port + null adapter, registered as `G_`. `TicCmd`, `TicCmdBuffer`, `PeerConnection`, `RedundantSender`, `AckWindow` are built (87 tests); no socket wired yet. `net/README.md` has a pending revision — check with the owner before editing it |
+| Audio | `audio` | STUB — port + null adapter, registered as `S_`. **0 tests.** Blocked on the audio source-format question: `docs/ASSETS.md` says "No IWADs, ever", so the old plan to read `DS*` lumps from a WAD is dead and the accepted-sources table has no audio row at all |
+| Network | `net` | **BUILT-UNWIRED.** `TicCmd`, `TicCmdBuffer`, `AckWindow`, `PeerConnection`, `RedundantSender`, `NetBytes` are built and tested (87 tests) — but `EngineMain` registers `NullNetworkPort` and their only callers are their own tests. **No socket is ever opened.** Next step is wiring them to `DesktopDatagramPort`, which exists and is tested |
 | Resource | `resource` | `WadReader`, `LumpCache`, `MapLumpParser`, `LittleEndian`, `WadFilePort` all built (101 tests). **Not registered** — no `W_` subsystem yet. Its *role* is now an open question: `docs/ASSETS.md` moves all art to preprocessed glTF, so the WAD path has no art left to read. See `render/README.md` § 11b. Do not delete it and do not build `ImageDecoder` until that is resolved |
 | Memory | `memory` | Phase 1.1 — state machine, two backends (`JvmMemoryPort`, `ZoneMemoryPort`), factory |
 | HAL | `hal` | Ports + `nulladapter` + `sqlite` + `desktop` (time, datagram) adapters, system info, user profile |

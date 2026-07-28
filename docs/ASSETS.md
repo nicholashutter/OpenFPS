@@ -111,6 +111,14 @@ demo scene** (294 world instances, 1777 triangles, 1280×720): **4.7 ms at 8
 workers, 3.9 ms at 16**, against a serial 22.1 ms. So 720p60 holds comfortably,
 with roughly 2× headroom inside the 10 ms budget.
 
+All frame-time figures in this document are **p50**. Reproduced independently on
+2026-07-28 at 8 workers over 270 timed frames: best 3.85 ms, **p50 4.86 ms**,
+p90 5.73 ms, p99 7.06 ms, mean 4.97 ms. The 4.7 above and the 4.9 quoted in
+`PLAN.md`, `README.md` and `AGENTS.md` are the same statistic from two different
+runs on the same machine — treat ~0.2 ms as ordinary run-to-run variance, not as
+a discrepancy between documents. Quote p50 and say so; `docs/ASSETS.md` § 2 is
+the reason best-of-N is not used anywhere here.
+
 Those figures postdate a fix worth knowing about, because the earlier ones were
 measured against a renderer whose parallel path was *slower* than its serial
 path. Two faults compounded: the pipeline ran per model instance, crossing 1180

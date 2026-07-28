@@ -5,6 +5,34 @@
 > import a platform API — and `hal/adapter/` itself is limited to the JDK, so
 > anything needing a device or a native library lives in a platform module.
 
+## Status
+
+| Field | Value |
+|---|---|
+| **State** | SHIPPING |
+| **Phase** | 1.4, 1.5 complete |
+| **Tests** | 91 |
+| **Registered** | I_ via `HalSubsystem` |
+| **Verified** | 2026-07-28 |
+
+**Built.** All nine ports, and three adapter families behind them: `nulladapter`
+(every test and `--headless`), `sqlite` (Xerial `SqliteUserProfilePort`) and
+`desktop` (`DesktopTimePort`, `DesktopDatagramPort`), selected by `HalBackend` /
+`AdapterFactorySelector`. Window and input are built too — `GdxWindowPort` and
+`GdxInputPort` in the `:desktop` module. `DesktopAdapterFactory` returning
+`NullWindowPort` and `NullInputPort` is the design, not a gap: `:engine` stays
+platform-free and `:desktop` decorates it (§ "Where the window and input actually
+live").
+
+**Not built.** Nothing outstanding for these phases. There is no `mobile/`
+adapter family; `I_UserProfilePort` names `hal.adapter.mobile` as where a Room
+implementation will go, not as somewhere that exists.
+
+**Blocked on.** Nothing.
+
+**Next step.** Android — the second platform is what proves the port set, and it
+is the only named backend with nothing written for it (`PLAN.md` § 6).
+
 ## Layout
 
 ```

@@ -4,6 +4,30 @@
 > go through events. A pool of dedicated worker threads consumes from
 > the queue and dispatches to subsystems.
 
+## Status
+
+| Field | Value |
+|---|---|
+| **State** | SHIPPING |
+| **Phase** | 1.2, 1.3 complete |
+| **Tests** | 68 |
+| **Registered** | CORE via `CoreSubsystem`; this package also owns `SubsystemRegistry` itself and all seven subsystems (Core, Memory, Hal, Net, Gameplay, Render, Audio) |
+| **Verified** | 2026-07-28 |
+
+**Built.** The event bus, the worker pool with caller-participating
+`submitParallel` and a DRAINING state, the per-subsystem state machine and the
+registry, `GameLoop` with absolute-deadline drift correction at 30/60/120 Hz,
+and `EngineSession` for non-blocking start/stop.
+
+**Not built.** Nothing outstanding.
+
+**Blocked on.** Nothing.
+
+**Next step.** Pool sizing still comes from
+`I_SystemInfoPort.logicalProcessorCount() / 2`; read the true physical-core
+count instead, via a Phase 2 desktop adapter (oshi/JNA), as § Threading below
+already says it should.
+
 ## What lives here
 
 ```

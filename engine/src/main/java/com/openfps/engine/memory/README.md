@@ -5,6 +5,33 @@
 > whether the backing store is the JVM heap, a custom zone, or a slab.
 > A factory at engine boot decides the backend.
 
+## Status
+
+| Field | Value |
+|---|---|
+| **State** | SHIPPING |
+| **Phase** | 1.1 complete |
+| **Tests** | 35 |
+| **Registered** | Z_ via `MemorySubsystem` |
+| **Verified** | 2026-07-28 |
+
+**Built.** The `I_MemoryPort` state machine, both backends — `JvmMemoryPort` and
+`ZoneMemoryPort` — and `MemoryPortFactory` as the single backend selector. The one
+sanctioned bypass (`render.adapter.Framebuffer` taking its `int[]` and `float[]`
+straight from the JVM) is documented below and in `STYLE.md` § 13.4.
+
+**Not built.** `ZoneSlabPort`. `MemoryPortFactory.createSlab(heap, block)` exists
+and does **not** throw — it ignores `blockSizeBytes`, logs "slab-mode" and returns
+a plain `ZoneMemoryPort`. So a caller asking for a slab silently gets a bump
+allocator with no partitioning, which is a Phase 2+ placeholder rather than a
+feature.
+
+**Blocked on.** Nothing.
+
+**Next step.** Either implement the block partitioning behind `createSlab` or make
+it throw until it is real — today it is a placeholder that answers as if it
+succeeded.
+
 ## What lives here
 
 ```

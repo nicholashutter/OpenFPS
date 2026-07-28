@@ -3,6 +3,31 @@
 > A room to stand in and a blaster to hold. This package is what turns the
 > engine's working parts into something you can walk around in.
 
+## Status
+
+| Field | Value |
+|---|---|
+| **State** | SHIPPING |
+| **Phase** | not a phase item — this is the playable demo content |
+| **Tests** | 35 |
+| **Registered** | not registered — not a subsystem; it is a composition root that consumes the engine |
+| **Verified** | 2026-07-28 |
+
+**Built.** `DemoScene` builds the room layout, the kit scale and the weapon pose
+once and hands back an immutable `Scene`; `DemoModels` loads the model set and
+reports honestly which of its three asset outcomes it got; `DemoGameplayPort` is
+the only live `I_GameplayPort` in the codebase, driving a `PlayerController` and
+aiming the software renderer once per tic; `DemoAssetException` refuses to start
+a demo with no floor. `:desktop:run` shows all of it in a window.
+
+**Not built.** Nothing outstanding.
+
+**Blocked on.** Nothing.
+
+**Next step.** This package follows the renderer. There is nothing to do here
+until the `render/README.md` polish items — the bilinear quality toggle and the
+independent internal render resolution — land.
+
 ## Not a subsystem
 
 `demo` has **no `SubsystemId`, no `Subsystem` wrapper, and is never registered

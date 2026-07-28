@@ -78,24 +78,34 @@ public final class MemoryPortFactory
     }
 
     /**
-     * Creates a zone-allocator backed memory port, pre-partitioned for
-     * slab use. Each slab block is exactly {@code blockSizeBytes} bytes.
-     * Reserving a slab gives O(1) allocate and O(1) free (via tag
-     * tracking) with zero fragmentation. Use for entity pools.
+     * NOT IMPLEMENTED — always throws. Planned Phase 2 feature: a
+     * zone-allocator backed port pre-partitioned into fixed
+     * {@code blockSizeBytes} blocks, giving O(1) allocate and O(1) free with
+     * zero fragmentation, for entity pools.
      *
-     * Phase 2 feature. The current implementation just wraps a
-     * ZoneMemoryPort — real slab is coming.
+     * <p>This threw nothing until now. It logged "slab-mode", discarded
+     * <b>both</b> arguments — {@code ZoneMemoryPort} takes none — and returned
+     * an ordinary unpartitioned bump allocator, while the Javadoc above it
+     * promised blocks of exactly {@code blockSizeBytes}. A caller got a
+     * plausible object that did not honour the contract it had just read, with
+     * nothing at the call site to notice. That is the same silent-wrong-answer
+     * shape as the 1024-entry trig table described in {@code common/README.md},
+     * and it is refused here for the same reason: a method that cannot keep its
+     * contract should say so rather than answer anyway.</p>
+     *
+     * <p>It has no callers and no tests today, so failing loudly costs nothing
+     * and removes a trap for whoever writes the first entity pool.</p>
      *
      * @param heapSizeBytes total slab heap size
      * @param blockSizeBytes size of each slab block
-     * @return a fresh, uninitialized port
+     * @return never returns
+     * @throws UnsupportedOperationException always
      */
     public static I_MemoryPort createSlab(final int heapSizeBytes, final int blockSizeBytes)
     {
-        LOG.info("MemoryPortFactory: selecting ZoneMemoryPort (slab-mode) backend (heap={}, block={})",
-            heapSizeBytes, blockSizeBytes);
-        // Phase 2 — for now, just a regular zone. Slab header in
-        // memory/README.md explains the planned structure.
-        return new ZoneMemoryPort();
+        throw new UnsupportedOperationException(
+            "createSlab(" + heapSizeBytes + ", " + blockSizeBytes + ") is a Phase 2 feature "
+            + "and is not implemented. Use createZone(int) for a bump allocator, or implement "
+            + "block partitioning in ZoneMemoryPort first — see memory/README.md.");
     }
 }

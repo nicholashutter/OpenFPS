@@ -2,6 +2,31 @@
 
 > S_ is the sound engine. Plays 3D-positioned SFX and background music.
 
+## Status
+
+| Field | Value |
+|---|---|
+| **State** | STUB |
+| **Phase** | `PLAN.md` Phase 6 — planned (§ 3.4) |
+| **Tests** | 0 |
+| **Registered** | S_ via `AudioSubsystem`, with a `NullAudioPort` hard-coded in `EngineMain` |
+| **Verified** | 2026-07-28 |
+
+**Built.** The port and the null adapter, and nothing else. `AudioSubsystem`
+forwards only `onInit` / `onShutdown` to the port; it does not override
+`onEvent`, and no SFX or music event types exist. **0 tests** — there is nothing
+here yet to assert.
+
+**Not built.** `SoundEngine`, `SoundEmitter`, `MusicPlayer`, `PcmLoader`. None
+of them exist; everything below is specification written ahead of the code.
+
+**Blocked on.** The audio source-format question. `docs/ASSETS.md` § 8 is "No
+IWADs, ever", which kills the old plan of reading `DS*` lumps from a WAD, and
+§ 3's accepted-sources table has no audio row at all.
+
+**Next step.** Decide the source, the shipped format and the container together
+— before `PcmLoader` is written, not while writing it.
+
 ## What lives here (planned)
 
 - `SoundEngine` — main entry, processes a queue of sound events per tic

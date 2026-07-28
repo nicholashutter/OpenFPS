@@ -2,6 +2,35 @@
 
 > Utilities used by every other subsystem. **Nothing platform-specific** lives here.
 
+## Status
+
+| Field | Value |
+|---|---|
+| **State** | SHIPPING |
+| **Phase** | 0 (FixedMath, Constants), 1.4 complete (UserProfile) |
+| **Tests** | 12 |
+| **Registered** | not registered — this is a utility package, not a subsystem: no `SubsystemId`, no `Subsystem` wrapper, nothing dispatches to it |
+| **Verified** | 2026-07-28 |
+
+The 12 are `UserProfileTest`, the only suite under `common/`. `FixedMath` is
+covered by 6 more in `engine/src/test/java/com/openfps/engine/FixedMathTest.java`,
+which sits at the **test root** rather than under `common/`; they are counted
+there, not here, so the two numbers do not overlap.
+
+**Built.** `FixedMath` 16.16 arithmetic — `fromFloat`, `toFloat`, `mul`, `div`,
+`abs`, `clamp` — plus `Constants` and the immutable `UserProfile`.
+
+**Not built.** Trig: no sin/cos tables and no angle type. An earlier 1024-entry
+table was deleted for disagreeing with its own documented angle convention (§ Trig
+below).
+
+**Blocked on.** Nothing. Trig is Phase 4/5 work that should be designed against a
+real caller rather than decided here.
+
+**Next step.** Design the angle type and table width against their first real
+consumer — player movement in `gameplay` — with a test that pins the convention
+down.
+
 ## Files
 
 - `FixedMath.java` — 16.16 fixed-point arithmetic (convert, multiply, divide, abs, clamp)

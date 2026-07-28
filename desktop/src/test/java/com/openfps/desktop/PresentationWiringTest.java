@@ -52,14 +52,25 @@ class PresentationWiringTest
         }
 
         @Test
-        @DisplayName("attaching mid-loop is rejected — the listener is already built")
-        void shouldRejectAttachWhileRunning()
+        @DisplayName("attaching before the loop starts is allowed, and null clears the renderer")
+        void shouldAllowAttachBeforeTheLoopStarts()
         {
+            // NOT a test of the RUNNING guard, despite what this test used to
+            // claim. Only runFrameLoop() sets RUNNING and it needs a display,
+            // so nothing headless can enter that state. The old version
+            // asserted state()==CREATED and a null renderer, which would pass
+            // just as happily with the guard deleted — a test that made an
+            // untested branch look covered. It now says what it actually does.
+            //
+            // STILL UNTESTED, and deliberately recorded here rather than
+            // hidden: the `state == RUNNING` rejection in init(),
+            // attachRenderer(), attachInput() and shutdown(). Covering them
+            // needs a package-private seam to force the state, which is a
+            // production change and a separate decision.
             final GdxWindowPort port = new GdxWindowPort();
             port.init();
             port.create(320, 240, "test");
-            // runFrameLoop is what sets RUNNING and it needs a display, so the
-            // guard is asserted through the message rather than by entering it.
+
             assertThat(port.state()).isEqualTo(GdxWindowPort.State.CREATED);
             port.attachRenderer(null);
             assertThat(port.renderer()).isNull();
