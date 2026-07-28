@@ -60,7 +60,13 @@ class WorkerPoolParallelTest
     @AfterEach
     void tearDown() throws Exception
     {
-        if (pool != null && pool.state() != I_ThreadPoolPort.State.SHUTDOWN
+        // DRAINING means a test already called shutdown(); calling it again is
+        // a rejected double shutdown, so only close the drain window.
+        if (pool != null && pool.state() == I_ThreadPoolPort.State.DRAINING)
+        {
+            pool.awaitTermination(5000);
+        }
+        else if (pool != null && pool.state() != I_ThreadPoolPort.State.SHUTDOWN
             && pool.state() != I_ThreadPoolPort.State.UNINITIALIZED)
         {
             pool.shutdown();
@@ -485,6 +491,74 @@ class WorkerPoolParallelTest
     {
         outerRuns.incrementAndGet(index);
         pool.submitParallel(inner, innerCount);
+    }
+
+    // ------------------------------------------------------------------
+    // The drain window. Shutting down does not stop dispatch immediately.
+    // ------------------------------------------------------------------
+
+    @Test
+    @DisplayName("a subsystem may still fan out while the pool is draining")
+    void shouldAllowParallelSubmissionWhileDraining()
+    {
+        // Regression test for a defect that made every clean exit throw.
+        //
+        // shutdown() drains the bus, and draining DELIVERS the queued events
+        // rather than discarding them. A subsystem handling one of those may
+        // fan out — the renderer does exactly this, because trailing
+        // RenderFrameEvents are dispatched during the drain. The pool used to
+        // move straight to SHUTDOWN before that window closed, so those
+        // submissions hit a terminal pool and threw.
+        //
+        // Against the old behaviour this fails on the first assertion.
+        startPool(2);
+        pool.shutdown();
+
+        assertThat(pool.state())
+            .as("shutdown() opens a drain window; the pool is not terminal yet")
+            .isEqualTo(I_ThreadPoolPort.State.DRAINING);
+
+        final AtomicInteger ran = new AtomicInteger(0);
+        assertThatCode(() -> pool.submitParallel(index -> ran.incrementAndGet(), 16))
+            .as("fan-out during the drain window must be permitted")
+            .doesNotThrowAnyException();
+        assertThat(ran.get())
+            .as("caller participation completes the batch even as workers exit")
+            .isEqualTo(16);
+    }
+
+    @Test
+    @DisplayName("the pool becomes terminal only once every worker has exited")
+    void shouldReachShutdownOnlyAfterWorkersExit() throws Exception
+    {
+        startPool(2);
+        pool.shutdown();
+        assertThat(pool.awaitTermination(5000))
+            .as("workers must exit within the timeout")
+            .isTrue();
+        assertThat(pool.state())
+            .as("awaitTermination closes the drain window")
+            .isEqualTo(I_ThreadPoolPort.State.SHUTDOWN);
+
+        assertThatThrownBy(() -> pool.submitParallel(index -> { }, 1))
+            .as("once terminal, fan-out is a genuine error again")
+            .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    @DisplayName("a second shutdown during the drain window is still rejected")
+    void shouldRejectRepeatedShutdownWhileDraining()
+    {
+        // Adding DRAINING must not weaken the house contract that every port
+        // rejects a double shutdown. The drain window changes when the pool
+        // becomes terminal, not whether shutting down twice is a programming
+        // error. `WorkerPoolTest.double-shutdown is rejected` covers the
+        // SHUTDOWN case; this covers the new intermediate one.
+        startPool(2);
+        pool.shutdown();
+        assertThatThrownBy(pool::shutdown)
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("DRAINING");
     }
 
     private static void awaitQuietly(final CountDownLatch latch)

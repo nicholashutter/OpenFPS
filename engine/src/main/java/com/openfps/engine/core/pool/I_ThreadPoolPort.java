@@ -19,7 +19,11 @@ import com.openfps.engine.core.subsystem.SubsystemRegistry;
  * Subsystem dispatch uses a {@link SubsystemRegistry}. The pool itself
  * is a state machine:
  *
- *   UNINITIALIZED ──init()──► READY ──start()──► RUNNING ──shutdown()──► SHUTDOWN
+ *   UNINITIALIZED ──init()──► READY ──start()──► RUNNING
+ *                                                  │
+ *                                            shutdown()
+ *                                                  ▼
+ *                                              DRAINING ──(last worker exits)──► SHUTDOWN
  *
  * On top of that draining loop the pool offers one fan-out primitive,
  * {@link #submitParallel(I_ParallelJob, int)} — "run indices 0..N-1 across
@@ -116,7 +120,24 @@ public interface I_ThreadPoolPort
         READY,
         /** Workers are hot and draining the bus. */
         RUNNING,
-        /** Terminal state. Workers are stopping or stopped. */
+        /**
+         * {@code shutdown()} has been called and workers are finishing the
+         * events already queued, but have not all exited.
+         *
+         * <b>This state exists because dispatch legitimately continues after
+         * shutdown begins.</b> Draining the bus means the remaining events are
+         * still delivered to their subsystems, and a subsystem handling one may
+         * fan out through {@link #submitParallel}. Collapsing this window into
+         * {@code SHUTDOWN} made that a hard failure: the renderer threw twice on
+         * every clean exit, because the trailing {@code RenderFrameEvent}s were
+         * dispatched to a pool that had already declared itself terminal.
+         *
+         * Parallel submission is therefore still permitted here — the workers
+         * are alive and the batch machinery is intact. What is not permitted is
+         * a second {@code shutdown()}.
+         */
+        DRAINING,
+        /** Terminal state. All workers have exited. */
         SHUTDOWN
     }
 }

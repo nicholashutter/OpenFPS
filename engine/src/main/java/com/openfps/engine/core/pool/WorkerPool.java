@@ -177,6 +177,11 @@ public final class WorkerPool implements I_ThreadPoolPort
         {
             throw new IllegalStateException("shutdown() called from state SHUTDOWN — already terminal");
         }
+        if (state == State.DRAINING)
+        {
+            throw new IllegalStateException(
+                "shutdown() called from state DRAINING — shutdown is already in progress");
+        }
         // Tell the bus to drain; workers will see null from take() once empty
         try
         {
@@ -186,7 +191,11 @@ public final class WorkerPool implements I_ThreadPoolPort
         {
             LOG.warn("bus.drain() threw during shutdown", e);
         }
-        state = State.SHUTDOWN;
+        // DRAINING, not SHUTDOWN. The workers below are still alive and still
+        // dispatching whatever the bus had queued, and a subsystem handling one
+        // of those events may fan out through submitParallel. Declaring the
+        // pool terminal here is what made every clean exit throw.
+        state = State.DRAINING;
         // Stop all workers — request stop AND interrupt so blocked take() calls wake up
         for (final WorkerThread w : workers)
         {
@@ -196,23 +205,37 @@ public final class WorkerPool implements I_ThreadPoolPort
         // Followers park on our own condition, so they are woken without
         // relying on the interrupt above.
         signalAllIdleWorkers();
+        // Deliberately NOT advancing to SHUTDOWN here even when every worker
+        // has already exited. An earlier revision did, and it made the state
+        // immediately after shutdown() depend on whether the workers happened
+        // to have noticed the interrupt yet — a race that showed up as a test
+        // failing roughly one run in three. shutdown() now always lands in
+        // DRAINING and awaitTermination() is the single place the terminal
+        // state is reached, which is both deterministic and easier to state.
         LOG.info("WorkerPool shutdown signaled");
     }
 
     @Override
     public boolean awaitTermination(final long timeoutMillis) throws InterruptedException
     {
-        if (state != State.SHUTDOWN)
+        if (state != State.DRAINING && state != State.SHUTDOWN)
         {
             throw new IllegalStateException("awaitTermination() called from state " + state
-                + " — only valid from SHUTDOWN");
+                + " — only valid from DRAINING or SHUTDOWN");
         }
         final long deadline = System.nanoTime() + timeoutMillis * 1_000_000L;
         while (activeWorkers.get() > 0 && System.nanoTime() < deadline)
         {
             Thread.sleep(10);
         }
-        return activeWorkers.get() == 0;
+        final boolean allExited = activeWorkers.get() == 0;
+        if (allExited)
+        {
+            // The drain window is over: no worker can dispatch another event,
+            // so no further submitParallel can legitimately arrive.
+            state = State.SHUTDOWN;
+        }
+        return allExited;
     }
 
     @Override
@@ -226,10 +249,15 @@ public final class WorkerPool implements I_ThreadPoolPort
         {
             throw new IllegalArgumentException("jobCount must be >= 0, got " + jobCount);
         }
-        if (state != State.RUNNING)
+        // DRAINING is permitted deliberately: the bus drain still delivers
+        // queued events, and a subsystem handling one may fan out. The workers
+        // are alive and the batch machinery is intact, so the work is safe to
+        // run — and caller participation means it completes even if every
+        // worker has already exited.
+        if (state != State.RUNNING && state != State.DRAINING)
         {
             throw new IllegalStateException("submitParallel() called from state " + state
-                + " — only valid from RUNNING");
+                + " — only valid from RUNNING or DRAINING");
         }
         if (jobCount == 0)
         {
