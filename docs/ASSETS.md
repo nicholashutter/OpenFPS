@@ -105,9 +105,19 @@ a single additional triangle is considered.
 the one this document reached an hour earlier, and it comes from measuring the
 real pipeline rather than a synthetic harness.
 
-The 720p rows are **scaled by pixel count from the 1080p measurements**, not
-measured directly. Scaling is sound here because fill dominates, but confirm it
-before committing.
+The 720p rows were originally **scaled by pixel count** from the 1080p
+measurements rather than measured. They have since been **measured on the real
+demo scene** (294 world instances, 1777 triangles, 1280×720): **4.7 ms at 8
+workers, 3.9 ms at 16**, against a serial 22.1 ms. So 720p60 holds comfortably,
+with roughly 2× headroom inside the 10 ms budget.
+
+Those figures postdate a fix worth knowing about, because the earlier ones were
+measured against a renderer whose parallel path was *slower* than its serial
+path. Two faults compounded: the pipeline ran per model instance, crossing 1180
+parallel barriers a frame, and the barrier join used a timed park that Windows
+rounds up to its 15.6 ms timer period. Batching the pass to 8 barriers and
+replacing the park with a yield took the demo from 2.9 fps windowed to a
+vsync-limited 60. See `render/README.md` § 5 and § 7.
 
 The old "~50–100k triangles/frame" ceiling was never a 60 Hz 1080p figure and
 now looks optimistic even at 720p. **Kenney's kits remain comfortably inside

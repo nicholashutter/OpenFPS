@@ -318,6 +318,25 @@ A frame is **two passes over the same buffers**: world geometry, then a depth
 clear, then view-space geometry. The second pass is what a first-person weapon
 is drawn in.
 
+**A pass batches every instance into one geometry stream.** This is not an
+optimisation detail — it is the difference between threading helping and
+threading hurting. An earlier revision ran the whole pipeline *per instance*,
+so a 295-instance room crossed **1180 parallel barriers per frame** to
+distribute a few dozen triangles each, and more workers made it slower. Now
+transform and clip run across all instances into one shared stream, and setup,
+binning and rasterization run once over the whole stream: **8 barriers per
+frame, independent of instance count.** Each instance still gets its own packed
+model→clip transform, which was always once-per-instance and cheap.
+
+The buffers are therefore sized to the **scene's pass total**, not to the
+largest single instance, and grow only when a bigger scene appears.
+
+Ordering is preserved exactly: instances enter the stream in submission order
+and tiles are binned in ascending stream index, so every pixel sees the same
+triangles in the same order the per-instance path produced. That is why the
+batched output is byte-identical to what it replaced — verified across
+{0,1,2,4,8,16} workers on four scenes, 48 images, all matching.
+
 ```text
   Scene
     ├── world instances  (ModelFormat + modelToWorld)
@@ -698,6 +717,30 @@ it at this stage.
 
 **Threading service.** Parallel work goes through the existing `WorkerPool`
 (`AGENTS.md` rule 1 — use the services we have). **Never `new Thread`.**
+
+> **A fine-grained join must not use a timed park. This cost 15× and was found
+> by measurement, not review.**
+>
+> `submitParallel`'s join is a polling loop — nothing unparks a joining thread —
+> so a `LockSupport.parkNanos` there is a **timed** park, and a timed park is
+> rounded up to the system timer period. On Windows that is **15.6 ms by
+> default**. A join that needed 50 microseconds slept for fifteen milliseconds.
+>
+> The symptom was that enabling worker threads made the demo scene *slower*:
+> best frame 4 ms, median 31 ms on eight workers. The tell was in the
+> distribution rather than the mean — frame times sat on exact multiples of
+> 15.6 ms, because a frame's several joins each caught a timer tick.
+>
+> `Thread.yield()` has no such floor; it is a reschedule, not a sleep. The join
+> now spins, then yields, and parks only as a backstop for a genuinely
+> descheduled worker, where burning a core is the worse trade.
+>
+> **Two lessons worth keeping.** Report percentiles, not best-of-N — best-of-N
+> hid this completely, because the best frame was always the one that missed a
+> tick. And a benchmark can be *unable to see* a fault: the single-instance
+> scene scaled 5.9× and looked healthy purely because it crossed four barriers
+> per frame instead of 1180, so it rarely caught a tick at all. That healthy
+> number is what made the pool look innocent.
 
 > **Prerequisite — SATISFIED.** `I_ThreadPoolPort` / `WorkerPool` was exclusively
 > an event-bus drainer: workers looped on `bus.take()` and dispatched to a
@@ -1102,10 +1145,33 @@ R_ (worker threads)                 platform adapter (render thread)
 ─────────────────────               ────────────────────────────────
 render into Framebuffer
       │
-      └──── finished int[] ────►    copy into Pixmap (RGBA8888)
+      ├─ de-pad into BACK buffer
+      │  (R_ owns it outright)
+      │
+      ├─ swap two references ◄──┐  short presentLock
+      │                          │
+      └──── FRONT int[] ─────────┴►  one arraycopy under the same lock
+                                    copy into Pixmap (RGBA8888)
                                     upload as one texture
                                     draw fullscreen, swap
 ```
+
+**Double-buffered, not lock-arbitrated.** A single shared buffer meant the
+presenting thread competed for a non-fair lock that the render workers kept
+reacquiring, and it rarely won: R_ finished **35 frames a second and the window
+displayed 2.9 of them.** Fairness settings would have arbitrated that contention;
+double buffering removes it. Neither side ever waits on the other's *work* — only
+on a two-reference swap. The cost is one extra full-frame copy, about 0.2 ms at
+720p.
+
+**Render frames are coalesced, and that belongs to the consumer.** `GameLoop`
+publishes a `RenderFrameEvent` every tic. If frames are already in flight,
+`RenderSubsystem` renders the newest and drops the rest — a stale frame is pure
+waste, because the camera has already moved. The throttle deliberately does
+**not** live in `GameLoop`: it is the simulation clock, it cannot know frame
+cost, and slowing it to the frame rate would couple simulation speed to
+rendering speed and desync lockstep. Only the consumer knows a frame is in
+flight.
 
 The two load-bearing facts, both already documented on `I_WindowPort`:
 
