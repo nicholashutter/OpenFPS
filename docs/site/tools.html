@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>:tools — build-time asset tooling — OpenFPS documentation</title>
+<meta name="description" content="Nothing in this module is ever shipped. It converts art offline, verifies it against the budget, and renders preview frames without a display. No class here reaches a runtime classpath, and…">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<a class="skip" href="#doc">Skip to content</a>
+<header class="topbar"><button class="burger" id="burger" aria-controls="sidebar" aria-expanded="false" aria-label="Show navigation"><span></span><span></span><span></span></button><span class="topbar-name">OpenFPS docs</span></header>
+<div class="scrim" id="scrim" hidden></div>
+<div class="layout">
+<aside class="sidebar" id="sidebar">
+<a class="brand" href="index.html"><span class="brand-mark"></span><span class="brand-name">OpenFPS</span><span class="brand-kind">docs</span></a>
+<input class="filter" id="filter" type="search" placeholder="Filter pages" aria-label="Filter pages" autocomplete="off">
+<nav class="nav" id="nav" aria-label="Documentation">
+<details class="grp" data-hue="1" open><summary><span class="dot"></span>Overview<span class="count">2</span></summary>
+<ul>
+<li><a href="index.html">Overview</a></li>
+<li><a href="agents.html">Agent instructions</a></li>
+</ul></details>
+<details class="grp" data-hue="2" open><summary><span class="dot"></span>Building<span class="count">1</span></summary>
+<ul>
+<li><a href="build.html">Build reference</a></li>
+</ul></details>
+<details class="grp" data-hue="3" open><summary><span class="dot"></span>Architecture<span class="count">2</span></summary>
+<ul>
+<li><a href="style.html">Code style</a></li>
+<li><a href="plan.html">Project plan</a></li>
+</ul></details>
+<details class="grp" data-hue="4" open><summary><span class="dot"></span>Modules<span class="count">5</span></summary>
+<ul>
+<li><a href="engine.html">:engine</a></li>
+<li><a href="desktop.html">:desktop</a></li>
+<li><a href="android.html">:android</a></li>
+<li><a href="tools.html" class="cur" aria-current="page">:tools</a></li>
+<li><a href="gdxshared.html">:gdxshared</a></li>
+</ul></details>
+<details class="grp" data-hue="5"><summary><span class="dot"></span>Packages<span class="count">10</span></summary>
+<ul>
+<li><a href="engine-core.html">Core</a></li>
+<li><a href="engine-common.html">Common</a></li>
+<li><a href="engine-hal.html">HAL (I_)</a></li>
+<li><a href="engine-gameplay.html">Gameplay (P_)</a></li>
+<li><a href="engine-render.html">Render (R_)</a></li>
+<li><a href="engine-demo.html">Demo</a></li>
+<li><a href="engine-audio.html">Audio (S_)</a></li>
+<li><a href="engine-net.html">Net (G_)</a></li>
+<li><a href="engine-resource.html">Resource (W_)</a></li>
+<li><a href="engine-memory.html">Memory (Z_)</a></li>
+</ul></details>
+<details class="grp" data-hue="6"><summary><span class="dot"></span>Reference<span class="count">2</span></summary>
+<ul>
+<li><a href="assets.html">Assets and licensing</a></li>
+<li><a href="demo-assets.html">Demo asset manifest</a></li>
+</ul></details>
+</nav>
+<p class="generated">Generated from the repository's Markdown by <code>:tools:buildDocsSite</code>.</p>
+</aside>
+<aside class="rail"><details class="toc" id="toc" open><summary>On this page</summary>
+<ul>
+<li class="lv2"><a href="#status">Status</a></li>
+<li class="lv2"><a href="#why-an-unshipped-module-exists-at-all">Why an unshipped module exists at all</a></li>
+<li class="lv2"><a href="#the-one-way-dependency-edge">The one-way dependency edge</a></li>
+<li class="lv2"><a href="#gradle-tasks">Gradle tasks</a></li>
+<li class="lv2"><a href="#demopreview-reports-percentiles-and-that-is-why-it-found-the-bug">demoPreview reports percentiles, and that is why it found the bug</a></li>
+<li class="lv2"><a href="#files">Files</a></li>
+</ul></details></aside>
+<main id="doc">
+<p class="crumb"><span class="tag">Modules</span><span class="sep">/</span><code>tools/README.md</code><span class="sep">/</span>5 min read</p>
+<h1 id="tools--build-time-asset-tooling"><code>:tools</code> — build-time asset tooling<a class="anchor" href="#tools--build-time-asset-tooling" aria-label="Permalink">#</a></h1>
+<blockquote>
+<p><strong>Nothing in this module is ever shipped.</strong> It converts art offline, verifies
+it against the budget, and renders preview frames without a display. No class
+here reaches a runtime classpath, and the build fails if one ever does.</p>
+</blockquote>
+<h2 id="status">Status<a class="anchor" href="#status" aria-label="Permalink">#</a></h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Field</th><th>Value</th></tr></thead>
+<tbody>
+<tr><td><strong>State</strong></td><td>SHIPPING</td></tr>
+<tr><td><strong>Phase</strong></td><td>5 (§ 7) — <code>GltfConverter</code> is a Phase 5 lane; the preview harnesses grew out of it</td></tr>
+<tr><td><strong>Tests</strong></td><td>73</td></tr>
+<tr><td><strong>Registered</strong></td><td>not registered — build-time only; nothing depends on <code>:tools</code></td></tr>
+<tr><td><strong>Verified</strong></td><td>2026-07-28</td></tr>
+</tbody>
+</table></div>
+<p><strong>Built.</strong> <code>GltfConverter</code> (glTF 2.0 / GLB in, <code>ModelFormat</code> out) with
+<code>GltfAsset</code>, <code>GltfAccessor</code> and <code>GltfException</code> behind it; <code>ModelBuilder</code>,
+<code>MipGenerator</code>, <code>ProceduralRoom</code> and <code>CubeModel</code> producing <code>.ofm</code> bytes;
+<code>AssetBudgetException</code> failing the build on an over-budget asset; <code>FramePng</code> and
+<code>ToolPool</code> shared by the two preview harnesses; and four entry points —
+<code>GltfConverterMain</code>, <code>DemoAssetsMain</code>, <code>RenderPreviewMain</code>, <code>DemoPreviewMain</code>.</p>
+<p><strong>Not built.</strong> Nothing outstanding.</p>
+<p><strong>Blocked on.</strong> Nothing.</p>
+<p><strong>Next step.</strong> Nothing outstanding. This module moves when the renderer or the
+asset budget does.</p>
+<h2 id="why-an-unshipped-module-exists-at-all">Why an unshipped module exists at all<a class="anchor" href="#why-an-unshipped-module-exists-at-all" aria-label="Permalink">#</a></h2>
+<p><code>docs/ASSETS.md</code> § 4: a software rasterizer's scarcest resource is per-frame CPU
+and its cheapest is build-time CPU. So triangulation, scene flattening, material
+flattening, texture decode, mip generation and budget enforcement all happen
+here, once, offline — and the runtime reads a flat binary with near-zero
+parsing. glTF is never parsed at runtime.</p>
+<p>That also buys a licensing result. Gson (Apache-2.0) parses the JSON chunk,
+which <code>docs/ASSETS.md</code> § 4 sanctions <strong>because</strong> build-time tooling ships
+nothing. If any of this were on the runtime classpath that argument would
+collapse.</p>
+<h2 id="the-one-way-dependency-edge">The one-way dependency edge<a class="anchor" href="#the-one-way-dependency-edge" aria-label="Permalink">#</a></h2>
+<div class="code"><pre><code>:tools  ──────►  :engine          (and nothing points back)
+</code></pre></div>
+<p><code>:tools</code> depends on <code>:engine</code> so <code>ModelBuilder</code> can write against
+<code>ModelFormat</code>'s own layout constants, <code>FramePng</code> against <code>Rgba</code>'s packing, and
+the preview harnesses against <code>Camera</code> / <code>Framebuffer</code> / <code>SoftwareRenderPort</code>.
+A second copy of the vertex stride or the RGBA byte order is exactly the
+divergence <code>AGENTS.md</code> rule 1 exists to prevent — <code>ModelFormat</code> owns the layout
+and the reader but deliberately not the writer, and this module is the other
+half of that split.</p>
+<p>Nothing depends on <code>:tools</code>. That is what keeps it, and Gson, off every shipped
+classpath, and it is <strong>enforced rather than trusted</strong>: the root project's
+<code>verifyToolsIsolation</code> task resolves the shipped runtime classpath and throws if
+any artifact name starts with <code>tools-</code> or <code>gson-</code>. It is wired into <code>:tools</code>'s
+own <code>check</code>, so a plain <code>gradlew build</code> fails the moment someone adds
+<code>implementation(project(":tools"))</code> to <code>:engine</code>, <code>:desktop</code> or <code>:android</code>.</p>
+<p>(<code>:tools</code> does pull <code>logback-classic</code> at <code>runtimeOnly</code>, so the converter's
+diagnostics appear when Gradle runs it. Same reasoning: this module's classpath
+is never a shipped one.)</p>
+<h2 id="gradle-tasks">Gradle tasks<a class="anchor" href="#gradle-tasks" aria-label="Permalink">#</a></h2>
+<p>None of these is wired into <code>build</code>. They write files, and <code>docs/ASSETS.md</code> § 6
+keeps generated art out of git while CI stays hermetic.</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Task</th><th>Required property</th><th>What it does</th></tr></thead>
+<tbody>
+<tr><td><code>regenerateDemoAssets</code></td><td><code>-PkenneyRaw=&lt;dir&gt;</code> (else it warns and falls back)</td><td>stages the curated CC0 selection, converts it, then reads every <code>.ofm</code> back and checks the budget</td></tr>
+<tr><td><code>verifyModels</code></td><td>—</td><td>the read-back-and-check half alone, for a payload already converted</td></tr>
+<tr><td><code>convertModels</code></td><td>— (<code>-PmodelsIn</code> / <code>-PmodelsOut</code> optional)</td><td>converts every <code>.gltf</code> / <code>.glb</code> under the input tree</td></tr>
+<tr><td><code>renderPreview</code></td><td><code>--args="--out=&lt;png&gt;"</code></td><td>orbits one model, writes a PNG, no window and no GL</td></tr>
+<tr><td><code>demoPreview</code></td><td><strong><code>-PdemoOut=&lt;dir&gt;</code>, mandatory</strong></td><td>renders the whole demo — room, props, viewmodel — to PNGs</td></tr>
+</tbody>
+</table></div>
+<p><code>-PkenneyRaw</code> names a directory holding each pack unzipped into a subdirectory
+of its own (<code>&lt;kenneyRaw&gt;/prototype-kit/Models/GLB format/...</code>). The download
+stays a manual step: <code>docs/ASSETS.md</code> § 6 forbids build-time third-party
+fetches, because those URLs are unpinnable and their uptime is not ours.
+Without it, <code>DemoAssetsMain</code> falls through to <code>ProceduralRoom</code> and says so at
+<code>WARN</code> — a generated greybox room is a floor to stand on, but presenting one as
+Kenney art would falsify the provenance record § 7 requires.</p>
+<p><code>-PdemoOut</code> is mandatory <strong>and must point outside the repository</strong>. There is no
+default on purpose; a defaulted output path is how generated art ends up
+committed.</p>
+<p>Conversion and verification are one step in <code>regenerateDemoAssets</code> because a
+model that converts without throwing is not a model that works: the converter's
+budget checks run on in-memory totals, which proves the geometry was in budget,
+not that the bytes on disk parse back into the same geometry. Reading every
+output through the runtime's own <code>ModelFormat</code> in the same process closes that
+gap and means nobody can regenerate and skip the check.</p>
+<h2 id="demopreview-reports-percentiles-and-that-is-why-it-found-the-bug"><code>demoPreview</code> reports percentiles, and that is why it found the bug<a class="anchor" href="#demopreview-reports-percentiles-and-that-is-why-it-found-the-bug" aria-label="Permalink">#</a></h2>
+<p><code>measure</code> prints p50, p90 and p99 rather than best-of-N, and that choice is
+load-bearing. Adding workers used to make the demo scene <em>slower</em>:</p>
+<div class="code"><pre><code>workers      1        2        4        8       16
+before    20.9 ms  30.3 ms  31.1 ms  30.6 ms  31.1 ms
+after     19.8 ms  11.0 ms   6.3 ms   4.7 ms   3.9 ms
+</code></pre></div>
+<p>Two faults, neither visible in a minimum. <code>SoftwareRenderPort</code> ran its
+four-stage pipeline once per instance — roughly 1,180 <code>submitParallel</code>
+publish/join boundaries a frame for a 295-instance room; it batches a whole pass
+now and pays eight. And <code>WorkerPool</code>'s batch join fell back to a <em>timed</em> park,
+which on Windows cannot resolve faster than the 15.6 ms platform timer period.
+<strong>The tell was in the distribution and nowhere else</strong>: frame times sat on exact
+multiples of 15.6 ms while the best frame was 4 ms. A best-of-N number would
+have looked healthy throughout. (<code>DemoPreviewMain</code>'s Javadoc calls this a 7x
+error against its own table; <code>DesktopLauncher</code>'s <code>RendererHolder</code> records the
+windowed cost as "fifteen times slower".)</p>
+<p><code>--threads</code> still defaults to 0 — the serial path is the reference the parallel
+result is compared against — but it has not been the fastest setting since.</p>
+<h2 id="files">Files<a class="anchor" href="#files" aria-label="Permalink">#</a></h2>
+<ul>
+<li>
+<p><code>gltf/</code> — <code>GltfConverter</code> (43 tests, with <code>GltfFixtures</code>), <code>GltfAsset</code> (GLB and
+<code>.gltf</code> containers, buffer and URI resolution), <code>GltfAccessor</code> (accessor → flat
+arrays), <code>GltfException</code> (malformed or unsupported input)</p>
+</li>
+<li>
+<p><code>model/</code> — <code>ModelBuilder</code> writes the <code>.ofm</code> image (14 tests), <code>MipGenerator</code>
+builds 2x2 box-filtered pyramids (11 tests), <code>ProceduralRoom</code> is the greybox
+room of last resort (5 tests), <code>CubeModel</code> is a closed textured cube for
+proving backface culling</p>
+</li>
+<li>
+<p><code>AssetBudgetException.java</code> — fails the build instead of silently fixing the asset</p>
+</li>
+<li>
+<p><code>FramePng.java</code> — <code>0xRRGGBBAA</code> → <code>TYPE_INT_ARGB</code>, in one place so the two tools agree</p>
+</li>
+<li>
+<p><code>ToolPool.java</code> — a standalone <code>WorkerPool</code>, or none when <code>threads &lt;= 0</code></p>
+</li>
+<li>
+<p><code>GltfConverterMain</code> / <code>DemoAssetsMain</code> / <code>RenderPreviewMain</code> /
+<code>DemoPreviewMain</code> — the four entry points</p>
+</li>
+</ul>
+<p><code>AGENTS.md</code> forbids <code>public static void main</code> outside core packages. That rule
+guards <code>:engine</code> against entry points competing with <code>EngineMain</code>; it has no
+purchase on an unshipped module whose reason to exist is being invoked by
+Gradle. Each <code>main</code> sits in its own class so the libraries stay libraries.</p>
+<p><strong>73 tests in this module.</strong> Run with <code>.\gradlew.bat :tools:test</code>.</p>
+<footer class="pagefoot"><p>Source: <a class="ext" rel="noopener noreferrer" target="_blank" href="https://github.com/nicholashutter/OpenFPS/blob/main/tools/README.md">tools/README.md</a>. This page is generated — edit the Markdown, not the HTML.</p></footer>
+</main>
+</div>
+<script src="site.js"></script>
+</body>
+</html>

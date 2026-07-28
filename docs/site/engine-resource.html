@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Resource (W_) — WAD File Loading — OpenFPS documentation</title>
+<meta name="description" content="W_ reads resource files and caches them so the same lump isn't read twice.">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<a class="skip" href="#doc">Skip to content</a>
+<header class="topbar"><button class="burger" id="burger" aria-controls="sidebar" aria-expanded="false" aria-label="Show navigation"><span></span><span></span><span></span></button><span class="topbar-name">OpenFPS docs</span></header>
+<div class="scrim" id="scrim" hidden></div>
+<div class="layout">
+<aside class="sidebar" id="sidebar">
+<a class="brand" href="index.html"><span class="brand-mark"></span><span class="brand-name">OpenFPS</span><span class="brand-kind">docs</span></a>
+<input class="filter" id="filter" type="search" placeholder="Filter pages" aria-label="Filter pages" autocomplete="off">
+<nav class="nav" id="nav" aria-label="Documentation">
+<details class="grp" data-hue="1" open><summary><span class="dot"></span>Overview<span class="count">2</span></summary>
+<ul>
+<li><a href="index.html">Overview</a></li>
+<li><a href="agents.html">Agent instructions</a></li>
+</ul></details>
+<details class="grp" data-hue="2" open><summary><span class="dot"></span>Building<span class="count">1</span></summary>
+<ul>
+<li><a href="build.html">Build reference</a></li>
+</ul></details>
+<details class="grp" data-hue="3" open><summary><span class="dot"></span>Architecture<span class="count">2</span></summary>
+<ul>
+<li><a href="style.html">Code style</a></li>
+<li><a href="plan.html">Project plan</a></li>
+</ul></details>
+<details class="grp" data-hue="4" open><summary><span class="dot"></span>Modules<span class="count">5</span></summary>
+<ul>
+<li><a href="engine.html">:engine</a></li>
+<li><a href="desktop.html">:desktop</a></li>
+<li><a href="android.html">:android</a></li>
+<li><a href="tools.html">:tools</a></li>
+<li><a href="gdxshared.html">:gdxshared</a></li>
+</ul></details>
+<details class="grp" data-hue="5" open><summary><span class="dot"></span>Packages<span class="count">10</span></summary>
+<ul>
+<li><a href="engine-core.html">Core</a></li>
+<li><a href="engine-common.html">Common</a></li>
+<li><a href="engine-hal.html">HAL (I_)</a></li>
+<li><a href="engine-gameplay.html">Gameplay (P_)</a></li>
+<li><a href="engine-render.html">Render (R_)</a></li>
+<li><a href="engine-demo.html">Demo</a></li>
+<li><a href="engine-audio.html">Audio (S_)</a></li>
+<li><a href="engine-net.html">Net (G_)</a></li>
+<li><a href="engine-resource.html" class="cur" aria-current="page">Resource (W_)</a></li>
+<li><a href="engine-memory.html">Memory (Z_)</a></li>
+</ul></details>
+<details class="grp" data-hue="6"><summary><span class="dot"></span>Reference<span class="count">2</span></summary>
+<ul>
+<li><a href="assets.html">Assets and licensing</a></li>
+<li><a href="demo-assets.html">Demo asset manifest</a></li>
+</ul></details>
+</nav>
+<p class="generated">Generated from the repository's Markdown by <code>:tools:buildDocsSite</code>.</p>
+</aside>
+<aside class="rail"><details class="toc" id="toc" open><summary>On this page</summary>
+<ul>
+<li class="lv2"><a href="#status">Status</a></li>
+<li class="lv2"><a href="#what-lives-here">What lives here</a></li>
+<li class="lv2"><a href="#open-question-what-is-this-subsystem-for-now">Open question: what is this subsystem for now?</a></li>
+<li class="lv2"><a href="#subsystem-layout">Subsystem layout</a></li>
+<li class="lv3"><a href="#endianness">Endianness</a></li>
+<li class="lv3"><a href="#reference-counting-and-the-port-api">Reference counting and the port API</a></li>
+<li class="lv3"><a href="#the-memory-port-tension">The memory-port tension</a></li>
+<li class="lv2"><a href="#wad-file-format">WAD file format</a></li>
+<li class="lv3"><a href="#header-12-bytes">Header (12 bytes)</a></li>
+<li class="lv3"><a href="#lump-directory-entry-16-bytes-each">Lump directory entry (16 bytes each)</a></li>
+<li class="lv3"><a href="#lump-name-lookup">Lump name lookup</a></li>
+<li class="lv2"><a href="#lump-name-conventions--dooms-for-reference">Lump name conventions — DOOM's, for reference</a></li>
+<li class="lv2"><a href="#image-format-patches-and-flats--specification-only-nothing-decodes-this">Image format (patches and flats) — specification only, nothing decodes this</a></li>
+<li class="lv3"><a href="#flat-64--64">Flat (64 × 64)</a></li>
+<li class="lv3"><a href="#wall-patch-doom-patch-format">Wall patch (Doom "patch" format)</a></li>
+<li class="lv2"><a href="#caching-strategy">Caching strategy</a></li>
+<li class="lv2"><a href="#files">Files</a></li>
+<li class="lv2"><a href="#todo-phase-2">TODO (Phase 2)</a></li>
+</ul></details></aside>
+<main id="doc">
+<p class="crumb"><span class="tag">Packages</span><span class="sep">/</span><code>engine/src/main/java/com/openfps/engine/resource/README.md</code><span class="sep">/</span>10 min read</p>
+<h1 id="resource-w_--wad-file-loading">Resource (W_) — WAD File Loading<a class="anchor" href="#resource-w_--wad-file-loading" aria-label="Permalink">#</a></h1>
+<blockquote>
+<p>W_ reads resource files and caches them so the same lump isn't read twice.</p>
+</blockquote>
+<h2 id="status">Status<a class="anchor" href="#status" aria-label="Permalink">#</a></h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Field</th><th>Value</th></tr></thead>
+<tbody>
+<tr><td><strong>State</strong></td><td>BUILT-UNWIRED</td></tr>
+<tr><td><strong>Phase</strong></td><td><code>PLAN.md</code> Phase 2 — partly done (§ 3.6)</td></tr>
+<tr><td><strong>Tests</strong></td><td>101</td></tr>
+<tr><td><strong>Registered</strong></td><td>not registered — no <code>W_</code> subsystem wrapper</td></tr>
+<tr><td><strong>Verified</strong></td><td>2026-07-28</td></tr>
+</tbody>
+</table></div>
+<p><strong>Built.</strong> <code>WadReader</code>, <code>LumpCache</code> (bounded, evict-on-release), <code>MapLumpParser</code>,
+<code>LittleEndian</code> and <code>WadFilePort</code> — the container, the cache and the map parser —
+under 101 passing tests. It is not a stub and it is not broken.</p>
+<p><strong>Not built.</strong> <code>ImageDecoder</code> (deliberately on hold), <code>BlockmapBuilder</code>, and the
+<code>W_</code> subsystem wrapper. <code>SubsystemId.W_</code> is declared but nothing registers
+<code>WadFilePort</code>; it and <code>MapLumpParser</code> are referenced only by their own tests, so
+nothing can route an event here.</p>
+<p><strong>Blocked on.</strong> The role question below — <code>docs/ASSETS.md</code> moved all art to
+preprocessed glTF, so the WAD path has no art left to read. Do not implement
+<code>ImageDecoder</code> until it is resolved.</p>
+<p><strong>Next step.</strong> A decision from the project owner on whether this package has a
+future. This is the third time it has been raised.</p>
+<p><strong>Read <a href="#open-question-what-is-this-subsystem-for-now">Open question: what is this subsystem for now?</a>
+before acting on anything below it.</strong> The container, the cache and the map
+parser are built and tested. What is <em>stale</em> is the assumption running through
+the rest of this file that the lumps being read are DOOM patches and flats bound
+for a palette-indexed renderer.</p>
+<h2 id="what-lives-here">What lives here<a class="anchor" href="#what-lives-here" aria-label="Permalink">#</a></h2>
+<ul>
+<li>
+<p><code>WadReader</code> — opens a <code>.wad</code> file (or an in-memory image) and reads its lump directory</p>
+</li>
+<li>
+<p><code>LumpCache</code> — demand-loaded, reference-counted cache of lump bytes</p>
+</li>
+<li>
+<p><code>MapLumpParser</code> — parses the map lumps (THINGS, LINEDEFS, SECTORS, VERTEXES)</p>
+</li>
+<li>
+<p><code>LittleEndian</code> — the LE primitive readers everything above shares</p>
+</li>
+<li>
+<p><code>WadFilePort</code> — the real <code>I_WadPort</code>, wiring the three together</p>
+</li>
+<li>
+<p><code>ImageDecoder</code> — decodes DOOM-format patches and flats <em>(on hold — see the open question)</em></p>
+</li>
+</ul>
+<p>This is the one subsystem with no wrapper. The seven registered subsystems are
+Audio, Core, Gameplay, Hal, Memory, Net and Render.</p>
+<h2 id="open-question-what-is-this-subsystem-for-now">Open question: what is this subsystem for now?<a class="anchor" href="#open-question-what-is-this-subsystem-for-now" aria-label="Permalink">#</a></h2>
+<p><code>docs/ASSETS.md</code> moves <strong>all</strong> art to preprocessed glTF, converted at build time
+into a flat binary format, and § 10 of that document records the rejection of
+Freedoom — the one complete, well-licensed WAD the project had identified. The
+renderer specified in <code>render/README.md</code> consumes neither palette-indexed
+textures nor BSP-compiled 2.5D sector maps.</p>
+<p><strong>So the WAD path currently has no art left to read.</strong></p>
+<p>Plausible remaining roles, none of them chosen:</p>
+<ul>
+<li>
+<p><strong>Map / level geometry container.</strong> WAD is a serviceable generic indexed-lump
+archive, and <code>MapLumpParser</code> already reads THINGS / LINEDEFS / SECTORS /
+VERTEXES. Level <em>layout</em> and entity placement are not art and are not
+superseded by glTF. This is the strongest candidate.</p>
+</li>
+<li>
+<p><strong>Generic asset container.</strong> Use the lump directory to hold model and texture
+blobs — competing directly with just shipping the preprocessed payload as a
+zip, which <code>build.gradle.kts</code> already does.</p>
+</li>
+<li>
+<p><strong>A format the project drops later.</strong> Keep it, stop investing, revisit if the
+first two never materialise.</p>
+</li>
+</ul>
+<p><strong>This is the user's call and is deliberately left open. Nothing is deleted and
+the subsystem is not dead.</strong> The same question is recorded in
+<code>render/README.md</code> § 11(b), <code>PLAN.md</code> § 3.6, and <code>docs/ASSETS.md</code> § 9; it is
+restated here because this is the file a reader of <em>this</em> package opens first.</p>
+<p>What it means for the sections below: the WAD <strong>container</strong> format — header,
+directory, lump slicing, endianness, the cache contract — is settled and shipped
+and is described as fact. The <strong>content</strong> conventions — flats, patches, sprite
+and sound namespaces, the palette — are DOOM's, and this project has no DOOM
+content and no palette. Treat them as a specification of the format we can read,
+not as a description of what we will load. They are kept because deleting them
+would throw away the format knowledge the answer to the open question may need.</p>
+<blockquote>
+<p><strong><code>ImageDecoder</code> is on hold. Do not implement it until this question is
+resolved.</strong> It decodes patches and flats into palette indices, and the
+renderer has no palette: <code>render/README.md</code> § 3 specifies 32-bit colour
+buffers and nothing anywhere loads a <code>PLAYPAL</code>. Writing it now produces
+working, tested, unusable code. <code>render/README.md</code> § 11(b) and <code>PLAN.md</code>
+Phase 2 state the same embargo.</p>
+</blockquote>
+<h2 id="subsystem-layout">Subsystem layout<a class="anchor" href="#subsystem-layout" aria-label="Permalink">#</a></h2>
+<div class="code"><pre><code>resource/
+├── WadException.java        runtime failure for every malformed container
+├── port/
+│   └── I_WadPort.java       interface — read + cache lumps
+└── adapter/
+    ├── LittleEndian.java    little-endian primitive readers
+    ├── WadReader.java       header + directory parse, lump slicing
+    ├── LumpCache.java       demand-loaded, ref-counted, bounded
+    ├── MapLumpParser.java   THINGS / LINEDEFS / SECTORS / VERTEXES
+    ├── WadFilePort.java     real I_WadPort implementation
+    └── NullWadPort.java     stub
+</code></pre></div>
+<h3 id="endianness">Endianness<a class="anchor" href="#endianness" aria-label="Permalink">#</a></h3>
+<p>Every WAD field is little-endian. The engine's other byte-packing site,
+<code>memory/adapter/ZoneMemoryPort</code>, packs its allocation headers <strong>big</strong>-endian
+because nothing outside the zone heap reads them. Do not copy that code
+here — use <code>LittleEndian</code>.</p>
+<h3 id="reference-counting-and-the-port-api">Reference counting and the port API<a class="anchor" href="#reference-counting-and-the-port-api" aria-label="Permalink">#</a></h3>
+<p><code>I_WadPort</code> has no unpin operation, so the three read paths map onto the
+cache like this:</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Call</th><th>Effect</th></tr></thead>
+<tbody>
+<tr><td><code>readLump(...)</code></td><td>loads the lump, leaves it <strong>unpinned</strong> and evictable</td></tr>
+<tr><td><code>precacheLump(i)</code></td><td>loads and <strong>pins</strong> it — never chosen as an eviction victim</td></tr>
+<tr><td><code>releaseLump(i)</code></td><td>unpins; the lump is evicted the moment the last reference goes</td></tr>
+<tr><td><code>flushCache()</code></td><td>drops everything, pinned or not</td></tr>
+</tbody>
+</table></div>
+<p><code>releaseLump(int)</code> and <code>openInMemory(byte[], String)</code> are additions on
+<code>WadFilePort</code> beyond the interface. Callers holding the interface type are
+unaffected.</p>
+<h3 id="the-memory-port-tension">The memory-port tension<a class="anchor" href="#the-memory-port-tension" aria-label="Permalink">#</a></h3>
+<p><code>STYLE.md</code> routes every allocation through <code>I_MemoryPort</code>, but that port
+hands back opaque int handles and has <strong>no read or write operation</strong> — a
+lump behind a handle could never be parsed or handed to the render and
+audio subsystems. The compromise: the memory port owns the <strong>budget and
+lifecycle</strong> (every resident lump holds a matching
+<code>allocate(size, TAG_CACHE)</code> handle; eviction calls <code>free</code>), and the bytes
+come from <code>WadReader.sliceLump</code> — the single lump-buffer site in the
+subsystem. See the class Javadoc on <code>LumpCache</code> for the full argument and
+the one honest gap. If <code>I_MemoryPort</code> ever grows a read/write API,
+<code>LumpCache</code> and <code>WadReader.sliceLump</code> are the only two places to change.</p>
+<h2 id="wad-file-format">WAD file format<a class="anchor" href="#wad-file-format" aria-label="Permalink">#</a></h2>
+<p>WAD is the resource container format from DOOM. The full file:</p>
+<div class="code"><pre><code>+---------------+  byte 0
+| WAD header    |  12 bytes
++---------------+
+| lump 0 data   |  variable
++---------------+
+| lump 1 data   |
++---------------+
+| ...           |
++---------------+
+| lump N-1 data |
++---------------+
++---------------+  end of file
+| lump directory|  N * 16 bytes
++---------------+
+</code></pre></div>
+<h3 id="header-12-bytes">Header (12 bytes)<a class="anchor" href="#header-12-bytes" aria-label="Permalink">#</a></h3>
+<div class="tablewrap"><table>
+<thead><tr><th>Offset</th><th>Size</th><th>Field</th></tr></thead>
+<tbody>
+<tr><td>0</td><td>4</td><td>Magic: <code>"IWAD"</code> (main WAD) or <code>"PWAD"</code> (patch WAD)</td></tr>
+<tr><td>4</td><td>4</td><td>Lump count (int32 LE)</td></tr>
+<tr><td>8</td><td>4</td><td>Directory offset in bytes from start of file (int32 LE)</td></tr>
+</tbody>
+</table></div>
+<h3 id="lump-directory-entry-16-bytes-each">Lump directory entry (16 bytes each)<a class="anchor" href="#lump-directory-entry-16-bytes-each" aria-label="Permalink">#</a></h3>
+<div class="tablewrap"><table>
+<thead><tr><th>Offset</th><th>Size</th><th>Field</th></tr></thead>
+<tbody>
+<tr><td>0</td><td>4</td><td>Lump offset from start of file (int32 LE)</td></tr>
+<tr><td>4</td><td>4</td><td>Lump size in bytes (int32 LE)</td></tr>
+<tr><td>8</td><td>8</td><td>Lump name (ASCII, uppercase, null-padded, max 8 chars)</td></tr>
+</tbody>
+</table></div>
+<p>So a WAD with N lumps has its directory at <code>header.directoryOffset</code> and the
+directory is <code>N * 16</code> bytes.</p>
+<h3 id="lump-name-lookup">Lump name lookup<a class="anchor" href="#lump-name-lookup" aria-label="Permalink">#</a></h3>
+<p>To find a lump by name, we scan the directory linearly, comparing each name
+byte-by-byte. For a typical WAD with 1000–2000 lumps this is fast enough.
+For larger WADs we build a <code>Map&lt;String, Integer&gt;</code> cache at first lookup.</p>
+<p><strong>Source — Matthew S Fell, "The Unofficial DOOM Specs" v1.666 (1994)</strong>, chapter
+[2] "The WAD Format" — the container layout above, field for field:
+https://www.gamers.org/dhs/helpdocs/dmsp1666.html</p>
+<blockquote>
+<p><strong>On citations.</strong> This file used to cite the SLADE editor's source and a wiki
+mirror. Both are gone. The project cites <strong>specifications and papers, not
+source repositories</strong> — a GPL-2 codebase is not a reference an MIT project can
+read while writing an implementation of the same format, and a wiki is not a
+spec. <code>render/README.md</code> stripped its own source-repo citations for the same
+reason.</p>
+</blockquote>
+<h2 id="lump-name-conventions--dooms-for-reference">Lump name conventions — DOOM's, for reference<a class="anchor" href="#lump-name-conventions--dooms-for-reference" aria-label="Permalink">#</a></h2>
+<p>Everything in this section describes how <em>DOOM</em> organised a WAD. This project
+ships no DOOM content (<code>docs/ASSETS.md</code> § 8: "No IWADs, ever"), so none of these
+namespaces are currently produced or consumed. Whether any of them survive
+depends on the <a href="#open-question-what-is-this-subsystem-for-now">open question</a>:
+if the answer is "map/level container", the map-data row is the only one that
+matters; if it is "generic asset container", the project invents its own
+namespaces and this table becomes prior art rather than a target.</p>
+<p>DOOM's conventions:</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Prefix</th><th>Type</th></tr></thead>
+<tbody>
+<tr><td><code>THINGS</code>, <code>LINEDEFS</code>, <code>SIDEDEFS</code>, <code>VERTEXES</code>, <code>SEGS</code>, <code>SSECTORS</code>, <code>NODES</code>, <code>SECTORS</code>, <code>REJECT</code>, <code>BLOCKMAP</code></td><td>Map data</td></tr>
+<tr><td><code>F_START</code> … <code>F_END</code></td><td>Flats (floor/ceiling textures)</td></tr>
+<tr><td><code>S_START</code> … <code>S_END</code></td><td>Sprite graphics</td></tr>
+<tr><td><code>W1</code> … <code>W##</code></td><td>Wall textures (column-organized)</td></tr>
+<tr><td><code>DS*</code> (e.g. <code>DSPISTOL</code>)</td><td>Sound effects</td></tr>
+<tr><td><code>D_*</code> (e.g. <code>D_BGND</code>)</td><td>Music lumps</td></tr>
+</tbody>
+</table></div>
+<p><code>F_START</code> / <code>F_END</code> and <code>S_START</code> / <code>S_END</code> are markers that delimit a range
+of lumps. The count between them is variable.</p>
+<h2 id="image-format-patches-and-flats--specification-only-nothing-decodes-this">Image format (patches and flats) — specification only, nothing decodes this<a class="anchor" href="#image-format-patches-and-flats--specification-only-nothing-decodes-this" aria-label="Permalink">#</a></h2>
+<p><strong>No code in this repository reads either format, and <code>ImageDecoder</code> is on
+hold.</strong> Both formats below decode to <strong>palette indices</strong>, and the renderer has
+no palette: <code>render/README.md</code> § 3 specifies an RGBA8888 <code>int[]</code> colour buffer,
+and <code>docs/ASSETS.md</code> § 4 routes every texture through the build-time glTF
+converter instead. Decoding a patch would therefore produce bytes with nowhere
+to go, plus a palette lookup table this project does not ship.</p>
+<p>The layouts are recorded so that whoever answers the open question does not have
+to rediscover them.</p>
+<h3 id="flat-64--64">Flat (64 × 64)<a class="anchor" href="#flat-64--64" aria-label="Permalink">#</a></h3>
+<p>A flat is a 64×64 column-major byte array. Each byte is a palette index.
+Total size: 4096 bytes.</p>
+<div class="code"><pre><code>flat[byteOffset] where byteOffset = y * 64 + x
+</code></pre></div>
+<h3 id="wall-patch-doom-patch-format">Wall patch (Doom "patch" format)<a class="anchor" href="#wall-patch-doom-patch-format" aria-label="Permalink">#</a></h3>
+<p>A wall patch is a column-major sprite-like image. Header:</p>
+<div class="code"><pre><code>struct PatchHeader {
+    uint16 width;       // patch width
+    uint16 height;      // patch height
+    int16  leftOffset;  // horizontal offset from origin
+    int16  topOffset;   // vertical offset from origin
+    uint32[height] columnOffsets;  // one offset per column
+}
+</code></pre></div>
+<p>For each column, the data is run-length encoded:</p>
+<div class="code"><pre><code>column:
+    uint8 topDelta;
+    repeat:
+        uint8 length;     // 0 = end of column
+        if length == 0: break
+        uint8 pad1;        // unused
+        uint8[length] pixels;   // palette indices
+        uint8 pad2;        // unused
+</code></pre></div>
+<p><strong>Source — Matthew S Fell, "The Unofficial DOOM Specs" v1.666 (1994)</strong>, chapter
+[5] "Graphics" — the patch column format and the 64×64 flat:
+https://www.gamers.org/dhs/helpdocs/dmsp1666.html</p>
+<p>*(The two citations that stood here — a wiki article and an <code>img2pic.c</code> from an
+unrelated Prince of Persia port — are removed. Neither was a specification and
+the second was not even the right format.)*</p>
+<h2 id="caching-strategy">Caching strategy<a class="anchor" href="#caching-strategy" aria-label="Permalink">#</a></h2>
+<p><code>LumpCache</code> as shipped is <strong>bounded and evict-on-release</strong>. An earlier draft of
+this section said static lumps are "loaded on first read, kept forever"; that
+was never true of the implementation and contradicted the port table above,
+which is the accurate description of pinning. Nothing is kept forever.</p>
+<p>What the table does not cover is the budget. The cache has a byte ceiling.
+Making room evicts the least-recently-used <strong>unpinned</strong> entry first; if every
+resident lump is pinned and the ceiling still cannot be met, the load <strong>fails
+loudly</strong> rather than silently overcommitting. Every resident lump holds a
+matching <code>allocate(size, TAG_CACHE)</code> handle, and eviction calls <code>free</code>, so the
+memory port's accounting sees the cache as if the bytes lived inside it.</p>
+<p>The tag policy — <code>TAG_CACHE</code> for long-lived resources, <code>TAG_GAME</code> for per-map
+data freed at map end — is the intended split, but only <code>TAG_CACHE</code> is exercised
+today because nothing loads a map through this path yet. Streaming audio is
+unimplemented; no lump is streamed.</p>
+<h2 id="files">Files<a class="anchor" href="#files" aria-label="Permalink">#</a></h2>
+<ul>
+<li>
+<p><code>WadException.java</code></p>
+</li>
+<li>
+<p><code>port/I_WadPort.java</code></p>
+</li>
+<li>
+<p><code>adapter/LittleEndian.java</code></p>
+</li>
+<li>
+<p><code>adapter/WadReader.java</code></p>
+</li>
+<li>
+<p><code>adapter/LumpCache.java</code></p>
+</li>
+<li>
+<p><code>adapter/MapLumpParser.java</code></p>
+</li>
+<li>
+<p><code>adapter/WadFilePort.java</code></p>
+</li>
+<li>
+<p><code>adapter/NullWadPort.java</code></p>
+</li>
+</ul>
+<h2 id="todo-phase-2">TODO (Phase 2)<a class="anchor" href="#todo-phase-2" aria-label="Permalink">#</a></h2>
+<ul>
+<li class="task done"><code>WadReader</code> — header + directory parse, lump slicing</li>
+<li class="task done"><code>LumpCache</code> — demand-loaded, ref-counted, bounded</li>
+<li class="task done"><code>MapLumpParser</code> — read THINGS / LINEDEFS / SECTORS / VERTEXES</li>
+<li class="task done"><code>LittleEndian</code> + <code>WadFilePort</code> — the real <code>I_WadPort</code> (101 tests across the package)</li>
+<li class="task todo"><code>ImageDecoder</code> — patch + flat decode — <strong>on hold</strong>, blocked on the
+    <a href="#open-question-what-is-this-subsystem-for-now">open question</a>. Do not start it.</li>
+<li class="task todo"><code>BlockmapBuilder</code> — pre-compute BLOCKMAP from LINEDEFS. Same blocker if the
+    answer turns out not to be "map/level container".</li>
+<li class="task todo">A <code>W_</code> subsystem registering <code>WadFilePort</code> with the <code>SubsystemRegistry</code> —
+    genuinely still open, and the reason the package has no consumer today</li>
+</ul>
+<footer class="pagefoot"><p>Source: <a class="ext" rel="noopener noreferrer" target="_blank" href="https://github.com/nicholashutter/OpenFPS/blob/main/engine/src/main/java/com/openfps/engine/resource/README.md">engine/src/main/java/com/openfps/engine/resource/README.md</a>. This page is generated — edit the Markdown, not the HTML.</p></footer>
+</main>
+</div>
+<script src="site.js"></script>
+</body>
+</html>

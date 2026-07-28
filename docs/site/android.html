@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>:android — the Android launcher — OpenFPS documentation</title>
+<meta name="description" content="libGDX's Android backend, the software rasterizer on a GLSurfaceView, a thumbstick, and the Room half of I_UserProfilePort. It is playable.">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<a class="skip" href="#doc">Skip to content</a>
+<header class="topbar"><button class="burger" id="burger" aria-controls="sidebar" aria-expanded="false" aria-label="Show navigation"><span></span><span></span><span></span></button><span class="topbar-name">OpenFPS docs</span></header>
+<div class="scrim" id="scrim" hidden></div>
+<div class="layout">
+<aside class="sidebar" id="sidebar">
+<a class="brand" href="index.html"><span class="brand-mark"></span><span class="brand-name">OpenFPS</span><span class="brand-kind">docs</span></a>
+<input class="filter" id="filter" type="search" placeholder="Filter pages" aria-label="Filter pages" autocomplete="off">
+<nav class="nav" id="nav" aria-label="Documentation">
+<details class="grp" data-hue="1" open><summary><span class="dot"></span>Overview<span class="count">2</span></summary>
+<ul>
+<li><a href="index.html">Overview</a></li>
+<li><a href="agents.html">Agent instructions</a></li>
+</ul></details>
+<details class="grp" data-hue="2" open><summary><span class="dot"></span>Building<span class="count">1</span></summary>
+<ul>
+<li><a href="build.html">Build reference</a></li>
+</ul></details>
+<details class="grp" data-hue="3" open><summary><span class="dot"></span>Architecture<span class="count">2</span></summary>
+<ul>
+<li><a href="style.html">Code style</a></li>
+<li><a href="plan.html">Project plan</a></li>
+</ul></details>
+<details class="grp" data-hue="4" open><summary><span class="dot"></span>Modules<span class="count">5</span></summary>
+<ul>
+<li><a href="engine.html">:engine</a></li>
+<li><a href="desktop.html">:desktop</a></li>
+<li><a href="android.html" class="cur" aria-current="page">:android</a></li>
+<li><a href="tools.html">:tools</a></li>
+<li><a href="gdxshared.html">:gdxshared</a></li>
+</ul></details>
+<details class="grp" data-hue="5"><summary><span class="dot"></span>Packages<span class="count">10</span></summary>
+<ul>
+<li><a href="engine-core.html">Core</a></li>
+<li><a href="engine-common.html">Common</a></li>
+<li><a href="engine-hal.html">HAL (I_)</a></li>
+<li><a href="engine-gameplay.html">Gameplay (P_)</a></li>
+<li><a href="engine-render.html">Render (R_)</a></li>
+<li><a href="engine-demo.html">Demo</a></li>
+<li><a href="engine-audio.html">Audio (S_)</a></li>
+<li><a href="engine-net.html">Net (G_)</a></li>
+<li><a href="engine-resource.html">Resource (W_)</a></li>
+<li><a href="engine-memory.html">Memory (Z_)</a></li>
+</ul></details>
+<details class="grp" data-hue="6"><summary><span class="dot"></span>Reference<span class="count">2</span></summary>
+<ul>
+<li><a href="assets.html">Assets and licensing</a></li>
+<li><a href="demo-assets.html">Demo asset manifest</a></li>
+</ul></details>
+</nav>
+<p class="generated">Generated from the repository's Markdown by <code>:tools:buildDocsSite</code>.</p>
+</aside>
+<aside class="rail"><details class="toc" id="toc" open><summary>On this page</summary>
+<ul>
+<li class="lv2"><a href="#status">Status</a></li>
+<li class="lv3"><a href="#what-the-emulator-run-established">What the emulator run established</a></li>
+<li class="lv3"><a href="#what-that-run-found-which-is-the-more-useful-half">What that run found, which is the more useful half</a></li>
+<li class="lv2"><a href="#what-is-still-not-verified-on-a-device">What is still not verified on a device</a></li>
+<li class="lv2"><a href="#a-green-build-does-not-mean-this-module-compiles">A green build does not mean this module compiles</a></li>
+<li class="lv2"><a href="#oncreate-starts-the-session-and-returns">onCreate starts the session and returns</a></li>
+<li class="lv2"><a href="#two-dependency-decisions-that-are-not-preferences">Two dependency decisions that are not preferences</a></li>
+<li class="lv2"><a href="#where-the-world-in-the-apk-comes-from">Where the world in the APK comes from</a></li>
+<li class="lv2"><a href="#build-install-run-watch">Build, install, run, watch</a></li>
+<li class="lv2"><a href="#the-controls">The controls</a></li>
+<li class="lv2"><a href="#files">Files</a></li>
+</ul></details></aside>
+<main id="doc">
+<p class="crumb"><span class="tag">Modules</span><span class="sep">/</span><code>android/README.md</code><span class="sep">/</span>10 min read</p>
+<h1 id="android--the-android-launcher"><code>:android</code> — the Android launcher<a class="anchor" href="#android--the-android-launcher" aria-label="Permalink">#</a></h1>
+<blockquote>
+<p>libGDX's Android backend, the software rasterizer on a GLSurfaceView, a
+thumbstick, and the Room half of <code>I_UserProfilePort</code>. <strong>It is playable.</strong></p>
+</blockquote>
+<h2 id="status">Status<a class="anchor" href="#status" aria-label="Permalink">#</a></h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Field</th><th>Value</th></tr></thead>
+<tbody>
+<tr><td><strong>State</strong></td><td>SHIPPING</td></tr>
+<tr><td><strong>Phase</strong></td><td>not a numbered phase</td></tr>
+<tr><td><strong>Tests</strong></td><td>123 unique (246 executions — the suite runs against the debug and release variants). Plain JVM only; nothing device-backed</td></tr>
+<tr><td><strong>Registered</strong></td><td>provides the Android HAL (<code>AndroidAdapterFactory</code>) and the LAUNCHER Activity</td></tr>
+<tr><td><strong>Verified</strong></td><td>2026-07-28 — <strong>played on the OpenFPS_API36 emulator: menu, match, seven bots, a kill</strong></td></tr>
+</tbody>
+</table></div>
+<h3 id="what-the-emulator-run-established">What the emulator run established<a class="anchor" href="#what-the-emulator-run-established" aria-label="Permalink">#</a></h3>
+<p>The whole loop works on a phone. Measured on the OpenFPS_API36 AVD, API 36,
+2400×1080 landscape at 2.625× density:</p>
+<ul>
+<li>
+<p>The menu comes up and fits the screen.</p>
+</li>
+<li>
+<p><strong>Single Player enters the world</strong>: the software rasterizer's frame is
+presented as a fullscreen quad, showing the real Kenney room read out of the
+APK's own assets — <code>source=KENNEY_KIT</code>, 301 world instances, GLES 3.0.</p>
+</li>
+<li>
+<p><strong>The touch controls drive the engine.</strong> A floating thumbstick on the left
+half walks; a drag on the right half turns; the fire, jump and leave buttons
+work; the system back key leaves the match.</p>
+</li>
+<li>
+<p><strong>Combat works end to end</strong>: <code>HIT entity 2</code>, <code>HIT entity 2</code>,
+<code>KILL entity 2 — 1 of 7 down</code>. Three shots kill a bot, exactly as designed,
+and the body is drawn lying flat afterwards.</p>
+</li>
+<li>
+<p>The bots patrol and shoot back, and the match gate holds them frozen while the
+menu is in front.</p>
+</li>
+</ul>
+<h3 id="what-that-run-found-which-is-the-more-useful-half">What that run found, which is the more useful half<a class="anchor" href="#what-that-run-found-which-is-the-more-useful-half" aria-label="Permalink">#</a></h3>
+<p>Running it by hand found <strong>two defects that no test had</strong>:</p>
+<ol>
+<li>
+<p><strong>The menu did not fit a landscape screen.</strong> Four 72 dp buttons plus a title
+want 468 dp of height; a landscape phone at 2.625× has 411 dp. The title
+clipped off the top and Quit clipped off the bottom — on a screen whose only
+two useful controls are "start" and "leave". <code>MainMenuFrameCallback
+.layoutDensity</code> caps the layout density so the block always fits.</p>
+</li>
+<li>
+<p><strong>The trigger never worked. On any platform.</strong> <code>DemoGameplayPort.lastFireTic</code>
+was initialised to <code>Long.MIN_VALUE</code> — the obvious "has never fired" sentinel
+— and the cooldown test is a subtraction, <code>ticIndex - lastFireTic</code>. That
+overflows on the very first shot, wraps to a large negative number, and reads
+as "still cooling down"; and since <code>lastFireTic</code> is only written <em>after</em> the
+test passes, it never passed. Every unit around it was green:
+<code>Match.firePlayerShot</code> had tests, <code>Hitscan</code> had tests, the input path had
+tests. The defect lived exactly in the join, and it took firing at a bot by
+hand on a phone to find it. <code>DemoGameplayPortTest.Trigger</code> is the regression.</p>
+</li>
+</ol>
+<p><strong>Built.</strong> <code>AndroidLauncher</code> (the Activity and composition root),
+<code>AndroidWindowPort</code> (registers with the framework loop rather than blocking),
+<code>AndroidAdapterFactory</code> (the null backend with the real window, touch input and
+a Room profile port substituted), <code>AndroidUiFrameCallback</code> (menu or world, and
+everything that follows), <code>AndroidInputPort</code> + <code>TouchLayout</code> + <code>TouchOverlay</code> +
+<code>AndroidBindings</code> (the touch control scheme), <code>ApkModelSource</code> (the demo's
+models, out of the APK), <code>GdxLifecycleBridge</code>, <code>CompositeFrameCallback</code>,
+<code>MainMenuFrameCallback</code>, <code>MenuSkinFactory</code>, and <code>persistence/</code> —
+<code>RoomUserProfilePort</code>, <code>UserProfileEntity</code>, <code>UserProfileDao</code>, <code>OpenFpsDatabase</code>.</p>
+<p><strong>Not built.</strong> No instrumented (<code>androidTest</code>) coverage — everything here is a
+plain-JVM unit test, and everything that would need a real framework is
+deliberately left uncovered rather than faked. No multiplayer: there is no
+Android equivalent of <code>--net=</code>/<code>--peer=</code>, so the Multiplayer button enters the
+same local match Single Player does. No sprint control, deliberately — see
+<code>AndroidBindings</code>. The Android menu is still its own Scene2D layout rather than
+the shared block welcome screen in <code>:gdxshared</code>.</p>
+<p><strong>Blocked on.</strong> Nothing.</p>
+<p><strong>Next step.</strong> Two, neither urgent: switch the menu over to <code>:gdxshared</code>'s block
+screen so both platforms look the same, and give the touch scheme a settings
+surface — <code>ActionBindings</code> is already rebindable at runtime and nothing exposes
+it.</p>
+<h2 id="what-is-still-not-verified-on-a-device">What is still not verified on a device<a class="anchor" href="#what-is-still-not-verified-on-a-device" aria-label="Permalink">#</a></h2>
+<p>Everything above was observed. These were not, and remain well-reasoned
+predictions rather than observations:</p>
+<ul>
+<li>
+<p><strong>GL context loss.</strong> Android can destroy and rebuild the EGL context while the
+process lives. Every GL resource here is managed, so libGDX should re-upload
+it; that path has not been exercised.</p>
+</li>
+<li>
+<p><strong>Rotation.</strong> The manifest pins landscape, so no rotation has ever happened.</p>
+</li>
+<li>
+<p><strong>Real hardware.</strong> The emulator is x86_64 with host GPU. No ARM device has run
+this, and the software rasterizer's throughput on a real phone is unmeasured.</p>
+</li>
+<li>
+<p><strong>The Room round trip across process death.</strong> The profile loads; nothing has
+killed the process and checked that it came back.</p>
+</li>
+</ul>
+<h2 id="a-green-build-does-not-mean-this-module-compiles">A green build does not mean this module compiles<a class="anchor" href="#a-green-build-does-not-mean-this-module-compiles" aria-label="Permalink">#</a></h2>
+<p><code>settings.gradle.kts</code> includes <code>:android</code> <strong>only when an Android SDK is
+present</strong>, checking <code>ANDROID_HOME</code>, <code>ANDROID_SDK_ROOT</code> and <code>local.properties</code> in
+that order. Without one, the module is not in the build at all.</p>
+<p>The guard is not an oversight: without it, <code>gradlew :engine:build</code> on a machine
+with no SDK fails during <em>settings</em> evaluation, before it can reach the module
+that does not need one. But the consequence is sharp — <strong>a green <code>gradlew build</code>
+on a machine without the SDK proves nothing about <code>:android</code>.</strong> With the
+configuration cache on, which is the default, even the "skipping :android"
+lifecycle notice goes unprinted on a cached run, so nothing signals that a whole
+module was omitted.</p>
+<p>Before changing anything here, confirm it is actually being built:</p>
+<div class="code"><pre><code>gradlew projects        # :android should be listed
+</code></pre></div>
+<h2 id="oncreate-starts-the-session-and-returns"><code>onCreate</code> starts the session and returns<a class="anchor" href="#oncreate-starts-the-session-and-returns" aria-label="Permalink">#</a></h2>
+<p><code>EngineMain.start()</code> brings up memory, the HAL, the bus, subsystems, the worker
+pool and the game-loop thread, and then <strong>returns</strong>, handing back an
+<code>EngineSession</code>. That is the whole reason <code>start</code> / <code>stop</code> exists as a pair
+separate from <code>run</code>.</p>
+<p>The older <code>run()</code> blocked its caller for the entire session. On a desktop <code>main</code>
+that is correct. On the Android UI thread it is an instant ANR: the very thread
+that must return to the looper to schedule frames would be parked. So <code>onCreate</code>
+starts and returns, <code>onDestroy</code> stops — the same pair desktop uses, minus
+<code>awaitPlatformLoop()</code>, because the Android framework owns the loop.</p>
+<p><code>AndroidWindowPort.runFrameLoop</code> follows the same rule. It does not loop; it
+<em>registers</em>, wrapping the engine's <code>I_FrameCallback</code> in a <code>GdxLifecycleBridge</code>
+and handing it to <code>AndroidApplication.initialize</code>, which installs the content
+view and returns. The port contract's "returns when the app is destroyed" is
+honoured by the Activity lifecycle instead. The port takes exactly one callback
+and two things need the frame, so <code>CompositeFrameCallback</code> fans it out — engine
+first, menu second, and that order is load-bearing on the way down as well as
+up.</p>
+<h2 id="two-dependency-decisions-that-are-not-preferences">Two dependency decisions that are not preferences<a class="anchor" href="#two-dependency-decisions-that-are-not-preferences" aria-label="Permalink">#</a></h2>
+<p><strong>Room stands in for sqlite-jdbc.</strong> <code>sqlite-jdbc</code> bundles precompiled natives
+for roughly twenty desktop triplets, none of which Android can load, so it is
+excluded from <code>:engine</code>'s coordinates here and <code>HalBackend.SQLITE</code> is never
+selected. <code>RoomUserProfilePort</code> wraps the SQLite already in the OS instead. The
+engine sees neither — it only ever holds <code>I_UserProfilePort</code>. <code>UserProfileEntity</code>
+exists as a separate storage shape because annotating <code>UserProfile</code> with
+<code>@Entity</code> would drag Room into <code>:engine</code>, which must compile with no Android SDK
+at all; column names match the desktop schema so the two platforms describe the
+same data the same way.</p>
+<p><strong><code>slf4j-android</code> was just added, and it is not an extra.</strong> <code>logback-classic</code> is
+excluded because it does not work on Android. SLF4J 2.x with no provider on the
+classpath binds to the <strong>NOP logger</strong> and silently discards every engine log
+line — including <code>LOG.error</code> from worker dispatch failures. The failure mode is
+an app that looks fine and reports nothing, which is the worst possible one to
+debug an emulator bring-up against. It earned its place on the first run: the
+lines that identified the broken trigger — <code>HIT entity 2</code>, and their absence
+before the fix — come out of <code>:engine</code> through this binding and nowhere else.</p>
+<h2 id="where-the-world-in-the-apk-comes-from">Where the world in the APK comes from<a class="anchor" href="#where-the-world-in-the-apk-comes-from" aria-label="Permalink">#</a></h2>
+<p>The demo's models live at the repository root in <code>assets/models</code>, written by
+<code>gradlew :tools:regenerateDemoAssets</code>. Desktop reads them straight off disk. An
+APK cannot: the app has no access to the developer's filesystem, so the files
+have to be <strong>inside</strong> it.</p>
+<p><code>stageModelAssets</code> syncs <code>assets/models/**/*.ofm</code> into a generated directory
+that is registered as an asset source set, and <code>ApkModelSource</code> reads them back
+through the platform <code>AssetManager</code>. That is the whole reason
+<code>DemoModels.load</code> takes a <code>ModelSource</code> rather than a <code>Path</code> — an APK entry has
+no filesystem path for <code>Files.readAllBytes</code> to open.</p>
+<p><code>assets/models</code> is gitignored (<code>docs/ASSETS.md</code> § 6 keeps upstream art out of
+git), so <strong>an APK built from a fresh clone contains no models</strong>. That is the
+intended outcome, not a failure: <code>AndroidLauncher</code> reports it at <code>ERROR</code>, naming
+the regenerate command, and comes up as a menu with nothing behind it.</p>
+<p>The staged models are about 36 MB uncompressed and add roughly 4 MB to the APK —
+<code>.ofm</code> texture data deflates extremely well. See <code>android/build.gradle.kts</code> for
+why all eighteen character models ship when only seven are used.</p>
+<h2 id="build-install-run-watch">Build, install, run, watch<a class="anchor" href="#build-install-run-watch" aria-label="Permalink">#</a></h2>
+<div class="code"><pre><code>gradlew :android:assembleDebug
+adb install -r android\build\outputs\apk\debug\android-debug.apk
+adb shell am start -n com.openfps.android/com.openfps.android.AndroidLauncher
+adb logcat -s OpenFPS:V
+</code></pre></div>
+<p><code>OpenFPS</code> is the logcat tag the platform classes use. Engine log lines arrive
+through <code>slf4j-android</code>, which tags by logger name and <strong>truncates to Android's
+23-character limit</strong> — <code>com.openfps.engine.demo.DemoGameplayPort</code> shows up as
+<code>coed.DemoGameplayPort</code>, which looks like corruption and is not. Drop the
+<code>-s OpenFPS:V</code> filter to see them.</p>
+<h2 id="the-controls">The controls<a class="anchor" href="#the-controls" aria-label="Permalink">#</a></h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Control</th><th>Where</th></tr></thead>
+<tbody>
+<tr><td>Move</td><td>anywhere on the left half — the stick appears under your thumb</td></tr>
+<tr><td>Look</td><td>anywhere on the right half — drag to turn</td></tr>
+<tr><td>Fire</td><td>the large disc, bottom right</td></tr>
+<tr><td>Jump</td><td>the smaller disc, inboard of fire</td></tr>
+<tr><td>Leave the match</td><td>the disc top right, or the system back key</td></tr>
+</tbody>
+</table></div>
+<p>The stick <strong>floats</strong>: it appears wherever the left thumb lands rather than at a
+painted spot. A fixed stick makes the player look at their thumb to find it, and
+on a screen they are also trying to aim at, that is the difference between a
+control and an obstacle.</p>
+<p>There is no sprint, deliberately. Screen space beside the fire button is the
+scarcest thing on a phone, and a modifier held while aiming and firing wants a
+thumb nobody has. <code>AndroidInputPort.init()</code> says so in logcat rather than
+leaving it to be discovered.</p>
+<h2 id="files">Files<a class="anchor" href="#files" aria-label="Permalink">#</a></h2>
+<ul>
+<li>
+<p><code>AndroidLauncher.java</code> — the LAUNCHER Activity and Android composition root</p>
+</li>
+<li>
+<p><code>AndroidWindowPort.java</code> — <code>I_WindowPort</code> that registers instead of looping</p>
+</li>
+<li>
+<p><code>AndroidAdapterFactory.java</code> — null backend, real window, Room profile port</p>
+</li>
+<li>
+<p><code>GdxLifecycleBridge.java</code> — <code>ApplicationListener</code> → <code>I_FrameCallback</code></p>
+</li>
+<li>
+<p><code>CompositeFrameCallback.java</code> — one platform frame, two callbacks, in order</p>
+</li>
+<li>
+<p><code>AndroidUiFrameCallback.java</code> — menu or world, the input processor, the match
+gate, and leaving a match</p>
+</li>
+<li>
+<p><code>MainMenuFrameCallback.java</code> — the menu, in density-independent pixels, capped
+so it fits the surface it is given</p>
+</li>
+<li>
+<p><code>MenuSkinFactory.java</code> — the skin built in code, as <em>managed</em> GL resources</p>
+</li>
+<li>
+<p><code>AndroidInputPort.java</code> — touch events → <code>InputState</code>, one finger at a time</p>
+</li>
+<li>
+<p><code>TouchLayout.java</code> — where the controls are and how far the stick is pushed.
+<strong>Imports nothing</strong>, so all of it is unit-tested</p>
+</li>
+<li>
+<p><code>TouchOverlay.java</code> — draws the controls, from one generated disc texture</p>
+</li>
+<li>
+<p><code>AndroidBindings.java</code> — the default touch scheme; the only file here that
+names a control</p>
+</li>
+<li>
+<p><code>ApkModelSource.java</code> — the demo's models, read through the platform
+<code>AssetManager</code> rather than a filesystem path that does not exist</p>
+</li>
+<li>
+<p><code>persistence/</code> — <code>RoomUserProfilePort</code> over <code>UserProfileEntity</code>,
+<code>UserProfileDao</code> and <code>OpenFpsDatabase</code></p>
+</li>
+</ul>
+<p><strong>123 tests in this module</strong> — all plain JVM unit tests, no Robolectric and no
+instrumentation. They cover what can honestly be covered off a device: the whole
+touch-gesture layer (which control a pixel belongs to, stick deflection and its
+dead zone, two fingers not interfering, a tap shorter than one tic still firing,
+a cancelled touch releasing), the UI transitions and the match gate, the menu's
+fit rule, the frame-callback fan-out and its load-bearing ordering, the entity
+mapping in both directions, the window port's close-flag and re-arm semantics,
+the adapter factory's delegation and its profile-closed-before-delegate
+ordering, the lifecycle bridge's resize filtering, and the profile port's
+off-READY refusals.</p>
+<p>What they deliberately do <strong>not</strong> cover is anything needing a real device: the
+Room round-trip against platform SQLite, <code>requestClose()</code> actually finishing the
+Activity, and <code>MenuSkinFactory</code>'s managed-texture claim — whose failure mode is a
+menu that renders as white rectangles after the first task-switch. Those need an
+emulator that can drop an EGL context, and faking them would be worse than
+leaving them uncovered.</p>
+<footer class="pagefoot"><p>Source: <a class="ext" rel="noopener noreferrer" target="_blank" href="https://github.com/nicholashutter/OpenFPS/blob/main/android/README.md">android/README.md</a>. This page is generated — edit the Markdown, not the HTML.</p></footer>
+</main>
+</div>
+<script src="site.js"></script>
+</body>
+</html>

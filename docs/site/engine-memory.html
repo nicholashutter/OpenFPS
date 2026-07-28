@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Memory (Z_) — Zone / Heap Allocator — OpenFPS documentation</title>
+<meta name="description" content="Z_ is the engine's unified memory port. The entire engine allocates memory through I_MemoryPort — the rest of the code does not know whether the backing store is the JVM heap, a custom zone,…">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<a class="skip" href="#doc">Skip to content</a>
+<header class="topbar"><button class="burger" id="burger" aria-controls="sidebar" aria-expanded="false" aria-label="Show navigation"><span></span><span></span><span></span></button><span class="topbar-name">OpenFPS docs</span></header>
+<div class="scrim" id="scrim" hidden></div>
+<div class="layout">
+<aside class="sidebar" id="sidebar">
+<a class="brand" href="index.html"><span class="brand-mark"></span><span class="brand-name">OpenFPS</span><span class="brand-kind">docs</span></a>
+<input class="filter" id="filter" type="search" placeholder="Filter pages" aria-label="Filter pages" autocomplete="off">
+<nav class="nav" id="nav" aria-label="Documentation">
+<details class="grp" data-hue="1" open><summary><span class="dot"></span>Overview<span class="count">2</span></summary>
+<ul>
+<li><a href="index.html">Overview</a></li>
+<li><a href="agents.html">Agent instructions</a></li>
+</ul></details>
+<details class="grp" data-hue="2" open><summary><span class="dot"></span>Building<span class="count">1</span></summary>
+<ul>
+<li><a href="build.html">Build reference</a></li>
+</ul></details>
+<details class="grp" data-hue="3" open><summary><span class="dot"></span>Architecture<span class="count">2</span></summary>
+<ul>
+<li><a href="style.html">Code style</a></li>
+<li><a href="plan.html">Project plan</a></li>
+</ul></details>
+<details class="grp" data-hue="4" open><summary><span class="dot"></span>Modules<span class="count">5</span></summary>
+<ul>
+<li><a href="engine.html">:engine</a></li>
+<li><a href="desktop.html">:desktop</a></li>
+<li><a href="android.html">:android</a></li>
+<li><a href="tools.html">:tools</a></li>
+<li><a href="gdxshared.html">:gdxshared</a></li>
+</ul></details>
+<details class="grp" data-hue="5" open><summary><span class="dot"></span>Packages<span class="count">10</span></summary>
+<ul>
+<li><a href="engine-core.html">Core</a></li>
+<li><a href="engine-common.html">Common</a></li>
+<li><a href="engine-hal.html">HAL (I_)</a></li>
+<li><a href="engine-gameplay.html">Gameplay (P_)</a></li>
+<li><a href="engine-render.html">Render (R_)</a></li>
+<li><a href="engine-demo.html">Demo</a></li>
+<li><a href="engine-audio.html">Audio (S_)</a></li>
+<li><a href="engine-net.html">Net (G_)</a></li>
+<li><a href="engine-resource.html">Resource (W_)</a></li>
+<li><a href="engine-memory.html" class="cur" aria-current="page">Memory (Z_)</a></li>
+</ul></details>
+<details class="grp" data-hue="6"><summary><span class="dot"></span>Reference<span class="count">2</span></summary>
+<ul>
+<li><a href="assets.html">Assets and licensing</a></li>
+<li><a href="demo-assets.html">Demo asset manifest</a></li>
+</ul></details>
+</nav>
+<p class="generated">Generated from the repository's Markdown by <code>:tools:buildDocsSite</code>.</p>
+</aside>
+<aside class="rail"><details class="toc" id="toc" open><summary>On this page</summary>
+<ul>
+<li class="lv2"><a href="#status">Status</a></li>
+<li class="lv2"><a href="#what-lives-here">What lives here</a></li>
+<li class="lv2"><a href="#architecture--system-level-abstraction">Architecture — system-level abstraction</a></li>
+<li class="lv2"><a href="#the-one-sanctioned-bypass--renderadapterframebuffer">The one sanctioned bypass — render.adapter.Framebuffer</a></li>
+<li class="lv2"><a href="#state-machine">State machine</a></li>
+<li class="lv2"><a href="#backends">Backends</a></li>
+<li class="lv3"><a href="#jvmmemoryport-default">JvmMemoryPort (default)</a></li>
+<li class="lv3"><a href="#zonememoryport-bulk-free">ZoneMemoryPort (bulk-free)</a></li>
+<li class="lv3"><a href="#zoneslabport-phase-2">ZoneSlabPort (Phase 2+)</a></li>
+<li class="lv2"><a href="#api-quick-reference">API quick reference</a></li>
+<li class="lv2"><a href="#why-a-custom-allocator-honest-take">Why a custom allocator? (Honest take)</a></li>
+<li class="lv2"><a href="#tests">Tests</a></li>
+</ul></details></aside>
+<main id="doc">
+<p class="crumb"><span class="tag">Packages</span><span class="sep">/</span><code>engine/src/main/java/com/openfps/engine/memory/README.md</code><span class="sep">/</span>7 min read</p>
+<h1 id="memory-z_--zone--heap-allocator">Memory (Z_) — Zone / Heap Allocator<a class="anchor" href="#memory-z_--zone--heap-allocator" aria-label="Permalink">#</a></h1>
+<blockquote>
+<p>Z_ is the engine's <strong>unified memory port</strong>. The entire engine allocates
+memory through <code>I_MemoryPort</code> — the rest of the code does not know
+whether the backing store is the JVM heap, a custom zone, or a slab.
+A factory at engine boot decides the backend.</p>
+</blockquote>
+<h2 id="status">Status<a class="anchor" href="#status" aria-label="Permalink">#</a></h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Field</th><th>Value</th></tr></thead>
+<tbody>
+<tr><td><strong>State</strong></td><td>SHIPPING</td></tr>
+<tr><td><strong>Phase</strong></td><td>1.1 complete</td></tr>
+<tr><td><strong>Tests</strong></td><td>35</td></tr>
+<tr><td><strong>Registered</strong></td><td>Z_ via <code>MemorySubsystem</code></td></tr>
+<tr><td><strong>Verified</strong></td><td>2026-07-28</td></tr>
+</tbody>
+</table></div>
+<p><strong>Built.</strong> The <code>I_MemoryPort</code> state machine, both backends — <code>JvmMemoryPort</code> and
+<code>ZoneMemoryPort</code> — and <code>MemoryPortFactory</code> as the single backend selector. The one
+sanctioned bypass (<code>render.adapter.Framebuffer</code> taking its <code>int[]</code> and <code>float[]</code>
+straight from the JVM) is documented below and in <code>STYLE.md</code> § 13.4.</p>
+<p><strong>Not built.</strong> <code>ZoneSlabPort</code>. <code>MemoryPortFactory.createSlab(heap, block)</code> exists
+and does <strong>not</strong> throw — it ignores <code>blockSizeBytes</code>, logs "slab-mode" and returns
+a plain <code>ZoneMemoryPort</code>. So a caller asking for a slab silently gets a bump
+allocator with no partitioning, which is a Phase 2+ placeholder rather than a
+feature.</p>
+<p><strong>Blocked on.</strong> Nothing.</p>
+<p><strong>Next step.</strong> Either implement the block partitioning behind <code>createSlab</code> or make
+it throw until it is real — today it is a placeholder that answers as if it
+succeeded.</p>
+<h2 id="what-lives-here">What lives here<a class="anchor" href="#what-lives-here" aria-label="Permalink">#</a></h2>
+<div class="code"><pre><code>memory/
+├── port/
+│   └── I_MemoryPort.java     the only memory API the engine uses
+├── adapter/
+│   ├── JvmMemoryPort.java    default — new byte[] + tracking
+│   └── ZoneMemoryPort.java   bulk-free — bump pointer on a single byte[]
+├── factory/
+│   └── MemoryPortFactory.java  system-level backend selector
+├── MemoryException.java        thrown for any invalid operation
+└── README.md                   (this file)
+</code></pre></div>
+<h2 id="architecture--system-level-abstraction">Architecture — system-level abstraction<a class="anchor" href="#architecture--system-level-abstraction" aria-label="Permalink">#</a></h2>
+<p>The user said: *"I don't want there to be multiple approaches to memory
+in this application."* This is enforced by:</p>
+<ol>
+<li>
+<p><strong>One interface</strong> — <code>I_MemoryPort</code> is the only memory API the engine calls.</p>
+</li>
+<li>
+<p><strong>One factory</strong> — <code>MemoryPortFactory</code> is the only thing that picks a backend.</p>
+</li>
+<li>
+<p><strong>No <code>new byte[]</code> outside the port</strong> — every allocation in engine code
+goes through <code>port.allocate(size, tag)</code>, with exactly one written-down
+exception (below).</p>
+</li>
+</ol>
+<p>The factory hides the choice. Production launch can swap the JVM backend
+for the zone backend with a single line change at boot:</p>
+<div class="code" data-lang="java"><pre><code>// Engine boot
+I_MemoryPort memory = MemoryPortFactory.createJvm(16 * 1024 * 1024);
+// or
+I_MemoryPort memory = MemoryPortFactory.createZone(16 * 1024 * 1024);
+// or (Phase 2+)
+I_MemoryPort memory = MemoryPortFactory.createSlab(16 * 1024 * 1024, 128);
+
+memory.init(16 * 1024 * 1024);  // UNINITIALIZED → READY
+int handle = memory.allocate(1024, I_MemoryPort.TAG_GAME);
+memory.free(handle);
+memory.shutdown();
+</code></pre></div>
+<h2 id="the-one-sanctioned-bypass--renderadapterframebuffer">The one sanctioned bypass — <code>render.adapter.Framebuffer</code><a class="anchor" href="#the-one-sanctioned-bypass--renderadapterframebuffer" aria-label="Permalink">#</a></h2>
+<p>Rule 3 has exactly one exception, and it is recorded here rather than only in
+the renderer's docs because a reader who reads this file alone would otherwise
+finish it believing there are none. <code>STYLE.md</code> § 13.4 names the site:
+<code>render.adapter.Framebuffer</code> takes its <code>int[]</code> colour buffer and <code>float[]</code> depth
+buffer straight from the JVM, at <code>init(w, h)</code> and <code>resize(w, h)</code> and nowhere
+else.</p>
+<p><strong>The reason is not that the rasterizer is hot.</strong> A hot loop is explicitly <em>not</em>
+a qualifying reason — if it were, the rule would have no force left. The reason
+is that <code>I_MemoryPort</code> hands out opaque <code>int</code> handles over a <code>byte[]</code> store and
+has <strong>no read or write operation at all</strong>. There is no way to touch a pixel
+through this API; the buffers are <code>int[]</code> and <code>float[]</code> rather than <code>byte[]</code>;
+and per-pixel handle indirection would cost several times the pixel work it
+wraps. Meanwhile everything this port is <em>for</em> — tags, <code>freeByTag</code>, bulk release
+of many small short-lived allocations — applies to nothing the framebuffer does.
+It is two arrays that live from init to shutdown. It gets none of the port's
+benefit and pays its whole cost.</p>
+<p>So the exception is scoped to that <em>shape</em>, not to that class:</p>
+<blockquote>
+<p>Long-lived, engine-owned primitive buffers whose element type is not <code>byte</code>,
+allocated once at initialisation and released at shutdown, may be allocated
+directly. Named sites only, listed in <code>STYLE.md</code> § 13.4. A hot loop is <strong>not</strong>
+on its own a qualifying reason.</p>
+</blockquote>
+<p>That wording admits <code>Framebuffer</code> and the future audio mixing buffers, and
+excludes per-frame and per-entity allocation — which is what rule 3 actually
+exists to prevent.</p>
+<p><strong>The alternative that was rejected is the one this package would have grown.</strong>
+<code>I_MemoryPort</code> could gain a typed-slab operation returning the array itself,
+with the port keeping the budget and lifecycle; <code>MemoryPortFactory.createSlab</code>
+already exists as a Phase 2+ placeholder, so the concept is anticipated. It was
+rejected on cost and timing: it weakens the port's central invariant — that the
+engine never dereferences memory it did not get a handle for — and both backends
+plus their 35 tests would have to absorb it, before a single pixel had been
+drawn. If a third and fourth candidate ever appear, the pattern is real and the
+typed slab becomes the better shape.</p>
+<p>The full argument, including the option that lost, is at
+<code>engine/src/main/java/com/openfps/engine/render/README.md</code> § 11(a). The
+normative list of sanctioned sites is <code>STYLE.md</code> § 13.4 — an undocumented
+exception is indistinguishable from a violation, so nothing may bypass this port
+without appearing in that table.</p>
+<h2 id="state-machine">State machine<a class="anchor" href="#state-machine" aria-label="Permalink">#</a></h2>
+<p>The port is a strict state machine. Every operation validates current state
+and throws <code>MemoryException</code> for any invalid transition:</p>
+<div class="code"><pre><code>  +---------------+
+  | UNINITIALIZED |  --init(heapSize)--------&gt; READY
+  +---------------+                            |
+                                              | first allocate() --&gt; ACTIVE
+                                              |   |
+                                              v   v
+                                          +--------+
+                                          | ACTIVE | --shutdown()-----&gt; SHUTDOWN (terminal)
+                                          +--------+ --reset()---------&gt; READY
+                                              |
+                                              v
+                                          +-------+
+                                          | ERROR |  (terminal — restart required)
+                                          +-------+
+</code></pre></div>
+<p>States: <code>UNINITIALIZED</code>, <code>READY</code>, <code>ACTIVE</code>, <code>SHUTDOWN</code>, <code>ERROR</code>.</p>
+<p><strong>No silent failures.</strong> Every invalid state request throws:</p>
+<div class="tablewrap"><table>
+<thead><tr><th>State</th><th><code>init</code></th><th><code>allocate</code></th><th><code>free</code></th><th><code>freeByTag</code></th><th><code>reset</code></th><th><code>shutdown</code></th></tr></thead>
+<tbody>
+<tr><td><code>UNINITIALIZED</code></td><td>✓</td><td>✗ throw</td><td>✗ throw</td><td>✗ throw</td><td>✗ throw</td><td>✗ throw</td></tr>
+<tr><td><code>READY</code></td><td>✗ throw</td><td>✓</td><td>✗ throw</td><td>✓</td><td>✓</td><td>✓</td></tr>
+<tr><td><code>ACTIVE</code></td><td>✗ throw</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td></tr>
+<tr><td><code>SHUTDOWN</code></td><td>✗ throw</td><td>✗ throw</td><td>✗ throw</td><td>✗ throw</td><td>✗ throw</td><td>✗ throw</td></tr>
+<tr><td><code>ERROR</code></td><td>✗ throw</td><td>✗ throw</td><td>✗ throw</td><td>✗ throw</td><td>✗ throw</td><td>✗ throw</td></tr>
+</tbody>
+</table></div>
+<h2 id="backends">Backends<a class="anchor" href="#backends" aria-label="Permalink">#</a></h2>
+<h3 id="jvmmemoryport-default"><code>JvmMemoryPort</code> (default)<a class="anchor" href="#jvmmemoryport-default" aria-label="Permalink">#</a></h3>
+<ul>
+<li>
+<p>Each <code>allocate</code> creates a <code>new byte[size]</code></p>
+</li>
+<li>
+<p>Parallel <code>byte[][] slots</code> tracks live references</p>
+</li>
+<li>
+<p><code>free</code> drops the reference (GC reclaims later)</p>
+</li>
+<li>
+<p><code>reset</code> clears all references</p>
+</li>
+<li>
+<p>OOM detection: <code>currentAllocated + size &gt; totalBytes</code></p>
+</li>
+</ul>
+<p><strong>Best for:</strong> general-purpose development, most production code.</p>
+<h3 id="zonememoryport-bulk-free"><code>ZoneMemoryPort</code> (bulk-free)<a class="anchor" href="#zonememoryport-bulk-free" aria-label="Permalink">#</a></h3>
+<ul>
+<li>
+<p>Single pre-allocated <code>byte[]</code> of fixed size</p>
+</li>
+<li>
+<p>Each allocation has an 8-byte header: <code>[size:4][tag:2][pad:2]</code></p>
+</li>
+<li>
+<p>Bump pointer for <code>allocate</code> (O(1))</p>
+</li>
+<li>
+<p><code>free</code> marks the slot as freed in a parallel <code>boolean[] live</code> bitmap;
+<strong>bytes are not reclaimed until <code>freeByTag</code> or <code>reset</code></strong></p>
+</li>
+<li>
+<p><code>freeByTag</code> walks the heap, marks matching slots as freed</p>
+</li>
+<li>
+<p>OOM detection: <code>used + header + payload &gt; heapSize</code></p>
+</li>
+</ul>
+<p><strong>Best for:</strong> entity pools, map data with bulk-free on map change, P2P
+lockstep determinism.</p>
+<h3 id="zoneslabport-phase-2"><code>ZoneSlabPort</code> (Phase 2+)<a class="anchor" href="#zoneslabport-phase-2" aria-label="Permalink">#</a></h3>
+<p>Planned: a zone port pre-partitioned into equal-sized blocks, giving
+O(1) alloc and O(1) free with zero fragmentation. Best for fixed-size
+hot-path objects (entities, tic commands).</p>
+<h2 id="api-quick-reference">API quick reference<a class="anchor" href="#api-quick-reference" aria-label="Permalink">#</a></h2>
+<div class="code" data-lang="java"><pre><code>public interface I_MemoryPort
+{
+    // Tags
+    int TAG_STATIC  = 0;
+    int TAG_GAME    = 1;
+    int TAG_DYNAMIC = 2;
+    int TAG_CACHE   = 3;
+    int NULL_HANDLE = -1;
+
+    enum State { UNINITIALIZED, READY, ACTIVE, SHUTDOWN, ERROR }
+
+    // Lifecycle
+    void init(int heapSizeBytes);
+    void shutdown();
+    void reset();
+    State state();
+
+    // Allocation
+    int allocate(int sizeBytes, int tag);
+    void free(int handle);
+    int freeByTag(int tag);
+
+    // Introspection
+    int totalBytes();
+    int allocatedBytes();
+    int freeBytes();
+    int maxAllocatable();    // largest payload that fits right now
+    int handleCount();
+    int sizeOf(int handle);
+}
+</code></pre></div>
+<h2 id="why-a-custom-allocator-honest-take">Why a custom allocator? (Honest take)<a class="anchor" href="#why-a-custom-allocator-honest-take" aria-label="Permalink">#</a></h2>
+<p><strong>The DOOM-style zone allocator in modern Java is mostly cargo culting.</strong>
+The original motivations (no FPU, no GC, bare-metal) don't apply to
+JVM 17+ with ZGC. Today, <code>new byte[size]</code> on a 64-bit JVM is a TLAB
+bump-pointer — extremely fast — and ZGC pauses are sub-millisecond.</p>
+<p><strong>BUT</strong> the zone pattern still has real value for <em>specific</em> cases:</p>
+<ol>
+<li>
+<p><strong>Bulk free on map change</strong> — much faster than waiting for GC</p>
+</li>
+<li>
+<p><strong>Entity pools</strong> — fixed-size, reused thousands of times/sec</p>
+</li>
+<li>
+<p><strong>Bounded memory</strong> — engine can't exceed a hard cap</p>
+</li>
+<li>
+<p><strong>P2P determinism</strong> — predictable allocation timing</p>
+</li>
+</ol>
+<p><strong>Right architecture (which is what we have):</strong></p>
+<ul>
+<li>
+<p><code>I_MemoryPort</code> = the <strong>only</strong> memory API the engine uses</p>
+</li>
+<li>
+<p>Multiple backends: <code>JvmMemoryPort</code> (default, <code>new</code>/GC) and <code>ZoneMemoryPort</code> (bulk-free)</p>
+</li>
+<li>
+<p>Factory picks the backend at startup</p>
+</li>
+<li>
+<p>Engine code is oblivious to which backend is in use</p>
+</li>
+</ul>
+<p>This satisfies "no multiple approaches" (one port, one API) AND
+"system-level abstraction" (factory hides the choice).</p>
+<p>References:</p>
+<ul>
+<li>
+<p>DOOM source <code>z_zone.c</code>: https://github.com/id-Software/DOOM/blob/master/linuxdoom-1.10/z_zone.c</p>
+</li>
+<li>
+<p>Bonwick, "The Slab Allocator" (USENIX 1994): https://www.usenix.org/legacy/publications/library/proceedings/bos94/full_papers/bonwick.ps</p>
+</li>
+<li>
+<p>Fabian Giesen, "The Ubiquitous Bump Allocator": https://fgiesen.wordpress.com/2012/04/03/the-ubiquitous-bump-allocator/</p>
+</li>
+<li>
+<p>OpenJDK ZGC: https://wiki.openjdk.org/display/zgc/Main</p>
+</li>
+</ul>
+<h2 id="tests">Tests<a class="anchor" href="#tests" aria-label="Permalink">#</a></h2>
+<p>35 tests cover (both backends, parameterized):</p>
+<ul>
+<li>
+<p><strong>State machine</strong> — every transition, every invalid transition</p>
+</li>
+<li>
+<p><strong>Positive</strong> — happy-path allocate/free/freeByTag/reset</p>
+</li>
+<li>
+<p><strong>Negative</strong> — invalid args, bad handles, double-free, out-of-bounds</p>
+</li>
+<li>
+<p><strong>Overflow</strong> — single oversized alloc, cumulative overflow, OOM recovery</p>
+</li>
+<li>
+<p><strong>Underflow</strong> — free of unknown handle, freeByTag with no matches</p>
+</li>
+<li>
+<p><strong>Random</strong> — 1000-iter stress with random alloc/free/freeByTag</p>
+</li>
+<li>
+<p><strong>Tags</strong> — isolation between tags, all four tags coexisting</p>
+</li>
+<li>
+<p><strong>Max allocatable</strong> — accounts for backend overhead</p>
+</li>
+</ul>
+<p>Run with: <code>.\gradlew.bat test</code></p>
+<footer class="pagefoot"><p>Source: <a class="ext" rel="noopener noreferrer" target="_blank" href="https://github.com/nicholashutter/OpenFPS/blob/main/engine/src/main/java/com/openfps/engine/memory/README.md">engine/src/main/java/com/openfps/engine/memory/README.md</a>. This page is generated — edit the Markdown, not the HTML.</p></footer>
+</main>
+</div>
+<script src="site.js"></script>
+</body>
+</html>

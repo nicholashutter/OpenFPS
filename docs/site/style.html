@@ -1,0 +1,696 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenFPS — Code Style Guide — OpenFPS documentation</title>
+<meta name="description" content="This document defines the coding conventions for all Java source in the OpenFPS engine. Compliance is enforced by Checkstyle. Rules here supersede Checkstyle defaults where noted.">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<a class="skip" href="#doc">Skip to content</a>
+<header class="topbar"><button class="burger" id="burger" aria-controls="sidebar" aria-expanded="false" aria-label="Show navigation"><span></span><span></span><span></span></button><span class="topbar-name">OpenFPS docs</span></header>
+<div class="scrim" id="scrim" hidden></div>
+<div class="layout">
+<aside class="sidebar" id="sidebar">
+<a class="brand" href="index.html"><span class="brand-mark"></span><span class="brand-name">OpenFPS</span><span class="brand-kind">docs</span></a>
+<input class="filter" id="filter" type="search" placeholder="Filter pages" aria-label="Filter pages" autocomplete="off">
+<nav class="nav" id="nav" aria-label="Documentation">
+<details class="grp" data-hue="1" open><summary><span class="dot"></span>Overview<span class="count">2</span></summary>
+<ul>
+<li><a href="index.html">Overview</a></li>
+<li><a href="agents.html">Agent instructions</a></li>
+</ul></details>
+<details class="grp" data-hue="2" open><summary><span class="dot"></span>Building<span class="count">1</span></summary>
+<ul>
+<li><a href="build.html">Build reference</a></li>
+</ul></details>
+<details class="grp" data-hue="3" open><summary><span class="dot"></span>Architecture<span class="count">2</span></summary>
+<ul>
+<li><a href="style.html" class="cur" aria-current="page">Code style</a></li>
+<li><a href="plan.html">Project plan</a></li>
+</ul></details>
+<details class="grp" data-hue="4" open><summary><span class="dot"></span>Modules<span class="count">5</span></summary>
+<ul>
+<li><a href="engine.html">:engine</a></li>
+<li><a href="desktop.html">:desktop</a></li>
+<li><a href="android.html">:android</a></li>
+<li><a href="tools.html">:tools</a></li>
+<li><a href="gdxshared.html">:gdxshared</a></li>
+</ul></details>
+<details class="grp" data-hue="5"><summary><span class="dot"></span>Packages<span class="count">10</span></summary>
+<ul>
+<li><a href="engine-core.html">Core</a></li>
+<li><a href="engine-common.html">Common</a></li>
+<li><a href="engine-hal.html">HAL (I_)</a></li>
+<li><a href="engine-gameplay.html">Gameplay (P_)</a></li>
+<li><a href="engine-render.html">Render (R_)</a></li>
+<li><a href="engine-demo.html">Demo</a></li>
+<li><a href="engine-audio.html">Audio (S_)</a></li>
+<li><a href="engine-net.html">Net (G_)</a></li>
+<li><a href="engine-resource.html">Resource (W_)</a></li>
+<li><a href="engine-memory.html">Memory (Z_)</a></li>
+</ul></details>
+<details class="grp" data-hue="6"><summary><span class="dot"></span>Reference<span class="count">2</span></summary>
+<ul>
+<li><a href="assets.html">Assets and licensing</a></li>
+<li><a href="demo-assets.html">Demo asset manifest</a></li>
+</ul></details>
+</nav>
+<p class="generated">Generated from the repository's Markdown by <code>:tools:buildDocsSite</code>.</p>
+</aside>
+<aside class="rail"><details class="toc" id="toc" open><summary>On this page</summary>
+<ul>
+<li class="lv2"><a href="#1-file-structure">1. File Structure</a></li>
+<li class="lv3"><a href="#11-file-header">1.1 File Header</a></li>
+<li class="lv3"><a href="#12-class-and-interface-declarations">1.2 Class and Interface Declarations</a></li>
+<li class="lv3"><a href="#13-import-organization">1.3 Import Organization</a></li>
+<li class="lv2"><a href="#2-naming-conventions">2. Naming Conventions</a></li>
+<li class="lv3"><a href="#21-standard-java-conventions-enforced">2.1 Standard Java Conventions (enforced)</a></li>
+<li class="lv3"><a href="#22-engine-specific-naming-signals">2.2 Engine-Specific Naming Signals</a></li>
+<li class="lv2"><a href="#3-immutability-and-mutability">3. Immutability and Mutability</a></li>
+<li class="lv3"><a href="#31-prefer-immutability">3.1 Prefer Immutability</a></li>
+<li class="lv3"><a href="#32-mutable-collections">3.2 Mutable Collections</a></li>
+<li class="lv2"><a href="#4-primitive-types">4. Primitive Types</a></li>
+<li class="lv3"><a href="#41-primitive-first-policy">4.1 Primitive-First Policy</a></li>
+<li class="lv3"><a href="#42-primitive-arrays">4.2 Primitive Arrays</a></li>
+<li class="lv3"><a href="#43-var--mutable-local-variables-project-valhalla-note">4.3 @Var / Mutable Local Variables (Project Valhalla Note)</a></li>
+<li class="lv2"><a href="#5-methods-and-functions">5. Methods and Functions</a></li>
+<li class="lv3"><a href="#51-method-javadoc">5.1 Method Javadoc</a></li>
+<li class="lv3"><a href="#52-method-length">5.2 Method Length</a></li>
+<li class="lv3"><a href="#53-parameters">5.3 Parameters</a></li>
+<li class="lv3"><a href="#54-return-statements">5.4 Return Statements</a></li>
+<li class="lv3"><a href="#55-no-ternary-operator">5.5 No Ternary Operator</a></li>
+<li class="lv2"><a href="#6-lambdas-and-functional-style">6. Lambdas and Functional Style</a></li>
+<li class="lv3"><a href="#61-simple-lambdas-are-fine">6.1 Simple Lambdas Are Fine</a></li>
+<li class="lv3"><a href="#62-no-lambda-chains-no-nesting">6.2 No Lambda Chains, No Nesting</a></li>
+<li class="lv3"><a href="#63-method-references">6.3 Method References</a></li>
+<li class="lv2"><a href="#7-error-handling">7. Error Handling</a></li>
+<li class="lv3"><a href="#71-no-checked-exceptions-for-expected-conditions">7.1 No Checked Exceptions for Expected Conditions</a></li>
+<li class="lv3"><a href="#72-no-swallowed-exceptions">7.2 No Swallowed Exceptions</a></li>
+<li class="lv3"><a href="#73-assertions">7.3 Assertions</a></li>
+<li class="lv2"><a href="#8-logging">8. Logging</a></li>
+<li class="lv2"><a href="#9-threading">9. Threading</a></li>
+<li class="lv2"><a href="#10-testing-conventions">10. Testing Conventions</a></li>
+<li class="lv2"><a href="#11-documentation-to-code-map">11. Documentation to Code Map</a></li>
+<li class="lv2"><a href="#12-tooling">12. Tooling</a></li>
+<li class="lv2"><a href="#frame-rate-configuration">Frame rate configuration</a></li>
+<li class="lv2"><a href="#13-code-reuse--use-the-services-we-already-have">13. Code Reuse — Use the Services We Already Have</a></li>
+<li class="lv3"><a href="#131-the-shared-services-use-these-dont-reinvent">13.1 The shared services (use these, don't reinvent)</a></li>
+<li class="lv3"><a href="#132-the-shared-constants-use-these-dont-redeclare">13.2 The shared constants (use these, don't redeclare)</a></li>
+<li class="lv3"><a href="#133-how-to-add-a-new-constant-or-service">13.3 How to add a new constant or service</a></li>
+<li class="lv3"><a href="#134-anti-patterns-instant-review-failure">13.4 Anti-patterns (instant review failure)</a></li>
+<li class="lv3"><a href="#135-why-this-rule-exists">13.5 Why this rule exists</a></li>
+</ul></details></aside>
+<main id="doc">
+<p class="crumb"><span class="tag">Architecture</span><span class="sep">/</span><code>STYLE.md</code><span class="sep">/</span>17 min read</p>
+<h1 id="openfps--code-style-guide">OpenFPS — Code Style Guide<a class="anchor" href="#openfps--code-style-guide" aria-label="Permalink">#</a></h1>
+<blockquote>
+<p>This document defines the coding conventions for all Java source in the OpenFPS engine.
+Compliance is enforced by Checkstyle. Rules here supersede Checkstyle defaults where noted.</p>
+</blockquote>
+<hr>
+<h2 id="1-file-structure">1. File Structure<a class="anchor" href="#1-file-structure" aria-label="Permalink">#</a></h2>
+<h3 id="11-file-header">1.1 File Header<a class="anchor" href="#11-file-header" aria-label="Permalink">#</a></h3>
+<p>Every <code>.java</code> file must begin with this Javadoc comment (no blank line between <code>/*</code> and <code>*</code>):</p>
+<div class="code" data-lang="java"><pre><code>/*
+ * Copyright (c) 2026 Nicholas Hutter and contributors.
+ * SPDX-License-Identifier: MIT
+ */
+
+package com.openfps.engine.&lt;subsystem&gt;;
+</code></pre></div>
+<p>A class in an <code>*.adapter.*</code> package must say so in its class Javadoc, and must
+not import from core engine packages.</p>
+<p><strong>Scope of that second rule: it governs HAL <em>platform</em> adapters</strong> — the classes
+under <code>hal.adapter.*</code> and the per-platform modules (<code>:desktop</code>, <code>:android</code>) whose
+whole purpose is to keep platform APIs out of the engine. It does <strong>not</strong> forbid
+a <em>subsystem</em> adapter from using engine services. <code>resource.adapter.LumpCache</code>
+and <code>WadFilePort</code> import <code>memory.port.I_MemoryPort</code> and <code>common.Constants</code>;
+<code>render.adapter.Rasterizer</code> uses <code>core.pool</code> for parallel work. Those are
+correct, and required — <code>AGENTS.md</code> rule 1 mandates the shared services for
+exactly this kind of code. A subsystem adapter reimplementing thread management
+to avoid an import would be the actual violation.</p>
+<div class="code" data-lang="java"><pre><code>/**
+ * Null implementation of I_TimePort.
+ *
+ * Platform adapter — must not import from core engine packages.
+ */
+public final class NullTimePort implements I_TimePort
+</code></pre></div>
+<p>The one legitimate place core code touches an adapter is the composition root
+(<code>EngineMain</code>), which by definition has to pick concrete implementations. No
+other class in <code>core</code> may import from an <code>adapter</code> package.</p>
+<h3 id="12-class-and-interface-declarations">1.2 Class and Interface Declarations<a class="anchor" href="#12-class-and-interface-declarations" aria-label="Permalink">#</a></h3>
+<p>Braces on their own lines:</p>
+<div class="code" data-lang="java"><pre><code>// GOOD
+public class MyClass
+{
+    // ...
+}
+
+// BAD
+public class MyClass {
+    // ...
+}
+</code></pre></div>
+<h3 id="13-import-organization">1.3 Import Organization<a class="anchor" href="#13-import-organization" aria-label="Permalink">#</a></h3>
+<p>Three blocks, separated by blank lines, sorted alphabetically within each block:</p>
+<ol>
+<li>
+<p><code>java.*</code> — standard library</p>
+</li>
+<li>
+<p><code>javax.*</code> — extended standard library</p>
+</li>
+<li>
+<p><code>com.openfps.*</code> — engine packages</p>
+</li>
+</ol>
+<p>No wildcard imports except for <code>static</code> imports of constants.</p>
+<hr>
+<h2 id="2-naming-conventions">2. Naming Conventions<a class="anchor" href="#2-naming-conventions" aria-label="Permalink">#</a></h2>
+<h3 id="21-standard-java-conventions-enforced">2.1 Standard Java Conventions (enforced)<a class="anchor" href="#21-standard-java-conventions-enforced" aria-label="Permalink">#</a></h3>
+<div class="tablewrap"><table>
+<thead><tr><th>Element</th><th>Convention</th><th>Example</th></tr></thead>
+<tbody>
+<tr><td>Class / Interface</td><td>PascalCase</td><td><code>ZoneAllocator</code>, <code>RendererPort</code></td></tr>
+<tr><td>Method</td><td>camelCase</td><td><code>allocateBlock</code>, <code>submitFrame</code></td></tr>
+<tr><td>Field (instance)</td><td>camelCase</td><td><code>currentTic</code>, <code>playerList</code></td></tr>
+<tr><td>Field (static final)</td><td>SCREAMING_SNAKE_CASE</td><td><code>MAX_PLAYERS</code>, <code>ZONE_HEAP_SIZE</code></td></tr>
+<tr><td>Local variable</td><td>camelCase</td><td><code>sectorIndex</code>, <code>deltaTime</code></td></tr>
+<tr><td>Parameter</td><td>camelCase</td><td><code>wadFile</code>, <code>peerId</code></td></tr>
+<tr><td>Package</td><td>lowercase</td><td><code>com.openfps.engine.hal</code></td></tr>
+<tr><td>Type parameter</td><td>single letter or PascalCase</td><td><code>T</code>, <code>TEntity</code></td></tr>
+</tbody>
+</table></div>
+<h3 id="22-engine-specific-naming-signals">2.2 Engine-Specific Naming Signals<a class="anchor" href="#22-engine-specific-naming-signals" aria-label="Permalink">#</a></h3>
+<div class="tablewrap"><table>
+<thead><tr><th>Pattern</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>I_*</code></td><td>HAL port interface (e.g., <code>I_TimeSource</code>)</td></tr>
+<tr><td><code>D_*</code></td><td>Core / game loop class prefix</td></tr>
+<tr><td><code>P_*</code></td><td>Gameplay subsystem prefix</td></tr>
+<tr><td><code>R_*</code></td><td>Render subsystem prefix</td></tr>
+<tr><td><code>S_*</code></td><td>Audio subsystem prefix</td></tr>
+<tr><td><code>G_*</code></td><td>Network subsystem prefix</td></tr>
+<tr><td><code>W_*</code></td><td>Resource / WAD subsystem prefix</td></tr>
+<tr><td><code>Z_*</code></td><td>Memory / zone allocator prefix</td></tr>
+</tbody>
+</table></div>
+<p>These are class name prefixes only — not package names. Package names remain standard lowercase.</p>
+<hr>
+<h2 id="3-immutability-and-mutability">3. Immutability and Mutability<a class="anchor" href="#3-immutability-and-mutability" aria-label="Permalink">#</a></h2>
+<h3 id="31-prefer-immutability">3.1 Prefer Immutability<a class="anchor" href="#31-prefer-immutability" aria-label="Permalink">#</a></h3>
+<p>Treat all fields as immutable by default. This mirrors Rust's <code>final</code> / <code>val</code> philosophy.</p>
+<p><strong>Rules:</strong></p>
+<ul>
+<li>
+<p>All instance fields must be <code>final</code></p>
+</li>
+<li>
+<p>If a field genuinely needs mutation (e.g., particle positions), mark it explicitly with a comment: <code>// MUTABLE: updated every frame</code></p>
+</li>
+<li>
+<p>Use <code>final</code> on every local variable unless you are reassigning it</p>
+</li>
+</ul>
+<div class="code" data-lang="java"><pre><code>// GOOD
+public void processTic(final int ticIndex)
+{
+    final PlayerState state = getPlayer(ticIndex);
+    final int clampedHealth = Math.min(state.health(), MAX_HEALTH);
+    render(clampedHealth);
+}
+
+// BAD
+public void processTic(int ticIndex) {
+    PlayerState state = getPlayer(ticIndex);
+    state.health = 50; // mutation without marker
+}
+</code></pre></div>
+<h3 id="32-mutable-collections">3.2 Mutable Collections<a class="anchor" href="#32-mutable-collections" aria-label="Permalink">#</a></h3>
+<p>If a field holds a collection that is modified in-place, it must be a concrete mutable type (not an interface), and must have the <code>// MUTABLE</code> comment:</p>
+<div class="code" data-lang="java"><pre><code>/** List of connected peers. MUTABLE: modified on connect/disconnect. */
+private final ArrayList&lt;PeerConnection&gt; peerList = new ArrayList&lt;&gt;();
+</code></pre></div>
+<hr>
+<h2 id="4-primitive-types">4. Primitive Types<a class="anchor" href="#4-primitive-types" aria-label="Permalink">#</a></h2>
+<h3 id="41-primitive-first-policy">4.1 Primitive-First Policy<a class="anchor" href="#41-primitive-first-policy" aria-label="Permalink">#</a></h3>
+<p><strong>Use primitive types everywhere.</strong> Avoid boxing. This is critical for a game engine hot path.</p>
+<div class="code" data-lang="java"><pre><code>// GOOD
+private final int playerHealth;
+private final long tickStartNanos;
+
+// BAD
+private final Integer playerHealth;
+private final Long tickStartNanos;
+</code></pre></div>
+<h3 id="42-primitive-arrays">4.2 Primitive Arrays<a class="anchor" href="#42-primitive-arrays" aria-label="Permalink">#</a></h3>
+<p>For hot-path data (entity lists, tic buffers), use <code>int[]</code>, <code>float[]</code>, <code>long[]</code>. Do not use <code>List&lt;Integer&gt;</code>.</p>
+<h3 id="43-var--mutable-local-variables-project-valhalla-note">4.3 <code>@Var</code> / Mutable Local Variables (Project Valhalla Note)<a class="anchor" href="#43-var--mutable-local-variables-project-valhalla-note" aria-label="Permalink">#</a></h3>
+<p>When primitive mutability is needed locally, use a local variable without <code>final</code>. The convention:</p>
+<div class="code" data-lang="java"><pre><code>// MUTABLE local — used as a scratch counter in a loop
+int totalDamage = 0;
+for (final Entity e : entityList) {
+    totalDamage += e.damage(); // read-only
+}
+</code></pre></div>
+<p>The <code>final</code> keyword is <strong>required on all parameters</strong> and <strong>strongly preferred on all other locals</strong>. Only omit it when you are demonstrably reassigning.</p>
+<hr>
+<h2 id="5-methods-and-functions">5. Methods and Functions<a class="anchor" href="#5-methods-and-functions" aria-label="Permalink">#</a></h2>
+<h3 id="51-method-javadoc">5.1 Method Javadoc<a class="anchor" href="#51-method-javadoc" aria-label="Permalink">#</a></h3>
+<p>Every non-private method must have a Javadoc comment <strong>above the declaration</strong>
+— the standard Java position, which is what tooling, IDEs, and Checkstyle all
+expect:</p>
+<div class="code" data-lang="java"><pre><code>/**
+ * Submits a rendered frame to the display.
+ * Blocks until vsync if enabled.
+ *
+ * @param frameNanos monotonic time in nanoseconds from engine start
+ */
+public void submitFrame(final long frameNanos)
+{
+    // implementation
+}
+</code></pre></div>
+<p><code>@param</code> / <code>@return</code> tags are encouraged wherever the name alone doesn't carry
+the meaning (units, ranges, sentinel values, null behaviour). They are not
+mechanically required — a one-line <code>/** Returns the frame rate in Hz. */</code> on an
+accessor is complete documentation. What Checkstyle does enforce is that any tag
+you <em>do</em> write matches the signature.</p>
+<p>For private methods, a one-line <code>//</code> comment is acceptable if the method name is
+self-explanatory.</p>
+<h3 id="52-method-length">5.2 Method Length<a class="anchor" href="#52-method-length" aria-label="Permalink">#</a></h3>
+<p>Target under 40 lines. If a method grows beyond 60 lines, extract logical blocks into private helpers.</p>
+<h3 id="53-parameters">5.3 Parameters<a class="anchor" href="#53-parameters" aria-label="Permalink">#</a></h3>
+<p>All parameters of a method <strong>with a body</strong> must be <code>final</code>:</p>
+<div class="code" data-lang="java"><pre><code>public void registerPeer(final int peerId, final InetAddress address)
+</code></pre></div>
+<p>Do <strong>not</strong> write <code>final</code> on parameters of an interface or abstract method
+declaration. There is no body, so it has no meaning there, and Checkstyle's
+<code>RedundantModifier</code> rejects it:</p>
+<div class="code" data-lang="java"><pre><code>// GOOD — interface declaration
+void registerPeer(int peerId, InetAddress address);
+
+// BAD — redundant, fails the build
+void registerPeer(final int peerId, final InetAddress address);
+</code></pre></div>
+<h3 id="54-return-statements">5.4 Return Statements<a class="anchor" href="#54-return-statements" aria-label="Permalink">#</a></h3>
+<p>Prefer early returns. Avoid flag variables when a direct return suffices.</p>
+<h3 id="55-no-ternary-operator">5.5 No Ternary Operator<a class="anchor" href="#55-no-ternary-operator" aria-label="Permalink">#</a></h3>
+<p><strong>The <code>?:</code> operator is banned.</strong> Use <code>if</code>/<code>else</code>, an early return, or a
+<code>switch</code>. Control flow should read as control flow, not as an expression
+you have to unpack — especially inside a larger expression such as string
+concatenation or an argument list, where the branch is easy to miss.</p>
+<div class="code" data-lang="java"><pre><code>// GOOD
+public static int abs(final int value)
+{
+    if (value &lt; 0)
+    {
+        return -value;
+    }
+    return value;
+}
+
+// GOOD — pull the branch out of the expression
+int byteCount = 0;
+if (payload != null)
+{
+    byteCount = payload.length;
+}
+return "NetworkPacketEvent{bytes=" + byteCount + "}";
+
+// BAD
+public static int abs(final int value)
+{
+    return value &lt; 0 ? -value : value;
+}
+
+// BAD — branch buried inside a concatenation
+return "NetworkPacketEvent{bytes=" + (payload == null ? 0 : payload.length) + "}";
+</code></pre></div>
+<p>Switch <em>expressions</em> (<code>case X -&gt; value</code>) are not ternaries and are fine —
+they are explicit, exhaustive, and checked by the compiler.</p>
+<hr>
+<h2 id="6-lambdas-and-functional-style">6. Lambdas and Functional Style<a class="anchor" href="#6-lambdas-and-functional-style" aria-label="Permalink">#</a></h2>
+<h3 id="61-simple-lambdas-are-fine">6.1 Simple Lambdas Are Fine<a class="anchor" href="#61-simple-lambdas-are-fine" aria-label="Permalink">#</a></h3>
+<p>A single-operation, single-return lambda is acceptable:</p>
+<div class="code" data-lang="java"><pre><code>final Runnable onTick = () -&gt; advanceTic();
+executor.submit(onTick);
+</code></pre></div>
+<h3 id="62-no-lambda-chains-no-nesting">6.2 No Lambda Chains, No Nesting<a class="anchor" href="#62-no-lambda-chains-no-nesting" aria-label="Permalink">#</a></h3>
+<p><strong>Never nest a lambda inside another lambda.</strong> One level is the hard
+limit — a lambda whose body contains another <code>-&gt;</code> is a review failure, no
+exceptions. Nested closures make capture and control flow nearly
+impossible to follow, and they are the single worst thing to land in a
+stack trace from a worker thread.</p>
+<p>Avoid chaining lambdas. If you need a lambda with more than one
+expression, extract it to a named method.</p>
+<div class="code" data-lang="java"><pre><code>// GOOD
+final Predicate&lt;Entity&gt; isAlive = Entity::isAlive;
+stream.filter(isAlive).forEach(Entity::activate);
+
+// BAD
+stream.filter(e -&gt; e.isAlive()).map(e -&gt; { e.activate(); return e; }).collect(toList());
+</code></pre></div>
+<h3 id="63-method-references">6.3 Method References<a class="anchor" href="#63-method-references" aria-label="Permalink">#</a></h3>
+<p>Prefer method references (<code>Entity::activate</code>) over verbose lambdas where the intent is clear.</p>
+<hr>
+<h2 id="7-error-handling">7. Error Handling<a class="anchor" href="#7-error-handling" aria-label="Permalink">#</a></h2>
+<h3 id="71-no-checked-exceptions-for-expected-conditions">7.1 No Checked Exceptions for Expected Conditions<a class="anchor" href="#71-no-checked-exceptions-for-expected-conditions" aria-label="Permalink">#</a></h3>
+<p>Use <code>IllegalArgumentException</code> or <code>UnsupportedOperationException</code> for programmer errors. Use specific runtime exceptions for recoverable game logic errors.</p>
+<h3 id="72-no-swallowed-exceptions">7.2 No Swallowed Exceptions<a class="anchor" href="#72-no-swallowed-exceptions" aria-label="Permalink">#</a></h3>
+<p>Every <code>catch</code> block must either:</p>
+<ul>
+<li>
+<p>Re-throw as a different exception with context</p>
+</li>
+<li>
+<p>Log the error</p>
+</li>
+<li>
+<p>Assert / fail the tic in a test</p>
+</li>
+</ul>
+<div class="code" data-lang="java"><pre><code>// GOOD
+} catch (final IOException e) {
+    throw new ResourceException("Failed to load WAD lump: " + lumpName, e);
+}
+
+// BAD
+} catch (final IOException e) {
+    // do nothing
+}
+</code></pre></div>
+<h3 id="73-assertions">7.3 Assertions<a class="anchor" href="#73-assertions" aria-label="Permalink">#</a></h3>
+<p>Use <code>assert</code> for invariants that should never fail in production:</p>
+<div class="code" data-lang="java"><pre><code>assert ticIndex &gt;= 0 : "ticIndex must be non-negative";
+</code></pre></div>
+<p>The <code>-ea</code> JVM flag is enabled in all test and dev runs.</p>
+<hr>
+<h2 id="8-logging">8. Logging<a class="anchor" href="#8-logging" aria-label="Permalink">#</a></h2>
+<ul>
+<li>
+<p>Use <strong>SLF4J</strong> for all logging (<code>org.slf4j:slf4j-api</code>, backed by Logback)</p>
+</li>
+<li>
+<p>Logger named per class: <code>private static final Logger LOG</code></p>
+</li>
+<li>
+<p>Use <code>{}</code> placeholders — never string concatenation inside a log call</p>
+</li>
+<li>
+<p>Pass the exception as the LAST argument; it gets no <code>{}</code> placeholder</p>
+</li>
+<li>
+<p>Log levels: <code>DEBUG</code> (dev), <code>INFO</code> (milestones), <code>WARN</code> (degraded), <code>ERROR</code> (failure)</p>
+</li>
+</ul>
+<div class="code" data-lang="java"><pre><code>import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+private static final Logger LOG = LoggerFactory.getLogger(GameLoop.class);
+
+LOG.info("GameLoop started: rate={} ({}ns/tic)", config.rate(), nanosPerTic);
+LOG.error("Subsystem {} init() failed", id, e);   // exception last, no {} for it
+</code></pre></div>
+<p><strong>Banned</strong>: <code>System.out</code> / <code>System.err</code>, <code>System.Logger</code>, <code>java.util.logging</code>,
+and Log4j used directly. Everything goes through the SLF4J facade so the
+backend stays swappable (Logback on desktop, an Android binding in Phase 3+).</p>
+<hr>
+<h2 id="9-threading">9. Threading<a class="anchor" href="#9-threading" aria-label="Permalink">#</a></h2>
+<ul>
+<li>
+<p>The game loop is the sole event producer and runs on its own dedicated
+thread (<code>openfps-gameloop</code>) — never on the worker pool, never on main</p>
+</li>
+<li>
+<p><strong>The main thread belongs to the platform</strong>: it runs the window event pump
+(<code>I_WindowPort.pumpEvents()</code>), because GLFW requires window calls there.
+Headless, it simply joins the loop thread</p>
+</li>
+<li>
+<p>All event dispatch happens on the <code>WorkerPool</code> (N = logical cores / 2)</p>
+</li>
+<li>
+<p>Audio, network, and render each get their own thread when adapters are wired</p>
+</li>
+<li>
+<p>Cross-thread communication goes through the event bus, backed by a bounded
+<code>java.util.concurrent.LinkedBlockingQueue</code>. The bound IS the backpressure:
+<code>publish()</code> blocks when full rather than dropping events. (<code>LinkedBlockingQueue</code>
+over <code>ArrayBlockingQueue</code> because the capacity need not be pre-allocated.)</p>
+</li>
+<li>
+<p>Prefer <code>java.util.concurrent</code> primitives over <code>synchronized</code>: <code>AtomicLong</code> /
+<code>AtomicInteger</code> for counters, <code>volatile</code> for state flags, the blocking queue
+for handoff. A <code>synchronized</code> block requires a comment saying why an atomic
+won't do.</p>
+</li>
+</ul>
+<hr>
+<h2 id="10-testing-conventions">10. Testing Conventions<a class="anchor" href="#10-testing-conventions" aria-label="Permalink">#</a></h2>
+<ul>
+<li>
+<p>Tests live in <code>src/test/java/com/openfps/engine/</code></p>
+</li>
+<li>
+<p>Test class naming: <code>&lt;ClassUnderTest&gt;Test</code> (e.g., <code>MemoryPortTest</code>, <code>FrameRateTest</code>)</p>
+</li>
+<li>
+<p>Test method naming: <code>should&lt;ExpectedBehavior&gt;When&lt;Condition&gt;</code> (JUnit 5 style),
+or a plain descriptive name plus <code>@DisplayName</code></p>
+</li>
+<li>
+<p>Group variants of one subject with <code>@Nested</code> (see <code>MemoryPortTest</code>)</p>
+</li>
+<li>
+<p>All tests must be deterministic — no unseeded random data</p>
+</li>
+<li>
+<p>Default to the null HAL adapter. The exception is a test that exists to cover
+a real adapter (<code>SqliteUserProfilePortTest</code>), which uses an in-memory SQLite
+database — never a file on disk, never a shared one.</p>
+</li>
+</ul>
+<hr>
+<h2 id="11-documentation-to-code-map">11. Documentation to Code Map<a class="anchor" href="#11-documentation-to-code-map" aria-label="Permalink">#</a></h2>
+<p>The design notes for a subsystem live in <strong>inline Javadoc on its port
+interface</strong> (see <code>I_MemoryPort</code>, <code>I_WadPort</code>) and in the package's
+<code>README.md</code>. There is no separate <code>PORT.md</code> file — an earlier draft of this
+guide referenced one; it never existed.</p>
+<p>When you implement or change a module:</p>
+<ol>
+<li>
+<p>Update the subsystem's section in <code>PLAN.md</code> § 3 with implementation notes</p>
+</li>
+<li>
+<p>Tick the matching <code>[x]</code> in the <code>PLAN.md</code> § 7 roadmap</p>
+</li>
+<li>
+<p>Update the package <code>README.md</code> if the design changed</p>
+</li>
+<li>
+<p>If you added a shared service or constant, add it to § 13 below</p>
+</li>
+</ol>
+<hr>
+<h2 id="12-tooling">12. Tooling<a class="anchor" href="#12-tooling" aria-label="Permalink">#</a></h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Tool</th><th>Version</th><th>Purpose</th></tr></thead>
+<tbody>
+<tr><td>Java</td><td>17 LTS</td><td>Source/target; runs on JVM 17+</td></tr>
+<tr><td>Gradle</td><td>8.10</td><td>Build (via wrapper)</td></tr>
+<tr><td>Checkstyle</td><td>10.18.0</td><td>Style enforcement — wired to <code>build</code>, <code>maxWarnings = 0</code></td></tr>
+<tr><td>JUnit Jupiter</td><td>5.11.4</td><td>Testing</td></tr>
+<tr><td>AssertJ</td><td>3.26.3</td><td>Test assertions</td></tr>
+<tr><td>SLF4J</td><td>2.0.16</td><td>Logging facade</td></tr>
+<tr><td>Logback</td><td>1.5.12</td><td>Logging backend</td></tr>
+<tr><td>Xerial SQLite JDBC</td><td>3.46.1.0</td><td>User profile persistence (desktop)</td></tr>
+<tr><td>LWJGL</td><td>3.3.4</td><td>Desktop graphics/audio/net (Phase 1.5, not yet a dependency)</td></tr>
+</tbody>
+</table></div>
+<p>Checkstyle runs as part of <code>gradlew build</code> and fails the build on any
+violation. Run it alone with <code>gradlew checkstyleMain</code>; the HTML report lands
+in <code>build/reports/checkstyle/main.html</code>.</p>
+<h2 id="frame-rate-configuration">Frame rate configuration<a class="anchor" href="#frame-rate-configuration" aria-label="Permalink">#</a></h2>
+<p>Frame rate is <strong>not</strong> a static constant. The engine supports three rates:
+30, 60, 120 Hz, selected at startup via <code>--fps=N</code>. See
+<code>core/FrameRate.java</code> and <code>core/GameConfig.java</code> for the math and
+factory methods. The Constants class does <strong>not</strong> contain any rate
+constants — that was removed in Phase 1.3.</p>
+<hr>
+<h2 id="13-code-reuse--use-the-services-we-already-have">13. Code Reuse — Use the Services We Already Have<a class="anchor" href="#13-code-reuse--use-the-services-we-already-have" aria-label="Permalink">#</a></h2>
+<p><strong>Rule: before writing new code, check whether the service or constant
+already exists. If it does, USE IT. Do not reimplement.</strong></p>
+<p>The engine has a small, fixed set of shared services and constants.
+Every module uses them. New code that bypasses them is a bug.</p>
+<h3 id="131-the-shared-services-use-these-dont-reinvent">13.1 The shared services (use these, don't reinvent)<a class="anchor" href="#131-the-shared-services-use-these-dont-reinvent" aria-label="Permalink">#</a></h3>
+<div class="tablewrap"><table>
+<thead><tr><th>Service</th><th>Where it lives</th><th>When to use it</th></tr></thead>
+<tbody>
+<tr><td><code>I_MemoryPort</code> (port + factory + backends)</td><td><code>com.openfps.engine.memory</code></td><td>Every allocation. <strong>Never</strong> <code>new byte[]</code> outside a port implementation.</td></tr>
+<tr><td><code>I_EventBusPort</code> (port + factory)</td><td><code>com.openfps.engine.core.eventbus</code></td><td>All inter-subsystem / inter-component communication.</td></tr>
+<tr><td><code>WorkerPool</code> (via <code>I_ThreadPoolPort</code>)</td><td><code>com.openfps.engine.core.pool</code></td><td>All parallel work. Event dispatch drains the bus; <code>submitParallel(I_ParallelJob, jobCount)</code> is the index-based fan-out for data-parallel passes such as the renderer's tiles — the submitting thread participates, so it is safe to call from a worker and from <code>workerCount == 1</code>. <strong>Never</strong> <code>new Thread(...)</code> for engine work.</td></tr>
+<tr><td><code>I_SystemInfoPort</code></td><td><code>com.openfps.engine.hal.port</code></td><td>Anything that depends on hardware — core count, memory, OS, JVM version.</td></tr>
+<tr><td><code>I_TimePort</code></td><td><code>com.openfps.engine.hal.port</code></td><td>Anything that reads time. <code>nanos()</code>/<code>millis()</code> are monotonic (tic timing, durations); <code>epochMillis()</code> is wall clock (persisted timestamps). <strong>Never</strong> <code>System.nanoTime()</code> / <code>System.currentTimeMillis()</code> in engine code — and never store a monotonic reading as a date.</td></tr>
+<tr><td><code>I_InputPort</code>, <code>I_DatagramPort</code>, <code>I_FilePort</code></td><td><code>com.openfps.engine.hal.port</code></td><td>HAL capabilities.</td></tr>
+<tr><td><code>I_UserProfilePort</code></td><td><code>com.openfps.engine.hal.port</code></td><td>All user-profile reads/writes. The engine never touches SQLite or Room directly. Desktop impl is <code>SqliteUserProfilePort</code> (Xerial); Android impl (Phase 3+) will use Room.</td></tr>
+<tr><td><code>Subsystem</code> base class</td><td><code>com.openfps.engine.core.subsystem</code></td><td>Every new subsystem. <strong>Don't</strong> implement <code>Runnable</code> or your own state machine.</td></tr>
+<tr><td><code>SubsystemRegistry</code></td><td><code>com.openfps.engine.core.subsystem</code></td><td>Registering / looking up / dispatching to subsystems.</td></tr>
+<tr><td><code>EventFactory</code></td><td><code>com.openfps.engine.core.event</code></td><td>Building events with sequence numbers and timestamps.</td></tr>
+<tr><td><code>GameConfig</code></td><td><code>com.openfps.engine.core</code></td><td>Holding rate + maxTics. <strong>Don't</strong> carry these as separate parameters.</td></tr>
+<tr><td><code>FrameRate</code></td><td><code>com.openfps.engine.core</code></td><td>All frame-rate config. Closed enum — no other values.</td></tr>
+<tr><td><code>FixedMath</code></td><td><code>com.openfps.engine.common</code></td><td>All 16.16 fixed-point arithmetic.</td></tr>
+<tr><td><code>NullAdapterFactory</code></td><td><code>com.openfps.engine.hal.adapter.nulladapter</code></td><td>Default HAL for tests and headless.</td></tr>
+<tr><td><code>SqliteAdapterFactory</code></td><td><code>com.openfps.engine.hal.adapter.sqlite</code></td><td>Desktop HAL — real on-disk profile persistence, null ports elsewhere.</td></tr>
+<tr><td><code>EngineMain.run(GameConfig, boolean, boolean)</code></td><td><code>com.openfps.engine.core</code></td><td>Standard bootstrap (config, useSqlite, headless).</td></tr>
+<tr><td><code>MemoryPortFactory</code></td><td><code>com.openfps.engine.memory.factory</code></td><td>Picking a memory backend. <strong>Don't</strong> instantiate <code>JvmMemoryPort</code> directly.</td></tr>
+<tr><td><code>EventBusFactory</code></td><td><code>com.openfps.engine.core.eventbus</code></td><td>Picking an event bus.</td></tr>
+<tr><td><code>ThreadPoolFactory</code></td><td><code>com.openfps.engine.core.pool</code></td><td>Picking a worker pool.</td></tr>
+</tbody>
+</table></div>
+<h3 id="132-the-shared-constants-use-these-dont-redeclare">13.2 The shared constants (use these, don't redeclare)<a class="anchor" href="#132-the-shared-constants-use-these-dont-redeclare" aria-label="Permalink">#</a></h3>
+<p>The <code>com.openfps.engine.common.Constants</code> class holds the engine-wide
+static primitives. New code must read from it, not redeclare.</p>
+<p>This was once a table of values reserved for future phases; most of them now
+have real callers. <code>MAX_PLAYERS</code>, <code>TIC_BUFFER_SIZE</code>, <code>MAX_LATENCY_TICS</code>,
+<code>DEFAULT_NET_PORT</code>, <code>MAP_SCALE</code>, <code>PLAYER_SPEED</code>, <code>ZONE_HEAP_SIZE</code> and
+<code>ZONE_ALIGN</code> are all read by net, gameplay, resource or memory code today. The
+few that remain unused are still fixed here on purpose, so the phase that lands
+the feature reads the value rather than inventing a magic number.</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Constant</th><th>Value</th><th>Use it for</th></tr></thead>
+<tbody>
+<tr><td><code>Constants.MAX_PLAYERS</code></td><td>8</td><td>Player slot bounds, net code, lobby.</td></tr>
+<tr><td><code>Constants.DEFAULT_NET_PORT</code></td><td>5021</td><td>Default P2P port.</td></tr>
+<tr><td><code>Constants.TIC_BUFFER_SIZE</code></td><td>64</td><td>Tic cmd ring buffer depth.</td></tr>
+<tr><td><code>Constants.MAX_LATENCY_TICS</code></td><td>5</td><td>Latency tracking cap.</td></tr>
+<tr><td><code>Constants.ZONE_HEAP_SIZE</code></td><td>16 MB</td><td>Default zone heap (used by <code>MemoryPortFactory</code> calls).</td></tr>
+<tr><td><code>Constants.ZONE_ALIGN</code></td><td>8</td><td>Per-allocation alignment.</td></tr>
+<tr><td><code>Constants.MAP_SCALE</code></td><td>65536</td><td>16.16 fixed-point scale for map coords.</td></tr>
+<tr><td><code>Constants.PLAYER_RADIUS</code></td><td>16 × MAP_SCALE</td><td>Collision radius.</td></tr>
+<tr><td><code>Constants.MAX_OPEN_HEIGHT</code></td><td>128 × MAP_SCALE</td><td>Sector ceiling cap.</td></tr>
+<tr><td><code>Constants.GRAVITY</code></td><td>8 × MAP_SCALE / 120²</td><td>Per-tic gravity.</td></tr>
+<tr><td><code>Constants.PLAYER_SPEED</code></td><td>256 × MAP_SCALE / 120</td><td>Player movement speed (per tic, at 120 Hz).</td></tr>
+<tr><td><code>Constants.MAX_VELOCITY</code></td><td>50 × MAP_SCALE</td><td>Velocity clamp.</td></tr>
+<tr><td><code>Constants.MAX_ENTITIES</code></td><td>4096</td><td>Per-map entity cap.</td></tr>
+<tr><td><code>Constants.NULL_ENTITY</code></td><td>-1</td><td>Sentinel for "no entity".</td></tr>
+<tr><td><code>Constants.ENTITY_EMPTY</code></td><td>0</td><td>Sentinel for "empty slot".</td></tr>
+</tbody>
+</table></div>
+<h3 id="133-how-to-add-a-new-constant-or-service">13.3 How to add a new constant or service<a class="anchor" href="#133-how-to-add-a-new-constant-or-service" aria-label="Permalink">#</a></h3>
+<ol>
+<li>
+<p><strong>Don't.</strong> Search <code>Constants.java</code> and the existing ports first.</p>
+</li>
+<li>
+<p>If you really need one, add it to <code>Constants</code> (for a primitive)
+or define a new port interface in the right package.</p>
+</li>
+<li>
+<p>Update <code>STYLE.md</code> § 13 to include it in the table above.</p>
+</li>
+<li>
+<p>Test the <em>behaviour</em> that depends on it, reading the constant rather than
+restating its literal value — so the test breaks if someone forks the value.</p>
+</li>
+<li>
+<p>Update <code>PLAN.md</code> to mark it in the subsystem spec.</p>
+</li>
+</ol>
+<h3 id="134-anti-patterns-instant-review-failure">13.4 Anti-patterns (instant review failure)<a class="anchor" href="#134-anti-patterns-instant-review-failure" aria-label="Permalink">#</a></h3>
+<ul>
+<li>
+<p><code>new byte[size]</code> in engine code (use the memory port)</p>
+<ul>
+<li>
+<p><strong>Sanctioned exception — long-lived engine-owned primitive buffers.</strong>
+Long-lived, engine-owned primitive buffers whose element type is <strong>not</strong>
+<code>byte</code>, allocated <strong>once at initialisation and released at shutdown</strong>, may
+be allocated directly. <strong>Named sites only</strong>, listed below. <strong>A hot loop is
+NOT on its own a qualifying reason.</strong></p>
+<div class="tablewrap"><table>
+<thead><tr><th>Sanctioned site</th><th>Buffers</th><th>Allocated at</th></tr></thead>
+<tbody>
+<tr><td><code>render.adapter.Framebuffer</code></td><td><code>int[]</code> colour (RGBA8888), <code>float[]</code> depth (1/w)</td><td><code>init(w, h)</code> and <code>resize(w, h)</code> only</td></tr>
+</tbody>
+</table></div>
+<p>Why the exception exists: <code>I_MemoryPort</code> hands out opaque <code>int</code> handles
+over a <code>byte[]</code> store and has no read or write operation, so per-pixel
+handle indirection is not a cost to measure — it is several times the cost
+of the pixel work itself. The port earns its keep tracking *many, small,
+short-lived* allocations (that is what tags and <code>freeByTag</code> are for); the
+framebuffer is two arrays allocated once and resized only when the window
+is. It gets none of the port's benefits and pays its whole cost. The full
+argument, including the typed-slab alternative that was rejected, is in
+<code>engine/src/main/java/com/openfps/engine/render/README.md</code> § 11(a).</p>
+<p>The wording admits <code>Framebuffer</code> and the audio mixing buffers, and excludes
+per-frame and per-entity allocation — which is what the rule actually
+exists to prevent. If a third and fourth candidate appear, the pattern is
+real and <code>I_MemoryPort</code> should grow a typed-slab capability instead;
+revisit § 11(a) at that point rather than lengthening the table.</p>
+</li>
+</ul>
+</li>
+<li>
+<p><code>System.nanoTime()</code> / <code>System.currentTimeMillis()</code> in engine code — use
+<code>I_TimePort</code>: <code>nanos()</code>/<code>millis()</code> for monotonic timing, <code>epochMillis()</code> for
+persisted timestamps. The only sanctioned direct callers are the time-port
+adapters themselves and shutdown-path timeouts that never feed simulation
+state (e.g. <code>WorkerPool.awaitTermination</code>). If a reading can influence
+lockstep, it must come from the port.</p>
+</li>
+<li>
+<p><code>new Thread(...)</code> in engine code — event handling belongs on the <code>WorkerPool</code>.
+The producer side is the exception: the game loop cannot run on the pool it
+feeds (it would hold a consumer thread for the whole run and deadlock at
+<code>workerCount == 1</code>), so <code>EngineMain</code> runs it on the calling thread.</p>
+</li>
+<li>
+<p><code>new HashMap&lt;&gt;()</code> / <code>new ArrayList&lt;&gt;()</code> in hot paths (primitive arrays or <code>I_MemoryPort</code> allocations)</p>
+</li>
+<li>
+<p>Magic numbers like <code>60</code>, <code>65536</code>, <code>4096</code> in engine code (use <code>Constants</code> or <code>FrameRate</code>)</p>
+</li>
+<li>
+<p><code>new JvmMemoryPort(...)</code> in engine code (use <code>MemoryPortFactory</code>)</p>
+</li>
+<li>
+<p><code>new SharedEventBus()</code> in engine code (use <code>EventBusFactory</code>)</p>
+</li>
+<li>
+<p>A subsystem class that <code>implements Runnable</code> (extend <code>Subsystem</code> instead)</p>
+</li>
+<li>
+<p>A new fixed-point math constant outside <code>FixedMath</code></p>
+</li>
+<li>
+<p>A new frame rate value outside the <code>FrameRate</code> enum</p>
+</li>
+<li>
+<p>A new "memory pool" or "thread pool" class (extend what's there)</p>
+</li>
+<li>
+<p>A ternary <code>?:</code> anywhere (use <code>if</code>/<code>else</code> or <code>switch</code> — see § 5.5)</p>
+</li>
+<li>
+<p>A lambda nested inside another lambda (see § 6.2)</p>
+</li>
+</ul>
+<h3 id="135-why-this-rule-exists">13.5 Why this rule exists<a class="anchor" href="#135-why-this-rule-exists" aria-label="Permalink">#</a></h3>
+<p>The engine is small enough that every service and constant is a
+deliberate architectural choice. A second copy of a fixed-point
+constant, a second time source, a second thread allocator — each
+one is a divergence waiting to happen. The factory pattern (memory,
+event bus, thread pool) exists precisely so the engine has exactly
+one of each thing. Honor that.</p>
+<hr>
+<p><em>This style guide is a living document. Changes require a PR with rationale and Checkstyle config update.</em></p>
+<footer class="pagefoot"><p>Source: <a class="ext" rel="noopener noreferrer" target="_blank" href="https://github.com/nicholashutter/OpenFPS/blob/main/STYLE.md">STYLE.md</a>. This page is generated — edit the Markdown, not the HTML.</p></footer>
+</main>
+</div>
+<script src="site.js"></script>
+</body>
+</html>

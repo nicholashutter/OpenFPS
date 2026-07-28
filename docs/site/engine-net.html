@@ -1,0 +1,862 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Net (G_) — Peer-to-Peer Networking — OpenFPS documentation</title>
+<meta name="description" content="G_ is the network layer. The engine is P2P-first — no dedicated server required for small matches. Authority is distributed: every player is a peer.">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<a class="skip" href="#doc">Skip to content</a>
+<header class="topbar"><button class="burger" id="burger" aria-controls="sidebar" aria-expanded="false" aria-label="Show navigation"><span></span><span></span><span></span></button><span class="topbar-name">OpenFPS docs</span></header>
+<div class="scrim" id="scrim" hidden></div>
+<div class="layout">
+<aside class="sidebar" id="sidebar">
+<a class="brand" href="index.html"><span class="brand-mark"></span><span class="brand-name">OpenFPS</span><span class="brand-kind">docs</span></a>
+<input class="filter" id="filter" type="search" placeholder="Filter pages" aria-label="Filter pages" autocomplete="off">
+<nav class="nav" id="nav" aria-label="Documentation">
+<details class="grp" data-hue="1" open><summary><span class="dot"></span>Overview<span class="count">2</span></summary>
+<ul>
+<li><a href="index.html">Overview</a></li>
+<li><a href="agents.html">Agent instructions</a></li>
+</ul></details>
+<details class="grp" data-hue="2" open><summary><span class="dot"></span>Building<span class="count">1</span></summary>
+<ul>
+<li><a href="build.html">Build reference</a></li>
+</ul></details>
+<details class="grp" data-hue="3" open><summary><span class="dot"></span>Architecture<span class="count">2</span></summary>
+<ul>
+<li><a href="style.html">Code style</a></li>
+<li><a href="plan.html">Project plan</a></li>
+</ul></details>
+<details class="grp" data-hue="4" open><summary><span class="dot"></span>Modules<span class="count">5</span></summary>
+<ul>
+<li><a href="engine.html">:engine</a></li>
+<li><a href="desktop.html">:desktop</a></li>
+<li><a href="android.html">:android</a></li>
+<li><a href="tools.html">:tools</a></li>
+<li><a href="gdxshared.html">:gdxshared</a></li>
+</ul></details>
+<details class="grp" data-hue="5" open><summary><span class="dot"></span>Packages<span class="count">10</span></summary>
+<ul>
+<li><a href="engine-core.html">Core</a></li>
+<li><a href="engine-common.html">Common</a></li>
+<li><a href="engine-hal.html">HAL (I_)</a></li>
+<li><a href="engine-gameplay.html">Gameplay (P_)</a></li>
+<li><a href="engine-render.html">Render (R_)</a></li>
+<li><a href="engine-demo.html">Demo</a></li>
+<li><a href="engine-audio.html">Audio (S_)</a></li>
+<li><a href="engine-net.html" class="cur" aria-current="page">Net (G_)</a></li>
+<li><a href="engine-resource.html">Resource (W_)</a></li>
+<li><a href="engine-memory.html">Memory (Z_)</a></li>
+</ul></details>
+<details class="grp" data-hue="6"><summary><span class="dot"></span>Reference<span class="count">2</span></summary>
+<ul>
+<li><a href="assets.html">Assets and licensing</a></li>
+<li><a href="demo-assets.html">Demo asset manifest</a></li>
+</ul></details>
+</nav>
+<p class="generated">Generated from the repository's Markdown by <code>:tools:buildDocsSite</code>.</p>
+</aside>
+<aside class="rail"><details class="toc" id="toc" open><summary>On this page</summary>
+<ul>
+<li class="lv2"><a href="#status">Status</a></li>
+<li class="lv3"><a href="#the-transport-ships-the-simulation-does-not">The transport ships. The simulation does not.</a></li>
+<li class="lv2"><a href="#what-lives-here">What lives here</a></li>
+<li class="lv2"><a href="#subsystem-layout">Subsystem layout</a></li>
+<li class="lv2"><a href="#library-only-nothing-in-the-running-engine-uses-these">Library-only: nothing in the running engine uses these</a></li>
+<li class="lv2"><a href="#p2p-model">P2P model</a></li>
+<li class="lv3"><a href="#topology">Topology</a></li>
+<li class="lv3"><a href="#ticcmd-structure">TicCmd structure</a></li>
+<li class="lv3"><a href="#network-timing-math">Network timing math</a></li>
+<li class="lv3"><a href="#lockstep-determinism">Lockstep determinism</a></li>
+<li class="lv3"><a href="#lag-compensation--phase-4-not-phase-3">Lag compensation — Phase 4+, not Phase 3</a></li>
+<li class="lv3"><a href="#snapshot-delta">Snapshot delta</a></li>
+<li class="lv3"><a href="#discovery">Discovery</a></li>
+<li class="lv2"><a href="#1-decision">1. Decision</a></li>
+<li class="lv2"><a href="#2-constraints-this-had-to-satisfy">2. Constraints this had to satisfy</a></li>
+<li class="lv2"><a href="#3-why-not-tcp-or-tcp-with-a-deadline">3. Why not TCP, or "TCP with a deadline"</a></li>
+<li class="lv2"><a href="#4-what-lockstep-actually-requires">4. What lockstep actually requires</a></li>
+<li class="lv2"><a href="#5-where-drop-the-stale-packet-is-correct">5. Where "drop the stale packet" is correct</a></li>
+<li class="lv2"><a href="#6-bandwidth-and-memory-recomputed">6. Bandwidth and memory, recomputed</a></li>
+<li class="lv2"><a href="#7-options-evaluated">7. Options evaluated</a></li>
+<li class="lv2"><a href="#8-the-native-option-evaluated-and-rejected">8. The native option, evaluated and rejected</a></li>
+<li class="lv2"><a href="#9-nat-traversal-the-honest-part">9. NAT traversal: the honest part</a></li>
+<li class="lv2"><a href="#10-security-and-trust-model">10. Security and trust model</a></li>
+<li class="lv2"><a href="#11-what-this-commits-phase-3-to">11. What this commits Phase 3 to</a></li>
+<li class="lv2"><a href="#12-corrections-applied-to-this-file">12. Corrections applied to this file</a></li>
+<li class="lv2"><a href="#13-revisit-triggers">13. Revisit triggers</a></li>
+<li class="lv2"><a href="#files">Files</a></li>
+<li class="lv2"><a href="#todo-phase-3">TODO (Phase 3)</a></li>
+</ul></details></aside>
+<main id="doc">
+<p class="crumb"><span class="tag">Packages</span><span class="sep">/</span><code>engine/src/main/java/com/openfps/engine/net/README.md</code><span class="sep">/</span>28 min read</p>
+<h1 id="net-g_--peer-to-peer-networking">Net (G_) — Peer-to-Peer Networking<a class="anchor" href="#net-g_--peer-to-peer-networking" aria-label="Permalink">#</a></h1>
+<blockquote>
+<p>G_ is the network layer. The engine is P2P-first — no dedicated server required
+for small matches. Authority is distributed: every player is a peer.</p>
+</blockquote>
+<h2 id="status">Status<a class="anchor" href="#status" aria-label="Permalink">#</a></h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Field</th><th>Value</th></tr></thead>
+<tbody>
+<tr><td><strong>State</strong></td><td>PARTIAL</td></tr>
+<tr><td><strong>Phase</strong></td><td><code>PLAN.md</code> Phase 3 — transport wired and measured; lockstep simulation not started</td></tr>
+<tr><td><strong>Tests</strong></td><td>129</td></tr>
+<tr><td><strong>Registered</strong></td><td>G_ via <code>NetSubsystem</code> with <code>NullNetworkPort</code>; the live path is <code>NetSession</code>, attached by <code>DesktopLauncher</code></td></tr>
+<tr><td><strong>Verified</strong></td><td>2026-07-28</td></tr>
+</tbody>
+</table></div>
+<h3 id="the-transport-ships-the-simulation-does-not">The transport ships. The simulation does not.<a class="anchor" href="#the-transport-ships-the-simulation-does-not" aria-label="Permalink">#</a></h3>
+<p><code>NetSession</code> opens a real socket and drives the primitives that were already
+here. It has been verified twice over, deliberately at two different levels:</p>
+<ul>
+<li>
+<p><strong>A loopback test over two real UDP sockets.</strong> A scripted socket can produce
+a lost packet and a hostile one, which a real socket cannot — but it also
+cannot fail in the ways a real socket fails, and every one of those is a way
+this could be broken while every unit test passed: an address string this
+code builds that the port cannot parse, a receive buffer that silently
+truncates a full window, a channel left blocking so the first empty read
+hangs the game loop.</p>
+</li>
+<li>
+<p><strong>Two live game processes.</strong> They exchanged 77 KB, 338 packets out and 223
+in, 2,460 commands accepted, with <strong>zero malformed and zero from strangers</strong>.
+The asymmetry is the second process starting later, and the wide commands
+per packet is the redundancy window adapting to the loss that caused.</p>
+</li>
+</ul>
+<p><strong>What is not done: a remote player is not simulated into a body.</strong> The inputs
+arrive and the ack state is live; nothing turns them into someone you can see
+and shoot. That needs a <code>PlayerController</code> per peer driven from the received
+ring, plus a rule for what to do when a peer's tics have not arrived. Stated
+plainly here because a session that exchanges packets perfectly and shows
+nobody looks exactly like a session that is broken.</p>
+<p><strong>Built.</strong> Six classes — <code>TicCmd</code>, <code>TicCmdBuffer</code>, <code>AckWindow</code>,
+<code>PeerConnection</code>, <code>RedundantSender</code>, <code>NetBytes</code> — implementing the 12-byte
+command, the 64-bit ack bitfield and the § 4 redundant-redelivery packet, under
+87 passing tests. The transport decision is recorded and settled: UDP plus
+redundant redelivery, no dependency added.</p>
+<p><strong>Not built.</strong> <code>SnapshotDelta</code> and <code>Discovery</code>. And the wiring: <code>EngineMain</code>
+registers <code>NetSubsystem(new NullNetworkPort())</code>, the six classes' only callers
+outside themselves are their own tests, and <strong>no socket is ever opened</strong>.</p>
+<p><strong>Blocked on.</strong> Nothing. This is wiring work, not a design question — the ADR
+below settled the design.</p>
+<p><strong>Next step.</strong> Wire the six primitives to
+<code>hal.adapter.desktop.DesktopDatagramPort</code> behind a real <code>I_NetworkPort</code>. That
+port already exists, is tested, and uses a preallocated direct <code>ByteBuffer</code>.</p>
+<p><a href="#transport-decision">Transport decision</a>, at the bottom of this file, is the
+ADR that settled the protocol. Its conclusions have since been folded back into
+the sections above it — § 12 lists every correction that was applied — so the
+two halves now agree and can be read in either order.</p>
+<h2 id="what-lives-here">What lives here<a class="anchor" href="#what-lives-here" aria-label="Permalink">#</a></h2>
+<p>Six classes are built and tested. <strong>None of them is wired to a socket</strong> — see
+<a href="#library-only-nothing-in-the-running-engine-uses-these">Library-only</a> below,
+which is the single most important thing to know about this package.</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Class</th><th>What it is</th></tr></thead>
+<tbody>
+<tr><td><code>TicCmd</code></td><td>The 12-byte lockstep input command, immutable, with a non-allocating codec</td></tr>
+<tr><td><code>TicCmdBuffer</code></td><td>Preallocated 64 × 8 input ring indexed by tic number</td></tr>
+<tr><td><code>AckWindow</code></td><td>Receive-side ack state: highest tic, 64-bit bitfield, highest contiguous tic</td></tr>
+<tr><td><code>PeerConnection</code></td><td>Per-peer state — address, EWMA RTT, ack window, loss stats. <strong>No socket.</strong></td></tr>
+<tr><td><code>RedundantSender</code></td><td>Packs and unpacks the redundant-input packet — the § 4 reliability layer</td></tr>
+<tr><td><code>NetBytes</code></td><td>Package-private big-endian primitive codec; the one byte-order site</td></tr>
+</tbody>
+</table></div>
+<p>Still to write: <code>SnapshotDelta</code> (diff-based state serialization between tics)
+and <code>Discovery</code> (LAN peer discovery via UDP broadcast).</p>
+<h2 id="subsystem-layout">Subsystem layout<a class="anchor" href="#subsystem-layout" aria-label="Permalink">#</a></h2>
+<div class="code"><pre><code>net/
+├── TicCmd.java              12-byte input command + non-allocating codec
+├── TicCmdBuffer.java        64 x 8 preallocated ring, indexed by tic number
+├── AckWindow.java           64-bit ack bitfield + highest contiguous tic
+├── PeerConnection.java      per-peer state; holds no socket
+├── RedundantSender.java     packet pack/unpack (static; the format is stateless)
+├── NetBytes.java            package-private big-endian primitives
+├── port/
+│   └── I_NetworkPort.java   interface — called by core per tic
+└── adapter/
+    └── NullNetworkPort.java stub — and still the only implementation
+</code></pre></div>
+<p>87 tests cover the six classes. They are unit tests with no I/O at all, which is
+a direct consequence of <code>PeerConnection</code> holding no socket: every packet in the
+test suite is a <code>byte[]</code> that never leaves the JVM.</p>
+<h2 id="library-only-nothing-in-the-running-engine-uses-these">Library-only: nothing in the running engine uses these<a class="anchor" href="#library-only-nothing-in-the-running-engine-uses-these" aria-label="Permalink">#</a></h2>
+<p><code>EngineMain</code> registers <code>NetSubsystem(new NullNetworkPort())</code>. Nothing in the
+running engine constructs a <code>PeerConnection</code>, a <code>TicCmdBuffer</code> or a
+<code>RedundantSender</code>; outside the six classes themselves, their only callers are
+their own tests. No socket is opened, no datagram is sent, and no tic command
+crosses a wire.</p>
+<p>So the six classes are a <strong>correct, tested implementation of a protocol nobody
+speaks yet</strong>. The next real Phase 3 step is wiring them to
+<code>hal.adapter.desktop.DesktopDatagramPort</code> behind a real <code>I_NetworkPort</code> — at
+which point <code>NetSubsystem.onEvent</code>, which is currently the base-class no-op,
+starts routing <code>NetworkPacketEvent</code>.</p>
+<p>Read every "ships", "sends" and "receives" below with that in mind: they
+describe the protocol these classes implement, not traffic the engine currently
+produces.</p>
+<h2 id="p2p-model">P2P model<a class="anchor" href="#p2p-model" aria-label="Permalink">#</a></h2>
+<p>The primitives below are built; the topology they serve is not yet running.</p>
+<h3 id="topology">Topology<a class="anchor" href="#topology" aria-label="Permalink">#</a></h3>
+<p>v1 is a <strong>full mesh</strong>: every peer sends directly to every other peer, with no
+hub. That is O(n²) in packets — the same input is unicast 7 times in an 8-player
+match, because there is no broadcast on the internet. Beyond <code>MAX_PLAYERS</code> this
+has to move <em>toward</em> a star: a hub or relay peer that forwards on behalf of
+others. v1 target: up to 8 players, direct UDP, LAN only (see
+<a href="#9-nat-traversal-the-honest-part">NAT traversal</a>).</p>
+<p>Each peer:</p>
+<ul>
+<li>
+<p>Owns a 32-bit <code>playerId</code> (assigned at game creation)</p>
+</li>
+<li>
+<p>Sends its <code>TicCmd</code> (input) to all peers every tic</p>
+</li>
+<li>
+<p>Receives every peer's <code>TicCmd</code> for tics <code>[current - MAX_LATENCY_TICS, current]</code></p>
+</li>
+<li>
+<p>Runs the same <code>GameLoop</code> deterministically on every peer (lockstep)</p>
+</li>
+</ul>
+<p><strong>Source — Gabriel Gambetta, "Fast-Paced Multiplayer (Parts I–IV)"</strong>:
+https://www.gabrielgambetta.com/client-server-game-architecture.html
+https://www.gabrielgambetta.com/client-side-prediction.html
+https://www.gabrielgambetta.com/entity-interpolation.html
+https://www.gabrielgambetta.com/lag-compensation.html</p>
+<h3 id="ticcmd-structure">TicCmd structure<a class="anchor" href="#ticcmd-structure" aria-label="Permalink">#</a></h3>
+<p><strong>Implemented — <code>TicCmd.java</code>.</strong> Each tic, each peer sends a <strong>12-byte</strong>
+<code>TicCmd</code>, big-endian (network byte order) on every field:</p>
+<div class="code"><pre><code>offset  size  field
+0       4     ticNumber
+4       2     forward        (-32768..32767, percent)
+6       2     strafe         (-32768..32767, percent)
+8       2     angle          (quantized: 65536 steps / 360° ≈ 0.0055°)
+10      1     pitch          (quantized: 256 steps / 180° ≈ 0.7°)
+11      1     buttons        (bitmask: fire, use, jump, ...)
+</code></pre></div>
+<p><code>playerId</code> is deliberately <strong>not</strong> in the cmd — it lives once in the packet
+header, since every cmd in a packet comes from the same sender. At the
+redundancy window this doc settles on, that alone saves 28 KB/s per peer.</p>
+<p>Size is the binding constraint on the whole design, not a detail: every byte
+here is multiplied by the redundancy window <strong>and</strong> by the mesh fanout. See
+<a href="#6-bandwidth-and-memory-recomputed">Bandwidth and memory</a> for the arithmetic.</p>
+<p>There is no <code>checksum</code> field. Per-cmd checksums are covered under
+<a href="#10-security-and-trust-model">Security and trust model</a>; desync detection is a
+separate periodic packet.</p>
+<p>DOOM is the precedent for keeping the cmd <em>small</em> — its <code>ticcmd_t</code> is 8 bytes
+(<code>forwardmove</code>, <code>sidemove</code>, <code>angleturn</code>, <code>consistancy</code>, <code>chatchar</code>, <code>buttons</code>),
+not the 64 an earlier draft of this file claimed.</p>
+<p><strong>Source — DOOM source <code>d_ticcmd.h</code></strong>:
+https://github.com/id-Software/DOOM/blob/master/linuxdoom-1.10/d_ticcmd.h</p>
+<p>Byte order is fixed in exactly one place: <code>NetBytes</code>, a package-private
+big-endian primitive codec. It is package-private precisely so that
+<code>TicCmd</code> and <code>RedundantSender</code> cannot drift into disagreeing about endianness —
+there is no second implementation to disagree with. Every method there writes
+into a caller-supplied array and allocates nothing, so the whole encode/decode
+path is safe on the per-tic path (<code>STYLE.md</code> § 13.4).</p>
+<p>Two forms of decode exist, and the distinction is deliberate. <code>TicCmd.encode</code>
+and the <code>decodeXxx</code> field accessors read and write a caller's array and
+allocate nothing — that is the hot path. <code>TicCmd.decode</code> materialises one
+immutable value and is for tests and cold paths. Hot code goes through
+<code>TicCmdBuffer</code>, which never materialises a <code>TicCmd</code> at all: it stores the
+fields unpacked in three preallocated <code>int[]</code> rings, packing forward and strafe
+into one int and yaw, pitch and buttons into another. That is what keeps the
+ring at exactly the 12 bytes per command § 6 budgets while honouring the
+"no <code>new byte[]</code> outside a memory port" rule — ints, not bytes, and allocated
+once in the constructor.</p>
+<p>The ring is indexed by <code>ticNumber % TIC_BUFFER_SIZE</code>, which is what makes a
+re-delivered command an idempotent overwrite needing no dedup bookkeeping. Each
+slot also stores the tic number it holds, so the staleness check comes free: a
+command older than the one already in its slot is a wrapped-around straggler and
+is rejected rather than applied.</p>
+<h3 id="network-timing-math">Network timing math<a class="anchor" href="#network-timing-math" aria-label="Permalink">#</a></h3>
+<p><strong>RTT (round-trip time):</strong> measured as <code>now - sentTime</code> on every received packet,
+smoothed with an <strong>EWMA</strong> (exponentially weighted moving average):</p>
+<div class="code"><pre><code>smoothedRtt = 0.7 × smoothedRtt + 0.3 × rtt
+</code></pre></div>
+<p>One <code>long</code> of state, no ring buffer, and it is what Quake 3 actually does. (An
+earlier draft called this a "7-tap moving average" — that is a different
+algorithm, and it would cost a 7-slot buffer per peer for no benefit.)</p>
+<p><strong>Implemented — <code>PeerConnection.java</code></strong>, and evaluated in <em>integer</em> arithmetic
+as <code>(7 × smoothed + 3 × sample) / 10</code> so the result is bit-identical on x86 and
+ARM. That matters even though RTT never feeds the simulation directly: it sizes
+the redundancy window, and two peers disagreeing about window size is a bug that
+only surfaces under packet loss, which is the worst possible time to find it.</p>
+<p><strong>Packet loss rate:</strong> count received vs. sent per peer over a 64-packet window.</p>
+<p><strong>Bandwidth:</strong> see <a href="#6-bandwidth-and-memory-recomputed">Bandwidth and memory</a>.
+The figures live in exactly one place so the two copies cannot drift apart.</p>
+<h3 id="lockstep-determinism">Lockstep determinism<a class="anchor" href="#lockstep-determinism" aria-label="Permalink">#</a></h3>
+<p>For lockstep to work, every peer must compute <strong>the exact same</strong> state given
+the same inputs. The original DOOM was lockstep; modern games (Quake 3, Overwatch)
+use snapshot + interpolation for better feel. We start with lockstep for
+simplicity and add snapshot delta later.</p>
+<p>The key rules:</p>
+<ol>
+<li>
+<p><strong>No <code>HashMap</code></strong> — use a fixed-order <code>int[]</code> indexed array</p>
+</li>
+<li>
+<p><strong>No <code>Math.random</code></strong> — use a custom <code>int</code>-based PRNG with seed</p>
+</li>
+<li>
+<p><strong>No <code>float</code> accumulation</strong> — fixed-point only (see <code>common/README.md</code>)</p>
+</li>
+<li>
+<p><strong>No <code>System.currentTimeMillis</code></strong> — use <code>I_TimePort</code></p>
+</li>
+<li>
+<p><strong>No <code>Thread.sleep</code></strong> — game loop times itself</p>
+</li>
+</ol>
+<p><strong>Source — "1500 Archers on a 28.8: Network Programming in Age of Empires and Beyond"</strong>:
+https://www.gamedeveloper.com/programming/1500-archers-on-a-288-network-programming-in-age-of-empires-and-beyond</p>
+<h3 id="lag-compensation--phase-4-not-phase-3">Lag compensation — Phase 4+, not Phase 3<a class="anchor" href="#lag-compensation--phase-4-not-phase-3" aria-label="Permalink">#</a></h3>
+<p>For hit detection (did my bullet hit that player?), you evaluate the world state
+at the time the <em>shooter</em> saw the target, not at the time it is processed:</p>
+<ol>
+<li>
+<p>Records <code>GameState</code> snapshots every tic (ring buffer, depth = <code>MAX_LATENCY_TICS</code>)</p>
+</li>
+<li>
+<p>On a shot from peer P, look up the snapshot from <code>now - peerP.rtt/2</code> ago</p>
+</li>
+<li>
+<p>Test bullet path against the rewinded state</p>
+</li>
+<li>
+<p>Apply damage in current state at the corresponding player</p>
+</li>
+</ol>
+<p><strong>Under pure lockstep there is nothing to rewind.</strong> Every peer simulates
+identical inputs at identical tic numbers, so every peer already computes the
+same hit result — the world state at tic <em>N</em> is by construction the same
+everywhere. Lag compensation only becomes meaningful once prediction or
+snapshot interpolation exists, and it presumes an authority to do the rewinding.
+Shipping <code>LagCompensator</code> alongside <code>TicCmdBuffer</code> would be contradictory, so it
+moves to Phase 4+ in <code>PLAN.md</code> § 7.</p>
+<p><strong>Source — Yahn Bernier, "Latency Compensating Methods in Client/Server In-game
+Protocol Design and Optimization" (GDC 2001)</strong> — the canonical reference:
+https://developer.valvesoftware.com/wiki/Latency_Compensating_Methods_in_Client/Server_In-game_Protocol_Design_and_Optimization</p>
+<p><strong>Source — Gabriel Gambetta, "Lag Compensation"</strong>:
+https://www.gabrielgambetta.com/lag-compensation.html</p>
+<h3 id="snapshot-delta">Snapshot delta<a class="anchor" href="#snapshot-delta" aria-label="Permalink">#</a></h3>
+<p>After lockstep, we'll add snapshot deltas for large objects (positions,
+health). Format:</p>
+<div class="code"><pre><code>delta header:
+  4 bytes  base tic number
+  4 bytes  base state checksum
+  4 bytes  delta entity count
+
+per delta entity:
+  2 bytes  entityId
+  1 byte   field mask (bit 0=pos, bit 1=vel, bit 2=health, ...)
+  2 bytes  field-id (only the fields in the mask, in order)
+</code></pre></div>
+<p>Bit-packing is critical here. The original Quake 3 netcode is a masterclass:</p>
+<p><strong>Source — Quake 3 source <code>qcommon/net_chan.c</code></strong>:
+https://github.com/id-Software/Quake-III-Arena/blob/master/code/qcommon/net_chan.c</p>
+<h3 id="discovery">Discovery<a class="anchor" href="#discovery" aria-label="Permalink">#</a></h3>
+<p>LAN discovery: every peer broadcasts a small announcement packet every second
+on a fixed port (default 5021). The packet includes:</p>
+<ul>
+<li>
+<p>4 bytes magic (<code>OPF1</code>)</p>
+</li>
+<li>
+<p>4 bytes version</p>
+</li>
+<li>
+<p>32 bytes peer name (UTF-8, null-padded)</p>
+</li>
+<li>
+<p>2 bytes game port</p>
+</li>
+<li>
+<p>4 bytes current player count</p>
+</li>
+<li>
+<p>4 bytes max player count</p>
+</li>
+</ul>
+<p>Receivers filter by magic + version, parse the rest, and decide whether to
+display a "join" option in the lobby.</p>
+<p><strong>Source — Bonjour/Zeroconf (for inspiration on a more robust version)</strong>:
+https://developer.apple.com/library/archive/documentation/Networking/Conceptual/dns_sd_networking_discovery_service/</p>
+<hr>
+<h1 id="transport-decision">Transport decision<a class="anchor" href="#transport-decision" aria-label="Permalink">#</a></h1>
+<blockquote>
+<p><strong>Status</strong>: Accepted · <strong>Scope</strong>: Phase 3 transport
+<strong>Dependency outcome</strong>: <strong>none added</strong> — this document is the discussion
+<code>AGENTS.md</code> requires before adding a library. <code>PLAN.md</code> § 6 and <code>STYLE.md</code> § 12
+are unchanged; the options were evaluated, not overlooked.
+<strong>Superseded</strong>: the reliability model, cmd layout, RTT smoothing and bandwidth
+figures that were in the sections above. Those sections have since been
+corrected in place — § 12 is the list — so nothing above this line contradicts
+anything below it any more.</p>
+</blockquote>
+<h2 id="1-decision">1. Decision<a class="anchor" href="#1-decision" aria-label="Permalink">#</a></h2>
+<p><strong>UDP datagrams over a single non-blocking <code>java.nio.channels.DatagramChannel</code>,
+with an application-level redundant-input-redelivery layer.</strong></p>
+<ul>
+<li>
+<p><strong>Transport</strong> — UDP. Unordered, unreliable datagrams. JDK stdlib, zero deps.</p>
+</li>
+<li>
+<p><strong>Reliability</strong> — redundancy, <em>not</em> retransmission. Every packet carries all
+inputs since the peer's last ack, so loss costs no extra round trip.</p>
+</li>
+<li>
+<p><strong>Sockets</strong> — one bound socket, demultiplexed by source address. Not one per peer.</p>
+</li>
+<li>
+<p><strong>Discovery</strong> — LAN broadcast for v1.</p>
+</li>
+<li>
+<p><strong>NAT traversal</strong> — deferred, with an honest cost (§ 9). v1 is LAN-only.</p>
+</li>
+<li>
+<p><strong>Encryption</strong> — out of scope for v1. Stated, not implied (§ 10).</p>
+</li>
+</ul>
+<h2 id="2-constraints-this-had-to-satisfy">2. Constraints this had to satisfy<a class="anchor" href="#2-constraints-this-had-to-satisfy" aria-label="Permalink">#</a></h2>
+<p>Each row is a rule already in the repo, not a preference invented here.</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Constraint</th><th>Source</th><th>Consequence</th></tr></thead>
+<tbody>
+<tr><td>No external libraries without discussion</td><td><code>AGENTS.md</code></td><td>A library must clear a bar the JDK already meets</td></tr>
+<tr><td>JDK 17 stdlib only in adapters</td><td><code>hal/README.md</code> step 3</td><td>No Netty, no LWJGL sockets</td></tr>
+<tr><td>Java 17 source/target</td><td><code>PLAN.md</code> § 6</td><td>FFM is final in 22 — unavailable without a language bump</td></tr>
+<tr><td>Android is a target (Phase 3+)</td><td><code>PLAN.md</code> § 6</td><td>Per-ABI native builds are disqualifying</td></tr>
+<tr><td>Pure Java, no native deps, permissive licence</td><td><code>build.gradle.kts</code> SQLite comment</td><td>The de-facto dependency rubric</td></tr>
+<tr><td>No <code>new byte[]</code> outside a memory port</td><td><code>STYLE.md</code> § 13.4</td><td>Receive path must reuse buffers</td></tr>
+<tr><td>No boxed collections in hot paths</td><td><code>STYLE.md</code> § 4.2</td><td>Peer and tic state are primitive arrays</td></tr>
+</tbody>
+</table></div>
+<h2 id="3-why-not-tcp-or-tcp-with-a-deadline">3. Why not TCP, or "TCP with a deadline"<a class="anchor" href="#3-why-not-tcp-or-tcp-with-a-deadline" aria-label="Permalink">#</a></h2>
+<p>The idea: keep TCP's reliability, but let the receiver skip a packet that has
+already arrived too late to matter.</p>
+<p>TCP has no API surface at which that can happen. It presents an ordered <strong>byte
+stream</strong>, not messages — there is no "packet" for an application to skip, and
+the kernel will not deliver byte <em>n+1</em> until byte <em>n</em> arrives. A single lost
+segment therefore stalls every byte behind it until the retransmit lands. This
+is head-of-line blocking, and it is a consequence of the ordering guarantee
+itself, not an implementation artifact.</p>
+<p>The knobs usually reached for do not address it:</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Knob</th><th>What it actually does</th></tr></thead>
+<tbody>
+<tr><td><code>TCP_NODELAY</code></td><td>Disables Nagle — send-side coalescing. Does not touch head-of-line blocking.</td></tr>
+<tr><td><code>SO_SNDBUF</code> / <code>SO_RCVBUF</code></td><td>Bounds buffering. A full buffer blocks or drops the <em>connection's</em> progress, not one message.</td></tr>
+<tr><td><code>TCP_USER_TIMEOUT</code></td><td>Abandons the <strong>whole connection</strong> after a deadline. All-or-nothing, not per-message.</td></tr>
+</tbody>
+</table></div>
+<p>The cost is quantifiable. Linux <code>TCP_RTO_MIN</code> is 200 ms, so the minimum stall
+from one dropped segment is 200 ms — <strong>12+ frozen tics at 60 Hz</strong>, for every
+peer, from a single lost packet.</p>
+<p>The <em>goal</em> is right, and it survives verbatim into § 5: never wait on data that
+is already too old to be useful. It simply has to live above an unordered
+datagram service, because a reliable ordered stream is definitionally the one
+layer that cannot express it.</p>
+<h2 id="4-what-lockstep-actually-requires">4. What lockstep actually requires<a class="anchor" href="#4-what-lockstep-actually-requires" aria-label="Permalink">#</a></h2>
+<p>There is an apparent paradox here worth resolving explicitly.</p>
+<p>Lockstep cannot advance tic <em>N</em> until <strong>every</strong> peer's input for <em>N</em> is in hand.
+Input is therefore required — you cannot drop it. That looks like it demands
+TCP-style reliability, which § 3 just ruled out.</p>
+<p>It does not, because retransmission is not the only way to get reliability.
+Retransmit-on-timeout reintroduces the exact failure TCP has: you wait ≥1 RTT to
+<em>learn</em> about the loss, then ≥1 RTT for the resend.</p>
+<p><strong>The resolution is redundancy, not retransmission.</strong> Inputs are tiny, so send
+them repeatedly instead of tracking which were lost:</p>
+<div class="code"><pre><code>packet := playerId | latestTic | ackBitfield | cmd[latestTic-W+1 .. latestTic]
+</code></pre></div>
+<p>Every packet carries the last <code>W</code> tics of input. Losing <em>k</em> consecutive packets
+is fully covered by the next packet that arrives, as long as <code>k &lt; W</code> — <strong>with
+zero added latency</strong>, because the recovery data was already in flight before
+anyone knew a loss had occurred.</p>
+<p>Mechanics:</p>
+<ul>
+<li>
+<p><strong>Ack</strong> — highest contiguous tic received, plus a <strong>64-bit bitfield</strong> covering
+the previous 64 tics. That width is exactly <code>Constants.TIC_BUFFER_SIZE</code>, which
+this makes load-bearing rather than reserved.</p>
+</li>
+<li>
+<p><strong>Duplicates</strong> — the receiver indexes by tic number, so a re-delivered cmd is
+an idempotent overwrite. No dedup bookkeeping.</p>
+</li>
+<li>
+<p><strong>Window</strong> — <code>W = ceil(RTT / ticDuration) + 2</code>, clamped to a configured max.</p>
+</li>
+<li>
+<p><strong>Stall</strong> — if a peer is more than <code>MAX_LATENCY_TICS</code> behind, the sim blocks.
+That is lockstep working as designed, not a bug to paper over.</p>
+</li>
+</ul>
+<p>Cost: roughly 200 lines of pure Java. No dependency.</p>
+<h4 id="ackwindow--where-the-bitfield-hangs-off-and-why"><code>AckWindow</code> — where the bitfield hangs off, and why<a class="anchor" href="#ackwindow--where-the-bitfield-hangs-off-and-why" aria-label="Permalink">#</a></h4>
+<p><strong>Implemented — <code>AckWindow.java</code>, one instance per peer.</strong> The sentence above
+packs two numbers that are anchored differently, and getting them confused makes
+the field useless:</p>
+<div class="code"><pre><code>highestTic            newest tic number seen from this peer
+bitfield bit i        set when tic (highestTic - 1 - i) was seen, i = 0..63
+highestContiguousTic  the highest T with every tic up to T seen
+</code></pre></div>
+<p>The bitfield has to hang off <code>highestTic</code>, <strong>not</strong> off the contiguous tic.
+Anchored on the contiguous tic every bit would be set by definition and the
+field would carry no information at all. Anchored on the newest tic, the holes
+in it are exactly the losses the sender has to cover.</p>
+<p><code>highestContiguousTic</code> is the other half: it is the point below which the peer
+provably needs nothing, so it is what bounds the redundancy window.</p>
+<p>One floor is needed. A tic more than <code>TIC_BUFFER_SIZE</code> behind <code>highestTic</code> can
+never be acked again — its bit has shifted out — so if the contiguous tic were
+allowed to stay pinned below that, it would never advance and <code>W</code> would grow
+without bound. It is therefore floored at <code>highestTic - TIC_BUFFER_SIZE</code>. In
+practice lockstep stalls at <code>MAX_LATENCY_TICS</code> long before a peer falls 64 tics
+behind, so the floor is a safety net, not a policy.</p>
+<h4 id="the-two-directions-of-ack">The two directions of ack<a class="anchor" href="#the-two-directions-of-ack" aria-label="Permalink">#</a></h4>
+<p><code>PeerConnection</code> carries both, and conflating them re-sends the wrong range:</p>
+<div class="tablewrap"><table>
+<thead><tr><th></th><th>Means</th><th>Used for</th></tr></thead>
+<tbody>
+<tr><td><code>ackWindow()</code></td><td>tics we have received <strong>from</strong> this peer</td><td>what we put in the packets we send them; what loss stats are measured over</td></tr>
+<tr><td><code>remoteAckedTic()</code></td><td>what they told us they have received <strong>from us</strong></td><td>bounds <em>our</em> redundancy window when sending to them</td></tr>
+</tbody>
+</table></div>
+<h4 id="packet-layout-as-built--a-deliberate-20-byte-header">Packet layout as built — a deliberate 20-byte header<a class="anchor" href="#packet-layout-as-built--a-deliberate-20-byte-header" aria-label="Permalink">#</a></h4>
+<p><code>RedundantSender</code> implements the packet, and it <strong>deviates from the line above</strong>
+on purpose:</p>
+<div class="code"><pre><code>offset  size  field
+0       4     playerId       sender; the reason TicCmd has no playerId
+4       4     latestTic      newest command in this packet
+8       4     ackTic         highest contiguous tic received FROM the peer
+12      8     ackBitfield    64 tics below the sender's newest received tic
+20      ...   cmd[]          ascending, 12 bytes each
+</code></pre></div>
+<p>The sketch <code>playerId | latestTic | ackBitfield | cmd[...]</code> is 4 + 4 + 8 = 16
+bytes and <strong>omits the ack's anchor tic</strong>. A bitfield is meaningless without the
+tic number bit 0 hangs off, and that number cannot be inferred from <code>latestTic</code>:
+<code>latestTic</code> is the sender's own newest <em>input</em>, which has nothing to do with
+what it has <em>received</em>. So <code>ackTic</code> is a real field and the header is 20 bytes,
+not 16. The § 6 table below still assumes 16 — add 4 bytes per datagram to every
+row, about 1.7 KB/s at 60 Hz across 7 peers. Noise against the correctness it
+buys.</p>
+<p>The command count is deliberately <strong>not</strong> a header field. It is implied by the
+datagram length, and each command carries its own tic number, which makes a
+packet self-describing under both reordering and truncation.</p>
+<p><code>RedundantSender</code> is a utility class with no instance state — the packet format
+is stateless, and every method reads from or writes into a caller-supplied
+array, so neither the send nor the receive path allocates.</p>
+<p><strong>Source — Glenn Fiedler, "Deterministic Lockstep"</strong>:
+https://gafferongames.com/post/deterministic_lockstep/</p>
+<p><strong>Source — Glenn Fiedler, "Reliability and Congestion Avoidance over UDP"</strong>:
+https://gafferongames.com/post/reliability_ordering_and_congestion_avoidance_over_udp/</p>
+<h2 id="5-where-drop-the-stale-packet-is-correct">5. Where "drop the stale packet" <em>is</em> correct<a class="anchor" href="#5-where-drop-the-stale-packet-is-correct" aria-label="Permalink">#</a></h2>
+<p>Snapshot and state-sync traffic — Phase 4+. Each snapshot supersedes the last,
+so the receiver should discard anything older than what it has already applied:</p>
+<div class="code"><pre><code>if (seq &lt;= lastAppliedSeq)
+{
+    return;
+}
+</code></pre></div>
+<p>The distinction that governs which model applies:</p>
+<blockquote>
+<p><strong>Input is a sequence — every element is needed.</strong>
+<strong>State is a sample — only the newest is needed.</strong></p>
+</blockquote>
+<p>Both eventually share one socket, on different channels. Phase 3 ships only the
+input path.</p>
+<p><strong>Source — Glenn Fiedler, "Snapshot Interpolation"</strong>:
+https://gafferongames.com/post/snapshot_interpolation/</p>
+<h2 id="6-bandwidth-and-memory-recomputed">6. Bandwidth and memory, recomputed<a class="anchor" href="#6-bandwidth-and-memory-recomputed" aria-label="Permalink">#</a></h2>
+<p>The figures previously in this file omitted the 28-byte IPv4+UDP header and
+assumed zero redundancy, which § 4 makes mandatory. Actual cost per datagram:</p>
+<div class="code"><pre><code>bytes = 28 (IPv4 20 + UDP 8) + 16 (header) + cmdSize × W
+KB/s  = bytes × 7 peers × rate ÷ 1000
+</code></pre></div>
+<blockquote>
+<p>The shipped <code>RedundantSender</code> header is <strong>20 bytes, not 16</strong> — it carries an
+explicit <code>ackTic</code>, for the reason given in § 4. Every row below is therefore
+4 bytes light per datagram: about 1.7 KB/s at 60 Hz across 7 peers, which
+changes no verdict in the table. The rows are left at 16 so the arithmetic
+stays checkable against the formula.</p>
+</blockquote>
+<p>At 60 Hz, 8 players, per peer, <strong>each direction</strong>:</p>
+<div class="tablewrap"><table>
+<thead><tr><th>cmd</th><th>W</th><th>bytes/pkt</th><th>KB/s</th><th>verdict</th></tr></thead>
+<tbody>
+<tr><td>64 B</td><td>1</td><td>108</td><td>45</td><td>what the old "27 KB/s" figure should have said</td></tr>
+<tr><td>64 B</td><td>8</td><td>556</td><td>233</td><td>unaffordable — this is why the cmd shrank</td></tr>
+<tr><td>16 B</td><td>8</td><td>172</td><td>72</td><td>acceptable</td></tr>
+<tr><td><strong>12 B</strong></td><td><strong>8</strong></td><td><strong>140</strong></td><td><strong>59</strong></td><td><strong>recommended</strong></td></tr>
+<tr><td>12 B</td><td>4</td><td>92</td><td>39</td><td>low-loss networks</td></tr>
+<tr><td>12 B</td><td>8</td><td>140</td><td>29</td><td>same, at 30 Hz</td></tr>
+</tbody>
+</table></div>
+<p>Where latency and memory genuinely pull apart:</p>
+<ul>
+<li>
+<p><strong>Larger <code>W</code></strong> tolerates longer loss bursts (latency win) but costs bandwidth
+and a deeper receive ring (memory cost). <code>W = 8</code> absorbs 7 consecutive losses
+— ~117 ms at 60 Hz — which exceeds any loss burst worth designing for.</p>
+</li>
+<li>
+<p><strong>Smaller cmd</strong> makes redundancy affordable but costs input fidelity: 32-bit
+angle becomes 16-bit quantized (0.0055°/step — far below human perception).</p>
+</li>
+<li>
+<p><strong>Mesh fanout is O(n²)</strong> and is not tunable. Growing past <code>MAX_PLAYERS = 8</code>
+changes topology, not parameters.</p>
+</li>
+</ul>
+<p>Memory, and this is the part that stays flat:</p>
+<div class="code"><pre><code>TIC_BUFFER_SIZE(64) × MAX_PLAYERS(8) × 12 B = 6 KB
+</code></pre></div>
+<p>Six kilobytes for the entire input ring, allocated <strong>once at init</strong> from
+<code>I_MemoryPort</code>. Steady-state per-tic allocation is <strong>zero</strong>.</p>
+<p><strong>MTU</strong> — keep datagrams ≤ 1200 B to avoid fragmentation. Not binding at 12 B
+cmds (<code>W ≤ 96</code>); binding at 64 B (<code>W ≤ 18</code>).</p>
+<p><strong>One NIO detail that decides the receive path</strong>: <code>DatagramChannel.receive()</code>
+with a <strong>heap</strong> <code>ByteBuffer</code> makes the JDK copy through a temporary direct
+buffer on every single call. Allocate one <strong>direct</strong> <code>ByteBuffer</code> per channel at
+init and reuse it. This is how the receive path honors <code>STYLE.md</code> § 13.4 without
+fighting it.</p>
+<h2 id="7-options-evaluated">7. Options evaluated<a class="anchor" href="#7-options-evaluated" aria-label="Permalink">#</a></h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Option</th><th>Runtime requirement</th><th>Licence</th><th>Android</th><th>NAT traversal</th><th>Delivery model</th><th>Alloc/packet</th><th>Maintained</th><th>Cost to adopt</th><th>Verdict</th></tr></thead>
+<tbody>
+<tr><td><strong><code>DatagramChannel</code></strong></td><td><strong>JDK 17 stdlib</strong></td><td>—</td><td><strong>Yes</strong></td><td>Manual</td><td><strong>Unordered datagram</strong></td><td><strong>0 (reused direct buffer)</strong></td><td>JDK</td><td><strong>~200 LOC</strong></td><td><strong>Chosen</strong></td></tr>
+<tr><td><code>DatagramSocket</code></td><td>JDK 17 stdlib</td><td>—</td><td>Yes</td><td>Manual</td><td>Unordered datagram</td><td>1 <code>byte[]</code> per receive</td><td>JDK</td><td>~200 LOC</td><td>Older blocking API</td></tr>
+<tr><td>KryoNet</td><td>JDK + jar</td><td>BSD-3</td><td>Untested</td><td>No</td><td>Reliable ordered + unreliable</td><td>Object graph</td><td><strong>No</strong></td><td>Dependency approval</td><td>Unmaintained</td></tr>
+<tr><td>Netty</td><td>JDK + jars</td><td>Apache-2.0</td><td>Hostile</td><td>No</td><td>Both</td><td>Pooled off-heap</td><td>Yes</td><td>Dependency approval</td><td>Far too heavy</td></tr>
+<tr><td>Netty QUIC</td><td>JDK + native</td><td>Apache-2.0</td><td>No</td><td>No</td><td>Per-stream reliable</td><td>Pooled</td><td>Incubator</td><td>Dependency + native</td><td>Reliable-only</td></tr>
+<tr><td>Aeron</td><td>JDK + media driver</td><td>Apache-2.0</td><td>No</td><td><strong>No</strong></td><td>Reliable ordered</td><td>Off-heap</td><td>Yes</td><td>Dependency + driver</td><td>Datacenter, not P2P</td></tr>
+<tr><td>KCP (Java ports)</td><td>JDK + jar (+Netty)</td><td>MIT / Apache-2.0</td><td>Untested</td><td>No</td><td>Reliable ordered ARQ</td><td>Per message</td><td>Varies</td><td>Dependency approval</td><td>ARQ we don't want</td></tr>
+<tr><td>ENet</td><td>JNI + native per ABI</td><td>MIT</td><td>Per-ABI build</td><td>No</td><td>Reliable + unreliable</td><td>Native</td><td>C lib yes</td><td>Binding + build matrix</td><td>Java bindings stale</td></tr>
+<tr><td><strong>GameNetworkingSockets</strong></td><td><strong>JNI, or FFM (JDK 22+)</strong></td><td>BSD-3</td><td>Per-ABI build</td><td><strong>Yes (ICE)</strong></td><td>Reliable + unreliable</td><td>Native</td><td>Yes</td><td>Binding + 6-platform matrix</td><td>See § 8</td></tr>
+<tr><td>QUIC (generally)</td><td>JDK 21+ / native</td><td>varies</td><td>Partial</td><td>No</td><td>Per-stream reliable</td><td>varies</td><td>Yes</td><td>—</td><td>Wrong tool</td></tr>
+<tr><td>WebRTC data channels</td><td>Native or heavy JVM stack</td><td>BSD-3</td><td>Yes</td><td><strong>Yes (ICE)</strong></td><td>Configurable partial</td><td>Native</td><td>Yes</td><td>Huge</td><td>Enormous for LAN P2P</td></tr>
+</tbody>
+</table></div>
+<p>The one disqualifying reason, per option:</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Option</th><th>Out because</th></tr></thead>
+<tbody>
+<tr><td><code>DatagramSocket</code></td><td>Blocking-era API; <code>DatagramChannel</code> is strictly better and equally stdlib</td></tr>
+<tr><td>KryoNet</td><td>Unmaintained, and reflective object serialization is non-deterministic</td></tr>
+<tr><td>Netty</td><td>An event-loop framework to send 140-byte datagrams</td></tr>
+<tr><td>Netty QUIC</td><td>Fully reliable — reintroduces head-of-line blocking per stream</td></tr>
+<tr><td>Aeron</td><td>Assumes a trusted network with a media driver; no NAT traversal at all</td></tr>
+<tr><td>KCP</td><td>Solves reliable-ordered-fast; we need unreliable-with-redundancy</td></tr>
+<tr><td>ENet</td><td>Native per ABI, and the Java bindings are abandoned</td></tr>
+<tr><td>GameNetworkingSockets</td><td>§ 8</td></tr>
+<tr><td>QUIC</td><td>Reliable by design — the property § 3 rules out</td></tr>
+<tr><td>WebRTC</td><td>Correct feature set, disproportionate cost, and native anyway</td></tr>
+</tbody>
+</table></div>
+<h2 id="8-the-native-option-evaluated-and-rejected">8. The native option, evaluated and rejected<a class="anchor" href="#8-the-native-option-evaluated-and-rejected" aria-label="Permalink">#</a></h2>
+<p>Valve's <strong>GameNetworkingSockets</strong> is the strongest technical option on this list
+and deserves a real rebuttal rather than a table row. It is BSD-3-Clause,
+production-proven, and genuinely good: mature congestion control, encryption,
+message fragmentation, and ICE-based NAT punching — the last of which is the
+hardest problem in § 9, already solved.</p>
+<p>It is still rejected, for reasons that compound:</p>
+<ol>
+<li>
+<p><strong>No Java binding exists.</strong> Third-party bindings ship for C#, Go and Rust.
+We would be writing and maintaining the Java one.</p>
+</li>
+<li>
+<p><strong>Java 17 gives us JNI only.</strong> FFM is final in 22. Adopting FFM means moving
+source/target 17 → 22, contradicting <code>PLAN.md</code> § 6 and <code>build.gradle.kts</code>.
+Adopting JNI instead means hand-written C glue.</p>
+</li>
+<li>
+<p><strong>Transitive native deps</strong> — protobuf plus OpenSSL or libsodium.</p>
+</li>
+<li>
+<p><strong>The build matrix is what actually kills it</strong>: win/linux/mac × x64/arm64,
+<strong>plus</strong> Android ABIs (<code>arm64-v8a</code>, <code>armeabi-v7a</code>, <code>x86_64</code>). Android is a
+stated goal in <code>PLAN.md</code> § 6, and this is irreconcilable with it.</p>
+</li>
+<li>
+<p><strong>Shipping natives in a JAR</strong> requires an extract-to-temp loader — file I/O
+and buffer allocation outside the HAL, violating two rules at once.</p>
+</li>
+</ol>
+<p>What we give up by saying no: mature congestion control, encryption, and working
+NAT traversal. § 4 recovers the reliability property that matters for lockstep
+at ~200 lines. § 9 and § 10 are honest that the other two are simply not solved
+here.</p>
+<p><strong>Source</strong>: https://github.com/ValveSoftware/GameNetworkingSockets</p>
+<h2 id="9-nat-traversal-the-honest-part">9. NAT traversal: the honest part<a class="anchor" href="#9-nat-traversal-the-honest-part" aria-label="Permalink">#</a></h2>
+<p>This is the genuinely hard part of P2P, and no pure-Java library solves it.
+Three tiers, with real costs:</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Tier</th><th>Approach</th><th>Cost</th><th>Works</th></tr></thead>
+<tbody>
+<tr><td><strong>T0</strong></td><td>LAN UDP broadcast discovery</td><td>Zero deps</td><td>Same subnet only</td></tr>
+<tr><td><strong>T1</strong></td><td>STUN + UDP hole punching</td><td>~30 LOC, public STUN servers</td><td>Cone NATs; <strong>fails on symmetric NAT and CGNAT</strong></td></tr>
+<tr><td><strong>T2</strong></td><td>TURN relay / host authority</td><td><strong>Servers, ops, money</strong></td><td>Everywhere</td></tr>
+</tbody>
+</table></div>
+<p><strong>T0 ships in Phase 3.</strong> It is already specified under <a href="#discovery">Discovery</a>
+above, needs nothing new, and works.</p>
+<p>T1 is cheap to implement (an RFC 5389 binding request is a small pure-Java
+message) but carries no guarantee — symmetric NAT defeats hole punching outright.</p>
+<p>T2 works universally and <strong>contradicts the opening line of this file</strong> ("no
+dedicated server required"). That is a product decision with an operational
+budget, not a config flag.</p>
+<p>Android specifics: receiving broadcast/multicast requires a
+<code>WifiManager.MulticastLock</code>, and mobile carriers sit behind CGNAT — making
+phone-to-phone P2P effectively impossible without T2.</p>
+<p><strong>Verdict: v1 is LAN-only, stated plainly.</strong> Internet play is a Phase 4+ scope
+item with a real cost attached.</p>
+<h2 id="10-security-and-trust-model">10. Security and trust model<a class="anchor" href="#10-security-and-trust-model" aria-label="Permalink">#</a></h2>
+<p><strong>The engine has no anti-cheat, and v1 has no encryption.</strong> Stating this
+explicitly so it is a decision rather than an oversight.</p>
+<p>In symmetric P2P every peer runs the simulation and every peer can lie. A
+checksum a sender computes over its own cmd is trivially recomputed by a sender
+that is tampering — it detects <strong>corruption</strong>, not tampering, and UDP already
+carries a checksum for corruption. An earlier draft of this file labelled the
+cmd's <code>checksum</code> field "for tamper detection"; that field is removed.</p>
+<p>What replaces it is <strong>desync detection</strong>, which is what DOOM's <code>consistancy</code>
+field actually was: a hash of local world state, exchanged periodically and
+compared across peers. A mismatch means the simulations have diverged — a
+determinism bug, or someone cheating — and the match should halt. Because it is
+periodic rather than per-tic, it costs almost nothing:</p>
+<div class="code"><pre><code>every 32 tics:  playerId | ticNumber | stateHash(4B)
+</code></pre></div>
+<p>Real anti-cheat requires either an authoritative server or cryptographic
+attestation. Neither is in scope, and neither is compatible with the "no
+dedicated server" premise.</p>
+<h2 id="11-what-this-commits-phase-3-to">11. What this commits Phase 3 to<a class="anchor" href="#11-what-this-commits-phase-3-to" aria-label="Permalink">#</a></h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Component</th><th>Consequence of this decision</th><th>Status</th></tr></thead>
+<tbody>
+<tr><td><code>PeerConnection</code></td><td>Peer <em>state</em> only — address, RTT (EWMA), ack window, loss stats. <strong>No socket.</strong></td><td>Built</td></tr>
+<tr><td><code>TicCmdBuffer</code></td><td><code>int[]</code> ring, <code>TIC_BUFFER_SIZE</code> deep × <code>MAX_PLAYERS</code> wide, allocated once</td><td>Built</td></tr>
+<tr><td><code>AckWindow</code></td><td>The 64-bit ack bitfield of § 4, anchored on the newest tic seen</td><td>Built</td></tr>
+<tr><td><code>RedundantSender</code></td><td>Packs <code>[lastAcked+1 .. latest]</code> per packet; the § 4 layer</td><td>Built</td></tr>
+<tr><td><code>TicCmd</code> / <code>NetBytes</code></td><td>The 12-byte command and the one big-endian codec behind it</td><td>Built</td></tr>
+<tr><td><code>Discovery</code></td><td>Unchanged — LAN broadcast, <code>DEFAULT_NET_PORT</code></td><td>Not started</td></tr>
+<tr><td><code>SnapshotDelta</code></td><td>Phase 4+ state sync, per § 5</td><td>Not started</td></tr>
+<tr><td><code>DesktopNetworkPort</code></td><td><strong>Datagram-only</strong>. One direct <code>ByteBuffer</code>, reused.</td><td><code>hal.adapter.desktop.DesktopDatagramPort</code> exists; <strong>nothing in <code>net/</code> is wired to it</strong></td></tr>
+</tbody>
+</table></div>
+<p>Reserved constants that become load-bearing:</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Constant</th><th>Becomes</th></tr></thead>
+<tbody>
+<tr><td><code>TIC_BUFFER_SIZE</code> = 64</td><td>Ack bitfield width <strong>and</strong> ring depth</td></tr>
+<tr><td><code>MAX_LATENCY_TICS</code> = 5</td><td>Stall threshold before the sim blocks</td></tr>
+<tr><td><code>MAX_PLAYERS</code> = 8</td><td>Mesh fanout</td></tr>
+<tr><td><code>DEFAULT_NET_PORT</code> = 5021</td><td>Bind port</td></tr>
+</tbody>
+</table></div>
+<p>No new constants are needed (<code>STYLE.md</code> § 13.3).</p>
+<p>Two API consequences, recorded now and executed later:</p>
+<ol>
+<li>
+<p><strong><code>pollTicCmd(int ticIndex, int peerId)</code> returns <code>byte[]</code></strong> — one allocation
+per call, and a poor fit for redundant redelivery, which delivers <em>many</em> tics
+for one peer in a single packet. Phase 3 should replace it with a
+fill-caller's-buffer form.</p>
+</li>
+<li>
+<p><del><strong>Two interfaces are both named <code>I_NetworkPort</code></strong></del> — <strong>DONE (Phase 1.5
+step 0a).</strong> <code>hal.port.I_NetworkPort</code> → <code>I_DatagramPort</code> and
+<code>NullNetworkPort</code> → <code>NullDatagramPort</code>. <code>net.port.I_NetworkPort</code> keeps its
+name — it is the high-level G_ port. Touchpoints updated: <code>hal/README.md</code>
+port table, <code>STYLE.md</code> § 13.1, <code>PLAN.md</code> § 3.8, both HAL factories.</p>
+</li>
+</ol>
+<h2 id="12-corrections-applied-to-this-file">12. Corrections applied to this file<a class="anchor" href="#12-corrections-applied-to-this-file" aria-label="Permalink">#</a></h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Was</th><th>Now</th></tr></thead>
+<tbody>
+<tr><td>"star-shaped ... every peer connects to every other"</td><td>Full <strong>mesh</strong>; a star has a hub. Terms were inverted</td></tr>
+<tr><td>64-byte <code>TicCmd</code>, 36 bytes reserved</td><td>12 bytes — cmd size is the binding bandwidth constraint</td></tr>
+<tr><td>"same layout DOOM uses"</td><td>DOOM's <code>ticcmd_t</code> is 8 bytes; cited as the precedent for <em>small</em></td></tr>
+<tr><td><code>checksum</code> "for tamper detection"</td><td>Removed; replaced by periodic desync detection (§ 10)</td></tr>
+<tr><td>"27 KB/s each way"</td><td>~59 KB/s at the recommended cmd size and window (§ 6)</td></tr>
+<tr><td>RTT "7-tap moving average"</td><td>EWMA — one <code>long</code>, and what Quake 3 does</td></tr>
+<tr><td><code>LagCompensator</code> in Phase 3</td><td>Phase 4+ — nothing to rewind under pure lockstep</td></tr>
+<tr><td><code>PeerConnection</code> = "UDP socket per peer"</td><td>Peer state; one shared socket in the adapter</td></tr>
+<tr><td>Citation <code>vinnieleer.com</code></td><td>Dead domain (does not resolve). Replaced with Bernier, GDC 2001</td></tr>
+</tbody>
+</table></div>
+<p>Second round, after the six classes were written:</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Was</th><th>Now</th></tr></thead>
+<tbody>
+<tr><td>"What lives here (<strong>planned</strong>)" and a 2-file layout</td><td>Six classes built and tested; the layout lists all eight files</td></tr>
+<tr><td><code>AckWindow</code>, <code>NetBytes</code>, <code>TicCmd</code> undocumented</td><td>Documented — <code>AckWindow</code> is the § 4 bitfield the doc already specified</td></tr>
+<tr><td>TODO left <code>PeerConnection</code> / <code>TicCmdBuffer</code> / <code>RedundantSender</code> unchecked</td><td>All three shipped. Only <code>SnapshotDelta</code> and <code>Discovery</code> remain unwritten</td></tr>
+<tr><td>A banner claiming this file's ADR "supersedes several numbers" above it</td><td>The corrections in the table above were applied in place; the banner was describing work already done</td></tr>
+<tr><td>§ 6 "16 (header)"</td><td>Shipped header is <strong>20 bytes</strong> — the ack needs an explicit anchor tic (§ 4)</td></tr>
+<tr><td>Nothing said the classes are unwired</td><td><a href="#library-only-nothing-in-the-running-engine-uses-these">Library-only</a> says it up front</td></tr>
+</tbody>
+</table></div>
+<h2 id="13-revisit-triggers">13. Revisit triggers<a class="anchor" href="#13-revisit-triggers" aria-label="Permalink">#</a></h2>
+<ul>
+<li>
+<p>Player count needs to exceed 8 → topology change, not tuning</p>
+</li>
+<li>
+<p>Internet play becomes a P0 requirement → § 9 T2, with its operational cost</p>
+</li>
+<li>
+<p>Determinism proves unattainable across JVM/Android → snapshot + authority,
+which changes the transport requirements wholesale</p>
+</li>
+</ul>
+<h2 id="files">Files<a class="anchor" href="#files" aria-label="Permalink">#</a></h2>
+<ul>
+<li>
+<p><code>TicCmd.java</code></p>
+</li>
+<li>
+<p><code>TicCmdBuffer.java</code></p>
+</li>
+<li>
+<p><code>AckWindow.java</code></p>
+</li>
+<li>
+<p><code>PeerConnection.java</code></p>
+</li>
+<li>
+<p><code>RedundantSender.java</code></p>
+</li>
+<li>
+<p><code>NetBytes.java</code> <em>(package-private)</em></p>
+</li>
+<li>
+<p><code>port/I_NetworkPort.java</code></p>
+</li>
+<li>
+<p><code>adapter/NullNetworkPort.java</code></p>
+</li>
+</ul>
+<h2 id="todo-phase-3">TODO (Phase 3)<a class="anchor" href="#todo-phase-3" aria-label="Permalink">#</a></h2>
+<ul>
+<li class="task done">Transport decision recorded — UDP + redundant redelivery, no dependency added</li>
+<li class="task done"><code>TicCmd</code> + <code>NetBytes</code> (12-byte command, big-endian, non-allocating codec)</li>
+<li class="task done"><code>TicCmdBuffer</code> (lockstep ring, 64 × 8, preallocated)</li>
+<li class="task done"><code>AckWindow</code> (64-bit ack bitfield + highest contiguous tic)</li>
+<li class="task done"><code>PeerConnection</code> (peer state — address, EWMA RTT, ack window; no socket)</li>
+<li class="task done"><code>RedundantSender</code> (redundant input redelivery — § 4)</li>
+<li class="task todo"><strong>Wire the above to <code>DesktopDatagramPort</code></strong> behind a real <code>I_NetworkPort</code>.
+    This is the next step, and until it happens all six classes are library-only.</li>
+<li class="task todo"><code>SnapshotDelta</code> (encode/decode)</li>
+<li class="task todo"><code>Discovery</code> (LAN broadcast)</li>
+</ul>
+<footer class="pagefoot"><p>Source: <a class="ext" rel="noopener noreferrer" target="_blank" href="https://github.com/nicholashutter/OpenFPS/blob/main/engine/src/main/java/com/openfps/engine/net/README.md">engine/src/main/java/com/openfps/engine/net/README.md</a>. This page is generated — edit the Markdown, not the HTML.</p></footer>
+</main>
+</div>
+<script src="site.js"></script>
+</body>
+</html>

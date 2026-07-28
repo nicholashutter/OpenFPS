@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Common — Shared Types and Math — OpenFPS documentation</title>
+<meta name="description" content="Utilities used by every other subsystem. Nothing platform-specific lives here.">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<a class="skip" href="#doc">Skip to content</a>
+<header class="topbar"><button class="burger" id="burger" aria-controls="sidebar" aria-expanded="false" aria-label="Show navigation"><span></span><span></span><span></span></button><span class="topbar-name">OpenFPS docs</span></header>
+<div class="scrim" id="scrim" hidden></div>
+<div class="layout">
+<aside class="sidebar" id="sidebar">
+<a class="brand" href="index.html"><span class="brand-mark"></span><span class="brand-name">OpenFPS</span><span class="brand-kind">docs</span></a>
+<input class="filter" id="filter" type="search" placeholder="Filter pages" aria-label="Filter pages" autocomplete="off">
+<nav class="nav" id="nav" aria-label="Documentation">
+<details class="grp" data-hue="1" open><summary><span class="dot"></span>Overview<span class="count">2</span></summary>
+<ul>
+<li><a href="index.html">Overview</a></li>
+<li><a href="agents.html">Agent instructions</a></li>
+</ul></details>
+<details class="grp" data-hue="2" open><summary><span class="dot"></span>Building<span class="count">1</span></summary>
+<ul>
+<li><a href="build.html">Build reference</a></li>
+</ul></details>
+<details class="grp" data-hue="3" open><summary><span class="dot"></span>Architecture<span class="count">2</span></summary>
+<ul>
+<li><a href="style.html">Code style</a></li>
+<li><a href="plan.html">Project plan</a></li>
+</ul></details>
+<details class="grp" data-hue="4" open><summary><span class="dot"></span>Modules<span class="count">5</span></summary>
+<ul>
+<li><a href="engine.html">:engine</a></li>
+<li><a href="desktop.html">:desktop</a></li>
+<li><a href="android.html">:android</a></li>
+<li><a href="tools.html">:tools</a></li>
+<li><a href="gdxshared.html">:gdxshared</a></li>
+</ul></details>
+<details class="grp" data-hue="5" open><summary><span class="dot"></span>Packages<span class="count">10</span></summary>
+<ul>
+<li><a href="engine-core.html">Core</a></li>
+<li><a href="engine-common.html" class="cur" aria-current="page">Common</a></li>
+<li><a href="engine-hal.html">HAL (I_)</a></li>
+<li><a href="engine-gameplay.html">Gameplay (P_)</a></li>
+<li><a href="engine-render.html">Render (R_)</a></li>
+<li><a href="engine-demo.html">Demo</a></li>
+<li><a href="engine-audio.html">Audio (S_)</a></li>
+<li><a href="engine-net.html">Net (G_)</a></li>
+<li><a href="engine-resource.html">Resource (W_)</a></li>
+<li><a href="engine-memory.html">Memory (Z_)</a></li>
+</ul></details>
+<details class="grp" data-hue="6"><summary><span class="dot"></span>Reference<span class="count">2</span></summary>
+<ul>
+<li><a href="assets.html">Assets and licensing</a></li>
+<li><a href="demo-assets.html">Demo asset manifest</a></li>
+</ul></details>
+</nav>
+<p class="generated">Generated from the repository's Markdown by <code>:tools:buildDocsSite</code>.</p>
+</aside>
+<aside class="rail"><details class="toc" id="toc" open><summary>On this page</summary>
+<ul>
+<li class="lv2"><a href="#status">Status</a></li>
+<li class="lv2"><a href="#files">Files</a></li>
+<li class="lv2"><a href="#why-fixed-point">Why fixed-point?</a></li>
+<li class="lv2"><a href="#1616-format">16.16 format</a></li>
+<li class="lv2"><a href="#trig--not-implemented-and-there-is-no-angle-convention-yet">Trig — not implemented, and there is no angle convention yet</a></li>
+<li class="lv2"><a href="#constants-reference">Constants reference</a></li>
+</ul></details></aside>
+<main id="doc">
+<p class="crumb"><span class="tag">Packages</span><span class="sep">/</span><code>engine/src/main/java/com/openfps/engine/common/README.md</code><span class="sep">/</span>7 min read</p>
+<h1 id="common--shared-types-and-math">Common — Shared Types and Math<a class="anchor" href="#common--shared-types-and-math" aria-label="Permalink">#</a></h1>
+<blockquote>
+<p>Utilities used by every other subsystem. <strong>Nothing platform-specific</strong> lives here.</p>
+</blockquote>
+<h2 id="status">Status<a class="anchor" href="#status" aria-label="Permalink">#</a></h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Field</th><th>Value</th></tr></thead>
+<tbody>
+<tr><td><strong>State</strong></td><td>SHIPPING</td></tr>
+<tr><td><strong>Phase</strong></td><td>0 (FixedMath, Constants), 1.4 complete (UserProfile)</td></tr>
+<tr><td><strong>Tests</strong></td><td>12</td></tr>
+<tr><td><strong>Registered</strong></td><td>not registered — this is a utility package, not a subsystem: no <code>SubsystemId</code>, no <code>Subsystem</code> wrapper, nothing dispatches to it</td></tr>
+<tr><td><strong>Verified</strong></td><td>2026-07-28</td></tr>
+</tbody>
+</table></div>
+<p>The 12 are <code>UserProfileTest</code>, the only suite under <code>common/</code>. <code>FixedMath</code> is
+covered by 6 more in <code>engine/src/test/java/com/openfps/engine/FixedMathTest.java</code>,
+which sits at the <strong>test root</strong> rather than under <code>common/</code>; they are counted
+there, not here, so the two numbers do not overlap.</p>
+<p><strong>Built.</strong> <code>FixedMath</code> 16.16 arithmetic — <code>fromFloat</code>, <code>toFloat</code>, <code>mul</code>, <code>div</code>,
+<code>abs</code>, <code>clamp</code> — plus <code>Constants</code> and the immutable <code>UserProfile</code>.</p>
+<p><strong>Not built.</strong> Trig: no sin/cos tables and no angle type. An earlier 1024-entry
+table was deleted for disagreeing with its own documented angle convention (§ Trig
+below).</p>
+<p><strong>Blocked on.</strong> Nothing. Trig is Phase 4/5 work that should be designed against a
+real caller rather than decided here.</p>
+<p><strong>Next step.</strong> Design the angle type and table width against their first real
+consumer — player movement in <code>gameplay</code> — with a test that pins the convention
+down.</p>
+<h2 id="files">Files<a class="anchor" href="#files" aria-label="Permalink">#</a></h2>
+<ul>
+<li>
+<p><code>FixedMath.java</code> — 16.16 fixed-point arithmetic (convert, multiply, divide, abs, clamp)</p>
+</li>
+<li>
+<p><code>Constants.java</code> — global engine constants</p>
+</li>
+<li>
+<p><code>UserProfile.java</code> — immutable user profile (Phase 1.4), persisted through
+<code>I_UserProfilePort</code>; see <code>hal/README.md</code> for the SQLite adapter</p>
+</li>
+</ul>
+<h2 id="why-fixed-point">Why fixed-point?<a class="anchor" href="#why-fixed-point" aria-label="Permalink">#</a></h2>
+<p>Most game engines use <code>float</code> or <code>double</code>. The original DOOM used <strong>fixed-point
+integers</strong> because (a) 386/486 CPUs had no FPU, (b) integer math is deterministic
+across machines (no rounding differences), and (c) it's faster on hardware that
+lacked SIMD.</p>
+<p>For us the reasons are different but still apply:</p>
+<ol>
+<li>
+<p><strong>JVM boxing cost.</strong> Every <code>Float</code> / <code>Double</code> allocates. <code>int</code> does not.</p>
+</li>
+<li>
+<p><strong>JIT inlining.</strong> Integer math inlines better than floating-point with strictfp.</p>
+</li>
+<li>
+<p><strong>Determinism for netcode.</strong> <code>int</code> arithmetic is exactly reproducible and its
+overflow is defined, so a fixed-point simulation is trivially safe to run in
+lockstep. This is a narrower edge than it sounds, and it is worth being
+precise about: since <strong>JEP 306</strong> (Java 17) every floating-point expression is
+FP-strict IEEE 754, so <code>+ - * /</code> and <code>sqrt</code> on <code>float</code> / <code>double</code> are
+bit-identical on every conforming JVM and CPU — ARM and x86 included. Plain
+float arithmetic does <strong>not</strong> desync peers. What can desync them is the
+transcendentals: <code>Math.sin</code> / <code>Math.cos</code> are permitted 1–2 ulp of
+implementation freedom, which is why float code in the engine calls
+<code>StrictMath</code> instead. See <code>gameplay/README.md</code>
+§ "Determinism — a documented deviation from <code>PLAN.md</code> § 4" for the full
+argument and the test that enforces it.</p>
+</li>
+<li>
+<p><strong>Cache locality.</strong> Arrays of <code>int</code> are half the size of arrays of <code>float</code>.</p>
+</li>
+</ol>
+<blockquote>
+<p>The "float differs between ARM and x86" claim also survives in <code>FixedMath</code>'s
+own class Javadoc (reason 3 there). It is wrong for the same reason; treat
+<code>gameplay/README.md</code> as the source of truth until that comment is corrected.</p>
+</blockquote>
+<p>The tradeoff: limited range (<code>int</code> = ±2.1 billion ≈ ±32 768 map units in 16.16)
+and reduced precision (1/65536 ≈ 0.000015 unit). Plenty for a 2D floorplan and
+integer tile coordinates.</p>
+<p><strong>Source code references for further reading:</strong></p>
+<ul>
+<li>
+<p>DOOM source: https://github.com/id-Software/DOOM/blob/master/linuxdoom-1.10/m_fixed.c</p>
+</li>
+<li>
+<p>The "Fixed Point Math" chapter of <em>Tricks of the Windows Game Programming Gurus</em> (LaMothe, 2002)</p>
+</li>
+<li>
+<p>"Using Fixed-Point Math" — Olivier Lebrun, GameDev.net: https://www.gamedev.net/tutorials/_/technical/math-and-physics/using-fixed-point-math-r2528/</p>
+</li>
+</ul>
+<h2 id="1616-format">16.16 format<a class="anchor" href="#1616-format" aria-label="Permalink">#</a></h2>
+<div class="code"><pre><code>1.0  = 0x00010000  = 65536
+0.5  = 0x00008000  = 32768
+0.0  = 0x00000000  = 0
+-1.0 = 0xFFFF0000  = -65536
+</code></pre></div>
+<p>Conversion:</p>
+<div class="code" data-lang="java"><pre><code>int fixed = (int)(floatValue * 65536.0f);
+float back = fixed / 65536.0f;
+</code></pre></div>
+<p>Multiplication (16.16 × 16.16 → 16.16):</p>
+<div class="code" data-lang="java"><pre><code>int mul(final int a, final int b)
+{
+    return (int) (((long) a * b) &gt;&gt; 16);
+}
+</code></pre></div>
+<p>The cast to <code>long</code> is mandatory — the intermediate product is 32.32, won't fit in <code>int</code>.
+The right-shift by 16 re-aligns back to 16.16.</p>
+<p>Division (16.16 ÷ 16.16 → 16.16):</p>
+<div class="code" data-lang="java"><pre><code>int div(final int a, final int b)
+{
+    return (int) (((long) a &lt;&lt; 16) / b);
+}
+</code></pre></div>
+<p>Left-shift numerator by 16 to pre-align, then integer-divide.</p>
+<h2 id="trig--not-implemented-and-there-is-no-angle-convention-yet">Trig — not implemented, and there is no angle convention yet<a class="anchor" href="#trig--not-implemented-and-there-is-no-angle-convention-yet" aria-label="Permalink">#</a></h2>
+<p><code>FixedMath</code> has no sin/cos tables and no angle type. Its public surface is
+exactly <code>fromFloat</code>, <code>toFloat</code>, <code>mul</code>, <code>div</code>, <code>abs</code>, <code>clamp</code>, plus the <code>UNIT</code>
+and <code>HALF</code> constants.</p>
+<p>An earlier draft did ship a 1024-entry table. It was indexed by degrees while
+the surrounding documentation described a degrees × 65536 angle convention, so
+the two silently disagreed: a caller that believed the documented convention
+got a plausible wrong number back, with no exception and nothing to notice at
+the call site. It was deleted rather than left in place as a trap — the
+reasoning is preserved in the <code>TRIG — NOT YET IMPLEMENTED</code> block of
+<code>FixedMath.java</code>.</p>
+<p>This README then went on describing the deleted table, index expression and
+angle convention as if they were live, which re-set precisely the trap the
+deletion removed. That is why this section now says what is <em>not</em> there.</p>
+<p>Trig is <strong>Phase 4/5</strong> work. The first real consumers are player movement in
+gameplay and then the renderer, and the table width, angle unit, and rounding
+behaviour should be chosen against those callers and a test that pins them
+down — not decided in advance in a README. Nothing is blocked on it today:
+<code>gameplay/PlayerController</code> does its trig in <code>StrictMath</code> on floats, which is
+a deliberate choice documented in <code>gameplay/README.md</code>.</p>
+<p><strong>References for when that lands:</strong></p>
+<ul>
+<li>
+<p>https://en.wikipedia.org/wiki/Trigonometric_tables</p>
+</li>
+<li>
+<p>DOOM source <code>tables.c</code> (<code>finesine[]</code>, <code>angle_t</code>) and <code>r_main.c</code> (angle setup)</p>
+</li>
+<li>
+<p>"How DOOM's tables work" — Fabien Sanglard: http://fabiensanglard.net/doomIphone/doomIphone.php (search for "TRIG")</p>
+</li>
+<li>
+<p>Michael Abrash's <em>Graphics Programming Black Book</em>, Chapter 50 ("Fast Trig Functions")</p>
+</li>
+</ul>
+<h2 id="constants-reference">Constants reference<a class="anchor" href="#constants-reference" aria-label="Permalink">#</a></h2>
+<blockquote>
+<p><strong>Not here: frame rate.</strong> <code>TIC_RATE</code> / <code>MS_PER_TIC</code> / <code>NANOS_PER_TIC</code> were
+removed in Phase 1.3. The rate is configuration, not a constant — see
+<code>core/FrameRate.java</code> (closed enum: 30 / 60 / 120 Hz) and <code>core/GameConfig.java</code>.</p>
+</blockquote>
+<p>All fifteen, in declaration order:</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Constant</th><th>Value</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>MAX_PLAYERS</code></td><td>8</td><td>Per-match player cap</td></tr>
+<tr><td><code>DEFAULT_NET_PORT</code></td><td>5021</td><td>Default P2P bind port</td></tr>
+<tr><td><code>TIC_BUFFER_SIZE</code></td><td>64</td><td>Tic command ring depth — also the ack bitfield width</td></tr>
+<tr><td><code>MAX_LATENCY_TICS</code></td><td>5</td><td>Peer latency cap; the stall threshold</td></tr>
+<tr><td><code>ZONE_HEAP_SIZE</code></td><td>16 MB</td><td>Default zone allocator heap</td></tr>
+<tr><td><code>ZONE_ALIGN</code></td><td>8</td><td>Smallest allocation alignment, bytes</td></tr>
+<tr><td><code>MAP_SCALE</code></td><td>65536</td><td>Fixed-point units per map unit (= <code>FixedMath.UNIT</code>)</td></tr>
+<tr><td><code>PLAYER_RADIUS</code></td><td>16 × <code>MAP_SCALE</code></td><td>Collision radius, fixed-point</td></tr>
+<tr><td><code>MAX_OPEN_HEIGHT</code></td><td>128 × <code>MAP_SCALE</code></td><td>Sector ceiling cap, fixed-point</td></tr>
+<tr><td><code>GRAVITY</code></td><td>8 × <code>MAP_SCALE</code> / 120 / 120 = 36</td><td>Downward acceleration, fixed-point <strong>per tic²</strong></td></tr>
+<tr><td><code>PLAYER_SPEED</code></td><td>256 × <code>MAP_SCALE</code> / 120 = 139 810</td><td>Movement velocity, fixed-point <strong>per tic</strong></td></tr>
+<tr><td><code>MAX_VELOCITY</code></td><td>50 × <code>MAP_SCALE</code></td><td>Velocity magnitude clamp</td></tr>
+<tr><td><code>MAX_ENTITIES</code></td><td>4096</td><td>Active entities per map</td></tr>
+<tr><td><code>NULL_ENTITY</code></td><td>-1</td><td>"No entity" sentinel</td></tr>
+<tr><td><code>ENTITY_EMPTY</code></td><td>0</td><td>"Empty slot" entity type</td></tr>
+</tbody>
+</table></div>
+<p><strong>Read the units on <code>GRAVITY</code> and <code>PLAYER_SPEED</code> carefully.</strong> They are authored
+as 8 map-units/sec² and 256 map-units/sec, but what is stored is already scaled
+to fixed-point <strong>per tic at 120 Hz</strong> — the <code>/ 120</code> factors are baked into the
+constant. They do not rescale when <code>FrameRate</code> is 30 or 60; a consumer at
+another rate has to convert. Both are also floored by integer division, so
+neither is exactly the ideal value. <code>PlayerController.MOVE_SPEED_UNITS_PER_SECOND</code>
+is the worked example: it divides <code>PLAYER_SPEED</code> by <code>MAP_SCALE</code> and multiplies
+by 120 to recover units/sec, lands a shade under 256, and derives rather than
+rounds precisely so it reproduces that shortfall.</p>
+<p>The networking constants are load-bearing rather than decorative.
+<code>TIC_BUFFER_SIZE</code> is both the tic ring depth and the ack bitfield width
+(<code>net/AckWindow.WIDTH</code> is defined as it), <code>MAX_LATENCY_TICS</code> is the stall
+threshold in <code>PeerConnection</code>, and <code>DEFAULT_NET_PORT</code> is the desktop datagram
+bind port. <code>net/README.md</code> sizes the whole design off them.</p>
+<p>Several constants still have <strong>no caller</strong> — <code>MAX_OPEN_HEIGHT</code>, <code>GRAVITY</code>,
+<code>MAX_VELOCITY</code>, <code>MAX_ENTITIES</code>, <code>NULL_ENTITY</code>, <code>ENTITY_EMPTY</code>, and
+<code>PLAYER_RADIUS</code> (referenced in prose, not read). That is intentional: the value
+is fixed here once so that the phase which lands the feature reads it instead of
+inventing a magic number. <code>STYLE.md</code> § 13.2 says what to use each one for —
+note its "only <code>ZONE_HEAP_SIZE</code> and <code>ZONE_ALIGN</code> have callers today" line has
+since gone stale; net, gameplay and resource all read from here now.</p>
+<p>The physics values are tuned for "feels like Doom". Change them and everything
+else (player height, jump arc, projectile speed) needs to be re-tuned together.</p>
+<footer class="pagefoot"><p>Source: <a class="ext" rel="noopener noreferrer" target="_blank" href="https://github.com/nicholashutter/OpenFPS/blob/main/engine/src/main/java/com/openfps/engine/common/README.md">engine/src/main/java/com/openfps/engine/common/README.md</a>. This page is generated — edit the Markdown, not the HTML.</p></footer>
+</main>
+</div>
+<script src="site.js"></script>
+</body>
+</html>

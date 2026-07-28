@@ -161,6 +161,39 @@ tasks.register<JavaExec>("demoPreview") {
     })
 }
 
+// Renders every Markdown file the repository documents itself with into a
+// self-contained static site.
+//
+//   .\gradlew.bat :tools:buildDocsSite
+//   .\gradlew.bat :tools:buildDocsSite -PdocsOut=some/other/dir
+//
+// The generator lives here rather than in a script for the same reason the
+// model converter does: this module already has a Java toolchain, Checkstyle
+// and -Werror pointed at it, and `verifyToolsIsolation` already proves none of
+// it reaches a shipped runtime classpath. A script would be the only build step
+// needing a toolchain CI does not already install.
+//
+// Deliberately NOT wired into `build`. It writes into the working tree, and a
+// broken cross-document link — which this task fails on, by design — should not
+// stop anyone compiling the engine.
+tasks.register<JavaExec>("buildDocsSite") {
+    group = "openfps"
+    description = "Generates the static documentation site from the repository's Markdown."
+
+    mainClass.set("com.openfps.tools.docs.DocsSiteMain")
+    classpath = sourceSets["main"].runtimeClasspath
+
+    val outputDir = providers.gradleProperty("docsOut").orElse("docs/site")
+    val rootDirectory = rootProject.layout.projectDirectory
+
+    argumentProviders.add(CommandLineArgumentProvider {
+        listOf(
+            rootDirectory.asFile.absolutePath,
+            rootDirectory.dir(outputDir.get()).asFile.absolutePath
+        )
+    })
+}
+
 // Converts every .gltf / .glb under the input directory into .ofm models.
 //
 // Deliberately NOT wired into `build`, for the same reason `fetchAssets` is

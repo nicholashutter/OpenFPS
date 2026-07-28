@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BUILD.md — OpenFPS Build Reference — OpenFPS documentation</title>
+<meta name="description" content="How to build, test, and run OpenFPS on all supported platforms.">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<a class="skip" href="#doc">Skip to content</a>
+<header class="topbar"><button class="burger" id="burger" aria-controls="sidebar" aria-expanded="false" aria-label="Show navigation"><span></span><span></span><span></span></button><span class="topbar-name">OpenFPS docs</span></header>
+<div class="scrim" id="scrim" hidden></div>
+<div class="layout">
+<aside class="sidebar" id="sidebar">
+<a class="brand" href="index.html"><span class="brand-mark"></span><span class="brand-name">OpenFPS</span><span class="brand-kind">docs</span></a>
+<input class="filter" id="filter" type="search" placeholder="Filter pages" aria-label="Filter pages" autocomplete="off">
+<nav class="nav" id="nav" aria-label="Documentation">
+<details class="grp" data-hue="1" open><summary><span class="dot"></span>Overview<span class="count">2</span></summary>
+<ul>
+<li><a href="index.html">Overview</a></li>
+<li><a href="agents.html">Agent instructions</a></li>
+</ul></details>
+<details class="grp" data-hue="2" open><summary><span class="dot"></span>Building<span class="count">1</span></summary>
+<ul>
+<li><a href="build.html" class="cur" aria-current="page">Build reference</a></li>
+</ul></details>
+<details class="grp" data-hue="3" open><summary><span class="dot"></span>Architecture<span class="count">2</span></summary>
+<ul>
+<li><a href="style.html">Code style</a></li>
+<li><a href="plan.html">Project plan</a></li>
+</ul></details>
+<details class="grp" data-hue="4" open><summary><span class="dot"></span>Modules<span class="count">5</span></summary>
+<ul>
+<li><a href="engine.html">:engine</a></li>
+<li><a href="desktop.html">:desktop</a></li>
+<li><a href="android.html">:android</a></li>
+<li><a href="tools.html">:tools</a></li>
+<li><a href="gdxshared.html">:gdxshared</a></li>
+</ul></details>
+<details class="grp" data-hue="5"><summary><span class="dot"></span>Packages<span class="count">10</span></summary>
+<ul>
+<li><a href="engine-core.html">Core</a></li>
+<li><a href="engine-common.html">Common</a></li>
+<li><a href="engine-hal.html">HAL (I_)</a></li>
+<li><a href="engine-gameplay.html">Gameplay (P_)</a></li>
+<li><a href="engine-render.html">Render (R_)</a></li>
+<li><a href="engine-demo.html">Demo</a></li>
+<li><a href="engine-audio.html">Audio (S_)</a></li>
+<li><a href="engine-net.html">Net (G_)</a></li>
+<li><a href="engine-resource.html">Resource (W_)</a></li>
+<li><a href="engine-memory.html">Memory (Z_)</a></li>
+</ul></details>
+<details class="grp" data-hue="6"><summary><span class="dot"></span>Reference<span class="count">2</span></summary>
+<ul>
+<li><a href="assets.html">Assets and licensing</a></li>
+<li><a href="demo-assets.html">Demo asset manifest</a></li>
+</ul></details>
+</nav>
+<p class="generated">Generated from the repository's Markdown by <code>:tools:buildDocsSite</code>.</p>
+</aside>
+<aside class="rail"><details class="toc" id="toc" open><summary>On this page</summary>
+<ul>
+<li class="lv2"><a href="#prerequisites">Prerequisites</a></li>
+<li class="lv3"><a href="#installing-the-jdk-if-needed">Installing the JDK (if needed)</a></li>
+<li class="lv2"><a href="#the-modules">The modules</a></li>
+<li class="lv2"><a href="#standard-build-desktop--windowslinuxmacos">Standard Build (Desktop — Windows/Linux/macOS)</a></li>
+<li class="lv3"><a href="#what-build-does">What build Does</a></li>
+<li class="lv3"><a href="#run-the-engine">Run the Engine</a></li>
+<li class="lv3"><a href="#two-peers-on-one-machine">Two peers on one machine</a></li>
+<li class="lv2"><a href="#a-native-windows-launcher">A native Windows launcher</a></li>
+<li class="lv2"><a href="#demo-assets--required-before-desktoprun-will-show-anything">Demo assets — required before :desktop:run will show anything</a></li>
+<li class="lv2"><a href="#reading-the-docs-as-a-website">Reading the docs as a website</a></li>
+<li class="lv2"><a href="#checkstyle-only">Checkstyle Only</a></li>
+<li class="lv2"><a href="#tests-only">Tests Only</a></li>
+<li class="lv2"><a href="#android-build">Android Build</a></li>
+<li class="lv3"><a href="#it-is-playable">It is playable</a></li>
+<li class="lv3"><a href="#the-apk-needs-the-models-staged-first">The APK needs the models staged first</a></li>
+<li class="lv3"><a href="#reading-engine-logs">Reading engine logs</a></li>
+<li class="lv2"><a href="#gradle-wrapper">Gradle wrapper</a></li>
+<li class="lv2"><a href="#intellij-idea">IntelliJ IDEA</a></li>
+<li class="lv2"><a href="#vs-code">VS Code</a></li>
+<li class="lv2"><a href="#troubleshooting">Troubleshooting</a></li>
+<li class="lv3"><a href="#could-not-find-toolchain">Could not find toolchain</a></li>
+<li class="lv3"><a href="#checkstyle-errors">Checkstyle errors</a></li>
+<li class="lv3"><a href="#verifytoolsisolation-failed">verifyToolsIsolation failed</a></li>
+<li class="lv3"><a href="#build-is-slow">Build is slow</a></li>
+<li class="lv2"><a href="#cicd">CI/CD</a></li>
+</ul></details></aside>
+<main id="doc">
+<p class="crumb"><span class="tag">Building</span><span class="sep">/</span><code>BUILD.md</code><span class="sep">/</span>12 min read</p>
+<h1 id="buildmd--openfps-build-reference">BUILD.md — OpenFPS Build Reference<a class="anchor" href="#buildmd--openfps-build-reference" aria-label="Permalink">#</a></h1>
+<blockquote>
+<p>How to build, test, and run OpenFPS on all supported platforms.</p>
+</blockquote>
+<hr>
+<h2 id="prerequisites">Prerequisites<a class="anchor" href="#prerequisites" aria-label="Permalink">#</a></h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Requirement</th><th>Version</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td>Java JDK</td><td>17 LTS or newer</td><td>Required. Use Eclipse Temurin / Adoptium. <code>java -version</code> must show 17+ — a JDK 8 <code>JAVA_HOME</code> will fail to start the Gradle daemon</td></tr>
+<tr><td>Gradle</td><td>8.13</td><td>Bundled via wrapper — no install needed. <strong>Do not downgrade</strong>, see <a href="#gradle-wrapper">Gradle wrapper</a></td></tr>
+<tr><td>Android SDK</td><td><strong>36</strong></td><td>Optional, <code>:android</code> only. SDK 34 will <em>not</em> build — androidx.core 1.17.0 forces compileSdk 36</td></tr>
+<tr><td>Git</td><td>Any recent</td><td>For version control</td></tr>
+</tbody>
+</table></div>
+<h3 id="installing-the-jdk-if-needed">Installing the JDK (if needed)<a class="anchor" href="#installing-the-jdk-if-needed" aria-label="Permalink">#</a></h3>
+<p>The project <strong>targets Java 17</strong> (<code>sourceCompatibility</code>/<code>targetCompatibility</code>),
+so it always emits Java 17 bytecode — but it <strong>builds on any JDK 17 or newer</strong>.
+JDK 21 LTS is a fine and recommended choice; building on 21 still produces
+class file version 61 (Java 17).</p>
+<p><strong>Windows (Chocolatey):</strong></p>
+<div class="code" data-lang="powershell"><pre><code>choco install temurin21 -y
+</code></pre></div>
+<p><strong>macOS (Homebrew):</strong></p>
+<div class="code" data-lang="bash"><pre><code>brew install openjdk@21
+</code></pre></div>
+<p><strong>Linux (apt):</strong></p>
+<div class="code" data-lang="bash"><pre><code>sudo apt install openjdk-21-jdk
+</code></pre></div>
+<p>After installing, point <code>JAVA_HOME</code> at it (adjust the version folder to match
+what you actually have):</p>
+<div class="code" data-lang="powershell"><pre><code># Current shell only
+$env:JAVA_HOME = "C:\Program Files\Eclipse Adoptium\jdk-21.0.11.10-hotspot"
+
+# Persist for your user (new shells pick it up)
+[Environment]::SetEnvironmentVariable("JAVA_HOME",
+    "C:\Program Files\Eclipse Adoptium\jdk-21.0.11.10-hotspot", "User")
+</code></pre></div>
+<blockquote>
+<p><strong><code>Unrecognized VM option 'UseZGC'</code> / <code>Could not create the Java Virtual
+Machine</code></strong> means <code>JAVA_HOME</code> is pointing at an old JDK (typically a leftover
+JDK 8). <code>gradle.properties</code> asks for ZGC, which needs a modern JVM.</p>
+<p>On Windows, <code>JAVA_HOME</code> can be set at <strong>both</strong> User and Machine scope. User
+scope wins for newly launched processes — but a running IDE keeps the
+environment it started with, so <strong>restart your IDE/terminal</strong> after changing
+it. To inspect both scopes:</p>
+<div class="code" data-lang="powershell"><pre><code>[Environment]::GetEnvironmentVariable("JAVA_HOME","User")
+[Environment]::GetEnvironmentVariable("JAVA_HOME","Machine")
+</code></pre></div>
+<p>Clearing a stale Machine-scope value needs an <strong>elevated</strong> shell:</p>
+<div class="code" data-lang="powershell"><pre><code>[Environment]::SetEnvironmentVariable("JAVA_HOME", $null, "Machine")
+</code></pre></div>
+</blockquote>
+<hr>
+<h2 id="the-modules">The modules<a class="anchor" href="#the-modules" aria-label="Permalink">#</a></h2>
+<p>OpenFPS is a five-module Gradle build. Knowing which is which is the difference
+between <code>run</code> doing what you meant and <code>run</code> opening a window you didn't want.</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Module</th><th>Included when</th><th>What it is</th></tr></thead>
+<tbody>
+<tr><td><code>:engine</code></td><td>always</td><td>The engine. Platform-free — builds and tests headless with no display</td></tr>
+<tr><td><code>:gdxshared</code></td><td>always</td><td>libGDX <strong>core</strong> only: framebuffer presentation, the welcome screen, the UI state machine. Shared by both launchers</td></tr>
+<tr><td><code>:desktop</code></td><td>always</td><td>libGDX LWJGL3 window, input, <code>DesktopLauncher</code></td></tr>
+<tr><td><code>:tools</code></td><td>always</td><td>Build-time only: glTF conversion and headless render previews</td></tr>
+<tr><td><code>:android</code></td><td><strong>only when an Android SDK is present</strong></td><td>libGDX Android backend</td></tr>
+</tbody>
+</table></div>
+<blockquote>
+<p><strong>The <code>:android</code> trap.</strong> <code>settings.gradle.kts</code> includes <code>:android</code> only if
+<code>ANDROID_HOME</code>, <code>ANDROID_SDK_ROOT</code>, or <code>local.properties</code> is present. Without
+one, the module is <strong>silently skipped</strong> and <code>gradlew build</code> exits 0 having
+compiled no Android code at all. Worse, the configuration cache is on by
+default, so the "No Android SDK found — skipping :android" notice is not even
+printed on a cached run. <strong>A green build is not evidence that <code>:android</code>
+compiles.</strong> Set <code>ANDROID_HOME</code> and check for <code>:android:</code> tasks in the output.</p>
+</blockquote>
+<hr>
+<h2 id="standard-build-desktop--windowslinuxmacos">Standard Build (Desktop — Windows/Linux/macOS)<a class="anchor" href="#standard-build-desktop--windowslinuxmacos" aria-label="Permalink">#</a></h2>
+<div class="code" data-lang="powershell"><pre><code># From the project root:
+.\gradlew build
+
+# Build without tests (faster iteration):
+.\gradlew build -x test
+
+# Clean + rebuild:
+.\gradlew clean build
+</code></pre></div>
+<h3 id="what-build-does">What <code>build</code> Does<a class="anchor" href="#what-build-does" aria-label="Permalink">#</a></h3>
+<ol>
+<li>
+<p>Compiles all Java source across <code>:engine</code>, <code>:desktop</code> and <code>:tools</code></p>
+</li>
+<li>
+<p>Runs Checkstyle over main <em>and</em> test sources (<code>maxWarnings = 0</code> — one warning fails the build)</p>
+</li>
+<li>
+<p>Compiles and runs all JUnit 5 tests — <strong>1239</strong> of them (977 <code>:engine</code>, 125 <code>:desktop</code>, 73 <code>:tools</code>, 64 <code>:android</code> when an SDK is present)</p>
+</li>
+<li>
+<p>Assembles JAR artifacts</p>
+</li>
+<li>
+<p>Runs <code>verifyToolsIsolation</code>, which fails the build if <code>:tools</code> or its Gson
+dependency ever reaches a shipped runtime classpath</p>
+</li>
+<li>
+<p>Generates Checkstyle and test HTML reports <strong>per module</strong> (see paths below)</p>
+</li>
+</ol>
+<h3 id="run-the-engine">Run the Engine<a class="anchor" href="#run-the-engine" aria-label="Permalink">#</a></h3>
+<p>Both <code>:engine</code> and <code>:desktop</code> apply the <code>application</code> plugin, so <strong>bare
+<code>gradlew run</code> matches both tasks and launches both</strong> — a headless smoke test
+<em>and</em> a GLFW window. Always name the module.</p>
+<div class="code" data-lang="powershell"><pre><code># Headless smoke test: boots the full stack, runs rate x 2 tics (~2s), shuts down
+.\gradlew :engine:run
+.\gradlew :engine:run --args="--fps=30"
+.\gradlew :engine:run --args="--no-sqlite"
+.\gradlew :engine:run --args="--headless"
+
+# The playable demo, in a window (needs art — see below)
+.\gradlew :desktop:run
+</code></pre></div>
+<div class="tablewrap"><table>
+<thead><tr><th>Flag</th><th>Effect</th><th>Honoured by</th></tr></thead>
+<tbody>
+<tr><td><code>--fps=30|60|120</code></td><td>Tic rate. Anything else is rejected at startup. Default 60</td><td>both</td></tr>
+<tr><td><code>--no-sqlite</code></td><td>Use the in-memory profile port instead of on-disk SQLite</td><td><code>:engine:run</code> only</td></tr>
+<tr><td><code>--headless</code></td><td>Force the null adapter factory (implies <code>--no-sqlite</code>)</td><td><code>:engine:run</code> only</td></tr>
+<tr><td><code>--assets=&lt;dir&gt;</code></td><td>Model root. Default <code>assets/models</code></td><td><code>:desktop:run</code> only</td></tr>
+<tr><td><code>--start-in-game</code></td><td>Skip the menu and open straight into the world</td><td><code>:desktop:run</code> only</td></tr>
+<tr><td><code>--net=&lt;id&gt;:&lt;port&gt;</code></td><td>Be player <code>&lt;id&gt;</code>, listen on UDP <code>&lt;port&gt;</code>. <code>0</code> asks the OS for a free port</td><td><code>:desktop:run</code> only</td></tr>
+<tr><td><code>--peer=&lt;id&gt;@&lt;host&gt;:&lt;port&gt;</code></td><td>Connect to a peer. May be given more than once</td><td><code>:desktop:run</code> only</td></tr>
+</tbody>
+</table></div>
+<p><code>:desktop:run</code> hard-selects the desktop HAL backend, so <code>--no-sqlite</code> and
+<code>--headless</code> do nothing there — a windowed launcher cannot be headless.</p>
+<h3 id="two-peers-on-one-machine">Two peers on one machine<a class="anchor" href="#two-peers-on-one-machine" aria-label="Permalink">#</a></h3>
+<p>Neither half of <code>--net</code> has a safe default and both are required. Two peers
+sharing a player id would each read the other's packets as coming from
+themselves and drop them silently — the game would open, connect, and show
+nobody. A default port cannot work for two instances on one machine, which is
+the first thing anyone tries.</p>
+<div class="code" data-lang="powershell"><pre><code># terminal 1
+.\gradlew :desktop:run --args="--start-in-game --net=1:5021 --peer=2@127.0.0.1:5022"
+
+# terminal 2
+.\gradlew :desktop:run --args="--start-in-game --net=2:5022 --peer=1@127.0.0.1:5021"
+</code></pre></div>
+<p>Each process logs a <code>Network summary</code> line on exit — packets and bytes both
+ways, commands accepted, and counts of malformed packets and packets from
+unknown senders. A measured run of the above exchanged 77 KB with both of the
+last two at zero.</p>
+<p><strong>What this does and does not do.</strong> The transport carries inputs both ways and
+keeps the acknowledgement and loss state a lockstep simulation needs. It does
+<strong>not</strong> yet turn a remote player into a body you can see and shoot. A session
+that exchanges packets perfectly and shows nobody looks exactly like a broken
+one, so check the summary line rather than the screen.</p>
+<hr>
+<h2 id="a-native-windows-launcher">A native Windows launcher<a class="anchor" href="#a-native-windows-launcher" aria-label="Permalink">#</a></h2>
+<p><code>gradlew :desktop:run</code> is a JVM, so Task Manager lists <code>java.exe</code> whatever the
+window title says. <code>jpackage</code> is what changes that:</p>
+<div class="code" data-lang="powershell"><pre><code>.\gradlew :desktop:packageWindows
+.\desktop\build\dist\OpenFPS\OpenFPS.exe
+</code></pre></div>
+<p>The result is an app-image — a directory holding <code>OpenFPS.exe</code>, the classes and
+a trimmed runtime — rather than an installer, which would need WiX on <code>PATH</code>.
+The <code>.ico</code> is generated at build time from <code>WindowIcon</code>'s design, so there is no
+icon file in the repository and none to keep in step.</p>
+<p>The <strong>window</strong> icon needs none of this: it is generated in code and applied
+through GLFW every run, including under <code>:desktop:run</code>.</p>
+<p>With SQLite enabled the engine creates or loads a profile at
+<code>~/.openfps/profile.db</code> and accumulates playtime across runs; override the path
+with the <code>OPENFPS_PROFILE_DB</code> environment variable.</p>
+<hr>
+<h2 id="demo-assets--required-before-desktoprun-will-show-anything">Demo assets — required before <code>:desktop:run</code> will show anything<a class="anchor" href="#demo-assets--required-before-desktoprun-will-show-anything" aria-label="Permalink">#</a></h2>
+<p><strong>Demo art is not in the repository.</strong> <code>assets/gltf/</code> and <code>assets/models/</code> are
+gitignored; the repo records provenance, licences and SHA-256s in
+<code>docs/DEMO_ASSETS.md</code>, not the art itself. A fresh clone has no models, and
+<code>:desktop:run</code> will report that and exit with code <strong>3</strong> rather than open an
+empty window.</p>
+<div class="code" data-lang="powershell"><pre><code># 1. Download and unzip the two CC0 Kenney packs listed in docs/DEMO_ASSETS.md,
+#    then convert them to the runtime .ofm format:
+.\gradlew :tools:regenerateDemoAssets -PkenneyRaw=C:\path\to\unzipped\packs
+
+# 2. Run the demo
+.\gradlew :desktop:run
+</code></pre></div>
+<p>Without <code>-PkenneyRaw</code> the task still succeeds, but staging is skipped and you
+get <strong>only a 60-triangle greybox room and no weapon</strong> — the deliberate fallback
+for when no pack has been staged. It is a room to stand in, not the demo.</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Task</th><th>Effect</th></tr></thead>
+<tbody>
+<tr><td><code>:tools:regenerateDemoAssets -PkenneyRaw=&lt;dir&gt;</code></td><td>Stage the packs, convert everything, verify budgets</td></tr>
+<tr><td><code>:tools:regenerateDemoAssets</code></td><td>No staging; emits the generated fallback room only</td></tr>
+<tr><td><code>:tools:verifyModels</code></td><td>Re-check an existing <code>assets/models</code> without reconverting</td></tr>
+<tr><td><code>:tools:demoPreview -PdemoOut=&lt;dir&gt;</code></td><td>Render the four demo shots to PNGs, headless</td></tr>
+<tr><td><code>:tools:demoPreview -PdemoOut=&lt;dir&gt; -PdemoThreads=8 -PdemoFrames=300</code></td><td>Same, plus p50/p90/p99 frame timing</td></tr>
+<tr><td><code>:tools:renderPreview "--args=--model=&lt;f&gt;.ofm --out=&lt;f&gt;.png"</code></td><td>Render a single model</td></tr>
+</tbody>
+</table></div>
+<p>Point <code>-PdemoOut</code> <strong>outside</strong> the repository — <code>docs/ASSETS.md</code> § 6 keeps
+generated art out of git, and the task refuses to run without it.</p>
+<blockquote>
+<p>The root <code>fetchAssets</code> task — which would download a pinned, SHA-256-verified
+asset payload and remove the manual step above — <strong>fails on purpose today</strong>.
+The <code>assets-v1</code> release has not been published, so its digest is still a
+placeholder and the task refuses to download something it cannot verify. See
+<code>docs/ASSETS.md</code> § 9. Until that release exists, the manual path above is the
+only one.</p>
+</blockquote>
+<hr>
+<h2 id="reading-the-docs-as-a-website">Reading the docs as a website<a class="anchor" href="#reading-the-docs-as-a-website" aria-label="Permalink">#</a></h2>
+<p>There is a lot of Markdown in this repository — a root set, a <code>docs/</code> set, and a
+<code>README.md</code> beside almost every package. Reading it on GitHub means a lot of
+tab-hopping.</p>
+<div class="code"><pre><code>gradlew :tools:buildDocsSite
+</code></pre></div>
+<p>Renders every one of them into <code>docs/site/</code> as a static site with a sidebar, a
+per-page table of contents, working cross-links, and a dark mode. No CDN, no
+fonts, no JavaScript framework — one stylesheet and about forty lines of vanilla
+JS for the sidebar. Open <code>docs/site/index.html</code>.</p>
+<p>The generator is <code>:tools</code>, so it ships nothing. It <strong>fails the build</strong> if any
+cross-document link fails to resolve, which is the main thing that rots in a doc
+set this size. <code>-PdocsOut=&lt;dir&gt;</code> writes somewhere else.</p>
+<p>The Markdown files remain the source of truth. Edit those; regenerate after.</p>
+<hr>
+<h2 id="checkstyle-only">Checkstyle Only<a class="anchor" href="#checkstyle-only" aria-label="Permalink">#</a></h2>
+<div class="code" data-lang="powershell"><pre><code>.\gradlew checkstyleMain
+</code></pre></div>
+<p>HTML reports are <strong>per module</strong>:
+<code>engine\build\reports\checkstyle\main.html</code>,
+<code>desktop\build\reports\checkstyle\main.html</code>,
+<code>tools\build\reports\checkstyle\main.html</code>.</p>
+<p>(A stale <code>build/reports/</code> directory may still exist at the repo root from before
+the module split. Ignore it — nothing writes there any more.)</p>
+<hr>
+<h2 id="tests-only">Tests Only<a class="anchor" href="#tests-only" aria-label="Permalink">#</a></h2>
+<div class="code" data-lang="powershell"><pre><code>.\gradlew test                 # all modules
+.\gradlew :engine:test         # one module
+</code></pre></div>
+<p>HTML reports, again per module: <code>engine\build\reports\tests\test\index.html</code>.</p>
+<hr>
+<h2 id="android-build">Android Build<a class="anchor" href="#android-build" aria-label="Permalink">#</a></h2>
+<p>Requires <strong>Android SDK 36</strong> and <code>ANDROID_HOME</code>. Gradle must run on JDK 17+
+(21 recommended).</p>
+<div class="code" data-lang="powershell"><pre><code>$env:ANDROID_HOME = "C:\Users\&lt;you&gt;\AppData\Local\Android\Sdk"
+$env:JAVA_HOME = "C:\Program Files\Eclipse Adoptium\jdk-21.0.11.10-hotspot"
+
+# Build the APK
+.\gradlew :android:assembleDebug
+
+# Install and launch on a connected device or running emulator
+adb install -r android\build\outputs\apk\debug\android-debug.apk
+adb shell am start -n com.openfps.android/com.openfps.android.AndroidLauncher
+
+# Engine logs
+adb logcat -s OpenFPS:V
+</code></pre></div>
+<p><code>adb</code> ships in <code>&lt;SDK&gt;\platform-tools</code>, which is not on <code>PATH</code> by default.</p>
+<h3 id="it-is-playable">It is playable<a class="anchor" href="#it-is-playable" aria-label="Permalink">#</a></h3>
+<p>Tap <strong>Single Player</strong> and you are in the same room the desktop build shows,
+drawn by the same software rasterizer, with the same seven bots shooting back.</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Control</th><th>Where</th></tr></thead>
+<tbody>
+<tr><td>Move</td><td>anywhere on the left half — the stick appears under your thumb</td></tr>
+<tr><td>Look</td><td>anywhere on the right half — drag to turn</td></tr>
+<tr><td>Fire</td><td>the large disc, bottom right</td></tr>
+<tr><td>Jump</td><td>the smaller disc, inboard of fire</td></tr>
+<tr><td>Leave the match</td><td>the disc top right, or the system back key</td></tr>
+</tbody>
+</table></div>
+<p>There is no sprint on this platform, deliberately — see <code>AndroidBindings</code>.</p>
+<h3 id="the-apk-needs-the-models-staged-first">The APK needs the models staged first<a class="anchor" href="#the-apk-needs-the-models-staged-first" aria-label="Permalink">#</a></h3>
+<p><code>stageModelAssets</code> copies <code>assets/models/**/*.ofm</code> into the APK. That directory
+is gitignored, so <strong>a fresh clone builds an APK with no world in it</strong>: the menu
+comes up, Single Player enters an empty room, and logcat says so at <code>ERROR</code>
+naming the regenerate command. Produce the models first — see <em>Demo assets</em>
+above — then rebuild.</p>
+<p>With the models staged the debug APK is about 11 MB; without them, about 7.</p>
+<h3 id="reading-engine-logs">Reading engine logs<a class="anchor" href="#reading-engine-logs" aria-label="Permalink">#</a></h3>
+<p><code>slf4j-android</code> tags by logger name and Android truncates tags to 23
+characters, so <code>com.openfps.engine.demo.DemoGameplayPort</code> appears as
+<code>coed.DemoGameplayPort</code>. That looks like corruption and is not. <code>-s OpenFPS:V</code>
+filters to the platform classes only; drop it to see the engine.</p>
+<p><code>:android</code> is a real <strong>application</strong> module (<code>com.android.application</code>,
+namespace <code>com.openfps.android</code>) whose launcher activity is <code>AndroidLauncher</code> —
+not a library. Plain <code>.\gradlew build</code> builds it too, provided the SDK is
+visible. There is no <code>-Pandroid</code> flag; no build script reads that property.</p>
+<blockquote>
+<p><strong>Screenshots:</strong> use <code>adb shell screencap -p /sdcard/x.png</code> followed by
+<code>adb pull</code>. PowerShell's <code>&gt;</code> redirection corrupts <code>adb exec-out screencap -p</code>
+output by injecting a BOM and mangling CRLF.</p>
+</blockquote>
+<hr>
+<h2 id="gradle-wrapper">Gradle wrapper<a class="anchor" href="#gradle-wrapper" aria-label="Permalink">#</a></h2>
+<p>The wrapper is <strong>pinned at 8.13 and must not be downgraded</strong>. The version chain
+is forced, not chosen:</p>
+<div class="code"><pre><code>gdx-backend-android 1.14.2 → androidx.core 1.17.0 → compileSdk 36, AGP &gt;= 8.9.1
+AGP 8.13.x → Gradle &gt;= 8.13
+</code></pre></div>
+<p>Running <code>gradlew wrapper --gradle-version=8.10</code> drops below the AGP floor and
+breaks <code>:android</code>. If the wrapper JAR is genuinely missing, restore it from git
+rather than regenerating at a lower version.</p>
+<hr>
+<h2 id="intellij-idea">IntelliJ IDEA<a class="anchor" href="#intellij-idea" aria-label="Permalink">#</a></h2>
+<ol>
+<li>
+<p>Open the project root as a Gradle project</p>
+</li>
+<li>
+<p>Set Project SDK to your installed JDK (17 or newer — e.g. 21), and set
+"Project language level" to <strong>17</strong> to match <code>targetCompatibility</code></p>
+</li>
+<li>
+<p>Enable "Import Gradle annotations"</p>
+</li>
+<li>
+<p>Enable "Annotation processing"</p>
+</li>
+<li>
+<p>Enable Checkstyle plugin and point it to <code>config/checkstyle/checkstyle.xml</code></p>
+</li>
+</ol>
+<hr>
+<h2 id="vs-code">VS Code<a class="anchor" href="#vs-code" aria-label="Permalink">#</a></h2>
+<ol>
+<li>
+<p>Install Extension Pack for Java (Microsoft)</p>
+</li>
+<li>
+<p>Install Checkstyle for Java</p>
+</li>
+<li>
+<p>Open the project folder</p>
+</li>
+<li>
+<p>Set <code>java.configuration.runtimes</code> in <code>.vscode/settings.json</code>:</p>
+</li>
+</ol>
+<div class="code" data-lang="json"><pre><code>{
+    "java.configuration.runtimes": [
+        {
+            "name": "JavaSE-21",
+            "path": "C:/Program Files/Eclipse Adoptium/jdk-21.0.11.10-hotspot",
+            "default": true
+        }
+    ],
+    "checkstyle.configuration": {
+        "location": "project",
+        "properties": {
+            "checkstyle.config": "config/checkstyle/checkstyle.xml"
+        }
+    }
+}
+</code></pre></div>
+<hr>
+<h2 id="troubleshooting">Troubleshooting<a class="anchor" href="#troubleshooting" aria-label="Permalink">#</a></h2>
+<h3 id="could-not-find-toolchain"><code>Could not find toolchain</code><a class="anchor" href="#could-not-find-toolchain" aria-label="Permalink">#</a></h3>
+<p><code>gradle.properties</code> already enables toolchain auto-detection, so this is rarely
+the real problem — check <code>JAVA_HOME</code> first. If you do pass the flag explicitly,
+<strong>quote it</strong>, or PowerShell 5.1 splits the argument and Gradle reports a
+nonexistent task name:</p>
+<div class="code" data-lang="powershell"><pre><code>.\gradlew build "-Dorg.gradle.java.installations.auto-detect=true"
+</code></pre></div>
+<h3 id="checkstyle-errors">Checkstyle errors<a class="anchor" href="#checkstyle-errors" aria-label="Permalink">#</a></h3>
+<div class="code" data-lang="powershell"><pre><code>.\gradlew checkstyleMain 2&gt;&amp;1 | Select-String "error"
+</code></pre></div>
+<h3 id="verifytoolsisolation-failed"><code>verifyToolsIsolation</code> failed<a class="anchor" href="#verifytoolsisolation-failed" aria-label="Permalink">#</a></h3>
+<p>Something added a dependency edge from a shipped module to <code>:tools</code>, or pulled
+Gson onto a runtime classpath. Both are build-breaking by design — see the task
+in the root <code>build.gradle.kts</code>.</p>
+<h3 id="build-is-slow">Build is slow<a class="anchor" href="#build-is-slow" aria-label="Permalink">#</a></h3>
+<p><code>gradle.properties</code> already turns on the parallel executor, the build cache and
+the configuration cache, so <code>--parallel --build-cache</code> adds nothing. If a build
+is unexpectedly slow, suspect the configuration cache being invalidated — it
+prints the reason.</p>
+<hr>
+<h2 id="cicd">CI/CD<a class="anchor" href="#cicd" aria-label="Permalink">#</a></h2>
+<p><strong>There is no CI yet.</strong> <code>.github/workflows/</code> does not exist. When it is set up,
+the workflow should:</p>
+<ul>
+<li>
+<p>Run <code>gradlew build</code> on push to <code>main</code> and all PRs</p>
+</li>
+<li>
+<p>Set <code>ANDROID_HOME</code> and build <code>:android:assembleDebug</code> explicitly, since a
+build without the SDK skips the module silently and proves nothing</p>
+</li>
+<li>
+<p>Upload Checkstyle HTML reports (per module) as artifacts</p>
+</li>
+<li>
+<p>Upload test results</p>
+</li>
+</ul>
+<hr>
+<footer class="pagefoot"><p>Source: <a class="ext" rel="noopener noreferrer" target="_blank" href="https://github.com/nicholashutter/OpenFPS/blob/main/BUILD.md">BUILD.md</a>. This page is generated — edit the Markdown, not the HTML.</p></footer>
+</main>
+</div>
+<script src="site.js"></script>
+</body>
+</html>

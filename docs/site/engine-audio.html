@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Audio (S_) — Sound and Music — OpenFPS documentation</title>
+<meta name="description" content="S_ is the sound engine. Plays 3D-positioned SFX and background music.">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<a class="skip" href="#doc">Skip to content</a>
+<header class="topbar"><button class="burger" id="burger" aria-controls="sidebar" aria-expanded="false" aria-label="Show navigation"><span></span><span></span><span></span></button><span class="topbar-name">OpenFPS docs</span></header>
+<div class="scrim" id="scrim" hidden></div>
+<div class="layout">
+<aside class="sidebar" id="sidebar">
+<a class="brand" href="index.html"><span class="brand-mark"></span><span class="brand-name">OpenFPS</span><span class="brand-kind">docs</span></a>
+<input class="filter" id="filter" type="search" placeholder="Filter pages" aria-label="Filter pages" autocomplete="off">
+<nav class="nav" id="nav" aria-label="Documentation">
+<details class="grp" data-hue="1" open><summary><span class="dot"></span>Overview<span class="count">2</span></summary>
+<ul>
+<li><a href="index.html">Overview</a></li>
+<li><a href="agents.html">Agent instructions</a></li>
+</ul></details>
+<details class="grp" data-hue="2" open><summary><span class="dot"></span>Building<span class="count">1</span></summary>
+<ul>
+<li><a href="build.html">Build reference</a></li>
+</ul></details>
+<details class="grp" data-hue="3" open><summary><span class="dot"></span>Architecture<span class="count">2</span></summary>
+<ul>
+<li><a href="style.html">Code style</a></li>
+<li><a href="plan.html">Project plan</a></li>
+</ul></details>
+<details class="grp" data-hue="4" open><summary><span class="dot"></span>Modules<span class="count">5</span></summary>
+<ul>
+<li><a href="engine.html">:engine</a></li>
+<li><a href="desktop.html">:desktop</a></li>
+<li><a href="android.html">:android</a></li>
+<li><a href="tools.html">:tools</a></li>
+<li><a href="gdxshared.html">:gdxshared</a></li>
+</ul></details>
+<details class="grp" data-hue="5" open><summary><span class="dot"></span>Packages<span class="count">10</span></summary>
+<ul>
+<li><a href="engine-core.html">Core</a></li>
+<li><a href="engine-common.html">Common</a></li>
+<li><a href="engine-hal.html">HAL (I_)</a></li>
+<li><a href="engine-gameplay.html">Gameplay (P_)</a></li>
+<li><a href="engine-render.html">Render (R_)</a></li>
+<li><a href="engine-demo.html">Demo</a></li>
+<li><a href="engine-audio.html" class="cur" aria-current="page">Audio (S_)</a></li>
+<li><a href="engine-net.html">Net (G_)</a></li>
+<li><a href="engine-resource.html">Resource (W_)</a></li>
+<li><a href="engine-memory.html">Memory (Z_)</a></li>
+</ul></details>
+<details class="grp" data-hue="6"><summary><span class="dot"></span>Reference<span class="count">2</span></summary>
+<ul>
+<li><a href="assets.html">Assets and licensing</a></li>
+<li><a href="demo-assets.html">Demo asset manifest</a></li>
+</ul></details>
+</nav>
+<p class="generated">Generated from the repository's Markdown by <code>:tools:buildDocsSite</code>.</p>
+</aside>
+<aside class="rail"><details class="toc" id="toc" open><summary>On this page</summary>
+<ul>
+<li class="lv2"><a href="#status">Status</a></li>
+<li class="lv2"><a href="#what-lives-here-planned">What lives here (planned)</a></li>
+<li class="lv2"><a href="#what-exists-today">What exists today</a></li>
+<li class="lv2"><a href="#subsystem-layout">Subsystem layout</a></li>
+<li class="lv2"><a href="#3d-audio-math--whats-coming">3D audio math — what's coming</a></li>
+<li class="lv3"><a href="#inverse-square-distance-falloff">Inverse-square distance falloff</a></li>
+<li class="lv3"><a href="#stereo-panning">Stereo panning</a></li>
+<li class="lv3"><a href="#pitch-and-doppler">Pitch and Doppler</a></li>
+<li class="lv3"><a href="#mix-bus-limit">Mix bus limit</a></li>
+<li class="lv2"><a href="#audio-file-formats--open-deliberately">Audio file formats — OPEN, deliberately</a></li>
+<li class="lv2"><a href="#performance-constraints">Performance constraints</a></li>
+<li class="lv2"><a href="#files">Files</a></li>
+<li class="lv2"><a href="#todo-phase-6">TODO (Phase 6)</a></li>
+</ul></details></aside>
+<main id="doc">
+<p class="crumb"><span class="tag">Packages</span><span class="sep">/</span><code>engine/src/main/java/com/openfps/engine/audio/README.md</code><span class="sep">/</span>6 min read</p>
+<h1 id="audio-s_--sound-and-music">Audio (S_) — Sound and Music<a class="anchor" href="#audio-s_--sound-and-music" aria-label="Permalink">#</a></h1>
+<blockquote>
+<p>S_ is the sound engine. Plays 3D-positioned SFX and background music.</p>
+</blockquote>
+<h2 id="status">Status<a class="anchor" href="#status" aria-label="Permalink">#</a></h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Field</th><th>Value</th></tr></thead>
+<tbody>
+<tr><td><strong>State</strong></td><td>STUB</td></tr>
+<tr><td><strong>Phase</strong></td><td><code>PLAN.md</code> Phase 6 — planned (§ 3.4)</td></tr>
+<tr><td><strong>Tests</strong></td><td>0</td></tr>
+<tr><td><strong>Registered</strong></td><td>S_ via <code>AudioSubsystem</code>, with a <code>NullAudioPort</code> hard-coded in <code>EngineMain</code></td></tr>
+<tr><td><strong>Verified</strong></td><td>2026-07-28</td></tr>
+</tbody>
+</table></div>
+<p><strong>Built.</strong> The port and the null adapter, and nothing else. <code>AudioSubsystem</code>
+forwards only <code>onInit</code> / <code>onShutdown</code> to the port; it does not override
+<code>onEvent</code>, and no SFX or music event types exist. <strong>0 tests</strong> — there is nothing
+here yet to assert.</p>
+<p><strong>Not built.</strong> <code>SoundEngine</code>, <code>SoundEmitter</code>, <code>MusicPlayer</code>, <code>PcmLoader</code>. None
+of them exist; everything below is specification written ahead of the code.</p>
+<p><strong>Blocked on.</strong> The audio source-format question. <code>docs/ASSETS.md</code> § 8 is "No
+IWADs, ever", which kills the old plan of reading <code>DS*</code> lumps from a WAD, and
+§ 3's accepted-sources table has no audio row at all.</p>
+<p><strong>Next step.</strong> Decide the source, the shipped format and the container together
+— before <code>PcmLoader</code> is written, not while writing it.</p>
+<h2 id="what-lives-here-planned">What lives here (planned)<a class="anchor" href="#what-lives-here-planned" aria-label="Permalink">#</a></h2>
+<ul>
+<li>
+<p><code>SoundEngine</code> — main entry, processes a queue of sound events per tic</p>
+</li>
+<li>
+<p><code>SoundEmitter</code> — 3D-positioned source (openAL/OpenSL source equivalent)</p>
+</li>
+<li>
+<p><code>SoundChannel</code> — one playing sound (loudness curve, position, looping)</p>
+</li>
+<li>
+<p><code>MusicPlayer</code> — background music player (MIDI or streamed audio)</p>
+</li>
+</ul>
+<h2 id="what-exists-today">What exists today<a class="anchor" href="#what-exists-today" aria-label="Permalink">#</a></h2>
+<p>Two files and no implementation — but the subsystem is <strong>wired, not absent</strong>.
+<code>core/subsystem/impl/AudioSubsystem.java</code> registers under <code>SubsystemId.S_</code> and
+forwards <code>onInit</code> / <code>onShutdown</code> to whichever <code>I_AudioPort</code> it was given, which
+in practice is <code>NullAudioPort</code>. It handles <strong>no event types at all</strong>: there is
+no <code>PlaySfxEvent</code>, and <code>onEvent</code> is not overridden. So S_ starts and stops with
+the engine and does nothing in between, by design, until Phase 6.</p>
+<p>That matters when reading the rest of this file: every formula below is
+specification written ahead of the code. <strong>This package has 0 tests</strong>, and that
+is honest rather than an oversight — there is nothing here yet to assert.</p>
+<h2 id="subsystem-layout">Subsystem layout<a class="anchor" href="#subsystem-layout" aria-label="Permalink">#</a></h2>
+<div class="code"><pre><code>audio/
+├── port/
+│   └── I_AudioPort.java   interface — called by core per tic
+└── adapter/
+    └── NullAudioPort.java stub
+</code></pre></div>
+<h2 id="3d-audio-math--whats-coming">3D audio math — what's coming<a class="anchor" href="#3d-audio-math--whats-coming" aria-label="Permalink">#</a></h2>
+<h3 id="inverse-square-distance-falloff">Inverse-square distance falloff<a class="anchor" href="#inverse-square-distance-falloff" aria-label="Permalink">#</a></h3>
+<p>Sound loudness falls off as <code>1 / r²</code> (r = distance from source to listener).
+To prevent loudness from blowing up at r=0, we clamp the minimum distance:</p>
+<div class="code"><pre><code>loudness = 1 / max(MIN_DISTANCE, distance²) * MAX_LOUDNESS
+</code></pre></div>
+<p>For practical purposes, game audio often uses a <strong>linear</strong> falloff between
+MIN_DISTANCE and MAX_DISTANCE, and 1/r² outside that range. The transition
+point is a tuning knob.</p>
+<p><strong>Source — OpenAL 1.1 specification, section 5.2 ("Distance Attenuation")</strong>:
+https://www.openal.org/documentation/openal-1.1-specification.pdf</p>
+<p><strong>Source — "Game Audio Programming" — Guy Somberg</strong>:
+https://gameaudioprogramming.com/</p>
+<h3 id="stereo-panning">Stereo panning<a class="anchor" href="#stereo-panning" aria-label="Permalink">#</a></h3>
+<p>Panning (left/right balance) is computed from the angle between the source-to-listener
+vector and the listener's forward direction:</p>
+<div class="code"><pre><code>dot = sourceDir · listenerForward
+angle = acos(dot)            // 0 = directly in front, π = directly behind
+pan = sin(angle)             // [-1, 1], 0 = centered
+</code></pre></div>
+<p>The sign of the cross product determines left vs. right.</p>
+<p><strong>Source — "3D Audio for Games" — Dyon Dutil, DSP Dimension</strong>:
+https://www.dspdimension.com/</p>
+<h3 id="pitch-and-doppler">Pitch and Doppler<a class="anchor" href="#pitch-and-doppler" aria-label="Permalink">#</a></h3>
+<p>The Doppler effect for moving sources:</p>
+<div class="code"><pre><code>f_observed = f_source * (c + v_listener) / (c + v_source)
+</code></pre></div>
+<p>Where <code>c</code> is the speed of sound (~343 m/s). For game purposes we typically
+clamp the observed frequency to <code>[0.5, 2.0] × f_source</code> to avoid extreme
+pitches.</p>
+<p><strong>Source — "Doppler Effect" — Wikipedia</strong>:
+https://en.wikipedia.org/wiki/Doppler_effect</p>
+<p><strong>Source — "Real-time 3D Audio for Interactive Games" — IRCAM, 2019</strong>:
+https://forum.ircam.fr/</p>
+<h3 id="mix-bus-limit">Mix bus limit<a class="anchor" href="#mix-bus-limit" aria-label="Permalink">#</a></h3>
+<p><strong>The target is 32 simultaneous voices</strong>, with lowest-priority voices culled
+above that.</p>
+<p>The 8 that appears in DOOM-derived writing is the original SoundBlaster's
+practical limit — a 1993 hardware constraint, not one we inherit. Modern
+hardware handles hundreds, and a software mixer's cost here is a per-sample
+add per voice, so 32 is chosen as the number a mix loop can carry without
+thinking about it rather than as a measured ceiling. <strong>Nothing is implemented,
+so treat 32 as an intent; there is no constant to read and no benchmark behind
+it.</strong> If it ever turns out to be wrong it will be wrong in the cheap direction.</p>
+<p>Priority is computed as:</p>
+<div class="code"><pre><code>priority = (distance_penalty) * (volume_boost) * (recency_penalty)
+</code></pre></div>
+<p>Distance penalty: louder = higher priority. Recency: recently-triggered sounds
+stay slightly prioritized so they don't get culled mid-playback.</p>
+<h2 id="audio-file-formats--open-deliberately">Audio file formats — OPEN, deliberately<a class="anchor" href="#audio-file-formats--open-deliberately" aria-label="Permalink">#</a></h2>
+<p><strong>This is not decided, and the previous version of this document decided it by
+accident.</strong> It described SFX as raw 8-bit PCM in WAD lumps named <code>DS*</code>
+(<code>DSPISTOL</code>, <code>DSPLDIE</code>) and a <code>PcmLoader</code> that reads them. That cannot be right
+as written:</p>
+<ul>
+<li>
+<p><code>docs/ASSETS.md</code> § 8 trap 7 is <strong>"No IWADs, ever."</strong> The project ships no id
+Software content, so there are no <code>DS*</code> lumps to read.</p>
+</li>
+<li>
+<p>The WAD subsystem itself has no art left to read at all — see
+<code>render/README.md</code> § 11(b), where its remaining role is explicitly left to the
+user. Asserting that audio arrives through it would be settling that question
+from the wrong document.</p>
+</li>
+<li>
+<p><code>docs/ASSETS.md</code> § 3's accepted-sources table covers models and textures only.
+It has no row for audio, and its per-file-licensing note about Freesound is
+the only place sound is mentioned at all.</p>
+</li>
+</ul>
+<p>So this is the <strong>same family of question as the resource-package one</strong>, and it
+gets the same treatment: recorded, not answered. Three things have to be settled
+together, and none of them is:</p>
+<ol>
+<li>
+<p><strong>Where sound comes from</strong> — which CC0 sources satisfy <code>docs/ASSETS.md</code> § 3,
+given that its accepted list was written for art.</p>
+</li>
+<li>
+<p><strong>What the shipped format is</strong> — the project's pattern (<code>docs/ASSETS.md</code> § 4)
+is to preprocess at build time into a flat binary the engine reads with
+near-zero parsing. Audio has no equivalent of <code>ModelFormat</code> yet, and whether
+it needs one or can just ship decoded PCM is unanswered.</p>
+</li>
+<li>
+<p><strong>What container carries it</strong> — the resource package, a zip payload, or loose
+files. Blocked on § 11(b).</p>
+</li>
+</ol>
+<p>Decide these before writing <code>PcmLoader</code>, and record the decision here and in
+<code>docs/ASSETS.md</code> rather than in code.</p>
+<p><strong>Music</strong> is not decided either. Original DOOM used MIDI; OGG is the obvious
+modern choice and would mean a decoder the project does not have and cannot add
+casually (<code>AGENTS.md</code> rules out new runtime dependencies). Streaming raw PCM
+costs disk instead. No preference is recorded.</p>
+<p><strong>Source — DOOM sound format details</strong>, retained as background on the 1993
+format only, not as a statement of what this engine reads:
+https://doom.fandom.com/wiki/Sound</p>
+<h2 id="performance-constraints">Performance constraints<a class="anchor" href="#performance-constraints" aria-label="Permalink">#</a></h2>
+<ul>
+<li>
+<p><strong>32 voices</strong> target, with lowest-priority culling above it (see the mix bus
+section — this is an intent, not a measurement).</p>
+</li>
+<li>
+<p><strong>No locks in the audio thread.</strong> All parameter updates are atomic.</p>
+</li>
+<li>
+<p><strong>Pre-allocated buffers</strong> for every sound, no runtime allocation. The mixing
+buffers are <code>float[]</code>, allocated once at init, which is the shape
+<code>STYLE.md</code> § 13.4 sanctions for direct allocation — they will not go through
+<code>I_MemoryPort</code>. They are not a named site yet because they do not exist yet;
+add them to that table when they do.</p>
+</li>
+</ul>
+<h2 id="files">Files<a class="anchor" href="#files" aria-label="Permalink">#</a></h2>
+<ul>
+<li>
+<p><code>port/I_AudioPort.java</code></p>
+</li>
+<li>
+<p><code>adapter/NullAudioPort.java</code></p>
+</li>
+</ul>
+<p><strong>0 tests.</strong> Nothing here is implemented; see "What exists today".</p>
+<h2 id="todo-phase-6">TODO (Phase 6)<a class="anchor" href="#todo-phase-6" aria-label="Permalink">#</a></h2>
+<ul>
+<li><strong>Settle the source-format question above</strong> — it blocks the loader, and
+partly blocks itself on <code>render/README.md</code> § 11(b)</li>
+<li><code>SoundEngine</code> — voice allocation, mix loop</li>
+<li><code>SoundEmitter</code> — 3D position + velocity</li>
+<li><code>MusicPlayer</code> — streaming, format undecided</li>
+<li><code>PcmLoader</code> — decode SFX, once there is a decided format for it to read</li>
+<li>Event types for S_ — <code>AudioSubsystem</code> handles none, so nothing can reach the
+port between init and shutdown</li>
+</ul>
+<footer class="pagefoot"><p>Source: <a class="ext" rel="noopener noreferrer" target="_blank" href="https://github.com/nicholashutter/OpenFPS/blob/main/engine/src/main/java/com/openfps/engine/audio/README.md">engine/src/main/java/com/openfps/engine/audio/README.md</a>. This page is generated — edit the Markdown, not the HTML.</p></footer>
+</main>
+</div>
+<script src="site.js"></script>
+</body>
+</html>

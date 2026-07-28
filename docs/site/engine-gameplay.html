@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gameplay (P_) — Player, Entities, Map Logic — OpenFPS documentation</title>
+<meta name="description" content="P_ is the gameplay / physics layer. Holds everything that changes during play.">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<a class="skip" href="#doc">Skip to content</a>
+<header class="topbar"><button class="burger" id="burger" aria-controls="sidebar" aria-expanded="false" aria-label="Show navigation"><span></span><span></span><span></span></button><span class="topbar-name">OpenFPS docs</span></header>
+<div class="scrim" id="scrim" hidden></div>
+<div class="layout">
+<aside class="sidebar" id="sidebar">
+<a class="brand" href="index.html"><span class="brand-mark"></span><span class="brand-name">OpenFPS</span><span class="brand-kind">docs</span></a>
+<input class="filter" id="filter" type="search" placeholder="Filter pages" aria-label="Filter pages" autocomplete="off">
+<nav class="nav" id="nav" aria-label="Documentation">
+<details class="grp" data-hue="1" open><summary><span class="dot"></span>Overview<span class="count">2</span></summary>
+<ul>
+<li><a href="index.html">Overview</a></li>
+<li><a href="agents.html">Agent instructions</a></li>
+</ul></details>
+<details class="grp" data-hue="2" open><summary><span class="dot"></span>Building<span class="count">1</span></summary>
+<ul>
+<li><a href="build.html">Build reference</a></li>
+</ul></details>
+<details class="grp" data-hue="3" open><summary><span class="dot"></span>Architecture<span class="count">2</span></summary>
+<ul>
+<li><a href="style.html">Code style</a></li>
+<li><a href="plan.html">Project plan</a></li>
+</ul></details>
+<details class="grp" data-hue="4" open><summary><span class="dot"></span>Modules<span class="count">5</span></summary>
+<ul>
+<li><a href="engine.html">:engine</a></li>
+<li><a href="desktop.html">:desktop</a></li>
+<li><a href="android.html">:android</a></li>
+<li><a href="tools.html">:tools</a></li>
+<li><a href="gdxshared.html">:gdxshared</a></li>
+</ul></details>
+<details class="grp" data-hue="5" open><summary><span class="dot"></span>Packages<span class="count">10</span></summary>
+<ul>
+<li><a href="engine-core.html">Core</a></li>
+<li><a href="engine-common.html">Common</a></li>
+<li><a href="engine-hal.html">HAL (I_)</a></li>
+<li><a href="engine-gameplay.html" class="cur" aria-current="page">Gameplay (P_)</a></li>
+<li><a href="engine-render.html">Render (R_)</a></li>
+<li><a href="engine-demo.html">Demo</a></li>
+<li><a href="engine-audio.html">Audio (S_)</a></li>
+<li><a href="engine-net.html">Net (G_)</a></li>
+<li><a href="engine-resource.html">Resource (W_)</a></li>
+<li><a href="engine-memory.html">Memory (Z_)</a></li>
+</ul></details>
+<details class="grp" data-hue="6"><summary><span class="dot"></span>Reference<span class="count">2</span></summary>
+<ul>
+<li><a href="assets.html">Assets and licensing</a></li>
+<li><a href="demo-assets.html">Demo asset manifest</a></li>
+</ul></details>
+</nav>
+<p class="generated">Generated from the repository's Markdown by <code>:tools:buildDocsSite</code>.</p>
+</aside>
+<aside class="rail"><details class="toc" id="toc" open><summary>On this page</summary>
+<ul>
+<li class="lv2"><a href="#status">Status</a></li>
+<li class="lv3"><a href="#the-match-layer">The match layer</a></li>
+<li class="lv2"><a href="#what-lives-here">What lives here</a></li>
+<li class="lv2"><a href="#subsystem-layout">Subsystem layout</a></li>
+<li class="lv3"><a href="#the-only-live-implementation">The only live implementation</a></li>
+<li class="lv2"><a href="#playercontroller--input-to-camera">PlayerController — input to camera</a></li>
+<li class="lv3"><a href="#conventions">Conventions</a></li>
+<li class="lv3"><a href="#invariants">Invariants</a></li>
+<li class="lv3"><a href="#determinism--a-documented-deviation-from-planmd--4">Determinism — a documented deviation from PLAN.md § 4</a></li>
+<li class="lv3"><a href="#the-input-seam">The input seam</a></li>
+<li class="lv2"><a href="#physics-math--whats-coming">Physics math — what's coming</a></li>
+<li class="lv3"><a href="#collision-detection">Collision detection</a></li>
+<li class="lv3"><a href="#gravity">Gravity</a></li>
+<li class="lv3"><a href="#player-movement-doom-style">Player movement (DOOM-style)</a></li>
+<li class="lv3"><a href="#map-format-lumps-we-parse">Map format (lumps we parse)</a></li>
+<li class="lv2"><a href="#performance-constraints">Performance constraints</a></li>
+<li class="lv2"><a href="#files">Files</a></li>
+<li class="lv2"><a href="#todo-phase-4">TODO (Phase 4)</a></li>
+</ul></details></aside>
+<main id="doc">
+<p class="crumb"><span class="tag">Packages</span><span class="sep">/</span><code>engine/src/main/java/com/openfps/engine/gameplay/README.md</code><span class="sep">/</span>9 min read</p>
+<h1 id="gameplay-p_--player-entities-map-logic">Gameplay (P_) — Player, Entities, Map Logic<a class="anchor" href="#gameplay-p_--player-entities-map-logic" aria-label="Permalink">#</a></h1>
+<blockquote>
+<p>P_ is the gameplay / physics layer. Holds everything that <em>changes during play</em>.</p>
+</blockquote>
+<h2 id="status">Status<a class="anchor" href="#status" aria-label="Permalink">#</a></h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Field</th><th>Value</th></tr></thead>
+<tbody>
+<tr><td><strong>State</strong></td><td>SHIPPING</td></tr>
+<tr><td><strong>Phase</strong></td><td>4 — the match layer landed ahead of its phase, as the controller did</td></tr>
+<tr><td><strong>Tests</strong></td><td>192</td></tr>
+<tr><td><strong>Registered</strong></td><td>P_ via <code>GameplaySubsystem</code></td></tr>
+<tr><td><strong>Verified</strong></td><td>2026-07-28</td></tr>
+</tbody>
+</table></div>
+<h3 id="the-match-layer">The match layer<a class="anchor" href="#the-match-layer" aria-label="Permalink">#</a></h3>
+<p><code>Bot</code>, <code>BotPattern</code>, <code>Match</code>, <code>MatchState</code> and <code>MatchMode</code> turn a room with
+bodies in it into a game. Two decisions are worth knowing before touching any
+of it:</p>
+<p><strong>A bot's position at tic <em>n</em> is a pure function of <em>n</em>.</strong> Not an integration.
+It cannot drift over a long match, a peer that joins late computes the same
+answer without replaying history, and — the actual requirement — a player can
+watch one for two seconds and know where it will be. These are target
+practice; a bot that flanks makes the shooting impossible to evaluate.</p>
+<p><strong>Return fire goes through the same <code>Hitscan</code> as the player's own weapon.</strong> A
+bot standing in the line of fire genuinely blocks the shot and takes no damage
+for it. That was worth more than the emergent cover it produces: it means
+seven opponents a second are exercising the same slab test the player's
+trigger uses.</p>
+<p><strong>Built.</strong> <code>PlayerController</code> — first-person look and movement, <code>StrictMath</code>
+throughout so lockstep peers stay bit-identical, pitch clamped to ±89°, eye at
+<code>EYE_HEIGHT_UNITS</code> 41 — plus <code>PlayerInputView</code>, the one class that adapts the
+HAL's <code>InputState</code> onto <code>I_PlayerInput</code>, and the <code>I_GameplayPort</code> /
+<code>I_GameplayPortFactory</code> pair the core calls per tic. Registration has a nuance
+worth knowing before you go looking for the code that runs: <code>EngineMain</code> wraps
+whatever <code>I_GameplayPort</code> its factory hands back in <code>GameplaySubsystem</code>, and the
+only implementation that plays anything is <code>demo/DemoGameplayPort</code>.
+<code>gameplay/adapter/NullGameplayPort</code> is the fallback, so P_ is registered whether
+or not anything is happening.</p>
+<p><strong>Not built.</strong> Everything Phase 4 names, and none of it exists in any form:
+<code>PlayerState</code>, <code>Entity</code>, <code>PhysicsWorld</code> (including <code>moveWithSlide</code>),
+<code>MapSubsector</code> / <code>Sector</code>, <code>MapLoader</code>, <code>LagCompensator</code>. The design sections
+further down this file are specification written ahead of that code.</p>
+<p><strong>Blocked on.</strong> Nothing for movement — <code>PhysicsWorld</code> can be written today
+against <code>PlayerController</code> alone. <code>MapLoader</code> <em>is</em> blocked: <code>render/README.md</code>
+§ 11(b) leaves the WAD subsystem's remaining role open, and map geometry is the
+strongest candidate for it, so do not assume <code>MapLoader</code> reads a WAD until that
+question closes.</p>
+<p><strong>Next step.</strong> <code>PhysicsWorld.moveWithSlide</code> — the player currently walks through
+walls, and every other Phase 4 item is easier once collision exists.</p>
+<h2 id="what-lives-here">What lives here<a class="anchor" href="#what-lives-here" aria-label="Permalink">#</a></h2>
+<p>Built and tested today:</p>
+<ul>
+<li>
+<p><code>PlayerController</code> — first-person look and movement in <code>float</code>, produces the <code>Camera</code></p>
+</li>
+<li>
+<p><code>PlayerInputView</code> — presents the HAL's <code>InputState</code> as an <code>I_PlayerInput</code></p>
+</li>
+<li>
+<p><code>I_GameplayPort</code> / <code>I_GameplayPortFactory</code> — what the core calls per tic, and
+how a launcher builds one after the HAL exists</p>
+</li>
+</ul>
+<p><strong>Planned — Phase 4. None of the following exist yet</strong>, and the design sections
+below them are specification written ahead of the code rather than a description
+of it:</p>
+<ul>
+<li>
+<p><code>PlayerState</code> — position (16.16 fixed-point), velocity, angle, pitch, health, armor</p>
+</li>
+<li>
+<p><code>Entity</code> — abstract base for all game objects: players, monsters, projectiles, pickups, doors</p>
+</li>
+<li>
+<p><code>PhysicsWorld</code> — collision detection, gravity, sliding along walls</p>
+</li>
+<li>
+<p><code>MapSubsector</code> / <code>Sector</code> — sector data with portal adjacency for movement</p>
+</li>
+<li>
+<p><code>MapLoader</code> — parses map lumps (<code>THINGS</code>, <code>LINEDEFS</code>, <code>SECTORS</code>, <code>SSECTORS</code>, <code>NODES</code>).
+Where those lumps come from is <em>not</em> settled — <code>render/README.md</code> § 11(b) has
+the WAD subsystem's remaining role open, and map geometry is the strongest
+candidate for it. Do not treat "from a WAD" as decided.</p>
+</li>
+</ul>
+<p><code>audio/README.md</code> and <code>net/README.md</code> mark their planned classes the same way;
+this file used not to, and read as an inventory of code that does not exist.</p>
+<h2 id="subsystem-layout">Subsystem layout<a class="anchor" href="#subsystem-layout" aria-label="Permalink">#</a></h2>
+<div class="code"><pre><code>gameplay/
+├── PlayerController.java          first-person look + movement, produces the Camera
+├── PlayerInputView.java           adapts the HAL InputState onto I_PlayerInput
+├── port/
+│   ├── I_GameplayPort.java        interface — called by core per tic
+│   ├── I_GameplayPortFactory.java builds the port once the HAL is initialised
+│   └── I_PlayerInput.java         the four floats PlayerController consumes
+└── adapter/
+    └── NullGameplayPort.java      stub
+</code></pre></div>
+<h3 id="the-only-live-implementation">The only live implementation<a class="anchor" href="#the-only-live-implementation" aria-label="Permalink">#</a></h3>
+<p><code>NullGameplayPort</code> is a stub and <code>PhysicsWorld</code> does not exist, so the one
+<code>I_GameplayPort</code> that actually plays anything is <strong><code>demo/DemoGameplayPort.java</code></strong>
+— it latches input, drives a <code>PlayerController</code> and aims the software renderer's
+camera, once per tic, under a lock. It is also the only place <code>PlayerController</code>
+is driven outside its own tests, which makes it the first thing to read when a
+change here needs to be seen rather than asserted. See
+<code>engine/src/main/java/com/openfps/engine/demo/README.md</code>.</p>
+<h2 id="playercontroller--input-to-camera"><code>PlayerController</code> — input to camera<a class="anchor" href="#playercontroller--input-to-camera" aria-label="Permalink">#</a></h2>
+<p>The first piece of the first-person work, and pure logic: no rendering, no I/O,
+no collision. It holds a feet position, a yaw and a pitch, integrates one tic of
+<code>I_PlayerInput</code> into them, and hands back an <code>eyePosition()</code>, a
+<code>forwardVector()</code> and a <code>Camera</code>.</p>
+<h3 id="conventions">Conventions<a class="anchor" href="#conventions" aria-label="Permalink">#</a></h3>
+<p>Right-handed world, <strong>+y up</strong>, matching <code>render/README.md</code> § 4.</p>
+<div class="code"><pre><code>groundForward = ( sin(yaw), 0, cos(yaw) )
+groundRight   = groundForward x up = ( -cos(yaw), 0, sin(yaw) )
+forward       = ( cos(pitch)*sin(yaw), sin(pitch), cos(pitch)*cos(yaw) )
+</code></pre></div>
+<p>Yaw 0 faces world +z; yaw increases from +z toward +x; positive pitch looks up.</p>
+<p><code>groundRight</code> is <code>forward x up</code>, <strong>not</strong> <code>up x forward</code> — the same operand order
+<code>Camera</code> pins as normative. The mirror is unusually hard to catch here, because
+a mirrored strafe and a mirrored render agree with each other while both being
+wrong. Check it physically: with +x east and +y up, +z is south; facing south,
+your right hand points west, which is <code>(-1, 0, 0)</code>.</p>
+<p>Movement uses <code>groundForward</code>, never <code>forward</code>, so looking up cannot fly.</p>
+<h3 id="invariants">Invariants<a class="anchor" href="#invariants" aria-label="Permalink">#</a></h3>
+<div class="tablewrap"><table>
+<thead><tr><th>Invariant</th><th>Where</th><th>Why</th></tr></thead>
+<tbody>
+<tr><td>pitch clamped to ±89°</td><td><code>MAX_PITCH_RADIANS</code></td><td>at exactly ±90° <code>forward</code> is parallel to world up, <code>forward x up</code> is the zero vector, and <code>Camera.create</code> rejects the basis</td></tr>
+<tr><td>yaw wrapped to <code>[0, 2π)</code></td><td><code>FULL_TURN_RADIANS</code></td><td>an unbounded angle loses float precision; near 1e7 rad the spacing between floats is about a radian</td></tr>
+<tr><td>displacement linear in <code>deltaSeconds</code></td><td><code>update</code></td><td>frame-rate independence — invisible until someone plays at a different rate</td></tr>
+<tr><td>combined axis magnitude clamped to 1</td><td><code>update</code></td><td>a diagonal must not be 41% faster than a straight line, while a half-deflected stick must still walk rather than run — clamped, not normalised, so the controller never double-normalises input the HAL already normalised</td></tr>
+</tbody>
+</table></div>
+<h3 id="determinism--a-documented-deviation-from-planmd--4">Determinism — a documented deviation from <code>PLAN.md</code> § 4<a class="anchor" href="#determinism--a-documented-deviation-from-planmd--4" aria-label="Permalink">#</a></h3>
+<p>§ 4 specifies 16.16 fixed-point for simulation state, and player position is
+simulation state. <code>PlayerController</code> is <code>float</code>. This satisfies § 4's <em>intent</em>
+— bit-identical state across lockstep peers — by a different route, and the
+reasoning is on the class Javadoc in full:</p>
+<ul>
+<li>
+<p>Since <strong>JEP 306</strong> (Java 17) all floating-point expressions are FP-strict IEEE
+754, so <code>+ - * /</code> and <code>sqrt</code> are bit-reproducible on every conforming JVM and
+CPU. Fixed-point buys nothing the language does not already guarantee.</p>
+</li>
+<li>
+<p>The exception is the transcendentals: <code>Math.sin</code> / <code>Math.cos</code> are permitted
+1–2 ulp and are <strong>not</strong> required to agree between implementations.
+<code>StrictMath</code> is fdlibm and is reproducible.</p>
+</li>
+</ul>
+<p>So <strong>every trig call in the update path is <code>StrictMath</code></strong>, and switching one to
+<code>Math</code> would desync peers silently — sub-micron per step, invisible for
+minutes, and impossible to reproduce in a single-process test. A test reads the
+compiled class's constant pool and fails if <code>java/lang/Math</code> appears in it.</p>
+<h3 id="the-input-seam">The input seam<a class="anchor" href="#the-input-seam" aria-label="Permalink">#</a></h3>
+<p><code>I_PlayerInput</code> declares exactly the four floats the controller consumes:
+<code>forwardAxis</code>, <code>strafeAxis</code> (dimensionless, nominally −1..1) and <code>yawDelta</code>,
+<code>pitchDelta</code> (radians, already accumulated for the tic). The HAL's richer
+<code>InputState</code> — which also carries action flags — adapts onto it in
+<code>PlayerInputView</code>, and that one class is the whole adapter.</p>
+<p>Two things about it are deliberate and easy to undo by accident:</p>
+<ul>
+<li>
+<p><strong>It is not <code>InputState implements I_PlayerInput</code>.</strong> The four accessors match
+name for name, so the inheritance looks free. It is not: <code>InputState</code> lives in
+<code>hal.port</code>, the contract every platform adapter compiles against, and making
+the HAL implement a gameplay interface inverts the dependency <code>PLAN.md</code> § 2
+draws (<code>hal</code> depends on <code>common</code> and nothing else). Gameplay knows about the
+HAL; never the reverse.</p>
+</li>
+<li>
+<p><strong>It is mutable on purpose.</strong> <code>InputState</code> is immutable and a fresh one is
+latched every tic, so a per-tic wrapper would allocate forever in the
+simulation path. One view is created at startup and re-pointed with <code>wrap</code>.</p>
+</li>
+</ul>
+<p>The action flags (<code>fire</code>, <code>jump</code>, <code>sprint</code>) are not forwarded — the controller
+has no use for them. Whatever consumes them later should read the <code>InputState</code>
+directly rather than widening this seam.
+<strong>Do not grow a second copy of <code>InputState</code> here.</strong></p>
+<h2 id="physics-math--whats-coming">Physics math — what's coming<a class="anchor" href="#physics-math--whats-coming" aria-label="Permalink">#</a></h2>
+<p>These are documented in advance so you can verify the formulas before they're coded.
+Implementation will reference this README for the source of each formula.</p>
+<h3 id="collision-detection">Collision detection<a class="anchor" href="#collision-detection" aria-label="Permalink">#</a></h3>
+<p>Two layers, both used together:</p>
+<ol>
+<li>
+<p><strong>BSP traversal</strong> — quick reject. Walk the BSP tree to find the smallest leaf the
+entity is inside. Anything outside that leaf can't collide.</p>
+</li>
+<li>
+<p><strong>Line-segment / sector</strong> — within the current subsector, the entity's movement
+vector is clipped against each linedef it could cross. This produces "wall sliding"
+(DOOM-style: if a wall is hit, movement is split into its two axis components and
+the un-blocked component is applied).</p>
+</li>
+</ol>
+<p><strong>Source — DOOM source <code>p_map.c</code>, <code>p_maputl.c</code></strong>:
+https://github.com/id-Software/DOOM/blob/master/linuxdoom-1.10/p_map.c</p>
+<h3 id="gravity">Gravity<a class="anchor" href="#gravity" aria-label="Permalink">#</a></h3>
+<div class="code"><pre><code>v.y -= GRAVITY * deltaT
+y   += v.y * deltaT
+</code></pre></div>
+<p>GRAVITY is in map-units/sec²; we precompute the per-tic increment.</p>
+<p><strong>Source — Game Programming Gems, "Applying Game-Physics Concepts"</strong>:
+https://www.gameprogrammer.com/game-physics.html</p>
+<h3 id="player-movement-doom-style">Player movement (DOOM-style)<a class="anchor" href="#player-movement-doom-style" aria-label="Permalink">#</a></h3>
+<p>Per tic, the player has:</p>
+<ul>
+<li>
+<p>Forward velocity along <code>angle</code></p>
+</li>
+<li>
+<p>Strafe velocity perpendicular</p>
+</li>
+<li>
+<p>Vertical velocity (for jumping / falling)</p>
+</li>
+</ul>
+<p>Resulting position is rotated by angle and applied to (x, y) with the speed vector.
+Then collision: if blocked, the engine tries to slide along the wall by doing the
+move twice — once with full X velocity, once with full Y, and the second one uses
+the residual from the first. This produces a surprisingly natural feel for arbitrary
+angle walls.</p>
+<p><strong>Source — "Player Movement in DOOM" by Jake McArthur</strong>:
+http://jake.mcarthur.io/blog/posts/4/player-movement-in-doom-like-games</p>
+<h3 id="map-format-lumps-we-parse">Map format (lumps we parse)<a class="anchor" href="#map-format-lumps-we-parse" aria-label="Permalink">#</a></h3>
+<ul>
+<li>
+<p><code>THINGS</code> — int16 × 5 per thing: x, y, angle, type, flags</p>
+</li>
+<li>
+<p><code>LINEDEFS</code> — int16 × 7 per line: v1, v2, flags, special, tag, sidedir, sidenum</p>
+</li>
+<li>
+<p><code>SIDEDEFS</code> — int16 × 6 per side: xoff, yoff, upper, lower, mid, sector</p>
+</li>
+<li>
+<p><code>VERTEXES</code> — int16 × 2 per vertex: x, y</p>
+</li>
+<li>
+<p><code>SEGS</code> — int16 × 5 per seg: v1, v2, angle, linedef, side</p>
+</li>
+<li>
+<p><code>SSECTORS</code> — int16 × 2 per sub-sector: first, count</p>
+</li>
+<li>
+<p><code>NODES</code> — int16 × 8 per node: x, y, dx, dy, bb[2][4], children[2]</p>
+</li>
+<li>
+<p><code>SECTORS</code> — int16 × 7 per sector: floor, ceil, floorpic, ceilpic, light, special, tag</p>
+</li>
+<li>
+<p><code>REJECT</code> / <code>BLOCKMAP</code> — used for line-of-sight and quick-reject tests</p>
+</li>
+</ul>
+<p><strong>Source — DOOM WAD format spec</strong> (Unofficial):
+http://doom.wikia.com/wiki/WAD</p>
+<h2 id="performance-constraints">Performance constraints<a class="anchor" href="#performance-constraints" aria-label="Permalink">#</a></h2>
+<ul>
+<li>
+<p><strong>Hot path</strong>: physics + map logic runs every tic (30/60/120 Hz) on the game thread.</p>
+</li>
+<li>
+<p><strong>Entity cap</strong>: 4096 active entities per map. Beyond that, evictions happen.</p>
+</li>
+<li>
+<p><strong>No <code>Math.sqrt</code></strong> in collision tests — use squared distance, compare to squared radius.</p>
+</li>
+<li>
+<p><strong>No lambda chains</strong> — see <code>STYLE.md</code> section 6.</p>
+</li>
+</ul>
+<h2 id="files">Files<a class="anchor" href="#files" aria-label="Permalink">#</a></h2>
+<ul>
+<li>
+<p><code>PlayerController.java</code> — first-person look and movement (72 tests)</p>
+</li>
+<li>
+<p><code>PlayerInputView.java</code> — the HAL <code>InputState</code> adapter (5 tests)</p>
+</li>
+<li>
+<p><code>port/I_GameplayPort.java</code> — interface, called by core per tic</p>
+</li>
+<li>
+<p><code>port/I_GameplayPortFactory.java</code> — deferred construction, mirroring <code>I_RenderPortFactory</code></p>
+</li>
+<li>
+<p><code>port/I_PlayerInput.java</code> — the controller's input seam</p>
+</li>
+<li>
+<p><code>adapter/NullGameplayPort.java</code> — null impl</p>
+</li>
+</ul>
+<p><strong>77 tests in this package.</strong> Run with <code>.\gradlew.bat test</code>.</p>
+<h2 id="todo-phase-4">TODO (Phase 4)<a class="anchor" href="#todo-phase-4" aria-label="Permalink">#</a></h2>
+<ul>
+<li><code>PhysicsWorld</code> wraps <code>PlayerController</code> and rejects the blocked part of a move</li>
+<li><code>PlayerState</code> data class</li>
+<li><code>Entity</code> base + concrete types (monster, projectile, pickup, door)</li>
+<li><code>PhysicsWorld.moveWithSlide(player, dx, dy)</code> — collision + slide</li>
+<li><code>MapLoader</code> — read THINGS / LINEDEFS / SECTORS, once <code>render/README.md</code>
+§ 11(b) settles what the map container is</li>
+<li><code>BspTraverser</code> — leaf lookup, reused in both gameplay and render</li>
+</ul>
+<footer class="pagefoot"><p>Source: <a class="ext" rel="noopener noreferrer" target="_blank" href="https://github.com/nicholashutter/OpenFPS/blob/main/engine/src/main/java/com/openfps/engine/gameplay/README.md">engine/src/main/java/com/openfps/engine/gameplay/README.md</a>. This page is generated — edit the Markdown, not the HTML.</p></footer>
+</main>
+</div>
+<script src="site.js"></script>
+</body>
+</html>

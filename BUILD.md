@@ -236,6 +236,29 @@ generated art out of git, and the task refuses to run without it.
 
 ---
 
+## Reading the docs as a website
+
+There is a lot of Markdown in this repository — a root set, a `docs/` set, and a
+`README.md` beside almost every package. Reading it on GitHub means a lot of
+tab-hopping.
+
+```
+gradlew :tools:buildDocsSite
+```
+
+Renders every one of them into `docs/site/` as a static site with a sidebar, a
+per-page table of contents, working cross-links, and a dark mode. No CDN, no
+fonts, no JavaScript framework — one stylesheet and about forty lines of vanilla
+JS for the sidebar. Open `docs/site/index.html`.
+
+The generator is `:tools`, so it ships nothing. It **fails the build** if any
+cross-document link fails to resolve, which is the main thing that rots in a doc
+set this size. `-PdocsOut=<dir>` writes somewhere else.
+
+The Markdown files remain the source of truth. Edit those; regenerate after.
+
+---
+
 ## Checkstyle Only
 
 ```powershell

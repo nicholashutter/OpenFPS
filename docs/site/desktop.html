@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>:desktop — the windowed launcher — OpenFPS documentation</title>
+<meta name="description" content="The only module allowed to touch LWJGL3 and GLFW. It gives the engine a real window, a real mouse, and somewhere to put the pixels the software rasterizer produced.">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<a class="skip" href="#doc">Skip to content</a>
+<header class="topbar"><button class="burger" id="burger" aria-controls="sidebar" aria-expanded="false" aria-label="Show navigation"><span></span><span></span><span></span></button><span class="topbar-name">OpenFPS docs</span></header>
+<div class="scrim" id="scrim" hidden></div>
+<div class="layout">
+<aside class="sidebar" id="sidebar">
+<a class="brand" href="index.html"><span class="brand-mark"></span><span class="brand-name">OpenFPS</span><span class="brand-kind">docs</span></a>
+<input class="filter" id="filter" type="search" placeholder="Filter pages" aria-label="Filter pages" autocomplete="off">
+<nav class="nav" id="nav" aria-label="Documentation">
+<details class="grp" data-hue="1" open><summary><span class="dot"></span>Overview<span class="count">2</span></summary>
+<ul>
+<li><a href="index.html">Overview</a></li>
+<li><a href="agents.html">Agent instructions</a></li>
+</ul></details>
+<details class="grp" data-hue="2" open><summary><span class="dot"></span>Building<span class="count">1</span></summary>
+<ul>
+<li><a href="build.html">Build reference</a></li>
+</ul></details>
+<details class="grp" data-hue="3" open><summary><span class="dot"></span>Architecture<span class="count">2</span></summary>
+<ul>
+<li><a href="style.html">Code style</a></li>
+<li><a href="plan.html">Project plan</a></li>
+</ul></details>
+<details class="grp" data-hue="4" open><summary><span class="dot"></span>Modules<span class="count">5</span></summary>
+<ul>
+<li><a href="engine.html">:engine</a></li>
+<li><a href="desktop.html" class="cur" aria-current="page">:desktop</a></li>
+<li><a href="android.html">:android</a></li>
+<li><a href="tools.html">:tools</a></li>
+<li><a href="gdxshared.html">:gdxshared</a></li>
+</ul></details>
+<details class="grp" data-hue="5"><summary><span class="dot"></span>Packages<span class="count">10</span></summary>
+<ul>
+<li><a href="engine-core.html">Core</a></li>
+<li><a href="engine-common.html">Common</a></li>
+<li><a href="engine-hal.html">HAL (I_)</a></li>
+<li><a href="engine-gameplay.html">Gameplay (P_)</a></li>
+<li><a href="engine-render.html">Render (R_)</a></li>
+<li><a href="engine-demo.html">Demo</a></li>
+<li><a href="engine-audio.html">Audio (S_)</a></li>
+<li><a href="engine-net.html">Net (G_)</a></li>
+<li><a href="engine-resource.html">Resource (W_)</a></li>
+<li><a href="engine-memory.html">Memory (Z_)</a></li>
+</ul></details>
+<details class="grp" data-hue="6"><summary><span class="dot"></span>Reference<span class="count">2</span></summary>
+<ul>
+<li><a href="assets.html">Assets and licensing</a></li>
+<li><a href="demo-assets.html">Demo asset manifest</a></li>
+</ul></details>
+</nav>
+<p class="generated">Generated from the repository's Markdown by <code>:tools:buildDocsSite</code>.</p>
+</aside>
+<aside class="rail"><details class="toc" id="toc" open><summary>On this page</summary>
+<ul>
+<li class="lv2"><a href="#status">Status</a></li>
+<li class="lv2"><a href="#why-the-window-and-input-are-not-in-haladapterdesktop">Why the window and input are not in hal/adapter/desktop/</a></li>
+<li class="lv2"><a href="#accumulate-on-one-thread-latch-on-the-other">Accumulate on one thread, latch on the other</a></li>
+<li class="lv2"><a href="#desktoplauncher-is-a-composition-root">DesktopLauncher is a composition root</a></li>
+<li class="lv2"><a href="#arguments">Arguments</a></li>
+<li class="lv2"><a href="#files">Files</a></li>
+</ul></details></aside>
+<main id="doc">
+<p class="crumb"><span class="tag">Modules</span><span class="sep">/</span><code>desktop/README.md</code><span class="sep">/</span>5 min read</p>
+<h1 id="desktop--the-windowed-launcher"><code>:desktop</code> — the windowed launcher<a class="anchor" href="#desktop--the-windowed-launcher" aria-label="Permalink">#</a></h1>
+<blockquote>
+<p>The only module allowed to touch LWJGL3 and GLFW. It gives the engine a real
+window, a real mouse, and somewhere to put the pixels the software rasterizer
+produced.</p>
+</blockquote>
+<h2 id="status">Status<a class="anchor" href="#status" aria-label="Permalink">#</a></h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Field</th><th>Value</th></tr></thead>
+<tbody>
+<tr><td><strong>State</strong></td><td>SHIPPING</td></tr>
+<tr><td><strong>Phase</strong></td><td>1.5 complete (§ 7); presentation landed with Phase 5</td></tr>
+<tr><td><strong>Tests</strong></td><td>118</td></tr>
+<tr><td><strong>Registered</strong></td><td>provides the windowed HAL (<code>GdxAdapterFactory</code>) and the <code>main</code> behind <code>gradlew :desktop:run</code></td></tr>
+<tr><td><strong>Verified</strong></td><td>2026-07-28</td></tr>
+</tbody>
+</table></div>
+<p><strong>Built.</strong> <code>GdxWindowPort</code> (LWJGL3, 1280x720 default) with an explicit state
+machine, <code>GdxInputPort</code> for mouse-look and WASD, <code>DesktopBindings</code> (the only
+file here that names a key), <code>GdxFrameLoopListener</code> bridging libGDX's
+<code>ApplicationListener</code> to the engine's <code>I_FrameCallback</code>, <code>GdxScreenshot</code> for
+reading the window back off the GPU, <code>WindowIcon</code> and <code>IconFileMain</code> for the
+native launcher's identity, <code>NetArgs</code> for <code>--net=</code>/<code>--peer=</code>, <code>GdxAdapterFactory</code>
+decorating the headless desktop HAL, and <code>DesktopLauncher</code> on top of all of it.</p>
+<p><strong>Moved out on 2026-07-28.</strong> <code>FramebufferPresenter</code>, <code>InputAccumulator</code>,
+<code>UiState</code>, <code>UiStateMachine</code>, the block welcome screen and the menu command
+interface now live in <strong><code>:gdxshared</code></strong>, because <code>:android</code> needs every one of
+them and none of them names a backend. Nothing changed about what they do; the
+test count here dropped from 195 to 118 because 77 tests went with them. See
+<code>gdxshared/README.md</code>.</p>
+<p><strong>Not built.</strong> Nothing outstanding for Phases 1.5 and 5. Start Game and Settings
+record intent only — there is no map loader and no settings screen to open yet.</p>
+<p><strong>Blocked on.</strong> Nothing.</p>
+<p><strong>Next step.</strong> Nothing outstanding — this module follows the renderer. The two
+open Phase 5 items (<code>render/README.md</code>) both surface here when they land.</p>
+<h2 id="why-the-window-and-input-are-not-in-haladapterdesktop">Why the window and input are not in <code>hal/adapter/desktop/</code><a class="anchor" href="#why-the-window-and-input-are-not-in-haladapterdesktop" aria-label="Permalink">#</a></h2>
+<p>They need libGDX, and <code>:engine</code> must stay platform-free — the module CI builds
+and tests on a machine with no display and no Android SDK. So
+<code>hal/adapter/desktop/</code> holds only what the JDK can satisfy alone
+(<code>DesktopTimePort</code> on <code>System.nanoTime()</code>, <code>DesktopDatagramPort</code> on
+<code>java.nio.channels.DatagramChannel</code>) and <code>DesktopAdapterFactory</code> returns
+<code>NullWindowPort</code> / <code>NullInputPort</code>. PLAN.md § 7 calls that a "known seam"; it is
+the design, not a gap.</p>
+<p><code>GdxAdapterFactory</code> closes it by <strong>decoration, not a new backend</strong>.
+<code>AdapterFactorySelector</code> lives in <code>:engine</code> and could never name a <code>:desktop</code>
+class without a module cycle, so there is no <code>HalBackend.DESKTOP_WINDOWED</code>.
+The factory delegates every port <code>DesktopAdapterFactory</code> already gets right and
+overrides exactly two. Window and input are overridden <em>together</em> because they
+are one device: mouse-look needs a captured cursor, which only exists inside a
+real window.</p>
+<h2 id="accumulate-on-one-thread-latch-on-the-other">Accumulate on one thread, latch on the other<a class="anchor" href="#accumulate-on-one-thread-latch-on-the-other" aria-label="Permalink">#</a></h2>
+<p>Two clocks read the mouse and they do not agree. <code>GdxInputPort.pollDevice()</code>
+runs on the LWJGL3 render thread once per presented frame — vsync-driven, so
+60 Hz here and 144 Hz there, irregular whenever a frame runs long. <code>sampleInput</code>
+runs on the game-loop thread once per tic at a fixed 30, 60 or 120 Hz. Neither
+rate divides the other.</p>
+<p>Sampling the mouse instantaneously at latch time is wrong in both directions. If
+the render thread is faster, frames between two tics are discarded and the view
+turns slower than the hand moved. If it is slower, the same unconsumed delta is
+read twice and the view turns twice as far. <strong>Relative motion is an integral,
+not a level, and an integral must be consumed exactly once.</strong></p>
+<p>So look motion is summed into an <code>AtomicInteger</code> of raw pixels and <code>latch()</code>
+drains it with <code>getAndSet(0)</code>: every pixel counted once, in exactly one tic,
+whatever the two rates are. Pixels rather than radians because integers make the
+accumulator lock-free and exact — the single multiply by <code>radiansPerPixel</code>
+happens once, at latch. Movement keys are stored as levels (a held key is still
+held) and actions as level <em>plus</em> sticky flag, so a click shorter than one tic
+still arrives.</p>
+<p>The payoff is testability: <code>InputAccumulator</code> imports no platform type, so all
+29 of its tests run headless. <code>GdxInputPort</code> keeps only the thin "ask GLFW what
+the mouse did" layer that no test can cover.</p>
+<h2 id="desktoplauncher-is-a-composition-root"><code>DesktopLauncher</code> is a composition root<a class="anchor" href="#desktoplauncher-is-a-composition-root" aria-label="Permalink">#</a></h2>
+<p><code>STYLE.md</code> § 1.1 lets a composition root name concrete types, and this one does:
+it constructs <code>SoftwareRenderPort</code>, <code>GdxWindowPort</code>, <code>DemoScene</code> and
+<code>DemoGameplayPort</code> by name. The wiring has to be spelled out somewhere, and
+confining it to one class is what keeps everything else here on interfaces.</p>
+<p>It uses <code>start</code> / <code>awaitPlatformLoop</code> / <code>stop</code> rather than <code>EngineMain.run</code>,
+because the renderer must be attached to the window in the gap between the
+bootstrap and the frame loop: it does not exist before <code>start</code> (it needs the
+worker pool) and it is too late once <code>runFrameLoop</code> has built its listener.</p>
+<p><strong>Missing assets exit, they do not open a window.</strong> The demo is built <em>before</em>
+<code>GdxWindowPort</code> is constructed, so a <code>DemoAssetException</code> is logged and followed
+by <code>System.exit(EXIT_NO_ASSETS)</code> — status <strong>3</strong>. A missing model set should
+report at a console the user is already looking at, not behind a black GLFW
+window they then have to close to read the reason.</p>
+<h2 id="arguments">Arguments<a class="anchor" href="#arguments" aria-label="Permalink">#</a></h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Argument</th><th>Effect</th></tr></thead>
+<tbody>
+<tr><td><code>--fps=30|60|120</code></td><td>simulation rate, default 60 (parsed by <code>EngineMain.parseFpsArg</code>)</td></tr>
+<tr><td><code>--assets=&lt;dir&gt;</code></td><td>model root for the demo scene, default <code>assets/models</code></td></tr>
+<tr><td><code>--model=&lt;path&gt;</code></td><td>draw one <code>.ofm</code> on the orbit camera instead of the demo</td></tr>
+</tbody>
+</table></div>
+<p><code>--no-sqlite</code> and <code>--headless</code> are <strong><code>:engine:run</code> arguments only</strong>.
+<code>DesktopLauncher</code> never parses them: it always supplies its own
+<code>GdxAdapterFactory</code>, so there is no null-backend or profile-backend choice left
+to make.</p>
+<p>Diagnostics are system properties rather than arguments, and <code>:desktop</code>'s
+<code>build.gradle.kts</code> forwards them explicitly because a <code>-D</code> on the Gradle command
+line lands on the daemon and never reaches the forked JVM:
+<code>-Dopenfps.fpsLog=2</code> logs platform, presented and rendered frame rates every two
+seconds — the only way to measure the <em>windowed</em> rate — and
+<code>-Dopenfps.screenshot=&lt;path&gt;</code> writes a frame to PNG.</p>
+<h2 id="files">Files<a class="anchor" href="#files" aria-label="Permalink">#</a></h2>
+<ul>
+<li>
+<p><code>DesktopLauncher.java</code> — composition root and <code>main</code></p>
+</li>
+<li>
+<p><code>GdxAdapterFactory.java</code> — decorates the headless desktop HAL (7 tests)</p>
+</li>
+<li>
+<p><code>GdxWindowPort.java</code> — LWJGL3 window and frame loop (22 tests)</p>
+</li>
+<li>
+<p><code>GdxInputPort.java</code> — the platform half of input (11 tests)</p>
+</li>
+<li>
+<p><code>InputAccumulator.java</code> — the testable half: accumulate and latch (29 tests)</p>
+</li>
+<li>
+<p><code>GdxFrameLoopListener.java</code> — <code>ApplicationListener</code> → <code>I_FrameCallback</code> (7 tests)</p>
+</li>
+<li>
+<p><code>FramebufferPresenter.java</code> — uploads and draws the finished frame</p>
+</li>
+<li>
+<p><code>GdxScreenshot.java</code> — <code>glReadPixels</code> → PNG, opt-in</p>
+</li>
+<li>
+<p><code>MainMenuScreen.java</code> / <code>MenuActions.java</code> / <code>DefaultMenuActions.java</code> /
+<code>MenuButtonListener.java</code> — the Scene2D menu and its testable seam (9 tests)</p>
+</li>
+</ul>
+<p><strong>99 tests in this module.</strong> Run with <code>.\gradlew.bat :desktop:test</code>.</p>
+<footer class="pagefoot"><p>Source: <a class="ext" rel="noopener noreferrer" target="_blank" href="https://github.com/nicholashutter/OpenFPS/blob/main/desktop/README.md">desktop/README.md</a>. This page is generated — edit the Markdown, not the HTML.</p></footer>
+</main>
+</div>
+<script src="site.js"></script>
+</body>
+</html>

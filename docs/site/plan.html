@@ -1,0 +1,994 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenFPS — Project Plan — OpenFPS documentation</title>
+<meta name="description" content="Status: Pre-alpha — Phases 0 through 1.5 complete, plus Phase 5 (render). Event-driven engine, unified memory, multi-threaded worker pool, configurable 30/60/120 Hz, SQLite user-profile…">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<a class="skip" href="#doc">Skip to content</a>
+<header class="topbar"><button class="burger" id="burger" aria-controls="sidebar" aria-expanded="false" aria-label="Show navigation"><span></span><span></span><span></span></button><span class="topbar-name">OpenFPS docs</span></header>
+<div class="scrim" id="scrim" hidden></div>
+<div class="layout">
+<aside class="sidebar" id="sidebar">
+<a class="brand" href="index.html"><span class="brand-mark"></span><span class="brand-name">OpenFPS</span><span class="brand-kind">docs</span></a>
+<input class="filter" id="filter" type="search" placeholder="Filter pages" aria-label="Filter pages" autocomplete="off">
+<nav class="nav" id="nav" aria-label="Documentation">
+<details class="grp" data-hue="1" open><summary><span class="dot"></span>Overview<span class="count">2</span></summary>
+<ul>
+<li><a href="index.html">Overview</a></li>
+<li><a href="agents.html">Agent instructions</a></li>
+</ul></details>
+<details class="grp" data-hue="2" open><summary><span class="dot"></span>Building<span class="count">1</span></summary>
+<ul>
+<li><a href="build.html">Build reference</a></li>
+</ul></details>
+<details class="grp" data-hue="3" open><summary><span class="dot"></span>Architecture<span class="count">2</span></summary>
+<ul>
+<li><a href="style.html">Code style</a></li>
+<li><a href="plan.html" class="cur" aria-current="page">Project plan</a></li>
+</ul></details>
+<details class="grp" data-hue="4" open><summary><span class="dot"></span>Modules<span class="count">5</span></summary>
+<ul>
+<li><a href="engine.html">:engine</a></li>
+<li><a href="desktop.html">:desktop</a></li>
+<li><a href="android.html">:android</a></li>
+<li><a href="tools.html">:tools</a></li>
+<li><a href="gdxshared.html">:gdxshared</a></li>
+</ul></details>
+<details class="grp" data-hue="5"><summary><span class="dot"></span>Packages<span class="count">10</span></summary>
+<ul>
+<li><a href="engine-core.html">Core</a></li>
+<li><a href="engine-common.html">Common</a></li>
+<li><a href="engine-hal.html">HAL (I_)</a></li>
+<li><a href="engine-gameplay.html">Gameplay (P_)</a></li>
+<li><a href="engine-render.html">Render (R_)</a></li>
+<li><a href="engine-demo.html">Demo</a></li>
+<li><a href="engine-audio.html">Audio (S_)</a></li>
+<li><a href="engine-net.html">Net (G_)</a></li>
+<li><a href="engine-resource.html">Resource (W_)</a></li>
+<li><a href="engine-memory.html">Memory (Z_)</a></li>
+</ul></details>
+<details class="grp" data-hue="6"><summary><span class="dot"></span>Reference<span class="count">2</span></summary>
+<ul>
+<li><a href="assets.html">Assets and licensing</a></li>
+<li><a href="demo-assets.html">Demo asset manifest</a></li>
+</ul></details>
+</nav>
+<p class="generated">Generated from the repository's Markdown by <code>:tools:buildDocsSite</code>.</p>
+</aside>
+<aside class="rail"><details class="toc" id="toc" open><summary>On this page</summary>
+<ul>
+<li class="lv2"><a href="#1-vision">1. Vision</a></li>
+<li class="lv2"><a href="#2-architecture-overview--event-driven">2. Architecture Overview — event-driven</a></li>
+<li class="lv3"><a href="#module-dependency-graph-no-cycles">Module dependency graph (no cycles)</a></li>
+<li class="lv2"><a href="#3-subsystem-specification">3. Subsystem Specification</a></li>
+<li class="lv3"><a href="#31-core--comopenfpsenginecore--built">3.1 Core — com.openfps.engine.core — built</a></li>
+<li class="lv3"><a href="#32-gameplay--comopenfpsenginegameplay--first-person-controller-done-rest-stub">3.2 Gameplay — com.openfps.engine.gameplay — first-person controller done, rest stub</a></li>
+<li class="lv3"><a href="#33-render--comopenfpsenginerender--built-316-tests">3.3 Render — com.openfps.engine.render — built (316 tests)</a></li>
+<li class="lv3"><a href="#34-audio--comopenfpsengineaudio--stub">3.4 Audio — com.openfps.engine.audio — stub</a></li>
+<li class="lv3"><a href="#35-network--comopenfpsenginenet--stub">3.5 Network — com.openfps.engine.net — stub</a></li>
+<li class="lv3"><a href="#36-resource--comopenfpsengineresource--built-but-unregistered-101-tests">3.6 Resource — com.openfps.engine.resource — built but unregistered (101 tests)</a></li>
+<li class="lv3"><a href="#37-memory--comopenfpsenginememory--phase-11-complete">3.7 Memory — com.openfps.engine.memory — Phase 1.1 complete</a></li>
+<li class="lv3"><a href="#38-hal--comopenfpsenginehal--phase-14-complete">3.8 HAL — com.openfps.engine.hal — Phase 1.4 complete</a></li>
+<li class="lv2"><a href="#4-data-layout-conventions">4. Data Layout Conventions</a></li>
+<li class="lv3"><a href="#recorded-deviation--playercontroller-uses-float-not-1616">Recorded deviation — PlayerController uses float, not 16.16</a></li>
+<li class="lv2"><a href="#5-frame-rate-configuration-phase-13">5. Frame Rate Configuration (Phase 1.3)</a></li>
+<li class="lv3"><a href="#per-rate-frame-budget">Per-rate frame budget</a></li>
+<li class="lv3"><a href="#drift-correction-the-math">Drift correction (the math)</a></li>
+<li class="lv3"><a href="#cli">CLI</a></li>
+<li class="lv2"><a href="#6-build-configuration">6. Build Configuration</a></li>
+<li class="lv3"><a href="#modules">Modules</a></li>
+<li class="lv3"><a href="#dependencies">Dependencies</a></li>
+<li class="lv2"><a href="#7-project-roadmap">7. Project Roadmap</a></li>
+<li class="lv3"><a href="#phase-0--scaffolding--done">Phase 0 — Scaffolding — done</a></li>
+<li class="lv3"><a href="#phase-05--per-subsystem-docs--math-demystification--done">Phase 0.5 — Per-subsystem docs + math demystification — done</a></li>
+<li class="lv3"><a href="#phase-11--unified-memory-port--done">Phase 1.1 — Unified Memory Port — done</a></li>
+<li class="lv3"><a href="#phase-12--event-driven-engine--multi-threaded-worker-pool--done">Phase 1.2 — Event-driven engine + multi-threaded worker pool — done</a></li>
+<li class="lv3"><a href="#phase-13--configurable-frame-rate-3060120--done">Phase 1.3 — Configurable frame rate (30/60/120) — done</a></li>
+<li class="lv3"><a href="#phase-14--user-profile-persistence-xerial-sqlite--done">Phase 1.4 — User profile persistence (Xerial SQLite) — done</a></li>
+<li class="lv3"><a href="#phase-15--desktop-hal-adapter-lwgjl3--done">Phase 1.5 — Desktop HAL adapter (LWGJL3) — done</a></li>
+<li class="lv3"><a href="#phase-2--wad-file-loader--partly-done">Phase 2 — WAD file loader — partly done</a></li>
+<li class="lv3"><a href="#phase-3--networking--primitives-built-nothing-wired">Phase 3 — Networking — primitives built, nothing wired</a></li>
+<li class="lv3"><a href="#phase-4--gameplay--planned">Phase 4 — Gameplay — planned</a></li>
+<li class="lv3"><a href="#phase-5--render-software-triangle-rasterizer--done-pending-polish">Phase 5 — Render (software triangle rasterizer) — done, pending polish</a></li>
+<li class="lv3"><a href="#phase-6--audio--planned">Phase 6 — Audio — planned</a></li>
+<li class="lv2"><a href="#8-test-coverage-summary">8. Test Coverage Summary</a></li>
+<li class="lv2"><a href="#9-contribution-guidelines">9. Contribution Guidelines</a></li>
+<li class="lv2"><a href="#10-document-to-code-mapping">10. Document-to-Code Mapping</a></li>
+</ul></details></aside>
+<main id="doc">
+<p class="crumb"><span class="tag">Architecture</span><span class="sep">/</span><code>PLAN.md</code><span class="sep">/</span>25 min read</p>
+<h1 id="openfps--project-plan">OpenFPS — Project Plan<a class="anchor" href="#openfps--project-plan" aria-label="Permalink">#</a></h1>
+<blockquote>
+<p><strong>Status</strong>: Pre-alpha — Phases 0 through 1.5 complete, plus Phase 5 (render). Event-driven engine, unified memory, multi-threaded worker pool, configurable 30/60/120 Hz, SQLite user-profile persistence, desktop HAL with a real window and input, and a multi-threaded software triangle rasterizer driving a playable first-person demo at 1280x720. Phase 2 (WAD) is partly done and unregistered; Phase 3 (net) has its lockstep primitives built but no socket wired. <strong>1239 tests</strong> — 977 <code>:engine</code>, 125 <code>:desktop</code>, 73 <code>:tools</code>, 64 <code>:android</code>.
+<strong>Engine Version</strong>: 0.1.0-SNAPSHOT
+<strong>Target JVM</strong>: 17 LTS (Java 17 source/target, runs on 17+)
+<strong>Platforms</strong>: Windows, Linux, macOS (<code>:desktop</code>, libGDX LWJGL3 backend); Android (<code>:android</code>, libGDX Android backend). <code>:engine</code> is platform-free and runs headless on any JVM 17+.
+<strong>Renderer</strong>: multi-threaded software triangle rasterizer — no GPU shading path. The platform layer exists to open a window, pump input, and upload one finished framebuffer per frame. See <code>docs/ASSETS.md</code> § 2 and <code>render/README.md</code>.</p>
+</blockquote>
+<hr>
+<h2 id="1-vision">1. Vision<a class="anchor" href="#1-vision" aria-label="Permalink">#</a></h2>
+<p>OpenFPS is a ground-up FPS game engine written in Java targeting the JVM runtime. It prioritizes memory efficiency, cross-platform portability, and a clean adapter/port (hexagonal) architecture so that platform-specific code lives at the edges, never in the core. Networking is peer-to-peer first; no authoritative server required for small-scale matches.</p>
+<p>The engine draws direct inspiration from the original Doom (id Software, 1993) subsystem layout — not as cargo culting, but because that architecture genuinely separates concerns well for a real-time game loop. We borrow the letter-prefix convention (D_, P_, R_, S_, G_, W_, Z_, I_) as a loving homage and a clear naming signal.</p>
+<p>The engine is now an <strong>event queue processor</strong>: subsystems communicate exclusively by publishing events to a shared bus, and a pool of N dedicated worker threads (where N = logical CPU count / 2) consumes events and dispatches them to the target subsystem.</p>
+<hr>
+<h2 id="2-architecture-overview--event-driven">2. Architecture Overview — event-driven<a class="anchor" href="#2-architecture-overview--event-driven" aria-label="Permalink">#</a></h2>
+<div class="code"><pre><code>+----------------------------------------------------------------+
+|  ENGINE ENTRY   com.openfps.engine.core.EngineMain             |
+|  Wires memory, HAL, bus, pool, subsystems                      |
++----------------------------------------------------------------+
+                              |
+                              v
++----------------------------------------------------------------+
+|  D_ GAME LOOP   com.openfps.engine.core.GameLoop               |
+|  Single thread, 30/60/120 Hz, produces events:                 |
+|    TickEvent, RenderFrameEvent, ShutdownEvent                  |
++----------------------------------------------------------------+
+                              |
+                              v
++----------------------------------------------------------------+
+|  EVENT BUS      com.openfps.engine.core.eventbus.SharedEventBus|
+|  LinkedBlockingQueue, blocking put (backpressure)              |
++----------------------------------------------------------------+
+                              |
+                              v
++----------------------------------------------------------------+
+|  WORKER POOL    com.openfps.engine.core.pool.WorkerPool        |
+|  N = logicalProcessorCount / 2 hot threads, pre-started        |
+|  Each: take() -&gt; dispatch() -&gt; loop                            |
++----------------------------------------------------------------+
+                              |
+                              v
++----------------------------------------------------------------+
+|  SUBSYSTEMS     com.openfps.engine.core.subsystem.impl.*       |
+|  Per-subsystem state machine (UNINIT -&gt; READY -&gt; SHUTDOWN)     |
+|                                                                  |
+|  P_ Gameplay   R_ Render   S_ Audio   G_ Net   W_ Resource   |
+|  Z_ Memory    I_ Hardware Abstraction                          |
++----------------------------------------------------------------+
+                              |
+                              v
++----------------------------------------------------------------+
+|  HARDWARE ABSTRACTION  com.openfps.engine.hal                   |
+|  Ports = interfaces, Adapters = platform impls                  |
+|  desktop/  nulladapter/  sqlite/                                 |
++----------------------------------------------------------------+
+</code></pre></div>
+<h3 id="module-dependency-graph-no-cycles">Module dependency graph (no cycles)<a class="anchor" href="#module-dependency-graph-no-cycles" aria-label="Permalink">#</a></h3>
+<div class="code"><pre><code>core  ──►  core.event       (event types, factory)
+      ──►  core.eventbus    (I_EventBusPort, SharedEventBus, factory)
+      ──►  core.pool        (I_ThreadPoolPort, WorkerPool, factory)
+      ──►  core.subsystem   (ISubsystem, base class, registry, impls)
+      ──►  common           (FixedMath, Constants)
+      ──►  gameplay/port
+      ──►  render/port
+      ──►  audio/port
+      ──►  net/port
+      ──►  resource/port
+      ──►  memory/port
+      ──►  hal/port
+
+memory  ──►  common
+hal     ──►  common
+
+demo    ──►  core            (FrameRate)
+        ──►  gameplay        (PlayerController, I_PlayerInput)
+        ──►  hal/port        (InputState)
+        ──►  render/adapter  (Scene, ModelFormat, Camera)
+
+gameplay ──►  hal/port          (InputState — the latched input snapshot)
+         ──►  render/adapter    (Camera, Vec3 — PlayerController.camera())
+         ──►  core              (FrameRate — derives move speed from the tic rate)
+</code></pre></div>
+<p>The three <code>gameplay</code> edges were added with <code>PlayerController</code> and are worth a
+note, because the middle one looks wrong at a glance. <code>STYLE.md</code> § 1.1 forbids
+an <strong>adapter</strong> importing core engine packages; it does not forbid a subsystem
+using another subsystem's public types, and there is precedent —
+<code>render.adapter</code> imports <code>core.pool</code> and <code>hal.port</code>, and <code>resource.adapter</code>
+imports <code>memory.port</code>. <code>camera(...)</code> is the only method carrying the render
+edge; the float accessors expose the same state without it, so the edge can be
+cut later if it ever becomes awkward.</p>
+<p>The direction that must <strong>not</strong> invert is <code>hal → gameplay</code>. <code>InputState</code> lives
+in <code>hal.port</code> and <code>I_PlayerInput</code> in <code>gameplay.port</code> with identical accessor
+names, so declaring <code>InputState implements I_PlayerInput</code> is tempting and
+wrong. <code>gameplay.PlayerInputView</code> adapts between them in the correct direction.</p>
+<p><code>core</code> is the only package that knows about the bus, the pool, and the subsystem state machine. The subsystem ports stay minimal (<code>init/shutdown/port-specific-methods</code>); the <code>Subsystem</code> wrapper in <code>core.subsystem</code> adds the state machine and event dispatch.</p>
+<hr>
+<h2 id="3-subsystem-specification">3. Subsystem Specification<a class="anchor" href="#3-subsystem-specification" aria-label="Permalink">#</a></h2>
+<p>Each subsystem lives in its own package under <code>com.openfps.engine.&lt;name&gt;</code>.
+Every subsystem has:</p>
+<ul>
+<li>
+<p><strong>port/</strong> — interfaces (the "port" side of hexagonal arch)</p>
+</li>
+<li>
+<p><strong>adapter/</strong> — concrete implementations (the "adapter" side)</p>
+</li>
+<li>
+<p>The subsystem itself (state machine + event handling) is in <code>core/subsystem/impl/</code></p>
+</li>
+</ul>
+<h3 id="31-core--comopenfpsenginecore--built">3.1 Core — <code>com.openfps.engine.core</code> — <strong>built</strong><a class="anchor" href="#31-core--comopenfpsenginecore--built" aria-label="Permalink">#</a></h3>
+<p><strong>D_ Game Loop &amp; Engine</strong></p>
+<ul>
+<li>
+<p><code>EngineMain</code> — bootstrap: memory → HAL → system info → bus → registry → pool → loop</p>
+</li>
+<li>
+<p><code>GameLoop</code> — single-threaded event producer at the configured rate (30/60/120 Hz)</p>
+</li>
+<li>
+<p><code>FrameRate</code> — closed enum: <code>FPS_30</code>, <code>FPS_60</code>, <code>FPS_120</code> (120 is the cap)</p>
+</li>
+<li>
+<p><code>GameConfig</code> — immutable (rate, maxTics) with factory methods</p>
+</li>
+<li>
+<p><code>EventFactory</code> — sequence numbers + timestamps for events</p>
+</li>
+</ul>
+<p><strong>Event flow</strong> (Phase 1.2):</p>
+<ul>
+<li>
+<p><code>I_EngineEvent</code> — base event interface (target subsystem, sequence, timestamp)</p>
+</li>
+<li>
+<p>Concrete events: <code>TickEvent</code>, <code>RenderFrameEvent</code>, <code>ShutdownEvent</code>, <code>MapLoadEvent</code>, <code>InputSampledEvent</code>, <code>NetworkPacketEvent</code></p>
+</li>
+<li>
+<p><code>I_EventBusPort</code> — bus port (single shared queue, blocking backpressure)</p>
+</li>
+<li>
+<p><code>SharedEventBus</code> — <code>LinkedBlockingQueue</code> implementation</p>
+</li>
+<li>
+<p><code>I_ThreadPoolPort</code> — pool port (N hot threads, pre-started)</p>
+</li>
+<li>
+<p><code>WorkerPool</code> — drains the bus, dispatches to subsystems</p>
+</li>
+<li>
+<p><code>EventBusFactory</code>, <code>ThreadPoolFactory</code> — system-level selectors</p>
+</li>
+</ul>
+<p><strong>Subsystem state machine</strong> (Phase 1.2):</p>
+<ul>
+<li>
+<p><code>ISubsystem</code> — interface (id, state, init, shutdown, processEvent)</p>
+</li>
+<li>
+<p><code>Subsystem</code> — base class with state machine + thread-safe <code>processEvent</code></p>
+</li>
+<li>
+<p><code>SubsystemId</code> — <code>CORE</code>, <code>P_</code>, <code>R_</code>, <code>S_</code>, <code>G_</code>, <code>W_</code>, <code>Z_</code>, <code>I_</code></p>
+</li>
+<li>
+<p><code>SubsystemState</code> — <code>UNINITIALIZED</code>, <code>READY</code>, <code>ERROR</code>, <code>SHUTDOWN</code></p>
+</li>
+<li>
+<p><code>SubsystemException</code> — invalid transitions throw</p>
+</li>
+<li>
+<p><code>SubsystemRegistry</code> — lookup by ID, dispatch routing</p>
+</li>
+</ul>
+<p><strong>Subsystem wrapper</strong>: <code>CoreSubsystem</code> — claims <code>SubsystemId.CORE</code> and handles
+<code>ShutdownEvent</code>. Without it, every shutdown logged a "no subsystem registered"
+warning, because <code>ShutdownEvent</code> targets CORE and nothing owned that ID.</p>
+<h3 id="32-gameplay--comopenfpsenginegameplay--first-person-controller-done-rest-stub">3.2 Gameplay — <code>com.openfps.engine.gameplay</code> — <strong>first-person controller done, rest stub</strong><a class="anchor" href="#32-gameplay--comopenfpsenginegameplay--first-person-controller-done-rest-stub" aria-label="Permalink">#</a></h3>
+<p><strong>P_ Player &amp; World Logic</strong></p>
+<ul>
+<li>
+<p><code>PlayerController</code> — <strong>done.</strong> First-person movement: yaw/pitch from look
+deltas, yaw-relative movement, pitch clamped to ±89°, wrapping yaw, eye-height
+offset, and <code>camera(aspect)</code> producing a <code>render.adapter.Camera</code>. See the
+determinism note in § 4.</p>
+</li>
+<li>
+<p><code>I_PlayerInput</code> — the four movement channels the controller consumes</p>
+</li>
+<li>
+<p><code>PlayerInputView</code> — adapts <code>hal.port.InputState</code> onto <code>I_PlayerInput</code></p>
+</li>
+<li>
+<p><code>PlayerState</code>: position (fixed-point), velocity, angle, pitch, health, inventory</p>
+</li>
+<li>
+<p><code>Entity</code>: abstract base for all game objects (players, projectiles, pickups, doors)</p>
+</li>
+<li>
+<p><code>PhysicsWorld</code>: collision detection, gravity, sliding along walls (BSP-assisted)</p>
+</li>
+<li>
+<p><code>MapSubsector</code>: sector adjacency, portal handling</p>
+</li>
+<li>
+<p><code>I_GameplayPort</code> — <code>tick(int)</code>, <code>loadMap(String)</code>, <code>spawnEntity(...)</code>, <code>removeEntity(...)</code></p>
+</li>
+<li>
+<p><code>NullGameplayPort</code> — stub</p>
+</li>
+</ul>
+<p><strong>Subsystem wrapper</strong>: <code>GameplaySubsystem</code> — routes <code>TickEvent</code> to <code>port.tick()</code>, <code>MapLoadEvent</code> to <code>port.loadMap()</code>.</p>
+<h3 id="33-render--comopenfpsenginerender--built-316-tests">3.3 Render — <code>com.openfps.engine.render</code> — <strong>built</strong> (316 tests)<a class="anchor" href="#33-render--comopenfpsenginerender--built-316-tests" aria-label="Permalink">#</a></h3>
+<p><strong>R_ Multi-threaded software triangle rasterizer</strong></p>
+<p>z-buffer, perspective-correct interpolation, mipmapped bilinear sampling, 32-bit colour, glTF models with baked lighting. <code>docs/ASSETS.md</code> § 2 is the canonical render target; <code>render/README.md</code> is the full Phase 5 specification — every formula, citation, and open question. Read it before writing any render code.</p>
+<p>The earlier 2.5D design (BSP visibility, visplanes, column renderer, affine mapping, 8-bit palette, fixed 320×200) is <strong>retired</strong>: those were VGA-era compromises, not properties of software rendering, and they cannot draw a glTF model.</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Component</th><th>Responsibility</th></tr></thead>
+<tbody>
+<tr><td><code>Framebuffer</code></td><td>Colour buffer (<code>int[]</code>, RGBA8888) + depth buffer (<code>float[]</code>, 1/w), tile geometry, <code>clear()</code></td></tr>
+<tr><td><code>Camera</code></td><td>View and projection matrices, world → clip space</td></tr>
+<tr><td><code>TriangleClipper</code></td><td>Near-plane clipping in homogeneous clip space (Sutherland-Hodgman)</td></tr>
+<tr><td><code>Rasterizer</code></td><td>Perspective divide, viewport transform, backface cull, edge-function setup, bounding box, binning triangles to tiles</td></tr>
+<tr><td><code>SpanRenderer</code></td><td>The inner loop — perspective-correct interpolation, depth test/write, colour write</td></tr>
+<tr><td><code>TextureSampler</code></td><td>Mipmapped bilinear sampling, mip level selection from UV derivatives</td></tr>
+<tr><td><code>ModelFormat</code></td><td>Flat binary runtime format; the engine reads it with near-zero parsing</td></tr>
+<tr><td><code>GltfConverter</code></td><td><strong>Build time only</strong>, on the Gradle buildscript classpath — may use a glTF/JSON library without adding a runtime dependency (<code>docs/ASSETS.md</code> § 4)</td></tr>
+</tbody>
+</table></div>
+<ul>
+<li>
+<p><code>I_RenderPort</code> — <code>renderFrame(int)</code></p>
+</li>
+<li>
+<p><code>NullRenderPort</code> — stub</p>
+</li>
+</ul>
+<p><strong>Numerics</strong>: the renderer uses <code>float</code>. Gameplay and networking stay 16.16 fixed-point — <strong>§ 4 below is unchanged and this is not an inconsistency.</strong> Fixed-point exists for lockstep <em>simulation</em> determinism; rendering is a pure function from game state to pixels and never feeds simulation state, so it cannot desync a peer regardless. Since JEP 306, Java 17 floating point is always-strict IEEE 754, so basic float arithmetic is bit-reproducible anyway (<code>Math.*</code> transcendentals are not; <code>StrictMath.*</code> is). Full argument: <code>render/README.md</code> § 2.</p>
+<p><strong>Threading</strong>: tiled with exclusive ownership. Triangles are binned to the tiles they touch during setup; each worker owns its tiles outright and is the only writer to those regions of the colour and depth buffers. That invariant is what makes the design lock-free — no synchronisation on the depth buffer, no false sharing between workers. Parallel work goes through the existing <code>WorkerPool</code>, never <code>new Thread</code>. The submit-and-await operation this needed (<code>submitParallel</code>, caller-participating) landed with Phase 5, along with a <code>DRAINING</code> pool state so a shutdown in flight cannot strand a tile pass.</p>
+<p><strong>Presentation</strong>: not R_'s job. The engine produces a finished framebuffer; the platform adapter uploads it. <code>I_WindowPort</code> / <code>I_FrameCallback</code> are the hook and already exist — do not design a new window port.</p>
+<p><strong>BSP</strong>: retired as the renderer's <em>visibility</em> algorithm — the z-buffer does that job now. It is <strong>not</strong> deleted from the project: Phase 4 keeps <code>BspTraverser</code> as a gameplay/collision structure (§ 3.2, <code>gameplay/README.md</code>).</p>
+<p><strong>Open questions blocking implementation</strong> — see <code>render/README.md</code> § 11: (a) framebuffer allocation vs. <code>I_MemoryPort</code>, (b) the role of the WAD subsystem now that art is preprocessed glTF, (c) no performance number in this design has been measured yet.</p>
+<p><strong>Subsystem wrapper</strong>: <code>RenderSubsystem</code> — routes <code>RenderFrameEvent</code> to <code>port.renderFrame()</code>.</p>
+<h3 id="34-audio--comopenfpsengineaudio--stub">3.4 Audio — <code>com.openfps.engine.audio</code> — <strong>stub</strong><a class="anchor" href="#34-audio--comopenfpsengineaudio--stub" aria-label="Permalink">#</a></h3>
+<p><strong>S_ Sound</strong></p>
+<ul>
+<li>
+<p><code>SoundEngine</code>: voice allocation, mix loop</p>
+</li>
+<li>
+<p><code>SoundEmitter</code>: 3D position + velocity</p>
+</li>
+<li>
+<p><code>I_AudioPort</code> — <code>playSfx</code>, <code>playMusic</code>, <code>stopAll</code></p>
+</li>
+<li>
+<p><code>NullAudioPort</code> — stub</p>
+</li>
+</ul>
+<p><strong>Subsystem wrapper</strong>: <code>AudioSubsystem</code> — init/shutdown only for now (event types for SFX/music are Phase 6 work).</p>
+<h3 id="35-network--comopenfpsenginenet--stub">3.5 Network — <code>com.openfps.engine.net</code> — <strong>stub</strong><a class="anchor" href="#35-network--comopenfpsenginenet--stub" aria-label="Permalink">#</a></h3>
+<p><strong>G_ Peer-to-Peer Networking</strong></p>
+<ul>
+<li>
+<p><code>PeerConnection</code> — per-peer state (address, RTT, ack window, loss stats); no socket</p>
+</li>
+<li>
+<p><code>TicCmdBuffer</code> — ring buffer of <code>TicCmd</code> per peer, indexed by tic number</p>
+</li>
+<li>
+<p><code>RedundantSender</code> — packs all cmds since the peer's last ack into every packet</p>
+</li>
+<li>
+<p><code>SnapshotDelta</code> — diff-based state serialization between tics</p>
+</li>
+<li>
+<p><code>Discovery</code> — LAN peer discovery via UDP broadcast</p>
+</li>
+<li>
+<p><code>I_NetworkPort</code> — <code>connect</code>, <code>disconnect</code>, <code>broadcastTicCmd</code>, <code>pollTicCmd</code>, <code>broadcastMapChange</code>, <code>discoverPeers</code>, <code>connectedPeerCount</code></p>
+</li>
+<li>
+<p><code>NullNetworkPort</code> — stub</p>
+</li>
+</ul>
+<p><strong>Transport</strong>: UDP over a single non-blocking <code>java.nio.channels.DatagramChannel</code>, demultiplexed by source address. Reliability is redundant input redelivery, not retransmission — TCP is ruled out by head-of-line blocking (a 200 ms <code>TCP_RTO_MIN</code> stall is 12+ tics at 60 Hz). No dependency added; native options (Valve GameNetworkingSockets) were evaluated and rejected on the Android build matrix. Full rationale and the options table: <code>net/README.md</code> § "Transport decision".</p>
+<p><strong>Subsystem wrapper</strong>: <code>NetSubsystem</code> — routes <code>NetworkPacketEvent</code> (Phase 3 will wire actual parsing).</p>
+<h3 id="36-resource--comopenfpsengineresource--built-but-unregistered-101-tests">3.6 Resource — <code>com.openfps.engine.resource</code> — <strong>built but unregistered</strong> (101 tests)<a class="anchor" href="#36-resource--comopenfpsengineresource--built-but-unregistered-101-tests" aria-label="Permalink">#</a></h3>
+<p><strong>W_ WAD File Management</strong></p>
+<ul>
+<li>
+<p><code>WadReader</code> — opens <code>.wad</code>, reads lump directory</p>
+</li>
+<li>
+<p><code>LumpCache</code> — demand-loaded, reference-counted</p>
+</li>
+<li>
+<p><code>MapLumpParser</code> — THINGS, LINEDEFS, SECTORS, etc.</p>
+</li>
+<li>
+<p><code>ImageDecoder</code> — DOOM-format patches and flats — <strong>on hold, see below</strong></p>
+</li>
+<li>
+<p><code>I_WadPort</code> — <code>open</code>, <code>close</code>, <code>readLump</code>, <code>precacheLump</code>, <code>flushCache</code>, <code>lumpCount</code></p>
+</li>
+<li>
+<p><code>NullWadPort</code> — stub</p>
+</li>
+</ul>
+<blockquote>
+<p><strong>Open question — what is this subsystem for now?</strong> <code>WadReader</code>, <code>LumpCache</code>,
+<code>MapLumpParser</code>, <code>LittleEndian</code> and <code>WadFilePort</code> are <strong>built and working</strong>
+(101 tests). But <code>docs/ASSETS.md</code> moves all art to preprocessed glTF and § 10
+records Freedoom's rejection, so the WAD path currently has <strong>no art left to
+read</strong>. Plausible remaining roles — map/level geometry container (the
+strongest: level layout is not art and <code>MapLumpParser</code> already reads it),
+generic asset container, or a format the project drops later — are all
+undecided. <strong>Nothing is deleted and the subsystem is not dead.</strong>
+<code>render/README.md</code> § 11b states the options.</p>
+<p><code>ImageDecoder</code> is <strong>on hold</strong> specifically: it decodes DOOM patches and flats
+into palette indices, and § 3.3's renderer has no palette. Do not implement it
+until the question above is answered.</p>
+</blockquote>
+<p><strong>Subsystem wrapper</strong>: none yet. Resource is the one subsystem with no wrapper
+and no registration in <code>EngineMain</code>, so <code>SubsystemId.W_</code> is currently unused and
+nothing can route an event to it. The port interface and its WAD-format spec are
+kept as the Phase 2 design; the wrapper lands with <code>WadReader</code>.</p>
+<h3 id="37-memory--comopenfpsenginememory--phase-11-complete">3.7 Memory — <code>com.openfps.engine.memory</code> — <strong>Phase 1.1 complete</strong><a class="anchor" href="#37-memory--comopenfpsenginememory--phase-11-complete" aria-label="Permalink">#</a></h3>
+<p><strong>Z_ Unified Memory Port</strong></p>
+<ul>
+<li>
+<p><strong>One interface, multiple backends</strong> — engine never instantiates a port directly</p>
+</li>
+<li>
+<p><code>I_MemoryPort</code> — <code>init(int)</code>, <code>shutdown</code>, <code>reset</code>, <code>allocate(int, int)</code>, <code>free(int)</code>, <code>freeByTag(int)</code>, <code>totalBytes</code>, <code>allocatedBytes</code>, <code>freeBytes</code>, <code>maxAllocatable</code>, <code>handleCount</code>, <code>sizeOf</code></p>
+</li>
+<li>
+<p><code>State</code> enum: <code>UNINITIALIZED</code>, <code>READY</code>, <code>ACTIVE</code>, <code>SHUTDOWN</code>, <code>ERROR</code></p>
+</li>
+<li>
+<p>All operations validate state and throw <code>MemoryException</code> on invalid transition</p>
+</li>
+<li>
+<p>Returns <code>int</code> handles (not raw pointers) — engine never dereferences</p>
+</li>
+<li>
+<p><code>NULL_HANDLE = -1</code> for failed allocations</p>
+</li>
+</ul>
+<p><strong>Backends:</strong></p>
+<ul>
+<li>
+<p><code>JvmMemoryPort</code> (default) — <code>new byte[size]</code> + slot tracking, O(N) freeByTag</p>
+</li>
+<li>
+<p><code>ZoneMemoryPort</code> — bump pointer on a pre-reserved heap + <code>boolean[] live</code> bitmap for handle validation</p>
+</li>
+<li>
+<p><code>MemoryPortFactory</code> — <code>createJvm(int)</code>, <code>createZone(int)</code>, <code>createSlab(int, int)</code> (Phase 2+)</p>
+</li>
+<li>
+<p><code>MemoryException</code> — dedicated exception</p>
+</li>
+</ul>
+<p><strong>Subsystem wrapper</strong>: <code>MemorySubsystem</code> — passes through to port shutdown.</p>
+<h3 id="38-hal--comopenfpsenginehal--phase-14-complete">3.8 HAL — <code>com.openfps.engine.hal</code> — <strong>Phase 1.4 complete</strong><a class="anchor" href="#38-hal--comopenfpsenginehal--phase-14-complete" aria-label="Permalink">#</a></h3>
+<p><strong>I_ Hardware Abstraction Layer</strong></p>
+<ul>
+<li>
+<p><code>I_TimePort</code> — <code>millis()</code>, <code>nanos()</code> (both monotonic), <code>epochMillis()</code> (wall clock, for persisted timestamps), <code>init()</code>, <code>shutdown()</code></p>
+</li>
+<li>
+<p><code>I_InputPort</code> — <code>sampleInput(int)</code>, <code>isShutdownRequested()</code>, <code>init()</code>, <code>shutdown()</code></p>
+</li>
+<li>
+<p><code>I_DatagramPort</code> — <code>send</code>, <code>receive</code>, <code>bind</code>, <code>close</code>, <code>processTic</code>, <code>init</code>, <code>shutdown</code></p>
+</li>
+<li>
+<p><code>I_FilePort</code> — <code>open</code>, <code>exists</code> + nested <code>I_FileHandle</code></p>
+</li>
+<li>
+<p><code>I_SystemInfoPort</code> (Phase 1.2) — <code>logicalProcessorCount</code>, <code>physicalProcessorCount</code>, <code>totalMemoryBytes</code>, <code>freeMemoryBytes</code>, <code>osName</code>, <code>osVersion</code>, <code>javaVersion</code>, <code>state()</code></p>
+</li>
+<li>
+<p><code>I_UserProfilePort</code> (Phase 1.4) — <code>findById</code>, <code>findAll</code>, <code>save</code> (upsert), <code>delete</code>, <code>count</code>, <code>generateNewId</code>, <code>init</code>, <code>shutdown</code>, <code>state()</code></p>
+</li>
+</ul>
+<p><strong>Adapters</strong> (in <code>hal/adapter/</code>):</p>
+<ul>
+<li>
+<p><code>nulladapter/</code> — headless stubs, used by all CI / smoke tests. Includes <code>MemoryUserProfilePort</code> (in-memory profiles).</p>
+</li>
+<li>
+<p><code>sqlite/</code> — <code>SqliteAdapterFactory</code> + <code>SqliteUserProfilePort</code> (Xerial SQLite JDBC). Real on-disk profile persistence at <code>&lt;userHome&gt;/.openfps/profile.db</code>, overridable via <code>OPENFPS_PROFILE_DB</code>. Null ports for everything else.</p>
+</li>
+<li>
+<p><code>desktop/</code> — <code>DesktopTimePort</code>, <code>DesktopDatagramPort</code> (NIO <code>DatagramChannel</code>), <code>DesktopAdapterFactory</code></p>
+</li>
+</ul>
+<p>Window and input adapters live in the <strong><code>:desktop</code> and <code>:android</code> modules</strong>, not
+under <code>hal/adapter/</code>, because they need libGDX and <code>:engine</code> must stay
+platform-free: <code>GdxWindowPort</code> / <code>GdxAdapterFactory</code> (<code>:desktop</code>, libGDX LWJGL3
+backend) and <code>AndroidWindowPort</code> / <code>AndroidAdapterFactory</code> / <code>RoomUserProfilePort</code>
+(<code>:android</code>, libGDX Android backend). Both implement <code>I_WindowPort</code> and drive
+<code>I_FrameCallback</code>. This pair is also the presentation path for the Phase 5
+software rasterizer — the engine hands over a finished framebuffer and the
+adapter uploads it (§ 3.3).</p>
+<p><strong>NullSystemInfoPort</strong> returns <code>Runtime.availableProcessors()</code> (logical cores). Worker pool size = <code>max(1, logicalCores / 2)</code>.</p>
+<hr>
+<h2 id="4-data-layout-conventions">4. Data Layout Conventions<a class="anchor" href="#4-data-layout-conventions" aria-label="Permalink">#</a></h2>
+<ul>
+<li>
+<p><strong>Fixed-point arithmetic</strong>: <code>int</code> storing value × 65536 (1.0 = 0x10000). See <code>common/FixedMath.java</code>.</p>
+</li>
+<li>
+<p><strong>Angles</strong>: degrees × 65536 in <code>int</code> (360° = 360 × 65536 = 23,592,960)</p>
+</li>
+<li>
+<p><strong>Coordinates</strong>: <code>x</code>, <code>y</code>, <code>z</code> each <code>int</code> fixed-point</p>
+</li>
+<li>
+<p><strong>Entity ID</strong>: <code>int</code> — unique per-level, rolled over on map load</p>
+</li>
+<li>
+<p><strong>Tic number</strong>: <code>int</code> — monotonically increasing from game start, no cap</p>
+</li>
+<li>
+<p><strong>Frame budget</strong>: <code>long</code> nanos, computed from <code>FrameRate</code> enum, NOT a constant</p>
+</li>
+</ul>
+<h3 id="recorded-deviation--playercontroller-uses-float-not-1616">Recorded deviation — <code>PlayerController</code> uses <code>float</code>, not 16.16<a class="anchor" href="#recorded-deviation--playercontroller-uses-float-not-1616" aria-label="Permalink">#</a></h3>
+<p><code>PlayerController</code> holds player position, yaw and pitch in <code>float</code>. That is
+simulation state, so by the letter of this section it should be fixed-point.
+The deviation is deliberate and satisfies the <em>intent</em> of the rule, which is
+bit-identical simulation state across peers in lockstep:</p>
+<ul>
+<li>
+<p><strong>Since JEP 306, all Java 17 floating-point arithmetic is FP-strict IEEE 754.</strong>
+<code>+ − × ÷</code> and <code>sqrt</code> are bit-reproducible on every conforming JVM and CPU.
+Fixed-point buys nothing here that the language does not already guarantee.</p>
+</li>
+<li>
+<p><strong>The real hazard is the transcendentals.</strong> <code>Math.sin</code> / <code>Math.cos</code> are
+permitted 1–2 ulp of error and are explicitly <em>not</em> required to agree between
+implementations. <code>StrictMath</code> is fdlibm-defined and is reproducible.</p>
+</li>
+</ul>
+<p>So every trig call in the controller's update path is <code>StrictMath</code>, never
+<code>Math</code>. This is enforced by a test that reads the compiled class's constant
+pool and fails if <code>java/lang/Math</code> appears in it at all.</p>
+<p>That guard is not belt-and-braces. A 1-ulp heading error is sub-micron per step
+and invisible for minutes of play, and it <strong>cannot reproduce in a single-process
+test</strong>, because one process is self-consistent with itself. The desync only
+appears between two machines, which is exactly where it is most expensive to
+diagnose. Review alone would not catch a <code>Math.cos</code> slipping in.</p>
+<p><code>FixedMath</code> remains correct for anything that must interoperate with the
+existing fixed-point map and entity data.</p>
+<hr>
+<h2 id="5-frame-rate-configuration-phase-13">5. Frame Rate Configuration (Phase 1.3)<a class="anchor" href="#5-frame-rate-configuration-phase-13" aria-label="Permalink">#</a></h2>
+<p>The engine runs at one of three rates: <strong>30, 60, or 120 Hz</strong>. Anything else is rejected.</p>
+<h3 id="per-rate-frame-budget">Per-rate frame budget<a class="anchor" href="#per-rate-frame-budget" aria-label="Permalink">#</a></h3>
+<div class="tablewrap"><table>
+<thead><tr><th>FPS</th><th>nanos/frame</th><th>drift/frame</th><th>use case</th></tr></thead>
+<tbody>
+<tr><td>30</td><td>33,333,333</td><td>0.33 ns</td><td>console, low-power</td></tr>
+<tr><td>60</td><td>16,666,666</td><td>0.67 ns</td><td>default, standard PC</td></tr>
+<tr><td>120</td><td>8,333,333</td><td>0.33 ns</td><td>high-refresh gaming</td></tr>
+</tbody>
+</table></div>
+<h3 id="drift-correction-the-math">Drift correction (the math)<a class="anchor" href="#drift-correction-the-math" aria-label="Permalink">#</a></h3>
+<p>Naive additive wait (<code>nextDeadline += budget</code>) accumulates per-frame rounding error and breaks P2P lockstep determinism. Instead, every iteration computes the deadline absolutely from a fixed origin:</p>
+<div class="code" data-lang="java"><pre><code>final long startNanos = timePort.nanos();
+for (int tic = 0; running; tic++) {
+    long deadlineNanos = startNanos + ((long) tic * nanosPerTic);
+    long waitNanos = deadlineNanos - timePort.nanos();
+    if (waitNanos &gt; 0) waitNanos(waitNanos);
+    publishTickEvent(tic, nanosPerTic);
+}
+</code></pre></div>
+<p>This is verified by <code>GameConfigTest.shouldNotDriftAt120Fps</code> and <code>shouldNotDriftAt30Fps</code> — both simulate 1000 iterations and assert total drift &lt; 1 microsecond. Reference: Glenn Fiedler, "Fix Your Timestep" — https://gafferongames.com/post/fix_your_timestep/</p>
+<h3 id="cli">CLI<a class="anchor" href="#cli" aria-label="Permalink">#</a></h3>
+<div class="code" data-lang="powershell"><pre><code>.\gradlew.bat run --args="--fps=30"
+.\gradlew.bat run --args="--fps=60"   # default
+.\gradlew.bat run --args="--fps=120"
+</code></pre></div>
+<hr>
+<h2 id="6-build-configuration">6. Build Configuration<a class="anchor" href="#6-build-configuration" aria-label="Permalink">#</a></h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Target</th><th>Toolchain</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td>Desktop (Win/Linux/macOS)</td><td>Java 17 + Gradle 8.13</td><td>Java 17 source/target; runs on JVM 17+</td></tr>
+<tr><td>Android</td><td>Java 17 source, compileSdk/targetSdk 36, minSdk 23</td><td>Built — APK assembles; not yet verified on a device or emulator</td></tr>
+<tr><td>Headless / Test</td><td>Java 17 only</td><td>null HAL adapter</td></tr>
+</tbody>
+</table></div>
+<h3 id="modules">Modules<a class="anchor" href="#modules" aria-label="Permalink">#</a></h3>
+<div class="tablewrap"><table>
+<thead><tr><th>Module</th><th>Included when</th><th>Purpose</th></tr></thead>
+<tbody>
+<tr><td><code>:engine</code></td><td>always</td><td>The engine. Platform-free; builds and tests with no display and no Android SDK</td></tr>
+<tr><td><code>:desktop</code></td><td>always</td><td>libGDX LWJGL3 window, input, presentation, launcher</td></tr>
+<tr><td><code>:tools</code></td><td>always</td><td><strong>Build-time only.</strong> glTF → <code>ModelFormat</code> conversion and headless preview harnesses. Depends on <code>:engine</code> one way; nothing depends on it</td></tr>
+<tr><td><code>:android</code></td><td><strong>only when an Android SDK is present</strong></td><td>libGDX Android backend. <code>settings.gradle.kts</code> checks <code>ANDROID_HOME</code> / <code>ANDROID_SDK_ROOT</code> / <code>local.properties</code> and <em>silently skips</em> the module otherwise — so a green <code>gradlew build</code> on a machine without the SDK does <strong>not</strong> mean <code>:android</code> compiles. With the configuration cache on (the default), even the "skipping :android" notice is suppressed on cached runs</td></tr>
+</tbody>
+</table></div>
+<h3 id="dependencies">Dependencies<a class="anchor" href="#dependencies" aria-label="Permalink">#</a></h3>
+<div class="tablewrap"><table>
+<thead><tr><th>Library</th><th>Version</th><th>Purpose</th></tr></thead>
+<tbody>
+<tr><td>Gradle</td><td>8.13</td><td>Build (via wrapper)</td></tr>
+<tr><td>SLF4J</td><td>2.0.16</td><td>Logging facade (industry standard)</td></tr>
+<tr><td>Logback</td><td>1.5.12</td><td>Logging backend</td></tr>
+<tr><td>Xerial SQLite JDBC</td><td>3.46.1.0</td><td>User profile persistence. <strong>NOT pure Java</strong> — bundles precompiled natives for ~20 platform triplets and is most of the ~15 MB desktop distribution. Excluded from <code>:android</code>, which uses Room instead</td></tr>
+<tr><td>JUnit Jupiter</td><td>5.11.4</td><td>Testing</td></tr>
+<tr><td>AssertJ</td><td>3.26.3</td><td>Test assertions</td></tr>
+<tr><td>Checkstyle</td><td>10.18.0</td><td>Style enforcement (enforces STYLE.md; wired to <code>build</code>, <code>maxWarnings = 0</code>)</td></tr>
+<tr><td>libGDX</td><td>1.14.2</td><td>Window, input, and framebuffer presentation. <code>gdx</code> + <code>gdx-backend-lwjgl3</code> in <code>:desktop</code>, <code>gdx</code> + <code>gdx-backend-android</code> in <code>:android</code>. <strong>Not a <code>:engine</code> dependency</strong></td></tr>
+<tr><td>Android Gradle Plugin</td><td>8.13.2</td><td><code>:android</code> only, requires Gradle ≥ 8.13 and compileSdk 36 — see the version chain in <code>settings.gradle.kts</code></td></tr>
+<tr><td>androidx.room</td><td>2.8.4</td><td><code>:android</code> only — the Android side of <code>I_UserProfilePort</code>, standing in for the excluded sqlite-jdbc</td></tr>
+<tr><td>desugar_jdk_libs</td><td>2.1.5</td><td><code>:android</code> only — core-library desugaring so Java 17 APIs resolve on minSdk 23</td></tr>
+<tr><td>slf4j-android</td><td>2.0.17-0</td><td><code>:android</code> only. <strong>Not optional</strong>: logback is excluded on Android, and SLF4J 2.x with no provider binds to the NOP logger and silently discards every engine log line, errors included</td></tr>
+<tr><td>Gson</td><td>2.11.0</td><td><code>:tools</code> only — glTF JSON parsing in <code>GltfConverter</code>. Apache-2.0. Never reaches a shipped runtime classpath; <code>verifyToolsIsolation</code> enforces that</td></tr>
+</tbody>
+</table></div>
+<p>The Gradle <strong>wrapper is pinned at 8.13</strong>, not 8.10: <code>gdx-backend-android 1.14.2 → androidx.core 1.17.0 → compileSdk 36, AGP ≥ 8.9.1 → Gradle ≥ 8.13</code>. None of those is a free choice.</p>
+<hr>
+<h2 id="7-project-roadmap">7. Project Roadmap<a class="anchor" href="#7-project-roadmap" aria-label="Permalink">#</a></h2>
+<h3 id="phase-0--scaffolding--done">Phase 0 — Scaffolding — <strong>done</strong><a class="anchor" href="#phase-0--scaffolding--done" aria-label="Permalink">#</a></h3>
+<ul>
+<li class="task done">
+<p>Git repo, project plan, style guide</p>
+</li>
+<li class="task done">
+<p>Gradle build (Kotlin DSL)</p>
+</li>
+<li class="task done">
+<p>Package skeleton with port/adapter stubs</p>
+</li>
+<li class="task done">
+<p>Checkstyle config</p>
+</li>
+</ul>
+<h3 id="phase-05--per-subsystem-docs--math-demystification--done">Phase 0.5 — Per-subsystem docs + math demystification — <strong>done</strong><a class="anchor" href="#phase-05--per-subsystem-docs--math-demystification--done" aria-label="Permalink">#</a></h3>
+<ul>
+<li class="task done">
+<p>README.md in every subsystem package (2-line pitch + full design)</p>
+</li>
+<li class="task done">
+<p>Math references (DOOM source, Quake 3 source, original papers)</p>
+</li>
+<li class="task done">
+<p>All port interfaces have inline Javadoc citing sources</p>
+</li>
+</ul>
+<h3 id="phase-11--unified-memory-port--done">Phase 1.1 — Unified Memory Port — <strong>done</strong><a class="anchor" href="#phase-11--unified-memory-port--done" aria-label="Permalink">#</a></h3>
+<ul>
+<li class="task done">
+<p><code>I_MemoryPort</code> state machine (<code>UNINITIALIZED → READY → ACTIVE → SHUTDOWN/ERROR</code>)</p>
+</li>
+<li class="task done">
+<p><code>JvmMemoryPort</code> (default) + <code>ZoneMemoryPort</code> (bulk-free)</p>
+</li>
+<li class="task done">
+<p><code>MemoryPortFactory</code> (system-level selector)</p>
+</li>
+<li class="task done">
+<p><code>MemoryException</code> for all invalid state</p>
+</li>
+<li class="task done">
+<p>35 tests across both backends (positive, negative, random, overflow, underflow, state machine, tags)</p>
+</li>
+</ul>
+<h3 id="phase-12--event-driven-engine--multi-threaded-worker-pool--done">Phase 1.2 — Event-driven engine + multi-threaded worker pool — <strong>done</strong><a class="anchor" href="#phase-12--event-driven-engine--multi-threaded-worker-pool--done" aria-label="Permalink">#</a></h3>
+<ul>
+<li class="task done">
+<p><code>I_EngineEvent</code> base + 6 concrete events</p>
+</li>
+<li class="task done">
+<p><code>SharedEventBus</code> (single shared queue, blocking backpressure)</p>
+</li>
+<li class="task done">
+<p><code>WorkerPool</code> (N = logicalCores / 2 hot threads, pre-started)</p>
+</li>
+<li class="task done">
+<p><code>Subsystem</code> state machine + <code>SubsystemRegistry</code></p>
+</li>
+<li class="task done">
+<p><code>I_SystemInfoPort</code> (logical core count from HAL)</p>
+</li>
+<li class="task done">
+<p><code>EngineMain</code> full event-driven bootstrap</p>
+</li>
+<li class="task done">
+<p>27 new tests (10 bus + 7 pool + 10 state)</p>
+</li>
+</ul>
+<h3 id="phase-13--configurable-frame-rate-3060120--done">Phase 1.3 — Configurable frame rate (30/60/120) — <strong>done</strong><a class="anchor" href="#phase-13--configurable-frame-rate-3060120--done" aria-label="Permalink">#</a></h3>
+<ul>
+<li class="task done">
+<p><code>FrameRate</code> enum (closed set, 120 cap)</p>
+</li>
+<li class="task done">
+<p><code>GameConfig</code> (immutable, factory methods)</p>
+</li>
+<li class="task done">
+<p>Drift-correction math (absolute deadline)</p>
+</li>
+<li class="task done">
+<p>CLI <code>--fps=N</code> parsing</p>
+</li>
+<li class="task done">
+<p>19 new tests (9 FrameRate + 10 GameConfig including drift tests)</p>
+</li>
+</ul>
+<h3 id="phase-14--user-profile-persistence-xerial-sqlite--done">Phase 1.4 — User profile persistence (Xerial SQLite) — <strong>done</strong><a class="anchor" href="#phase-14--user-profile-persistence-xerial-sqlite--done" aria-label="Permalink">#</a></h3>
+<ul>
+<li class="task done">
+<p><code>I_UserProfilePort</code> interface with state machine</p>
+</li>
+<li class="task done">
+<p><code>UserProfile</code> immutable record with validation</p>
+</li>
+<li class="task done">
+<p><code>SqliteUserProfilePort</code> (Xerial SQLite JDBC 3.46.1.0)</p>
+</li>
+<li class="task done">
+<p><code>MemoryUserProfilePort</code> (in-memory, for tests/headless)</p>
+</li>
+<li class="task done">
+<p><code>SqliteAdapterFactory</code> (real desktop-ish factory)</p>
+</li>
+<li class="task done">
+<p><code>EngineMain</code> loads/saves profile on boot/shutdown</p>
+</li>
+<li class="task done">
+<p>42 new tests (15 in-memory + 15 SQLite + 12 UserProfile validation)</p>
+</li>
+<li class="task done">
+<p>Persistence verified: same UUID loaded across restarts, playtime accumulates</p>
+</li>
+</ul>
+<h3 id="phase-15--desktop-hal-adapter-lwgjl3--done">Phase 1.5 — Desktop HAL adapter (LWGJL3) — <strong>done</strong><a class="anchor" href="#phase-15--desktop-hal-adapter-lwgjl3--done" aria-label="Permalink">#</a></h3>
+<p>Three of these shipped under different names than planned; the names below are
+what actually exists, with the original intent noted where it diverged.</p>
+<ul>
+<li class="task done">
+<p><code>DesktopTimePort</code> — monotonic time. <strong>Uses <code>System.nanoTime()</code>, not <code>GLFW.glfwGetTime()</code></strong>: the port is constructed before any window exists and must work headless, which rules out a GLFW-backed clock</p>
+</li>
+<li class="task done">
+<p><code>GdxInputPort</code> + <code>InputAccumulator</code> (in <code>:desktop</code>, not <code>hal/adapter/desktop/</code>) — polls <code>Gdx.input</code> per frame rather than binding raw GLFW callbacks. Accumulates on the render thread and latches on the game-loop thread with <code>getAndSet(0)</code></p>
+</li>
+<li class="task done">
+<p><code>DesktopDatagramPort</code> using <code>java.nio.channels.DatagramChannel</code> — datagram-only, non-blocking, one preallocated <strong>direct</strong> <code>ByteBuffer</code> per direction allocated at <code>init()</code> (a heap buffer makes the JDK copy through a temporary direct one on every call)</p>
+</li>
+<li class="task done">
+<p>Window for render testing — <code>GdxWindowPort</code> (LWJGL3, 1280x720 default), presenting through <code>FramebufferPresenter</code></p>
+</li>
+<li class="task done">
+<p>Confirm event-driven architecture handles real input timing — the accumulate/latch split above is that confirmation</p>
+</li>
+</ul>
+<p><strong>Known seam</strong>: <code>DesktopAdapterFactory</code> still returns <code>NullInputPort</code> / <code>NullWindowPort</code>. This is deliberate, not an oversight — the real window and input adapters need libGDX, and <code>:engine</code> must stay platform-free, so they live in <code>:desktop</code>'s <code>GdxAdapterFactory</code> instead.</p>
+<h3 id="phase-2--wad-file-loader--partly-done">Phase 2 — WAD file loader — <strong>partly done</strong><a class="anchor" href="#phase-2--wad-file-loader--partly-done" aria-label="Permalink">#</a></h3>
+<ul>
+<li class="task done">
+<p><code>WadReader</code> — header + directory parse</p>
+</li>
+<li class="task done">
+<p><code>LumpCache</code> — demand-loaded, ref-counted</p>
+</li>
+<li class="task done">
+<p><code>MapLumpParser</code> — THINGS / LINEDEFS / SECTORS / VERTEXES</p>
+</li>
+<li class="task done">
+<p><code>LittleEndian</code> + <code>WadFilePort</code> — the real <code>I_WadPort</code> (101 tests total)</p>
+</li>
+<li class="task todo">
+<p><code>ImageDecoder</code> — patch + flat decode — <strong>on hold</strong>, blocked on the § 3.6 open question (it decodes to palette indices; the renderer has no palette)</p>
+</li>
+<li class="task todo">
+<p><code>BlockmapBuilder</code> — pre-compute BLOCKMAP from LINEDEFS</p>
+</li>
+<li class="task todo">
+<p>A <code>W_</code> subsystem registering <code>WadFilePort</code> with the <code>SubsystemRegistry</code></p>
+</li>
+</ul>
+<h3 id="phase-3--networking--primitives-built-nothing-wired">Phase 3 — Networking — <strong>primitives built, nothing wired</strong><a class="anchor" href="#phase-3--networking--primitives-built-nothing-wired" aria-label="Permalink">#</a></h3>
+<ul>
+<li class="task done">
+<p>Transport decision recorded (<code>net/README.md</code> § "Transport decision") — UDP + redundant redelivery, no dependency added</p>
+</li>
+<li class="task done">
+<p><code>PeerConnection</code> (peer state — address, EWMA RTT, ack window; no socket)</p>
+</li>
+<li class="task done">
+<p><code>TicCmdBuffer</code> (lockstep) — 64x8 preallocated ring, zero per-tic allocation, decoupled from render. Note the sim rate is configurable 30/60/120, not fixed at 60</p>
+</li>
+<li class="task done">
+<p><code>RedundantSender</code> + <code>AckWindow</code> — redundant input redelivery, 64-bit ack bitfield</p>
+</li>
+<li class="task todo">
+<p><code>SnapshotDelta</code> (encode/decode)</p>
+</li>
+<li class="task todo">
+<p><code>Discovery</code> (LAN broadcast)</p>
+</li>
+</ul>
+<p><strong>These six classes are library-only.</strong> <code>EngineMain</code> still registers <code>NullNetworkPort</code>; nothing in the running engine constructs a <code>PeerConnection</code>, <code>TicCmdBuffer</code> or <code>RedundantSender</code>, and no socket is opened. 87 tests cover them in isolation. Wiring them to <code>DesktopDatagramPort</code> is the next real Phase 3 step.</p>
+<h3 id="phase-4--gameplay--planned">Phase 4 — Gameplay — <strong>planned</strong><a class="anchor" href="#phase-4--gameplay--planned" aria-label="Permalink">#</a></h3>
+<ul>
+<li class="task todo">
+<p><code>LagCompensator</code> (rewind for hits) — moved from Phase 3; under pure lockstep there is nothing to rewind, so this only becomes meaningful once prediction/snapshot exists</p>
+</li>
+<li class="task todo">
+<p><code>PlayerState</code> data class</p>
+</li>
+<li class="task todo">
+<p><code>Entity</code> base + concrete types (monster, projectile, pickup, door)</p>
+</li>
+<li class="task todo">
+<p><code>PhysicsWorld.moveWithSlide(player, dx, dy)</code> — collision + slide</p>
+</li>
+<li class="task todo">
+<p><code>MapLoader</code> — read THINGS / LINEDEFS / SECTORS from WAD</p>
+</li>
+<li class="task todo">
+<p><code>BspTraverser</code> — leaf lookup, reused in both gameplay and render</p>
+</li>
+</ul>
+<h3 id="phase-5--render-software-triangle-rasterizer--done-pending-polish">Phase 5 — Render (software triangle rasterizer) — <strong>done, pending polish</strong><a class="anchor" href="#phase-5--render-software-triangle-rasterizer--done-pending-polish" aria-label="Permalink">#</a></h3>
+<p>Full specification: <code>engine/src/main/java/com/openfps/engine/render/README.md</code>.
+Render target: <code>docs/ASSETS.md</code> § 2. Ordered by dependency.</p>
+<p><strong>Blockers — resolve before writing code:</strong></p>
+<ul>
+<li class="task done">
+<p>Benchmark the textured-span inner loop — done. Measured 17–21 ns/px, not 3–8; 60 Hz 1080p affords ~10–20k triangles, not 50–100k. See <code>docs/ASSETS.md</code> § 2</p>
+</li>
+<li class="task done">
+<p>Decide framebuffer allocation vs. <code>I_MemoryPort</code> (<code>render/README.md</code> § 11a) — sanctioned exception, or a typed-slab capability on the port</p>
+</li>
+<li class="task done">
+<p>Extend <code>WorkerPool</code> with a submit-N-jobs-and-await operation for the tile pass — <code>submitParallel</code>, caller-participating</p>
+</li>
+</ul>
+<p><strong>Implementation lanes:</strong></p>
+<ul>
+<li class="task done">
+<p><code>Framebuffer</code> — <code>int[]</code> colour (RGBA8888, matching libGDX <code>Pixmap.Format.RGBA8888</code>), <code>float[]</code> depth (1/w), tile geometry, cache-line-padded row stride, <code>clear()</code></p>
+</li>
+<li class="task done">
+<p><code>Camera</code> — view matrix, projection matrix (no z row needed — we store 1/w), world → clip space</p>
+</li>
+<li class="task done">
+<p><code>TriangleClipper</code> — near-plane Sutherland-Hodgman in homogeneous clip space, allocation-free 4-vertex scratch, fan re-triangulation</p>
+</li>
+<li class="task done">
+<p><code>Rasterizer</code> — perspective divide, viewport transform, backface cull, edge functions with the top-left fill rule, screen-space bounding box, per-chunk tile binning</p>
+</li>
+<li class="task done">
+<p><code>SpanRenderer</code> — reference per-pixel path. The segment path was deliberately not written: measured indistinguishable from per-pixel (<code>docs/ASSETS.md</code> § 2)</p>
+</li>
+<li class="task done">
+<p><code>TextureSampler</code> — bilinear with the −0.5 texel-centre offset, per-segment mip selection from UV derivatives</p>
+</li>
+<li class="task done">
+<p><code>ModelFormat</code> — flat binary reader, versioned header, near-zero parsing</p>
+</li>
+<li class="task done">
+<p><code>GltfConverter</code> — Gradle buildscript classpath only; triangulation, mip-chain generation, texture decode, <code>docs/ASSETS.md</code> § 5 budget enforcement</p>
+</li>
+<li class="task done">
+<p><strong>Integration</strong> — <code>SoftwareRenderPort</code> implements <code>I_RenderPort</code>, <code>GameLoop</code> publishes <code>RenderFrameEvent</code>, <code>:desktop</code> presents via <code>FramebufferPresenter</code>. A real Kenney model (368 tris, textured) renders to window and to PNG</p>
+</li>
+<li class="task done">
+<p><strong>Backface winding</strong> — measured against a no-cull oracle: <code>CullMode.CLOCKWISE</code></p>
+</li>
+<li class="task done">
+<p>Fix the drain-window defect — <code>WorkerPool</code> gained a <code>DRAINING</code> state; <code>submitParallel</code> is legal there</p>
+</li>
+<li class="task done">
+<p>Default to 720p60 — <code>GdxWindowPort</code> 1280x720, <code>GameConfig</code> <code>FPS_60</code>, <code>DemoPreviewMain</code> and <code>AndroidLauncher</code> agree. Measured p50 4.9 ms at 8 workers on the 295-instance demo room</p>
+</li>
+<li class="task todo">
+<p>Expose bilinear filtering as a quality toggle — <strong>not started</strong>. <code>TextureSampler</code> is unconditionally bilinear and no configuration field for it exists anywhere. Worth doing: bilinear alone is 2.9x the rest of the span loop, so disabling it is the cheapest path to 1080p60</p>
+</li>
+<li class="task todo">
+<p>Cap the internal render resolution independently of window size — a <code>RenderResolution</code> policy class was written but never landed; it is preserved as a patch and needs re-applying against the batched pipeline</p>
+</li>
+</ul>
+<p>Retired from this phase and deliberately not listed: <code>BspTraverser</code> (moved to Phase 4 as a gameplay/collision structure), <code>WallClipper</code>, <code>VisplaneBuilder</code>, <code>ColumnRenderer</code>, palette blitting.</p>
+<h3 id="phase-6--audio--planned">Phase 6 — Audio — <strong>planned</strong><a class="anchor" href="#phase-6--audio--planned" aria-label="Permalink">#</a></h3>
+<ul>
+<li class="task todo">
+<p><code>SoundEngine</code> — voice allocation, mix loop</p>
+</li>
+<li class="task todo">
+<p><code>SoundEmitter</code> — 3D position + velocity</p>
+</li>
+<li class="task todo">
+<p><code>MusicPlayer</code> — OGG/MIDI streaming</p>
+</li>
+<li class="task todo">
+<p><code>PcmLoader</code> — read SFX from WAD lumps</p>
+</li>
+</ul>
+<hr>
+<h2 id="8-test-coverage-summary">8. Test Coverage Summary<a class="anchor" href="#8-test-coverage-summary" aria-label="Permalink">#</a></h2>
+<p><strong>392 tests, all passing</strong> — 354 in <code>:engine</code>, 38 in <code>:desktop</code>.</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Suite</th><th>Module</th><th>Tests</th><th>Coverage</th></tr></thead>
+<tbody>
+<tr><td><code>FixedMathTest</code></td><td>engine</td><td>6</td><td>fixed-point arithmetic</td></tr>
+<tr><td><code>UserProfileTest</code></td><td>engine</td><td>12</td><td>field validation, withXxx copies, equals/hashCode</td></tr>
+<tr><td><code>FrameRateTest</code></td><td>engine</td><td>9</td><td>per-rate math, parser, rejection</td></tr>
+<tr><td><code>GameConfigTest</code></td><td>engine</td><td>10</td><td>factories, drift correction (1000-tic sim)</td></tr>
+<tr><td><code>SharedEventBusTest</code></td><td>engine</td><td>10</td><td>FIFO, backpressure, drain, lifecycle</td></tr>
+<tr><td><code>WorkerPoolTest</code></td><td>engine</td><td>7</td><td>hot threads, parallel dispatch, error recovery</td></tr>
+<tr><td><code>SubsystemStateTest</code></td><td>engine</td><td>10</td><td>transitions, error handling, thread-safety</td></tr>
+<tr><td><code>AdapterFactoryTest</code></td><td>engine</td><td>11</td><td>HAL backend selection</td></tr>
+<tr><td><code>DesktopAdapterFactoryTest</code></td><td>engine</td><td>5</td><td>desktop factory wiring</td></tr>
+<tr><td><code>DesktopTimePortTest</code></td><td>engine</td><td>7</td><td>monotonic vs. wall clock</td></tr>
+<tr><td><code>DesktopDatagramPortTest</code></td><td>engine</td><td>14</td><td>bind, send, receive, direct-buffer reuse</td></tr>
+<tr><td><code>MemoryUserProfilePortTest</code></td><td>engine</td><td>15</td><td>in-memory CRUD, state machine</td></tr>
+<tr><td><code>SqliteUserProfilePortTest</code></td><td>engine</td><td>15</td><td>SQLite CRUD, upsert, persistence, state machine</td></tr>
+<tr><td><code>MemoryPortTest</code></td><td>engine</td><td>35</td><td>both backends (7 <code>@Nested</code> groups): positive, negative, random, overflow, underflow, state machine, tags</td></tr>
+<tr><td><code>TicCmdTest</code>, <code>TicCmdBufferTest</code>, <code>PeerConnectionTest</code>, <code>RedundantSenderTest</code>, <code>AckWindowTest</code></td><td>engine</td><td>87</td><td>lockstep tic buffers, peer state, redundant redelivery, 64-bit ack bitfield</td></tr>
+<tr><td><code>LittleEndianTest</code></td><td>engine</td><td>10</td><td>LE primitive readers</td></tr>
+<tr><td><code>WadReaderTest</code></td><td>engine</td><td>27</td><td>header + directory parse, lump slicing</td></tr>
+<tr><td><code>LumpCacheTest</code></td><td>engine</td><td>21</td><td>demand load, ref counting, pinning, eviction</td></tr>
+<tr><td><code>MapLumpParserTest</code></td><td>engine</td><td>16</td><td>THINGS / LINEDEFS / SECTORS / VERTEXES</td></tr>
+<tr><td><code>WadFilePortTest</code></td><td>engine</td><td>27</td><td>real <code>I_WadPort</code> end to end</td></tr>
+<tr><td><code>GdxWindowPortTest</code></td><td>desktop</td><td>18</td><td><code>I_WindowPort</code> lifecycle, frame loop, close requests</td></tr>
+<tr><td><code>GdxFrameLoopListenerTest</code></td><td>desktop</td><td>6</td><td><code>I_FrameCallback</code> dispatch</td></tr>
+<tr><td><code>GdxAdapterFactoryTest</code></td><td>desktop</td><td>5</td><td>factory wiring</td></tr>
+<tr><td><code>DefaultMenuActionsTest</code>, <code>MenuButtonListenerTest</code></td><td>desktop</td><td>9</td><td>main-menu actions</td></tr>
+</tbody>
+</table></div>
+<p>Run with: <code>.\gradlew.bat test</code>. <code>.\gradlew.bat build</code> additionally runs
+Checkstyle over main and test sources and fails on any violation.</p>
+<blockquote>
+<p>The <code>:engine</code> numbers above cover subsystems whose PLAN sections still read
+"stub" (net, resource). Those sections are pending their own revisions; the
+test counts here are measured, not aspirational.</p>
+</blockquote>
+<hr>
+<h2 id="9-contribution-guidelines">9. Contribution Guidelines<a class="anchor" href="#9-contribution-guidelines" aria-label="Permalink">#</a></h2>
+<ol>
+<li>
+<p>All PRs must pass <code>gradle build</code> (Checkstyle + tests)</p>
+</li>
+<li>
+<p>New subsystems require port interfaces before any adapter implementation</p>
+</li>
+<li>
+<p>Core engine never imports from <code>adapter/</code> packages — the sole exception is
+the composition root, <code>EngineMain</code>, which has to pick concrete implementations</p>
+</li>
+<li>
+<p>Each subsystem has its own state machine — no shared state machines</p>
+</li>
+<li>
+<p>New frame rates require a new <code>FrameRate</code> enum value (not runtime config)</p>
+</li>
+<li>
+<p>All public API must be documented with Javadoc citing sources</p>
+</li>
+<li>
+<p>Breaking changes to public API require a major version bump</p>
+</li>
+</ol>
+<hr>
+<h2 id="10-document-to-code-mapping">10. Document-to-Code Mapping<a class="anchor" href="#10-document-to-code-mapping" aria-label="Permalink">#</a></h2>
+<p>This plan is the source of truth. When code is written:</p>
+<ul>
+<li>
+<p>Update the relevant subsystem section with implementation notes</p>
+</li>
+<li>
+<p>Mark <code>[x]</code> items in the roadmap as they complete</p>
+</li>
+<li>
+<p>Keep section numbers stable; append <code>-impl</code> notes below the specification</p>
+</li>
+</ul>
+<p>Per-package READMEs in <code>src/main/java/com/openfps/engine/&lt;subsystem&gt;/README.md</code> are the FDE entry point for that subsystem — read them in order: <code>core → common → hal → gameplay → render → audio → net → resource → memory</code>.</p>
+<footer class="pagefoot"><p>Source: <a class="ext" rel="noopener noreferrer" target="_blank" href="https://github.com/nicholashutter/OpenFPS/blob/main/PLAN.md">PLAN.md</a>. This page is generated — edit the Markdown, not the HTML.</p></footer>
+</main>
+</div>
+<script src="site.js"></script>
+</body>
+</html>

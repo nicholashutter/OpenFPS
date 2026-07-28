@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Demo — the playable first-person scene — OpenFPS documentation</title>
+<meta name="description" content="A room to stand in and a blaster to hold. This package is what turns the engine's working parts into something you can walk around in.">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<a class="skip" href="#doc">Skip to content</a>
+<header class="topbar"><button class="burger" id="burger" aria-controls="sidebar" aria-expanded="false" aria-label="Show navigation"><span></span><span></span><span></span></button><span class="topbar-name">OpenFPS docs</span></header>
+<div class="scrim" id="scrim" hidden></div>
+<div class="layout">
+<aside class="sidebar" id="sidebar">
+<a class="brand" href="index.html"><span class="brand-mark"></span><span class="brand-name">OpenFPS</span><span class="brand-kind">docs</span></a>
+<input class="filter" id="filter" type="search" placeholder="Filter pages" aria-label="Filter pages" autocomplete="off">
+<nav class="nav" id="nav" aria-label="Documentation">
+<details class="grp" data-hue="1" open><summary><span class="dot"></span>Overview<span class="count">2</span></summary>
+<ul>
+<li><a href="index.html">Overview</a></li>
+<li><a href="agents.html">Agent instructions</a></li>
+</ul></details>
+<details class="grp" data-hue="2" open><summary><span class="dot"></span>Building<span class="count">1</span></summary>
+<ul>
+<li><a href="build.html">Build reference</a></li>
+</ul></details>
+<details class="grp" data-hue="3" open><summary><span class="dot"></span>Architecture<span class="count">2</span></summary>
+<ul>
+<li><a href="style.html">Code style</a></li>
+<li><a href="plan.html">Project plan</a></li>
+</ul></details>
+<details class="grp" data-hue="4" open><summary><span class="dot"></span>Modules<span class="count">5</span></summary>
+<ul>
+<li><a href="engine.html">:engine</a></li>
+<li><a href="desktop.html">:desktop</a></li>
+<li><a href="android.html">:android</a></li>
+<li><a href="tools.html">:tools</a></li>
+<li><a href="gdxshared.html">:gdxshared</a></li>
+</ul></details>
+<details class="grp" data-hue="5" open><summary><span class="dot"></span>Packages<span class="count">10</span></summary>
+<ul>
+<li><a href="engine-core.html">Core</a></li>
+<li><a href="engine-common.html">Common</a></li>
+<li><a href="engine-hal.html">HAL (I_)</a></li>
+<li><a href="engine-gameplay.html">Gameplay (P_)</a></li>
+<li><a href="engine-render.html">Render (R_)</a></li>
+<li><a href="engine-demo.html" class="cur" aria-current="page">Demo</a></li>
+<li><a href="engine-audio.html">Audio (S_)</a></li>
+<li><a href="engine-net.html">Net (G_)</a></li>
+<li><a href="engine-resource.html">Resource (W_)</a></li>
+<li><a href="engine-memory.html">Memory (Z_)</a></li>
+</ul></details>
+<details class="grp" data-hue="6"><summary><span class="dot"></span>Reference<span class="count">2</span></summary>
+<ul>
+<li><a href="assets.html">Assets and licensing</a></li>
+<li><a href="demo-assets.html">Demo asset manifest</a></li>
+</ul></details>
+</nav>
+<p class="generated">Generated from the repository's Markdown by <code>:tools:buildDocsSite</code>.</p>
+</aside>
+<aside class="rail"><details class="toc" id="toc" open><summary>On this page</summary>
+<ul>
+<li class="lv2"><a href="#status">Status</a></li>
+<li class="lv2"><a href="#not-a-subsystem">Not a subsystem</a></li>
+<li class="lv2"><a href="#the-only-live-i_gameplayport">The only live I_GameplayPort</a></li>
+<li class="lv2"><a href="#art--a-fresh-clone-has-none">Art — a fresh clone has none</a></li>
+<li class="lv2"><a href="#the-hand-tuned-constants-in-demoscene">The hand-tuned constants in DemoScene</a></li>
+<li class="lv2"><a href="#files">Files</a></li>
+</ul></details></aside>
+<main id="doc">
+<p class="crumb"><span class="tag">Packages</span><span class="sep">/</span><code>engine/src/main/java/com/openfps/engine/demo/README.md</code><span class="sep">/</span>4 min read</p>
+<h1 id="demo--the-playable-first-person-scene">Demo — the playable first-person scene<a class="anchor" href="#demo--the-playable-first-person-scene" aria-label="Permalink">#</a></h1>
+<blockquote>
+<p>A room to stand in and a blaster to hold. This package is what turns the
+engine's working parts into something you can walk around in.</p>
+</blockquote>
+<h2 id="status">Status<a class="anchor" href="#status" aria-label="Permalink">#</a></h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Field</th><th>Value</th></tr></thead>
+<tbody>
+<tr><td><strong>State</strong></td><td>SHIPPING</td></tr>
+<tr><td><strong>Phase</strong></td><td>not a phase item — this is the playable demo content</td></tr>
+<tr><td><strong>Tests</strong></td><td>58</td></tr>
+<tr><td><strong>Registered</strong></td><td>not registered — not a subsystem; it is a composition root that consumes the engine</td></tr>
+<tr><td><strong>Verified</strong></td><td>2026-07-28</td></tr>
+</tbody>
+</table></div>
+<p><strong>Built.</strong> <code>DemoScene</code> builds the room layout, the kit scale and the weapon pose
+once and hands back an immutable <code>Scene</code>; <code>DemoModels</code> loads the model set and
+reports honestly which of its three asset outcomes it got; <code>DemoGameplayPort</code> is
+the only live <code>I_GameplayPort</code> in the codebase, driving a <code>PlayerController</code> and
+aiming the software renderer once per tic; <code>DemoAssetException</code> refuses to start
+a demo with no floor. <code>:desktop:run</code> shows all of it in a window.</p>
+<p><strong>Not built.</strong> Nothing outstanding.</p>
+<p><strong>Blocked on.</strong> Nothing.</p>
+<p><strong>Next step.</strong> This package follows the renderer. There is nothing to do here
+until the <code>render/README.md</code> polish items — the bilinear quality toggle and the
+independent internal render resolution — land.</p>
+<h2 id="not-a-subsystem">Not a subsystem<a class="anchor" href="#not-a-subsystem" aria-label="Permalink">#</a></h2>
+<p><code>demo</code> has <strong>no <code>SubsystemId</code>, no <code>Subsystem</code> wrapper, and is never registered
+with the core.</strong> It is a <em>consumer</em> of the engine, sitting where a game would
+sit: <code>DesktopLauncher</code> builds a <code>DemoScene</code>, hands the renderer its <code>Scene</code>, and
+registers <code>DemoGameplayPort</code> as <code>P_</code> through <code>I_GameplayPortFactory</code>. Delete this
+package and the engine still starts — it just has nothing to show.</p>
+<p>Because it is a composition root, <code>STYLE.md</code> § 1.1 lets it name concrete types:
+<code>DemoGameplayPort</code> imports <code>SoftwareRenderPort</code> directly, and has to, since
+<code>I_RenderPort</code> has no <code>setCamera</code> and <code>render/README.md</code> § 12 keeps it that way.</p>
+<h2 id="the-only-live-i_gameplayport">The only live <code>I_GameplayPort</code><a class="anchor" href="#the-only-live-i_gameplayport" aria-label="Permalink">#</a></h2>
+<p><code>gameplay/adapter/NullGameplayPort</code> is a stub and <code>PhysicsWorld</code> does not exist
+yet, so <code>DemoGameplayPort</code> is the only implementation that actually plays
+anything. Per tic, under one lock: latch input, present it as <code>I_PlayerInput</code>,
+integrate one tic of movement, aim the camera. Its <code>deltaSeconds</code> comes from
+<code>GameConfig.nanosPerTic()</code> rather than a measured frame time, because <code>GameLoop</code>
+is a fixed-timestep clock — see <code>gameplay/README.md</code>.</p>
+<h2 id="art--a-fresh-clone-has-none">Art — a fresh clone has none<a class="anchor" href="#art--a-fresh-clone-has-none" aria-label="Permalink">#</a></h2>
+<p><code>docs/ASSETS.md</code> § 6 keeps upstream art out of git, so <code>assets/models/</code> is
+gitignored. Two CC0 Kenney packs feed the demo when they <em>are</em> staged — the
+<strong>Prototype Kit</strong> (level geometry) and the <strong>Blaster Kit</strong> (the viewmodel) —
+both documented with URLs, digests and measured budgets in <code>docs/DEMO_ASSETS.md</code>.</p>
+<p>Without them, <code>:tools:regenerateDemoAssets</code> emits <strong>only</strong> a 60-triangle greybox
+room and <strong>no weapon at all</strong>. <code>DemoModels</code> reports which of the three outcomes
+it got, and reports the fallback at <code>WARN</code>, precisely so nobody mistakes
+generated greybox for Kenney art. If neither is present it throws
+<code>DemoAssetException</code> naming the command that fixes it, rather than starting a
+demo with no floor.</p>
+<h2 id="the-hand-tuned-constants-in-demoscene">The hand-tuned constants in <code>DemoScene</code><a class="anchor" href="#the-hand-tuned-constants-in-demoscene" aria-label="Permalink">#</a></h2>
+<p>These are empirical — arrived at by rendering the scene and looking at it — and
+their derivations live in the Javadoc, which is worth reading before changing
+any of them. The short version:</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Constant</th><th>Value</th><th>Why that number</th></tr></thead>
+<tbody>
+<tr><td><code>KIT_WORLD_SCALE</code></td><td>64</td><td>Kenney authors on a <strong>1-unit grid</strong>; this engine inherited DOOM's geometry — a 41-unit eye, a 16-unit radius. Unscaled, a wall would be 1/41 of the player's eye height. 64 is DOOM's map grid, so one Kenney cell maps onto one DOOM cell</td></tr>
+<tr><td><code>FALLBACK_WORLD_SCALE</code></td><td>32</td><td>Different kit, same job: <code>ProceduralRoom</code> authors 4-unit-tall walls, so 32 gives the fallback room the <em>same</em> ceiling and keeps the two demos comparable</td></tr>
+<tr><td><code>WEAPON_VIEW_SCALE</code></td><td>1.9</td><td>Sized to look right on a screen, not in the world — see below</td></tr>
+<tr><td><code>WEAPON_VIEW_YAW_DEGREES</code></td><td>174</td><td>180° because the blaster's muzzle points down model <strong>−z</strong> while view space is <strong>+z forward</strong>, minus 6° of toe-in so a weapon sitting right of centre reads as aimed rather than carried</td></tr>
+<tr><td><code>WEAPON_VIEW_FORWARD</code> / <code>_RIGHT</code> / <code>_DOWN</code></td><td>1.85 / 0.92 / −0.38</td><td>Far enough forward to clear the near plane (nearest vertex ≈ 1.43 against a 1.0 near plane), close enough that perspective does not flatten it into a decal</td></tr>
+</tbody>
+</table></div>
+<p><strong>The corroboration is the interesting part.</strong> <code>KIT_WORLD_SCALE</code> was chosen from
+the eye height — 41 of a 128-unit ceiling is 32% up, the same fraction as a 1.7 m
+person in a 5.3 m room. Only afterwards did it turn out that two Kenney courses
+at 64 land exactly on <code>Constants.MAX_OPEN_HEIGHT</code>, this engine's own inherited
+constant for the tallest open space, written long before the demo existed.
+<code>DemoSceneTest</code> asserts that equality so the two cannot drift apart silently.</p>
+<p><strong>The weapon scale is deliberately unrelated to the world scale.</strong> A viewmodel
+lives in view space; it is sized against the screen and the field of view, not
+against the room. Deriving one from the other would be a coincidence dressed as
+a rule.</p>
+<blockquote>
+<p>Two Javadoc <em>summary</em> lines in <code>DemoScene</code> are stale — they open with 2.2 and
+1.8 where the fields hold 1.9 and 1.85. The prose below each one, and the
+table above, follow the real values.</p>
+</blockquote>
+<h2 id="files">Files<a class="anchor" href="#files" aria-label="Permalink">#</a></h2>
+<ul>
+<li>
+<p><code>DemoScene.java</code> — builds the immutable <code>Scene</code> once and the spawn that goes with it</p>
+</li>
+<li>
+<p><code>DemoModels.java</code> — loads the model set, with the honest three-outcome fallback</p>
+</li>
+<li>
+<p><code>DemoGameplayPort.java</code> — the per-tic loop</p>
+</li>
+<li>
+<p><code>DemoAssetException.java</code> — thrown when there is nothing to stand on</p>
+</li>
+</ul>
+<p><strong>35 tests.</strong> Run with <code>.\gradlew.bat test</code>.</p>
+<footer class="pagefoot"><p>Source: <a class="ext" rel="noopener noreferrer" target="_blank" href="https://github.com/nicholashutter/OpenFPS/blob/main/engine/src/main/java/com/openfps/engine/demo/README.md">engine/src/main/java/com/openfps/engine/demo/README.md</a>. This page is generated — edit the Markdown, not the HTML.</p></footer>
+</main>
+</div>
+<script src="site.js"></script>
+</body>
+</html>

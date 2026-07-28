@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HAL (I_) — Hardware Abstraction Layer — OpenFPS documentation</title>
+<meta name="description" content="Every platform dependency the engine has, named as an interface here and satisfied somewhere else. Nothing in :engine outside hal/adapter/ may import a platform API — and hal/adapter/ itself…">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<a class="skip" href="#doc">Skip to content</a>
+<header class="topbar"><button class="burger" id="burger" aria-controls="sidebar" aria-expanded="false" aria-label="Show navigation"><span></span><span></span><span></span></button><span class="topbar-name">OpenFPS docs</span></header>
+<div class="scrim" id="scrim" hidden></div>
+<div class="layout">
+<aside class="sidebar" id="sidebar">
+<a class="brand" href="index.html"><span class="brand-mark"></span><span class="brand-name">OpenFPS</span><span class="brand-kind">docs</span></a>
+<input class="filter" id="filter" type="search" placeholder="Filter pages" aria-label="Filter pages" autocomplete="off">
+<nav class="nav" id="nav" aria-label="Documentation">
+<details class="grp" data-hue="1" open><summary><span class="dot"></span>Overview<span class="count">2</span></summary>
+<ul>
+<li><a href="index.html">Overview</a></li>
+<li><a href="agents.html">Agent instructions</a></li>
+</ul></details>
+<details class="grp" data-hue="2" open><summary><span class="dot"></span>Building<span class="count">1</span></summary>
+<ul>
+<li><a href="build.html">Build reference</a></li>
+</ul></details>
+<details class="grp" data-hue="3" open><summary><span class="dot"></span>Architecture<span class="count">2</span></summary>
+<ul>
+<li><a href="style.html">Code style</a></li>
+<li><a href="plan.html">Project plan</a></li>
+</ul></details>
+<details class="grp" data-hue="4" open><summary><span class="dot"></span>Modules<span class="count">5</span></summary>
+<ul>
+<li><a href="engine.html">:engine</a></li>
+<li><a href="desktop.html">:desktop</a></li>
+<li><a href="android.html">:android</a></li>
+<li><a href="tools.html">:tools</a></li>
+<li><a href="gdxshared.html">:gdxshared</a></li>
+</ul></details>
+<details class="grp" data-hue="5" open><summary><span class="dot"></span>Packages<span class="count">10</span></summary>
+<ul>
+<li><a href="engine-core.html">Core</a></li>
+<li><a href="engine-common.html">Common</a></li>
+<li><a href="engine-hal.html" class="cur" aria-current="page">HAL (I_)</a></li>
+<li><a href="engine-gameplay.html">Gameplay (P_)</a></li>
+<li><a href="engine-render.html">Render (R_)</a></li>
+<li><a href="engine-demo.html">Demo</a></li>
+<li><a href="engine-audio.html">Audio (S_)</a></li>
+<li><a href="engine-net.html">Net (G_)</a></li>
+<li><a href="engine-resource.html">Resource (W_)</a></li>
+<li><a href="engine-memory.html">Memory (Z_)</a></li>
+</ul></details>
+<details class="grp" data-hue="6"><summary><span class="dot"></span>Reference<span class="count">2</span></summary>
+<ul>
+<li><a href="assets.html">Assets and licensing</a></li>
+<li><a href="demo-assets.html">Demo asset manifest</a></li>
+</ul></details>
+</nav>
+<p class="generated">Generated from the repository's Markdown by <code>:tools:buildDocsSite</code>.</p>
+</aside>
+<aside class="rail"><details class="toc" id="toc" open><summary>On this page</summary>
+<ul>
+<li class="lv2"><a href="#status">Status</a></li>
+<li class="lv2"><a href="#layout">Layout</a></li>
+<li class="lv2"><a href="#where-the-window-and-input-actually-live">Where the window and input actually live</a></li>
+<li class="lv2"><a href="#what-each-port-does">What each port does</a></li>
+<li class="lv2"><a href="#the-platform-owns-the-loop">The platform owns the loop</a></li>
+<li class="lv2"><a href="#input-sample-then-read">Input: sample, then read</a></li>
+<li class="lv2"><a href="#how-to-write-a-new-adapter">How to write a new adapter</a></li>
+<li class="lv2"><a href="#why-port-first">Why port-first?</a></li>
+</ul></details></aside>
+<main id="doc">
+<p class="crumb"><span class="tag">Packages</span><span class="sep">/</span><code>engine/src/main/java/com/openfps/engine/hal/README.md</code><span class="sep">/</span>8 min read</p>
+<h1 id="hal-i_--hardware-abstraction-layer">HAL (I_) — Hardware Abstraction Layer<a class="anchor" href="#hal-i_--hardware-abstraction-layer" aria-label="Permalink">#</a></h1>
+<blockquote>
+<p>Every platform dependency the engine has, named as an interface here and
+satisfied somewhere else. Nothing in <code>:engine</code> outside <code>hal/adapter/</code> may
+import a platform API — and <code>hal/adapter/</code> itself is limited to the JDK, so
+anything needing a device or a native library lives in a platform module.</p>
+</blockquote>
+<h2 id="status">Status<a class="anchor" href="#status" aria-label="Permalink">#</a></h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Field</th><th>Value</th></tr></thead>
+<tbody>
+<tr><td><strong>State</strong></td><td>SHIPPING</td></tr>
+<tr><td><strong>Phase</strong></td><td>1.4, 1.5 complete</td></tr>
+<tr><td><strong>Tests</strong></td><td>110</td></tr>
+<tr><td><strong>Registered</strong></td><td>I_ via <code>HalSubsystem</code></td></tr>
+<tr><td><strong>Verified</strong></td><td>2026-07-28</td></tr>
+</tbody>
+</table></div>
+<p><strong>Built.</strong> All nine ports, and three adapter families behind them: <code>nulladapter</code>
+(every test and <code>--headless</code>), <code>sqlite</code> (Xerial <code>SqliteUserProfilePort</code>) and
+<code>desktop</code> (<code>DesktopTimePort</code>, <code>DesktopDatagramPort</code>), selected by <code>HalBackend</code> /
+<code>AdapterFactorySelector</code>. Window and input are built too — <code>GdxWindowPort</code> and
+<code>GdxInputPort</code> in the <code>:desktop</code> module. <code>DesktopAdapterFactory</code> returning
+<code>NullWindowPort</code> and <code>NullInputPort</code> is the design, not a gap: <code>:engine</code> stays
+platform-free and <code>:desktop</code> decorates it (§ "Where the window and input actually
+live").</p>
+<p><strong>Not built.</strong> Nothing outstanding for these phases. There is no <code>mobile/</code>
+adapter family; <code>I_UserProfilePort</code> names <code>hal.adapter.mobile</code> as where a Room
+implementation will go, not as somewhere that exists.</p>
+<p><strong>Blocked on.</strong> Nothing.</p>
+<p><strong>Next step.</strong> Android — the second platform is what proves the port set, and it
+is the only named backend with nothing written for it (<code>PLAN.md</code> § 6).</p>
+<h2 id="layout">Layout<a class="anchor" href="#layout" aria-label="Permalink">#</a></h2>
+<div class="code"><pre><code>hal/
+├── port/                interfaces + one value type — core depends on these
+│   ├── I_TimePort.java          monotonic + wall clock
+│   ├── I_InputPort.java         latch input once per tic
+│   ├── InputState.java          the latched snapshot (immutable value)
+│   ├── I_DatagramPort.java      raw UDP
+│   ├── I_FilePort.java          open / read / size / close
+│   ├── I_SystemInfoPort.java    cores, memory, OS strings
+│   ├── I_UserProfilePort.java   profile persistence
+│   ├── I_WindowPort.java        the platform window and its frame loop
+│   └── I_FrameCallback.java     what the platform calls back into
+└── adapter/
+    ├── I_AdapterFactory.java    one complete port set for one platform
+    ├── HalBackend.java          the closed set of backends: NULL, SQLITE, DESKTOP
+    ├── AdapterFactorySelector.java  backend enum → factory; the only construction site
+    ├── nulladapter/     everything null / in-memory — every test, and --headless
+    ├── sqlite/          real Xerial SQLite user profile on disk
+    └── desktop/         real JDK-backed time + UDP; window and input stay null (see below)
+</code></pre></div>
+<p><code>InputState</code> is the one non-interface in <code>port/</code> on purpose: it is the value the
+input port hands back, and it has no platform in it, so it belongs with the
+contract rather than with any adapter.</p>
+<p>There is no <code>mobile/</code> directory. Android is a stated target (<code>PLAN.md</code> § 6) but
+nothing has been written for it — <code>I_UserProfilePort</code> names <code>hal.adapter.mobile</code>
+as where its Room implementation will go, not as somewhere that exists.</p>
+<h2 id="where-the-window-and-input-actually-live">Where the window and input actually live<a class="anchor" href="#where-the-window-and-input-actually-live" aria-label="Permalink">#</a></h2>
+<p><strong><code>hal/adapter/desktop/</code> contains no window and no input.</strong> It holds
+<code>DesktopAdapterFactory</code>, <code>DesktopDatagramPort</code> and <code>DesktopTimePort</code> — a real
+<code>java.nio.channels.DatagramChannel</code> and a <code>System.nanoTime()</code> clock, both pure
+JDK 17. <code>DesktopAdapterFactory</code> returns <code>NullWindowPort</code> and <code>NullInputPort</code>,
+which is why <code>HalBackend.DESKTOP</code> still needs no display and still runs on CI.</p>
+<p>The real LWJGL3 window and mouse/keyboard input are <code>GdxWindowPort</code> and
+<code>GdxInputPort</code> in the <strong>separate <code>:desktop</code> module</strong> (package
+<code>com.openfps.desktop</code>), together with <code>GdxAdapterFactory</code>, which delegates every
+other getter to <code>DesktopAdapterFactory</code> and overrides only those two.</p>
+<p>That split is the architectural point of this package, not an accident of
+layout. <code>:engine</code> must stay platform-free — it has to compile and test with no
+libGDX, no GLFW and no display — so it cannot depend on <code>:desktop</code>. The
+dependency therefore runs one way only, and <code>AdapterFactorySelector</code> can never
+name <code>GdxAdapterFactory</code>: the windowed HAL is assembled at the composition root
+in <code>:desktop</code>, by decorating the headless one.</p>
+<p>The rule that falls out of it: <strong>a port interface lives here, an implementation
+that needs a device does not.</strong></p>
+<h2 id="what-each-port-does">What each port does<a class="anchor" href="#what-each-port-does" aria-label="Permalink">#</a></h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Port</th><th>Role</th><th>Backends today</th></tr></thead>
+<tbody>
+<tr><td><code>I_TimePort</code></td><td>Monotonic nanosecond counter + wall clock</td><td><code>DesktopTimePort</code> (<code>System.nanoTime()</code>, rebased at <code>init</code>), <code>NullTimePort</code> (also <code>System.nanoTime()</code>; tests that need a controlled clock supply their own fake)</td></tr>
+<tr><td><code>I_InputPort</code></td><td>Latch keyboard / mouse / gamepad once per tic into an <code>InputState</code></td><td><code>GdxInputPort</code> (<code>:desktop</code>), <code>NullInputPort</code></td></tr>
+<tr><td><code>I_DatagramPort</code></td><td>Raw UDP send/receive + per-tic tick</td><td><code>DesktopDatagramPort</code> (<code>java.nio.channels.DatagramChannel</code>), <code>NullDatagramPort</code></td></tr>
+<tr><td><code>I_FilePort</code></td><td>Open + read + size + close files</td><td><code>NullFilePort</code> — which already reads the real filesystem, so desktop needs nothing more</td></tr>
+<tr><td><code>I_SystemInfoPort</code></td><td>Logical / physical cores, total + free memory, OS and JVM strings</td><td><code>NullSystemInfoPort</code> (answers from <code>Runtime</code>)</td></tr>
+<tr><td><code>I_UserProfilePort</code></td><td>Persist <code>UserProfile</code> records; <code>UNINITIALIZED → READY → SHUTDOWN</code></td><td><code>SqliteUserProfilePort</code> (Xerial JDBC), <code>MemoryUserProfilePort</code></td></tr>
+<tr><td><code>I_WindowPort</code></td><td>Create the window, own the frame loop, report close requests</td><td><code>GdxWindowPort</code> (<code>:desktop</code>), <code>NullWindowPort</code></td></tr>
+<tr><td><code>I_FrameCallback</code></td><td>What the platform calls back into per frame — <strong>engine</strong> side, not platform side</td><td><code>EngineFrameCallback</code> in <code>core</code>, handed to the window by <code>EngineSession</code></td></tr>
+</tbody>
+</table></div>
+<p><code>I_FrameCallback</code> is the one entry here that is not a thing a platform provides:
+the engine implements it and the platform calls it. It lives in <code>port/</code> because
+it is half of the <code>I_WindowPort</code> contract, not because an adapter supplies it.</p>
+<p><code>I_SystemInfoPort</code> and <code>I_UserProfilePort</code> are the two ports the engine queries
+outside the tic: <code>EngineMain</code> reads <code>logicalProcessorCount()</code> to size the worker
+pool at startup (<code>ThreadPoolFactory</code>), and loads or creates the <code>UserProfile</code>
+before the session begins.</p>
+<h2 id="the-platform-owns-the-loop">The platform owns the loop<a class="anchor" href="#the-platform-owns-the-loop" aria-label="Permalink">#</a></h2>
+<p><code>I_WindowPort</code> and <code>I_FrameCallback</code> are one mechanism split across two files,
+and they are the whole presentation hook the renderer hangs off.</p>
+<p>An earlier <code>I_WindowPort</code> exposed <code>pumpEvents()</code> and <code>present()</code> for the engine
+to call in its own while-loop. That is a GLFW shape, and Android cannot satisfy
+it: there the framework owns the loop and calls the app when a frame is due —
+there is nothing to pump. Faking a pump in the Android adapter would invert
+control twice. So <code>runFrameLoop(I_FrameCallback)</code> hands the calling thread to
+the platform and blocks until the window closes, and the engine supplies the
+callback. Desktop implements the loop with a while-loop; Android will implement
+it with the Activity lifecycle; neither shape leaks into the other.</p>
+<p>Two consequences worth stating plainly:</p>
+<ul>
+<li>
+<p><strong>The window is not behind <code>I_RenderPort</code>.</strong> R_ is pure math on primitive
+arrays (<code>render/README.md</code>), and <code>RenderSubsystem.onEvent</code> runs on worker
+threads while a GL context is current on exactly one. Keeping the window on a
+HAL port that only the composition root drives makes the threading correct by
+construction rather than by discipline.</p>
+</li>
+<li>
+<p><strong><code>onFrame</code> draws; it never advances.</strong> The simulation clock stays the
+engine's own <code>GameLoop</code> on its own thread at a fixed 30/60/120 Hz, because
+lockstep requires two peers at the same tic to be at the same point in the
+simulation. Platform frame rate is whatever the display decides, and it must
+never drive a tic.</p>
+</li>
+</ul>
+<p><code>init</code>, <code>create</code>, <code>runFrameLoop</code> and <code>shutdown</code> are main-thread only — GLFW
+requires it (strictly, on macOS) and Android requires it for the Activity
+lifecycle. <code>I_AdapterFactory.init()</code> and <code>shutdown()</code> inherit the same
+constraint and say so.</p>
+<h2 id="input-sample-then-read">Input: sample, then read<a class="anchor" href="#input-sample-then-read" aria-label="Permalink">#</a></h2>
+<p><code>I_InputPort</code> is two calls on purpose. <code>sampleInput(tic)</code> <strong>latches</strong> the
+device into one immutable <code>InputState</code>; <code>currentInput()</code> hands back whatever
+was latched and changes nothing. A tic consumes exactly one stable snapshot,
+which is what makes it serialisable into a <code>TicCmd</code>, replayable, and identical
+on every peer under lockstep — none of which is true if gameplay races a live
+device.</p>
+<p>The two rates involved are unrelated: the platform polls the mouse at vsync,
+the simulation latches at a fixed 30/60/120 Hz. A real adapter therefore
+<strong>accumulates</strong> relative motion between latches rather than sampling it
+instantaneously, so no rotation is dropped when rendering runs slow and none is
+counted twice when it runs fast. <code>GdxInputPort</code> in <code>:desktop</code> splits that into a
+platform half (reads <code>Gdx.input</code> on the render thread) and an
+<code>InputAccumulator</code> (no platform imports, latches on the loop thread) so the
+bookkeeping is testable headlessly.</p>
+<p><code>InputState</code> is what the latch produces: seven device-neutral values —
+<code>forwardAxis</code>, <code>strafeAxis</code>, <code>yawDelta</code>, <code>pitchDelta</code>, <code>fire</code>, <code>jump</code>,
+<code>sprint</code> — so a keyboard, a gamepad and a replay file are indistinguishable
+downstream. The axes are a <em>level</em> ("the stick is pushed this far"); the look
+deltas are an <em>integral</em> ("the view turned this much since the last snapshot").
+A level can be re-read harmlessly, a delta must be consumed exactly once — which
+is the reason <code>sampleInput</code> and <code>currentInput</code> are two calls and not one.</p>
+<h2 id="how-to-write-a-new-adapter">How to write a new adapter<a class="anchor" href="#how-to-write-a-new-adapter" aria-label="Permalink">#</a></h2>
+<ol>
+<li>
+<p>Pick the right <code>adapter/&lt;platform&gt;/</code> directory. Create it if needed — but
+first decide whether it belongs here at all: if it needs a device, a native
+library or a display, it belongs in a platform module, not in <code>:engine</code>.</p>
+</li>
+<li>
+<p><code>implements I_&lt;Capability&gt;Port</code> from the matching <code>port/</code> interface.</p>
+</li>
+<li>
+<p>Use <strong>only</strong> JDK 17 stdlib APIs (no LWJGL / Android in the engine module).</p>
+</li>
+<li>
+<p>If you need a platform-specific dependency, put it in its own module with its
+own <code>build.gradle.kts</code> — as <code>:desktop</code> does for libGDX — so the Android
+profile doesn't pull in desktop natives and CI can still build headlessly.</p>
+</li>
+<li>
+<p>Expose it from a factory. Inside <code>:engine</code> that means <code>NullAdapterFactory</code>
+or <code>DesktopAdapterFactory</code>, plus a <code>HalBackend</code> value and a branch in
+<code>AdapterFactorySelector</code> if it is a whole new backend. Outside <code>:engine</code> it
+means decorating an existing factory, the way <code>GdxAdapterFactory</code> does.
+Every getter must return non-null — fall back to the matching null adapter —
+so the engine has exactly one code path regardless of backend.</p>
+</li>
+<li>
+<p>Add tests in <code>src/test/java/com/openfps/engine/hal/adapter/&lt;yourplatform&gt;/</code>,
+or in the platform module's own test source set.</p>
+</li>
+</ol>
+<h2 id="why-port-first">Why port-first?<a class="anchor" href="#why-port-first" aria-label="Permalink">#</a></h2>
+<p>Adapter/port (a.k.a. hexagonal) architecture lets the engine core run:</p>
+<ul>
+<li>
+<p>On a server with no graphics (<code>HalBackend.NULL</code>, or <code>SQLITE</code> for a real profile)</p>
+</li>
+<li>
+<p>On a desktop with a real window (<code>:desktop</code>, <code>GdxAdapterFactory</code>)</p>
+</li>
+<li>
+<p>On a phone with Android (planned; nothing written yet)</p>
+</li>
+<li>
+<p>In a test JVM with fakes (null adapter, plus per-test stubs of any port)</p>
+</li>
+</ul>
+<p>…all from the same compiled core JAR. Adapters are the only things that change.</p>
+<p>The 91 tests in this package are largely a check on that claim: they run every
+port through its state machine with no display and no peer, which is only
+possible because none of those things are named in <code>port/</code>.</p>
+<p><strong>Reference:</strong> Alistair Cockburn, "Hexagonal Architecture" (2005):
+https://alistair.cockburn.us/hexagonal-architecture/</p>
+<footer class="pagefoot"><p>Source: <a class="ext" rel="noopener noreferrer" target="_blank" href="https://github.com/nicholashutter/OpenFPS/blob/main/engine/src/main/java/com/openfps/engine/hal/README.md">engine/src/main/java/com/openfps/engine/hal/README.md</a>. This page is generated — edit the Markdown, not the HTML.</p></footer>
+</main>
+</div>
+<script src="site.js"></script>
+</body>
+</html>

@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Demo Asset Manifest — OpenFPS documentation</title>
+<meta name="description" content="Provenance record for the first-person demo's model set: one weapon and eight level pieces, plus a generated fallback room.  The binaries are not in git — docs/ASSETS.md § 6, enforced by…">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<a class="skip" href="#doc">Skip to content</a>
+<header class="topbar"><button class="burger" id="burger" aria-controls="sidebar" aria-expanded="false" aria-label="Show navigation"><span></span><span></span><span></span></button><span class="topbar-name">OpenFPS docs</span></header>
+<div class="scrim" id="scrim" hidden></div>
+<div class="layout">
+<aside class="sidebar" id="sidebar">
+<a class="brand" href="index.html"><span class="brand-mark"></span><span class="brand-name">OpenFPS</span><span class="brand-kind">docs</span></a>
+<input class="filter" id="filter" type="search" placeholder="Filter pages" aria-label="Filter pages" autocomplete="off">
+<nav class="nav" id="nav" aria-label="Documentation">
+<details class="grp" data-hue="1" open><summary><span class="dot"></span>Overview<span class="count">2</span></summary>
+<ul>
+<li><a href="index.html">Overview</a></li>
+<li><a href="agents.html">Agent instructions</a></li>
+</ul></details>
+<details class="grp" data-hue="2" open><summary><span class="dot"></span>Building<span class="count">1</span></summary>
+<ul>
+<li><a href="build.html">Build reference</a></li>
+</ul></details>
+<details class="grp" data-hue="3" open><summary><span class="dot"></span>Architecture<span class="count">2</span></summary>
+<ul>
+<li><a href="style.html">Code style</a></li>
+<li><a href="plan.html">Project plan</a></li>
+</ul></details>
+<details class="grp" data-hue="4" open><summary><span class="dot"></span>Modules<span class="count">5</span></summary>
+<ul>
+<li><a href="engine.html">:engine</a></li>
+<li><a href="desktop.html">:desktop</a></li>
+<li><a href="android.html">:android</a></li>
+<li><a href="tools.html">:tools</a></li>
+<li><a href="gdxshared.html">:gdxshared</a></li>
+</ul></details>
+<details class="grp" data-hue="5"><summary><span class="dot"></span>Packages<span class="count">10</span></summary>
+<ul>
+<li><a href="engine-core.html">Core</a></li>
+<li><a href="engine-common.html">Common</a></li>
+<li><a href="engine-hal.html">HAL (I_)</a></li>
+<li><a href="engine-gameplay.html">Gameplay (P_)</a></li>
+<li><a href="engine-render.html">Render (R_)</a></li>
+<li><a href="engine-demo.html">Demo</a></li>
+<li><a href="engine-audio.html">Audio (S_)</a></li>
+<li><a href="engine-net.html">Net (G_)</a></li>
+<li><a href="engine-resource.html">Resource (W_)</a></li>
+<li><a href="engine-memory.html">Memory (Z_)</a></li>
+</ul></details>
+<details class="grp" data-hue="6" open><summary><span class="dot"></span>Reference<span class="count">2</span></summary>
+<ul>
+<li><a href="assets.html">Assets and licensing</a></li>
+<li><a href="demo-assets.html" class="cur" aria-current="page">Demo asset manifest</a></li>
+</ul></details>
+</nav>
+<p class="generated">Generated from the repository's Markdown by <code>:tools:buildDocsSite</code>.</p>
+</aside>
+<aside class="rail"><details class="toc" id="toc" open><summary>On this page</summary>
+<ul>
+<li class="lv2"><a href="#1-regenerating-everything">1. Regenerating everything</a></li>
+<li class="lv3"><a href="#why-staging-exists-at-all">Why staging exists at all</a></li>
+<li class="lv2"><a href="#2-sources">2. Sources</a></li>
+<li class="lv2"><a href="#3-what-was-converted">3. What was converted</a></li>
+<li class="lv3"><a href="#weapon--assetsmodelsweapon">Weapon — assets/models/weapon/</a></li>
+<li class="lv3"><a href="#level--assetsmodelslevel">Level — assets/models/level/</a></li>
+<li class="lv3"><a href="#scale--read-this-before-placing-anything">Scale — read this before placing anything</a></li>
+<li class="lv2"><a href="#4-scene-cost-against-the-frame-budget">4. Scene cost against the frame budget</a></li>
+<li class="lv3"><a href="#the-payload-finding-which-is-the-real-cost">The payload finding, which is the real cost</a></li>
+<li class="lv2"><a href="#5-the-generated-fallback">5. The generated fallback</a></li>
+<li class="lv2"><a href="#6-intake-checklist--docsassetsmd--7">6. Intake checklist — docs/ASSETS.md § 7</a></li>
+</ul></details></aside>
+<main id="doc">
+<p class="crumb"><span class="tag">Reference</span><span class="sep">/</span><code>docs/DEMO_ASSETS.md</code><span class="sep">/</span>9 min read</p>
+<h1 id="demo-asset-manifest">Demo Asset Manifest<a class="anchor" href="#demo-asset-manifest" aria-label="Permalink">#</a></h1>
+<blockquote>
+<p>Provenance record for the first-person demo's model set: one weapon and eight
+level pieces, plus a generated fallback room.</p>
+<p><strong>The binaries are not in git</strong> — <code>docs/ASSETS.md</code> § 6, enforced by
+<code>.gitignore</code> (<code>assets/gltf/</code>, <code>assets/models/</code>, <code>*.ofm</code>, <code>*.glb</code>). This file
+is. It is the only durable record of where each model came from, and
+<code>docs/ASSETS.md</code> § 7 is explicit that an asset with no provenance has to be
+treated as unlicensed and removed.</p>
+</blockquote>
+<hr>
+<h2 id="1-regenerating-everything">1. Regenerating everything<a class="anchor" href="#1-regenerating-everything" aria-label="Permalink">#</a></h2>
+<div class="code" data-lang="powershell"><pre><code># 1. Download the two CC0 packs by hand (see § 2 for URLs and digests) and
+#    unzip each into its own subdirectory:
+#
+#      &lt;raw&gt;\blaster-kit\Models\GLB format\...
+#      &lt;raw&gt;\prototype-kit\Models\GLB format\...
+#
+# 2. Stage, convert, and verify in one command:
+.\gradlew.bat :tools:regenerateDemoAssets -PkenneyRaw=&lt;raw&gt;
+</code></pre></div>
+<p>That writes <code>assets/models/weapon/*.ofm</code> and <code>assets/models/level/*.ofm</code>, then
+reads every one back through the runtime's own <code>ModelFormat</code> and reports it
+against the <code>docs/ASSETS.md</code> § 5 budget. It fails the build if any model does
+not parse, holds no geometry, or is over budget.</p>
+<p>Useful variants:</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Command</th><th>Effect</th></tr></thead>
+<tbody>
+<tr><td><code>.\gradlew.bat :tools:regenerateDemoAssets</code></td><td>No <code>-PkenneyRaw</code>: staging warns and skips, and the <strong>generated fallback room</strong> is emitted instead (§ 5)</td></tr>
+<tr><td><code>.\gradlew.bat :tools:regenerateDemoAssets -PkenneyRaw=&lt;raw&gt; -PforceFallback</code></td><td>Both: the Kenney set <em>and</em> the generated room</td></tr>
+<tr><td><code>.\gradlew.bat :tools:verifyModels</code></td><td>Re-check an existing <code>assets/models</code> without reconverting</td></tr>
+<tr><td><code>.\gradlew.bat :tools:renderPreview "--args=--model=&lt;path&gt;.ofm --out=&lt;path&gt;.png"</code></td><td>Render one model headlessly, to look at it</td></tr>
+</tbody>
+</table></div>
+<p><strong>The download is deliberately manual.</strong> <code>docs/ASSETS.md</code> § 6 forbids
+build-time third-party fetches: the URLs are unpinnable, the uptime is not
+ours, and CI must stay hermetic. <code>stageDemoAssets</code> only ever reads from a local
+directory you point it at.</p>
+<h3 id="why-staging-exists-at-all">Why staging exists at all<a class="anchor" href="#why-staging-exists-at-all" aria-label="Permalink">#</a></h3>
+<p>Kenney's GLBs reference their texture atlas by <strong>relative URI</strong>
+(<code>Textures/colormap.png</code>) rather than embedding it in the GLB's binary chunk.
+The glTF 2.0 specification resolves a relative URI against the referring
+document, so the atlas must sit <em>beside</em> each <code>.glb</code> — copying a <code>.glb</code> out on
+its own produces a conversion failure that reads like a converter bug and is
+not one.</p>
+<p><code>stageDemoAssets</code> therefore copies each pack's <code>Textures/colormap.png</code> into
+every staged directory alongside the models that reference it. This is the one
+sharp edge in the pipeline and it is handled in exactly one place.</p>
+<p>Source — Khronos Group, glTF 2.0 Specification, § 3.6.1.1 (buffers and images,
+URI resolution) — https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html</p>
+<hr>
+<h2 id="2-sources">2. Sources<a class="anchor" href="#2-sources" aria-label="Permalink">#</a></h2>
+<p>Both packs satisfy <code>docs/ASSETS.md</code> § 3: <strong>CC0 1.0</strong>, verified twice — on the
+download page <em>and</em> in the <code>License.txt</code> shipped inside the archive. Neither
+carries a per-file exception.</p>
+<div class="tablewrap"><table>
+<thead><tr><th></th><th>Blaster Kit</th><th>Prototype Kit</th></tr></thead>
+<tbody>
+<tr><td><strong>Version</strong></td><td>2.1</td><td>1.0</td></tr>
+<tr><td><strong>Author</strong></td><td>Kenney (kenney.nl)</td><td>Kenney (kenney.nl)</td></tr>
+<tr><td><strong>Source page</strong></td><td>https://kenney.nl/assets/blaster-kit</td><td>https://kenney.nl/assets/prototype-kit</td></tr>
+<tr><td><strong>Archive URL</strong></td><td><code>https://kenney.nl/media/pages/assets/blaster-kit/261d80a716-1753959510/kenney_blaster-kit_2.1.zip</code></td><td><code>https://kenney.nl/media/pages/assets/prototype-kit/4d3b7073ed-1724832076/kenney_prototype-kit.zip</code></td></tr>
+<tr><td><strong>Licence</strong></td><td>CC0 1.0</td><td>CC0 1.0</td></tr>
+<tr><td><strong>Licence URL</strong></td><td>http://creativecommons.org/publicdomain/zero/1.0/</td><td>http://creativecommons.org/publicdomain/zero/1.0/</td></tr>
+<tr><td><strong>Retrieved</strong></td><td>2026-07-28</td><td>2026-07-28</td></tr>
+<tr><td><strong>Archive bytes</strong></td><td>1,724,676</td><td>2,961,396</td></tr>
+<tr><td><strong>Archive SHA-256</strong></td><td><code>91e3093e95427d59625e7e2ce2d0399b861600160fd0b4ada7714796b67cea8c</code></td><td><code>213b522fb12bcc9b9ac66c4f7581f7c74623293272212e40a70c39936ad3da95</code></td></tr>
+<tr><td><strong>Atlas</strong></td><td><code>Models/GLB format/Textures/colormap.png</code>, 512×512 PNG</td><td><code>Models/GLB format/Textures/colormap.png</code>, 512×512 PNG</td></tr>
+</tbody>
+</table></div>
+<p>The in-archive <code>License.txt</code> of both reads, verbatim:</p>
+<blockquote>
+<p>License: (Creative Commons Zero, CC0)
+http://creativecommons.org/publicdomain/zero/1.0/
+You can use this content for personal, educational, and commercial purposes.
+Support by crediting 'Kenney' or 'www.kenney.nl' (this is not a requirement)</p>
+</blockquote>
+<p>Crediting is explicitly <strong>not</strong> a requirement, which is what keeps this on the
+§ 3 accepted list rather than in the CC-BY rejection.</p>
+<blockquote>
+<p>The archive URLs embed a content hash and a timestamp. Kenney re-issues them
+when a pack is revised, so a URL that 404s means the pack moved on — go via
+the source page, and record the new digest here rather than assuming the old
+one still applies.</p>
+</blockquote>
+<hr>
+<h2 id="3-what-was-converted">3. What was converted<a class="anchor" href="#3-what-was-converted" aria-label="Permalink">#</a></h2>
+<p>Every model below is <strong>real Kenney art</strong>, not generated. Measured by
+<code>:tools:verifyModels</code> after conversion, reading each <code>.ofm</code> back through
+<code>ModelFormat</code>.</p>
+<p>Budget: <strong>≤1,500 triangles</strong>, <strong>≤512² textures</strong>, power-of-two, mipmaps
+required, albedo only (<code>docs/ASSETS.md</code> § 5).</p>
+<h3 id="weapon--assetsmodelsweapon">Weapon — <code>assets/models/weapon/</code><a class="anchor" href="#weapon--assetsmodelsweapon" aria-label="Permalink">#</a></h3>
+<div class="tablewrap"><table>
+<thead><tr><th>Model</th><th>Source file</th><th>Triangles</th><th>% of budget</th><th>Verts</th><th>Texture</th><th>Extent (x·y·z)</th></tr></thead>
+<tbody>
+<tr><td><code>blaster-b.ofm</code></td><td>Blaster Kit <code>blaster-b.glb</code></td><td><strong>368</strong></td><td>24.5%</td><td>632</td><td>512×512, 10 mips</td><td>0.16 · 0.31 · 0.42</td></tr>
+</tbody>
+</table></div>
+<h3 id="level--assetsmodelslevel">Level — <code>assets/models/level/</code><a class="anchor" href="#level--assetsmodelslevel" aria-label="Permalink">#</a></h3>
+<div class="tablewrap"><table>
+<thead><tr><th>Model</th><th>Source file</th><th>Triangles</th><th>% of budget</th><th>Verts</th><th>Texture</th><th>Extent (x·y·z)</th></tr></thead>
+<tbody>
+<tr><td><code>floor-square.ofm</code></td><td>Prototype Kit <code>floor-square.glb</code></td><td><strong>8</strong></td><td>0.5%</td><td>14</td><td>512×512, 10 mips</td><td>1.00 · 0.00 · 1.00</td></tr>
+<tr><td><code>wall.ofm</code></td><td>Prototype Kit <code>wall.glb</code></td><td><strong>12</strong></td><td>0.8%</td><td>24</td><td>512×512, 10 mips</td><td>0.20 · 1.00 · 1.00</td></tr>
+<tr><td><code>wall-corner.ofm</code></td><td>Prototype Kit <code>wall-corner.glb</code></td><td><strong>20</strong></td><td>1.3%</td><td>36</td><td>512×512, 10 mips</td><td>1.00 · 1.00 · 1.00</td></tr>
+<tr><td><code>wall-doorway.ofm</code></td><td>Prototype Kit <code>wall-doorway.glb</code></td><td><strong>152</strong></td><td>10.1%</td><td>240</td><td>512×512, 10 mips</td><td>0.30 · 1.00 · 1.00</td></tr>
+<tr><td><code>shape-slope.ofm</code></td><td>Prototype Kit <code>shape-slope.glb</code></td><td><strong>8</strong></td><td>0.5%</td><td>18</td><td>512×512, 10 mips</td><td>1.00 · 1.00 · 1.00</td></tr>
+<tr><td><code>stairs.ofm</code></td><td>Prototype Kit <code>stairs.glb</code></td><td><strong>36</strong></td><td>2.4%</td><td>60</td><td>512×512, 10 mips</td><td>1.00 · 1.00 · 1.00</td></tr>
+<tr><td><code>column.ofm</code></td><td>Prototype Kit <code>column.glb</code></td><td><strong>12</strong></td><td>0.8%</td><td>24</td><td>512×512, 10 mips</td><td>0.20 · 1.00 · 0.20</td></tr>
+<tr><td><code>crate.ofm</code></td><td>Prototype Kit <code>crate.glb</code></td><td><strong>204</strong></td><td>13.6%</td><td>312</td><td>512×512, 10 mips</td><td>0.50 · 0.50 · 0.50</td></tr>
+</tbody>
+</table></div>
+<p><strong>Nothing is close to the cap.</strong> The largest piece is the blaster at a quarter
+of it, and the whole level kit together is 452 triangles — under a third of
+what one model is allowed. <code>docs/ASSETS.md</code> § 2's remark that "Kenney's kits
+remain comfortably inside whatever the real budget turns out to be" is
+confirmed: across the <em>entire</em> Blaster Kit and Prototype Kit, all 187 models,
+the worst case is <code>blaster-p.glb</code> at 882 triangles. <strong>No piece in either pack
+exceeds the 1,500 cap</strong>, so the cap constrains imports from elsewhere and not
+this art direction.</p>
+<h3 id="scale--read-this-before-placing-anything">Scale — read this before placing anything<a class="anchor" href="#scale--read-this-before-placing-anything" aria-label="Permalink">#</a></h3>
+<p>The Prototype Kit is authored on a <strong>1-unit grid</strong>: a floor tile is 1×1, a wall
+is 1 unit wide and 1 unit tall. The blaster is 0.42 units long. A 1-unit wall
+is therefore about knee height next to a human-scaled weapon, so <strong>the two kits
+need a relative scale chosen at placement time</strong> — they are not authored to a
+common unit. This is a property of the source art, not of the conversion.</p>
+<hr>
+<h2 id="4-scene-cost-against-the-frame-budget">4. Scene cost against the frame budget<a class="anchor" href="#4-scene-cost-against-the-frame-budget" aria-label="Permalink">#</a></h2>
+<p><code>docs/ASSETS.md</code> § 2 measures the target as <strong>720p at 60 Hz</strong>, affording roughly
+<strong>10–20k triangles per frame</strong> once fill is paid for.</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Scene</th><th>Triangles</th><th>Share of 10k</th></tr></thead>
+<tbody>
+<tr><td>One of every model placed at once</td><td><strong>820</strong></td><td>8%</td></tr>
+<tr><td>A worked room: 10×10 floor tiles, 40 wall segments, 4 corners, 2 doorways, 1 ramp, 1 staircase, 4 columns, 8 crates, 1 held weapon</td><td><strong>3,756</strong></td><td>38%</td></tr>
+</tbody>
+</table></div>
+<p>The worked room breaks down as 800 + 480 + 80 + 304 + 8 + 36 + 48 + 1,632 +</p>
+<ol start="368">
+<li>The crates dominate at 43% of it, which is the one counter-intuitive</li>
+</ol>
+<p>number here: a 204-triangle prop costs more than the entire 100-tile floor,
+because the floor is 8 triangles a tile. <strong>Geometry is not the constraint at
+this scale — fill is</strong>, exactly as § 2 concluded.</p>
+<h3 id="the-payload-finding-which-is-the-real-cost">The payload finding, which is the real cost<a class="anchor" href="#the-payload-finding-which-is-the-real-cost" aria-label="Permalink">#</a></h3>
+<p>The nine converted models total <strong>12.7 MB</strong>, and roughly 12.6 MB of that is
+<strong>nine identical copies of the same 512×512 atlas plus its mip pyramid</strong> —
+about 1.4 MB each. <code>ModelFormat</code> has no notion of a texture shared between
+models, so a pack built around one atlas per kit — the exact property
+<code>docs/ASSETS.md</code> § 3 praises Kenney for — pays for that atlas once per model.</p>
+<p>Nine models is already a quarter of § 5's 20–50 MB total payload cap. This is
+fine for a demo and will not be fine for a level. Recorded rather than fixed:
+the fix is a shared-texture section or an atlas-by-reference indirection in
+<code>ModelFormat</code>, which is an engine change and not this lane's to make.</p>
+<hr>
+<h2 id="5-the-generated-fallback">5. The generated fallback<a class="anchor" href="#5-the-generated-fallback" aria-label="Permalink">#</a></h2>
+<p><code>assets/models/generated-room.ofm</code> is <strong>generated geometry, not third-party
+art.</strong> It has no upstream source, no author but this repository, and no licence
+question — which is the entire point of it.</p>
+<div class="tablewrap"><table>
+<thead><tr><th></th><th></th></tr></thead>
+<tbody>
+<tr><td><strong>Source</strong></td><td><code>com.openfps.tools.model.ProceduralRoom</code>, this repository</td></tr>
+<tr><td><strong>Licence</strong></td><td>MIT, same as the rest of the codebase</td></tr>
+<tr><td><strong>Triangles</strong></td><td>60 (4.0% of budget)</td></tr>
+<tr><td><strong>Vertices</strong></td><td>120</td></tr>
+<tr><td><strong>Textures</strong></td><td>2 × 64×64, 7 mips each — generated grid, floor and wall</td></tr>
+<tr><td><strong>Extent</strong></td><td>17.00 · 4.50 · 17.00 — a 16×16 interior with 4-high walls</td></tr>
+</tbody>
+</table></div>
+<p>It is emitted <strong>only</strong> when no glTF has been staged, or when <code>-PforceFallback</code>
+asks for it, and <code>DemoAssetsMain</code> logs at <code>WARN</code> when it does. A clone with no
+packs downloaded still gets a floor to stand on; nobody gets a generated room
+recorded against a Kenney URL.</p>
+<p>Two design notes worth keeping:</p>
+<ul>
+<li>
+<p><strong>Every piece is a closed box</strong>, wound counter-clockwise as seen from
+outside. A room made of inward-facing single-sided quads would be invisible
+under the same backface culling that renders a converted Kenney model
+correctly, and a test scene needing different render state from the real art
+tests the wrong thing. A wall with thickness has its room-facing side as a
+genuine outward face.</p>
+</li>
+<li>
+<p><strong>UVs are world position over a tile size</strong>, not per-face <code>0..1</code>, so the grid
+holds constant texel density across pieces of different sizes and tiles
+seamlessly where they meet.</p>
+</li>
+</ul>
+<p><code>ProceduralRoomTest</code> asserts the winding by <strong>signed volume</strong> — the divergence
+theorem over the triangle soup gives +260 for the correct winding and −260 for
+the inverted one. Vertex counts, triangle counts, bounds and file size are
+identical between the two, so nothing else in the file distinguishes them.</p>
+<hr>
+<h2 id="6-intake-checklist--docsassetsmd--7">6. Intake checklist — <code>docs/ASSETS.md</code> § 7<a class="anchor" href="#6-intake-checklist--docsassetsmd--7" aria-label="Permalink">#</a></h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Requirement</th><th>Blaster Kit</th><th>Prototype Kit</th><th>Generated room</th></tr></thead>
+<tbody>
+<tr><td>Source URL recorded</td><td>✅ § 2</td><td>✅ § 2</td><td>n/a — this repository</td></tr>
+<tr><td>Author recorded</td><td>✅ Kenney</td><td>✅ Kenney</td><td>✅ this project</td></tr>
+<tr><td>Licence + URL recorded, on the § 3 accepted list</td><td>✅ CC0 1.0</td><td>✅ CC0 1.0</td><td>✅ MIT</td></tr>
+<tr><td>Retrieval date recorded</td><td>✅ 2026-07-28</td><td>✅ 2026-07-28</td><td>n/a</td></tr>
+<tr><td>SHA-256 of the original download recorded</td><td>✅ § 2</td><td>✅ § 2</td><td>n/a</td></tr>
+<tr><td>Fits the § 5 triangle and texture budgets</td><td>✅ § 3</td><td>✅ § 3</td><td>✅ § 5</td></tr>
+<tr><td>Per-file licence verified where the source is per-file licensed</td><td>n/a — pack-wide CC0</td><td>n/a — pack-wide CC0</td><td>n/a</td></tr>
+</tbody>
+</table></div>
+<footer class="pagefoot"><p>Source: <a class="ext" rel="noopener noreferrer" target="_blank" href="https://github.com/nicholashutter/OpenFPS/blob/main/docs/DEMO_ASSETS.md">docs/DEMO_ASSETS.md</a>. This page is generated — edit the Markdown, not the HTML.</p></footer>
+</main>
+</div>
+<script src="site.js"></script>
+</body>
+</html>

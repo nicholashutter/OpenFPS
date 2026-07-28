@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>:gdxshared — the libGDX code that is not platform-specific — OpenFPS documentation</title>
+<meta name="description" content="Both launchers use libGDX. Neither of them should have to write the framebuffer presenter twice.">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<a class="skip" href="#doc">Skip to content</a>
+<header class="topbar"><button class="burger" id="burger" aria-controls="sidebar" aria-expanded="false" aria-label="Show navigation"><span></span><span></span><span></span></button><span class="topbar-name">OpenFPS docs</span></header>
+<div class="scrim" id="scrim" hidden></div>
+<div class="layout">
+<aside class="sidebar" id="sidebar">
+<a class="brand" href="index.html"><span class="brand-mark"></span><span class="brand-name">OpenFPS</span><span class="brand-kind">docs</span></a>
+<input class="filter" id="filter" type="search" placeholder="Filter pages" aria-label="Filter pages" autocomplete="off">
+<nav class="nav" id="nav" aria-label="Documentation">
+<details class="grp" data-hue="1" open><summary><span class="dot"></span>Overview<span class="count">2</span></summary>
+<ul>
+<li><a href="index.html">Overview</a></li>
+<li><a href="agents.html">Agent instructions</a></li>
+</ul></details>
+<details class="grp" data-hue="2" open><summary><span class="dot"></span>Building<span class="count">1</span></summary>
+<ul>
+<li><a href="build.html">Build reference</a></li>
+</ul></details>
+<details class="grp" data-hue="3" open><summary><span class="dot"></span>Architecture<span class="count">2</span></summary>
+<ul>
+<li><a href="style.html">Code style</a></li>
+<li><a href="plan.html">Project plan</a></li>
+</ul></details>
+<details class="grp" data-hue="4" open><summary><span class="dot"></span>Modules<span class="count">5</span></summary>
+<ul>
+<li><a href="engine.html">:engine</a></li>
+<li><a href="desktop.html">:desktop</a></li>
+<li><a href="android.html">:android</a></li>
+<li><a href="tools.html">:tools</a></li>
+<li><a href="gdxshared.html" class="cur" aria-current="page">:gdxshared</a></li>
+</ul></details>
+<details class="grp" data-hue="5"><summary><span class="dot"></span>Packages<span class="count">10</span></summary>
+<ul>
+<li><a href="engine-core.html">Core</a></li>
+<li><a href="engine-common.html">Common</a></li>
+<li><a href="engine-hal.html">HAL (I_)</a></li>
+<li><a href="engine-gameplay.html">Gameplay (P_)</a></li>
+<li><a href="engine-render.html">Render (R_)</a></li>
+<li><a href="engine-demo.html">Demo</a></li>
+<li><a href="engine-audio.html">Audio (S_)</a></li>
+<li><a href="engine-net.html">Net (G_)</a></li>
+<li><a href="engine-resource.html">Resource (W_)</a></li>
+<li><a href="engine-memory.html">Memory (Z_)</a></li>
+</ul></details>
+<details class="grp" data-hue="6"><summary><span class="dot"></span>Reference<span class="count">2</span></summary>
+<ul>
+<li><a href="assets.html">Assets and licensing</a></li>
+<li><a href="demo-assets.html">Demo asset manifest</a></li>
+</ul></details>
+</nav>
+<p class="generated">Generated from the repository's Markdown by <code>:tools:buildDocsSite</code>.</p>
+</aside>
+<aside class="rail"><details class="toc" id="toc" open><summary>On this page</summary>
+<ul>
+<li class="lv2"><a href="#status">Status</a></li>
+<li class="lv2"><a href="#why-this-module-exists">Why this module exists</a></li>
+<li class="lv2"><a href="#what-the-presenter-is-worth-sharing-for">What the presenter is worth sharing for</a></li>
+<li class="lv2"><a href="#inputaccumulator-imports-nothing">InputAccumulator imports nothing</a></li>
+<li class="lv2"><a href="#files">Files</a></li>
+</ul></details></aside>
+<main id="doc">
+<p class="crumb"><span class="tag">Modules</span><span class="sep">/</span><code>gdxshared/README.md</code><span class="sep">/</span>4 min read</p>
+<h1 id="gdxshared--the-libgdx-code-that-is-not-platform-specific"><code>:gdxshared</code> — the libGDX code that is not platform-specific<a class="anchor" href="#gdxshared--the-libgdx-code-that-is-not-platform-specific" aria-label="Permalink">#</a></h1>
+<blockquote>
+<p>Both launchers use libGDX. Neither of them should have to write the framebuffer
+presenter twice.</p>
+</blockquote>
+<h2 id="status">Status<a class="anchor" href="#status" aria-label="Permalink">#</a></h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Field</th><th>Value</th></tr></thead>
+<tbody>
+<tr><td><strong>State</strong></td><td>SHIPPING</td></tr>
+<tr><td><strong>Phase</strong></td><td>created 2026-07-28, when <code>:android</code> needed a presenter and a UI state machine that already existed in <code>:desktop</code></td></tr>
+<tr><td><strong>Tests</strong></td><td>76</td></tr>
+<tr><td><strong>Registered</strong></td><td>consumed by <code>:desktop</code> and <code>:android</code>; depends on <code>:engine</code> and libGDX <strong>core</strong> only</td></tr>
+<tr><td><strong>Verified</strong></td><td>2026-07-28</td></tr>
+</tbody>
+</table></div>
+<p><strong>Built.</strong> <code>FramebufferPresenter</code> (uploads R_'s finished <code>int[]</code> and draws it as
+a fullscreen quad), the blocky welcome screen (<code>MainMenuScreen</code>, <code>BlockFont</code>,
+<code>BlockTitle</code>, <code>BlockButton</code>, <code>MenuBackground</code>, <code>MenuPalette</code>), the menu command
+interface and its default wiring (<code>MenuActions</code>, <code>DefaultMenuActions</code>,
+<code>MenuButtonListener</code>), the UI state machine (<code>UiState</code>, <code>UiStateMachine</code>), and
+<code>InputAccumulator</code>.</p>
+<p><strong>Not built.</strong> Nothing outstanding. The one asymmetry left is that the block
+welcome screen is drawn by <code>:desktop</code> while <code>:android</code> still draws a Scene2D
+menu of its own — the classes are here and shared-ready, but nothing has
+switched Android over to them yet.</p>
+<p><strong>Blocked on.</strong> Nothing.</p>
+<h2 id="why-this-module-exists">Why this module exists<a class="anchor" href="#why-this-module-exists" aria-label="Permalink">#</a></h2>
+<p>The rule that shapes this repository is that <strong><code>:engine</code> must never import
+libGDX</strong>. It is what keeps the engine buildable and testable on a machine with
+no display and no Android SDK, and it is not negotiable.</p>
+<p>The rule that does <em>not</em> follow from it — and that was quietly assumed until
+Android needed a screen — is that everything touching libGDX must therefore be
+platform-specific. It is not. libGDX core is plain Java. <code>Pixmap</code>, <code>Texture</code>,
+<code>SpriteBatch</code> and Scene2D behave identically on the LWJGL3 backend and the
+Android one, and the code built on them does not care which is underneath.</p>
+<p>So there are three layers, not two:</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Layer</th><th>May import</th><th>Example</th></tr></thead>
+<tbody>
+<tr><td><code>:engine</code></td><td>JDK only</td><td><code>SoftwareRenderPort</code>, <code>Match</code>, <code>NetSession</code></td></tr>
+<tr><td><code>:gdxshared</code></td><td>JDK + libGDX <strong>core</strong></td><td><code>FramebufferPresenter</code>, <code>MainMenuScreen</code></td></tr>
+<tr><td><code>:desktop</code> / <code>:android</code></td><td>+ one backend</td><td><code>GdxWindowPort</code>, <code>AndroidLauncher</code></td></tr>
+</tbody>
+</table></div>
+<p>The middle layer is this module. What belongs here is anything that needs
+libGDX and does not need to know which platform it is on; what does not belong
+is anything naming <code>Lwjgl3Application</code>, <code>AndroidApplication</code>, GLFW or
+<code>android.*</code>.</p>
+<p>A <strong>key code is platform-specific</strong> and stays out. <code>Input.Keys.SPACE</code> is a
+number whose meaning belongs to a backend, and a touch region is not a key at
+all — so <code>DesktopBindings</code> lives in <code>:desktop</code>, <code>AndroidBindings</code> lives in
+<code>:android</code>, and <code>:engine</code> ships no defaults whatsoever. See <code>hal/README.md</code>.</p>
+<h2 id="what-the-presenter-is-worth-sharing-for">What the presenter is worth sharing for<a class="anchor" href="#what-the-presenter-is-worth-sharing-for" aria-label="Permalink">#</a></h2>
+<p><code>FramebufferPresenter</code> is 140 lines of code and three subtle correctness
+properties, and it is the second of those that makes duplication a bad idea:</p>
+<ul>
+<li>
+<p><strong>De-padding.</strong> The framebuffer's row stride is padded to a multiple of 16
+pixels to avoid false sharing between render workers. Uploading the colour
+buffer raw shears the image progressively down the screen, because stride is
+not width.</p>
+</li>
+<li>
+<p><strong>Byte order.</strong> A <code>0xRRGGBBAA</code> int written through <code>getPixels().asIntBuffer()</code>
+lands as the bytes R, G, B, A, because libGDX hands out a big-endian buffer —
+and <code>glTexImage2D</code> then accepts them as <code>GL_RGBA</code> unchanged.</p>
+</li>
+<li>
+<p><strong>Orientation.</strong> The viewport transform flips y once, and
+<code>SpriteBatch.draw(Texture, …)</code> flips it again. They cancel. <strong>Adding an
+explicit flip is the bug, not the fix.</strong></p>
+</li>
+</ul>
+<p>Every one of those is identical on a phone. A second copy would be a second
+place for them to drift, and drift in any of the three produces an image that is
+wrong in a way that looks like a renderer bug rather than an upload bug.</p>
+<h2 id="inputaccumulator-imports-nothing"><code>InputAccumulator</code> imports nothing<a class="anchor" href="#inputaccumulator-imports-nothing" aria-label="Permalink">#</a></h2>
+<p>It is in this module because both input ports use it, not because it needs
+libGDX — it does not import anything at all. That is deliberate: the tricky part
+of input is the accumulate-and-latch bookkeeping between a platform's frame rate
+and the simulation's fixed one, and keeping it free of toolkit types is what
+makes it the part CI can actually test.</p>
+<p>It stores movement as <strong>two floats, not four booleans</strong>. A key is a stick that
+only ever reaches its stops, so <code>setMovementKeys</code> reduces to <code>setMovementAxes</code>
+and the Android thumbstick uses the analog path directly. Nothing downstream can
+tell which produced a given <code>InputState</code>.</p>
+<h2 id="files">Files<a class="anchor" href="#files" aria-label="Permalink">#</a></h2>
+<div class="tablewrap"><table>
+<thead><tr><th>File</th><th>What it does</th></tr></thead>
+<tbody>
+<tr><td><code>FramebufferPresenter.java</code></td><td>Uploads R_'s finished frame and draws it fullscreen</td></tr>
+<tr><td><code>InputAccumulator.java</code></td><td>Accumulate-and-latch between platform and tic rates</td></tr>
+<tr><td><code>UiState.java</code> / <code>UiStateMachine.java</code></td><td>Menu or game, and what each permits</td></tr>
+<tr><td><code>MenuActions.java</code></td><td>What the menu can ask the application to do</td></tr>
+<tr><td><code>DefaultMenuActions.java</code></td><td>The default wiring — Quit goes through <code>I_WindowPort</code></td></tr>
+<tr><td><code>MenuButtonListener.java</code></td><td>One Scene2D change event to one <code>Runnable</code></td></tr>
+<tr><td><code>MainMenuScreen.java</code></td><td>The welcome screen's layout and lifecycle</td></tr>
+<tr><td><code>BlockFont.java</code></td><td>A 5×7 block alphabet, no assets, headlessly testable</td></tr>
+<tr><td><code>BlockTitle.java</code></td><td>The cycling blocky title</td></tr>
+<tr><td><code>BlockButton.java</code></td><td>A beveled key with a hover lift</td></tr>
+<tr><td><code>MenuBackground.java</code></td><td>The checkered field and its diagonal sheen</td></tr>
+<tr><td><code>MenuPalette.java</code></td><td>Every colour the menu uses, in one place</td></tr>
+</tbody>
+</table></div>
+<footer class="pagefoot"><p>Source: <a class="ext" rel="noopener noreferrer" target="_blank" href="https://github.com/nicholashutter/OpenFPS/blob/main/gdxshared/README.md">gdxshared/README.md</a>. This page is generated — edit the Markdown, not the HTML.</p></footer>
+</main>
+</div>
+<script src="site.js"></script>
+</body>
+</html>

@@ -1,0 +1,1366 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Render (R_) — Multi-threaded Software Triangle Rasterizer — OpenFPS documentation</title>
+<meta name="description" content="R_ takes the current game state and produces a finished framebuffer. It is pure math over primitive arrays — no window, no graphics API, no GPU. The platform adapter uploads the finished…">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<a class="skip" href="#doc">Skip to content</a>
+<header class="topbar"><button class="burger" id="burger" aria-controls="sidebar" aria-expanded="false" aria-label="Show navigation"><span></span><span></span><span></span></button><span class="topbar-name">OpenFPS docs</span></header>
+<div class="scrim" id="scrim" hidden></div>
+<div class="layout">
+<aside class="sidebar" id="sidebar">
+<a class="brand" href="index.html"><span class="brand-mark"></span><span class="brand-name">OpenFPS</span><span class="brand-kind">docs</span></a>
+<input class="filter" id="filter" type="search" placeholder="Filter pages" aria-label="Filter pages" autocomplete="off">
+<nav class="nav" id="nav" aria-label="Documentation">
+<details class="grp" data-hue="1" open><summary><span class="dot"></span>Overview<span class="count">2</span></summary>
+<ul>
+<li><a href="index.html">Overview</a></li>
+<li><a href="agents.html">Agent instructions</a></li>
+</ul></details>
+<details class="grp" data-hue="2" open><summary><span class="dot"></span>Building<span class="count">1</span></summary>
+<ul>
+<li><a href="build.html">Build reference</a></li>
+</ul></details>
+<details class="grp" data-hue="3" open><summary><span class="dot"></span>Architecture<span class="count">2</span></summary>
+<ul>
+<li><a href="style.html">Code style</a></li>
+<li><a href="plan.html">Project plan</a></li>
+</ul></details>
+<details class="grp" data-hue="4" open><summary><span class="dot"></span>Modules<span class="count">5</span></summary>
+<ul>
+<li><a href="engine.html">:engine</a></li>
+<li><a href="desktop.html">:desktop</a></li>
+<li><a href="android.html">:android</a></li>
+<li><a href="tools.html">:tools</a></li>
+<li><a href="gdxshared.html">:gdxshared</a></li>
+</ul></details>
+<details class="grp" data-hue="5" open><summary><span class="dot"></span>Packages<span class="count">10</span></summary>
+<ul>
+<li><a href="engine-core.html">Core</a></li>
+<li><a href="engine-common.html">Common</a></li>
+<li><a href="engine-hal.html">HAL (I_)</a></li>
+<li><a href="engine-gameplay.html">Gameplay (P_)</a></li>
+<li><a href="engine-render.html" class="cur" aria-current="page">Render (R_)</a></li>
+<li><a href="engine-demo.html">Demo</a></li>
+<li><a href="engine-audio.html">Audio (S_)</a></li>
+<li><a href="engine-net.html">Net (G_)</a></li>
+<li><a href="engine-resource.html">Resource (W_)</a></li>
+<li><a href="engine-memory.html">Memory (Z_)</a></li>
+</ul></details>
+<details class="grp" data-hue="6"><summary><span class="dot"></span>Reference<span class="count">2</span></summary>
+<ul>
+<li><a href="assets.html">Assets and licensing</a></li>
+<li><a href="demo-assets.html">Demo asset manifest</a></li>
+</ul></details>
+</nav>
+<p class="generated">Generated from the repository's Markdown by <code>:tools:buildDocsSite</code>.</p>
+</aside>
+<aside class="rail"><details class="toc" id="toc" open><summary>On this page</summary>
+<ul>
+<li class="lv2"><a href="#status">Status</a></li>
+<li class="lv2"><a href="#0-what-this-replaces">0. What this replaces</a></li>
+<li class="lv2"><a href="#1-components">1. Components</a></li>
+<li class="lv3"><a href="#subsystem-layout">Subsystem layout</a></li>
+<li class="lv2"><a href="#2-numeric-policy--the-renderer-uses-float">2. Numeric policy — the renderer uses float</a></li>
+<li class="lv2"><a href="#3-buffers">3. Buffers</a></li>
+<li class="lv3"><a href="#colour-buffer--int-rgba8888">Colour buffer — int[], RGBA8888</a></li>
+<li class="lv3"><a href="#depth-buffer--separate-primitive-array">Depth buffer — separate primitive array</a></li>
+<li class="lv3"><a href="#resolution">Resolution</a></li>
+<li class="lv2"><a href="#4-camera-and-transforms">4. Camera and transforms</a></li>
+<li class="lv3"><a href="#view-space-convention">View space convention</a></li>
+<li class="lv3"><a href="#projection">Projection</a></li>
+<li class="lv3"><a href="#perspective-divide-and-viewport-transform">Perspective divide and viewport transform</a></li>
+<li class="lv2"><a href="#5-pipeline-order">5. Pipeline order</a></li>
+<li class="lv2"><a href="#6-near-plane-clipping-sutherland-hodgman-homogeneous">6. Near-plane clipping (Sutherland-Hodgman, homogeneous)</a></li>
+<li class="lv3"><a href="#why-only-the-near-plane">Why only the near plane</a></li>
+<li class="lv3"><a href="#the-algorithm">The algorithm</a></li>
+<li class="lv3"><a href="#output-cases">Output cases</a></li>
+<li class="lv2"><a href="#7-rasterization-and-tiling">7. Rasterization and tiling</a></li>
+<li class="lv3"><a href="#edge-functions">Edge functions</a></li>
+<li class="lv3"><a href="#bounding-box">Bounding box</a></li>
+<li class="lv3"><a href="#tile-binning">Tile binning</a></li>
+<li class="lv3"><a href="#the-parallel-model--tiled-exclusive-ownership">The parallel model — tiled, exclusive ownership</a></li>
+<li class="lv2"><a href="#8-perspective-correct-interpolation-and-the-depth-test">8. Perspective-correct interpolation and the depth test</a></li>
+<li class="lv3"><a href="#the-rule">The rule</a></li>
+<li class="lv3"><a href="#the-divide-and-how-to-afford-it">The divide, and how to afford it</a></li>
+<li class="lv3"><a href="#depth-store-1w-test-greater">Depth: store 1/w, test greater</a></li>
+<li class="lv2"><a href="#9-texture-sampling">9. Texture sampling</a></li>
+<li class="lv3"><a href="#bilinear-filtering">Bilinear filtering</a></li>
+<li class="lv3"><a href="#mip-level-selection">Mip level selection</a></li>
+<li class="lv2"><a href="#10-model-format-and-what-happened-to-bsp">10. Model format, and what happened to BSP</a></li>
+<li class="lv3"><a href="#modelformat--the-flat-binary-runtime-format">ModelFormat — the flat binary runtime format</a></li>
+<li class="lv3"><a href="#bsp--retired-as-a-renderer-algorithm-not-deleted">BSP — retired as a renderer algorithm, not deleted</a></li>
+<li class="lv2"><a href="#11-open-questions--one-of-the-three-is-still-open">11. Open questions — one of the three is still open</a></li>
+<li class="lv3"><a href="#a-framebuffer-allocation-vs-the-memory-port--decided">(a) Framebuffer allocation vs. the memory port — DECIDED</a></li>
+<li class="lv3"><a href="#b-the-wad-subsystem-has-no-art-left-to-read--still-open">(b) The WAD subsystem has no art left to read — STILL OPEN</a></li>
+<li class="lv3"><a href="#c-the-performance-numbers--resolved-by-measurement-and-they-moved">(c) The performance numbers — RESOLVED BY MEASUREMENT, and they moved</a></li>
+<li class="lv2"><a href="#12-presentation--r_-does-not-present">12. Presentation — R_ does not present</a></li>
+<li class="lv2"><a href="#13-files">13. Files</a></li>
+<li class="lv2"><a href="#14-todo-phase-5">14. TODO (Phase 5)</a></li>
+<li class="lv2"><a href="#15-a-note-on-citations">15. A note on citations</a></li>
+<li class="lv2"><a href="#16-style-note-for-anyone-copying-from-this-document">16. Style note for anyone copying from this document</a></li>
+</ul></details></aside>
+<main id="doc">
+<p class="crumb"><span class="tag">Packages</span><span class="sep">/</span><code>engine/src/main/java/com/openfps/engine/render/README.md</code><span class="sep">/</span>51 min read</p>
+<h1 id="render-r_--multi-threaded-software-triangle-rasterizer">Render (R_) — Multi-threaded Software Triangle Rasterizer<a class="anchor" href="#render-r_--multi-threaded-software-triangle-rasterizer" aria-label="Permalink">#</a></h1>
+<blockquote>
+<p>R_ takes the current game state and produces a finished framebuffer. It is
+pure math over primitive arrays — no window, no graphics API, no GPU. The
+platform adapter uploads the finished buffer; R_ never presents.</p>
+</blockquote>
+<h2 id="status">Status<a class="anchor" href="#status" aria-label="Permalink">#</a></h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Field</th><th>Value</th></tr></thead>
+<tbody>
+<tr><td><strong>State</strong></td><td>SHIPPING</td></tr>
+<tr><td><strong>Phase</strong></td><td><code>PLAN.md</code> Phase 5 — done, pending polish (§ 3.3)</td></tr>
+<tr><td><strong>Tests</strong></td><td>409</td></tr>
+<tr><td><strong>Registered</strong></td><td>R_ via <code>RenderSubsystem</code>. Which port it gets depends on the caller: <code>EngineMain</code>'s own default is <code>NullRenderPort</code> (the headless path), and the real <code>SoftwareRenderPort</code> is supplied through <code>I_RenderPortFactory</code> by <code>DesktopLauncher</code>. So the running desktop app renders; <code>EngineMain.main</code> alone does not</td></tr>
+<tr><td><strong>Verified</strong></td><td>2026-07-28</td></tr>
+</tbody>
+</table></div>
+<p><strong>Built.</strong> The full software triangle rasterizer — <code>Framebuffer</code>, <code>Camera</code>,
+<code>TriangleClipper</code>, <code>Rasterizer</code>, <code>SpanRenderer</code>, <code>TextureSampler</code>, <code>MipChain</code>,
+<code>ModelFormat</code>, <code>Scene</code>, <code>Rgba</code>, <code>Mat4</code>, <code>Vec3</code> — drawing two passes per frame:
+world, then the view-space viewmodel after a depth clear. Measured p50 4.9 ms at
+1280×720 on 8 workers, with output bit-identical across every worker count.</p>
+<p><strong>Not built.</strong> Two polish items, both in § 14. (1) A bilinear/nearest quality
+toggle — <code>TextureSampler</code> is unconditionally bilinear and no config field
+exists. (2) An internal render-resolution cap independent of window size; a
+<code>RenderResolution</code> class was written for it but never landed, and needs
+re-applying against the batched pipeline.</p>
+<p><strong>Blocked on.</strong> Nothing for the renderer itself. § 11(b), the WAD subsystem's
+remaining role, is still open but no longer blocks it.</p>
+<p><strong>Next step.</strong> The bilinear toggle. Bilinear alone costs 2.9× the entire rest of
+the span loop (§ 9, <code>docs/ASSETS.md</code> § 2), so it is the cheapest path to 1080p60.</p>
+<p><strong>This document is the Phase 5 specification.</strong> <code>docs/ASSETS.md</code> § 2 is the
+canonical statement of the render target; this file is its implementation
+spec. Where the two disagree, <code>docs/ASSETS.md</code> wins and this file is the bug.</p>
+<hr>
+<h2 id="0-what-this-replaces">0. What this replaces<a class="anchor" href="#0-what-this-replaces" aria-label="Permalink">#</a></h2>
+<p>An earlier draft of this file specified a 1993-era 2.5D renderer: a 320×200
+framebuffer, an 8-bit palette, BSP front-to-back traversal for visibility,
+visplanes, a per-column renderer, and affine texture mapping.</p>
+<p><strong>That design is retired.</strong> It was a set of VGA-era compromises, not properties
+of software rendering, and it cannot consume the art the project has actually
+committed to — a visplane and a column renderer cannot draw a Kenney GLB model.
+<code>docs/ASSETS.md</code> § 2 and § 10 record the reasoning and the Freedoom evaluation
+that followed from it.</p>
+<p>What survives, and in what form:</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Retired thing</th><th>Status</th></tr></thead>
+<tbody>
+<tr><td>BSP for renderer visibility</td><td>Retired. The z-buffer does this job now. <strong>BSP itself is not deleted</strong> — see § 10</td></tr>
+<tr><td>Sutherland-Hodgman</td><td><strong>Survives, repurposed</strong> — near-plane clipping in homogeneous space, not 2D frustum clipping of wall segments. See § 6</td></tr>
+<tr><td><code>TextureSampler</code></td><td><strong>Survives, rewritten</strong> — mipmapped bilinear, not nearest-neighbour column sampling</td></tr>
+<tr><td>Visplanes, <code>ColumnRenderer</code>, <code>WallClipper</code>, affine mapping, 8-bit palette, fixed 320×200</td><td>Gone</td></tr>
+</tbody>
+</table></div>
+<hr>
+<h2 id="1-components">1. Components<a class="anchor" href="#1-components" aria-label="Permalink">#</a></h2>
+<p>These are the Phase 5 implementation lanes. Each owns one thing; the "does not
+own" column is as load-bearing as the "owns" column, because overlapping
+ownership is how a rasterizer turns into an unmaintainable blob.</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Component</th><th>Owns</th><th>Does not own</th></tr></thead>
+<tbody>
+<tr><td><code>Scene</code></td><td>The immutable draw list: world instances (<code>model</code> + <code>modelToWorld</code>) and view instances (<code>model</code> + <code>modelToView</code>). Built once, never per frame</td><td>Drawing, culling, ordering. It is data</td></tr>
+<tr><td><code>Framebuffer</code></td><td>Colour buffer, depth buffer, dimensions, tile geometry, <code>clear()</code></td><td>Any drawing. It is storage plus a tile map</td></tr>
+<tr><td><code>Camera</code> (+ transform math)</td><td>View matrix, projection matrix, world → clip-space transform, frustum parameters</td><td>Clipping, rasterizing. It produces clip-space vertices and stops</td></tr>
+<tr><td><code>TriangleClipper</code></td><td>Near-plane clipping in homogeneous clip space (Sutherland-Hodgman), attribute interpolation along clipped edges, fan re-triangulation</td><td>The perspective divide, the viewport transform</td></tr>
+<tr><td><code>Rasterizer</code></td><td>Perspective divide, viewport transform, backface cull, edge-function setup, screen-space bounding box, <strong>binning triangles to tiles</strong></td><td>The per-pixel inner loop</td></tr>
+<tr><td><code>SpanRenderer</code></td><td>The inner loop: per-pixel or per-segment perspective-correct interpolation, depth test, depth write, colour write</td><td>Which triangles it draws, and where. It is handed a triangle and a tile rectangle</td></tr>
+<tr><td><code>TextureSampler</code></td><td>Bilinear filtering, mip level selection from UV derivatives, texel fetch and unpack</td><td>UV computation. It receives finished <code>(u, v, lod)</code></td></tr>
+<tr><td><code>ModelFormat</code></td><td>The flat binary runtime format: layout, versioning, reader. Near-zero parsing at load</td><td>Producing that format</td></tr>
+<tr><td><code>GltfConverter</code></td><td><strong>Build time only.</strong> glTF/GLB → <code>ModelFormat</code>. Triangulation, mip generation, texture decode, budget enforcement</td><td>Anything at runtime. It is never on the runtime classpath</td></tr>
+</tbody>
+</table></div>
+<p><code>GltfConverter</code> runs on the Gradle <strong>buildscript</strong> classpath, so it may freely
+use a glTF/JSON library without adding a runtime dependency or shipping
+anything — see <code>docs/ASSETS.md</code> § 4. Everything expensive moves offline,
+because a software rasterizer's scarcest resource is per-frame CPU and its
+cheapest is build-time CPU.</p>
+<h3 id="subsystem-layout">Subsystem layout<a class="anchor" href="#subsystem-layout" aria-label="Permalink">#</a></h3>
+<div class="code"><pre><code>render/
+├── port/
+│   └── I_RenderPort.java     interface — called by core per tic
+└── adapter/
+    ├── NullRenderPort.java   stub
+    ├── Rgba.java             the one definition of the 0xRRGGBBAA format
+    ├── Framebuffer.java      colour + depth buffers, tile geometry
+    ├── Vec3.java, Mat4.java  minimal transform math
+    ├── Camera.java           world → clip space
+    ├── TriangleClipper.java  homogeneous near-plane clipping
+    ├── MipChain.java         a texture and its pre-generated mip levels
+    ├── TextureSampler.java   bilinear + mip selection
+    ├── Rasterizer.java       setup, binning, tile dispatch
+    ├── SpanRenderer.java     the per-pixel inner loop
+    ├── Scene.java            world + view instance draw list
+    └── SoftwareRenderPort.java  the real I_RenderPort
+</code></pre></div>
+<p><strong>Landed:</strong> every component in § 1 — <code>Scene</code>, <code>Framebuffer</code>, <code>Camera</code>,
+<code>TriangleClipper</code>, <code>Rasterizer</code>, <code>SpanRenderer</code>, <code>TextureSampler</code>,
+<code>ModelFormat</code>, <code>GltfConverter</code> — plus <code>SoftwareRenderPort</code> tying them together
+and the supporting <code>Rgba</code>, <code>Vec3</code>, <code>Mat4</code>, <code>MipChain</code>, and the <code>WorkerPool</code>
+prerequisite in § 7.</p>
+<p><strong>Binning is per <em>chunk</em>, not per worker.</strong> § 7 originally said per-worker; the
+implementation improved on it. A chunk is one <code>submitParallel</code> index, so it runs
+exactly once and never concurrently with itself — which makes its bin region
+private without needing any thread identity at all. That matters because the
+participating caller has no worker id, so a per-worker scheme could not have
+been expressed. Counting per (chunk, tile) → serial prefix sum → scatter, with
+the prefix sum walking tiles outermost so a tile's entries form one contiguous
+run in ascending triangle order.</p>
+<p><strong>All eight components have landed, and the pipeline is wired end to end.</strong>
+<code>SoftwareRenderPort</code> implements <code>I_RenderPort</code>, <code>GameLoop</code> drives it, and
+<code>:desktop</code> presents the result. A real Kenney model (Blaster Kit, 368 triangles,
+textured) renders correctly both to a window and to a PNG.</p>
+<p><strong>What integration found that unit tests could not.</strong> This section previously
+said to expect exactly this, and it is worth recording what actually turned up,
+because both bugs were invisible to a passing suite (748 tests at the time; 828
+in <code>:engine</code> and 1000 overall now):</p>
+<ol>
+<li>
+<p><strong><code>RenderFrameEvent</code> had no producer.</strong> The event class, <code>EventFactory</code>
+method, <code>SubsystemId.R_</code> target and <code>RenderSubsystem</code> branch all existed and
+were tested. Nothing ever published one, so R_ had never been invoked at all.
+<code>GameLoop</code> now publishes one per tic, and <code>GameLoopRenderEventTest</code> asserts it.</p>
+</li>
+<li>
+<p><strong>The world was mirrored</strong> — see the § 4 correction. A wrong basis order that
+a unit test had <em>locked in</em>.</p>
+</li>
+<li>
+<p><strong>A pool defect the renderer surfaced but did not cause — now fixed.</strong>
+<code>pool.shutdown()</code> drained the bus and <em>immediately</em> declared the pool
+terminal. But draining <strong>delivers</strong> the queued events rather than discarding
+them, so trailing <code>RenderFrameEvent</code>s were dispatched to a pool that had
+already refused further work, and every clean exit threw twice. The fix was a
+missing state, not a renderer workaround: <code>WorkerPool</code> now has <code>DRAINING</code>
+between <code>RUNNING</code> and <code>SHUTDOWN</code>, and <code>submitParallel</code> is legal there. Any
+fan-out subsystem would have hit this; the renderer was simply the first.</p>
+</li>
+</ol>
+<p><code>GltfConverter</code> lives in the separate <code>:tools</code> module, never on the runtime
+classpath; <code>verifyToolsIsolation</code> proves it mechanically on every build.</p>
+<p><code>Rgba</code> deserves a note, since it is not in the § 1 component table. <code>Framebuffer</code>
+and <code>TextureSampler</code> were built in parallel and each grew its own identical copy
+of pack/unpack. Two definitions of one pixel format is exactly what <code>AGENTS.md</code>
+rule 1 forbids, and had they drifted the symptom would have been a channel swap
+that reads as slightly-wrong colour rather than an error — in the one place every
+pixel passes through both. Use <code>Rgba</code>; do not add a third copy.</p>
+<hr>
+<h2 id="2-numeric-policy--the-renderer-uses-float">2. Numeric policy — the renderer uses <code>float</code><a class="anchor" href="#2-numeric-policy--the-renderer-uses-float" aria-label="Permalink">#</a></h2>
+<p><strong>The renderer uses <code>float</code>. Gameplay and networking stay 16.16 fixed-point
+(<code>PLAN.md</code> § 4 is unchanged).</strong></p>
+<p>This looks like an inconsistency and it is not. Record the reasoning here,
+because a future contributor will otherwise "fix" it in one direction or the
+other and break something.</p>
+<p><strong>1. Fixed-point exists for simulation determinism, not for speed.</strong> Peer-to-peer
+lockstep requires that two peers at the same tic hold bit-identical simulation
+state. Fixed-point integer arithmetic guarantees that trivially. That is the
+entire reason <code>FixedMath</code> exists. It is not there because floats are slow — on
+any CPU this project targets, <code>float</code> multiply is at least as fast as the
+shift-and-<code>long</code>-multiply that 16.16 requires.</p>
+<p><strong>2. Rendering never feeds simulation state.</strong> R_ is a pure function from game
+state to pixels. Nothing it computes is ever written back, sent over the wire,
+or read on the next tic. <strong>A fully non-reproducible renderer cannot desync
+lockstep</strong>, so the renderer has no reason to pay fixed-point's cost — neither
+its precision cost (16.16 has ~5 decimal digits, hopeless for a 1/w that spans
+several orders of magnitude across a frame) nor its range cost.</p>
+<p><strong>3. Java 17 floating point is always-strict anyway.</strong> Since <strong>JEP 306</strong>,
+delivered in Java 17, all floating-point expressions are FP-strict IEEE 754;
+<code>strictfp</code> became a no-op keyword. So <code>+ - * /</code> and <code>Math.sqrt</code> are
+bit-reproducible across every conforming JVM and every CPU. This is stronger
+than most people assume and worth knowing even though § 2 above means the
+renderer does not depend on it.</p>
+<p>The exception, and it is a real one: <strong><code>Math.sin</code>, <code>Math.cos</code>, <code>Math.tan</code>,
+<code>Math.pow</code>, <code>Math.exp</code> and <code>Math.log</code> are permitted 1–2 ulp of error and are
+explicitly NOT required to be reproducible between implementations.</strong>
+<code>StrictMath.*</code> is defined by fdlibm and is reproducible. The renderer calls
+<code>Math.tan</code> once per frame when building the projection matrix (§ 4) — that is
+fine precisely because of § 2. <strong>If a transcendental is ever needed in
+simulation code, it must be <code>StrictMath</code>.</strong></p>
+<ul>
+<li>
+<p>JEP 306, Restore Always-Strict Floating-Point Semantics — https://openjdk.org/jeps/306</p>
+</li>
+<li>
+<p>JLS 17 § 15.4, FP-strict expressions — https://docs.oracle.com/javase/specs/jls/se17/html/jls-15.html#jls-15.4</p>
+</li>
+<li>
+<p><code>java.lang.Math</code> javadoc, on the 1–2 ulp allowance and <code>StrictMath</code> — https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/lang/Math.html</p>
+</li>
+</ul>
+<hr>
+<h2 id="3-buffers">3. Buffers<a class="anchor" href="#3-buffers" aria-label="Permalink">#</a></h2>
+<h3 id="colour-buffer--int-rgba8888">Colour buffer — <code>int[]</code>, RGBA8888<a class="anchor" href="#colour-buffer--int-rgba8888" aria-label="Permalink">#</a></h3>
+<p>One <code>int</code> per pixel, packed <code>0xRRGGBBAA</code>. The format is chosen to match libGDX
+<code>Pixmap.Format.RGBA8888</code> so that a finished frame presents as <strong>a single
+texture upload</strong> with no per-pixel conversion.</p>
+<p>Indexing is <code>y * strideInPixels + x</code>. The stride is <strong>not</strong> necessarily the
+width — see § 7 on false sharing.</p>
+<h3 id="depth-buffer--separate-primitive-array">Depth buffer — separate primitive array<a class="anchor" href="#depth-buffer--separate-primitive-array" aria-label="Permalink">#</a></h3>
+<p>A separate <code>float[]</code>, one element per pixel, holding <strong>1/w</strong> (see § 8). Not
+interleaved with colour. Two reasons:</p>
+<ul>
+<li>
+<p>The two have different element semantics and different clear values, and
+keeping them separate lets each tile row be cache-line aligned independently.</p>
+</li>
+<li>
+<p>The depth clear value is <code>0.0f</code>, whose bit pattern is all zeros, so clearing
+the depth buffer is a memset the JIT turns into the fastest path available.
+(1/w = 0 means "infinitely far"; the test is <em>greater passes</em> — § 8.)</p>
+</li>
+</ul>
+<h3 id="resolution">Resolution<a class="anchor" href="#resolution" aria-label="Permalink">#</a></h3>
+<p>Not fixed. The framebuffer is allocated at the surface size reported by
+<code>I_FrameCallback.onSurfaceReady(width, height)</code> and reallocated on
+<code>onResize(width, height)</code>. <code>docs/ASSETS.md</code> § 2 budgets 1080p at 2× overdraw;
+rendering at a lower internal resolution and letting the adapter scale is a
+legitimate quality knob, not a fixed constraint.</p>
+<blockquote>
+<p><strong>Decided — <code>Framebuffer</code> allocates its own <code>int[]</code> and <code>float[]</code> directly,
+once at <code>init</code> and again only on <code>resize</code>, not through <code>I_MemoryPort</code>.
+See § 11(a) and the sanctioned-site table in <code>STYLE.md</code> § 13.4.</strong></p>
+</blockquote>
+<hr>
+<h2 id="4-camera-and-transforms">4. Camera and transforms<a class="anchor" href="#4-camera-and-transforms" aria-label="Permalink">#</a></h2>
+<h3 id="view-space-convention">View space convention<a class="anchor" href="#view-space-convention" aria-label="Permalink">#</a></h3>
+<p>This spec uses a view space with <strong>+x right, +y up, +z forward</strong>. Forward is
+positive z, which means <code>w_clip</code> is positive in front of the camera and the
+near-plane test in § 6 is simply <code>w &gt; near</code>. Left-handed, and deliberately so —
+it removes a sign flip from the hottest branch in the pipeline.</p>
+<p>The view matrix is the inverse of the camera's world transform. For a rigid
+camera (rotation <code>R</code>, position <code>eye</code>) that inverse is exact and cheap:
+<code>V = Rᵀ · T(−eye)</code>. Do not call a general matrix inverse.</p>
+<p><strong>Basis derivation — the operand order is normative:</strong></p>
+<div class="code" data-lang="text"><pre><code>right = normalize(forward × up)      // NOT up × forward
+up    = right × forward
+</code></pre></div>
+<blockquote>
+<p><strong>Corrected twice, and the second correction was found by looking at a
+rendered image rather than by reasoning.</strong> An early draft left the order
+unpinned. It was then pinned — to <code>up × forward</code>, which is <strong>the mirror</strong>, and
+a test was written that locked the wrong answer in. It survived every unit
+test and was caught the first time a real model was drawn.</p>
+<p>Why <code>up × forward</code> is wrong, concretely. Camera at +z looking at the origin
+gives <code>forward = (0,0,−1)</code>, <code>up = (0,1,0)</code>:</p>
+<div class="code" data-lang="text"><pre><code>up × forward = (1*(−1) − 0*0,  0*0 − 0*(−1),  0*0 − 1*0) = (−1, 0, 0)
+</code></pre></div>
+<p><code>right</code> is world <strong>−X</strong>, so world +x maps to camera-<em>left</em> and every model
+renders horizontally mirrored. With <code>forward × up</code> you get <code>(+1, 0, 0)</code>.</p>
+<p>A second case worth checking, because it catches a sign error the first
+permits: looking down +x, <code>forward × up = (0,0,+1)</code>. Physically — right-handed
+world, +x east, +y up, so +z is south — face east and your right hand points
+south. <code>right = +z</code> is what a person standing there would say.</p>
+<p><strong>This also delivers the left-handedness the section claims.</strong> With the
+corrected order <code>right × up == −forward</code>, so <code>(right, up, forward)</code> is a
+left-handed triple in a right-handed world, which is exactly what "+x right,
++y up, +z into the screen" means. The old order produced a <em>right</em>-handed
+triple while claiming left — the mirror was the claim failing, not a separate
+bug.</p>
+<p><strong>A mirrored render is nearly invisible.</strong> Most game art is close to
+symmetric; the blaster that exposed this looked entirely correct until an
+asymmetric detail <em>within a single face</em> was checked. If this order is ever
+changed again, verify with an asymmetric marker, not with reasoning.</p>
+</blockquote>
+<p><strong><code>near</code> must be positive.</strong> <code>1/w</code> is evaluated at <code>w = near</code>, so a zero or
+negative near plane is a division by zero or a sign inversion, not merely a bad
+view. Enforced in <code>Camera.create</code>.</p>
+<h3 id="projection">Projection<a class="anchor" href="#projection" aria-label="Permalink">#</a></h3>
+<p>With vertical field of view <code>fovY</code> and <code>aspect = width / height</code>, let
+<code>f = 1 / tan(fovY / 2)</code>:</p>
+<div class="code" data-lang="text"><pre><code>x_clip = x_view * f / aspect
+y_clip = y_view * f
+w_clip = z_view
+</code></pre></div>
+<p><strong>There is no third row.</strong> A GPU needs <code>z_clip</code> because its fixed-function depth
+unit consumes a window-space z in [0, 1]. We own the depth unit, we store 1/w,
+and 1/w comes from <code>w_clip</code> alone — so the z row of the projection matrix is
+dead weight and is simply not computed. This is a real simplification available
+to a software rasterizer that a GPU pipeline cannot take.</p>
+<p><strong>Consequence: "projection matrix" is a misnomer here, and § 1 keeps the term
+only because it is what a reader searches for.</strong> Once the z row is gone, what
+remains is two scale factors. <code>Camera</code> therefore exposes <code>projectionScaleX()</code>
+and <code>projectionScaleY()</code> and there is deliberately <strong>no <code>projectionMatrix()</code></strong> —
+handing back a <code>Mat4</code> with a zeroed row is an invitation to fill it back in.</p>
+<p><strong>Clip space has three components: <code>x</code>, <code>y</code>, <code>w</code>. There is no <code>z</code>.</strong> The valid
+range is <code>-w ≤ x ≤ w</code> and <code>-w ≤ y ≤ w</code>; § 4's viewport formula only implies it,
+so it is stated here. <code>Camera.CLIP_FLOATS == 3</code>, and the vertex layout the
+clipper and rasterizer share is a flat <code>float[]</code> with stride <code>3 + attributeCount</code>
+laid out <code>[x, y, w, attr...]</code>.</p>
+<p><code>Math.tan</code> is called once per frame here. See § 2 for why that is fine.</p>
+<h3 id="perspective-divide-and-viewport-transform">Perspective divide and viewport transform<a class="anchor" href="#perspective-divide-and-viewport-transform" aria-label="Permalink">#</a></h3>
+<p>Applied by <code>Rasterizer</code>, <strong>after</strong> <code>TriangleClipper</code> (§ 6):</p>
+<div class="code" data-lang="text"><pre><code>invW = 1 / w_clip
+sx   = (x_clip * invW * 0.5 + 0.5) * width
+sy   = (0.5 - y_clip * invW * 0.5) * height
+</code></pre></div>
+<p><code>sy</code> is flipped because the framebuffer's y grows downward while clip space's
+grows upward. Doing the flip here, once per vertex, is why no later stage has
+to think about it.</p>
+<hr>
+<h2 id="5-pipeline-order">5. Pipeline order<a class="anchor" href="#5-pipeline-order" aria-label="Permalink">#</a></h2>
+<p>A frame is <strong>two passes over the same buffers</strong>: world geometry, then a depth
+clear, then view-space geometry. The second pass is what a first-person weapon
+is drawn in.</p>
+<p><strong>A pass batches every instance into one geometry stream.</strong> This is not an
+optimisation detail — it is the difference between threading helping and
+threading hurting. An earlier revision ran the whole pipeline <em>per instance</em>,
+so a 295-instance room crossed <strong>1180 parallel barriers per frame</strong> to
+distribute a few dozen triangles each, and more workers made it slower. Now
+transform and clip run across all instances into one shared stream, and setup,
+binning and rasterization run once over the whole stream: <strong>8 barriers per
+frame, independent of instance count.</strong> Each instance still gets its own packed
+model→clip transform, which was always once-per-instance and cheap.</p>
+<p>The buffers are therefore sized to the <strong>scene's pass total</strong>, not to the
+largest single instance, and grow only when a bigger scene appears.</p>
+<p>Ordering is preserved exactly: instances enter the stream in submission order
+and tiles are binned in ascending stream index, so every pixel sees the same
+triangles in the same order the per-instance path produced. That is why the
+batched output is byte-identical to what it replaced — verified across
+{0,1,2,4,8,16} workers on four scenes, 48 images, all matching.</p>
+<div class="code" data-lang="text"><pre><code>  Scene
+    ├── world instances  (ModelFormat + modelToWorld)
+    └── view  instances  (ModelFormat + modelToView)
+
+  clear colour + depth
+        │
+        ▼
+  ── WORLD PASS ── for each world instance ──────────────────
+        │
+        ▼
+  Camera.packModelToClip(modelToWorld)         (once per INSTANCE)
+        │                                       48 multiplies, not per vertex
+        ▼
+  model triangles (ModelFormat)
+        │
+        ▼
+  Camera:          model → clip space          (per vertex, 12 mul + 9 add)
+        │
+        ▼
+  TriangleClipper: near-plane clip             (per triangle → 0, 1 or 2 triangles)
+        │
+        ▼
+  Rasterizer:      divide, viewport, backface cull,
+                   edge setup, bounding box, BIN TO TILES
+        │
+        ▼   ── parallel, one worker per tile, exclusive ownership ──
+        │
+  SpanRenderer:    per tile, per binned triangle, per covered pixel:
+                   interpolate, depth test, sample, write
+        │
+        ▼
+  ── CLEAR DEPTH ONLY ───────────────────────────────────────
+        │            colour is NOT cleared: the world stays
+        │
+        ▼
+  ── VIEW PASS ── for each view instance ────────────────────
+        │            Camera.packViewToClip — projection only,
+        │            no view matrix: these are already in view space
+        ▼
+        (same clip → raster → span path)
+        │
+        ▼
+  Framebuffer (finished)  →  adapter uploads  →  screen
+</code></pre></div>
+<p><strong>Why the depth clear rather than a compressed depth range.</strong> A first-person
+weapon is bolted to the camera, so it is naturally expressed in view space —
+which makes its transform a fixed constant and skips the view matrix entirely.
+But it sits centimetres from the eye and the world does not, so with a shared
+depth buffer it punches through walls the moment the player stands near one.
+Clearing depth between the passes makes the weapon unconditionally nearest,
+costs one <code>Arrays.fill</code> of a buffer that is about to be written anyway, and is
+what shipped first-person renderers have always done. A compressed depth range
+would work too and is strictly more complex for no benefit here.</p>
+<p>The view pass is skipped entirely when a scene has no view instances, so a
+scene that is only world geometry pays nothing for this.</p>
+<hr>
+<h2 id="6-near-plane-clipping-sutherland-hodgman-homogeneous">6. Near-plane clipping (Sutherland-Hodgman, homogeneous)<a class="anchor" href="#6-near-plane-clipping-sutherland-hodgman-homogeneous" aria-label="Permalink">#</a></h2>
+<h3 id="why-only-the-near-plane">Why only the near plane<a class="anchor" href="#why-only-the-near-plane" aria-label="Permalink">#</a></h3>
+<p>The perspective divide is <code>1 / w_clip</code>. A vertex behind the eye has <code>w ≤ 0</code>, and
+dividing by it produces garbage — geometry mirrored through the origin, or an
+infinity. So a triangle crossing the near plane <strong>must</strong> be geometrically clipped
+before the divide. There is no way to fix it up afterwards.</p>
+<p>The other five frustum planes need no geometric clip at all. Once a triangle is
+in screen space, left/right/top/bottom rejection is just intersecting its
+bounding box with the screen rectangle — which the tile binning in § 7 does
+anyway, for free. And there is no far plane: with 1/w depth, distant geometry
+converges toward 1/w = 0 rather than overflowing.</p>
+<p>So: <strong>one clip plane, applied in homogeneous clip space.</strong> This is why
+Sutherland-Hodgman survives the retirement of the 2.5D design. It was always the
+right algorithm; it was pointed at the wrong plane.</p>
+<h3 id="the-algorithm">The algorithm<a class="anchor" href="#the-algorithm" aria-label="Permalink">#</a></h3>
+<p>Sutherland-Hodgman clips a polygon against one half-space in O(n) per plane,
+walking edges and emitting kept vertices plus intersections. Against the plane
+<code>w = near</code>, with vertex <code>a</code> inside iff <code>a.w &gt; near</code>:</p>
+<div class="code" data-lang="text"><pre><code>clipNear(polygon, near):
+    out = []
+    for each edge (a, b) in polygon:          // b follows a, wrapping
+        aIn = a.w &gt; near
+        bIn = b.w &gt; near
+        if aIn and bIn:
+            out.append(b)
+        else if aIn and not bIn:
+            out.append(lerpVertex(a, b, (near - a.w) / (b.w - a.w)))
+        else if not aIn and bIn:
+            out.append(lerpVertex(a, b, (near - a.w) / (b.w - a.w)))
+            out.append(b)
+        // both outside: emit nothing
+    return out
+</code></pre></div>
+<p><code>lerpVertex(a, b, t)</code> interpolates <strong>every</strong> vertex attribute linearly by <code>t</code>:
+<code>x, y, w</code> of the clip-space position, and <code>u, v</code>, and any baked colour.</p>
+<p><strong>Linear interpolation is correct here and would not be correct after the
+divide.</strong> Clip-space position and all vertex attributes are affine functions of
+the parameter along the edge in object space; the divide is what destroys that
+linearity. Clipping before the divide is what lets one <code>lerp</code> handle position
+and UVs identically. This is the whole reason the operation lives in homogeneous
+space, and it is the point of the Blinn &amp; Newell paper below.</p>
+<h3 id="output-cases">Output cases<a class="anchor" href="#output-cases" aria-label="Permalink">#</a></h3>
+<p>Clipping a triangle against one plane yields 0, 3, or 4 vertices:</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Vertices inside</th><th>Output</th></tr></thead>
+<tbody>
+<tr><td>0</td><td>0 vertices — triangle rejected entirely</td></tr>
+<tr><td>1</td><td>3 vertices — 1 triangle</td></tr>
+<tr><td>2</td><td>4 vertices — fan-triangulate to 2 triangles: (0,1,2) and (0,2,3)</td></tr>
+<tr><td>3</td><td>unchanged — 1 triangle, and the fast path. Take it with an early-out on <code>min(w) &gt; near</code></td></tr>
+</tbody>
+</table></div>
+<p>The output is bounded at 4 vertices, so the clipper needs <strong>no allocation</strong> — a
+fixed 4-vertex scratch buffer per worker is sufficient.</p>
+<p><strong>The boundary rule is strict: a vertex is inside iff <code>w &gt; near</code>.</strong> A vertex
+lying <em>exactly</em> on the plane is outside.</p>
+<p><strong>A case the table above does not cover.</strong> Because the rule is strict, "3 inside"
+is not the only way to reach an unclipped triangle, and more importantly the
+<em>2-inside</em> row is not the only way to reach 4 vertices: a triangle with two
+vertices strictly inside and one exactly <strong>on</strong> the plane also emits 4, two of
+which coincide. Fan-triangulating that gives one good triangle and one
+<strong>degenerate</strong> one. This is harmless — § 7 mandates an <code>area2 == 0</code> reject, which
+discards it — but it will look like a clipper bug to whoever hits it first, so it
+is recorded rather than left to be rediscovered. Do not add a de-duplication
+pass: that spends comparisons on every triangle to tidy a measure-zero case the
+rasterizer already handles.</p>
+<p><strong>Trivial reject.</strong> § 6 gave the <code>min(w) &gt; near</code> accept fast path; the symmetric
+<code>max(w) ≤ near</code> reject costs the same and discards everything behind the camera
+without touching the scratch buffer at all. Implement both.</p>
+<p><strong>Snap the intersection vertex's <code>w</code> to exactly <code>near</code>.</strong> The lerp produces
+<code>near</code> give or take a few ulp, and the sign of that error decides whether a
+freshly clipped vertex satisfies the very predicate that just admitted it.
+Assigning <code>near</code> directly is algebraically identical and makes
+<code>w ≥ near &gt; 0</code> a guarantee the rasterizer can rely on, so <code>1/w</code> is always finite.</p>
+<p><strong>Sources:</strong></p>
+<ul>
+<li>
+<p>Sutherland &amp; Hodgman, "Reentrant Polygon Clipping", <em>CACM</em> 17(1), 1974 — https://dl.acm.org/doi/10.1145/360767.360802</p>
+</li>
+<li>
+<p>Blinn &amp; Newell, "Clipping using homogeneous coordinates", <em>SIGGRAPH '78</em> — https://dl.acm.org/doi/10.1145/800248.807398</p>
+</li>
+</ul>
+<hr>
+<h2 id="7-rasterization-and-tiling">7. Rasterization and tiling<a class="anchor" href="#7-rasterization-and-tiling" aria-label="Permalink">#</a></h2>
+<h3 id="edge-functions">Edge functions<a class="anchor" href="#edge-functions" aria-label="Permalink">#</a></h3>
+<p>For a screen-space triangle with vertices <code>(x0,y0)</code>, <code>(x1,y1)</code>, <code>(x2,y2)</code>, the
+edge function of edge <code>01</code> evaluated at a point is:</p>
+<div class="code" data-lang="text"><pre><code>E01(x, y) = (x1 - x0) * (y - y0) - (y1 - y0) * (x - x0)
+</code></pre></div>
+<p>Its sign says which side of the line <code>01</code> the point is on. A point is inside the
+triangle when all three edge functions share a sign. This is Pineda's
+formulation, and the reason it is the right one for this renderer is that it is
+<strong>linear in x and y</strong>, so it steps incrementally:</p>
+<div class="code" data-lang="text"><pre><code>∂E01/∂x = -(y1 - y0)        // add this when moving one pixel right
+∂E01/∂y =  (x1 - x0)        // add this when moving one pixel down
+</code></pre></div>
+<blockquote>
+<p><strong>Corrected.</strong> An earlier draft wrote this as
+<code>E01 = (x - x0)(y1 - y0) - (y - y0)(x1 - x0)</code>, which is the <strong>negation</strong> of the
+form above, and the <code>Rasterizer</code> implementation caught the contradiction. That
+version is inconsistent with the <code>area2</code> immediately below: evaluated at vertex
+2 it yields <code>−area2</code>, so <code>e0 + e1 + e2 = −area2</code> and the barycentrics would sum
+to <code>−1</code> rather than <code>1</code>. Both statements could not be true at once. The form
+above is the orientation determinant, agrees with <code>area2</code>, and makes the λ
+assignment below correct as written. Verify with the unit triangle
+<code>(0,0), (1,0), (0,1)</code>: <code>area2 = 1</code>, <code>E01 = y</code>, <code>E12 = 1 − x − y</code>, <code>E20 = x</code>,
+summing to exactly <code>area2</code>.</p>
+</blockquote>
+<p>Setup computes <code>E</code> once at the top-left corner of the bounding box and then the
+whole traversal is adds. It also parallelizes trivially: <code>E</code> can be evaluated at
+any pixel directly, with no dependence on neighbours, which is exactly what lets
+a tile be rasterized independently of every other tile.</p>
+<p><strong>Signed area and barycentrics.</strong> Twice the signed triangle area is <code>E01</code>
+evaluated at vertex 2:</p>
+<div class="code" data-lang="text"><pre><code>area2 = (x1 - x0) * (y2 - y0) - (y1 - y0) * (x2 - x0)
+</code></pre></div>
+<p><code>area2</code> is the backface cull test — one sign check, before any per-pixel work —
+and a degenerate triangle has <code>area2 == 0</code> and must be rejected before it
+divides by zero.</p>
+<p><strong>Decided by measurement: <code>CullMode.CLOCKWISE</code>.</strong> <code>Rasterizer</code> still takes a
+required <code>CullMode</code> with no default, whose values name the <strong>screen-space</strong>
+winding (<code>CLOCKWISE</code> = positive signed area with y growing downward) rather than
+asserting which one is a back face; <code>SoftwareRenderPort.BACKFACE_CULL_MODE</code>
+holds the engine's choice.</p>
+<p><strong>How it was settled, because the method matters more than the answer.</strong> A
+z-buffer draws a <em>closed</em> mesh correctly with <strong>no culling at all</strong>, so
+<code>CullMode.NONE</code> is an oracle that assumes nothing about winding. Render a
+six-coloured cube three ways and the mode whose output is <em>pixel-identical</em> to
+<code>NONE</code> is correct. The other mode does not error — it renders the cube's
+<strong>interior</strong>, which looks like a perfectly plausible open box. That is why this
+cannot be eyeballed on arbitrary geometry.</p>
+<blockquote>
+<p><strong>This value is NOT independent of § 4's basis order.</strong> It was originally
+measured as <code>COUNTER_CLOCKWISE</code>, and flipped to <code>CLOCKWISE</code> when the mirrored
+basis was corrected — because a handedness change reverses screen-space
+winding. <strong>If <code>Camera</code>'s basis ever changes, re-run the oracle. Do not edit
+the expectation to match.</strong> Both the constant's Javadoc and the pinning test
+carry this warning.</p>
+<p>The flip count now resolves to two, cancelling: the view transform is
+orientation-reversing and the <code>sy</code> flip reverses again, so glTF's
+CCW-from-outside front face stays CCW on screen. That is recorded as a <em>check</em>
+on the measurement, not as its justification. With <code>e0 = E12(p)</code>, <code>e1 = E20(p)</code>, <code>e2 = E01(p)</code>, the</p>
+</blockquote>
+<p>barycentric weights are:</p>
+<div class="code" data-lang="text"><pre><code>λ0 = e0 / area2      λ1 = e1 / area2      λ2 = e2 / area2      (λ0 + λ1 + λ2 = 1)
+</code></pre></div>
+<p>Compute <code>1 / area2</code> once at setup and multiply.</p>
+<p><strong>Fill rule.</strong> Adjacent triangles share edges. Without a rule, a pixel exactly on
+a shared edge is drawn twice (visible with blending, and wasted work regardless)
+or zero times (a seam of background pixels). Adopt the standard <strong>top-left rule</strong>:
+a pixel on an edge is inside only if that edge is a top edge or a left edge.
+This is a decision made once at setup by biasing each edge's constant term, so
+the inner loop stays a plain sign test.</p>
+<p><strong>The bias is not −1.</strong> An earlier draft said to bias by −1, which is the
+<em>fixed-point</em> subpixel idiom — in 16.16 or 4.8 subpixel coordinates, −1 is one
+subpixel step and excludes exactly the on-edge case. This is a <code>float</code>
+rasterizer (§ 2), where −1 is an entire pixel. Use a per-edge bias of <code>0.0f</code>
+when the edge is owned and <code>Float.MIN_VALUE</code> when it is not; the test <code>e &gt;= bias</code>
+is then <em>exactly</em> <code>e &gt;= 0</code> or <code>e &gt; 0</code>, with no epsilon and no tolerance.</p>
+<p>Exactness here has a prerequisite that is easy to miss: the two triangles
+sharing an edge must produce edge functions that are <strong>bitwise negations</strong> of one
+another, or the rule stops deciding the pixel and a seam reappears. Two
+consequences follow, both load-bearing:</p>
+<ul>
+<li>
+<p>Compute the edge constant in the cross-product form <code>px*qy − qx*py</code>, because
+IEEE subtraction is exactly antisymmetric. The algebraically identical
+<code>−(dx*px + dy*py)</code> is not, once rounding enters.</p>
+</li>
+<li>
+<p><strong>Evaluate</strong> <code>dx*x + rowConst</code> per pixel rather than accumulating <code>e += dx</code>
+along the span. Accumulation drifts the two triangles' values apart by a few
+ulp, which is all it takes.</p>
+</li>
+</ul>
+<p>Assert this directly: a test should check that the shared edge function is
+exactly <code>0.0f</code> at a pixel on the edge. Without that assertion, fill-rule tests
+silently degrade into coverage tests and stop testing the rule at all.</p>
+<h3 id="bounding-box">Bounding box<a class="anchor" href="#bounding-box" aria-label="Permalink">#</a></h3>
+<div class="code" data-lang="text"><pre><code>minX = max(0, floor(min(x0, x1, x2)))
+maxX = min(width  - 1, ceil (max(x0, x1, x2)))
+minY = max(0, floor(min(y0, y1, y2)))
+maxY = min(height - 1, ceil (max(y0, y1, y2)))
+</code></pre></div>
+<p>Clamping to the screen here is what makes the four side frustum planes free
+(§ 6). An empty box after clamping means the triangle is off-screen — reject.</p>
+<h3 id="tile-binning">Tile binning<a class="anchor" href="#tile-binning" aria-label="Permalink">#</a></h3>
+<p>The screen is divided into fixed-size tiles (<strong>64×64 pixels is the starting
+point</strong>; it is a tuning parameter, and § 11 flags that none of these numbers are
+measured yet). The tile grid is <code>ceil(width / TILE) × ceil(height / TILE)</code>.</p>
+<p>Setup converts a triangle's clamped bounding box into a tile range and appends
+the triangle's index to each covered tile's bin:</p>
+<div class="code" data-lang="text"><pre><code>tx0 = minX / TILE      tx1 = maxX / TILE
+ty0 = minY / TILE      ty1 = maxY / TILE
+for ty in ty0..ty1:
+    for tx in tx0..tx1:
+        bin[ty * tilesX + tx].append(triangleIndex)
+</code></pre></div>
+<p>Bounding-box binning over-includes: a thin diagonal triangle is binned into
+corner tiles it does not actually touch. Those tiles reject it in one edge-
+function test. Testing the triangle's edges against tile corners at bin time is
+a known refinement — do not do it until the profile says to.</p>
+<h3 id="the-parallel-model--tiled-exclusive-ownership">The parallel model — tiled, exclusive ownership<a class="anchor" href="#the-parallel-model--tiled-exclusive-ownership" aria-label="Permalink">#</a></h3>
+<p><strong>This is the design decision that makes the renderer lock-free.</strong></p>
+<p>A pixel belongs to exactly one tile. A tile is drawn by exactly one worker. So
+<strong>two workers never write the same colour or depth address, ever.</strong> From that
+one invariant:</p>
+<ul>
+<li>
+<p>No lock, no atomic, and no compare-and-swap on the depth buffer. The
+read-modify-write of the depth test — which is where a naive parallel
+rasterizer either serializes or races — is a plain array access, because it is
+provably uncontended.</p>
+</li>
+<li>
+<p>No barrier between triangles within a tile.</p>
+</li>
+<li>
+<p>The only synchronisation in the whole raster pass is one join at the end of
+the frame.</p>
+</li>
+</ul>
+<p>Exclusivity is a property <strong>of the tile, not of the assignment policy</strong>. Any
+policy that hands each tile to exactly one worker preserves it.</p>
+<p><strong>The policy is a shared atomic claim counter. This is forced, not preferred.</strong>
+An earlier draft of this section offered a static interleave (<code>worker w takes
+tiles where index % W == w</code>) as the simpler starting point, and that was wrong:
+a static interleave assigns tile sets by <em>worker id</em>, and <strong>the participating
+caller has no worker id</strong> — nor is there any guarantee that the worker whose id
+owns a given tile ever shows up. It is directly incompatible with the
+caller-participation requirement below, which is a correctness constraint rather
+than a tuning one. The claim counter is the only policy that satisfies both, and
+it load-balances better anyway when tile costs are uneven, which they will be.</p>
+<p><strong>Binning must not become the shared-write hazard the raster pass avoided.</strong>
+Setup is itself parallel (<code>docs/ASSETS.md</code> § 2 budgets 200–500 ns per triangle
+against a 50–100k triangle ceiling — serial setup alone would consume the whole
+frame). So each worker bins its slice of the triangle stream into its <strong>own</strong>
+per-worker bin arrays, and the raster pass reads tile T by walking the W
+per-worker bins for T in worker order. Lock-free on both sides.</p>
+<p><strong>Determinism.</strong> Bin lists are appended in a fixed triangle order and read in a
+fixed worker order, so a tile's output does not depend on thread scheduling.
+This matters because coplanar triangles at exactly equal depth would otherwise
+resolve differently run to run. It is not required for lockstep — the renderer
+cannot desync anything (§ 2) — but a renderer that flickers between runs is
+miserable to debug.</p>
+<p><strong>False sharing.</strong> Tiles are rectangles in a linearly addressed buffer, so the
+end of one tile's row and the start of its right-hand neighbour's row land in
+the same 64-byte cache line — two workers writing the same line, which is the
+classic false-sharing stall and would quietly eat most of the parallel win. The
+cheap fix: make the <strong>tile width a multiple of 16 pixels</strong> (16 ints = 64 bytes)
+and pad the framebuffer's <strong>row stride</strong> to a multiple of 16 pixels. This is why
+§ 3 says stride is not necessarily width.</p>
+<blockquote>
+<p><strong>Correction — how much this actually guarantees.</strong> An earlier draft of this
+section claimed "no line is ever shared". That is not achievable in Java and
+the implementation of <code>Framebuffer</code> found it. Padding buys <em>relative</em>
+alignment: every tile row starts a whole number of cache lines from the array's
+<strong>first element</strong>. Whether that element itself sits on a 64-byte boundary is
+the JVM's object layout, which Java offers no way to request or even observe.</p>
+<p>So: if the array base happens to be line-aligned, no line is shared. If it is
+not, adjacent tile rows share exactly <strong>one</strong> line at their boundary — instead
+of a number that varies with the window width. The padding is still worth
+doing, because it converts an unpredictable width-dependent amount of false
+sharing into a bounded, deterministic one. A hard guarantee needs an aligned
+allocator, which means native memory. Do not claim more than this in code
+comments.</p>
+<p>Second consequence, easy to miss: <strong>the padded columns belong to no tile</strong>, so
+the presentation adapter must not upload the raw <code>int[]</code> to a <code>width × height</code>
+texture — it would shear the image. <code>Framebuffer.copyColorTo</code> de-pads for that
+reason.</p>
+</blockquote>
+<p>The alternative — per-tile contiguous (swizzled) buffers, de-swizzled once at
+present — has better locality still, but it costs a full-frame shuffle before
+upload and complicates every debug tool that wants to look at a pixel. Not worth
+it at this stage.</p>
+<p><strong>Threading service.</strong> Parallel work goes through the existing <code>WorkerPool</code>
+(<code>AGENTS.md</code> rule 1 — use the services we have). <strong>Never <code>new Thread</code>.</strong></p>
+<blockquote>
+<p><strong>A fine-grained join must not use a timed park. This cost 15× and was found
+by measurement, not review.</strong></p>
+<p><code>submitParallel</code>'s join is a polling loop — nothing unparks a joining thread —
+so a <code>LockSupport.parkNanos</code> there is a <strong>timed</strong> park, and a timed park is
+rounded up to the system timer period. On Windows that is <strong>15.6 ms by
+default</strong>. A join that needed 50 microseconds slept for fifteen milliseconds.</p>
+<p>The symptom was that enabling worker threads made the demo scene <em>slower</em>:
+best frame 4 ms, median 31 ms on eight workers. The tell was in the
+distribution rather than the mean — frame times sat on exact multiples of
+15.6 ms, because a frame's several joins each caught a timer tick.</p>
+<p><code>Thread.yield()</code> has no such floor; it is a reschedule, not a sleep. The join
+now spins, then yields, and parks only as a backstop for a genuinely
+descheduled worker, where burning a core is the worse trade.</p>
+<p><strong>Two lessons worth keeping.</strong> Report percentiles, not best-of-N — best-of-N
+hid this completely, because the best frame was always the one that missed a
+tick. And a benchmark can be <em>unable to see</em> a fault: the single-instance
+scene scaled 5.9× and looked healthy purely because it crossed four barriers
+per frame instead of 1180, so it rarely caught a tick at all. That healthy
+number is what made the pool look innocent.</p>
+</blockquote>
+<blockquote>
+<p><strong>Prerequisite — SATISFIED.</strong> <code>I_ThreadPoolPort</code> / <code>WorkerPool</code> was exclusively
+an event-bus drainer: workers looped on <code>bus.take()</code> and dispatched to a
+<code>SubsystemRegistry</code>, with no "submit N jobs and await completion" operation.
+It now has one — <code>submitParallel(I_ParallelJob, int jobCount)</code>, index-based so
+nothing is allocated per tile per frame. Extending the existing pool was the
+right move; a second thread pool is a <code>STYLE.md</code> § 13.4 anti-pattern.</p>
+<p><strong>Caller participation was necessary but not sufficient.</strong> The requirement
+below stops the submitting thread from deadlocking, and it is what makes
+correctness independent of worker count. It does not, on its own, produce any
+<strong>parallelism</strong>: at frame time the bus is normally idle, so every other worker
+is blocked inside <code>bus.take()</code> and cannot be reached at all. A caller that
+merely participates would run all
+the tiles itself, correctly and serially.</p>
+<p>Waking those workers by interrupting them is not acceptable — a worker may be
+inside subsystem code, and any blocking call in a handler would start seeing
+<code>InterruptedException</code>, which changes dispatch behaviour for every subsystem.
+<code>WorkerPool</code> uses <strong>leader/follower</strong> instead: at most one worker sits in
+<code>take()</code> (the leader) and the rest wait on a pool-owned condition that
+<code>submitParallel</code> can signal. The leader hands leadership on <em>before</em> it
+dispatches, so concurrent dispatch is unaffected — and <code>take()</code> was already
+serialised on the queue's own lock, so nothing was lost.</p>
+<p><strong>The submitting thread must participate in the work.</strong> This is a correctness
+requirement, not a tuning choice. <code>RenderSubsystem</code> is dispatched <em>from</em> the
+bus, so the thread that submits the tile jobs <strong>is itself a pool worker</strong>. If
+it submits W jobs and then blocks waiting for them, it has removed a worker
+from the pool that has to execute them. At <code>workerCount == 1</code> that is an
+immediate, total deadlock; above 1 it is a latent one that appears the moment
+two subsystems fan out in the same frame. This is the same hazard <code>AGENTS.md</code>
+already documents for the game loop ("it cannot run on the pool it feeds —
+deadlock at <code>workerCount == 1</code>"), arriving from the other direction.</p>
+<p>The fix is the standard fork-join one: the caller <strong>runs tiles itself</strong> until
+the queue is empty, then waits only for tiles other workers already claimed.
+Progress is then guaranteed by the calling thread alone, so correctness no
+longer depends on how many workers exist. Tile exclusivity is untouched — the
+caller claims tiles through the same policy as everyone else. Any submit/await
+added to <code>I_ThreadPoolPort</code> must have this property, and it must be tested at
+<code>workerCount == 1</code>.</p>
+</blockquote>
+<p><strong>Sources:</strong></p>
+<ul>
+<li>
+<p>Pineda, "A Parallel Algorithm for Polygon Rasterization", <em>SIGGRAPH '88</em>, Computer Graphics 22(4) — https://dl.acm.org/doi/10.1145/378456.378457</p>
+</li>
+<li>
+<p>Fabian Giesen, "A trip through the Graphics Pipeline 2011" — binning, tiling, and the rasterizer's place in the pipeline — https://fgiesen.wordpress.com/2011/07/09/a-trip-through-the-graphics-pipeline-2011-index/</p>
+</li>
+<li>
+<p>Fabian Giesen, "Optimizing the basic rasterizer" — incremental edge functions, fill rules, block traversal — https://fgiesen.wordpress.com/2013/02/10/optimizing-the-basic-rasterizer/</p>
+</li>
+</ul>
+<hr>
+<h2 id="8-perspective-correct-interpolation-and-the-depth-test">8. Perspective-correct interpolation and the depth test<a class="anchor" href="#8-perspective-correct-interpolation-and-the-depth-test" aria-label="Permalink">#</a></h2>
+<h3 id="the-rule">The rule<a class="anchor" href="#the-rule" aria-label="Permalink">#</a></h3>
+<p>Screen-space linear interpolation of a texture coordinate is <strong>wrong</strong> — that is
+affine mapping, and it is what produced the sliding-texture artefact the retired
+design lived with. The correct statement is:</p>
+<blockquote>
+<p><code>u/w</code>, <code>v/w</code>, and <code>1/w</code> <strong>are</strong> linear in screen space. <code>u</code> and <code>v</code> are not.</p>
+</blockquote>
+<p>So interpolate the <em>divided</em> quantities with the barycentric weights from § 7,
+then undo the division per pixel:</p>
+<div class="code" data-lang="text"><pre><code>invW   = λ0 * (1/w0)     + λ1 * (1/w1)     + λ2 * (1/w2)
+uOverW = λ0 * (u0/w0)    + λ1 * (u1/w1)    + λ2 * (u2/w2)
+vOverW = λ0 * (v0/w0)    + λ1 * (v1/w1)    + λ2 * (v2/w2)
+
+w = 1 / invW
+u = uOverW * w
+v = vOverW * w
+</code></pre></div>
+<p><code>1/w0</code>, <code>u0/w0</code>, <code>v0/w0</code> and their siblings are computed <strong>once per vertex at
+setup</strong>, never in the loop. All three interpolated quantities are linear in
+screen space, so like the edge functions they step incrementally along a span:
+setup computes <code>∂/∂x</code> for each and the inner loop adds.</p>
+<h3 id="the-divide-and-how-to-afford-it">The divide, and how to afford it<a class="anchor" href="#the-divide-and-how-to-afford-it" aria-label="Permalink">#</a></h3>
+<p><code>w = 1 / invW</code> is a floating-point reciprocal per pixel. That is the single most
+expensive operation in the inner loop and it is on the critical path of every
+textured pixel.</p>
+<p>Two correct strategies:</p>
+<ol>
+<li>
+<p><strong>Per pixel.</strong> Exact. This is the reference implementation — write it first,
+keep it as the correctness oracle for the fast path, and use it in tests.</p>
+</li>
+<li>
+<p><strong>Per span segment (recommended default).</strong> Divide exactly at the two ends of
+an N-pixel segment (<strong>N = 8 or 16</strong>), and interpolate <code>u</code> and <code>v</code> linearly
+between those exact endpoints. The error is bounded by the curvature of the
+hyperbola over N pixels and is imperceptible at N = 16 for anything but
+extreme grazing angles. This is the classic Quake span technique and it is
+what makes the ~3–8 ns/pixel estimate in <code>docs/ASSETS.md</code> § 2 plausible at
+all.</p>
+</li>
+</ol>
+<p>Strategy 2 also gives mip selection its natural cadence — see § 9.</p>
+<h3 id="depth-store-1w-test-greater">Depth: store 1/w, test greater<a class="anchor" href="#depth-store-1w-test-greater" aria-label="Permalink">#</a></h3>
+<p><code>invW</code> is already being interpolated, so <strong>using it as the depth value is free</strong>
+— no extra interpolant, no extra setup. Convention:</p>
+<div class="code" data-lang="text"><pre><code>clear   depth to 0.0f            // 1/w = 0 is infinitely far; all-zero bit pattern
+test    invW &gt; depth[index]      // greater is nearer
+write   depth[index] = invW      // only when the test passes
+</code></pre></div>
+<p>1/w also distributes precision hyperbolically, concentrating it near the camera
+where it is wanted — the same property that makes GPU depth buffers nonlinear,
+here for free rather than as a side effect.</p>
+<p>Do the <strong>depth test before texture sampling</strong>. Sampling is far more expensive
+than a compare, and at 2× overdraw roughly half of it is thrown away.</p>
+<p><strong>Sources:</strong></p>
+<ul>
+<li>
+<p>Heckbert &amp; Moreton, "Interpolation for Polygon Texture Mapping and Shading" — the derivation of why <code>u/w</code> and <code>1/w</code> are the screen-linear quantities</p>
+</li>
+<li>
+<p>Paul Heckbert, "Fundamentals of Texture Mapping and Image Warping", UCB/CSD 89/516, 1989 — https://www2.eecs.berkeley.edu/Pubs/TechRpts/1989/CSD-89-516.pdf</p>
+</li>
+<li>
+<p>Jim Blinn, "Hyperbolic Interpolation", <em>IEEE CG&amp;A</em> 12(4), 1992 — https://doi.org/10.1109/38.144827</p>
+</li>
+<li>
+<p>Chris Hecker, "Perspective Texture Mapping" series, <em>Game Developer Magazine</em> 1995–96 — the practical span-subdivision treatment — https://chrishecker.com/Miscellaneous_Technical_Articles</p>
+</li>
+<li>
+<p>Michael Abrash, <em>Graphics Programming Black Book</em>, Part V (the Quake chapters) — span-based rendering and subdivided perspective correction — https://www.jagregory.com/abrash-black-book/</p>
+</li>
+</ul>
+<hr>
+<h2 id="9-texture-sampling">9. Texture sampling<a class="anchor" href="#9-texture-sampling" aria-label="Permalink">#</a></h2>
+<p><code>docs/ASSETS.md</code> § 2 specifies <strong>mipmapped bilinear</strong> — bilinear filtering
+<em>within</em> one mip level. Trilinear (blending two levels) doubles the sample cost
+and is not in the per-frame budget. Mip chains are pre-generated by
+<code>GltfConverter</code> and are <strong>required</strong>, not optional: unmipmapped minification is
+both aliased and slow, because it destroys texture cache locality exactly when
+the texture is being sampled sparsely.</p>
+<h3 id="bilinear-filtering">Bilinear filtering<a class="anchor" href="#bilinear-filtering" aria-label="Permalink">#</a></h3>
+<p>With <code>u, v</code> in [0, 1] and a level of size <code>w × h</code>:</p>
+<div class="code" data-lang="text"><pre><code>tx = u * w - 0.5          ty = v * h - 0.5
+x0 = floor(tx)            y0 = floor(ty)
+fx = tx - x0              fy = ty - y0
+
+result = lerp( lerp(texel(x0,   y0),   texel(x0+1, y0),   fx),
+               lerp(texel(x0,   y0+1), texel(x0+1, y0+1), fx),
+               fy )
+</code></pre></div>
+<p>The <code>- 0.5</code> is not decorative: it places the sample point at the texel <em>centre</em>,
+and omitting it shifts the whole texture by half a texel — a bug that looks like
+a blurry-but-plausible image and survives review for months.</p>
+<p>Filtering runs per channel on the unpacked RGBA8888 components. Power-of-two
+level dimensions make the wrap/clamp of <code>x0+1</code> and <code>y0+1</code> a mask rather than a
+branch; <code>GltfConverter</code> should enforce power-of-two textures for that reason
+alone.</p>
+<h3 id="mip-level-selection">Mip level selection<a class="anchor" href="#mip-level-selection" aria-label="Permalink">#</a></h3>
+<p>The level is chosen from how fast UV changes per screen pixel. With <code>u, v</code>
+expressed <strong>in texels of level 0</strong>, the scale factor and level of detail are:</p>
+<div class="code" data-lang="text"><pre><code>ρ = max( sqrt((∂u/∂x)² + (∂v/∂x)²),
+         sqrt((∂u/∂y)² + (∂v/∂y)²) )
+
+λ = log2(ρ)
+
+level = clamp(floor(λ + 0.5), 0, maxLevel)
+</code></pre></div>
+<p>This is the OpenGL specification's definition, and matching it means the output
+matches what a GPU would produce, which makes visual comparison against a
+reference renderer meaningful.</p>
+<p><strong>Computing the derivatives cheaply.</strong> Do <em>not</em> evaluate <code>∂u/∂x</code> per pixel.</p>
+<p>An earlier draft got these by differencing the two exact endpoints of an N-pixel
+segment — <code>∂u/∂x ≈ (uEnd − uStart) / N</code>. <strong>That recipe is obsolete</strong>, because
+§ 11(c) measured the segment path as not worth writing, and the recipe assumed
+segments exist. Use the <strong>quotient rule</strong> instead, which is cheaper, exact, and
+independent of any segmentation:</p>
+<div class="code" data-lang="text"><pre><code>∂u/∂x = (udx − u * wdx) * w          where w = 1 / w_clip
+</code></pre></div>
+<p>Every term is already in hand: <code>udx</code> and <code>wdx</code> are the triangle's setup
+gradients for the <code>u/w</code> and <code>1/w</code> planes, and <code>u</code> and <code>w</code> are the values the loop
+just computed for this pixel. The same form gives <code>∂u/∂y</code>, <code>∂v/∂x</code> and <code>∂v/∂y</code>.</p>
+<p>Selection still runs <strong>per segment rather than per pixel</strong> — roughly every 16
+pixels — because <code>log2</code> and the square root genuinely do not belong in the
+per-pixel path, even though the perspective divide turned out to be affordable
+there. <code>log2</code> reduces to extracting the float's exponent field, so no <code>Math.log</code>
+call is needed in the loop.</p>
+<p>Cheap-and-conservative variants (using only the x derivative, or <code>max(|∂u|,|∂v|)</code>
+in place of the square root) trade a little over- or under-blurring for speed and
+are legitimate — but implement the specification form first so there is something
+to compare against.</p>
+<p><strong>Sources:</strong></p>
+<ul>
+<li>
+<p>Lance Williams, "Pyramidal Parametrics", <em>SIGGRAPH '83</em> — the original mipmap paper — https://dl.acm.org/doi/10.1145/800059.801126</p>
+</li>
+<li>
+<p>OpenGL 4.6 Core Profile Specification, § 8.14 "Texture Minification" — the normative ρ and λ definitions — https://registry.khronos.org/OpenGL/specs/gl/glspec46.core.pdf</p>
+</li>
+<li>
+<p>Heckbert, "Fundamentals of Texture Mapping and Image Warping" (above) — filtering theory</p>
+</li>
+</ul>
+<hr>
+<h2 id="10-model-format-and-what-happened-to-bsp">10. Model format, and what happened to BSP<a class="anchor" href="#10-model-format-and-what-happened-to-bsp" aria-label="Permalink">#</a></h2>
+<h3 id="modelformat--the-flat-binary-runtime-format"><code>ModelFormat</code> — the flat binary runtime format<a class="anchor" href="#modelformat--the-flat-binary-runtime-format" aria-label="Permalink">#</a></h3>
+<p>glTF is <strong>not parsed at runtime</strong> (<code>docs/ASSETS.md</code> § 4). <code>GltfConverter</code>
+produces a flat binary file that <code>ModelFormat</code> reads with near-zero parsing:
+fixed-size header, explicit section offsets, arrays laid out exactly as the
+renderer wants to consume them, no per-element decoding.</p>
+<p>Shape (indicative, to be pinned down in Phase 5):</p>
+<ul>
+<li>
+<p>Header: magic, format version, section offsets and counts</p>
+</li>
+<li>
+<p>Interleaved vertex array: position, UV, baked vertex colour</p>
+</li>
+<li>
+<p>Index array</p>
+</li>
+<li>
+<p>Submesh/material table</p>
+</li>
+<li>
+<p>Texture blobs, <strong>already decoded</strong>, with <strong>pre-generated mip chains</strong></p>
+</li>
+</ul>
+<p><code>ModelFormat</code> owns the layout and its version field. Refusing to load an
+unrecognised version with a clear error is cheaper than debugging a
+mis-parsed vertex array.</p>
+<blockquote>
+<p><strong>Channel order — decided: <code>RGBA8888</code> end to end.</strong> <code>docs/ASSETS.md</code> § 4 used
+to say the converter decodes to raw BGRA, which predated the colour buffer
+decision. RGBA wins because the colour buffer's format is pinned from outside
+(it must match what the presentation path uploads, libGDX
+<code>Pixmap.Format.RGBA8888</code>) while the texture's format is ours, produced by a
+build-time converter that does not exist yet. The free side moves. A mismatch
+would cost a swizzle per texel fetched, in the hottest loop, for nothing.</p>
+<p><code>TextureSampler</code> therefore never swizzles. But <strong>prove the byte layout, do not
+assume it</strong> — an <code>int[]</code> reaching the GPU passes through a byte-order step, and
+whether <code>0xRRGGBBAA</code> arrives as R,G,B,A depends on the upload path and platform
+endianness. Round-trip test in the <code>Framebuffer</code> lane: write a known texel,
+present, read back, assert.</p>
+</blockquote>
+<h3 id="bsp--retired-as-a-renderer-algorithm-not-deleted">BSP — retired as a <em>renderer</em> algorithm, not deleted<a class="anchor" href="#bsp--retired-as-a-renderer-algorithm-not-deleted" aria-label="Permalink">#</a></h3>
+<p>Be precise about this, because "we dropped BSP" is a half-truth that will
+mislead someone.</p>
+<p><strong>Retired:</strong> BSP as the renderer's <em>visibility</em> algorithm. The old design walked
+the tree front-to-back to get a correct draw order without a depth buffer. <strong>The
+z-buffer does that job now</strong>, per-pixel and per-triangle, correctly for arbitrary
+geometry including the interpenetrating meshes a painter's-algorithm order cannot
+resolve at all. R_ does not traverse a BSP tree.</p>
+<p><strong>Kept:</strong> BSP as a <em>spatial structure for gameplay and collision</em>. <code>PLAN.md</code>
+Phase 4 lists <code>BspTraverser</code> for leaf lookup, and <code>gameplay/README.md</code> uses it as
+the broad-phase quick-reject for collision. That is a completely different use of
+the same structure and it is unaffected by anything in this document.</p>
+<p>So: <strong>BSP is not gone from the project. It is gone from the renderer.</strong></p>
+<hr>
+<h2 id="11-open-questions--one-of-the-three-is-still-open">11. Open questions — one of the three is still open<a class="anchor" href="#11-open-questions--one-of-the-three-is-still-open" aria-label="Permalink">#</a></h2>
+<p><strong>(b) is the only unresolved item.</strong> (a) was decided and (c) was measured; both
+stay here, with their answers marked in place, because the argument is what
+makes the answer defensible — deleting the losing option would leave a bare
+assertion that the next reader has to re-litigate.</p>
+<div class="tablewrap"><table>
+<thead><tr><th></th><th>Status</th></tr></thead>
+<tbody>
+<tr><td>(a) Framebuffer allocation vs. the memory port</td><td><strong>Decided</strong> — option 1, narrowly scoped</td></tr>
+<tr><td>(b) The WAD subsystem's remaining role</td><td><strong>Open</strong> — the user's call</td></tr>
+<tr><td>(c) The performance numbers</td><td><strong>Measured</strong> — and they moved</td></tr>
+</tbody>
+</table></div>
+<h3 id="a-framebuffer-allocation-vs-the-memory-port--decided">(a) Framebuffer allocation vs. the memory port — <strong>DECIDED</strong><a class="anchor" href="#a-framebuffer-allocation-vs-the-memory-port--decided" aria-label="Permalink">#</a></h3>
+<p><strong>The conflict.</strong> <code>AGENTS.md</code> and <code>STYLE.md</code> § 13.4 forbid <code>new byte[]</code> outside a
+memory-port adapter: every allocation goes through <code>I_MemoryPort</code>. But
+<code>I_MemoryPort</code> hands out opaque <code>int</code> handles over a <code>byte[]</code> backing store and
+has <strong>no read or write operation</strong>. A software rasterizer needs raw typed-array
+access in its inner loop, and the buffers are <code>int[]</code> and <code>float[]</code>, not <code>byte[]</code>.
+Per-pixel handle indirection is not a performance concern to be measured — it is
+a non-starter, several times the cost of the pixel work itself.</p>
+<p>The resource subsystem hit the same wall and documented it (<code>resource/README.md</code>,
+"The memory-port tension"), resolving it by letting the memory port own the
+<em>budget and lifecycle</em> while the bytes come from one sanctioned site. That
+precedent is relevant but not identical: <code>LumpCache</code> touches its bytes rarely,
+and the framebuffer is touched millions of times per frame.</p>
+<p><strong>Option 1 — sanctioned exception.</strong> <code>Framebuffer</code> allocates its <code>int[]</code> and
+<code>float[]</code> directly, once at init and again only on resize, and is named in
+<code>STYLE.md</code> § 13.4 as an explicit exception alongside the memory-port adapters
+themselves.
+<em>Cost:</em> the rule acquires a second exception, and every future "my hot loop is
+special too" argument now has a precedent to point at. The exception must be
+narrow and written down, not just tolerated.</p>
+<p><strong>Option 2 — <code>I_MemoryPort</code> grows a typed-slab capability.</strong> Add an operation
+that allocates a typed slab and returns the <strong>array itself</strong> (plus an offset and
+length), tracked by the port for budget and lifecycle, with the caller free to
+index it directly. <code>MemoryPortFactory.createSlab(int, int)</code> already exists as a
+Phase 2+ placeholder, so the concept is anticipated.
+<em>Cost:</em> real design and test work on the engine's most foundational port, before
+a single pixel is drawn. It also weakens the port's central invariant — that the
+engine never dereferences memory it did not get a handle for — and both backends
+plus their 35 tests must absorb it.</p>
+<p><strong>Decided: option 1, narrowly scoped.</strong></p>
+<p>The memory port earns its keep by tracking and bulk-freeing *many, small,
+short-lived* allocations — that is what tags and <code>freeByTag</code> are for. The
+framebuffer is the exact opposite: two or three arrays, allocated once at init,
+freed at shutdown, resized only when the window is. It gets none of the port's
+benefits and pays its whole cost. Growing a typed-slab capability on the engine's
+most foundational port, plus absorbing it into both backends and their 35 tests,
+would be real design work done <em>before the first pixel is drawn</em>, to satisfy a
+rule that is not buying anything here.</p>
+<p>The exception is <strong>narrow, and the narrowness is the point</strong> — it must not become
+the precedent for every future "my loop is hot too" argument:</p>
+<blockquote>
+<p>Long-lived, engine-owned primitive buffers whose element type is not <code>byte</code>,
+allocated once at initialisation and released at shutdown, may be allocated
+directly. Named sites only, listed in <code>STYLE.md</code> § 13.4. A hot loop is <strong>not</strong>
+on its own a qualifying reason.</p>
+</blockquote>
+<p>That wording admits <code>Framebuffer</code> and the audio mixing buffers, and excludes
+per-frame and per-entity allocation, which is what the rule actually exists to
+prevent.</p>
+<p>Revisit if a third and fourth candidate appear — at that point the pattern is
+real and option 2 becomes the better shape. Record the exception in <code>STYLE.md</code>
+§ 13.4 as part of the <code>Framebuffer</code> lane, not afterwards; an undocumented
+exception is indistinguishable from a violation.</p>
+<h3 id="b-the-wad-subsystem-has-no-art-left-to-read--still-open">(b) The WAD subsystem has no art left to read — <strong>STILL OPEN</strong><a class="anchor" href="#b-the-wad-subsystem-has-no-art-left-to-read--still-open" aria-label="Permalink">#</a></h3>
+<p><strong>The situation.</strong> <code>engine/.../resource/</code> is <strong>built and working</strong>: <code>WadReader</code>,
+<code>LumpCache</code>, <code>MapLumpParser</code>, <code>LittleEndian</code>, <code>WadFilePort</code>, backed by 101
+passing tests. It is not a stub and it is not broken.</p>
+<p>But <code>docs/ASSETS.md</code> moves all art to preprocessed glTF, and § 10 records the
+rejection of Freedoom — the one complete, well-licensed WAD the project had
+identified. The renderer specified in this document consumes neither
+palette-indexed textures nor BSP-compiled 2.5D sector maps. <strong>So the subsystem
+currently has no art to read.</strong></p>
+<p>Plausible remaining roles, none of them chosen:</p>
+<ul>
+<li>
+<p><strong>Map/level geometry container.</strong> WAD is a serviceable generic indexed-lump
+archive, and <code>MapLumpParser</code> already reads THINGS / LINEDEFS / SECTORS /
+VERTEXES. Level <em>layout</em> and entity placement are not art and are not
+superseded by glTF. This is the strongest candidate.</p>
+</li>
+<li>
+<p><strong>Generic asset container.</strong> Use the lump directory to hold <code>ModelFormat</code>
+blobs and textures — competing directly with just shipping the preprocessed
+payload as a zip, which <code>build.gradle.kts</code> already does.</p>
+</li>
+<li>
+<p><strong>A format the project drops later.</strong> Keep it, stop investing, revisit if the
+first two never materialise.</p>
+</li>
+</ul>
+<p><strong>This is the user's call and is deliberately left open.</strong> Nothing is deleted,
+nothing is declared dead. What <em>is</em> stale is the assumption baked into
+<code>resource/README.md</code> and <code>I_WadPort</code> that the lumps being read are DOOM patches
+and flats destined for a palette-indexed renderer — the planned <code>ImageDecoder</code>
+(<code>PLAN.md</code> Phase 2) decodes into a pixel format § 3 no longer uses. Do not
+implement <code>ImageDecoder</code> until (b) is resolved.</p>
+<h3 id="c-the-performance-numbers--resolved-by-measurement-and-they-moved">(c) The performance numbers — <strong>RESOLVED BY MEASUREMENT</strong>, and they moved<a class="anchor" href="#c-the-performance-numbers--resolved-by-measurement-and-they-moved" aria-label="Permalink">#</a></h3>
+<p><strong>The benchmark has been run.</strong> <code>docs/ASSETS.md</code> § 2 carries the full results and
+is canonical. What matters for the lanes still unwritten:</p>
+<ul>
+<li>
+<p><strong>The span loop costs 17–21 ns/pixel, not 3–8.</strong> The architecture survives, but
+60 Hz at 1080p affords <strong>~10–20k triangles</strong>, not 50–100k. 50–100k is a 30 Hz
+1080p figure or a 60 Hz 720p one.</p>
+</li>
+<li>
+<p><strong>Bilinear filtering is 2.9× the entire rest of the inner loop</strong> (21.4 → 7.3
+ns/px with nearest). It is the only large lever, and therefore the quality
+setting to expose and the first thing to drop on weak hardware. § 9's sampler is
+correct as specified — this is a runtime choice, not a spec change.</p>
+</li>
+<li>
+<p><strong>Perspective correction costs 8%.</strong> Never worth trading away. § 8 is vindicated.</p>
+</li>
+<li>
+<p><strong><code>SpanRenderer</code>'s segment optimisation is probably not worth writing.</strong> § 8
+proposes a per-8-or-16-pixel divide over a per-pixel one; measured, the two are
+indistinguishable, because the FP divider is not the bottleneck — memory and the
+bilinear load/ALU work are. <strong>Build the reference per-pixel path and measure
+before writing the segment path.</strong> The § 14 ordering already says reference
+first; this is the evidence for why that ordering matters.</p>
+</li>
+<li>
+<p><strong>Tiled scaling is ~100% efficient once clock-adjusted</strong>, so § 7's decomposition
+is sound. Raw speedup looks worse than it is because the test CPU runs 4.75+ GHz
+on one thread and ~3.1 GHz across all 22. <strong>Report cycles/pixel, not ns/pixel</strong>,
+in any future measurement — it held stable across runs where ns/pixel moved 35%.</p>
+</li>
+<li>
+<p><strong>Still unmeasured: the 64×64 tile size.</strong> The benchmark did not vary it.</p>
+</li>
+<li>
+<p>Two cheap wins the numbers point at, neither of them spec changes: sorting draws
+by material (17%), and storing textures pre-swizzled in 2×2 blocks so a bilinear
+quad lands in one cache line (the single-texture case measured 2.6× faster).</p>
+</li>
+</ul>
+<hr>
+<h2 id="12-presentation--r_-does-not-present">12. Presentation — R_ does not present<a class="anchor" href="#12-presentation--r_-does-not-present" aria-label="Permalink">#</a></h2>
+<p>The engine produces a finished framebuffer. <strong>The platform adapter uploads it.</strong>
+There is no new window port and none is needed: <code>I_WindowPort</code> and
+<code>I_FrameCallback</code> already are the hook, and their Javadoc explains why the window
+lives in the HAL rather than behind <code>I_RenderPort</code>.</p>
+<div class="code" data-lang="text"><pre><code>R_ (worker threads)                 platform adapter (render thread)
+─────────────────────               ────────────────────────────────
+render into Framebuffer
+      │
+      ├─ de-pad into BACK buffer
+      │  (R_ owns it outright)
+      │
+      ├─ swap two references ◄──┐  short presentLock
+      │                          │
+      └──── FRONT int[] ─────────┴►  one arraycopy under the same lock
+                                    copy into Pixmap (RGBA8888)
+                                    upload as one texture
+                                    draw fullscreen, swap
+</code></pre></div>
+<p><strong>Double-buffered, not lock-arbitrated.</strong> A single shared buffer meant the
+presenting thread competed for a non-fair lock that the render workers kept
+reacquiring, and it rarely won: R_ finished <strong>35 frames a second and the window
+displayed 2.9 of them.</strong> Fairness settings would have arbitrated that contention;
+double buffering removes it. Neither side ever waits on the other's <em>work</em> — only
+on a two-reference swap. The cost is one extra full-frame copy, about 0.2 ms at
+720p.</p>
+<p><strong>Render frames are coalesced, and that belongs to the consumer.</strong> <code>GameLoop</code>
+publishes a <code>RenderFrameEvent</code> every tic. If frames are already in flight,
+<code>RenderSubsystem</code> renders the newest and drops the rest — a stale frame is pure
+waste, because the camera has already moved. The throttle deliberately does
+<strong>not</strong> live in <code>GameLoop</code>: it is the simulation clock, it cannot know frame
+cost, and slowing it to the frame rate would couple simulation speed to
+rendering speed and desync lockstep. Only the consumer knows a frame is in
+flight.</p>
+<p>The two load-bearing facts, both already documented on <code>I_WindowPort</code>:</p>
+<ol>
+<li>
+<p><strong>R_ must not know what a window is.</strong> Giving it <code>swapBuffers()</code> would put
+platform knowledge in a subsystem that is otherwise pure math on arrays.</p>
+</li>
+<li>
+<p><strong>A graphics context is current on exactly one thread.</strong> <code>RenderSubsystem</code>
+runs on <em>worker</em> threads; the context lives on the platform's render thread.
+Routing graphics calls through <code>I_RenderPort</code> would be a crash waiting to
+happen.</p>
+</li>
+</ol>
+<p><code>I_FrameCallback.onFrame(float deltaSeconds)</code> is presentation, not simulation.
+Platform frame rate is whatever the display and OS decide; the 30/60/120 Hz
+<code>GameLoop</code> remains the simulation clock on its own thread. <code>onFrame</code> draws the
+latest state — it never advances it.</p>
+<p>The colour buffer format in § 3 exists to make this handoff one bulk copy. The
+adapter is responsible for confirming byte order at the <code>Pixmap</code> boundary; that
+check belongs in the adapter's tests, not in R_.</p>
+<hr>
+<h2 id="13-files">13. Files<a class="anchor" href="#13-files" aria-label="Permalink">#</a></h2>
+<p><code>engine/.../render/</code>:</p>
+<ul>
+<li>
+<p><code>port/I_RenderPort.java</code>, <code>port/I_RenderPortFactory.java</code></p>
+</li>
+<li>
+<p><code>adapter/NullRenderPort.java</code> — headless stub</p>
+</li>
+<li>
+<p><code>adapter/SoftwareRenderPort.java</code> — the real port; composes the pipeline in § 5 order over four <code>submitParallel</code> passes</p>
+</li>
+<li>
+<p><code>adapter/Scene.java</code> — the immutable draw list: world instances plus view instances, each with its own <code>modelToWorld</code> (§ 5)</p>
+</li>
+<li>
+<p><code>adapter/Rgba.java</code>, <code>Framebuffer.java</code>, <code>Vec3.java</code>, <code>Mat4.java</code>, <code>Camera.java</code>, <code>TriangleClipper.java</code>, <code>Rasterizer.java</code>, <code>SpanRenderer.java</code>, <code>MipChain.java</code>, <code>TextureSampler.java</code>, <code>ModelFormat.java</code>, <code>ModelFormatException.java</code></p>
+</li>
+</ul>
+<p><code>desktop/.../</code>:</p>
+<ul>
+<li>
+<p><code>FramebufferPresenter.java</code> — uploads <code>copyColorTo</code>'s de-padded copy as an RGBA8888 <code>Pixmap</code> (§ 12)</p>
+</li>
+<li>
+<p><code>GdxScreenshot.java</code></p>
+</li>
+</ul>
+<p><code>tools/.../</code> — build-time only, never on the runtime classpath:</p>
+<ul>
+<li>
+<p><code>gltf/GltfConverter.java</code> and support, <code>model/ModelBuilder.java</code>, <code>model/MipGenerator.java</code>, <code>GltfConverterMain.java</code></p>
+</li>
+<li>
+<p><code>AssetBudgetException.java</code> — thrown when an asset breaks a <code>docs/ASSETS.md</code> § 5 budget; fails the build rather than silently decimating the mesh</p>
+</li>
+<li>
+<p><code>model/CubeModel.java</code> — a hand-built textured cube, for exercising the pipeline with no third-party asset at all</p>
+</li>
+<li>
+<p><code>model/ProceduralRoom.java</code> — the generated greybox room used when no level kit has been staged (60 triangles; <code>docs/DEMO_ASSETS.md</code> § 5)</p>
+</li>
+<li>
+<p><code>DemoAssetsMain.java</code> — stages and converts the demo's models, reading every result back and reporting it against the budget</p>
+</li>
+<li>
+<p><code>RenderPreviewMain.java</code> — renders one frame to a PNG; the headless verification path</p>
+</li>
+<li>
+<p><code>DemoPreviewMain.java</code> — renders the whole demo scene, viewmodel included, to PNGs with no window and no graphics API</p>
+</li>
+<li>
+<p><code>FramePng.java</code> — writes a finished frame out, converting <code>Rgba</code>'s <code>0xRRGGBBAA</code> to <code>TYPE_INT_ARGB</code></p>
+</li>
+<li>
+<p><code>ToolPool.java</code> — a standalone <code>WorkerPool</code> for a build-time tool, built through the engine's own <code>ThreadPoolFactory</code></p>
+</li>
+</ul>
+<h2 id="14-todo-phase-5">14. TODO (Phase 5)<a class="anchor" href="#14-todo-phase-5" aria-label="Permalink">#</a></h2>
+<p>Ordered. Each item is a lane from § 1; the ordering is by dependency.</p>
+<ul>
+<li class="task done">
+<p><strong>Benchmark the textured-span inner loop first</strong> — done; results in <code>docs/ASSETS.md</code> § 2 and § 11(c) above</p>
+</li>
+<li class="task done">
+<p><strong>Resolve open question § 11(a)</strong> — framebuffer allocation vs. <code>I_MemoryPort</code></p>
+</li>
+<li class="task done">
+<p><strong>Extend <code>WorkerPool</code></strong> with submit-and-await for tile jobs (§ 7 prerequisite)</p>
+</li>
+<li class="task done">
+<p><code>Framebuffer</code> — <code>int[]</code> colour (RGBA8888), <code>float[]</code> depth (1/w), tile geometry, padded stride, <code>clear()</code></p>
+</li>
+<li class="task done">
+<p><code>Camera</code> — view matrix, projection without a z row, world → clip space</p>
+</li>
+<li class="task done">
+<p><code>TriangleClipper</code> — homogeneous near-plane Sutherland-Hodgman, 4-vertex scratch, fan re-triangulation</p>
+</li>
+<li class="task done">
+<p><code>Rasterizer</code> — divide, viewport transform, backface cull, edge setup with top-left fill rule, bounding box, per-chunk tile binning</p>
+</li>
+<li class="task done">
+<p><code>SpanRenderer</code> — reference per-pixel path; segment path deliberately NOT written (§ 11c measured it as no better)</p>
+</li>
+<li class="task done">
+<p><code>TextureSampler</code> — bilinear with the −0.5 texel-centre offset, per-segment mip selection</p>
+</li>
+<li class="task done">
+<p><code>ModelFormat</code> — flat binary reader, versioned header</p>
+</li>
+<li class="task done">
+<p><code>GltfConverter</code> — buildscript classpath only; triangulation, mip chains, budget enforcement per <code>docs/ASSETS.md</code> § 5</p>
+</li>
+<li class="task done">
+<p><strong>Integration</strong> — <code>SoftwareRenderPort</code>, <code>GameLoop</code> publishes <code>RenderFrameEvent</code>, <code>:desktop</code> presents. A real Kenney model renders to window and PNG</p>
+</li>
+<li class="task done">
+<p><strong>Backface winding</strong> — measured, <code>CullMode.CLOCKWISE</code> (§ 7)</p>
+</li>
+<li class="task done">
+<p><code>Scene</code> — world + view instances with per-instance <code>modelToWorld</code>; view pass after a depth clear (§ 5)</p>
+</li>
+<li class="task done">
+<p>Fix the drain-window defect — <code>WorkerPool</code> gained <code>DRAINING</code>; <code>submitParallel</code> is legal there. Clean exits no longer throw</p>
+</li>
+<li class="task todo">
+<p>Measure the 64×64 tile size — still the one unmeasured constant (§ 11c)</p>
+</li>
+<li class="task todo">
+<p>Default to 720p60; expose bilinear as a quality toggle (<code>docs/ASSETS.md</code> § 2)</p>
+</li>
+</ul>
+<hr>
+<h2 id="15-a-note-on-citations">15. A note on citations<a class="anchor" href="#15-a-note-on-citations" aria-label="Permalink">#</a></h2>
+<p><code>docs/ASSETS.md</code> § 8 rule 1: <strong>cite specifications and papers, not GPL source
+repositories.</strong> DOOM, Chocolate Doom, PrBoom+, DSDA-Doom and SLADE are all
+GPL-2; copying from them into this MIT codebase is a license violation, and
+reading a GPL <em>implementation</em> to learn an algorithm is legally murky in a way
+that reading a published <em>specification</em> is not.</p>
+<p>The previous version of this file cited <code>id-Software/DOOM</code> source files
+directly. Those citations have been removed. Every algorithm above is sourced to
+a paper, a standard, or an author's own published prose.</p>
+<hr>
+<h2 id="16-style-note-for-anyone-copying-from-this-document">16. Style note for anyone copying from this document<a class="anchor" href="#16-style-note-for-anyone-copying-from-this-document" aria-label="Permalink">#</a></h2>
+<p>Every code block above is <strong>pseudocode and non-normative</strong> — it is written for
+clarity of the math, not as Java to paste. Real code in this repository is bound
+by <code>STYLE.md</code>: Allman braces, <code>final</code> on every parameter, no ternary <code>?:</code>, no
+nested lambdas, primitives over boxed types, and no magic numbers outside
+<code>Constants</code>.</p>
+<footer class="pagefoot"><p>Source: <a class="ext" rel="noopener noreferrer" target="_blank" href="https://github.com/nicholashutter/OpenFPS/blob/main/engine/src/main/java/com/openfps/engine/render/README.md">engine/src/main/java/com/openfps/engine/render/README.md</a>. This page is generated — edit the Markdown, not the HTML.</p></footer>
+</main>
+</div>
+<script src="site.js"></script>
+</body>
+</html>

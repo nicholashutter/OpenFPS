@@ -1,0 +1,583 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Game Data and Asset Licensing — OpenFPS documentation</title>
+<meta name="description" content="Policy document. What game data OpenFPS may legally ship, what technical shape it must be in, and how it reaches a developer's machine.  Every asset entering this repository must satisfy §3…">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<a class="skip" href="#doc">Skip to content</a>
+<header class="topbar"><button class="burger" id="burger" aria-controls="sidebar" aria-expanded="false" aria-label="Show navigation"><span></span><span></span><span></span></button><span class="topbar-name">OpenFPS docs</span></header>
+<div class="scrim" id="scrim" hidden></div>
+<div class="layout">
+<aside class="sidebar" id="sidebar">
+<a class="brand" href="index.html"><span class="brand-mark"></span><span class="brand-name">OpenFPS</span><span class="brand-kind">docs</span></a>
+<input class="filter" id="filter" type="search" placeholder="Filter pages" aria-label="Filter pages" autocomplete="off">
+<nav class="nav" id="nav" aria-label="Documentation">
+<details class="grp" data-hue="1" open><summary><span class="dot"></span>Overview<span class="count">2</span></summary>
+<ul>
+<li><a href="index.html">Overview</a></li>
+<li><a href="agents.html">Agent instructions</a></li>
+</ul></details>
+<details class="grp" data-hue="2" open><summary><span class="dot"></span>Building<span class="count">1</span></summary>
+<ul>
+<li><a href="build.html">Build reference</a></li>
+</ul></details>
+<details class="grp" data-hue="3" open><summary><span class="dot"></span>Architecture<span class="count">2</span></summary>
+<ul>
+<li><a href="style.html">Code style</a></li>
+<li><a href="plan.html">Project plan</a></li>
+</ul></details>
+<details class="grp" data-hue="4" open><summary><span class="dot"></span>Modules<span class="count">5</span></summary>
+<ul>
+<li><a href="engine.html">:engine</a></li>
+<li><a href="desktop.html">:desktop</a></li>
+<li><a href="android.html">:android</a></li>
+<li><a href="tools.html">:tools</a></li>
+<li><a href="gdxshared.html">:gdxshared</a></li>
+</ul></details>
+<details class="grp" data-hue="5"><summary><span class="dot"></span>Packages<span class="count">10</span></summary>
+<ul>
+<li><a href="engine-core.html">Core</a></li>
+<li><a href="engine-common.html">Common</a></li>
+<li><a href="engine-hal.html">HAL (I_)</a></li>
+<li><a href="engine-gameplay.html">Gameplay (P_)</a></li>
+<li><a href="engine-render.html">Render (R_)</a></li>
+<li><a href="engine-demo.html">Demo</a></li>
+<li><a href="engine-audio.html">Audio (S_)</a></li>
+<li><a href="engine-net.html">Net (G_)</a></li>
+<li><a href="engine-resource.html">Resource (W_)</a></li>
+<li><a href="engine-memory.html">Memory (Z_)</a></li>
+</ul></details>
+<details class="grp" data-hue="6" open><summary><span class="dot"></span>Reference<span class="count">2</span></summary>
+<ul>
+<li><a href="assets.html" class="cur" aria-current="page">Assets and licensing</a></li>
+<li><a href="demo-assets.html">Demo asset manifest</a></li>
+</ul></details>
+</nav>
+<p class="generated">Generated from the repository's Markdown by <code>:tools:buildDocsSite</code>.</p>
+</aside>
+<aside class="rail"><details class="toc" id="toc" open><summary>On this page</summary>
+<ul>
+<li class="lv2"><a href="#1-why-this-document-exists">1. Why this document exists</a></li>
+<li class="lv2"><a href="#2-render-target--the-constraint-everything-else-follows-from">2. Render target — the constraint everything else follows from</a></li>
+<li class="lv3"><a href="#per-frame-budget--measured">Per-frame budget — MEASURED</a></li>
+<li class="lv3"><a href="#what-actually-fits-in-60-hz">What actually fits in 60 Hz</a></li>
+<li class="lv3"><a href="#full-resolution-and-worker-sweep--measured-2026-07-28">Full resolution and worker sweep — measured 2026-07-28</a></li>
+<li class="lv3"><a href="#the-one-big-lever">The one big lever</a></li>
+<li class="lv3"><a href="#what-that-means-for-assets">What that means for assets</a></li>
+<li class="lv2"><a href="#3-licensing-policy">3. Licensing policy</a></li>
+<li class="lv3"><a href="#accepted">Accepted</a></li>
+<li class="lv3"><a href="#rejected">Rejected</a></li>
+<li class="lv3"><a href="#sources">Sources</a></li>
+<li class="lv2"><a href="#4-runtime-format--preprocess-at-build-time">4. Runtime format — preprocess at build time</a></li>
+<li class="lv3"><a href="#texture-channel-order--decided">Texture channel order — decided</a></li>
+<li class="lv2"><a href="#5-asset-budget">5. Asset budget</a></li>
+<li class="lv2"><a href="#6-distribution">6. Distribution</a></li>
+<li class="lv2"><a href="#7-asset-intake-checklist">7. Asset intake checklist</a></li>
+<li class="lv2"><a href="#8-legal-traps">8. Legal traps</a></li>
+<li class="lv2"><a href="#9-open-items">9. Open items</a></li>
+<li class="lv2"><a href="#10-history">10. History</a></li>
+</ul></details></aside>
+<main id="doc">
+<p class="crumb"><span class="tag">Reference</span><span class="sep">/</span><code>docs/ASSETS.md</code><span class="sep">/</span>20 min read</p>
+<h1 id="game-data-and-asset-licensing">Game Data and Asset Licensing<a class="anchor" href="#game-data-and-asset-licensing" aria-label="Permalink">#</a></h1>
+<blockquote>
+<p>Policy document. What game data OpenFPS may legally ship, what technical shape it
+must be in, and how it reaches a developer's machine.</p>
+<p><strong>Every asset entering this repository must satisfy §3 (licensing) and §5 (budget).</strong>
+No exceptions without a recorded decision in this file.</p>
+</blockquote>
+<hr>
+<h2 id="1-why-this-document-exists">1. Why this document exists<a class="anchor" href="#1-why-this-document-exists" aria-label="Permalink">#</a></h2>
+<p>OpenFPS is MIT-licensed and distributed as a binary on Windows, Linux, and eventually
+Android. Anything we ship alongside that binary — models, textures, sound — is
+redistributed by us, to everyone, forever. Getting that wrong is expensive to unwind:
+by the time art is embedded in levels, referenced by code, and shipped in a release,
+removing one badly-licensed texture can mean rebuilding a level.</p>
+<p>So the licensing decision is made <strong>before</strong> any asset lands, and it is deliberately
+conservative.</p>
+<hr>
+<h2 id="2-render-target--the-constraint-everything-else-follows-from">2. Render target — the constraint everything else follows from<a class="anchor" href="#2-render-target--the-constraint-everything-else-follows-from" aria-label="Permalink">#</a></h2>
+<p>The renderer is a <strong>multi-threaded software triangle rasterizer</strong>: z-buffer,
+perspective-correct interpolation, mipmapped bilinear sampling, 32-bit colour, glTF
+models with baked lighting.</p>
+<p>Software rasterization is retained from the original DOOM-inspired design. The 1993
+constraints layered on top of it are not — the 8-bit palette, the 320×200 framebuffer,
+the visplane/column renderer, and billboard sprites were VGA-era compromises, not
+properties of software rendering.</p>
+<blockquote>
+<p><strong>This section is the canonical render target.</strong> The implementation
+specification derived from it — pipeline stages, edge functions,
+perspective-correct interpolation, mip selection, tile binning, every citation,
+and the open questions — is
+<code>engine/src/main/java/com/openfps/engine/render/README.md</code>. <code>PLAN.md</code> § 3.3
+and § 7 Phase 5 track it. Where any of those disagree with this section, this
+section wins and the other document is the bug.</p>
+</blockquote>
+<h3 id="per-frame-budget--measured">Per-frame budget — MEASURED<a class="anchor" href="#per-frame-budget--measured" aria-label="Permalink">#</a></h3>
+<p>The original estimates in this section were derived from first principles and have
+now been <strong>measured</strong>. They were optimistic by roughly 2–3×. The measured numbers
+replace them; the estimates are kept alongside so the size of the error stays visible.</p>
+<p>Hardware: Intel Core Ultra 7 155H (16 physical / 22 logical), Temurin OpenJDK 17,
+1080p at a measured 2.00× overdraw. Span figures are min-of-9 at single-thread turbo.</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Quantity</th><th>Estimated</th><th><strong>Measured</strong></th><th>Verdict</th></tr></thead>
+<tbody>
+<tr><td>Perspective-correct, mipmapped, bilinear span</td><td>~3–8 ns/px</td><td><strong>21.1 ns/px</strong></td><td>Optimistic ~3–7×</td></tr>
+<tr><td>1080p @ 2× overdraw, single core</td><td>~20 ms</td><td><strong>87.4 ms</strong></td><td>Optimistic 4.4×</td></tr>
+<tr><td>1080p @ 2× overdraw, 8 workers</td><td>~3–4 ms</td><td><strong>14.9 ms</strong></td><td>Optimistic ~4×</td></tr>
+<tr><td>1080p @ 1× overdraw (culled), 8 workers</td><td>—</td><td><strong>10.3 ms</strong></td><td></td></tr>
+<tr><td>Triangle setup</td><td>200–500 ns</td><td><strong>26–64 ns</strong></td><td>Pessimistic 4–8×</td></tr>
+<tr><td>Per-triangle raster-phase cost</td><td>not estimated</td><td><strong>~600–900 ns</strong></td><td>The real per-triangle cost</td></tr>
+</tbody>
+</table></div>
+<blockquote>
+<p><strong>These rows were corrected once, and how they were wrong is worth keeping.</strong>
+The synthetic benchmark first reported 46–48 ms single-core and 8.2 ms at 8
+workers. Those numbers were <strong>internally inconsistent with its own per-pixel
+figure</strong>: 2,073,600 px × 2 overdraw × ~19 ns is 79 ms, not 46. The real
+renderer, measured end to end on the same CPU, reports 87.4 ms and 21.1 ns/px
+— and 4.147M × 21.1 ns = 87.5 ms, which closes. The per-pixel figure was right
+all along; the frame-time rows were not, and nobody noticed until an actual
+frame was drawn.</p>
+<p>The lesson is cheap to state and was expensive to find: <strong>a benchmark's rows
+should be checked against each other, not just against expectations.</strong> These
+figures come from the shipping pipeline drawing a real model, so they are the
+ones to trust.</p>
+</blockquote>
+<p><strong>The clock is the thing to understand before reading any of this.</strong> The test
+machine runs 4.75–5.44 GHz on one thread but averages ~3.1 GHz across all 22
+(P-cores ~4.0, E-cores ~2.3). Every per-core figure degrades ~40% the moment the
+renderer actually goes wide, and naive speedup ratios are meaningless — an early
+run showed "162% efficiency", which is impossible and was pure clock artifact.
+<strong>Cycles/pixel is the portable number</strong>: it held stable across runs where ns/pixel
+moved 35%. Clock-adjusted, tiled scaling measures at ~100% efficiency, so the
+decomposition is sound — the hardware simply does not provide 22 full-speed cores.</p>
+<h3 id="what-actually-fits-in-60-hz">What actually fits in 60 Hz<a class="anchor" href="#what-actually-fits-in-60-hz" aria-label="Permalink">#</a></h3>
+<p>Allowing a 10 ms renderer budget inside a 16.7 ms frame. <strong>Revised downward
+after the end-to-end measurements above replaced the synthetic ones.</strong></p>
+<p>The governing fact is that a first-person view is nearly 100% screen coverage —
+you are always looking at a wall, a floor or the sky — so pixel fill, not
+triangle count, sets the floor. At 1080p with backface culling that floor is
+<strong>10.3 ms at 8 workers</strong>, which consumes the entire 60 Hz renderer budget before
+a single additional triangle is considered.</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Target</th><th>Verdict</th></tr></thead>
+<tbody>
+<tr><td><strong>1080p @ 60 Hz</strong></td><td><strong>Does not fit.</strong> Fill alone is 10.3 ms culled, 14.9 ms at 2× overdraw</td></tr>
+<tr><td><strong>1080p @ 30 Hz</strong></td><td>Comfortable — 33 ms frame, fill is a third of it</td></tr>
+<tr><td><strong>720p @ 60 Hz</strong></td><td><strong>The target.</strong> 720p is 44% of 1080p's pixels: ~4.6 ms culled, ~6.6 ms at 2× overdraw, leaving real headroom for geometry</td></tr>
+<tr><td><strong>1080p @ 60 Hz, nearest-neighbour</strong></td><td>Plausible — dropping bilinear cuts the span cost 2.9×</td></tr>
+<tr><td>4-core minimum spec</td><td>720p only</td></tr>
+</tbody>
+</table></div>
+<p><strong>720p at 60 Hz is the default the engine should ship</strong>, with 1080p offered at
+30 Hz or with bilinear disabled. That is a materially different conclusion from
+the one this document reached an hour earlier, and it comes from measuring the
+real pipeline rather than a synthetic harness.</p>
+<p>The 720p rows were originally <strong>scaled by pixel count</strong> from the 1080p
+measurements rather than measured. They have since been <strong>measured on the real
+demo scene</strong> (294 world instances, 1777 triangles, 1280×720): <strong>4.7 ms at 8
+workers, 3.9 ms at 16</strong>, against a serial 22.1 ms. So 720p60 holds comfortably,
+with roughly 2× headroom inside the 10 ms budget.</p>
+<h3 id="full-resolution-and-worker-sweep--measured-2026-07-28">Full resolution and worker sweep — measured 2026-07-28<a class="anchor" href="#full-resolution-and-worker-sweep--measured-2026-07-28" aria-label="Permalink">#</a></h3>
+<p>The demo scene (294 world instances, 1777 triangles after clipping) on an Intel
+Core Ultra 7 155H (16 physical / 22 logical). p50 over 270 timed frames at 720p,
+170 at the higher resolutions. The default pool is <code>logicalProcessors / 2</code> = 11
+workers here, which sits between the 8 and 16 columns.</p>
+<div class="tablewrap"><table>
+<thead><tr><th>workers</th><th>0 (serial)</th><th>1</th><th>2</th><th>4</th><th>8</th><th>16</th></tr></thead>
+<tbody>
+<tr><td><strong>1280x720</strong></td><td>26.1 ms</td><td>25.1</td><td>16.3</td><td>8.5</td><td>5.2</td><td>4.0</td></tr>
+<tr><td>speed-up</td><td>1.00x</td><td>1.04x</td><td>1.60x</td><td>3.09x</td><td>5.03x</td><td>6.55x</td></tr>
+</tbody>
+</table></div>
+<div class="tablewrap"><table>
+<thead><tr><th>resolution</th><th>8 workers</th><th>16 workers</th><th>ns per pixel @16</th></tr></thead>
+<tbody>
+<tr><td>1280x720 (0.92 Mpx)</td><td>5.2 ms</td><td>4.0 ms</td><td>4.33</td></tr>
+<tr><td>1920x1080 (2.07 Mpx)</td><td>14.4 ms</td><td>10.2 ms</td><td>4.90</td></tr>
+<tr><td>2560x1440 (3.69 Mpx)</td><td>—</td><td>19.6 ms</td><td>5.31</td></tr>
+</tbody>
+</table></div>
+<p><strong>Per-pixel cost rises 23% from 720p to 1440p</strong>, so the renderer scales slightly
+<em>worse</em> than pixel count (2.25x the pixels costs 2.55x the time; 4x costs 4.91x).
+The likely cause is the working set leaving cache: colour + depth is 8 bytes per
+pixel, so the framebuffer alone is 7.4 MB at 720p, 16.6 MB at 1080p and 29.5 MB
+at 1440p, against 24 MB of L3 on this part. 720p fits, 1440p cannot.</p>
+<p><strong>Two conclusions worth acting on:</strong></p>
+<ol>
+<li>
+<p><strong>1080p60 is genuinely marginal, not merely tight.</strong> 10.2 ms at 16 workers is
+already the whole 10 ms renderer budget, and p99 was 16.1 ms — inside the
+16.7 ms frame with nothing left for simulation or presentation. 1080p is a
+30 Hz option, or a 60 Hz option only once bilinear can be switched off.</p>
+</li>
+<li>
+<p><strong>A low-core machine cannot hit 720p60, and this is the portability risk.</strong>
+At 2 workers the frame is 16.3 ms — it misses 60 Hz outright. Under the
+<code>logicalProcessors / 2</code> rule that is any 4-thread device. A modern 8-core
+phone gets 4 workers and 8.5 ms, which holds; a 4-core one does not. The
+Android target should measure before assuming.</p>
+</li>
+</ol>
+<p>All frame-time figures in this document are <strong>p50</strong>. Reproduced independently on
+2026-07-28 at 8 workers over 270 timed frames: best 3.85 ms, <strong>p50 4.86 ms</strong>,
+p90 5.73 ms, p99 7.06 ms, mean 4.97 ms. The 4.7 above and the 4.9 quoted in
+<code>PLAN.md</code>, <code>README.md</code> and <code>AGENTS.md</code> are the same statistic from two different
+runs on the same machine — treat ~0.2 ms as ordinary run-to-run variance, not as
+a discrepancy between documents. Quote p50 and say so; <code>docs/ASSETS.md</code> § 2 is
+the reason best-of-N is not used anywhere here.</p>
+<p>Those figures postdate a fix worth knowing about, because the earlier ones were
+measured against a renderer whose parallel path was <em>slower</em> than its serial
+path. Two faults compounded: the pipeline ran per model instance, crossing 1180
+parallel barriers a frame, and the barrier join used a timed park that Windows
+rounds up to its 15.6 ms timer period. Batching the pass to 8 barriers and
+replacing the park with a yield took the demo from 2.9 fps windowed to a
+vsync-limited 60. See <code>render/README.md</code> § 5 and § 7.</p>
+<p>The old "~50–100k triangles/frame" ceiling was never a 60 Hz 1080p figure and
+now looks optimistic even at 720p. <strong>Kenney's kits remain comfortably inside
+whatever the real budget turns out to be</strong> — a 368-triangle blaster is the
+scale this art direction actually operates at, which is exactly why it was the
+right choice.</p>
+<h3 id="the-one-big-lever">The one big lever<a class="anchor" href="#the-one-big-lever" aria-label="Permalink">#</a></h3>
+<div class="tablewrap"><table>
+<thead><tr><th>Variant</th><th>ns/px</th><th>vs full</th></tr></thead>
+<tbody>
+<tr><td>Full: perspective + mip + bilinear + z</td><td>21.4</td><td>—</td></tr>
+<tr><td><strong>Nearest-neighbour instead of bilinear</strong></td><td><strong>7.3</strong></td><td><strong>2.9× faster</strong></td></tr>
+<tr><td>Affine instead of perspective-correct</td><td>19.7</td><td>8% faster</td></tr>
+<tr><td>Single L2-resident texture</td><td>8.2</td><td>2.6× faster</td></tr>
+<tr><td>Material-sorted spans</td><td>17.7</td><td>17% faster</td></tr>
+</tbody>
+</table></div>
+<p><strong>Bilinear filtering costs 2.9× the entire rest of the inner loop.</strong> It is the only
+large quality/performance knob, which makes it the natural setting to expose to
+players and the obvious first sacrifice on weak hardware.</p>
+<p>Perspective correction is nearly free at 8%, so it is never worth trading. The
+per-8-pixel divide optimisation buys nothing measurable — the FP divider is not
+the bottleneck, memory and the bilinear load/ALU work are. <strong>The headroom is in
+memory layout, not arithmetic</strong>: storing textures pre-swizzled in 2×2 blocks so a
+bilinear quad lands in one cache line is where the 2.6× single-texture gap points.</p>
+<p><strong>Permanently out of reach</strong>, regardless of optimisation effort: real-time shadow maps,
+many per-pixel dynamic lights, post-processing stacks (bloom / SSAO / TAA), and 4K.
+Normal mapping is borderline — roughly 3× per-pixel cost; possibly affordable at 720p,
+not at 1080p.</p>
+<blockquote>
+<p><strong>Caveats the benchmark author flagged, which keep these numbers honest.</strong> The
+harness's front end (setup and binning) ran single-threaded, overstating frame
+time by up to ~7 ms at 100k triangles — the raster-phase figures are the
+trustworthy ones, and the triangle budgets above may improve once that is
+parallel. Its span-extent code did three float divides per scanline where a
+production rasterizer steps edges incrementally, so part of the 600–900 ns
+per-triangle cost is the harness. The 50%-z-reject result showing <em>no</em> saving
+used random per-pixel depths, which defeats branch prediction; real occlusion is
+spatially coherent and early-z should do better. Run-to-run spread is ±20–40% at
+high triangle counts.</p>
+</blockquote>
+<h3 id="what-that-means-for-assets">What that means for assets<a class="anchor" href="#what-that-means-for-assets" aria-label="Permalink">#</a></h3>
+<p>Two consequences drive every recommendation below:</p>
+<ol>
+<li>
+<p><strong>Low-poly is a requirement, not a style preference.</strong> The triangle ceiling is a hard
+number.</p>
+</li>
+<li>
+<p><strong>PBR map sets are dead weight.</strong> With no per-pixel lighting, normal / roughness /
+metallic / AO maps have nothing to feed. We take <strong>albedo only</strong> and bake lighting
+offline. This also cuts asset size roughly 4× versus a naive PBR import.</p>
+</li>
+</ol>
+<hr>
+<h2 id="3-licensing-policy">3. Licensing policy<a class="anchor" href="#3-licensing-policy" aria-label="Permalink">#</a></h2>
+<h3 id="accepted">Accepted<a class="anchor" href="#accepted" aria-label="Permalink">#</a></h3>
+<div class="tablewrap"><table>
+<thead><tr><th>License</th><th>Obligation</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td><strong>CC0 1.0</strong></td><td>None</td><td>Preferred. Public-domain equivalent</td></tr>
+<tr><td><strong>MIT</strong></td><td>Retain notice</td><td></td></tr>
+<tr><td><strong>BSD 2/3-clause</strong></td><td>Retain notice, no endorsement</td><td>Discharged by <code>NOTICE</code></td></tr>
+<tr><td><strong>Public domain</strong> (verifiable)</td><td>None</td><td>Provenance must be documented</td></tr>
+</tbody>
+</table></div>
+<h3 id="rejected">Rejected<a class="anchor" href="#rejected" aria-label="Permalink">#</a></h3>
+<div class="tablewrap"><table>
+<thead><tr><th>License</th><th>Why</th></tr></thead>
+<tbody>
+<tr><td><strong>CC-BY</strong></td><td>Attribution bookkeeping in perpetuity — every asset, author, and license URL must stay accurate in a shipped credits screen forever. One missed entry is a license violation</td></tr>
+<tr><td><strong>CC-BY-SA</strong></td><td>Share-alike attaches to derivatives, and our build-time preprocessing (§4) <em>creates</em> a derivative. Contaminates the asset tree</td></tr>
+<tr><td><strong>GPL / LGPL assets</strong></td><td>Copyleft obligations conflict with MIT distribution</td></tr>
+<tr><td><strong>"Free for commercial use, no redistribution"</strong></td><td>Common on itch.io. Outright incompatible — we redistribute the asset files themselves, which is precisely what this forbids</td></tr>
+<tr><td><strong>Unlicensed / unclear</strong></td><td>Absence of a license is not permission</td></tr>
+</tbody>
+</table></div>
+<p>CC-BY is the notable exclusion — it would roughly triple the available pool. It is
+rejected because the obligation is unbounded in time and silently breaks: nothing fails
+the build when a credits entry goes stale.</p>
+<h3 id="sources">Sources<a class="anchor" href="#sources" aria-label="Permalink">#</a></h3>
+<p>All CC0. Verified against each project's stated license at the time of writing.</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Source</th><th>Ships</th><th>Fit</th><th>Use for</th></tr></thead>
+<tbody>
+<tr><td><strong><a href="https://kenney.nl/assets/category:3D" class="ext" rel="noopener noreferrer" target="_blank">Kenney</a></strong></td><td>GLB, OBJ, FBX</td><td><strong>Best</strong> — low-poly, one shared texture atlas per pack</td><td><strong>Primary art direction.</strong> Weapons, characters, level kits, props</td></tr>
+<tr><td><a href="https://quaternius.com/" class="ext" rel="noopener noreferrer" target="_blank">Quaternius</a></td><td>GLB / glTF</td><td>Excellent — low-poly, same philosophy</td><td>Characters, creatures, nature, vehicles</td></tr>
+<tr><td><a href="https://kaylousberg.com/" class="ext" rel="noopener noreferrer" target="_blank">KayKit</a></td><td>GLB / glTF</td><td>Excellent — animated low-poly characters</td><td>Player and enemy characters with rigs</td></tr>
+<tr><td><a href="https://polyhaven.com/" class="ext" rel="noopener noreferrer" target="_blank">Poly Haven</a></td><td>glTF, textures, HDRIs</td><td>Good, requires downsampling — 8K source</td><td>Environment textures; HDRIs for offline light baking</td></tr>
+<tr><td><a href="https://ambientcg.com/" class="ext" rel="noopener noreferrer" target="_blank">ambientCG</a></td><td>PBR material sets</td><td>Good, albedo only</td><td>Wall / floor / surface textures</td></tr>
+<tr><td><a href="https://github.com/KhronosGroup/glTF-Sample-Assets" class="ext" rel="noopener noreferrer" target="_blank">Khronos glTF-Sample-Assets</a></td><td>glTF / GLB</td><td>Renderer conformance fixtures</td><td><strong>Mixed licenses — verify per model</strong></td></tr>
+</tbody>
+</table></div>
+<p><strong>Kenney is the spine of the art direction.</strong> The low-poly GLB plus shared-atlas
+structure is close to ideal here: low triangle counts and small textures are exactly
+what the per-frame budget wants, so the technically correct choice and the aesthetically
+coherent one coincide.</p>
+<p>FPS-relevant packs: Blaster Kit (40 assets, sci-fi weapons, animated), Prototype Kit
+(145 assets, greybox level geometry), Modular Space Kit, Factory Kit, Modular Dungeon
+Kit, Blocky Characters.</p>
+<p>Standardising on one source family also buys <strong>visual coherence for free</strong> — the thing
+most asset-mixed indie projects fail at. Mixing Quaternius and KayKit with Kenney works
+because all three target the same low-poly flat-shaded look; mixing in photoscanned
+Poly Haven models would not.</p>
+<hr>
+<h2 id="4-runtime-format--preprocess-at-build-time">4. Runtime format — preprocess at build time<a class="anchor" href="#4-runtime-format--preprocess-at-build-time" aria-label="Permalink">#</a></h2>
+<p><strong>glTF is not parsed at runtime.</strong></p>
+<p>glTF is JSON plus binary buffers, and this project has no JSON library. But the stronger
+argument is architectural: <strong>a software rasterizer's scarcest resource is per-frame CPU
+and its cheapest is build-time CPU.</strong> Everything expensive moves offline.</p>
+<p>A Gradle build-time converter turns upstream glTF into a flat binary format the engine
+reads with near-zero parsing. Build-time tooling runs on the Gradle buildscript
+classpath, so it may freely use a glTF/JSON library <strong>without adding a runtime
+dependency or shipping anything</strong> — satisfying the <code>AGENTS.md</code> rule against new external
+libraries.</p>
+<p>Moved offline: triangulation, index and vertex-cache optimisation, mipmap chain
+generation, texture decode to the renderer's texel layout (below), normal computation,
+bounding-volume precompute, material flattening, and lightmap baking.</p>
+<p>The converter is <code>GltfConverter</code>; the runtime format it emits is <code>ModelFormat</code>. Both
+are Phase 5 lanes — see <code>render/README.md</code> § 1 and § 10.</p>
+<h3 id="texture-channel-order--decided">Texture channel order — decided<a class="anchor" href="#texture-channel-order--decided" aria-label="Permalink">#</a></h3>
+<p><strong>One layout end to end: <code>RGBA8888</code>, the same as the colour buffer.</strong> This section
+previously said BGRA, which was written before the colour buffer format was settled.</p>
+<p>RGBA wins for an asymmetric reason rather than a preference. The <strong>colour buffer's</strong>
+format is constrained from outside — it has to match what the presentation path
+uploads, and that is libGDX <code>Pixmap.Format.RGBA8888</code>. The <strong>texture's</strong> format is
+entirely ours: it is produced by our own build-time converter, so changing it costs
+one line in a tool that has not been written yet. When one side is pinned by an
+external contract and the other is free, the free side moves. Any mismatch would
+otherwise be paid for as a per-texel swizzle in the hottest loop in the engine, to
+buy nothing.</p>
+<blockquote>
+<p><strong>Verify this empirically; do not assume it.</strong> A Java <code>int[]</code> reaching the GPU as
+bytes goes through a byte-order step, and whether <code>0xRRGGBBAA</code> arrives as R,G,B,A
+depends on the upload path and the platform's endianness. The converter, the
+sampler, and the presentation blit must agree on one concrete layout, and the way
+to establish that is a round-trip test — write a known texel, present it, read it
+back, assert the colour — not a reading of this paragraph. Do that once, early, in
+the <code>Framebuffer</code> lane; it is a class of bug that otherwise surfaces as
+everything-looks-slightly-wrong much later.</p>
+</blockquote>
+<hr>
+<h2 id="5-asset-budget">5. Asset budget<a class="anchor" href="#5-asset-budget" aria-label="Permalink">#</a></h2>
+<p>Enforced by the converter. Derived from §2.</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Budget</th><th>Cap</th><th>Rationale</th></tr></thead>
+<tbody>
+<tr><td>Texture resolution</td><td><strong>512²</strong> (256² for Kenney atlases)</td><td>Cache locality dominates the inner loop. Poly Haven's 8K source must be downsampled</td></tr>
+<tr><td>Triangles per model</td><td><strong>~1,500</strong> (was ~5,000)</td><td>Tightened by the §2 measurements. A 60 Hz 1080p scene affords ~10–20k triangles <em>total</em>, so a 5,000-triangle model meant two to four objects on screen. Kenney's kits sit well under this already — the cap constrains imports from elsewhere, not the primary art direction</td></tr>
+<tr><td>Texture channels</td><td><strong>Albedo only</strong></td><td>No per-pixel lighting to consume normal/roughness/metallic/AO</td></tr>
+<tr><td>Mipmaps</td><td><strong>Pre-generated, required</strong></td><td>Un-mipmapped minification is both slow and aliased</td></tr>
+<tr><td>Total payload</td><td><strong>~20–50 MB</strong></td><td>Byte-identical across platforms; Android ships a trimmed subset</td></tr>
+</tbody>
+</table></div>
+<hr>
+<h2 id="6-distribution">6. Distribution<a class="anchor" href="#6-distribution" aria-label="Permalink">#</a></h2>
+<p>Assets are <strong>not committed to git</strong>. Tens of megabytes that change rarely and
+delta-compress poorly would make every clone permanently heavy.</p>
+<p>Upstream sources are <strong>mirrored into our own release artifact</strong> rather than fetched from
+kenney.nl or polyhaven.com at build time. Third-party download URLs are unpinnable and
+couple our build to their uptime. CC0 explicitly permits redistribution, so we publish
+the curated, preprocessed payload as a versioned GitHub release on this repository — one
+URL we control, one SHA-256, reproducible forever.</p>
+<p>This is a concrete, practical dividend of the CC0-only floor that a CC-BY policy would
+not have given us cleanly.</p>
+<p>Fetch with:</p>
+<div class="code" data-lang="powershell"><pre><code>.\gradlew.bat fetchAssets
+</code></pre></div>
+<p>The task verifies SHA-256 and <strong>fails the build on mismatch</strong>. It is deliberately <em>not</em>
+wired into <code>build</code> — assets are opt-in, and CI must stay hermetic.</p>
+<hr>
+<h2 id="7-asset-intake-checklist">7. Asset intake checklist<a class="anchor" href="#7-asset-intake-checklist" aria-label="Permalink">#</a></h2>
+<p>Before anything enters the tree:</p>
+<ul>
+<li class="task todo">
+<p><strong>Source URL</strong> recorded</p>
+</li>
+<li class="task todo">
+<p><strong>Author</strong> recorded</p>
+</li>
+<li class="task todo">
+<p><strong>License and license URL</strong> recorded — must be on the §3 accepted list</p>
+</li>
+<li class="task todo">
+<p><strong>Retrieval date</strong> recorded</p>
+</li>
+<li class="task todo">
+<p><strong>SHA-256</strong> of the original download recorded</p>
+</li>
+<li class="task todo">
+<p>Fits the §5 triangle and texture budgets, or a downsampling step is defined</p>
+</li>
+<li class="task todo">
+<p>For per-file-licensed sources (Freesound, Khronos samples): license verified for
+<strong>that specific file</strong>, not the site as a whole</p>
+</li>
+</ul>
+<p>Record provenance <strong>at import time</strong>. Six months later it is effectively unrecoverable,
+and an asset with no provenance has to be treated as unlicensed and removed.</p>
+<hr>
+<h2 id="8-legal-traps">8. Legal traps<a class="anchor" href="#8-legal-traps" aria-label="Permalink">#</a></h2>
+<p>Each of these is a plausible mistake for a contributor or an AI agent working in this
+repository.</p>
+<ol>
+<li>
+<p><strong>Do not copy code from DOOM, Chocolate Doom, PrBoom+, DSDA-Doom, or SLADE.</strong> All are
+<strong>GPL-2</strong>. Copying into an MIT codebase is a license violation. Reading a GPL
+<em>implementation</em> to learn a file format is legally murky; reading a published
+<em>specification</em> is not. <strong>Cite specifications, not source repositories.</strong></p>
+</li>
+<li>
+<p><strong>"DOOM" is an id Software / Bethesda trademark.</strong> Fine in design docs as
+architectural inspiration. Not fine in a product name, splash screen, or store
+listing.</p>
+</li>
+<li>
+<p><strong>Khronos glTF-Sample-Assets is not uniformly CC0.</strong> Licenses vary per model. Verify
+each one used.</p>
+</li>
+<li>
+<p><strong>Build-time GPL tooling is fine.</strong> Running a GPL tool to produce an asset does not
+license the asset under GPL. Do not vendor GPL source into this repository.</p>
+</li>
+<li>
+<p><strong>Preprocessing creates a derivative work.</strong> Downsampling, re-encoding, and mipmapping
+all produce derivatives — which is why share-alike licenses are rejected in §3.</p>
+</li>
+<li>
+<p><strong>"Free for commercial use" ≠ redistributable.</strong> Using an asset in a game and
+shipping the asset file itself are different permissions. We need the second.</p>
+</li>
+<li>
+<p><strong>No IWADs, ever.</strong> The DOOM shareware IWAD is not freely redistributable under our
+terms and the retail IWADs are commercial. This project ships no id Software content.</p>
+</li>
+</ol>
+<hr>
+<h2 id="9-open-items">9. Open items<a class="anchor" href="#9-open-items" aria-label="Permalink">#</a></h2>
+<ul>
+<li>
+<p><del>Benchmark the textured-span inner loop</del> — <strong>done.</strong> §2 now carries measured
+numbers, and §5's per-model triangle cap was tightened from 5,000 to 1,500 as a
+direct consequence. The estimates were optimistic by 2–3×; the architecture
+survives, but 60 Hz at 1080p buys ~10–20k triangles rather than 50–100k.
+<strong>Still unmeasured</strong>, because the benchmark did not vary them: the 64×64 tile
+size and the 8/16-pixel span subdivision in <code>render/README.md</code> § 7 and § 8. The
+span subdivision now looks unlikely to matter — the per-8-pixel divide
+optimisation measured as no better than a per-pixel divide, since the FP divider
+is not the bottleneck.</p>
+</li>
+<li>
+<p><strong>Sort draws by material.</strong> Measured at 17% off the span loop, essentially free
+to implement, and it compounds with the texture-swizzle idea in §2. Worth doing
+once <code>Rasterizer</code> exists.</p>
+</li>
+<li>
+<p><del>Decide the texture channel order</del> — <strong>decided</strong>: <code>RGBA8888</code> end to end, §4. What
+remains is the round-trip test that proves the converter, the sampler and the
+presentation blit agree on the concrete byte layout. Do it in the <code>Framebuffer</code> lane.</p>
+</li>
+<li>
+<p><strong>Publish the <code>assets-v1</code> release.</strong> Until it exists, <code>fetchAssets</code> fails with an
+actionable message. See the task's header comment in <code>build.gradle.kts</code>.</p>
+</li>
+<li>
+<p><del>Curate the initial pack selection from §3 and record each entry against the §7
+checklist</del> — <strong>done for the first-person demo.</strong> Blaster Kit 2.1 and Prototype
+Kit 1.0, both CC0, nine models converted and verified. The §7 record lives in
+<code>docs/DEMO_ASSETS.md</code> rather than here, because a per-asset manifest grows and
+this file is policy. Remaining packs from §3 — Modular Space Kit, Factory Kit,
+Modular Dungeon Kit, Blocky Characters — are still uncurated.</p>
+</li>
+<li>
+<p><strong>One atlas per model, not per pack.</strong> The nine demo models total 12.7 MB, of
+which ~12.6 MB is <strong>nine identical copies of the same 512² atlas and its mip
+pyramid</strong>. <code>ModelFormat</code> has no shared-texture concept, so the one-atlas-per-kit
+structure §3 praises Kenney for is paid for once per model. Nine models is
+already a quarter of §5's 20–50 MB payload cap, so this will not survive a real
+level. The fix is a shared-texture section or an atlas-by-reference indirection
+in <code>ModelFormat</code>. Measured, not estimated — see <code>docs/DEMO_ASSETS.md</code> § 4.</p>
+</li>
+</ul>
+<p>Two further open questions belong to the renderer rather than to asset policy, but
+are recorded here because both were surfaced by the §2 render target and one of them
+concerns this document's consequences directly:</p>
+<ul>
+<li>
+<p><strong>Framebuffer allocation vs. <code>I_MemoryPort</code></strong> — <code>render/README.md</code> § 11a.</p>
+</li>
+<li>
+<p><strong>What the WAD subsystem is for now.</strong> §10 records why Freedoom was rejected; the
+consequence is that a built, tested, 101-test WAD subsystem has no art left to read,
+because this document moves all art to preprocessed glTF. Its remaining role —
+map/level geometry container, generic asset container, or a format the project drops
+later — is undecided. Nothing is deleted. <code>render/README.md</code> § 11b states the
+options.</p>
+</li>
+</ul>
+<hr>
+<h2 id="10-history">10. History<a class="anchor" href="#10-history" aria-label="Permalink">#</a></h2>
+<p><strong>2026-07-28 — First art landed: Blaster Kit 2.1 and Prototype Kit 1.0.</strong>
+Both CC0, verified on the download page <em>and</em> against the <code>License.txt</code> inside
+each archive. Nine models converted and rendered: one blaster as the viewmodel,
+eight Prototype Kit pieces as level geometry. Full §7 provenance — URLs, SHA-256
+digests, retrieval date, triangle and texture counts — is in
+<code>docs/DEMO_ASSETS.md</code>, along with the one command that rebuilds every <code>.ofm</code>.</p>
+<p>Three things this settled, all measured rather than assumed:</p>
+<ol>
+<li>
+<p><strong>The §5 triangle cap does not bind this art direction.</strong> Across the <em>entire</em>
+two packs — 187 models — the worst case is 882 triangles, well under 1,500.
+§2's claim that "Kenney's kits remain comfortably inside whatever the real
+budget turns out to be" holds.</p>
+</li>
+<li>
+<p><strong>The packs' 512² atlases sit exactly at the §5 texture cap</strong>, power-of-two,
+and mip cleanly to 10 levels. No downsampling step was needed.</p>
+</li>
+<li>
+<p><strong>Payload size, not triangle count, is the constraint that bites first</strong> —
+see the new §9 item. This was not anticipated by §5, which reasoned about
+texture <em>resolution</em> and never about how many times one texture is stored.</p>
+</li>
+</ol>
+<p>Also recorded because it looks like a converter bug and is not: Kenney's GLBs
+reference their atlas by relative URI (<code>Textures/colormap.png</code>) rather than
+embedding it, so the atlas must sit beside each <code>.glb</code>. Resolving a relative URI
+against the referring document is what the glTF 2.0 specification requires, so
+the fix belongs in staging, not in <code>GltfConverter</code>.</p>
+<p><strong>2026-07-27 — Freedoom evaluated and rejected.</strong>
+<a href="https://freedoom.github.io/" class="ext" rel="noopener noreferrer" target="_blank">Freedoom</a> was the leading candidate before the render
+target was settled: BSD-3-clause, complete, actively maintained, and already in the
+exact WAD format the original design targeted (24 MB for <code>freedoom1.wad</code> +
+<code>freedoom2.wad</code>, 11 MB for the FreeDM deathmatch set). It remains an excellent choice
+for a DOOM-architecture engine.</p>
+<p>It has no role here. Its content is 128×128 palette-indexed textures and BSP-compiled
+2.5D sector maps — the renderer described in §2 consumes neither. Recorded so the
+evaluation is not repeated.</p>
+<footer class="pagefoot"><p>Source: <a class="ext" rel="noopener noreferrer" target="_blank" href="https://github.com/nicholashutter/OpenFPS/blob/main/docs/ASSETS.md">docs/ASSETS.md</a>. This page is generated — edit the Markdown, not the HTML.</p></footer>
+</main>
+</div>
+<script src="site.js"></script>
+</body>
+</html>

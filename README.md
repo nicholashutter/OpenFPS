@@ -262,6 +262,20 @@ Each engine package has its own `README.md` — the entry point for that
 subsystem. Read in order: `core → common → hal → gameplay → render → demo →
 audio → net → resource → memory`.
 
+## Documentation
+
+Every module and most packages carry a `README.md`, and there is a root set
+(`AGENTS.md`, `BUILD.md`, `PLAN.md`, `STYLE.md`) plus `docs/`. To read it as a
+website rather than a folder of files:
+
+```
+gradlew :tools:buildDocsSite
+```
+
+Renders all of it into `docs/site/` — sidebar, per-page contents, cross-links,
+dark mode, no external assets. The task fails if any cross-document link does
+not resolve. The Markdown stays the source of truth.
+
 ## Test Coverage
 
 **1524 tests, all passing** — 1131 `:engine`, 79 `:gdxshared`, 118 `:desktop`, 73 `:tools`, 123 `:android`.

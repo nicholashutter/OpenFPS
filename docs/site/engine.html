@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenFPS — Engine Subsystem Map — OpenFPS documentation</title>
+<meta name="description" content="For new contributors: read this first. Every Java package below has a README.md with the full subsystem spec. This page is the 2-line elevator pitch for each.">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<a class="skip" href="#doc">Skip to content</a>
+<header class="topbar"><button class="burger" id="burger" aria-controls="sidebar" aria-expanded="false" aria-label="Show navigation"><span></span><span></span><span></span></button><span class="topbar-name">OpenFPS docs</span></header>
+<div class="scrim" id="scrim" hidden></div>
+<div class="layout">
+<aside class="sidebar" id="sidebar">
+<a class="brand" href="index.html"><span class="brand-mark"></span><span class="brand-name">OpenFPS</span><span class="brand-kind">docs</span></a>
+<input class="filter" id="filter" type="search" placeholder="Filter pages" aria-label="Filter pages" autocomplete="off">
+<nav class="nav" id="nav" aria-label="Documentation">
+<details class="grp" data-hue="1" open><summary><span class="dot"></span>Overview<span class="count">2</span></summary>
+<ul>
+<li><a href="index.html">Overview</a></li>
+<li><a href="agents.html">Agent instructions</a></li>
+</ul></details>
+<details class="grp" data-hue="2" open><summary><span class="dot"></span>Building<span class="count">1</span></summary>
+<ul>
+<li><a href="build.html">Build reference</a></li>
+</ul></details>
+<details class="grp" data-hue="3" open><summary><span class="dot"></span>Architecture<span class="count">2</span></summary>
+<ul>
+<li><a href="style.html">Code style</a></li>
+<li><a href="plan.html">Project plan</a></li>
+</ul></details>
+<details class="grp" data-hue="4" open><summary><span class="dot"></span>Modules<span class="count">5</span></summary>
+<ul>
+<li><a href="engine.html" class="cur" aria-current="page">:engine</a></li>
+<li><a href="desktop.html">:desktop</a></li>
+<li><a href="android.html">:android</a></li>
+<li><a href="tools.html">:tools</a></li>
+<li><a href="gdxshared.html">:gdxshared</a></li>
+</ul></details>
+<details class="grp" data-hue="5"><summary><span class="dot"></span>Packages<span class="count">10</span></summary>
+<ul>
+<li><a href="engine-core.html">Core</a></li>
+<li><a href="engine-common.html">Common</a></li>
+<li><a href="engine-hal.html">HAL (I_)</a></li>
+<li><a href="engine-gameplay.html">Gameplay (P_)</a></li>
+<li><a href="engine-render.html">Render (R_)</a></li>
+<li><a href="engine-demo.html">Demo</a></li>
+<li><a href="engine-audio.html">Audio (S_)</a></li>
+<li><a href="engine-net.html">Net (G_)</a></li>
+<li><a href="engine-resource.html">Resource (W_)</a></li>
+<li><a href="engine-memory.html">Memory (Z_)</a></li>
+</ul></details>
+<details class="grp" data-hue="6"><summary><span class="dot"></span>Reference<span class="count">2</span></summary>
+<ul>
+<li><a href="assets.html">Assets and licensing</a></li>
+<li><a href="demo-assets.html">Demo asset manifest</a></li>
+</ul></details>
+</nav>
+<p class="generated">Generated from the repository's Markdown by <code>:tools:buildDocsSite</code>.</p>
+</aside>
+<aside class="rail"><details class="toc" id="toc" open><summary>On this page</summary>
+<ul>
+<li class="lv2"><a href="#subsystem-layout-doom-style-adapted-for-jvm">Subsystem Layout (Doom-style, adapted for JVM)</a></li>
+<li class="lv2"><a href="#subsystems-2-line-pitch-each">Subsystems (2-line pitch each)</a></li>
+<li class="lv2"><a href="#folder-layout">Folder layout</a></li>
+<li class="lv2"><a href="#architectural-rules-enforced-by-stylemd-and-review">Architectural rules (enforced by STYLE.md and review)</a></li>
+<li class="lv2"><a href="#where-to-start-reading">Where to start reading</a></li>
+</ul></details></aside>
+<main id="doc">
+<p class="crumb"><span class="tag">Modules</span><span class="sep">/</span><code>engine/src/main/java/com/openfps/engine/README.md</code><span class="sep">/</span>3 min read</p>
+<h1 id="openfps--engine-subsystem-map">OpenFPS — Engine Subsystem Map<a class="anchor" href="#openfps--engine-subsystem-map" aria-label="Permalink">#</a></h1>
+<blockquote>
+<p><strong>For new contributors</strong>: read this first. Every Java package below has a <code>README.md</code>
+with the full subsystem spec. This page is the 2-line elevator pitch for each.</p>
+</blockquote>
+<hr>
+<h2 id="subsystem-layout-doom-style-adapted-for-jvm">Subsystem Layout (Doom-style, adapted for JVM)<a class="anchor" href="#subsystem-layout-doom-style-adapted-for-jvm" aria-label="Permalink">#</a></h2>
+<div class="code"><pre><code>+--------------------------------------------------------------------+
+|  ENGINE ENTRY          com.openfps.engine.core.EngineMain          |
+|  Boots engine, wires HAL adapter, drives game loop.                |
++--------------------------------------------------------------------+
+                                  |
+                                  v
++--------------------------------------------------------------------+
+|  CORE GAME LOOP       com.openfps.engine.core.GameLoop (D_)        |
+|  30/60/120 Hz tic producer; publishes events to the shared bus.    |
++--------------------------------------------------------------------+
+       |            |            |            |            |
+       v            v            v            v            v
++--------+  +-----------+  +--------+  +--------+  +------------+
+|   P_   |  |    R_     |  |   S_   |  |   G_   |  |     W_     |
+| gameplay|  |  render   |  | audio  |  |  net   |  |  resource  |
++--------+  +-----------+  +--------+  +--------+  +------------+
+       |            |            |            |            |
+       +------------+------------+------------+------------+
+                                  |
+                                  v
++--------------------------------------------------------------------+
+|  Z_ MEMORY  com.openfps.engine.memory                                |
+|  Zone allocator, tag-based bulk free, bypasses JVM GC for hot path. |
++--------------------------------------------------------------------+
+                                  |
+                                  v
++--------------------------------------------------------------------+
+|  I_ HAL     com.openfps.engine.hal                                   |
+|  Hardware abstraction: port interfaces + platform adapters.        |
+|  desktop/  mobile/  null/  -- only adapters live here.             |
++--------------------------------------------------------------------+
+</code></pre></div>
+<hr>
+<h2 id="subsystems-2-line-pitch-each">Subsystems (2-line pitch each)<a class="anchor" href="#subsystems-2-line-pitch-each" aria-label="Permalink">#</a></h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Prefix</th><th>Package</th><th>What it does</th></tr></thead>
+<tbody>
+<tr><td><code>D_</code></td><td><code>core</code></td><td>Runs the game at a configurable 30/60/120 Hz tic rate and publishes events to the bus; a worker pool dispatches them to subsystems.</td></tr>
+<tr><td><code>P_</code></td><td><code>gameplay</code></td><td>Holds player state, entities, map logic, and physics (collision, sliding, BSP-assisted movement).</td></tr>
+<tr><td><code>R_</code></td><td><code>render</code></td><td>(Stub) Multi-threaded software triangle rasterizer — z-buffer, perspective-correct interpolation, mipmapped bilinear sampling. Produces a framebuffer; the platform adapter presents it.</td></tr>
+<tr><td><code>S_</code></td><td><code>audio</code></td><td>(Stub) Plays 3D-positioned SFX and background music. Adapter-agnostic.</td></tr>
+<tr><td><code>G_</code></td><td><code>net</code></td><td>P2P tic distribution, peer discovery (LAN), snapshot delta, and latency compensation.</td></tr>
+<tr><td><code>W_</code></td><td><code>resource</code></td><td>Reads <code>.wad</code> files (maps, textures, flats, sprites) and caches lumps by name and index.</td></tr>
+<tr><td><code>Z_</code></td><td><code>memory</code></td><td>Custom zone heap with tag-based bulk free — bypasses JVM GC for game objects.</td></tr>
+<tr><td><code>I_</code></td><td><code>hal</code></td><td>The only place platform code lives. Port interfaces + desktop / mobile / null adapters.</td></tr>
+</tbody>
+</table></div>
+<hr>
+<h2 id="folder-layout">Folder layout<a class="anchor" href="#folder-layout" aria-label="Permalink">#</a></h2>
+<div class="code"><pre><code>engine/
+├── core/           D_ main game loop, EngineMain entry
+├── gameplay/       P_ player, entities, physics
+│   ├── port/         (interfaces)
+│   └── adapter/      (null/stub impls)
+├── render/         R_ rendering pipeline
+│   ├── port/
+│   └── adapter/
+├── audio/          S_ sound engine
+│   ├── port/
+│   └── adapter/
+├── net/            G_ P2P networking
+│   ├── port/
+│   └── adapter/
+├── resource/       W_ WAD file loader
+│   ├── port/
+│   └── adapter/
+├── memory/         Z_ zone allocator
+│   ├── port/
+│   └── adapter/
+├── hal/            I_ hardware abstraction
+│   ├── port/         (port interfaces — core depends only on these)
+│   └── adapter/
+│       ├── desktop/    (LWJGL3 + OpenAL — Phase 1)
+│       ├── mobile/     (Android Canvas / AudioTrack — Phase 1)
+│       └── nulladapter/ (headless / CI — current)
+└── common/         shared types: FixedMath, Constants
+</code></pre></div>
+<p>Every package has its own <code>README.md</code> with the full design. <strong>Read top-to-bottom, D_ → P_ → R_ → S_ → G_ → W_ → Z_ → I_.</strong></p>
+<hr>
+<h2 id="architectural-rules-enforced-by-stylemd-and-review">Architectural rules (enforced by <code>STYLE.md</code> and review)<a class="anchor" href="#architectural-rules-enforced-by-stylemd-and-review" aria-label="Permalink">#</a></h2>
+<ol>
+<li>
+<p><strong>Core never imports an adapter.</strong> Core depends only on <code>port/</code> interfaces and <code>common/</code>.</p>
+</li>
+<li>
+<p><strong>Adapters never import each other.</strong> Each adapter is self-contained.</p>
+</li>
+<li>
+<p><strong>No global state.</strong> All state is in subsystem instances held by the core.</p>
+</li>
+<li>
+<p><strong>No boxing in hot paths.</strong> <code>int[]</code> not <code>List&lt;Integer&gt;</code>. <code>long</code> not <code>Long</code>. See <code>common/README.md</code>.</p>
+</li>
+<li>
+<p><strong>All ports first, adapters second.</strong> A new subsystem ships its interface before any implementation.</p>
+</li>
+</ol>
+<hr>
+<h2 id="where-to-start-reading">Where to start reading<a class="anchor" href="#where-to-start-reading" aria-label="Permalink">#</a></h2>
+<ol>
+<li><code>core/README.md</code> — understand the tic loop</li>
+<li><code>common/README.md</code> — fixed-point math (used everywhere)</li>
+<li><code>hal/README.md</code> — how adapters plug in</li>
+<li>Any subsystem <code>README.md</code> — details on that subsystem</li>
+</ol>
+<footer class="pagefoot"><p>Source: <a class="ext" rel="noopener noreferrer" target="_blank" href="https://github.com/nicholashutter/OpenFPS/blob/main/engine/src/main/java/com/openfps/engine/README.md">engine/src/main/java/com/openfps/engine/README.md</a>. This page is generated — edit the Markdown, not the HTML.</p></footer>
+</main>
+</div>
+<script src="site.js"></script>
+</body>
+</html>
