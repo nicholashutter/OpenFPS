@@ -241,4 +241,46 @@ class GdxWindowPortTest
     {
         assertThat(new GdxWindowPort().isRealWindow()).isTrue();
     }
+
+    @Nested
+    @DisplayName("input attachment")
+    class InputAttachment
+    {
+        @Test
+        @DisplayName("a fresh port has no input attached")
+        void shouldStartWithNoInput()
+        {
+            assertThat(new GdxWindowPort().inputPort()).isNull();
+        }
+
+        @Test
+        @DisplayName("the attached port is the one the frame loop will be given")
+        void shouldRememberTheAttachedPort()
+        {
+            final GdxWindowPort port = new GdxWindowPort();
+            final GdxInputPort input = new GdxInputPort();
+            port.init();
+            port.attachInput(input);
+            assertThat(port.inputPort()).isSameAs(input);
+        }
+
+        @Test
+        @DisplayName("attaching null leaves a window that reads no input")
+        void shouldAcceptNull()
+        {
+            final GdxWindowPort port = new GdxWindowPort();
+            port.attachInput(new GdxInputPort());
+            port.attachInput(null);
+            assertThat(port.inputPort()).isNull();
+        }
+
+        @Test
+        @DisplayName("attachment does not disturb the lifecycle state")
+        void shouldNotAdvanceState()
+        {
+            final GdxWindowPort port = new GdxWindowPort();
+            port.attachInput(new GdxInputPort());
+            assertThat(port.state()).isEqualTo(GdxWindowPort.State.NEW);
+        }
+    }
 }

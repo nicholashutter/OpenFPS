@@ -7,6 +7,7 @@ package com.openfps.desktop;
 
 import com.openfps.engine.hal.adapter.I_AdapterFactory;
 import com.openfps.engine.hal.adapter.nulladapter.NullAdapterFactory;
+import com.openfps.engine.hal.port.InputState;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -21,8 +22,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * The delegate here is {@link NullAdapterFactory} rather than the real
  * desktop one, so these stay off disk and off the network. What matters is
  * the decoration contract, which is backend-independent: every port except
- * the window comes straight from the delegate, and the window is the real
- * GLFW-backed one.
+ * the window and the input comes straight from the delegate, and those two
+ * are the real GLFW-backed ones.
  */
 class GdxAdapterFactoryTest
 {
@@ -50,7 +51,7 @@ class GdxAdapterFactoryTest
     }
 
     @Test
-    @DisplayName("every port except the window comes from the delegate")
+    @DisplayName("every port except the window and input comes from the delegate")
     void shouldDelegateEveryPortExceptTheWindow()
     {
         final I_AdapterFactory delegate = new NullAdapterFactory();
@@ -59,7 +60,7 @@ class GdxAdapterFactoryTest
         try
         {
             assertThat(factory.getTimePort()).isSameAs(delegate.getTimePort());
-            assertThat(factory.getInputPort()).isSameAs(delegate.getInputPort());
+            assertThat(factory.getInputPort()).isNotSameAs(delegate.getInputPort());
             assertThat(factory.getDatagramPort()).isSameAs(delegate.getDatagramPort());
             assertThat(factory.getFilePort()).isSameAs(delegate.getFilePort());
             assertThat(factory.getSystemInfoPort()).isSameAs(delegate.getSystemInfoPort());
@@ -83,6 +84,42 @@ class GdxAdapterFactoryTest
             assertThat(factory.getWindowPort()).isInstanceOf(GdxWindowPort.class);
             assertThat(factory.getWindowPort().isRealWindow()).isTrue();
             assertThat(factory.getWindowPort().isCloseRequested()).isFalse();
+        }
+        finally
+        {
+            factory.shutdown();
+        }
+    }
+
+    @Test
+    @DisplayName("the input port is the real libGDX-backed one")
+    void shouldSupplyRealInput()
+    {
+        final GdxAdapterFactory factory = factoryOver(new NullAdapterFactory());
+        factory.init();
+        try
+        {
+            assertThat(factory.getInputPort()).isInstanceOf(GdxInputPort.class);
+            assertThat(factory.getInputPort().currentInput()).isEqualTo(InputState.NEUTRAL);
+        }
+        finally
+        {
+            factory.shutdown();
+        }
+    }
+
+    @Test
+    @DisplayName("init hands the input port to the window so the frame loop polls it")
+    void shouldAttachInputToTheWindow()
+    {
+        final GdxWindowPort window = new GdxWindowPort();
+        final GdxAdapterFactory factory = new GdxAdapterFactory(new NullAdapterFactory(), window);
+        assertThat(window.inputPort()).isNull();
+
+        factory.init();
+        try
+        {
+            assertThat(window.inputPort()).isSameAs(factory.getInputPort());
         }
         finally
         {
