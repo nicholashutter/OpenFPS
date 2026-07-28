@@ -30,9 +30,16 @@ import org.slf4j.LoggerFactory;
  * {@link AdapterFactorySelector} can never name this class. Rather than
  * duplicate the time, datagram, file, system-info and SQLite-profile wiring
  * that {@code DesktopAdapterFactory} already gets right, this delegates all
- * of it and overrides exactly one getter. Adding a port to
- * {@code I_AdapterFactory} therefore needs no change here beyond the
+ * of it and overrides the two getters that need a real device. Adding a port
+ * to {@code I_AdapterFactory} therefore needs no change here beyond the
  * forwarding method the interface forces.
+ *
+ * <p>The two overridden getters are the window and the input port, and they
+ * are overridden together because they are the same device: mouse-look needs a
+ * captured cursor, which only exists inside a real window, and the per-frame
+ * mouse delta has to be read on the thread that owns that window. {@link
+ * #init()} introduces them with {@code attachInput} so the frame loop can poll
+ * the port it will hand the engine.</p>
  *
  * {@link #init()} also performs the {@code create()} call the engine's
  * bootstrap does not make: the composition root has no opinion about window
@@ -52,6 +59,9 @@ public final class GdxAdapterFactory implements I_AdapterFactory
 
     /** The real GLFW-backed window. */
     private final GdxWindowPort windowPort;
+
+    /** Real mouse and keyboard, polled by that window's frame loop. */
+    private final GdxInputPort inputPort = new GdxInputPort();
 
     /** Creates the factory over the standard desktop HAL backend. */
     public GdxAdapterFactory()
@@ -83,12 +93,15 @@ public final class GdxAdapterFactory implements I_AdapterFactory
     @Override
     public void init()
     {
-        LOG.info("Initializing windowed desktop HAL (libGDX LWJGL3 window)");
+        LOG.info("Initializing windowed desktop HAL (libGDX LWJGL3 window and input)");
         delegate.init();
         windowPort.init();
         windowPort.create(GdxWindowPort.DEFAULT_WIDTH,
             GdxWindowPort.DEFAULT_HEIGHT,
             GdxWindowPort.DEFAULT_TITLE);
+        // Must precede runFrameLoop: the listener that polls the device is
+        // built inside it, from whatever is attached at that moment.
+        windowPort.attachInput(inputPort);
     }
 
     @Override
@@ -106,11 +119,18 @@ public final class GdxAdapterFactory implements I_AdapterFactory
         return delegate.getTimePort();
     }
 
-    /** Returns the delegate's input port. */
+    /**
+     * Returns the real mouse and keyboard, not the delegate's null port.
+     *
+     * The delegate's port is still constructed and still initialised by its
+     * own {@code init()} — it is simply never handed out here. That costs one
+     * unused object and keeps the delegate's lifecycle intact, which is
+     * cheaper than special-casing it.
+     */
     @Override
     public I_InputPort getInputPort()
     {
-        return delegate.getInputPort();
+        return inputPort;
     }
 
     /** Returns the delegate's UDP datagram port. */
