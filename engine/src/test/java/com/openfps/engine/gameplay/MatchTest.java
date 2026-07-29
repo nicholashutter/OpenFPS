@@ -52,6 +52,18 @@ class MatchTest
     /** A route period; irrelevant to a sentry, but the constructor needs one. */
     private static final int PERIOD = 60;
 
+    /** The demo's tic rate, for expressing a measurement in seconds. */
+    private static final int TICS_PER_SECOND = 60;
+
+    /**
+     * Tics to run a balance or hit-rate measurement over — thirty seconds.
+     *
+     * <p>Long enough that a random firing rate settles into something worth
+     * quoting: at {@link BotSkill#DUMB}'s mean interval one bot takes about
+     * fourteen shots in that time and seven take a hundred.</p>
+     */
+    private static final int BALANCE_RUN_TICS = TICS_PER_SECOND * 30;
+
     // A stationary bot at a given distance straight down +z.
     //
     // The firing cadence used to be an argument here and is not one any more: it
@@ -611,6 +623,381 @@ class MatchTest
             assertThat(match.state()).isEqualTo(MatchState.WON);
             assertThat(match.botsKilled()).isEqualTo(Match.DEFAULT_BOT_COUNT);
             assertThat(match.playerShotsFired()).isEqualTo(21);
+        }
+    }
+
+    @Nested
+    @DisplayName("respawning")
+    class Respawn
+    {
+        @Test
+        @DisplayName("the player is not shot at while on the floor")
+        void shouldStopReturnFireWhileThePlayerIsDown()
+        {
+            // Otherwise the two seconds after a death are the most dangerous part
+            // of the round: seven marksmen emptying magazines into a corpse would
+            // run the death counter away before the body stood up.
+            final Match match = marksmanMatch(sentryAt(2, 200.0f));
+            final int hitsToKill = Match.PLAYER_MAX_HEALTH / Match.BOT_SHOT_DAMAGE;
+            for (int tic = 0; tic < hitsToKill; tic++)
+            {
+                tick(match, tic);
+            }
+            assertThat(match.isPlayerDown()).isTrue();
+            final int shotsAtDeath = match.botShotsFired();
+
+            for (int tic = hitsToKill; tic < hitsToKill + Match.RESPAWN_DELAY_TICS - 1; tic++)
+            {
+                tick(match, tic);
+            }
+
+            assertThat(match.botShotsFired()).isEqualTo(shotsAtDeath);
+            assertThat(match.playerDeaths()).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("stands up at full health exactly RESPAWN_DELAY_TICS later")
+        void shouldRespawnAfterTheDelay()
+        {
+            final Match match = marksmanMatch(sentryAt(2, 200.0f));
+            final int hitsToKill = Match.PLAYER_MAX_HEALTH / Match.BOT_SHOT_DAMAGE;
+            for (int tic = 0; tic < hitsToKill; tic++)
+            {
+                tick(match, tic);
+            }
+            final int deathTic = hitsToKill - 1;
+
+            // One tic short.
+            for (int tic = hitsToKill; tic < deathTic + Match.RESPAWN_DELAY_TICS; tic++)
+            {
+                tick(match, tic);
+            }
+            assertThat(match.isPlayerDown()).as("stood up early").isTrue();
+            assertThat(match.playerHealth()).isEqualTo(0);
+
+            tick(match, deathTic + Match.RESPAWN_DELAY_TICS);
+
+            assertThat(match.isPlayerDown()).isFalse();
+            assertThat(match.playerHealth()).isEqualTo(Match.PLAYER_MAX_HEALTH);
+        }
+
+        @Test
+        @DisplayName("the respawn is reported exactly once, so the body is moved once")
+        void shouldConsumeTheRespawnFlagOnce()
+        {
+            // A consuming read: the caller has to teleport a body, and moving it
+            // twice would be harmless only by luck.
+            final Match match = marksmanMatch(sentryAt(2, 200.0f));
+            final int hitsToKill = Match.PLAYER_MAX_HEALTH / Match.BOT_SHOT_DAMAGE;
+            for (int tic = 0; tic < hitsToKill + Match.RESPAWN_DELAY_TICS; tic++)
+            {
+                tick(match, tic);
+                if (match.consumePlayerRespawned())
+                {
+                    assertThat(match.consumePlayerRespawned())
+                        .as("the same respawn was reported twice")
+                        .isFalse();
+                    return;
+                }
+            }
+            assertThat(false).as("no respawn was ever reported").isTrue();
+        }
+
+        @Test
+        @DisplayName("the countdown counts down, so the notice is not a frozen screen")
+        void shouldCountDownTowardTheRespawn()
+        {
+            // The perceptible property. A static "you died" is indistinguishable
+            // from a hung game, which is the whole reason the notice shows a
+            // number at all.
+            final Match match = marksmanMatch(sentryAt(2, 200.0f));
+            final int hitsToKill = Match.PLAYER_MAX_HEALTH / Match.BOT_SHOT_DAMAGE;
+            for (int tic = 0; tic < hitsToKill; tic++)
+            {
+                tick(match, tic);
+            }
+
+            final int first = match.respawnTicsRemaining(hitsToKill);
+            final int later = match.respawnTicsRemaining(hitsToKill + 30);
+
+            assertThat(first).isGreaterThan(0);
+            assertThat(later).isLessThan(first);
+            assertThat(match.respawnTicsRemaining(hitsToKill + Match.RESPAWN_DELAY_TICS))
+                .isEqualTo(0);
+        }
+    }
+
+    @Nested
+    @DisplayName("reset — a rematch is indistinguishable from a first round")
+    class Reset
+    {
+        @Test
+        @DisplayName("every counter, every bot and the player match a freshly built match")
+        void shouldBeIdenticalToAFreshMatchAfterReset()
+        {
+            // THE invariant, and asserted against a fresh Match rather than
+            // against a list of fields somebody has to remember to extend. A
+            // counter added to Match later and not zeroed in reset() fails HERE
+            // rather than shipping as a summary that is the sum of two rounds.
+            final Match fresh = marksmanMatch(sentryAt(2, 200.0f), sentryAt(3, 260.0f));
+            final Match used = marksmanMatch(sentryAt(2, 200.0f), sentryAt(3, 260.0f));
+
+            // Play a whole round out: kill one bot, take fire, die, respawn.
+            shootAhead(used);
+            shootAhead(used);
+            shootAhead(used);
+            for (int tic = 0; tic < 400; tic++)
+            {
+                tick(used, tic);
+            }
+            assertThat(used.botsKilled()).isEqualTo(1);
+            assertThat(used.playerDeaths()).isGreaterThan(0);
+
+            used.reset();
+
+            assertThat(used.playerHealth()).isEqualTo(fresh.playerHealth());
+            assertThat(used.botsKilled()).isEqualTo(fresh.botsKilled());
+            assertThat(used.playerDeaths()).isEqualTo(fresh.playerDeaths());
+            assertThat(used.playerShotsFired()).isEqualTo(fresh.playerShotsFired());
+            assertThat(used.playerShotsHit()).isEqualTo(fresh.playerShotsHit());
+            assertThat(used.botShotsFired()).isEqualTo(fresh.botShotsFired());
+            assertThat(used.botShotsLanded()).isEqualTo(fresh.botShotsLanded());
+            assertThat(used.livingBots()).isEqualTo(fresh.livingBots());
+            assertThat(used.isPlayerDown()).isEqualTo(fresh.isPlayerDown());
+            assertThat(used.state()).isEqualTo(fresh.state());
+        }
+
+        @Test
+        @DisplayName("a cleared room is full again, and the match is playable rather than won")
+        void shouldReviveEveryBotWhenResetting()
+        {
+            // What the player actually perceives about a rematch: there is
+            // somebody to shoot. A reset that zeroed the counters and left the
+            // corpses would report IN_PROGRESS for a round already over, or WON
+            // for one that had not started.
+            final Match match = marksmanMatch(sentryAt(2, 200.0f));
+            shootAhead(match);
+            shootAhead(match);
+            shootAhead(match);
+            assertThat(match.state()).isEqualTo(MatchState.WON);
+
+            match.reset();
+
+            assertThat(match.livingBots()).isEqualTo(1);
+            assertThat(match.state()).isEqualTo(MatchState.IN_PROGRESS);
+            assertThat(shootAhead(match))
+                .as("the revived bot is not a target again")
+                .isEqualTo(2);
+        }
+
+        @Test
+        @DisplayName("a reset round plays out identically to the first one")
+        void shouldReplayTheSameRoundAfterReset()
+        {
+            // The strongest statement of the invariant available: run the same
+            // tics twice on the same object with a reset between, and the two
+            // halves have to agree in every figure. This is also what would catch
+            // a bot whose cooldown or memory survived the reset — either would
+            // shift the second round's return fire.
+            final Match match = marksmanMatch(sentryAt(2, 200.0f), sentryAt(3, 260.0f));
+            for (int tic = 0; tic < 300; tic++)
+            {
+                tick(match, tic);
+            }
+            final String firstRound = match.toString();
+
+            match.reset();
+            for (int tic = 0; tic < 300; tic++)
+            {
+                tick(match, tic);
+            }
+
+            assertThat(match.toString()).isEqualTo(firstRound);
+        }
+    }
+
+    @Nested
+    @DisplayName("dumbness — the measured properties, not the constants")
+    class Dumbness
+    {
+        @Test
+        @DisplayName("most shots MISS, and some still land")
+        void shouldMissMostShotsButNotAllOfThem()
+        {
+            // Both halves matter and neither alone is enough. "The bots miss" is
+            // satisfied by opponents who never hit anything, which is not a threat
+            // but scenery; "the bots hit" is satisfied by the metronome this
+            // replaced. The pair is the feature.
+            //
+            // The player stands 200 units from a bot that fires as often as it can
+            // — an engagement distance the demo room produces constantly.
+            final Match match = new Match(new Bot[] { sentryAt(2, 200.0f) },
+                new BotRng(), BotSkill.DUMB, Match.UNLIMITED_DEATHS);
+
+            for (int tic = 0; tic < BALANCE_RUN_TICS; tic++)
+            {
+                tick(match, tic);
+            }
+
+            assertThat(match.botShotsFired())
+                .as("nothing was fired at all over %d tics", BALANCE_RUN_TICS)
+                .isGreaterThan(5);
+            assertThat(match.botShotsLanded())
+                .as("no shot ever landed — that is scenery, not an opponent")
+                .isGreaterThan(0);
+            final int landedPercent = match.botShotsLanded() * 100 / match.botShotsFired();
+            assertThat(landedPercent)
+                .as("%d%% of shots landed, which is not 'most shots miss'", landedPercent)
+                .isLessThan(50);
+        }
+
+        @Test
+        @DisplayName("a distant bot misses far more than a close one")
+        void shouldMissMoreOftenAtRange()
+        {
+            // The consequence of scattering the RAY rather than rolling against
+            // the outcome, and the reason it was worth doing that way: a fixed
+            // angular error is a bigger miss the further it travels, so distance
+            // matters without anything modelling it. A dice roll against the
+            // outcome would give the same hit rate across the whole room.
+            final int closeHits = landedOver(80.0f);
+            final int distantHits = landedOver(460.0f);
+
+            assertThat(closeHits)
+                .as("a bot at arm's length never hit anything")
+                .isGreaterThan(0);
+            assertThat(distantHits)
+                .as("a bot at 460 units hit %d times against %d at 80 — range does not matter",
+                    distantHits, closeHits)
+                .isLessThan(closeHits);
+        }
+
+        // How many shots one DUMB bot lands on a motionless player at a distance.
+        private static int landedOver(final float distance)
+        {
+            final Match match = new Match(new Bot[] { sentryAt(2, distance) },
+                new BotRng(), BotSkill.DUMB, Match.UNLIMITED_DEATHS);
+            for (int tic = 0; tic < BALANCE_RUN_TICS; tic++)
+            {
+                tick(match, tic);
+            }
+            return match.botShotsLanded();
+        }
+
+        @Test
+        @DisplayName("the same seed replays a round exactly; a different seed does not")
+        void shouldBeReproducibleUnderOneSeed()
+        {
+            // The lockstep guarantee, stated as the thing it protects rather than
+            // as a property of the generator: two peers running the same tics must
+            // reach the same state. Math.random() in the firing path fails this on
+            // the second run, which is the point of having it.
+            final String underOneSeed = roundUnderSeed(1234L);
+
+            assertThat(roundUnderSeed(1234L))
+                .as("the same seed must replay exactly")
+                .isEqualTo(underOneSeed);
+            assertThat(roundUnderSeed(9876L))
+                .as("a different seed must produce a different round")
+                .isNotEqualTo(underOneSeed);
+        }
+
+        // A whole round's outcome under one seed, as a string so a mismatch prints
+        // the divergence rather than "expected 41, was 47".
+        private static String roundUnderSeed(final long seed)
+        {
+            final Match match = new Match(
+                new Bot[] { sentryAt(2, 150.0f), sentryAt(3, 300.0f), sentryAt(4, 420.0f) },
+                new BotRng(seed), BotSkill.DUMB, Match.UNLIMITED_DEATHS);
+            for (int tic = 0; tic < BALANCE_RUN_TICS; tic++)
+            {
+                tick(match, tic);
+            }
+            return match.toString();
+        }
+    }
+
+    @Nested
+    @DisplayName("balance — the measurement BOT_SHOT_DAMAGE is derived from")
+    class Balance
+    {
+        @Test
+        @DisplayName("seven bots in sight kill a motionless player in about half a minute")
+        void shouldKillAStationaryPlayerInAboutThirtySeconds()
+        {
+            // THE MEASUREMENT. Match.BOT_SHOT_DAMAGE's Javadoc quotes a figure
+            // taken from this test, and the previous figure — "a hit every 0.40 s,
+            // dead in twenty seconds" — described opponents who could aim and went
+            // stale the moment they could not. Pinning it here is what stops the
+            // same thing happening again: change the skill profile or the damage
+            // and this test tells you the new number rather than passing quietly.
+            //
+            // The room is the demo's own arrangement in spirit: seven bots spread
+            // between 100 and 400 units, all in line of sight, player motionless
+            // in the open. That is the worst case a player can put themselves in.
+            final Bot[] roster = new Bot[Match.DEFAULT_BOT_COUNT];
+            for (int index = 0; index < roster.length; index++)
+            {
+                roster[index] = sentryAt(Match.FIRST_BOT_ENTITY_ID + index,
+                    100.0f + index * 50.0f);
+            }
+            final Match match = new Match(roster, new BotRng(), BotSkill.DUMB,
+                Match.UNLIMITED_DEATHS);
+
+            int ticsToFirstDeath = -1;
+            for (int tic = 0; tic < BALANCE_RUN_TICS * 4; tic++)
+            {
+                tick(match, tic);
+                if (ticsToFirstDeath < 0 && match.playerDeaths() > 0)
+                {
+                    ticsToFirstDeath = tic;
+                }
+            }
+
+            assertThat(ticsToFirstDeath)
+                .as("the player never died at all — the opponents are scenery")
+                .isGreaterThan(0);
+            // Between ten and sixty seconds at 60 Hz. Wide bounds because this is
+            // a random process; the point is that standing still is punished on a
+            // timescale a player experiences as pressure, and that it is nowhere
+            // near the two and a half minutes the old 2 damage would have given.
+            assertThat(ticsToFirstDeath / TICS_PER_SECOND)
+                .as("death took %d tics, which is %d seconds",
+                    ticsToFirstDeath, ticsToFirstDeath / TICS_PER_SECOND)
+                .isBetween(10, 60);
+        }
+
+        @Test
+        @DisplayName("the room fires at about the rate it did under the old fixed cadence")
+        void shouldKeepTheRoomsRateOfFireWhenRandomised()
+        {
+            // The other half of the balance argument. The bots miss far more than
+            // they did, so the room has to still SOUND about as busy or the demo
+            // goes quiet — the noise is what tells the player they are in a fight.
+            // The old cadence produced a shot somewhere in the room every 21 tics;
+            // BotSkill.DUMB is tuned to land near that.
+            final Bot[] roster = new Bot[Match.DEFAULT_BOT_COUNT];
+            for (int index = 0; index < roster.length; index++)
+            {
+                roster[index] = sentryAt(Match.FIRST_BOT_ENTITY_ID + index, 200.0f);
+            }
+            // A death limit of one, so the run is not interrupted by respawns —
+            // the moment the player goes down the room stops firing, which would
+            // make the measurement about the respawn delay instead.
+            final Match match = new Match(roster, new BotRng(), BotSkill.DUMB, 1);
+
+            int tics = 0;
+            while (tics < BALANCE_RUN_TICS && match.playerDeaths() == 0)
+            {
+                tick(match, tics);
+                tics++;
+            }
+
+            final int ticsPerShot = tics / Math.max(1, match.botShotsFired());
+            assertThat(ticsPerShot)
+                .as("the room fired once every %d tics against the old cadence's 21",
+                    ticsPerShot)
+                .isBetween(10, 40);
         }
     }
 }

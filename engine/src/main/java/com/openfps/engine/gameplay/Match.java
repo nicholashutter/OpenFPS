@@ -129,29 +129,58 @@ public final class Match
     public static final int PLAYER_SHOT_DAMAGE = 34;
 
     /**
-     * Damage one bot shot does — <b>10</b>.
+     * Damage one bot shot does — <b>20</b>. Five hits to kill.
      *
-     * <p>Ten hits to kill the player, and <b>the number was re-derived when the
-     * bots stopped being able to aim.</b> It used to be 2, against opponents who
-     * hit every single shot inside {@link #BOT_RANGE_UNITS} on a fixed 150-tic
-     * cadence — a hit every 0.40 s with all seven in sight, measured, which at 2
-     * damage killed a motionless player in twenty seconds.</p>
+     * <p><b>The number was re-derived from scratch when the bots stopped being
+     * able to aim, and the old measurement is deleted rather than left to rot.</b>
+     * It used to be 2, against opponents who hit every single shot inside
+     * {@link #BOT_RANGE_UNITS} on a fixed 150-tic cadence — "a hit every 0.40 s
+     * with all seven in sight", which at 2 damage killed a motionless player in
+     * twenty seconds. Every clause of that described a bot that could shoot
+     * straight, and none of it is true any more.</p>
      *
-     * <p><b>That measurement is void and this one replaces it.</b> With
-     * {@link BotSkill#DUMB} the room still <i>fires</i> at very nearly the old
-     * rate — seven bots roll a shot roughly every 19 tics between them, against
-     * the old 21 — but only about one shot in eight lands at mid range, because
-     * a shot is now a scattered ray rather than a certainty.
-     * {@code MatchTest.Balance} measures the result in the real demo room with
-     * the player standing motionless at the spawn point, and pins it so this
-     * paragraph cannot go stale again.</p>
+     * <h2>The replacement measurement</h2>
      *
-     * <p>Ten also makes a single hit <b>legible</b>, which 2 never was: a tenth
-     * of the health bar is something a player notices and can attribute to the
-     * bot that just fired. The whole point of making the bots miss is that the
-     * shots which do land have to mean something.</p>
+     * <p>Taken from {@code MatchTest.Balance}, which pins it so this cannot go
+     * stale again: seven {@link BotSkill#DUMB} bots spread between 100 and 400
+     * units, all in line of sight, player standing motionless in the open — the
+     * worst position a player can put themselves in.</p>
+     *
+     * <pre>
+     *   the room fires once every       18 tics   (old fixed cadence: 21)
+     *   of those shots, landing          6 %
+     *   so a hit lands every           4.5 s
+     *   and a motionless player dies in 22 s      (old figure: 20 s)
+     * </pre>
+     *
+     * <p><b>Which is the whole point of the exercise: the room is as dangerous as
+     * it was, while missing 94% of what it fires.</b> The threat is unchanged and
+     * the <i>character</i> of it is completely different — it used to be an
+     * unavoidable trickle, and it is now a stream of near-misses with an
+     * occasional heavy hit in it. That is a fight a player can read and can do
+     * something about.</p>
+     *
+     * <p>The hit rate falls sharply with distance, which is a consequence of
+     * scattering the ray rather than rolling against the outcome, and is what
+     * makes closing on a bot a decision rather than a formality:</p>
+     *
+     * <pre>
+     *    80 units   100 %      300 units    5 %
+     *   150 units    29 %      460 units    2 %
+     *   200 units    20 %
+     * </pre>
+     *
+     * <p>Twenty rather than ten — which is where this landed first — because at
+     * ten the same motionless player survived <b>48 seconds</b>, and something
+     * that takes three quarters of a minute to kill you while you ignore it is
+     * scenery. Twenty also divides {@link #PLAYER_MAX_HEALTH} exactly, so "five
+     * hits" is a fact rather than a rounding, and it makes an individual hit
+     * <b>legible</b> in a way 2 never was: a fifth of the health bar is something
+     * a player notices and can attribute to the bot that just fired. The whole
+     * point of making the bots miss is that the shots which do land have to mean
+     * something.</p>
      */
-    public static final int BOT_SHOT_DAMAGE = 10;
+    public static final int BOT_SHOT_DAMAGE = 20;
 
     /**
      * How far a bot can shoot, in world units — <b>512</b>.

@@ -117,13 +117,19 @@ public final class BotSkill
      * The opponents the demo actually ships: inaccurate, slow, and occasionally
      * shooting at nothing.
      *
-     * <p>The numbers are chosen against each other rather than individually. The
-     * room's rate of fire is kept close to what it was — seven bots produce a
-     * shot roughly every 19 tics between them, against 21 under the old fixed
-     * cadence — so the demo still <i>sounds</i> the same, while the fraction of
-     * those shots that land falls from 100% to about one in eight at mid range.
-     * {@code Match.BOT_SHOT_DAMAGE} was raised to compensate; see its Javadoc
-     * for the measurement.</p>
+     * <p>The numbers are chosen against each other rather than individually, and
+     * the constraint they are solved under is that <b>the room must still sound
+     * as busy as it did</b>. The noise of return fire is what tells a player they
+     * are in a fight, and an opponent that misses is only an improvement if it is
+     * still shooting. Measured: seven bots produce a shot every <b>18</b> tics
+     * between them, against 21 under the old fixed cadence — so the demo sounds
+     * the same, while the fraction that lands falls from 100% to <b>20%</b> at
+     * 200 units and 6% averaged over the room.</p>
+     *
+     * <p>{@code Match.BOT_SHOT_DAMAGE} was raised from 2 to 20 against those
+     * figures, which leaves the room as dangerous as it was to a player who
+     * stands still — 22 seconds rather than 20. See its Javadoc for the whole
+     * measurement, and {@code MatchTest.Balance} for the test that pins it.</p>
      */
     public static final BotSkill DUMB = new BotSkill(25, 45, 90, 0.244f, 150, 24);
 
