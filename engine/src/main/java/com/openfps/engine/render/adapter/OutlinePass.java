@@ -9,13 +9,41 @@ import com.openfps.engine.core.pool.I_ParallelJob;
 import com.openfps.engine.core.pool.I_ThreadPoolPort;
 
 /**
- * R_ Draws a wireframe edge highlight over every tagged entity, from the
- * per-pixel entity-id and depth buffers.
+ * R_ Draws a wireframe edge highlight over <b>one</b> tagged entity — the one
+ * the player is aiming at — from the per-pixel entity-id and depth buffers.
  *
  * Render adapter — it reads {@link Framebuffer#entityIdBuffer()} and
  * {@link Framebuffer#depthBuffer()} and writes
  * {@link Framebuffer#colorBuffer()}, and imports nothing outside this package
  * but the worker pool.
+ *
+ * <h2>One entity, not all of them — the second half of the same bug report</h2>
+ *
+ * <p>This pass used to mark every tagged entity in the frame, and the shape of
+ * the mark was fixed before its <i>scope</i> was. Both were the same complaint:
+ * a permanent mark on an opponent reads as a status the opponent is in.
+ * Thinning the band to a hairline stopped it reading as damage; it did not stop
+ * seven simultaneous hairlines reading as seven simultaneous somethings, in a
+ * room where nothing had happened to any of them.</p>
+ *
+ * <p>So the mark now means what a mark on exactly one body can mean:
+ * <b>this is the one you are pointing at</b>. {@code SoftwareRenderPort}
+ * samples the id buffer at the point of aim once per frame and passes the id
+ * here; every other entity is skipped by the same {@code continue} that skips
+ * the background. A highlight that appears and disappears as the player sweeps
+ * across the room is unmistakably about the player's aim rather than about the
+ * body, which is the distinction the earlier versions could not make.</p>
+ *
+ * <p>It also costs less than it did: the neighbourhood test now runs for the
+ * pixels of one body rather than of all seven, and a frame with nothing under
+ * the crosshair is not dispatched at all.</p>
+ *
+ * <p>{@link #draw(Framebuffer, I_ThreadPoolPort)} still marks everything
+ * tagged. That overload is not production — it is the reference the
+ * single-subject path is compared against, and it is what the tests that are
+ * about <i>edge finding</i> rather than about <i>scope</i> use, so those tests
+ * do not have to name a subject to assert that a seam appears between two
+ * touching bodies.</p>
  *
  * <h2>A wireframe, not a glow — and that distinction is a bug report</h2>
  *
@@ -186,6 +214,19 @@ public final class OutlinePass
      */
     public static final int OUTLINE_COLOR = Rgba.pack(0, 255, 255, 255);
 
+    /**
+     * Subject meaning "every tagged entity", the behaviour this pass used to
+     * have unconditionally.
+     *
+     * <p>{@link Integer#MIN_VALUE} rather than {@link Scene#UNTAGGED}, and the
+     * difference is load-bearing: {@code UNTAGGED} is the id the buffer holds
+     * where there is <i>nothing</i>, so a subject of {@code UNTAGGED} has to
+     * mean "mark nothing at all" — which is exactly what a frame with the
+     * crosshair on a wall asks for. Overloading the two onto one value would
+     * make an empty sky outline the whole room.</p>
+     */
+    public static final int EVERY_TAGGED_ENTITY = Integer.MIN_VALUE;
+
     /** The tile pass, one index per tile. Held once; never allocated per frame. */
     private final I_ParallelJob tileJob = this::runTile;
 
@@ -212,6 +253,13 @@ public final class OutlinePass
 
     /** Cached framebuffer geometry. MUTABLE: refreshed per frame. */
     private volatile int strideInPixels;
+
+    /**
+     * Which entity this frame marks, or {@link #EVERY_TAGGED_ENTITY}.
+     * MUTABLE: rebound by {@link #draw} before any tile job reads it, on the
+     * thread that then dispatches them.
+     */
+    private volatile int subject = EVERY_TAGGED_ENTITY;
 
     /**
      * Creates an outline pass with the default thickness and colour.
@@ -245,12 +293,11 @@ public final class OutlinePass
     }
 
     /**
-     * Paints an outline into the colour buffer wherever the id buffer changes
-     * value.
+     * Paints an outline around every tagged entity in the frame.
      *
-     * <p>Call after the world pass has finished and before the viewmodel pass
-     * clears depth — see the class Javadoc for why that position is not
-     * negotiable.</p>
+     * <p>The reference behaviour, and no longer what the game does — see the
+     * class Javadoc. It is exactly
+     * {@code draw(target, pool, EVERY_TAGGED_ENTITY)}.</p>
      *
      * @param target the framebuffer, whose id buffer must already be complete;
      *     must be READY
@@ -261,6 +308,34 @@ public final class OutlinePass
      */
     public void draw(final Framebuffer target, final I_ThreadPoolPort pool)
     {
+        draw(target, pool, EVERY_TAGGED_ENTITY);
+    }
+
+    /**
+     * Paints an outline into the colour buffer wherever one entity's pixels
+     * meet something that is not that entity, or fold away from themselves.
+     *
+     * <p>Call after the world pass has finished and before the viewmodel pass
+     * clears depth — see the class Javadoc for why that position is not
+     * negotiable.</p>
+     *
+     * <p>A subject of {@link Scene#UNTAGGED} paints nothing, which is the
+     * honest answer when the player is aiming at a wall; the caller may skip
+     * the call entirely in that case and usually does, because the scan is the
+     * cost rather than the paint.</p>
+     *
+     * @param target the framebuffer, whose id buffer must already be complete;
+     *     must be READY
+     * @param pool the worker pool, or null to run every tile on the calling
+     *     thread — the serial reference the parallel result is compared against
+     * @param subjectEntityId the one entity to mark, or
+     *     {@link #EVERY_TAGGED_ENTITY} for all of them
+     * @throws IllegalArgumentException if the framebuffer is null
+     * @throws IllegalStateException if the framebuffer has no buffers
+     */
+    public void draw(final Framebuffer target, final I_ThreadPoolPort pool,
+        final int subjectEntityId)
+    {
         if (target == null)
         {
             throw new IllegalArgumentException("framebuffer must not be null");
@@ -269,6 +344,9 @@ public final class OutlinePass
         {
             throw new IllegalStateException("Framebuffer is " + target.state() + ", not READY");
         }
+        // After the validation, so a refused call leaves the pass exactly as it
+        // was rather than half-rebound to a frame it never drew.
+        this.subject = subjectEntityId;
         this.framebuffer = target;
         this.ids = target.entityIdBuffer();
         this.depths = target.depthBuffer();
@@ -301,6 +379,17 @@ public final class OutlinePass
         return outlineColor;
     }
 
+    /**
+     * Returns the entity the last {@link #draw} marked, or
+     * {@link #EVERY_TAGGED_ENTITY}.
+     *
+     * @return the subject of the most recent pass
+     */
+    public int subjectEntityId()
+    {
+        return subject;
+    }
+
     /** Returns a debug rendering of this pass's configuration. */
     @Override
     public String toString()
@@ -326,6 +415,10 @@ public final class OutlinePass
         final int maxX = target.tileMaxX(tile);
         final int maxY = target.tileMaxY(tile);
         final int paint = outlineColor;
+        final int marked = subject;
+        // Hoisted, so the per-pixel test is one integer compare in both modes
+        // rather than a compare against a sentinel plus a compare against an id.
+        final boolean everything = marked == EVERY_TAGGED_ENTITY;
 
         for (int py = minY; py <= maxY; py++)
         {
@@ -335,6 +428,14 @@ public final class OutlinePass
                 final int id = idBuffer[rowBase + px];
                 if (id == Scene.UNTAGGED)
                 {
+                    continue;
+                }
+                if (!everything && id != marked)
+                {
+                    // Someone else's body. It still counts as "different" to
+                    // the subject's own edge test below, so the seam between
+                    // two touching opponents is still found — it is simply
+                    // drawn on the subject's side of the boundary only.
                     continue;
                 }
                 if (onEdge(idBuffer, depthBuffer, px, py, id, depthBuffer[rowBase + px]))

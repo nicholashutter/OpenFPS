@@ -21,11 +21,13 @@ import org.junit.jupiter.params.provider.CsvSource;
 /**
  * Tests for {@link Crosshair}.
  *
- * The two that carry the design are {@link Centring}, which pins the
- * even-dimension answer as exact mirror symmetry rather than as a tolerance,
- * and {@link Readability}, which asserts that no core pixel ever touches the
- * background — the property the whole green-inside-black scheme exists to
- * provide.
+ * The three that carry the design are {@link Centring}, which pins the
+ * even-dimension answer as exact mirror symmetry rather than as a tolerance;
+ * {@link Readability}, which asserts that no core pixel ever touches the
+ * background — the property the whole core-inside-black scheme exists to
+ * provide; and {@link EnemyState}, which asserts that the white-to-red change
+ * is one a player could actually see rather than merely one the constants
+ * differ by.
  */
 @DisplayName("Crosshair")
 final class CrosshairTest
@@ -39,11 +41,24 @@ final class CrosshairTest
 
     private static Framebuffer drawn(final int width, final int height)
     {
+        return drawn(width, height, false);
+    }
+
+    private static Framebuffer drawn(final int width, final int height,
+        final boolean enemyUnderAim)
+    {
         final Framebuffer fb = new Framebuffer();
         fb.init(width, height);
         fb.clearColor(BACKGROUND);
-        Crosshair.draw(fb);
+        Crosshair.draw(fb, enemyUnderAim);
         return fb;
+    }
+
+    private static double luminance(final int rgba)
+    {
+        return 0.2126 * Rgba.red(rgba)
+            + 0.7152 * Rgba.green(rgba)
+            + 0.0722 * Rgba.blue(rgba);
     }
 
     // Inclusive bounding box of everything that is not the background, as
@@ -190,12 +205,12 @@ final class CrosshairTest
     class Readability
     {
         @Test
-        @DisplayName("paints both the green core and the black outline, not just one of them")
+        @DisplayName("paints both the white core and the black outline, not just one of them")
         void shouldPaintBothColours()
         {
             final Framebuffer fb = drawn(1280, 720);
             assertThat(countOf(fb, Crosshair.CORE_COLOR))
-                .as("green core pixels").isGreaterThan(0);
+                .as("white core pixels").isGreaterThan(0);
             assertThat(countOf(fb, Crosshair.OUTLINE_COLOR))
                 .as("black outline pixels").isGreaterThan(0);
         }
@@ -238,19 +253,26 @@ final class CrosshairTest
         }
 
         @Test
-        @DisplayName("uses a core hue the demo scene contains no pixel of, so it cannot be "
-            + "confused with the orange weapon")
-        void shouldUseAHueAbsentFromTheScene()
+        @DisplayName("the neutral core is brighter than every surface in the room")
+        void shouldOutshineTheWholeRoom()
         {
-            // Every demo surface is blue-grey or orange-to-amber; a sweep of
-            // all 230,400 pixels of shot 01-down-room found zero in which
-            // green was the dominant channel. That is the property being
-            // relied on, so the core must actually be green-dominant.
-            assertThat(Rgba.green(Crosshair.CORE_COLOR))
-                .isGreaterThan(Rgba.red(Crosshair.CORE_COLOR))
-                .isGreaterThan(Rgba.blue(Crosshair.CORE_COLOR));
+            // 201 is the amber crate decal, the brightest room surface
+            // measured. The neutral core has to be above it, because it is the
+            // half of the pair that carries the contrast against dark
+            // backgrounds and it cannot do that from inside the room's range.
+            assertThat(luminance(Crosshair.CORE_COLOR)).isGreaterThan(201.0);
             assertThat(Rgba.alpha(Crosshair.CORE_COLOR)).isEqualTo(0xFF);
+            assertThat(Rgba.alpha(Crosshair.ENEMY_CORE_COLOR)).isEqualTo(0xFF);
             assertThat(Rgba.alpha(Crosshair.OUTLINE_COLOR)).isEqualTo(0xFF);
+        }
+
+        @Test
+        @DisplayName("the enemy core is unmistakably red — red dominant, and nothing else lit")
+        void shouldUseARedEnemyCore()
+        {
+            assertThat(Rgba.red(Crosshair.ENEMY_CORE_COLOR)).isEqualTo(0xFF);
+            assertThat(Rgba.green(Crosshair.ENEMY_CORE_COLOR)).isZero();
+            assertThat(Rgba.blue(Crosshair.ENEMY_CORE_COLOR)).isZero();
         }
 
         @Test
@@ -266,13 +288,6 @@ final class CrosshairTest
                 .isGreaterThan(720 / 6);
         }
 
-        private double luminance(final int rgba)
-        {
-            return 0.2126 * Rgba.red(rgba)
-                + 0.7152 * Rgba.green(rgba)
-                + 0.0722 * Rgba.blue(rgba);
-        }
-
         private void assertNeighbourIsReticle(final Framebuffer fb, final int x, final int y)
         {
             if (x < 0 || x >= fb.width() || y < 0 || y >= fb.height())
@@ -282,6 +297,169 @@ final class CrosshairTest
             assertThat(fb.pixel(x, y))
                 .as("neighbour (%d,%d) of a core pixel", x, y)
                 .isIn(Crosshair.CORE_COLOR, Crosshair.OUTLINE_COLOR);
+        }
+    }
+
+    @Nested
+    @DisplayName("white normally, red over an enemy")
+    class EnemyState
+    {
+        /**
+         * Smallest luminance gap between the two states that counts as
+         * perceptible, out of 255.
+         *
+         * <p>Deliberately a large number. The bug this whole class of test
+         * exists to catch is an effect that is drawn perfectly and is ten
+         * levels from what it sits on — every test passed and the player could
+         * not see it. Fifty levels is roughly a fifth of the range and is well
+         * clear of anything a display or a viewer could lose.</p>
+         */
+        private static final double PERCEPTIBLE_LUMINANCE_GAP = 50.0;
+
+        @Test
+        @DisplayName("the core is red over an enemy and white otherwise — no white left over")
+        void shouldSwapTheCoreColourEntirely()
+        {
+            final Framebuffer clear = drawn(1280, 720, false);
+            final Framebuffer aimed = drawn(1280, 720, true);
+
+            assertThat(countOf(clear, Crosshair.CORE_COLOR)).isGreaterThan(0);
+            assertThat(countOf(clear, Crosshair.ENEMY_CORE_COLOR)).isZero();
+            assertThat(countOf(aimed, Crosshair.ENEMY_CORE_COLOR)).isGreaterThan(0);
+            assertThat(countOf(aimed, Crosshair.CORE_COLOR))
+                .as("no neutral core pixel may survive into the enemy state")
+                .isZero();
+        }
+
+        @Test
+        @DisplayName("the change is one a player can SEE — 200 levels of luminance, not ten")
+        void shouldChangePerceptibly()
+        {
+            // The assertion that matters, and the one an earlier effect in this
+            // codebase did not have: two constants being different is not the
+            // same as two states looking different. Both are measured on the
+            // same scale the scene was measured on.
+            final double neutral = luminance(Crosshair.CORE_COLOR);
+            final double enemy = luminance(Crosshair.ENEMY_CORE_COLOR);
+            assertThat(Math.abs(neutral - enemy))
+                .as("white-to-red luminance drop")
+                .isGreaterThan(PERCEPTIBLE_LUMINANCE_GAP * 3.0);
+
+            // And it survives having no colour discrimination at all, which a
+            // green-to-red reticle would not: the luminance alone carries it.
+            assertThat(neutral).isGreaterThan(enemy + PERCEPTIBLE_LUMINANCE_GAP);
+        }
+
+        @Test
+        @DisplayName("the change covers a meaningful area, not a handful of pixels")
+        void shouldChangeEnoughPixelsToNotice()
+        {
+            final Framebuffer clear = drawn(1280, 720, false);
+            final Framebuffer aimed = drawn(1280, 720, true);
+
+            // MUTABLE local — pixels that differ between the two states.
+            int changed = 0;
+            for (int y = 0; y < clear.height(); y++)
+            {
+                for (int x = 0; x < clear.width(); x++)
+                {
+                    if (clear.pixel(x, y) != aimed.pixel(x, y))
+                    {
+                        changed++;
+                    }
+                }
+            }
+            // The core is 7 px thick over four arms 80 px long at 720p, so a
+            // little over 2,200 pixels change. A floor of a thousand catches a
+            // future edit that recolours, say, only the horizontal bar.
+            assertThat(changed).isGreaterThan(1000);
+        }
+
+        @Test
+        @DisplayName("only the fill changes: the figure's geometry is identical in both states")
+        void shouldKeepTheFigureIdentical()
+        {
+            // What makes it read as a STATE rather than as a different reticle.
+            // Every pixel that is background in one state is background in the
+            // other, and every outline pixel is in the same place.
+            final Framebuffer clear = drawn(1280, 720, false);
+            final Framebuffer aimed = drawn(1280, 720, true);
+
+            for (int y = 0; y < clear.height(); y++)
+            {
+                for (int x = 0; x < clear.width(); x++)
+                {
+                    final boolean paintedClear = clear.pixel(x, y) != BACKGROUND;
+                    final boolean paintedAimed = aimed.pixel(x, y) != BACKGROUND;
+                    assertThat(paintedAimed)
+                        .as("painted at (%d,%d)", x, y)
+                        .isEqualTo(paintedClear);
+                    if (clear.pixel(x, y) == Crosshair.OUTLINE_COLOR
+                        || aimed.pixel(x, y) == Crosshair.OUTLINE_COLOR)
+                    {
+                        assertThat(aimed.pixel(x, y)).isEqualTo(clear.pixel(x, y));
+                    }
+                }
+            }
+        }
+
+        @Test
+        @DisplayName("the red core is still fully enclosed by the black outline")
+        void shouldEncloseTheRedCoreToo()
+        {
+            // The red core's own luminance is 54, which is inside the room's
+            // range and well inside the character bodies it appears over. The
+            // outline is the whole of what keeps it legible there, so the
+            // enclosure property has to hold in this state as well.
+            final Framebuffer fb = drawn(1280, 720, true);
+            for (int y = 0; y < fb.height(); y++)
+            {
+                for (int x = 0; x < fb.width(); x++)
+                {
+                    if (fb.pixel(x, y) != Crosshair.ENEMY_CORE_COLOR)
+                    {
+                        continue;
+                    }
+                    assertEnclosed(fb, x - 1, y);
+                    assertEnclosed(fb, x + 1, y);
+                    assertEnclosed(fb, x, y - 1);
+                    assertEnclosed(fb, x, y + 1);
+                }
+            }
+        }
+
+        @Test
+        @DisplayName("the one-argument draw is the neutral state, not a third one")
+        void shouldDefaultToNeutral()
+        {
+            final Framebuffer explicit = drawn(1280, 720, false);
+            final Framebuffer implicit = drawn(1280, 720);
+            for (int y = 0; y < explicit.height(); y++)
+            {
+                for (int x = 0; x < explicit.width(); x++)
+                {
+                    assertThat(implicit.pixel(x, y)).isEqualTo(explicit.pixel(x, y));
+                }
+            }
+        }
+
+        @Test
+        @DisplayName("coreColor names the same two constants the drawing uses")
+        void shouldExposeTheCoreColours()
+        {
+            assertThat(Crosshair.coreColor(false)).isEqualTo(Crosshair.CORE_COLOR);
+            assertThat(Crosshair.coreColor(true)).isEqualTo(Crosshair.ENEMY_CORE_COLOR);
+        }
+
+        private void assertEnclosed(final Framebuffer fb, final int x, final int y)
+        {
+            if (x < 0 || x >= fb.width() || y < 0 || y >= fb.height())
+            {
+                return;
+            }
+            assertThat(fb.pixel(x, y))
+                .as("neighbour (%d,%d) of a red core pixel", x, y)
+                .isIn(Crosshair.ENEMY_CORE_COLOR, Crosshair.OUTLINE_COLOR);
         }
     }
 

@@ -233,7 +233,17 @@ final class DemoGameplayPortTest
                 port.tick(tic);
             }
 
-            assertThat(player.yawRadians()).isCloseTo(50 * perTic, within(EPSILON));
+            // Fifty rightward nudges, and a rightward turn DECREASES this angle
+            // — PlayerController.applyLook subtracts the delta, because its yaw
+            // sweeps +z toward +x and that is a left turn. Wrapped into
+            // [0, 2pi), so the expectation is a whole turn less the total.
+            //
+            // This test is about the port latching and forwarding every tic's
+            // delta exactly once, not about which way that is; the direction is
+            // pinned against a strafe step in PlayerControllerTest.LookDirection,
+            // because an angle compared with another angle cannot see a mirror.
+            assertThat(player.yawRadians())
+                .isCloseTo(PlayerController.FULL_TURN_RADIANS - 50 * perTic, within(EPSILON));
         }
 
         @Test

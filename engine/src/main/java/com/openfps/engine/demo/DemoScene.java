@@ -516,23 +516,42 @@ public final class DemoScene
      * bot's model follows its patrol. It is the one piece of the scene that is
      * <b>not</b> built once.</p>
      *
-     * <p>A dead bot is toppled rather than removed. Removing it would mean
-     * rebuilding the whole {@link Scene} — texture table, stream offsets, entity
-     * ids, buffer sizing — for a set of instances that has not otherwise
-     * changed, and a body left standing would be indistinguishable from one that
-     * was never hit. Falling over costs one transform and reads instantly.</p>
+     * <h2>A dead bot is hidden, not removed and no longer toppled</h2>
+     *
+     * <p><b>Not removed</b>, because removing an instance means rebuilding the
+     * whole {@link Scene} — texture table, stream offsets, entity ids, buffer
+     * sizing — for a set of instances that has not otherwise changed. The scene
+     * is immutable and that is load-bearing; see
+     * {@code SoftwareRenderPort.setWorldTransform}.</p>
+     *
+     * <p><b>Not toppled either, which it used to be.</b> Laying the body flat
+     * was one transform and read instantly, and it was still a body: it stayed
+     * in the room, it kept writing entity ids, so the crosshair went red over a
+     * corpse and the wireframe marked it as the thing you were aiming at, while
+     * {@code Match} had already stopped treating it as a target. A mark that
+     * says "you are pointing at this one" pointing at something you cannot
+     * shoot is worse than no mark. The body now goes away, which is what
+     * "killed" means everywhere else in the genre.</p>
+     *
+     * <p>{@link DemoEffects#HIDDEN} is the established way to hide a
+     * pre-allocated instance here, and it is referenced rather than copied: a
+     * degenerate transform collapses every vertex onto one point, so every
+     * triangle has zero screen area and {@code Rasterizer} rejects it before it
+     * reaches a pixel — no colour, no depth, and <b>no entity id</b>, which is
+     * the part that matters for the crosshair. It costs one reference store and
+     * changes nothing about the pass structure.</p>
      *
      * @param bot the bot to place; must not be null
-     * @return its model-to-world transform this tic
+     * @return its model-to-world transform this tic, or {@link DemoEffects#HIDDEN}
+     *     if it is dead
      */
     public static Mat4 botPlacement(final Bot bot)
     {
-        if (bot.isAlive())
+        if (!bot.isAlive())
         {
-            return placement(bot.positionX(), bot.positionY(), bot.positionZ(),
-                bot.yawRadians(), CHARACTER_WORLD_SCALE);
+            return DemoEffects.HIDDEN;
         }
-        return fallenPlacement(bot.positionX(), bot.positionY(), bot.positionZ(),
+        return placement(bot.positionX(), bot.positionY(), bot.positionZ(),
             bot.yawRadians(), CHARACTER_WORLD_SCALE);
     }
 
@@ -738,72 +757,6 @@ public final class DemoScene
             cos, 0.0f, sin, x,
             0.0f, scale, 0.0f, y,
             -sin, 0.0f, cos, z,
-            0.0f, 0.0f, 0.0f, 1.0f,
-        });
-    }
-
-    /**
-     * Builds the placement of a body that has fallen over.
-     *
-     * <p>How a kill is made visible. The alternative — removing the instance —
-     * means rebuilding the whole {@link Scene}: texture table, stream offsets,
-     * entity ids and buffer sizing, all re-derived because one body stopped
-     * existing. This costs one transform, and a body on the floor is a clearer
-     * statement than a body that vanished.</p>
-     *
-     * <p><b>The rotation is about the model's own +x axis, applied before the
-     * yaw</b>, so the body falls face-first along whatever direction it was
-     * looking rather than always toward world north. The composition is
-     * {@code T . R_y(yaw) . R_x(+90) . S(scale)}, whose columns are the images
-     * of the model's own axes:</p>
-     *
-     * <pre>
-     *   model +x -&gt; ( cos, 0, -sin)   across the body, unchanged by the pitch
-     *   model +y -&gt; ( sin, 0,  cos)   the head, now along the former heading
-     *   model +z -&gt; (   0, -1,    0)  the face, now pointing at the floor
-     * </pre>
-     *
-     * <p>The sign of that pitch is the whole difference between falling forwards
-     * and falling backwards, and it is invisible in the matrix: {@code R_x(-90)}
-     * is just as valid a rotation, has the same determinant, and drops every
-     * body the wrong way. The head landing along the heading is what says it is
-     * right.</p>
-     *
-     * <p>Both factors are rotations, so the determinant is {@code scale^3} and
-     * stays positive — {@link Scene} rejects a negative one outright rather than
-     * render an instance inside-out, so this is a build failure waiting for
-     * anyone who reaches for a {@code scale(1, -1, 1)} instead.</p>
-     *
-     * <p>The body is also raised by half its own height, because a model whose
-     * origin is at its feet, rotated flat, ends up with half its bulk below the
-     * floor. {@code CHARACTER_MODEL_HEIGHT * scale * 0.5} is exactly the
-     * correction, and it is derived from the same constant the standing scale
-     * uses rather than eyeballed.</p>
-     *
-     * @param x world x translation
-     * @param y world y translation — the floor the body lies on
-     * @param z world z translation
-     * @param yawRadians the heading the body was facing when it fell
-     * @param scale uniform scale; must be positive
-     * @return a placement lying face-down along the heading
-     */
-    public static Mat4 fallenPlacement(final float x, final float y, final float z,
-        final float yawRadians, final float scale)
-    {
-        if (!(scale > 0.0f))
-        {
-            throw new IllegalArgumentException("scale must be positive, got " + scale);
-        }
-        final float sin = (float) StrictMath.sin(yawRadians);
-        final float cos = (float) StrictMath.cos(yawRadians);
-        final float lift = y + CHARACTER_MODEL_HEIGHT * scale * 0.5f;
-        // R_y(yaw) . R_x(+90), scaled. Determinant is scale^3 — both factors are
-        // rotations, so nothing here is a reflection and Scene will accept it.
-        return Mat4.ofRowMajor(new float[]
-        {
-            cos * scale, sin * scale, 0.0f, x,
-            0.0f, 0.0f, -scale, lift,
-            -sin * scale, cos * scale, 0.0f, z,
             0.0f, 0.0f, 0.0f, 1.0f,
         });
     }

@@ -67,10 +67,22 @@ public interface I_PlayerInput
     /**
      * Returns this tic's accumulated yaw change, in radians.
      *
-     * Positive turns from world +z toward world +x, which is the direction the
-     * controller's yaw angle increases in.
+     * <p><b>Positive turns the view to the player's RIGHT</b>, matching
+     * {@code InputState}'s convention exactly — this is an intent, expressed the
+     * way a player would describe it, and it is the same number on a mouse, a
+     * thumbstick and a replay.</p>
      *
-     * @return the yaw delta in radians
+     * <p><b>It is NOT the direction the controller's yaw angle increases in, and
+     * that mismatch is real rather than sloppy.</b> The controller's yaw sweeps
+     * from world +z toward world +x, a right-handed rotation about +y, which
+     * turns the player <i>left</i>. So {@code PlayerController} subtracts this
+     * value — the single conversion between the input layer's convention and the
+     * world's, and the sign that made the horizontal axis play inverted. The
+     * input layer must not pre-negate to compensate: doing that at one port
+     * moved the fault to the other platform twice over, because both platforms
+     * share the consumer. See {@code PlayerController.applyLook}.</p>
+     *
+     * @return the yaw delta in radians, positive to the right
      */
     float yawDelta();
 

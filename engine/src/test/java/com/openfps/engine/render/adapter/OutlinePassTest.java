@@ -118,6 +118,145 @@ final class OutlinePassTest
     }
 
     @Nested
+    @DisplayName("subject — one entity, not all of them")
+    class Subject
+    {
+        @Test
+        @DisplayName("naming one of two entities marks that one and leaves the other bare")
+        void shouldMarkOnlyTheSubject()
+        {
+            // The change the player asked for: the mark says "you are pointing
+            // at this one", so the body beside it must carry nothing at all —
+            // not a thinner line, not a partial one.
+            final Framebuffer fb = frame();
+            box(fb, PAIR_MIN_X, BOX_MIN_Y, PAIR_SPLIT_X, BOX_MAX_Y, ID_A);
+            box(fb, PAIR_SPLIT_X + 1, BOX_MIN_Y, PAIR_MAX_X, BOX_MAX_Y, ID_B);
+            defaultPass().draw(fb, null, ID_A);
+
+            assertThat(painted(fb, PAIR_MIN_X, MID_Y))
+                .as("the subject's outer silhouette")
+                .isTrue();
+            assertThat(painted(fb, PAIR_SPLIT_X, MID_Y))
+                .as("the subject's edge against its neighbour")
+                .isTrue();
+            assertThat(painted(fb, PAIR_SPLIT_X + 1, MID_Y))
+                .as("the neighbour's own edge is NOT drawn")
+                .isFalse();
+            assertThat(painted(fb, PAIR_MAX_X, MID_Y))
+                .as("nor is any part of the neighbour")
+                .isFalse();
+        }
+
+        @Test
+        @DisplayName("the whole of the non-subject entity is left untouched, every pixel")
+        void shouldLeaveTheNonSubjectCompletelyUnpainted()
+        {
+            // Sweeping the whole body rather than sampling two pixels of it:
+            // "mostly not outlined" is not a state the eye distinguishes from
+            // "outlined", and a bug that left one edge on would pass the
+            // spot checks above.
+            final Framebuffer fb = frame();
+            box(fb, PAIR_MIN_X, BOX_MIN_Y, PAIR_SPLIT_X, BOX_MAX_Y, ID_A);
+            box(fb, PAIR_SPLIT_X + 1, BOX_MIN_Y, PAIR_MAX_X, BOX_MAX_Y, ID_B);
+            defaultPass().draw(fb, null, ID_A);
+
+            for (int y = BOX_MIN_Y; y <= BOX_MAX_Y; y++)
+            {
+                for (int x = PAIR_SPLIT_X + 1; x <= PAIR_MAX_X; x++)
+                {
+                    assertThat(painted(fb, x, y))
+                        .as("pixel (%d,%d) of the entity that is not the subject", x, y)
+                        .isFalse();
+                }
+            }
+        }
+
+        @Test
+        @DisplayName("a subject of UNTAGGED — the crosshair on a wall — paints nothing at all")
+        void shouldPaintNothingWhenNothingIsAimedAt()
+        {
+            final Framebuffer fb = frame();
+            box(fb, BOX_MIN_X, BOX_MIN_Y, BOX_MAX_X, BOX_MAX_Y, ID_A);
+            defaultPass().draw(fb, null, Scene.UNTAGGED);
+
+            assertThat(anyPainted(fb))
+                .as("UNTAGGED must mean 'nobody', never 'everybody'")
+                .isFalse();
+        }
+
+        @Test
+        @DisplayName("a subject nothing in the frame carries paints nothing")
+        void shouldPaintNothingForAnAbsentSubject()
+        {
+            // An entity that walked behind a wall between the sample and the
+            // pass. Silently marking somebody else would be worse than nothing.
+            final Framebuffer fb = frame();
+            box(fb, BOX_MIN_X, BOX_MIN_Y, BOX_MAX_X, BOX_MAX_Y, ID_A);
+            defaultPass().draw(fb, null, ID_C);
+
+            assertThat(anyPainted(fb)).isFalse();
+        }
+
+        @Test
+        @DisplayName("EVERY_TAGGED_ENTITY is the two-argument behaviour, bit for bit")
+        void shouldReproduceTheAllEntitiesBehaviour()
+        {
+            final Framebuffer both = frame();
+            box(both, PAIR_MIN_X, BOX_MIN_Y, PAIR_SPLIT_X, BOX_MAX_Y, ID_A);
+            box(both, PAIR_SPLIT_X + 1, BOX_MIN_Y, PAIR_MAX_X, BOX_MAX_Y, ID_B);
+            defaultPass().draw(both, null);
+
+            final Framebuffer sentinel = frame();
+            box(sentinel, PAIR_MIN_X, BOX_MIN_Y, PAIR_SPLIT_X, BOX_MAX_Y, ID_A);
+            box(sentinel, PAIR_SPLIT_X + 1, BOX_MIN_Y, PAIR_MAX_X, BOX_MAX_Y, ID_B);
+            defaultPass().draw(sentinel, null, OutlinePass.EVERY_TAGGED_ENTITY);
+
+            assertThat(sentinel.colorBuffer()).isEqualTo(both.colorBuffer());
+        }
+
+        @Test
+        @DisplayName("the sentinel cannot collide with a real entity id")
+        void shouldKeepTheSentinelOutOfTheIdSpace()
+        {
+            // Scene.UNTAGGED and a bot id are both reachable values; the
+            // sentinel must be neither, or aiming at nothing would outline
+            // everything.
+            assertThat(OutlinePass.EVERY_TAGGED_ENTITY).isNotEqualTo(Scene.UNTAGGED);
+            assertThat(OutlinePass.EVERY_TAGGED_ENTITY).isNegative();
+        }
+
+        @Test
+        @DisplayName("the subject a pass last drew is reported back")
+        void shouldReportItsSubject()
+        {
+            final OutlinePass pass = defaultPass();
+            final Framebuffer fb = frame();
+            box(fb, BOX_MIN_X, BOX_MIN_Y, BOX_MAX_X, BOX_MAX_Y, ID_A);
+
+            pass.draw(fb, null, ID_A);
+            assertThat(pass.subjectEntityId()).isEqualTo(ID_A);
+            pass.draw(fb, null);
+            assertThat(pass.subjectEntityId()).isEqualTo(OutlinePass.EVERY_TAGGED_ENTITY);
+        }
+
+        // Whether the pass painted anywhere in the visible rectangle.
+        private boolean anyPainted(final Framebuffer fb)
+        {
+            for (int y = 0; y < fb.height(); y++)
+            {
+                for (int x = 0; x < fb.width(); x++)
+                {
+                    if (painted(fb, x, y))
+                    {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+    }
+
+    @Nested
     @DisplayName("silhouettes")
     class Silhouettes
     {
