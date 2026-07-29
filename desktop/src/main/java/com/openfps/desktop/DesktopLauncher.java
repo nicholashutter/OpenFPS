@@ -201,6 +201,15 @@ public final class DesktopLauncher
             AdapterFactorySelector.create(HalBackend.DESKTOP), window);
         final RendererHolder holder = new RendererHolder();
         final GameConfig config = GameConfig.unbounded(rate);
+        // A gamepad's look stick reports a RATE — "keep turning at this speed" —
+        // and a rate is not an angle until something supplies the duration. The
+        // launcher is the only object that knows the configured frame rate, so
+        // the launcher is who says. Without this the pad would still work, at
+        // 60 Hz sensitivity regardless of the real rate: at --fps=120 every turn
+        // would be half as fast as intended and at 30 twice. Nothing else in the
+        // input path cares, because a mouse delta is a displacement that has
+        // already happened.
+        hal.inputPort().setTicRate(rate.fps());
         // MUTABLE: assigned once on this thread by the factory below, before
         // the frame loop that reads it starts. There is no race — the engine
         // bootstrap has returned by then.
