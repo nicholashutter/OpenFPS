@@ -108,9 +108,18 @@ import java.util.Arrays;
  *       same pixels is a drop of 201 luminance levels together with a jump from
  *       zero saturation to full. What a player perceives is the change, and
  *       that is the largest change this figure can make without moving.</li>
- *   <li><b>{@code OutlinePass} paints the same body cyan</b>, which is red's
- *       exact complement. The two marks that both mean "this one" are 180
- *       degrees apart in hue and cannot be mistaken for each other.</li>
+ *   <li><b>{@code OutlinePass} paints the same body in this same red, keyed with
+ *       this same black</b>, on the same frame and off the same sample. It used
+ *       to paint it cyan, and this Javadoc used to argue that a complementary
+ *       hue was the point — that the two marks were 180 degrees apart and so
+ *       could not be confused. That was backwards: they are not two marks to
+ *       tell apart, they are one fact about one body, and giving the fact two
+ *       hues taught a player that hue means nothing in particular. What pays for
+ *       the red core now is <b>redundancy of position</b>: the same instant that
+ *       the reticle changes at the centre of the screen, the body under it gains
+ *       a red-and-black wireframe. A player who loses the core against a red
+ *       shirt has not lost the signal, because the signal is also drawn round
+ *       the shirt.</li>
  * </ul>
  *
  * <p><b>White to red also survives colour blindness, and green to red would

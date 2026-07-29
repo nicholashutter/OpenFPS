@@ -706,10 +706,11 @@ final class SoftwareRenderPortTest
             final int[] frame = copy(port);
 
             assertThat(colorsIn(frame))
-                .as("the entity's own colour and the outline, and nothing else")
-                .containsExactlyInAnyOrder(NEAR_COLOR, OutlinePass.OUTLINE_COLOR);
+                .as("the entity's own colour, the red line and its keyline, and nothing else")
+                .containsExactlyInAnyOrder(NEAR_COLOR, OutlinePass.OUTLINE_COLOR,
+                    OutlinePass.KEYLINE_COLOR);
             assertThat(pixel(frame, HALF_WIDTH, HALF_HEIGHT))
-                .as("the middle of the entity is not an edge")
+                .as("the middle of the entity is neither an edge nor next to one")
                 .isEqualTo(NEAR_COLOR);
             port.shutdown();
         }
