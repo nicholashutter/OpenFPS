@@ -1,0 +1,821 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Memory: what OpenFPS reserves, what it churns — OpenFPS documentation</title>
+<meta name="description" content="Measurement document. How many bytes the engine pre-allocates, how many it allocates per frame and per tic, which of the Javadoc's allocation-freedom claims survive contact with a running…">
+<link rel="stylesheet" href="site.css">
+<script>try{var t=localStorage.getItem('openfps-theme');if(t){document.documentElement.setAttribute('data-theme',t);}}catch(e){}</script>
+</head>
+<body>
+<a class="skip" href="#doc">Skip to content</a>
+<header class="topbar"><button class="burger" id="burger" aria-controls="sidebar" aria-expanded="false" aria-label="Show navigation"><span></span><span></span><span></span></button><span class="topbar-name">OpenFPS docs</span></header>
+<div class="scrim" id="scrim" hidden></div>
+<div class="layout">
+<aside class="sidebar" id="sidebar">
+<a class="brand" href="index.html"><span class="brand-mark"></span><span class="brand-name">OpenFPS</span><span class="brand-kind">docs</span></a>
+<button class="themer" id="themer" type="button" aria-live="polite" aria-label="Switch to dark theme" title="Switch theme"><svg class="to-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5Z"/></svg><svg class="to-light" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.2 5.2l1.4 1.4M17.4 17.4l1.4 1.4M18.8 5.2l-1.4 1.4M6.6 17.4l-1.4 1.4"/></svg></button>
+<input class="filter" id="filter" type="search" placeholder="Filter pages" aria-label="Filter pages" autocomplete="off">
+<nav class="nav" id="nav" aria-label="Documentation">
+<details class="grp" data-hue="1" open><summary><span class="dot"></span>Overview<span class="count">2</span></summary>
+<ul>
+<li><a href="index.html">Overview</a></li>
+<li><a href="agents.html">Agent instructions</a></li>
+</ul></details>
+<details class="grp" data-hue="2" open><summary><span class="dot"></span>Building<span class="count">1</span></summary>
+<ul>
+<li><a href="build.html">Build reference</a></li>
+</ul></details>
+<details class="grp" data-hue="3" open><summary><span class="dot"></span>Architecture<span class="count">2</span></summary>
+<ul>
+<li><a href="style.html">Code style</a></li>
+<li><a href="plan.html">Project plan</a></li>
+</ul></details>
+<details class="grp" data-hue="4" open><summary><span class="dot"></span>Modules<span class="count">5</span></summary>
+<ul>
+<li><a href="engine.html">:engine</a></li>
+<li><a href="desktop.html">:desktop</a></li>
+<li><a href="android.html">:android</a></li>
+<li><a href="tools.html">:tools</a></li>
+<li><a href="gdxshared.html">:gdxshared</a></li>
+</ul></details>
+<details class="grp" data-hue="5"><summary><span class="dot"></span>Packages<span class="count">10</span></summary>
+<ul>
+<li><a href="engine-core.html">Core</a></li>
+<li><a href="engine-common.html">Common</a></li>
+<li><a href="engine-hal.html">HAL (I_)</a></li>
+<li><a href="engine-gameplay.html">Gameplay (P_)</a></li>
+<li><a href="engine-render.html">Render (R_)</a></li>
+<li><a href="engine-demo.html">Demo</a></li>
+<li><a href="engine-audio.html">Audio (S_)</a></li>
+<li><a href="engine-net.html">Net (G_)</a></li>
+<li><a href="engine-resource.html">Resource (W_)</a></li>
+<li><a href="engine-memory.html">Memory (Z_)</a></li>
+</ul></details>
+<details class="grp" data-hue="6" open><summary><span class="dot"></span>Reference<span class="count">4</span></summary>
+<ul>
+<li><a href="assets.html">Assets and licensing</a></li>
+<li><a href="demo-assets.html">Demo asset manifest</a></li>
+<li><a href="memory.html" class="cur" aria-current="page">Memory: what OpenFPS reserves, what it churns</a></li>
+<li><a href="wasm.html">WebAssembly</a></li>
+</ul></details>
+</nav>
+<p class="generated">Generated from the repository's Markdown by <code>:tools:buildDocsSite</code>.</p>
+</aside>
+<aside class="rail"><details class="toc" id="toc" open><summary>On this page</summary>
+<ul>
+<li class="lv2"><a href="#1-why-this-document-exists">1. Why this document exists</a></li>
+<li class="lv2"><a href="#2-method--three-instruments-and-why-each">2. Method — three instruments, and why each</a></li>
+<li class="lv2"><a href="#3-pre-allocated-pools">3. Pre-allocated pools</a></li>
+<li class="lv3"><a href="#31-the-six-full-frame-buffers--the-arithmetic-nobody-had-added-up">3.1 The six full-frame buffers — the arithmetic nobody had added up</a></li>
+<li class="lv3"><a href="#32-geometry-pools--linear-in-scenemaxpasstriangles">3.2 Geometry pools — linear in Scene.maxPassTriangles()</a></li>
+<li class="lv3"><a href="#33-tile-bins--the-only-pool-that-depends-on-both-resolution-and-worker-count">3.3 Tile bins — the only pool that depends on both resolution and worker count</a></li>
+<li class="lv3"><a href="#34-fixed-pools--everything-that-scales-with-neither">3.4 Fixed pools — everything that scales with neither</a></li>
+<li class="lv3"><a href="#35-totals-per-render-mode">3.5 Totals per render mode</a></li>
+<li class="lv2"><a href="#4-android-the-manifest-is-right-about-the-symptom-and-wrong-by-half">4. Android: the manifest is right about the symptom and wrong by half</a></li>
+<li class="lv2"><a href="#5-dynamic-allocation--measured">5. Dynamic allocation — measured</a></li>
+<li class="lv3"><a href="#51-the-headline">5.1 The headline</a></li>
+<li class="lv3"><a href="#52-where-it-comes-from">5.2 Where it comes from</a></li>
+<li class="lv3"><a href="#53-strictmath-allocates-on-jdk-21-and-the-project-is-built-for-17">5.3 StrictMath allocates on JDK 21, and the project is built for 17</a></li>
+<li class="lv3"><a href="#54-per-shot-and-per-tic-against-what-the-source-claims">5.4 Per-shot and per-tic, against what the source claims</a></li>
+<li class="lv2"><a href="#6-the-claims-audit">6. The claims audit</a></li>
+<li class="lv3"><a href="#61-claims-that-hold">6.1 Claims that hold</a></li>
+<li class="lv3"><a href="#62-claims-that-are-false">6.2 Claims that are FALSE</a></li>
+<li class="lv3"><a href="#63-misleading-rather-than-false">6.3 Misleading rather than false</a></li>
+<li class="lv2"><a href="#7-gc-observations-on-a-real-run">7. GC observations on a real run</a></li>
+<li class="lv2"><a href="#8-steady-state-footprint-against-the-platforms">8. Steady-state footprint against the platforms</a></li>
+<li class="lv2"><a href="#9-what-would-actually-be-worth-fixing">9. What would actually be worth fixing</a></li>
+<li class="lv2"><a href="#10-what-could-not-be-measured">10. What could not be measured</a></li>
+<li class="lv2"><a href="#11-reproducing-this">11. Reproducing this</a></li>
+</ul></details></aside>
+<main id="doc">
+<p class="crumb"><span class="tag">Reference</span><span class="sep">/</span><code>docs/MEMORY.md</code><span class="sep">/</span>33 min read</p>
+<h1 id="memory-what-openfps-reserves-what-it-churns">Memory: what OpenFPS reserves, what it churns<a class="anchor" href="#memory-what-openfps-reserves-what-it-churns" aria-label="Permalink">#</a></h1>
+<blockquote>
+<p>Measurement document. How many bytes the engine pre-allocates, how many it
+allocates per frame and per tic, which of the Javadoc's allocation-freedom
+claims survive contact with a running process, and what that means for frame
+time.</p>
+<p><strong>Every number here was measured or derived from a quoted constant.</strong> Where a
+figure could not be measured it is in <a href="#10-what-could-not-be-measured">§ 10</a>
+and labelled as such. <a href="assets.html">docs/ASSETS.md</a> § 2 is the model for this:
+its frame-time table replaced estimates that were wrong by 2–3×, and the same
+thing happens below to two claims that had been in the source for months.</p>
+</blockquote>
+<hr>
+<h2 id="1-why-this-document-exists">1. Why this document exists<a class="anchor" href="#1-why-this-document-exists" aria-label="Permalink">#</a></h2>
+<p>The renderer is software. A GPU game's colour buffer, depth buffer and staging
+texture live in VRAM and never appear in a heap profile; here all three are Java
+arrays. And the engine is a 60/120 Hz loop, so <strong>a garbage collection pause is
+not a slowdown, it is a dropped frame</strong>: at 120 Hz the whole budget is 8.33 ms
+and a G1 young pause on this machine measures 6.4–6.9 ms.</p>
+<p>The source knows this and says so, repeatedly. <code>TriangleClipper</code> promises
+"Nothing is allocated after construction". <code>SpanRenderer</code> says it "allocates
+nothing". <code>DemoGameplayPort</code> says "The only per-tic allocation is the <code>Camera</code>".
+<code>net/README.md</code> says "Steady-state per-tic allocation is zero". Those sentences
+are load-bearing and <strong>none of them had ever been checked against a running
+process.</strong> Three of them are false.</p>
+<hr>
+<h2 id="2-method--three-instruments-and-why-each">2. Method — three instruments, and why each<a class="anchor" href="#2-method--three-instruments-and-why-each" aria-label="Permalink">#</a></h2>
+<p>Reading the code finds allocation sites. It cannot weigh them, and it cannot
+find the ones that are not in this repository at all — the largest single
+allocator below is a JDK class, reached from one line of <code>WorkerPool</code>.</p>
+<p>All runs are the shipping demo scene (<code>DemoScene</code>: <strong>340 world instances, 36 of
+them translucent, 1 view instance, largest model 368 triangles,
+<code>maxPassTriangles = 7844</code></strong> — logged at startup), on the same machine as
+<a href="assets.html">docs/ASSETS.md</a> § 2: Intel Core Ultra 7 155H, 16 physical / 22
+logical, so the auto-sized pool is <code>22 − 1 = 21</code> workers. Windowed 1280×720,
+<code>--fps=60</code> unless stated.</p>
+<p><strong>Runs bypass Gradle.</strong> <code>desktop/build.gradle.kts</code> forwards named
+<code>openfps.*</code> system properties into the forked JVM precisely because a <code>-D</code> on
+the Gradle line lands on the daemon — but it forwards no <em>JVM</em> arguments, and
+<code>-Xlog:gc</code> is a JVM argument. Rather than add forwarding, every measurement
+below launches <code>com.openfps.desktop.DesktopLauncher</code> directly against
+<code>desktop/build/install/desktop/lib/*.jar</code> with <code>--start-in-game</code> and
+<code>-Dopenfps.screenshotFrame=N -Dopenfps.screenshotExit=true</code>, which makes the run
+an exact number of frames long.</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Instrument</th><th>What it gives</th><th>Why it was needed</th></tr></thead>
+<tbody>
+<tr><td><strong><code>-XX:+UseEpsilonGC</code></strong> with <code>-Xms1g -Xmx1g -XX:EpsilonPrintHeapSteps=4096</code></td><td>Total bytes allocated, exactly. Epsilon never collects, so heap-used is a monotone running total; the log emits a line every 256 KiB. A least-squares fit of used-bytes against uptime over the steady-state window <strong>is</strong> the allocation rate</td><td>The only way to get an absolute figure with no sampling error. Ordinary GC logs bound the answer but do not give it</td></tr>
+<tr><td><strong>JFR <code>jdk.ThreadAllocationStatistics</code></strong> at <code>period=1000ms</code></td><td>Per-thread cumulative allocated bytes, once a second</td><td>This is <code>ThreadMXBean.getThreadAllocatedBytes</code> sampled by the VM — <strong>the probe the brief asked for, without touching a line of engine code.</strong> It splits the total across <code>main</code>, <code>openfps-gameloop</code> and the 21 workers</td></tr>
+<tr><td><strong>JFR <code>jdk.ObjectAllocationInNewTLAB</code> / <code>OutsideTLAB</code></strong> with <code>-XX:TLABSize=4k -XX:-ResizeTLAB</code></td><td>~900 stack traces per 16 s window, attributed to a class and a line</td><td><code>jdk.ObjectAllocationSample</code> is throttled to ~150/s and yielded <strong>7</strong> usable samples in a steady-state window. Shrinking the TLAB to 4 KiB turns every refill into an event and raises that by two orders of magnitude</td></tr>
+<tr><td><strong><code>jcmd GC.class_histogram</code></strong> mid-run, after the implied full GC</td><td>Live bytes per array type</td><td>Verifies the pre-allocation arithmetic against the actual heap rather than against itself</td></tr>
+</tbody>
+</table></div>
+<p><strong>The two independent rate measurements agree to 0.3%</strong> — Epsilon 332,497 B/s
+against JFR-per-thread 333,555 B/s on the same configuration. That agreement is
+the reason the figures below are quoted as measurements rather than estimates.</p>
+<p>One correction to make before reading § 5: <strong>TLAB-refill attribution charges a
+whole 4 KiB refill to whichever stack tripped it</strong>, so its <em>shares</em> are sound
+and its <em>absolute</em> per-site bytes are coarse. Its total (4,501 B/frame) lands
+inside the Epsilon range (4,414–6,204 B/frame) rather than on a point in it.</p>
+<hr>
+<h2 id="3-pre-allocated-pools">3. Pre-allocated pools<a class="anchor" href="#3-pre-allocated-pools" aria-label="Permalink">#</a></h2>
+<h3 id="31-the-six-full-frame-buffers--the-arithmetic-nobody-had-added-up">3.1 The six full-frame buffers — the arithmetic nobody had added up<a class="anchor" href="#31-the-six-full-frame-buffers--the-arithmetic-nobody-had-added-up" aria-label="Permalink">#</a></h3>
+<p>A frame at <code>w × h</code> costs <strong>six</strong> arrays sized by the surface, not the three the
+Android manifest counts:</p>
+<div class="tablewrap"><table>
+<thead><tr><th>#</th><th>Field</th><th>Declared at</th><th>Type</th><th>Length</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>Framebuffer.color</code></td><td><a href="https://github.com/nicholashutter/OpenFPS/blob/main/engine/src/main/java/com/openfps/engine/render/adapter/Framebuffer.java" class="ext" rel="noopener noreferrer" target="_blank"><code>Framebuffer.java:935</code></a></td><td><code>int[]</code></td><td><code>stride × h</code></td></tr>
+<tr><td>2</td><td><code>Framebuffer.depth</code></td><td><code>Framebuffer.java:936</code></td><td><code>float[]</code></td><td><code>stride × h</code></td></tr>
+<tr><td>3</td><td><code>Framebuffer.entityIds</code></td><td><code>Framebuffer.java:939</code></td><td><code>int[]</code></td><td><code>stride × h</code></td></tr>
+<tr><td>4</td><td><code>SoftwareRenderPort.frontColor</code></td><td><a href="https://github.com/nicholashutter/OpenFPS/blob/main/engine/src/main/java/com/openfps/engine/render/adapter/SoftwareRenderPort.java" class="ext" rel="noopener noreferrer" target="_blank"><code>SoftwareRenderPort.java:791</code></a></td><td><code>int[]</code></td><td><code>w × h</code></td></tr>
+<tr><td>5</td><td><code>SoftwareRenderPort.backColor</code></td><td><code>SoftwareRenderPort.java:792</code></td><td><code>int[]</code></td><td><code>w × h</code></td></tr>
+<tr><td>6</td><td><code>FramebufferPresenter.scratch</code></td><td><a href="https://github.com/nicholashutter/OpenFPS/blob/main/gdxshared/src/main/java/com/openfps/gdx/FramebufferPresenter.java" class="ext" rel="noopener noreferrer" target="_blank"><code>FramebufferPresenter.java:415</code></a></td><td><code>int[]</code></td><td><code>w × h</code></td></tr>
+</tbody>
+</table></div>
+<p><code>stride = alignUp(w, STRIDE_ALIGNMENT)</code> with <code>STRIDE_ALIGNMENT = 16</code>
+(<code>Framebuffer.java:114</code>) — sixteen <code>int</code>s are one 64-byte cache line, which is
+the false-sharing mitigation <code>render/README.md</code> § 7 asks for. <strong>The padding is
+charged three times</strong>, because buffers 1–3 are indexed by stride and buffers 4–6
+are the de-padded copies the presentation path uploads
+(<code>Framebuffer.copyColorTo</code>, <code>Framebuffer.java:753</code>).</p>
+<p>So the per-pixel cost is:</p>
+<div class="code"><pre><code>12 bytes per PADDED pixel   (colour int + depth float + entity-id int)
+12 bytes per VISIBLE pixel  (frontColor + backColor + presenter scratch)
+</code></pre></div>
+<p><strong>24 bytes per pixel</strong> once the width is already 16-aligned. <code>docs/ASSETS.md</code>
+§ 2 reasons about the cache working set as "8 bytes per pixel, so the
+framebuffer alone is 7.4 MB at 720p" — correct for the two buffers the *inner
+loop* touches, and a third of what the <em>heap</em> carries.</p>
+<p>Why three copies of the colour and not one: <code>frontColor</code>/<code>backColor</code> are a swap
+pair so the de-padding copy happens outside <code>presentLock</code>
+(<code>SoftwareRenderPort.java:639–644</code>), and the presenter's <code>scratch</code> exists
+because <code>copyColorInto</code> needs a destination the render port does not own. Each
+is individually justified; nothing had ever summed them.</p>
+<p><strong>Verified against the heap, not against itself.</strong> Two <code>GC.class_histogram</code>
+snapshots of the same build, 480P and NATIVE, on the same 1280×720 window:</p>
+<div class="tablewrap"><table>
+<thead><tr><th></th><th><code>[I</code> live bytes</th><th><code>[F</code> live bytes</th></tr></thead>
+<tbody>
+<tr><td>480P (853×480, stride 864)</td><td>29,714,504</td><td>4,480,168</td></tr>
+<tr><td>NATIVE (1280×720, stride 1280)</td><td>39,947,720</td><td>6,507,752</td></tr>
+<tr><td><strong>delta</strong></td><td><strong>10,233,216</strong></td><td><strong>2,027,584</strong></td></tr>
+</tbody>
+</table></div>
+<p>Predicted <code>int[]</code> delta: <code>2 × (921,600 − 414,720)</code> padded pixels for colour and
+entity-ids, <code>3 × (921,600 − 409,440)</code> visible pixels for the three de-padded
+buffers, and <code>3 × 21 × (240 − 112)</code> for the tile bins — <code>1,013,760 + 1,536,480 +
+8,064 = 2,558,304</code> elements = <strong>10,233,216 bytes. Exact.</strong> Predicted <code>float[]</code>
+delta is the depth buffer alone, <code>506,880 × 4 = 2,027,520</code> bytes, measured
+2,027,584 — 64 bytes over, one unrelated array.</p>
+<h3 id="32-geometry-pools--linear-in-scenemaxpasstriangles">3.2 Geometry pools — linear in <code>Scene.maxPassTriangles()</code><a class="anchor" href="#32-geometry-pools--linear-in-scenemaxpasstriangles" aria-label="Permalink">#</a></h3>
+<p><code>SoftwareRenderPort.growBuffersFor</code> (<code>SoftwareRenderPort.java:1088–1114</code>) sizes
+these from <code>T = maxPassTriangles()</code> and <code>maxOutput = T × CLIP_EXPANSION</code> where
+<code>CLIP_EXPANSION = TriangleClipper.MAX_OUTPUT_TRIANGLES = 2</code>. They are grow-only.
+For the demo's <code>T = 7844</code>:</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Pool</th><th>Length</th><th>Bytes</th></tr></thead>
+<tbody>
+<tr><td><code>Rasterizer.records</code> <code>float[2T × 25]</code> (<code>Rasterizer.java:403</code>)</td><td>392,200</td><td>1,568,816</td></tr>
+<tr><td><code>clipVertices</code> <code>float[2T × 15]</code> (<code>:1096</code>)</td><td>235,320</td><td>941,296</td></tr>
+<tr><td><code>clipMaterials</code> / <code>clipColors</code> / <code>clipEntityIds</code> <code>int[2T]</code> (<code>:1097–1099</code>)</td><td>15,688 each</td><td>62,768 each</td></tr>
+<tr><td><code>binEntries</code> <code>int[2T]</code>, grows to the (triangle, tile) high-water mark (<code>Rasterizer.java:407</code>, <code>:955</code>)</td><td>≥15,688</td><td>≥62,768</td></tr>
+<tr><td><strong>subtotal</strong></td><td></td><td><strong>2,761,184</strong></td></tr>
+</tbody>
+</table></div>
+<p><code>records</code> dominates because the record stride is <code>RECORD_HEADER_FLOATS +
+PLANE_FLOATS × attributeCount = 19 + 3×2 = 25</code> floats — 100 bytes of setup per
+clipped triangle. <strong>352 bytes per pass triangle</strong> all told, which is the number
+to carry into any conversation about scene size: a 50,000-triangle level would
+want 17.6 MB of geometry scratch before a pixel is drawn.</p>
+<h3 id="33-tile-bins--the-only-pool-that-depends-on-both-resolution-and-worker-count">3.3 Tile bins — the only pool that depends on both resolution and worker count<a class="anchor" href="#33-tile-bins--the-only-pool-that-depends-on-both-resolution-and-worker-count" aria-label="Permalink">#</a></h3>
+<p><code>Rasterizer.beginFrame</code> sizes three <code>int[chunkCount × tileCount]</code>
+(<code>Rasterizer.java:456–458</code>), where <code>chunkCount = max(1, pool.workerCount())</code>
+and <code>tileCount = ceil(w/64) × ceil(h/64)</code> with <code>DEFAULT_TILE_SIZE = 64</code>
+(<code>Framebuffer.java:122</code>).</p>
+<p><strong>Cost = 12 × workers bytes per tile.</strong> At 21 workers that is 252 B/tile: 28,272
+B at 480P (112 tiles), 60,528 B at 720P (240 tiles), 54,312 B at a phone's
+NATIVE 2400×1080 with 7 workers (646 tiles). The retirement of
+<code>logicalProcessors / 2</code> in favour of <code>logicalProcessors − 1</code>
+(<a href="assets.html">docs/ASSETS.md</a> § 2) roughly doubled this pool on a 22-thread part —
+from 11 to 21 chunks — which is 30 KB at 720P and not worth a second thought.
+It also roughly doubled something that <em>is</em> worth a thought; see § 5.2.</p>
+<h3 id="34-fixed-pools--everything-that-scales-with-neither">3.4 Fixed pools — everything that scales with neither<a class="anchor" href="#34-fixed-pools--everything-that-scales-with-neither" aria-label="Permalink">#</a></h3>
+<div class="tablewrap"><table>
+<thead><tr><th>Pool</th><th>Constants</th><th>Bytes</th></tr></thead>
+<tbody>
+<tr><td>Lockstep input ring: <code>TicCmdBuffer.slotTics</code> / <code>axes</code> / <code>look</code>, <code>int[TIC_BUFFER_SIZE × MAX_PLAYERS]</code> (<a href="https://github.com/nicholashutter/OpenFPS/blob/main/engine/src/main/java/com/openfps/engine/net/TicCmdBuffer.java" class="ext" rel="noopener noreferrer" target="_blank"><code>TicCmdBuffer.java:69–71</code></a>)</td><td><code>64 × 8 = 512</code> slots; <code>Constants.TIC_BUFFER_SIZE = 64</code>, <code>MAX_PLAYERS = 8</code></td><td>6,192</td></tr>
+<tr><td><code>TicCmdBuffer.latestTics</code> <code>int[8]</code></td><td></td><td>48</td></tr>
+<tr><td><code>NetSession.sendBuffer</code> <code>byte[1200]</code> (<a href="https://github.com/nicholashutter/OpenFPS/blob/main/engine/src/main/java/com/openfps/engine/net/NetSession.java" class="ext" rel="noopener noreferrer" target="_blank"><code>NetSession.java:101</code></a>)</td><td><code>RedundantSender.MAX_DATAGRAM_BYTES = 1200</code></td><td>1,216</td></tr>
+<tr><td>7 × <code>PeerConnection</code> + <code>AckWindow</code></td><td><code>MAX_PEERS = MAX_PLAYERS − 1</code></td><td>664</td></tr>
+<tr><td><code>DemoEffects</code> tracer + smoke pools, 12 arrays (<a href="https://github.com/nicholashutter/OpenFPS/blob/main/engine/src/main/java/com/openfps/engine/demo/DemoEffects.java" class="ext" rel="noopener noreferrer" target="_blank"><code>DemoEffects.java:516–526</code></a>)</td><td><code>MAX_TRACERS = 3</code>, <code>MAX_PUFFS = 3</code>, <code>PUFF_STAGES = 4</code>, <code>PUFF_LOBES = 3</code> → 39 scene instances</td><td>624</td></tr>
+<tr><td><code>Match.bots</code> <code>Bot[7]</code> + 7 <code>Bot</code> + one reused <code>HitResult</code></td><td><code>DEFAULT_BOT_COUNT = 7</code></td><td>576</td></tr>
+<tr><td><code>PhysicsWorld.solids</code> <code>float[16 × 4]</code></td><td>16 boxes, <code>SOLID_STRIDE = 4</code></td><td>272</td></tr>
+<tr><td><code>SoftwareRenderPort.blendedRenderers</code> <code>SpanRenderer[256]</code> (<code>:1023</code>)</td><td><code>Scene.OPAQUE + 1</code></td><td>1,040</td></tr>
+<tr><td><code>WorkerPool.batches</code> <code>ParallelBatch[8]</code> (<code>WorkerPool.java:121</code>, <code>:150</code>)</td><td><code>MAX_CONCURRENT_BATCHES = 8</code></td><td>304</td></tr>
+<tr><td>Blaster sound: <code>short[3969]</code> PCM + <code>byte[7982]</code> WAV (<a href="https://github.com/nicholashutter/OpenFPS/blob/main/engine/src/main/java/com/openfps/engine/audio/synth/BlasterSound.java" class="ext" rel="noopener noreferrer" target="_blank"><code>BlasterSound.java</code></a>, <code>SAMPLE_RATE = 22050</code>, <code>DURATION_MS = 180</code>)</td><td><code>22050 × 180 / 1000 = 3969</code> samples; <code>44 + 2 × 3969</code></td><td>15,960</td></tr>
+<tr><td><strong>total</strong></td><td></td><td><strong>26,896 (26.3 KiB)</strong></td></tr>
+</tbody>
+</table></div>
+<p><strong>The input ring is 6,144 bytes of payload and the whole of <code>net</code> is 8.1 KB.</strong>
+That is the most striking thing in this table: the subsystem with the most
+documentation about memory discipline is four orders of magnitude smaller than
+the one array the presenter needs. Two caveats on it, both in
+<a href="engine-net.html">net/README.md</a> and both
+wrong — see § 6.</p>
+<p><code>GdxAudioPort</code> stages nothing per-frame. The blaster WAV is generated once,
+lazily, on first play; <code>AudioVolume</code> is stateless, <code>NullAudioPort</code> holds one
+<code>AtomicLong</code>. The claim at <code>BlasterSound.java:185–188</code> that it "allocates a
+fresh array each call — about 8 KB" and is "not on any per-tic or per-frame
+path" is accurate: 7,938 + 7,982 bytes, once per process.</p>
+<h3 id="35-totals-per-render-mode">3.5 Totals per render mode<a class="anchor" href="#35-totals-per-render-mode" aria-label="Permalink">#</a></h3>
+<p>Render-owned pre-allocation. Decoded model textures are the measured
+<code>21,203,936 bytes</code> of <code>int[]</code> mip chains left over once § 3.1's arithmetic is
+subtracted from the 480P histogram — which matches
+<a href="demo-assets.html">docs/DEMO_ASSETS.md</a> § 4's on-disk 12.7 MB expanding to the
+"about 21 MB" the Android manifest guesses at.</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Surface</th><th>Mode</th><th>Render size</th><th>Stride</th><th>Tiles</th><th>Frame buffers</th><th>Geometry + bins</th><th><strong>Render total</strong></th><th>+ textures</th></tr></thead>
+<tbody>
+<tr><td>1280×720 window, 21 workers</td><td>480P</td><td>853×480</td><td>864</td><td>112</td><td>9,890,016</td><td>2,793,968</td><td><strong>12,683,984</strong> (12.10 MiB)</td><td>33.3 MiB</td></tr>
+<tr><td></td><td>720P / NATIVE</td><td>1280×720</td><td>1280</td><td>240</td><td>22,118,496</td><td>2,826,224</td><td><strong>24,944,720</strong> (23.79 MiB)</td><td>45.0 MiB</td></tr>
+<tr><td>2400×1080 phone, 7 workers</td><td>480P</td><td>1067×480</td><td>1072</td><td>136</td><td>12,320,736</td><td>2,774,120</td><td><strong>15,094,856</strong> (14.40 MiB)</td><td>35.6 MiB</td></tr>
+<tr><td></td><td>720P</td><td>1600×720</td><td>1600</td><td>300</td><td>27,648,096</td><td>2,787,896</td><td><strong>30,435,992</strong> (29.03 MiB)</td><td>50.3 MiB</td></tr>
+<tr><td></td><td>NATIVE</td><td>2400×1080</td><td>2400</td><td>646</td><td>62,208,096</td><td>2,816,960</td><td><strong>65,025,056</strong> (62.01 MiB)</td><td>83.2 MiB</td></tr>
+</tbody>
+</table></div>
+<p>Measured live heap after a full GC, 1280×720 window, JDK 17, default G1:
+<strong>55.4 MiB at 480P, 69.7 MiB at NATIVE.</strong> Both are the table's "+ textures"
+column plus the JVM's own baseline, minus whatever the demo has not touched yet.</p>
+<hr>
+<h2 id="4-android-the-manifest-is-right-about-the-symptom-and-wrong-by-half">4. Android: the manifest is right about the symptom and wrong by half<a class="anchor" href="#4-android-the-manifest-is-right-about-the-symptom-and-wrong-by-half" aria-label="Permalink">#</a></h2>
+<p><a href="https://github.com/nicholashutter/OpenFPS/blob/main/android/src/main/AndroidManifest.xml" class="ext" rel="noopener noreferrer" target="_blank"><code>android/src/main/AndroidManifest.xml:27–47</code></a>
+is the best piece of memory documentation in the repository — it is measured,
+not precautionary, and it records a real failure. It is also short by 31 MB.</p>
+<p><strong>Its one hard number checks out exactly.</strong> The presenter's scratch array on a
+2400×1080 panel at NATIVE is <code>int[2,592,000]</code>; Android ART's array header is 12
+bytes, so the allocation request is <code>12 + 2,592,000 × 4 =</code> <strong>10,368,012 bytes</strong>
+— the figure in the two <code>OutOfMemoryError</code>s. That the arithmetic closes on ART's
+12-byte header rather than HotSpot's 16 is itself the proof it was copied off a
+device and not computed.</p>
+<p>Where it is wrong: it counts "a 10.4 MB colour <code>int[]</code>, a 10.4 MB depth buffer,
+and another 10.4 MB <code>int[]</code> the presenter uploads from — 31 MB". § 3.1 shows
+<strong>six</strong> such arrays, not three. Missing are <code>Framebuffer.entityIds</code>,
+<code>SoftwareRenderPort.frontColor</code> and <code>SoftwareRenderPort.backColor</code>, and each is
+another 10,368,012 bytes. <strong>The real figure is 62.2 MB, not 31 MB</strong>, and with
+~21 MB of decoded textures the app wants ~83 MB of arrays plus its baseline
+before it draws anything.</p>
+<p>That makes the manifest's own conclusion <em>more</em> right than it argues. Against
+<code>dalvik.vm.heapgrowthlimit</code> at 96–128 MB on mid-range phones, 83 MB of arrays is
+not "close to the edge", it is over it for anything but the emulator's 192 MB.
+And the corollary the manifest does not draw:</p>
+<blockquote>
+<p><strong>480P is not only a frame-time default, it is the reason the Android build
+fits in memory at all.</strong> It costs 15.1 MB of render-owned arrays against
+NATIVE's 65.0 MB — a 49.9 MB saving, four times the entire <code>largeHeap</code>
+headroom of a 128 MB device.</p>
+</blockquote>
+<p><a href="https://github.com/nicholashutter/OpenFPS/blob/main/gdxshared/src/main/java/com/openfps/gdx/RenderMode.java" class="ext" rel="noopener noreferrer" target="_blank"><code>RenderMode</code></a> argues
+for 480P entirely from the 98 ms frame it measured on the emulator, and never
+mentions memory. It should: the frame-time argument makes NATIVE unplayable, the
+memory argument makes it unbootable.</p>
+<p>One thing that does <em>not</em> land on the Java heap and is easy to double-count:
+libGDX's <code>Pixmap</code> (<code>FramebufferPresenter.java:416</code>) is another <code>w × h × 4</code> bytes,
+but it is a native <code>gdx2d</code> allocation. It counts against the process, not against
+<code>heapgrowthlimit</code>.</p>
+<hr>
+<h2 id="5-dynamic-allocation--measured">5. Dynamic allocation — measured<a class="anchor" href="#5-dynamic-allocation--measured" aria-label="Permalink">#</a></h2>
+<h3 id="51-the-headline">5.1 The headline<a class="anchor" href="#51-the-headline" aria-label="Permalink">#</a></h3>
+<p>Steady-state, JDK 17, 480P, 21 workers, five Epsilon runs, windows chosen after
+warm-up and before the demo's match is lost:</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Run</th><th>Mode</th><th>B per rendered frame</th></tr></thead>
+<tbody>
+<tr><td><code>j17_60</code></td><td>480P</td><td>4,651</td></tr>
+<tr><td><code>j17_60b</code></td><td>480P</td><td>5,039</td></tr>
+<tr><td><code>j17_720</code></td><td>720P</td><td>4,414</td></tr>
+<tr><td><code>j17_720b</code></td><td>720P</td><td>6,204</td></tr>
+<tr><td><code>j17_nat</code></td><td>NATIVE 1280×720</td><td>5,491</td></tr>
+</tbody>
+</table></div>
+<p><strong>≈5 KB per tic, spread 4.4–6.2 KB.</strong> Three findings follow immediately, and the
+first two are good news:</p>
+<ol>
+<li>
+<p><strong>Allocation does not scale with render resolution.</strong> 720P allocates no more
+than 480P above the run-to-run spread, across 2.25× the pixels. That is
+exactly what a genuinely allocation-free raster path looks like.</p>
+</li>
+<li>
+<p><strong>Presentation allocates almost nothing per platform frame.</strong> Solving
+<code>rate = A × platformFps + B × renderedFps</code> across <code>--fps=30/60/120</code> runs (all
+vsync-locked to 60 platform fps, rendering at 30/60/120) puts <code>B</code> at
+~5–6 KB per rendered frame and <code>A</code> at or below zero — i.e. within noise of
+nothing. Rendering is tic-driven via <code>RenderFrameEvent</code>, so <strong>per-frame and
+per-tic are the same number in this engine</strong>, and the extra 30 platform
+frames a second at <code>--fps=30</code> cost nothing measurable.</p>
+</li>
+<li>
+<p><strong>It does scale with worker count, up to a point.</strong> Same build, same scene,
+480P, JDK 17, <code>-Dopenfps.workers=N</code>:</p>
+<div class="tablewrap"><table>
+<thead><tr><th>workers</th><th>2</th><th>4</th><th>8</th><th>16</th><th>21</th></tr></thead>
+<tbody>
+<tr><td>B/frame</td><td>3,307</td><td>3,929</td><td>5,405</td><td>4,903</td><td>4,651 / 5,039</td></tr>
+</tbody>
+</table></div>
+<p>It rises by ~60% from 2 to 8 workers and then flattens. § 5.2 explains why,
+and why the ceiling is set by dispatch count rather than by thread count.</p>
+</li>
+</ol>
+<h3 id="52-where-it-comes-from">5.2 Where it comes from<a class="anchor" href="#52-where-it-comes-from" aria-label="Permalink">#</a></h3>
+<p>Per-thread, from <code>jdk.ThreadAllocationStatistics</code> over a 17 s window — the
+<code>getThreadAllocatedBytes</code> split, and independently reproduced by the TLAB
+attribution:</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Thread group</th><th>B/s</th><th>B/frame @60</th><th>share</th></tr></thead>
+<tbody>
+<tr><td><code>openfps-worker-*</code> (21 threads)</td><td>266,258</td><td>4,438</td><td>79.8%</td></tr>
+<tr><td><code>main</code> (LWJGL3 loop + present)</td><td>56,720</td><td>945</td><td>17.0%</td></tr>
+<tr><td><code>openfps-gameloop</code></td><td>9,835</td><td>164</td><td>2.9%</td></tr>
+<tr><td>JVM / libGDX housekeeping</td><td>741</td><td>12</td><td>0.2%</td></tr>
+<tr><td><strong>total</strong></td><td><strong>333,555</strong></td><td><strong>5,559</strong></td><td></td></tr>
+</tbody>
+</table></div>
+<p>And by site, from 921 TLAB-refill stacks on JDK 17 (shares reliable, absolutes
+coarse — see § 2):</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Share</th><th>B/frame</th><th>Allocating site</th><th>Object</th></tr></thead>
+<tbody>
+<tr><td><strong>40.7%</strong></td><td>1,833</td><td><a href="https://github.com/nicholashutter/OpenFPS/blob/main/engine/src/main/java/com/openfps/engine/core/pool/WorkerPool.java" class="ext" rel="noopener noreferrer" target="_blank"><code>WorkerPool$WorkerThread.awaitWork:544</code></a></td><td><code>AbstractQueuedSynchronizer$ConditionNode</code></td></tr>
+<tr><td><strong>16.3%</strong></td><td>733</td><td><a href="https://github.com/nicholashutter/OpenFPS/blob/main/engine/src/main/java/com/openfps/engine/render/adapter/Mat4.java" class="ext" rel="noopener noreferrer" target="_blank"><code>Mat4.ofRowMajor:80</code></a></td><td><code>float[16]</code></td></tr>
+<tr><td><strong>13.9%</strong></td><td>624</td><td><a href="https://github.com/nicholashutter/OpenFPS/blob/main/engine/src/main/java/com/openfps/engine/demo/DemoScene.java" class="ext" rel="noopener noreferrer" target="_blank"><code>DemoScene.placement:960</code></a></td><td><code>float[16]</code></td></tr>
+<tr><td>3.8%</td><td>171</td><td><code>Mat4.ofRowMajor:82</code></td><td><code>Mat4</code></td></tr>
+<tr><td>2.9%</td><td>132</td><td><a href="https://github.com/nicholashutter/OpenFPS/blob/main/desktop/src/main/java/com/openfps/desktop/GdxInputPort.java" class="ext" rel="noopener noreferrer" target="_blank"><code>GdxInputPort.isHeld:730</code></a></td><td>capturing lambda</td></tr>
+<tr><td>2.0%</td><td>89</td><td><a href="https://github.com/nicholashutter/OpenFPS/blob/main/engine/src/main/java/com/openfps/engine/render/adapter/Camera.java" class="ext" rel="noopener noreferrer" target="_blank"><code>Camera.&lt;init&gt;:150</code></a></td><td><code>float[12]</code></td></tr>
+<tr><td>1.7%</td><td>78</td><td><a href="https://github.com/nicholashutter/OpenFPS/blob/main/engine/src/main/java/com/openfps/engine/render/adapter/Vec3.java" class="ext" rel="noopener noreferrer" target="_blank"><code>Vec3.cross:123</code></a></td><td><code>Vec3</code></td></tr>
+<tr><td>1.6%</td><td>73</td><td><a href="https://github.com/nicholashutter/OpenFPS/blob/main/engine/src/main/java/com/openfps/engine/core/eventbus/SharedEventBus.java" class="ext" rel="noopener noreferrer" target="_blank"><code>SharedEventBus.publish:107</code></a></td><td><code>LinkedBlockingQueue$Node</code></td></tr>
+<tr><td>1.5%</td><td>69</td><td><code>Camera.create:204</code></td><td><code>Camera</code></td></tr>
+<tr><td>1.4%</td><td>63</td><td><code>GdxInputPort.isJustPressed:740</code></td><td>capturing lambda</td></tr>
+<tr><td>1.2%</td><td>54</td><td><code>WorkerPool$WorkerThread.awaitWork:537</code></td><td><code>AQS$ExclusiveNode</code></td></tr>
+<tr><td>1.1%</td><td>49</td><td><code>SharedEventBus.take:123</code></td><td><code>ConditionNode</code></td></tr>
+<tr><td>1.1%</td><td>49</td><td><code>Vec3.normalized:158</code></td><td><code>Vec3</code></td></tr>
+<tr><td>0.9%</td><td>39</td><td><a href="https://github.com/nicholashutter/OpenFPS/blob/main/gdxshared/src/main/java/com/openfps/gdx/FramebufferPresenter.java" class="ext" rel="noopener noreferrer" target="_blank"><code>FramebufferPresenter.present:482</code></a></td><td><code>DirectIntBufferS</code></td></tr>
+<tr><td>0.9%</td><td>39</td><td><a href="https://github.com/nicholashutter/OpenFPS/blob/main/engine/src/main/java/com/openfps/engine/gameplay/Match.java" class="ext" rel="noopener noreferrer" target="_blank"><code>Match.bots:340</code></a></td><td><code>Bot[7]</code> clone</td></tr>
+<tr><td>0.9%</td><td>39</td><td><a href="https://github.com/nicholashutter/OpenFPS/blob/main/engine/src/main/java/com/openfps/engine/core/event/EventFactory.java" class="ext" rel="noopener noreferrer" target="_blank"><code>EventFactory.newRenderFrame:55</code></a></td><td><code>RenderFrameEvent</code></td></tr>
+<tr><td>0.8%</td><td>34</td><td><code>EventFactory.newTick:50</code></td><td><code>TickEvent</code></td></tr>
+<tr><td>0.8%</td><td>34</td><td><a href="https://github.com/nicholashutter/OpenFPS/blob/main/engine/src/main/java/com/openfps/engine/hal/port/InputState.java" class="ext" rel="noopener noreferrer" target="_blank"><code>InputState.of:130</code></a></td><td><code>InputState</code></td></tr>
+<tr><td>0.5%</td><td>25</td><td><a href="https://github.com/nicholashutter/OpenFPS/blob/main/engine/src/main/java/com/openfps/engine/gameplay/Target.java" class="ext" rel="noopener noreferrer" target="_blank"><code>Target.aroundFeet:156</code></a></td><td><code>Target</code></td></tr>
+<tr><td>0.5%</td><td>24</td><td><a href="https://github.com/nicholashutter/OpenFPS/blob/main/engine/src/main/java/com/openfps/engine/gameplay/PlayerController.java" class="ext" rel="noopener noreferrer" target="_blank"><code>PlayerController.eyePosition:730</code></a></td><td><code>Vec3</code></td></tr>
+<tr><td>0.4%</td><td>20</td><td><code>PlayerController.forwardVector:765</code></td><td><code>Vec3</code></td></tr>
+</tbody>
+</table></div>
+<p><strong>The largest allocator in OpenFPS is not the renderer and not the simulation.
+It is 21 hot worker threads parking on one shared <code>Condition</code>.</strong>
+<code>WorkerPool.awaitWork</code> (<code>WorkerPool.java:535–555</code>) takes <code>idleLock</code> and calls
+<code>idleCondition.await(IDLE_PARK_MILLIS, MILLISECONDS)</code>. Every <code>await</code> on an
+<code>AbstractQueuedSynchronizer$ConditionObject</code> allocates one <code>ConditionNode</code> to
+put the thread on the wait queue; the contended <code>idleLock.lock()</code> on the line
+above adds an <code>ExclusiveNode</code>. Together that is <strong>42% of everything the engine
+allocates</strong>, and there is not a <code>new</code> anywhere near it.</p>
+<p>It is dispatch-driven rather than thread-driven, which is why § 5.1's worker
+sweep flattens: <code>SoftwareRenderPort</code> reports <strong>56 parallel passes per frame</strong>
+(<code>lastFrameParallelPasses</code>, <code>SoftwareRenderPort.java:1452</code>), each of which wakes
+the pool and lets it re-park. 1,882 B/frame at ~40 bytes a node is ~47 nodes per
+frame — one per barrier, not one per worker per barrier. <code>docs/ASSETS.md</code> § 2
+records batching this pass "to 8 barriers" as the fix that took the demo from
+2.9 fps to vsync-limited; translucency has since taken it to 56, and the cost of
+that is now visible here rather than only in frame time.</p>
+<p><strong>Second: 32% of allocation is <code>float[16]</code>, and all of it is one seam.</strong>
+<code>DemoGameplayPort.publishBotPlacements</code> (<code>DemoGameplayPort.java:696–713</code>) calls
+<code>DemoScene.botPlacement</code> per living bot per tic; <code>DemoScene.placement:960</code> builds
+a <code>float[16]</code> literal and <code>Mat4.ofRowMajor:80</code> <strong>copies it defensively into a
+second <code>float[16]</code></strong> before <code>Mat4.ofRowMajor:82</code> wraps it. Three objects, 176
+bytes, per bot per tic — 1,232 B/tic for seven bots. <code>Mat4</code>'s immutability is
+what makes it safe to hand to 21 raster workers, and the defensive copy is what
+makes it immutable; the cost is paid 420 times a second.</p>
+<p><strong>Third: the raster path is clean.</strong> Across 921 sampled allocations there is not
+one attributed to <code>Rasterizer</code>, <code>SpanRenderer</code>, <code>TextureSampler</code>,
+<code>TriangleClipper</code>, <code>OutlinePass</code>, <code>Crosshair</code>, <code>Rgba</code>, <code>MipChain</code> or
+<code>Framebuffer</code>. Per-triangle, per-tile, per-span and per-pixel allocation is
+<strong>zero, measured</strong> — and <code>Framebuffer.clear</code>'s "runs every frame and allocates
+nothing" (<code>Framebuffer.java:421</code>) and <code>Crosshair</code>'s <code>Arrays.fill</code>-per-row claim
+(<code>Crosshair.java:219–220</code>) both hold. The three months of Javadoc discipline
+around the inner loop worked exactly as advertised. The leaks are all at the
+seams.</p>
+<h3 id="53-strictmath-allocates-on-jdk-21-and-the-project-is-built-for-17">5.3 <code>StrictMath</code> allocates on JDK 21, and the project is built for 17<a class="anchor" href="#53-strictmath-allocates-on-jdk-21-and-the-project-is-built-for-17" aria-label="Permalink">#</a></h3>
+<p>The JDK-21 TLAB profile showed <strong>15.1% of all allocation as <code>double[]</code> from
+<code>java.lang.FdLibm$Sin.compute</code> and <code>FdLibm$Cos.compute</code></strong> — 1,019 B/frame,
+reached from <code>DemoScene.placement:958/:959</code>, <code>BotPattern.offsetX:81</code>,
+<code>BotPattern.offsetZ:107</code> and <code>PlayerController.forwardVector:763</code>. On JDK 17
+that class does not appear at all.</p>
+<p>JDK 21 ported fdlibm from C to Java (JDK-8302027). The Java port's argument
+reduction allocates a <code>double[]</code> per call. Measured directly with
+<code>getThreadAllocatedBytes</code> over 10⁶ calls each, after warm-up:</p>
+<div class="tablewrap"><table>
+<thead><tr><th></th><th>JDK 17.0.19</th><th>JDK 21.0.11</th><th>JDK 25.0.3</th></tr></thead>
+<tbody>
+<tr><td><code>StrictMath.sin</code>, arg &gt; π/4</td><td><strong>0.00 B/call</strong></td><td>37.26</td><td>32.00</td></tr>
+<tr><td><code>StrictMath.cos</code>, arg &gt; π/4</td><td><strong>0.00</strong></td><td>32.00</td><td>32.00</td></tr>
+<tr><td><code>StrictMath.sin(0.3)</code>, no reduction</td><td><strong>0.00</strong></td><td>2.62</td><td>2.62</td></tr>
+<tr><td><code>StrictMath.atan2</code></td><td>0.00</td><td>~0.00</td><td>~0.00</td></tr>
+<tr><td><code>StrictMath.sqrt</code></td><td>0.00</td><td>0.00</td><td>0.00</td></tr>
+<tr><td><code>Math.sin</code> (contrast, intrinsic)</td><td>0.00</td><td>0.00</td><td>0.00</td></tr>
+</tbody>
+</table></div>
+<p>End to end, the same 480P configuration: <strong>JDK 17 4,651 B/frame, JDK 21
+5,964 B/frame.</strong></p>
+<p>This matters more than 1 KB a frame, because the two rules collide.
+<code>README.md</code> records that "<code>PlayerController</code> is checked at the constant-pool
+level to prove it never references <code>java/lang/Math</code>, only <code>StrictMath</code>" — lockstep
+P2P needs transcendentals to agree bit-for-bit. <code>STYLE.md</code> § 13.4 bans allocation
+on a per-tic path. <strong>On JDK 21+ those two rules cannot both be satisfied by
+<code>StrictMath.sin</code>.</strong> Nothing is broken today: <code>gradle.properties</code> pins
+<code>org.openfps.java.version=17</code> and both modules set <code>sourceCompatibility = 17</code>.
+But <code>gradlew</code> runs on whatever JDK is on <code>JAVA_HOME</code>, which on this machine is
+21, so <strong>the JVM that runs the game is already the one that allocates.</strong></p>
+<p>The fix, if the project ever needs one, is not to abandon determinism — it is a
+hand-rolled fixed-point or table-driven sine that is deterministic *by
+construction*, which <code>common/FixedMath</code> already has the machinery for. Recording
+the collision is the useful part; § 9 prices it.</p>
+<h3 id="54-per-shot-and-per-tic-against-what-the-source-claims">5.4 Per-shot and per-tic, against what the source claims<a class="anchor" href="#54-per-shot-and-per-tic-against-what-the-source-claims" aria-label="Permalink">#</a></h3>
+<p>Everything below was found by reading and is consistent with the profile:</p>
+<ul>
+<li>
+<p><strong>Per tic, always:</strong> 1 <code>InputState</code> (32 B), 8 objects / 264 B for the camera
+(<code>aimCamera</code> → <code>PlayerController.camera</code> → 2 <code>Vec3</code> from <code>eyePosition</code>/
+<code>forwardVector</code>, 4 more inside <code>Camera.create</code>, a <code>float[12]</code>, a <code>Camera</code>),
+22 objects / 1,280 B for bot placements, up to 36 objects / 2,112 B for
+effects. <strong>~52 objects / ~2,808 B/tic</strong> with seven living bots and effects in
+flight.</p>
+</li>
+<li>
+<p><strong>Per shot</strong> (≤5/s, <code>FIRE_INTERVAL_TICS = 12</code>): 2 <code>Vec3</code> + <code>Target[7]</code> +
+7 <code>Target</code> ≈ 376 B. Bot shots add 328 B at 2.8/s.</p>
+</li>
+<li>
+<p><strong>Per rendered frame on <code>main</code>:</strong> 2 capturing lambdas × ~4.5 polls
+(<code>GdxInputPort.isHeld:730</code>, <code>isJustPressed:740</code>), and one <code>DirectIntBufferS</code>
+from <code>pixels.asIntBuffer()</code> at <code>FramebufferPresenter.java:482</code>.</p>
+</li>
+<li>
+<p><strong>Per tic on the bus:</strong> a <code>TickEvent</code>, a <code>RenderFrameEvent</code> and a
+<code>LinkedBlockingQueue$Node</code> each — the event-driven architecture's own floor,
+~146 B/frame.</p>
+</li>
+<li>
+<p><strong>Networked (not exercised here):</strong> <code>NetSession.trimmed</code> (<code>NetSession.java:494</code>)
+allocates a <code>byte[20 + 12W]</code> <strong>per peer per tic</strong> — at 7 peers, <code>W = 8</code>,
+60 Hz that is 420 arrays/s ≈ 57 KB/s, plus one <code>byte[]</code> per received datagram
+from <code>socket.receive()</code>. That would roughly double the current rate.</p>
+</li>
+</ul>
+<p>The <code>Vec3</code> accounting specifically, since the source draws attention to it:
+<code>forwardVector()</code>/<code>eyePosition()</code> are called <strong>twice per tic</strong> from
+<code>aimCamera</code> and <strong>twice per shot</strong> from <code>fireIfRequested</code>, and the per-tic call
+drags four more <code>Vec3</code> out of <code>Camera.create</code>. <strong>Six <code>Vec3</code> per tic, two per
+shot.</strong> The render path itself allocates <strong>zero</strong> <code>Vec3</code> in the game, because
+<code>DemoGameplayPort</code> sets an explicit camera and <code>SoftwareRenderPort.cameraFor</code>
+(<code>:2010–2013</code>) returns it untouched; the 7-per-frame orbit-camera path at
+<code>:2061/:2065</code> is reached only by <code>--model=</code> mode and the offline preview tools.</p>
+<hr>
+<h2 id="6-the-claims-audit">6. The claims audit<a class="anchor" href="#6-the-claims-audit" aria-label="Permalink">#</a></h2>
+<h3 id="61-claims-that-hold">6.1 Claims that hold<a class="anchor" href="#61-claims-that-hold" aria-label="Permalink">#</a></h3>
+<p>Verified by reading and confirmed by the profile's silence:</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Claim</th><th>Where</th></tr></thead>
+<tbody>
+<tr><td>"Nothing is allocated after construction… one fixed scratch polygon sized at construction is sufficient forever"</td><td><code>TriangleClipper.java:76–83</code></td></tr>
+<tr><td>"One instance serves every tile of every frame, which is also why it allocates nothing"</td><td><code>SpanRenderer.java:112–114</code></td></tr>
+<tr><td>"None per frame. The tile job is a field… the inner loop holds only primitives"</td><td><code>OutlinePass.java:156–159</code></td></tr>
+<tr><td>"It owns no state, allocates nothing" / "<code>Arrays.fill</code> per row… no allocation of any kind"</td><td><code>Crosshair.java:17–19</code>, <code>:219–220</code></td></tr>
+<tr><td>"Nothing here allocates"</td><td><code>TextureSampler.java:23–29</code> (the <em>justification</em> "takes primitives" is wrong — five methods take a <code>MipChain</code> — but the conclusion is right)</td></tr>
+<tr><td>"Runs every frame and allocates nothing"</td><td><code>Framebuffer.java:421</code>, and <code>copyColorTo</code> at <code>:745</code></td></tr>
+<tr><td>"pre-allocated so the per-frame sort allocates nothing" — the insertion sort over <code>translucentOrder</code>/<code>translucentDepth</code></td><td><code>SoftwareRenderPort.java:504–506</code>, sort at <code>:1669–1700</code></td></tr>
+<tr><td>"Three <code>int[]</code> rings are allocated once… <code>64 × 8 × 12 B = 6 KB</code>" — arithmetic verified exactly</td><td><code>TicCmdBuffer.java:30–37</code></td></tr>
+<tr><td>"<code>fire</code> allocates nothing… the answer is written into a caller-owned <code>HitResult</code>"</td><td><code>Hitscan.java:118–124</code></td></tr>
+<tr><td>"the update path allocates nothing, touches no clock" — <code>PlayerController.update</code></td><td><code>PlayerController.java:28–30</code></td></tr>
+<tr><td>"one view is created and re-pointed with <code>wrap</code>, so the whole adapter costs a single object for the life of the session"</td><td><code>PlayerInputView.java:25–31</code></td></tr>
+<tr><td>"A tic where no trigger is pulled allocates nothing at all" — true of <code>Match.tick</code> itself</td><td><code>Match.java:30–38</code></td></tr>
+<tr><td>"hiding costs one reference store and no allocation at all"</td><td><code>DemoEffects.java:289–291</code></td></tr>
+<tr><td>"allocates a fresh array each call — about 8 KB… not on any per-tic or per-frame path"</td><td><code>BlasterSound.java:185–188</code></td></tr>
+<tr><td>"<code>String.format</code> allocates, and this draws every frame while it is on"</td><td><code>DebugOverlay.java:54</code> — the only claim in the repository that volunteers a cost rather than denying one, and it is honest: the overlay measured within noise of free</td></tr>
+</tbody>
+</table></div>
+<h3 id="62-claims-that-are-false">6.2 Claims that are FALSE<a class="anchor" href="#62-claims-that-are-false" aria-label="Permalink">#</a></h3>
+<p><strong>F1 — <code>DemoGameplayPort.java:80–83</code>.</strong> "<strong>The only per-tic allocation is the
+<code>Camera</code></strong>, which <code>render/README.md</code> § 4 explicitly sanctions."</p>
+<p>Measured: ~52 objects / ~2,808 B per tic. The <code>Camera</code> is 8 of those objects and
+264 of those bytes — and <code>DemoScene.placement</code>/<code>Mat4.ofRowMajor</code>, reached from
+the same <code>tick</code>, are <strong>32% of the entire process's allocation</strong>. Off by 52× on
+object count. This is the most consequential false claim in the repository
+because it is the one a reader would trust to skip the tick path.</p>
+<p><strong>F2 — <code>DemoGameplayPort.java:689–695</code>.</strong> "<strong>it is one reference store per bot
+per tic.</strong> The Scene itself is untouched."</p>
+<p><code>publishBotPlacements</code> calls <code>match.bots()</code> → <code>bots.clone()</code> (<code>Match.java:340</code>),
+then per living bot <code>DemoScene.placement:960</code> + <code>Mat4.ofRowMajor:80</code> +
+<code>Mat4.ofRowMajor:82</code>. <strong>22 objects / 1,280 B per tic</strong>, and the profile puts all
+three lines in its top four.</p>
+<p><strong>F3 — <code>DemoEffects.java:79–85</code>.</strong> "<strong>A tic allocates one <code>Mat4</code> per <em>visible</em>
+effect and nothing else.</strong>"</p>
+<p>Wrong twice. One "<code>Mat4</code>" is three objects / 176 B, because
+<code>Mat4.ofRowMajor:80</code> copies the caller's <code>float[16]</code>. And a visible puff
+publishes <code>PUFF_LOBES = 3</code> instances (<code>DemoEffects.java:778–782</code>), so it is
+three <code>Mat4</code> = 9 objects / 528 B. Worst case 36 objects / 2,112 B per tic against
+a claimed 6. The same file states the honest version at <code>:124</code> ("one more <code>Mat4</code>
+per tic per visible <strong>puff</strong>" — per <em>lobe</em>), so the two contradict each other.</p>
+<p><strong>F4 — <code>SoftwareRenderPort.java:237–239</code>.</strong> "<strong>a scene swap that stays within the
+high-water mark allocates nothing at all.</strong>"</p>
+<p>Only <code>growBuffersFor</code> is gated on the high-water mark (<code>:1090–1093</code>). <code>bindScene</code>
+(<code>:947</code>) then allocates unconditionally on every swap: <code>new float[opaque.length ×
+12]</code> (<code>:964</code>), <code>new Mat4[worldInstanceCount()]</code> (<code>:972</code>), <code>new float[hand.length ×
+12]</code> (<code>:973</code>), two <code>int[instances.length + 1]</code> (<code>:1123</code>), <code>new MipChain[total]</code>
+(<code>:1177</code>), <code>new Instance[…]</code> (<code>:1222</code>, <code>:1233</code>), plus two <code>int[triangles]</code> per
+distinct model (<code>:1266</code>, <code>:1286</code>) and seven arrays in <code>bindTranslucent</code>
+(<code>:997–1011</code>). For the demo's 340 instances that is hundreds of arrays.
+The same Javadoc says the opposite 200 lines earlier at <code>:839–843</code> ("the
+per-instance tables… are rebuilt every time"). The defensible claim is "does not
+re-grow the <strong>geometry</strong> buffers".</p>
+<p><strong>F5 — <code>SoftwareRenderPort.java:836–838</code>.</strong> "<strong>This is the only allocation site
+outside <code>resize</code>.</strong>"</p>
+<p>Two allocation sites are inside the per-frame path. <code>Rasterizer.java:955</code>
+(<code>binEntries = new int[running]</code>) is reached from <code>renderPass</code> → <code>setupAndBin</code> →
+<code>buildBinOffsets</code> on any frame that bins more (triangle, tile) pairs than any
+before it. <code>Rasterizer.java:456–458</code> (three <code>int[chunkCount × tiles]</code>) is reached
+from <code>renderPass</code> → <code>beginFrame</code>, and because <code>growBuffersFor</code> constructs a
+<em>fresh</em> <code>Rasterizer</code> with <code>tileCount == 0</code> (<code>:1112</code>), it fires <strong>on a frame</strong>
+after every buffer grow — 60,528 bytes at 720P/21 workers. <code>Rasterizer</code>'s own
+Javadoc admits both at <code>:161–167</code> while its headline sentence, "Nothing is
+allocated per frame", is contradicted by its own third clause.</p>
+<p><strong>F6 — <code>net/README.md:550–551</code>.</strong> "Six kilobytes for the entire input ring,
+allocated once at init <strong>from <code>I_MemoryPort</code></strong>."</p>
+<p><code>TicCmdBuffer.java:69–72</code> uses plain <code>new int[…]</code>. Nothing in <code>engine/net</code>
+imports <code>I_MemoryPort</code>. The 6 KB and the "steady-state per-tic allocation is
+zero" halves are both correct; the provenance is invented. Worth fixing because
+<code>README.md</code> advertises "Every allocation in the engine goes through
+<code>I_MemoryPort</code>" with exactly one sanctioned exception, and this is a second one
+nobody declared.</p>
+<p><strong>F7 — <code>net/README.md:474–476</code> and <code>RedundantSender.java:51–52</code>.</strong> "<strong>neither the
+send nor the receive path allocates.</strong>"</p>
+<p>True of <code>RedundantSender</code> in isolation, false of the shipped path:
+<code>NetSession.trimmed</code> (<code>:494</code>) allocates per packet per peer per tic and
+<code>socket.receive()</code> (<code>:427</code>) returns a fresh <code>byte[]</code> per datagram.
+<code>NetSession.java:487–491</code> admits the copy; the README generalises past it. The
+options table at <code>net/README.md:566</code> compounds it with "Alloc/packet 0 (reused
+direct buffer)" — true of <code>DatagramChannel</code>, false of the <code>byte[]</code>-based
+<code>I_DatagramPort</code> contract layered over it.</p>
+<p><strong>F8 — <code>net/README.md:100–116</code>.</strong> "Nothing in the running engine constructs a
+<code>PeerConnection</code>, a <code>TicCmdBuffer</code> or a <code>RedundantSender</code>… <strong>No socket is
+opened.</strong>"</p>
+<p>Stale, and contradicted by line 13 of the same file. <code>NetSession</code> constructs a
+<code>TicCmdBuffer</code> at <code>:89</code> and a <code>PeerConnection</code> at <code>:205</code>, calls
+<code>RedundantSender.packWindow</code> at <code>:479</code>, and binds a socket at <code>:170–176</code>.</p>
+<p><strong>F9 — narrower absolutes that are wrong as written</strong>, all off the hot path but
+all stated without qualification: <code>TicCmdBuffer.java:63–65</code> "This is the only
+allocation the class ever performs" (<code>get</code> allocates a <code>TicCmd</code> at <code>:339</code>, and
+the method's own Javadoc at <code>:325</code> says so); <code>PhysicsWorld.java:179–180</code> "That
+copy is the only allocation this class ever performs" (<code>solid(int)</code> at <code>:418</code>,
+<code>Builder</code> at <code>:238</code>/<code>:477</code>/<code>:518</code>); <code>TicCmd.java:196–199</code> "the only method here
+that allocates".</p>
+<p><strong>F10 — <code>SoftwareRenderPort.java:228–230</code>.</strong> "<code>render/README.md</code> § 4 explicitly
+sanctions ("Build one per frame")."</p>
+<p>The quoted string is not in <code>render/README.md</code>. It is in <code>Camera.java:91</code>. The
+substance is defensible; the citation is fabricated — which matters in a
+repository whose contribution rules require Javadoc to cite sources.</p>
+<p><strong>F11 — <code>OutlinePass.java:150–154</code>.</strong> "<code>SoftwareRenderPort</code> does not run the pass
+at all unless <code>Scene#hasTaggedEntities()</code>."</p>
+<p>It gates on <code>worldEntityIds != null &amp;&amp; outlineEnabled &amp;&amp; aimedEntityId !=
+Scene.UNTAGGED</code> (<code>:1403</code>), and <code>SoftwareRenderPort.java:1143–1148</code> argues at
+length that answering from <code>hasTaggedEntities()</code> would be <em>wrong</em>. Not an
+allocation claim, but the named condition is not the one in the code.</p>
+<h3 id="63-misleading-rather-than-false">6.3 Misleading rather than false<a class="anchor" href="#63-misleading-rather-than-false" aria-label="Permalink">#</a></h3>
+<p><strong><code>DemoGameplayPort.java:573–576</code></strong> — "<strong>Two Vec3 allocations per SHOT, not per
+tic.</strong>" Literally true of lines 578–579. Twelve lines below, <code>aimCamera</code> calls
+the <em>same two accessors</em> every tic and drags four more <code>Vec3</code> out of
+<code>Camera.create</code>. <strong>The per-tic camera costs three times as many <code>Vec3</code> as the
+per-shot path the file goes out of its way to defend.</strong></p>
+<p><strong><code>net/TicCmdEncoder.java:52–55</code></strong> — the "flat 'no <code>java.lang.Math</code>' guard… so
+that the check needs no exceptions to remember". The guard is per-class, over six
+classes. Live <code>java.lang.Math</code> calls exist in <code>AckWindow:201</code>,
+<code>RedundantSender:84</code>, <code>PeerConnection:255</code>, <code>DemoEffects:804</code>, <code>Vec3:140</code>,
+<code>InputState:127</code>. None is a determinism defect — integer ops, correctly-rounded
+<code>sqrt</code>, non-lockstep audio — but "flat rule, no exceptions" does not describe the
+repository.</p>
+<hr>
+<h2 id="7-gc-observations-on-a-real-run">7. GC observations on a real run<a class="anchor" href="#7-gc-observations-on-a-real-run" aria-label="Permalink">#</a></h2>
+<p>JDK 17, <strong>default G1 and default heap</strong> — what a player's JVM actually does.
+<code>MaxHeapSize</code> resolved to 4,217,372,672 B (¼ of 16 GB RAM). Two 3,600-frame runs
+(~62 s, ~3,680 tics each):</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Run</th><th>GC</th><th>Uptime</th><th>Cause</th><th>Heap</th><th>Pause</th></tr></thead>
+<tbody>
+<tr><td>480P</td><td>GC(0)</td><td>0.711s</td><td>Young (Concurrent Start), G1 Humongous Allocation</td><td>133M→33M</td><td>6.351 ms</td></tr>
+<tr><td></td><td>GC(2)</td><td>8.586s</td><td>Young (Normal), G1 Evacuation Pause</td><td>81M→50M</td><td>6.593 ms</td></tr>
+<tr><td></td><td>—</td><td>8.6s → 62s</td><td><strong>nothing</strong></td><td></td><td></td></tr>
+<tr><td>NATIVE</td><td>GC(0)</td><td>0.807s</td><td>Young (Concurrent Start), G1 Humongous Allocation</td><td>133M→32M</td><td>6.899 ms</td></tr>
+<tr><td></td><td>GC(2)</td><td>8.862s</td><td>Young (Normal), G1 Evacuation Pause</td><td>92M→62M</td><td>6.904 ms</td></tr>
+<tr><td></td><td>—</td><td>8.9s → 62s</td><td><strong>nothing</strong></td><td></td><td></td></tr>
+</tbody>
+</table></div>
+<p><strong>Two collections, both inside the first nine seconds, then roughly 3,100
+rendered frames with no pause at all.</strong> Corroborated by the very first
+measurement taken for this document — Serial GC, <code>-Xmx2g</code>, 300 frames: two young
+GCs, at 0.596 s and 1.350 s, and none thereafter.</p>
+<p>Both early collections are startup, not gameplay. GC(0)'s cause is *humongous
+allocation* — a G1 region here is 2 MiB and every buffer in § 3.1 is larger than
+half of one, so each full-frame array is allocated straight into humongous
+regions. GC(2) at ~8.6 s reclaims the ~30 MB of model-loading garbage
+(<code>Files.readAllBytes</code> per <code>.ofm</code>, <code>ModelFormat.sliceLevels</code>).</p>
+<p><strong>The frame-time conclusion:</strong></p>
+<ul>
+<li>
+<p>At ~300 kB/s and G1's adaptive young gen (30 MB reclaimed at GC(2)), the
+engine earns a young collection roughly <strong>once every 100 seconds — about every
+6,000 frames</strong>.</p>
+</li>
+<li>
+<p>The pause is <strong>6.4–6.9 ms</strong>. Against <code>docs/ASSETS.md</code> § 2's p99 of 7.06 ms at
+720p/8 workers, a pause landing on the worst frame gives ~14 ms — <strong>inside a
+16.7 ms budget. 60 Hz survives it.</strong></p>
+</li>
+<li>
+<p>At <strong>120 Hz the budget is 8.33 ms and a 6.6 ms pause does not fit.</strong> One
+dropped frame every ~12,000 at 120 Hz is not a defect worth engineering
+around, but it is the honest description, and it is the reason the § 9 list is
+worth doing at all rather than a reason it is urgent.</p>
+</li>
+<li>
+<p>The 600-frame harness in the brief will normally see <strong>zero</strong> steady-state
+collections. That is a fine smoke test and a useless GC benchmark; use
+Epsilon and read the slope.</p>
+</li>
+</ul>
+<hr>
+<h2 id="8-steady-state-footprint-against-the-platforms">8. Steady-state footprint against the platforms<a class="anchor" href="#8-steady-state-footprint-against-the-platforms" aria-label="Permalink">#</a></h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Configuration</th><th>Pre-allocated (render)</th><th>+ textures</th><th>Measured live heap</th><th>Verdict</th></tr></thead>
+<tbody>
+<tr><td>Desktop 480P</td><td>12.68 MB</td><td>33.3 MiB</td><td><strong>55.4 MiB</strong></td><td>Trivial against a 4 GiB default max</td></tr>
+<tr><td>Desktop 720P/NATIVE</td><td>24.94 MB</td><td>45.0 MiB</td><td><strong>69.7 MiB</strong></td><td>Trivial</td></tr>
+<tr><td>Phone 480P</td><td>15.09 MB</td><td>35.6 MiB</td><td>not measured</td><td>Fits a 96 MB growth limit with room</td></tr>
+<tr><td>Phone 720P</td><td>30.44 MB</td><td>50.3 MiB</td><td>not measured</td><td>Fits, tight on a 96 MB device</td></tr>
+<tr><td>Phone NATIVE</td><td><strong>65.03 MB</strong></td><td><strong>83.2 MiB</strong></td><td>not measured</td><td><strong>Does not fit a 96–128 MB growth limit.</strong> <code>largeHeap</code> is load-bearing, and the manifest under-counts the reason by 31 MB</td></tr>
+</tbody>
+</table></div>
+<hr>
+<h2 id="9-what-would-actually-be-worth-fixing">9. What would actually be worth fixing<a class="anchor" href="#9-what-would-actually-be-worth-fixing" aria-label="Permalink">#</a></h2>
+<p>Ordered by measured benefit per unit of risk. Together, items 1–4 remove ~62% of
+all steady-state allocation and would take the engine to roughly 1.9 KB/tic.</p>
+<div class="tablewrap"><table>
+<thead><tr><th>#</th><th>Fix</th><th>Wins</th><th>Cost</th></tr></thead>
+<tbody>
+<tr><td><strong>1</strong></td><td><strong><code>WorkerPool.awaitWork</code>: replace <code>idleLock</code> + <code>idleCondition.await(50ms)</code> with a per-worker <code>LockSupport.parkNanos</code>.</strong> <code>AQS$ConditionObject.await</code> allocates a <code>ConditionNode</code> per park and the contended <code>lock()</code> adds an <code>ExclusiveNode</code></td><td><strong>~1,900 B/frame, 42%</strong> — the single largest allocator in the process. Also removes 21-way contention on one lock</td><td>One class, ~30 lines. Needs care: the existing three-condition recheck under the lock (<code>:540</code>) is what makes a signal unmissable, and a park/unpark rewrite has to keep that. Highest value and the only item on this list with real concurrency risk</td></tr>
+<tr><td><strong>2</strong></td><td><strong>Give <code>I_RenderPort</code> a <code>setWorldTransform(int, float[])</code> that copies from a caller-owned <code>float[16]</code></strong>, so <code>DemoScene.placement</code> and <code>DemoEffects</code> can fill reusable scratch instead of building a literal that <code>Mat4.ofRowMajor</code> then copies</td><td><strong>~1,450 B/frame, 32%.</strong> Removes 2 of the 3 objects per placement and all of the defensive copies</td><td>A port-contract addition. <code>Mat4</code>'s immutability is deliberate — it is what makes a transform safe to hand to 21 workers — so the overload must copy into port-owned storage, not alias the caller's array. Medium</td></tr>
+<tr><td><strong>3</strong></td><td><strong><code>GdxInputPort.isHeld</code> / <code>isJustPressed</code>: replace <code>binding -&gt; isDown(input, binding)</code> with a plain loop or a non-capturing predicate</strong></td><td>~195 B/frame, 4.3%</td><td>Two methods, both private, no contract change. The cheapest real win here</td></tr>
+<tr><td><strong>4</strong></td><td><strong><code>FramebufferPresenter</code>: hoist <code>pixmap.getPixels().asIntBuffer()</code> into a field, refreshed on resize</strong></td><td>39 B/frame per <em>platform</em> frame</td><td>One line. <code>asIntBuffer()</code> allocates a view object every frame for no reason</td></tr>
+<tr><td><strong>5</strong></td><td><strong><code>Match.bots()</code>: stop cloning.</strong> <code>DemoGameplayPort</code> calls it every tic purely to iterate</td><td>39 B/frame</td><td>Add a non-copying accessor, or have <code>DemoGameplayPort</code> hold the roster it already receives. Trivially safe; the clone is defending against a caller that does not exist</td></tr>
+<tr><td><strong>6</strong></td><td><strong>Correct F1–F11 in § 6.2.</strong> Zero runtime effect</td><td>The reason this audit was needed. A false "allocates nothing" is worse than no comment: it tells the next reader not to look</td><td>Comment edits. Do this one first — it costs nothing and it is what makes items 1–5 discoverable</td></tr>
+<tr><td><strong>7</strong></td><td><strong>Drop <code>Framebuffer.entityIds</code>, or fold it into the depth buffer's spare bits, or allocate it only for tagged scenes.</strong> Memory, not rate</td><td><strong>10.4 MB at phone NATIVE, 3.7 MB at 720P</strong></td><td>The Javadoc at <code>Framebuffer.java:94–97</code> argues it is allocated unconditionally so it need not be published safely to workers mid-frame — a good reason. But it is a third of what pushed Android into <code>OutOfMemoryError</code>, and § 4's real 62 MB makes the trade worth re-opening</td></tr>
+<tr><td><strong>8</strong></td><td><strong>Record the <code>StrictMath</code> collision</strong> (§ 5.3) in <code>STYLE.md</code> § 13.4 and <code>net/README.md</code></td><td>1,019 B/frame <em>if</em> the project moves off JDK 17</td><td>A paragraph now. A deterministic fixed-point sine later, if it ever has to be paid — <code>common/FixedMath</code> already has the shape for it. Do not silently switch to <code>Math.sin</code>: that trades 1 KB/frame for a lockstep desync</td></tr>
+</tbody>
+</table></div>
+<p>Explicitly <strong>not</strong> worth fixing: the event bus's <code>TickEvent</code> +
+<code>RenderFrameEvent</code> + two <code>LinkedBlockingQueue$Node</code> per tic (~146 B/frame, 3%).
+Pooling them means either mutable events or a ring buffer, and both trade the
+architecture's clearest property — an event is an immutable value on a shared
+queue — for 3% of a number that is already small enough not to trigger a
+collection inside 100 seconds.</p>
+<hr>
+<h2 id="10-what-could-not-be-measured">10. What could not be measured<a class="anchor" href="#10-what-could-not-be-measured" aria-label="Permalink">#</a></h2>
+<p>Stated plainly so nothing above reads as more certain than it is.</p>
+<ol>
+<li>
+<p><strong>Nothing was measured on Android.</strong> Every phone figure in § 3.5, § 4 and
+§ 8 is <em>computed</em> from the same constants that were verified exactly against
+a desktop heap histogram (§ 3.1), and the one Android data point —
+10,368,012 bytes — is quoted from the manifest, not re-observed. The
+arithmetic closes on ART's 12-byte array header, which is good evidence the
+model is right, but <strong>the growth-limit conclusion in § 8 is a prediction.</strong>
+Running the <code>OpenFPS_API36</code> emulator with <code>adb shell dumpsys meminfo</code> at each
+<code>RenderMode</code> would settle it and was out of scope here.</p>
+</li>
+<li>
+<p><strong>Native memory is not counted anywhere.</strong> libGDX's <code>Pixmap</code>
+(<code>FramebufferPresenter.java:416</code>) is another <code>w × h × 4</code> bytes off-heap —
+10.4 MB at phone NATIVE — and LWJGL, GLFW, the GL driver and the uploaded
+texture are all outside the Java heap. <code>-XX:NativeMemoryTracking=summary</code>
+plus <code>jcmd VM.native_memory</code> would give the JVM's share; the driver's would
+need platform tooling. Every "footprint" figure here is <strong>Java heap only</strong>.</p>
+</li>
+<li>
+<p><strong>Per-frame and per-tic could not be separated,</strong> because they are the same
+event. Rendering is driven by <code>RenderFrameEvent</code> from <code>GameLoop</code>, so varying
+<code>--fps</code> moves both together. What <em>was</em> separated is per-<em>platform</em>-frame
+(vsync, 60 Hz, <code>main</code>) from per-<em>rendered</em>-frame, and the platform half
+measured within noise of zero. A build that decoupled them would be needed to
+do better, and that build does not exist.</p>
+</li>
+<li>
+<p><strong>TLAB attribution is coarse in absolute bytes.</strong> A 4 KiB refill is charged
+entirely to the stack that tripped it, so § 5.2's per-site bytes are shares
+scaled by a total, not direct measurements. The <em>shares</em> are corroborated by
+the independent per-thread split; the <em>absolutes</em> should be read to one
+significant figure.</p>
+</li>
+<li>
+<p><strong>Run-to-run spread is ±20–30%</strong> and is not fully explained. Five JDK 17
+runs of the same configuration gave 4,414–6,204 B/frame. The candidates are
+<code>binEntries</code> high-water growth (<code>Rasterizer.java:955</code>) creeping as the camera
+finds new (triangle, tile) maxima, a varying number of live effects, and the
+number of idle worker parks tracking scheduler luck. <strong>Any single measured
+figure in § 5.1 is worth ±25%, and the resolution-independence conclusion is
+drawn from the whole set, not from any pair.</strong></p>
+</li>
+<li>
+<p><strong>The networked path is unexercised.</strong> § 5.4's 57 KB/s for
+<code>NetSession.trimmed</code> is computed from <code>RedundantSender.packetBytes(W)</code> at
+7 peers and 60 Hz, not observed — no run here attached a <code>NetSession</code>. It
+would roughly double the total, which makes it the largest <em>unmeasured</em> risk
+in this document.</p>
+</li>
+<li>
+<p><strong>The demo's match is lost after ~25 s at 60 Hz</strong> (the bots shoot back and
+nothing shoots back at them in an unattended run), and <code>GameOverScreen</code>
+constructs a <code>SpriteBatch</code>. Every regression window above ends before that
+transition. <strong>No figure here describes a match longer than about 25 seconds
+of play</strong>, and long-run behaviour — texture churn on scene swaps, a slowly
+creeping <code>binEntries</code> — is therefore unmeasured.</p>
+</li>
+<li>
+<p><strong>Tile size and worker-count interaction on the bin pools was not swept.</strong>
+<code>render/README.md</code> § 11(c) already flags 64×64 as never measured for <em>speed</em>;
+it is equally unmeasured for memory, and § 3.3's <code>12 × workers</code> bytes per
+tile is arithmetic from the source rather than a measurement of alternatives.</p>
+</li>
+</ol>
+<hr>
+<h2 id="11-reproducing-this">11. Reproducing this<a class="anchor" href="#11-reproducing-this" aria-label="Permalink">#</a></h2>
+<div class="code" data-lang="powershell"><pre><code># Absolute allocation rate. Read the slope of heap-used against uptime,
+# in the window after warm-up and before the match is lost.
+java -XX:+UnlockExperimentalVMOptions -XX:+UseEpsilonGC -Xms1g -Xmx1g `
+     -XX:EpsilonPrintHeapSteps=4096 -Xlog:gc:file=alloc.log:uptime,time `
+     -Dopenfps.screenshotFrame=1300 -Dopenfps.screenshotExit=true `
+     -Dopenfps.screenshot=C:\tmp\x.png -Dopenfps.renderMode=480p `
+     -cp "desktop\build\install\desktop\lib\*" `
+     com.openfps.desktop.DesktopLauncher --start-in-game --fps=60
+
+# Attribution. Shrinking the TLAB is what makes the sample density usable.
+java "-XX:StartFlightRecording:filename=a.jfr,jdk.ObjectAllocationInNewTLAB#enabled=true,jdk.ObjectAllocationInNewTLAB#stackTrace=true,jdk.ThreadAllocationStatistics#enabled=true,jdk.ThreadAllocationStatistics#period=1000ms" `
+     -XX:FlightRecorderOptions=stackdepth=128 -XX:TLABSize=4k -XX:-ResizeTLAB `
+     -cp "desktop\build\install\desktop\lib\*" com.openfps.desktop.DesktopLauncher --start-in-game
+jfr print --json --events jdk.ThreadAllocationStatistics a.jfr
+
+# Pre-allocation, verified rather than computed. Take two, at two render modes;
+# the delta must equal 12 B per padded pixel + 12 B per visible pixel.
+jcmd &lt;pid&gt; GC.class_histogram
+</code></pre></div>
+<p><code>gradlew :desktop:run</code> cannot do any of this: <code>run</code> is a <code>JavaExec</code> and
+<code>desktop/build.gradle.kts:105–115</code> forwards <code>openfps.*</code> system properties only,
+so a <code>-Xlog</code> or <code>-XX:</code> flag on the Gradle line lands on the daemon. Use
+<code>:desktop:installDist</code> and launch the JVM yourself, or add <code>jvmArgs</code> forwarding
+alongside the existing <code>systemProperty</code> loop.</p>
+<footer class="pagefoot"><p>Source: <a class="ext" rel="noopener noreferrer" target="_blank" href="https://github.com/nicholashutter/OpenFPS/blob/main/docs/MEMORY.md">docs/MEMORY.md</a>. This page is generated — edit the Markdown, not the HTML.</p></footer>
+</main>
+</div>
+<script src="site.js"></script>
+</body>
+</html>
