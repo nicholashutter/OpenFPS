@@ -590,7 +590,13 @@ public final class GdxFrameLoopListener implements ApplicationListener
     //
     // Runs on the render thread from a Scene2D click. restartMatch takes the tic
     // lock, which is what makes that safe — see attachMatchRestart.
-    private void restartMatch()
+    //
+    // Package-private rather than private, on the same terms as menuActions()
+    // above and for the same reason: the only caller in production is a button on
+    // a GameOverScreen, and a GameOverScreen cannot be constructed without a GL
+    // context. Widening it by one level is what lets the ORDERING be asserted
+    // headlessly, and the ordering is the part that can be got wrong.
+    void restartMatch()
     {
         if (matchRestart == null)
         {
