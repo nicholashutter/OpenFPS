@@ -174,6 +174,16 @@ import com.openfps.engine.core.pool.I_ThreadPoolPort;
  * that feeds it. Only the pixels that <i>are</i> tagged pay for the
  * neighbourhood test, four reads per pixel of thickness.</p>
  *
+ * <p><b>The keyline is not free, and it is worth saying where the cost lands.</b>
+ * A pixel that fails the edge test asks the same question of its four immediate
+ * neighbours, so an <i>interior</i> pixel of the subject costs about five
+ * neighbourhood tests instead of one. That is deliberately the cheapest place to
+ * put it: the subject is one body, and every pixel of the frame that is untagged
+ * or belongs to somebody else still costs the single integer compare it did
+ * before. The alternative — deriving the keyline from the background side —
+ * would have paid four extra reads on <i>every</i> pixel of the frame, and would
+ * have had workers writing outside their own tiles.</p>
+ *
  * <h2>Allocation</h2>
  *
  * <p>None per frame. The tile job is a field, the frame's buffers are hoisted
