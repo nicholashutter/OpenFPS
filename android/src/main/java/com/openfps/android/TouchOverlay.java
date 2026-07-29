@@ -408,6 +408,19 @@ public final class TouchOverlay
     {
         final float range = layout.stickRange();
         drawSprite(disc, baseX, baseY, range, HALO_TINT, WELL_ALPHA);
+        // The base ring was the one control with nothing behind its outer edge.
+        // The well darkens the inside of it; outside is whatever the room
+        // happens to be, and against a lit grey floor a light blue ring at 0.66
+        // is the faintest thing on the screen — which the black captures the
+        // control pad was built against could not possibly have shown.
+        //
+        // A RING rather than the filled disc the buttons use. The buttons' halo
+        // is a disc a little larger than the rim, which works because a button
+        // is small; at the stick's range the same treatment is four times the
+        // area and lays a dark plate over the corner of the world the player is
+        // walking into. This shadows the rim from outside only, and the well
+        // already backs it from inside, so the ring is bracketed either way.
+        drawSprite(ring, baseX, baseY, range * HALO_SPREAD, HALO_TINT, HALO_ALPHA);
         drawSprite(ring, baseX, baseY, range, STICK_TINT, rimAlpha(held));
 
         final float knobRadius = layout.stickKnobRadius();

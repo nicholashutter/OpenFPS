@@ -108,6 +108,26 @@ public interface I_AudioPort
     void play(SoundId sound);
 
     /**
+     * Loads every sound this port can play, now, if it can.
+     *
+     * <p>An optional hint, not a lifecycle step: a port that loads eagerly in
+     * {@link #init()} may do nothing here, and calling it twice must be
+     * harmless. It exists because {@link #init()} runs before some platforms
+     * have an audio device at all, so the only alternative to a hint is loading
+     * on the first {@link #play} — and on Android that is measurably too late.
+     * {@code SoundPool.load} is <b>asynchronous</b>: the sound is not playable
+     * for some tens of milliseconds after it is created, and a shot fired
+     * inside that window is dropped with nothing but a {@code play soundID not
+     * READY} line in logcat to show for it. The first three shots of every
+     * match were silent.</p>
+     *
+     * <p>Call it at a seam where a device certainly exists and nothing is about
+     * to fire — entering a match, not leaving a menu. Must not throw and must
+     * not block on anything slower than a small file write.</p>
+     */
+    void preload();
+
+    /**
      * Silences everything currently playing.
      *
      * <p>For the seams where the world goes away underneath the sound: a match

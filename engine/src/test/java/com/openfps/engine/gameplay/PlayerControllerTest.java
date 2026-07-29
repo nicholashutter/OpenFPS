@@ -321,16 +321,94 @@ class PlayerControllerTest
         }
     }
 
+    /**
+     * The sign of a turn, stated in terms nothing here can define away.
+     *
+     * <p>Every other yaw test in this file is satisfied by a controller that
+     * turns the wrong way, because they all compare a yaw against another yaw
+     * and a mirror is self-consistent. These compare the turn against the
+     * player's OWN right-hand direction, which the movement tests pin
+     * independently — so a controller that turns the wrong way has to disagree
+     * with its own strafe to pass, and it cannot.</p>
+     *
+     * <p>They exist because the sign was wrong, in shipped code, on both
+     * platforms, until someone dragged a thumb across an emulator and watched
+     * the room slide the wrong way.</p>
+     */
+    @Nested
+    @DisplayName("turn direction")
+    class TurnDirection
+    {
+        @Test
+        @DisplayName("a positive yaw delta turns the view toward the player's own right")
+        void shouldFaceTheOldRightAfterAQuarterTurnRight()
+        {
+            final PlayerController player = facing(0.0f);
+            final Vec3 rightBefore = player.groundRightVector();
+
+            player.update(look(QUARTER_TURN, 0.0f), TIC_60HZ);
+
+            // A quarter turn to the right puts the nose exactly where the
+            // right hand was pointing. No renderer, no basis, no sign
+            // convention needed to read this.
+            assertThat(player.groundForwardVector().x())
+                .isCloseTo(rightBefore.x(), within(EPSILON));
+            assertThat(player.groundForwardVector().z())
+                .isCloseTo(rightBefore.z(), within(EPSILON));
+        }
+
+        @Test
+        @DisplayName("turning right then walking forward goes where strafing right went")
+        void shouldWalkWhereStrafeWentAfterTurningRight()
+        {
+            final PlayerController strafed = facing(0.0f);
+            strafed.update(move(0.0f, 1.0f), ONE_SECOND);
+
+            final PlayerController turned = facing(0.0f);
+            turned.update(look(QUARTER_TURN, 0.0f), TIC_60HZ);
+            turned.update(move(1.0f, 0.0f), ONE_SECOND);
+
+            // The two ways of getting to the same place. If look and strafe
+            // disagreed about which way "right" is, these would land on
+            // opposite sides of the origin — which is exactly the failure the
+            // Android emulator showed as a camera that panned backwards.
+            assertThat(turned.positionX()).isCloseTo(strafed.positionX(), within(EPSILON));
+            assertThat(turned.positionZ()).isCloseTo(strafed.positionZ(), within(EPSILON));
+        }
+
+        @Test
+        @DisplayName("a negative yaw delta turns the other way")
+        void shouldFaceTheOldLeftAfterAQuarterTurnLeft()
+        {
+            final PlayerController player = facing(0.0f);
+            final Vec3 rightBefore = player.groundRightVector();
+
+            player.update(look(-QUARTER_TURN, 0.0f), TIC_60HZ);
+
+            assertThat(player.groundForwardVector().x())
+                .isCloseTo(-rightBefore.x(), within(EPSILON));
+            assertThat(player.groundForwardVector().z())
+                .isCloseTo(-rightBefore.z(), within(EPSILON));
+        }
+    }
+
     @Nested
     @DisplayName("yaw wrap")
     class YawWrap
     {
+        // Every look() argument below carries the OPPOSITE sign to the yaw it
+        // produces, because a positive yawDelta turns the view right and the
+        // stored yaw grows to the LEFT. That is applyLook's minus sign, and
+        // these tests are about the wrap, not about it — see TurnDirection for
+        // the tests that pin the sign itself.
+
         @Test
         @DisplayName("stays inside [0, 2pi) after a large positive turn")
         void shouldWrapYawIntoRangeWhenTurningFarPositive()
         {
             final PlayerController player = new PlayerController();
-            player.update(look(PlayerController.FULL_TURN_RADIANS * 5.0f + 2.0f, 0.0f), TIC_60HZ);
+            player.update(
+                look(-(PlayerController.FULL_TURN_RADIANS * 5.0f + 2.0f), 0.0f), TIC_60HZ);
 
             assertThat(player.yawRadians())
                 .isGreaterThanOrEqualTo(0.0f)
@@ -343,7 +421,8 @@ class PlayerControllerTest
         void shouldWrapYawIntoRangeWhenTurningFarNegative()
         {
             final PlayerController player = new PlayerController();
-            player.update(look(-PlayerController.FULL_TURN_RADIANS * 5.0f - 2.0f, 0.0f), TIC_60HZ);
+            player.update(
+                look(PlayerController.FULL_TURN_RADIANS * 5.0f + 2.0f, 0.0f), TIC_60HZ);
 
             assertThat(player.yawRadians())
                 .isGreaterThanOrEqualTo(0.0f)
@@ -354,21 +433,21 @@ class PlayerControllerTest
 
         @Test
         @DisplayName("crosses the 2pi boundary upward without a discontinuity")
-        void shouldWrapAcrossUpperBoundaryWhenTurningRight()
+        void shouldWrapAcrossUpperBoundaryWhenTurningLeft()
         {
             final PlayerController player =
                 facing(PlayerController.FULL_TURN_RADIANS - 0.1f);
-            player.update(look(0.2f, 0.0f), TIC_60HZ);
+            player.update(look(-0.2f, 0.0f), TIC_60HZ);
 
             assertThat(player.yawRadians()).isCloseTo(0.1f, within(EPSILON));
         }
 
         @Test
         @DisplayName("crosses the 0 boundary downward without a discontinuity")
-        void shouldWrapAcrossLowerBoundaryWhenTurningLeft()
+        void shouldWrapAcrossLowerBoundaryWhenTurningRight()
         {
             final PlayerController player = facing(0.1f);
-            player.update(look(-0.2f, 0.0f), TIC_60HZ);
+            player.update(look(0.2f, 0.0f), TIC_60HZ);
 
             assertThat(player.yawRadians())
                 .isCloseTo(PlayerController.FULL_TURN_RADIANS - 0.1f, within(EPSILON));
@@ -826,8 +905,11 @@ class PlayerControllerTest
         @DisplayName("a zero timestep moves nobody, but still turns the head")
         void shouldNotMoveWhenTheTimestepIsZero()
         {
+            // The look delta is NEGATIVE where the stored yaw is positive: a
+            // yawDelta turns the view right and a larger stored yaw faces
+            // left, so the two carry opposite signs. See applyLook.
             final PlayerController player = facing(0.0f);
-            player.update(new Input(1.0f, 1.0f, 0.5f, 0.25f), 0.0f);
+            player.update(new Input(1.0f, 1.0f, -0.5f, 0.25f), 0.0f);
 
             assertThat(player.positionX()).isEqualTo(0.0f);
             assertThat(player.positionZ()).isEqualTo(0.0f);

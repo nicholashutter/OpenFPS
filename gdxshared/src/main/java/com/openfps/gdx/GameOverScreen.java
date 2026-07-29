@@ -71,6 +71,21 @@ public final class GameOverScreen
     /** Where the heading's top edge sits, as a fraction of height from the top. */
     private static final float TITLE_TOP_FRACTION = 0.14f;
 
+    /**
+     * The most of the surface height the heading may occupy.
+     *
+     * <p>The heading is sized from the <b>width</b>, which is right on a desktop
+     * window and runaway on a landscape phone: 52% of 2400 px is a word 240 px
+     * tall on a screen only 1080 px high, and everything below it inherits the
+     * overflow. Capping here rather than lowering
+     * {@link #TITLE_WIDTH_FRACTION} keeps the heading full-width on the shapes
+     * where it already fitted.</p>
+     */
+    private static final float HEADING_MAX_HEIGHT_FRACTION = 0.22f;
+
+    /** Clearance kept below the button, in pixels before scaling. */
+    private static final float BOTTOM_MARGIN = 28.0f;
+
     /** Gap under the heading before the first summary line, in pixels. */
     private static final float SUMMARY_GAP = 40.0f;
 
@@ -277,6 +292,25 @@ public final class GameOverScreen
      * window width so it scales with the window, and the button is a fixed
      * pixel size so it stays pointer-sized whatever the window does.</p>
      *
+     * <h2>The block is made to fit, and that is not cosmetic</h2>
+     *
+     * <p>Laid out naively at a phone's density this screen is about 1123 px tall
+     * on a 1080 px surface, and what falls off the bottom is the <b>button</b> —
+     * the only way off a screen that has already taken the input processor away
+     * from everything else and un-caught the back key. The emulator showed it
+     * exactly: DEFEAT, four tidy figures, and a sliver of yellow along the
+     * bottom edge. That is not a layout blemish, it is a dead end.</p>
+     *
+     * <p>Two bounded corrections, in the order that costs the player least.
+     * First the heading is capped by height as well as width — it is decoration
+     * and it is the single largest item. Then the three gaps are shrunk
+     * together by whatever fraction still does not fit. <b>Nothing that is
+     * touched, sized or read is scaled</b>: the button keeps its full
+     * pointer-sized box and the figures keep their font, because a screen that
+     * fits by shrinking its own touch target has solved the wrong problem. The
+     * same reasoning, and the same emulator, produced
+     * {@code MainMenuFrameCallback.layoutDensity}.</p>
+     *
      * @param width window width in pixels
      * @param height window height in pixels
      */
@@ -284,26 +318,127 @@ public final class GameOverScreen
     {
         background.setBounds(0.0f, 0.0f, width, height);
 
-        final float headingWidth = width * TITLE_WIDTH_FRACTION;
+        final float headingWidth = headingWidthFor(width, height, heading.widthInBlocks());
         final float cell = heading.cellSizeFor(headingWidth);
         final float headingHeight = cell * BlockFont.GLYPH_HEIGHT;
         final float headingTop = height * (1.0f - TITLE_TOP_FRACTION);
         heading.setBounds((width - headingWidth) * 0.5f, headingTop - headingHeight,
             headingWidth, headingHeight);
 
-        float nextTop = headingTop - headingHeight - SUMMARY_GAP * uiScale;
+        // Packed before anything is measured: the gap budget below is the
+        // surface minus the things whose size is already decided, and a label
+        // that has not been packed reports a size it will not keep.
         for (final Label line : summaryLines)
         {
             line.pack();
-            line.setPosition((width - line.getWidth()) * 0.5f, nextTop - line.getHeight());
-            nextTop = nextTop - line.getHeight() - LINE_GAP * uiScale;
         }
 
         final float buttonWidth = BUTTON_WIDTH * uiScale;
         final float buttonHeight = BUTTON_HEIGHT * uiScale;
+        final float gapScale = gapScaleFor(headingTop - headingHeight, buttonHeight);
+
+        float nextTop = headingTop - headingHeight - SUMMARY_GAP * uiScale * gapScale;
+        for (final Label line : summaryLines)
+        {
+            line.setPosition((width - line.getWidth()) * 0.5f, nextTop - line.getHeight());
+            nextTop = nextTop - line.getHeight() - LINE_GAP * uiScale * gapScale;
+        }
+
         backButton.setSize(buttonWidth, buttonHeight);
         backButton.setPosition((width - buttonWidth) * 0.5f,
-            nextTop - BUTTON_GAP * uiScale - buttonHeight);
+            nextTop - BUTTON_GAP * uiScale * gapScale - buttonHeight);
+    }
+
+    /**
+     * Returns the width to draw the heading at, capped so it cannot dominate a
+     * short surface.
+     *
+     * <p>A width rather than a height because that is the only dimension
+     * {@link BlockTitle} reads — it derives its cell size from
+     * {@code getWidth()} and draws downward from the top of its bounds, so the
+     * bounds height is a placement hint and never a limit. The cap is therefore
+     * expressed by inverting {@code BlockTitle}'s own arithmetic rather than by
+     * guessing a second constant that could drift from it.</p>
+     *
+     * <p>Static, and taking the block count rather than reading it off the
+     * heading, so the rule can be asserted in a plain JVM. Everything else on
+     * this screen needs a GL context to exist at all.</p>
+     *
+     * @param width the surface width in pixels
+     * @param height the surface height in pixels
+     * @param blocks the heading's width in {@link BlockFont} cells
+     * @return the heading width in pixels, never more than
+     *     {@link #TITLE_WIDTH_FRACTION} of the surface
+     */
+    public static float headingWidthFor(final float width, final float height, final int blocks)
+    {
+        final float wanted = width * TITLE_WIDTH_FRACTION;
+        if (blocks <= 0)
+        {
+            return wanted;
+        }
+        final float capped =
+            (height * HEADING_MAX_HEIGHT_FRACTION / BlockFont.GLYPH_HEIGHT) * blocks;
+        if (capped < wanted)
+        {
+            return capped;
+        }
+        return wanted;
+    }
+
+    /**
+     * Returns the fraction of their natural size a block of gaps may take.
+     *
+     * <p>The whole fit rule, as arithmetic: 1 when everything already fits — so
+     * no window that was correct becomes tighter — falling proportionally as the
+     * surface runs out, and 0 rather than negative when there is nothing left to
+     * give. At 0 the figures sit directly on the button, which is cramped and
+     * still reachable; that is the trade this method exists to make, and it is
+     * strictly better than a button below the bottom edge.</p>
+     *
+     * <p>Static and public because it is the part of this layout worth pinning
+     * without a window, and the part whose failure is a screen with no way off
+     * it.</p>
+     *
+     * @param available pixels left for the gaps once every fixed-size item has
+     *     taken its share
+     * @param natural the height the gaps want, in pixels
+     * @return a factor in 0..1 to multiply every gap by
+     */
+    public static float gapFitFraction(final float available, final float natural)
+    {
+        if (!(natural > 0.0f))
+        {
+            return 1.0f;
+        }
+        if (available >= natural)
+        {
+            return 1.0f;
+        }
+        if (available <= 0.0f)
+        {
+            return 0.0f;
+        }
+        return available / natural;
+    }
+
+    // The gap factor for this screen's actual contents. Measures the packed
+    // labels and hands the decision to gapFitFraction, which is where the rule
+    // lives and where it is tested.
+    private float gapScaleFor(final float spaceBelowHeading, final float buttonHeight)
+    {
+        float lines = 0.0f;
+        for (final Label line : summaryLines)
+        {
+            lines = lines + line.getHeight();
+        }
+        // One gap under the heading, one after each line — the layout loop
+        // subtracts LINE_GAP after the last line too — and one above the button.
+        final float natural = (SUMMARY_GAP + BUTTON_GAP
+            + LINE_GAP * summaryLines.length) * uiScale;
+        final float available = spaceBelowHeading - lines - buttonHeight
+            - BOTTOM_MARGIN * uiScale;
+        return gapFitFraction(available, natural);
     }
 
     /**

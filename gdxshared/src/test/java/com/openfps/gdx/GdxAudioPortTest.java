@@ -136,6 +136,62 @@ final class GdxAudioPortTest
     }
 
     @Nested
+    @DisplayName("preload")
+    final class Preload
+    {
+        @Test
+        @DisplayName("is harmless with no device, and does not latch the port off")
+        void shouldSurvivePreloadWithoutADevice(@TempDir final Path cache)
+        {
+            // The Android launcher calls this on entering a match, which fires
+            // once at attach time while the menu is still up — before the frame
+            // loop, so before Gdx.audio exists. It has to be as survivable as
+            // play() is, and it must leave the port willing to try again.
+            final I_AudioPort port = new GdxAudioPort(cache.toFile());
+            port.init();
+
+            assertThatCode(() ->
+            {
+                port.preload();
+                port.preload();
+                port.play(SoundId.WEAPON_FIRE);
+            }).doesNotThrowAnyException();
+            assertThat(port.isAudible()).isFalse();
+            port.shutdown();
+        }
+
+        @Test
+        @DisplayName("outside the lifecycle it does nothing rather than opening a device")
+        void shouldIgnorePreloadOutsideTheLifecycle(@TempDir final Path cache)
+        {
+            // shutdown() has already released whatever was loaded. A preload
+            // after it must not quietly reopen the port behind the subsystem's
+            // back — the same rule play() follows.
+            final I_AudioPort port = new GdxAudioPort(cache.toFile());
+
+            assertThatCode(() ->
+            {
+                port.preload();
+                port.init();
+                port.shutdown();
+                port.preload();
+            }).doesNotThrowAnyException();
+            assertThat(port.isAudible()).isFalse();
+        }
+
+        @Test
+        @DisplayName("a null cache directory costs the warm-up, not the run")
+        void shouldSurvivePreloadWithNoCacheDirectory()
+        {
+            final I_AudioPort port = new GdxAudioPort(null);
+            port.init();
+
+            assertThatCode(port::preload).doesNotThrowAnyException();
+            port.shutdown();
+        }
+    }
+
+    @Nested
     @DisplayName("with a broken cache directory")
     final class BrokenCache
     {

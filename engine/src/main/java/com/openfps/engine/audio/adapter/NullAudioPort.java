@@ -80,6 +80,14 @@ public final class NullAudioPort implements I_AudioPort
     }
 
     @Override
+    public void preload()
+    {
+        // There is nothing to load. Deliberately not counted either: preload is
+        // a hint about device latency, and a test asserting on play counts must
+        // not have them moved by one.
+    }
+
+    @Override
     public void stopAll()
     {
         // Nothing is playing, by construction. The play count is left alone:

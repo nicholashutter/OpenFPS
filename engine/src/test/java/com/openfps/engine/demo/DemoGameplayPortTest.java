@@ -233,7 +233,11 @@ final class DemoGameplayPortTest
                 port.tick(tic);
             }
 
-            assertThat(player.yawRadians()).isCloseTo(50 * perTic, within(EPSILON));
+            // Fifty tics of a rightward look delta. The stored yaw runs the
+            // other way — it grows to the left — so a right turn from zero
+            // wraps down through 2pi. See PlayerController.applyLook.
+            assertThat(player.yawRadians())
+                .isCloseTo(PlayerController.FULL_TURN_RADIANS - 50 * perTic, within(EPSILON));
         }
 
         @Test

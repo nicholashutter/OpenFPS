@@ -13,6 +13,7 @@ import com.badlogic.gdx.backends.android.AndroidApplication;
 import com.openfps.engine.core.EngineMain;
 import com.openfps.engine.core.EngineSession;
 import com.openfps.engine.core.GameConfig;
+import com.openfps.engine.audio.port.I_AudioPort;
 import com.openfps.engine.core.pool.I_ThreadPoolPort;
 import com.openfps.engine.demo.DemoAssetException;
 import com.openfps.engine.demo.DemoGameplayPort;
@@ -153,7 +154,7 @@ public final class AndroidLauncher extends AndroidApplication
         final AndroidUiFrameCallback ui = new AndroidUiFrameCallback(
             new DefaultMenuActions(windowPort), new FramebufferPresenter(renderer), input,
             debug);
-        attachMatchGate(ui, gameplay[0]);
+        attachMatchGate(ui, gameplay[0], hal.getAudioPort());
         attachMatchResult(ui, gameplay[0]);
         // Loosely, on purpose: DebugSettings does not import the renderer and
         // the renderer has never heard of a settings screen. Attaching does not
@@ -275,15 +276,38 @@ public final class AndroidLauncher extends AndroidApplication
      * seconds starts already down a fifth of their health. That was visible in
      * the first run of the packaged desktop build and there is no reason a
      * phone would be different.</p>
+     *
+     * <p><b>The weapon's sound is loaded on the same edge</b>, and this is the
+     * only seam in the app where it can be. It needs a live {@code Gdx.audio},
+     * which does not exist until the frame loop is running, and it has to
+     * happen before the trigger rather than on it — {@code SoundPool.load} is
+     * asynchronous, so a sound created by the first shot is not ready to play
+     * until several shots later. Entering a match satisfies both: the surface
+     * is up, and the player is still finding their thumbs.</p>
+     *
+     * @param ui the UI whose transitions drive the gate; must not be null
+     * @param gameplay the match to freeze and unfreeze, or null when no world
+     *     was packaged
+     * @param audio the sound output to warm up; must not be null
      */
     private static void attachMatchGate(final AndroidUiFrameCallback ui,
-        final DemoGameplayPort gameplay)
+        final DemoGameplayPort gameplay, final I_AudioPort audio)
     {
         if (gameplay == null)
         {
             return;
         }
-        ui.attachMatchGate(live -> gameplay.setMatchLive(live.booleanValue()));
+        ui.attachMatchGate(live ->
+        {
+            gameplay.setMatchLive(live.booleanValue());
+            if (live.booleanValue())
+            {
+                // Idempotent, so a second match costs one map lookup. Attaching
+                // the gate fires it once with the CURRENT state — the menu — so
+                // this cannot run before there is a device to run against.
+                audio.preload();
+            }
+        });
     }
 
     /**

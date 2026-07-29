@@ -64,6 +64,16 @@ import org.slf4j.LoggerFactory;
  * bug in a different place. The warning is logged once regardless, so a
  * genuinely broken setup does not scroll the console.</p>
  *
+ * <p><b>Lazy is not the same as late</b>, and on Android the difference is
+ * audible. {@code Gdx.audio.newSound} maps to {@code SoundPool.load}, which
+ * returns an id immediately and finishes loading on its own thread some tens of
+ * milliseconds later; a {@code play} inside that window is dropped outright.
+ * Baking on the first shot therefore silenced the first shot — and the two
+ * after it. {@link #preload()} is the fix: the same bake, at a seam where a
+ * device exists and nothing is about to fire. Desktop's OpenAL loads
+ * synchronously and never had the symptom, which is exactly why it went
+ * unnoticed until an emulator.</p>
+ *
  * <h2>Threading</h2>
  *
  * <p>{@link #play} is called from the game loop thread — a shot is a simulation
@@ -179,6 +189,23 @@ public final class GdxAudioPort implements I_AudioPort
             // A device unplugged mid-session lands here. One log, then silence,
             // rather than one log per shot.
             warnOnce("Could not play " + sound + ": {}", e.toString());
+        }
+    }
+
+    @Override
+    public void preload()
+    {
+        if (!running)
+        {
+            return;
+        }
+        // Every sound, not a named one: a second SoundId should be warmed by
+        // existing at all rather than by someone remembering to add it here.
+        // bake() is the same call play() makes, so a device that is still
+        // absent costs one null check and the next attempt tries again.
+        for (final SoundId sound : SoundId.values())
+        {
+            bake(sound);
         }
     }
 

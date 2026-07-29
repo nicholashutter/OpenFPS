@@ -39,48 +39,88 @@ val roomVersion = "2.8.4"
 // A fresh clone therefore builds an APK with no models in it — that is the
 // intended outcome, and AndroidLauncher reports it and comes up as a menu.
 //
-// It is a lot of megabytes — about 36 of converted models, against an APK that
-// was 10 without them. Almost all of it is texture: ModelFormat has no shared-
-// atlas concept, so each of the eighteen Kenney characters carries its own
-// private copy of what is very nearly the same 512x512 image. The demo only
-// stands seven of them up, but the choice of WHICH seven lives in DemoModels
-// where it belongs, and repeating that list here would be a second place for it
-// to drift. Shrinking this is a model-format change, not a build-script one.
+// The 28 staged .ofm files are 37 MB on disk and cost about 1 MB of APK: 5.7 MB
+// without them, 6.7 MB with. That ratio is not a surprise once measured — the
+// bulk of a .ofm is an uncompressed 512x512 texture of large flat colour fields,
+// which is close to the best case deflate has, and AGP compresses assets by
+// default. (The figure that used to stand here, "about 36 MB against an APK that
+// was 10", was never measured against a built APK. It could not have been: no
+// APK had the models in it until the wiring below was fixed.)
 //
-// Resolved to plain Files at configuration time: the configuration cache
+// ModelFormat has no shared-atlas concept, so each of the eighteen Kenney
+// characters carries its own private copy of very nearly the same image. The
+// demo only stands seven of them up, but the choice of WHICH seven lives in
+// DemoModels where it belongs, and repeating that list here would be a second
+// place for it to drift. Shrinking the on-disk set is a model-format change, not
+// a build-script one — and at 1 MB in the package it is not urgent.
+//
+// Resolved to a plain File at configuration time: the configuration cache
 // refuses to serialise a task that closes over a Project or a script object.
 val modelAssetsSourceDir = rootProject.layout.projectDirectory.dir("assets/models").asFile
-val modelAssetsStagedDir = layout.buildDirectory.dir("generated/openfpsAssets").get().asFile
 
 /**
- * Stages the repository's model tree into the APK's assets.
+ * Stages the repository's model tree into a directory the APK's assets are
+ * built from.
  *
- * Sync rather than Copy: a model removed from assets/models must disappear from
- * the next APK too, and Copy would leave it behind forever. A missing source
- * directory is not an error — it is the state of every fresh clone — and Sync
- * simply produces an empty staging directory, which is exactly what an APK with
- * no world in it should contain.
+ * A sync rather than a copy: a model removed from assets/models must disappear
+ * from the next APK too, and a plain copy would leave it behind forever. A
+ * missing source directory is not an error — it is the state of every fresh
+ * clone — and the sync simply produces an empty staging directory, which is
+ * exactly what an APK with no world in it should contain.
  *
  * The `into("models")` sits on the FROM spec rather than on the task, so the
  * task's declared output directory is the assets ROOT and the files land one
- * level down in models/. That is not cosmetic: the source set below registers
- * this task itself as the srcDir, which is what tells Gradle who produces that
- * directory. Registering the plain File instead builds and packages correctly
- * and then fails every task that merely READS the directory — lint, in
- * practice — with "Gradle detected a problem with the following location",
- * because nothing had declared a producer for it.
+ * level down in models/ — the path ApkModelSource resolves against.
+ *
+ * <b>Why a hand-written task rather than `Sync`.</b> AGP is told about this
+ * directory through the variant API below, and that call demands a task whose
+ * output is a `DirectoryProperty` it can wire up itself. `Sync` exposes
+ * `destinationDir`, a plain `File` property, so it cannot be handed over — and
+ * the source-set route it was registered through before is precisely the bug
+ * this replaces. See the comment on `onVariants`.
  */
-val stageModelAssets by tasks.registering(Sync::class) {
+abstract class StageModelAssetsTask : DefaultTask() {
+
+    /**
+     * The repository's assets/models tree. A file collection rather than a
+     * DirectoryProperty because that directory is routinely ABSENT — a fresh
+     * clone has no upstream art — and a missing DirectoryProperty input fails
+     * the build instead of staging nothing.
+     */
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val sourceTree: ConfigurableFileCollection
+
+    /** Where the staged assets root is written. */
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    /** Gradle's copy engine, injected so nothing resolves against the Project. */
+    @get:Inject
+    abstract val fs: FileSystemOperations
+
+    /** Mirrors the model tree into the staging directory, deletions included. */
+    @TaskAction
+    fun stage() {
+        fs.sync {
+            from(sourceTree) {
+                // Converted models only. assets/models also holds the RAW
+                // Kenney downloads the converter reads — .glb, .obj, source
+                // textures, licence files — which are ~17 MB the device would
+                // carry and never open.
+                include("**/*.ofm")
+                into("models")
+            }
+            into(outputDir)
+        }
+    }
+}
+
+val stageModelAssets by tasks.registering(StageModelAssetsTask::class) {
     group = "openfps"
     description = "Copies assets/models into the APK's assets so the demo has a world."
-    from(modelAssetsSourceDir) {
-        // Converted models only. assets/models also holds the RAW Kenney
-        // downloads the converter reads — .glb, .obj, source textures, licence
-        // files — which are ~17 MB the device would carry and never open.
-        include("**/*.ofm")
-        into("models")
-    }
-    into(modelAssetsStagedDir)
+    sourceTree.from(modelAssetsSourceDir)
+    outputDir.set(layout.buildDirectory.dir("generated/openfpsAssets"))
 }
 
 android {
@@ -127,20 +167,6 @@ android {
         }
     }
 
-    sourceSets {
-        getByName("main") {
-            // The staged models, in addition to the default
-            // src/main/assets — not instead of it, so anything genuinely
-            // committed as an asset later still arrives.
-            //
-            // The TASK, not its output path. srcDir resolves it through
-            // Project.files(), which carries the task dependency with it, so
-            // every consumer of the assets — merge, package, AND lint — knows
-            // what produces them. See stageModelAssets.
-            assets.srcDir(stageModelAssets)
-        }
-    }
-
     // libGDX ships one .so per ABI inside gdx-platform. Nothing here needs
     // a jniLibs source set — the natives arrive as a dependency.
     packaging {
@@ -176,6 +202,37 @@ android {
                 }
             }
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Handing the staged models to AGP — the line the world depends on
+// ---------------------------------------------------------------------------
+// `addGeneratedSourceDirectory` is the ONLY registration that both adds the
+// directory to the variant's assets and makes the merge task depend on the task
+// that fills it. AGP takes the TaskProvider and the output property together,
+// so the dependency is derived rather than declared, and it cannot drift.
+//
+// This replaces `sourceSets.main.assets.srcDir(stageModelAssets)`, which was
+// wrong in a way that is invisible until you open the APK. That call reads the
+// directory but does NOT carry the producing task into `mergeDebugAssets`:
+// `assembleDebug` ran to completion without ever executing stageModelAssets, so
+// the staging directory stayed empty and the APK shipped with no assets/ entry
+// at all. The app then came up as a menu over a BLACK world and blamed the
+// missing art in logcat — while assets/models sat fully populated on disk two
+// directories up. Anything that merely lands the files in the right place by
+// accident (running the task by hand, a second build after someone else ran it)
+// makes the symptom disappear without fixing it, which is why the fix has to be
+// the wiring and not the copy.
+//
+// Applied to every variant: a release APK with no world in it would be the same
+// bug shipped.
+androidComponents {
+    onVariants { variant ->
+        variant.sources.assets?.addGeneratedSourceDirectory(
+            stageModelAssets,
+            StageModelAssetsTask::outputDir
+        )
     }
 }
 

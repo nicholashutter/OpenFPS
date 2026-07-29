@@ -67,6 +67,30 @@ final class NullAudioPortTest
         }
 
         @Test
+        @DisplayName("preloading nothing is a no-op that does not count as a play")
+        void shouldIgnorePreload()
+        {
+            // preload is a hint about a real device's load latency and this port
+            // has no device. It must stay free, and — the part worth pinning —
+            // it must not move the play count, or every test that asserts "one
+            // shot fired one sound" starts reading two.
+            final NullAudioPort port = new NullAudioPort();
+
+            assertThatCode(() ->
+            {
+                port.preload();
+                port.init();
+                port.preload();
+                port.preload();
+                port.shutdown();
+                port.preload();
+            }).doesNotThrowAnyException();
+            assertThat(port.playCount()).isZero();
+            assertThat(port.lastSound()).isNull();
+            assertThat(port.isAudible()).isFalse();
+        }
+
+        @Test
         @DisplayName("ignores a null sound rather than rejecting it")
         void shouldIgnoreANullSound()
         {

@@ -45,6 +45,104 @@ class EndOfMatchTextTest
         return new MatchSummary(MatchState.LOST, 3, 7, 18, 9, 100, 0);
     }
 
+    /**
+     * The heading's real width in cells, asked of the font rather than counted
+     * by hand — the cap arithmetic inverts BlockTitle's, so a test that guessed
+     * the number would stop testing the thing the moment the font changed.
+     */
+    private static int defeatBlocks()
+    {
+        return BlockFont.widthInBlocks(GameOverScreen.LOSS_TEXT);
+    }
+
+    /**
+     * The fit rule that keeps the one way off this screen on the screen.
+     *
+     * <p>Laid out naively at a landscape phone's density the end-of-match block
+     * is taller than the surface, and what falls off the bottom is the button —
+     * on a screen that has already taken the input processor away from
+     * everything else. The emulator showed DEFEAT, four tidy figures and a
+     * sliver of yellow along the bottom edge, which is a dead end rather than a
+     * blemish. Both halves of the correction are plain arithmetic and are
+     * pinned here; the placement they feed still needs a window to judge.</p>
+     */
+    @Nested
+    @DisplayName("the end-of-match fit rule")
+    class FitRule
+    {
+
+        @Test
+        @DisplayName("a roomy surface leaves every gap at its natural size")
+        void shouldNotTightenAScreenThatAlreadyFits()
+        {
+            assertThat(GameOverScreen.gapFitFraction(500.0f, 300.0f)).isEqualTo(1.0f);
+            assertThat(GameOverScreen.gapFitFraction(300.0f, 300.0f)).isEqualTo(1.0f);
+        }
+
+        @Test
+        @DisplayName("a short surface shrinks the gaps proportionally rather than overflowing")
+        void shouldShrinkGapsWhenTheBlockIsTooTall()
+        {
+            assertThat(GameOverScreen.gapFitFraction(150.0f, 300.0f)).isEqualTo(0.5f);
+            assertThat(GameOverScreen.gapFitFraction(240.0f, 300.0f)).isEqualTo(0.8f);
+        }
+
+        @Test
+        @DisplayName("a surface with nothing left to give collapses the gaps, never inverts them")
+        void shouldClampToZeroRatherThanGoingNegative()
+        {
+            // A negative factor would push the button UP past the figures and
+            // out of the top of the screen, which is the same dead end upside
+            // down.
+            assertThat(GameOverScreen.gapFitFraction(0.0f, 300.0f)).isEqualTo(0.0f);
+            assertThat(GameOverScreen.gapFitFraction(-400.0f, 300.0f)).isEqualTo(0.0f);
+        }
+
+        @Test
+        @DisplayName("a layout wanting no gaps at all is left alone rather than divided by zero")
+        void shouldReturnOneWhenThereAreNoGaps()
+        {
+            assertThat(GameOverScreen.gapFitFraction(-10.0f, 0.0f)).isEqualTo(1.0f);
+        }
+
+        @Test
+        @DisplayName("a desktop window keeps the heading at its full width fraction")
+        void shouldNotCapTheHeadingOnADesktopWindow()
+        {
+            // 1280x720: 52% of the width is a word well inside 22% of the
+            // height, so the cap must not fire and change what already worked.
+            assertThat(GameOverScreen.headingWidthFor(1280.0f, 720.0f, defeatBlocks()))
+                .isEqualTo(1280.0f * 0.52f);
+        }
+
+        @Test
+        @DisplayName("a landscape phone caps the heading by height instead of width")
+        void shouldCapTheHeadingOnAWideShortSurface()
+        {
+            // 2400x1080 is the emulator. The heading must come back smaller than
+            // the width alone would give it, or everything below inherits the
+            // overflow.
+            final float capped = GameOverScreen.headingWidthFor(2400.0f, 1080.0f, defeatBlocks());
+
+            assertThat(capped).isLessThan(2400.0f * 0.52f);
+            // A hundredth of a pixel of slack: the cap is set by inverting
+            // BlockTitle's divide-by-cells and this multiplies it back, which
+            // is not bit-exact in float. Anything that actually overflowed
+            // would be out by whole pixels.
+            assertThat(capped / defeatBlocks() * BlockFont.GLYPH_HEIGHT)
+                .as("the resulting word must sit inside the height cap")
+                .isLessThanOrEqualTo(1080.0f * 0.22f + 0.01f);
+        }
+
+        @Test
+        @DisplayName("a heading with no blocks asks for the width rather than dividing by zero")
+        void shouldFallBackWhenTheHeadingIsEmpty()
+        {
+            assertThat(GameOverScreen.headingWidthFor(1280.0f, 720.0f, 0))
+                .isEqualTo(1280.0f * 0.52f);
+        }
+    }
+
     @Nested
     @DisplayName("the end-of-match heading")
     class Heading

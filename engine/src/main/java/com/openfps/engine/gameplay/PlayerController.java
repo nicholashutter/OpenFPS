@@ -45,6 +45,13 @@ import com.openfps.engine.render.adapter.Vec3;
  * south, your right hand points west, and {@code groundRight} at yaw 0 is
  * indeed {@code (-1, 0, 0)}.</p>
  *
+ * <p><b>Increasing yaw therefore turns the player LEFT</b>, which reads as a
+ * surprise every time and is worth stating rather than deriving. Yaw sweeps
+ * from +z toward +x, and +x is where {@code groundRight} is <i>not</i> — right
+ * is {@code -x} at yaw 0. That is why {@link #applyLook} <b>subtracts</b> the
+ * input's yaw delta; see the comment there, which is where this cost a working
+ * camera once already.</p>
+ *
  * <p><b>Movement is yaw-only.</b> The displacement uses {@code groundForward},
  * never {@code forward}, so looking at the sky does not launch the player into
  * it. Pitch aims the camera and nothing else.</p>
@@ -437,9 +444,33 @@ public final class PlayerController
     }
 
     // Integrates the look deltas, then re-establishes both angle invariants.
+    //
+    // THE YAW IS SUBTRACTED, and that minus sign is the whole of the mapping
+    // between "what the player did" and "what this class stores". It is not a
+    // taste question and it is not negotiable:
+    //
+    //   I_PlayerInput / InputState define yawDelta > 0 as "turn the view
+    //   RIGHT", deliberately, so that no adapter has to know a renderer's
+    //   basis. InputState's own Javadoc spells out the consequence — "a
+    //   consumer building a forward vector rotates by -yaw about +y".
+    //
+    //   This class's yaw does the opposite: it sweeps +z toward +x, and right
+    //   at yaw 0 is -x (groundRight = groundForward x up). So a LARGER yaw is
+    //   a turn to the LEFT. Adding the delta therefore turns the player away
+    //   from the direction they asked for.
+    //
+    // It did exactly that, on both platforms, until it was measured on an
+    // Android emulator: a finger dragged right panned the camera left, with
+    // the whole room sliding the wrong way under a stationary crosshair. The
+    // desktop mouse had the same bug and nobody had caught it, because a mouse
+    // inverted in one axis reads as "sensitivity feels odd" far more readily
+    // than a thumb does — a thumb is dragging the world itself.
+    //
+    // Pitch needs no such flip: InputState's "positive tilts up" and this
+    // class's "positive pitch looks up" already agree.
     private void applyLook(final I_PlayerInput input)
     {
-        this.yawRadians = wrapYaw(yawRadians + input.yawDelta());
+        this.yawRadians = wrapYaw(yawRadians - input.yawDelta());
         this.pitchRadians = clampPitch(pitchRadians + input.pitchDelta());
     }
 
