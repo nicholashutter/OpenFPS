@@ -66,8 +66,14 @@ public final class ScoreOverlay
      * <p>Big enough to be read without looking for it. The notice appears when
      * the player has just lost control of the camera, which is the moment they
      * are least likely to be scanning a corner of the screen.</p>
+     *
+     * <p>Eight rather than twelve, which is where it started: at twelve
+     * "ELIMINATED!" spanned 792 px of a 1280 px window — 62% of the width — and
+     * the band under it swallowed a third of the room. Judged from a capture
+     * rather than from the arithmetic, which is the only way to judge it: the
+     * word has to dominate the frame without replacing it.</p>
      */
-    public static final float NOTICE_CELL_PIXELS = 12.0f;
+    public static final float NOTICE_CELL_PIXELS = 8.0f;
 
     /** Fraction of a cell left empty, so the digits read as blocks. */
     public static final float CELL_GAP_FRACTION = 0.15f;

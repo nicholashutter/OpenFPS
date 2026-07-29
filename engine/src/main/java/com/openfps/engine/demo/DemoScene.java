@@ -346,16 +346,47 @@ public final class DemoScene
     public static final float BOT_WEAPON_HEIGHT_UNITS = 30.0f;
 
     /**
-     * Half a turn in radians, added to a bot's yaw to point its weapon forwards.
+     * Weapon yaw within a bot's own frame, in degrees — <b>240</b>.
      *
-     * <p>The same flip {@link #WEAPON_VIEW_YAW_DEGREES} carries and for the same
-     * reason: a Blaster Kit muzzle points along model <b>-z</b>, verified by
-     * rendering one, while a placement's yaw of zero puts model +z along the
-     * facing. Without it every bot in the room holds its carbine backwards,
-     * which is both wrong and — because the grip end is chunkier — surprisingly
-     * hard to notice in a still.</p>
+     * <p>Two rotations that compose into one number, so both are written down —
+     * the same shape of statement {@link #WEAPON_VIEW_YAW_DEGREES} makes for the
+     * player's own gun.</p>
+     *
+     * <ul>
+     *   <li><b>180 degrees</b> because a Blaster Kit muzzle points along model
+     *       <b>-z</b>, verified by rendering one, while a placement's yaw of zero
+     *       puts model +z along the holder's facing. Without the flip every bot in
+     *       the room holds its carbine backwards — which is surprisingly hard to
+     *       notice in a still, because the grip end is the chunkier one.</li>
+     *   <li><b>60 degrees of carry angle</b>, and <b>this is the number that made
+     *       the weapon visible at all.</b> Pointed straight down the bot's facing
+     *       it was aimed at the camera, so what the player saw was its
+     *       <i>cross-section</i> — 3 units by 8, on a 56-unit body, which reads as
+     *       a smudge on a shirt rather than as a gun. It is the identical mistake
+     *       {@code DemoEffects.TRACER_WIDTH_UNITS} records for the tracer bolt,
+     *       and it was made again here.</li>
+     * </ul>
+     *
+     * <p>Sixty rather than ninety: at ninety the weapon is exactly side-on and
+     * shows its full 17.8 units, but a body holding a carbine dead across its
+     * chest reads as a guard of honour. At sixty the visible length is
+     * {@code sin(60) = 87%} of it — about a third of the body's height across the
+     * screen, unmistakably a weapon — while the muzzle still points forward
+     * enough to read as carried rather than presented.</p>
+     *
+     * <p><b>Angled rather than scaled up, which was the other candidate fix.</b>
+     * The scale is <i>derived</i> ({@link #BOT_WEAPON_WORLD_SCALE}) from two packs
+     * that turn out to agree about a metre, and inflating it to solve a
+     * foreshortening problem would have thrown that away and given the bots
+     * comically large guns to look at from the side. The weapon was the right
+     * size all along and pointing the wrong way.</p>
+     *
+     * <p>It also happens to suit these opponents: a weapon held across the body is
+     * a weapon that is not being aimed, and {@link Bot}'s whole skill model is
+     * about how badly they aim. The same reasoning put
+     * {@link #BOT_WEAPON_HEIGHT_UNITS} below eye level.</p>
      */
-    private static final float BOT_WEAPON_YAW_OFFSET_RADIANS = (float) StrictMath.PI;
+    public static final float BOT_WEAPON_YAW_DEGREES = 240.0f;
 
 
     /**
@@ -688,16 +719,16 @@ public final class DemoScene
      *
      * <h2>The transform, since it is not one of {@link #placement}'s</h2>
      *
-     * <p>Two rotations that do not agree with each other, which is why this is
-     * written out rather than composed. The <b>offset</b> is expressed in the
-     * bot's own frame and so is rotated by the <i>bot's</i> yaw, using
-     * {@code PlayerController}'s basis — {@code groundForward = (sin, 0, cos)}
-     * and {@code groundRight = groundForward x up = (-cos, 0, sin)}. The
-     * <b>model</b> is then turned by the bot's yaw plus half a turn, because a
-     * Blaster Kit muzzle points down model -z; see
-     * {@link #BOT_WEAPON_YAW_OFFSET_RADIANS}. Using one angle for both would put
-     * the gun in the correct hand pointing backwards, or in the wrong hand
-     * pointing forwards, depending on which one was chosen.</p>
+     * <p><b>Two angles that are deliberately different, which is why this is
+     * written out rather than composed from {@link #placement} alone.</b> The
+     * <i>offset</i> is a position in the bot's own frame, so it is rotated by the
+     * bot's yaw using {@code PlayerController}'s basis —
+     * {@code groundForward = (sin, 0, cos)} and
+     * {@code groundRight = groundForward x up = (-cos, 0, sin)}. The <i>model</i>
+     * is turned by the bot's yaw plus {@link #BOT_WEAPON_YAW_DEGREES}, which is
+     * the muzzle flip and the carry angle together. Using one angle for both would
+     * put the gun in the correct hand pointing backwards, or in the wrong hand
+     * pointing forwards, depending on which one was picked.</p>
      *
      * @param bot the bot holding it; must not be null
      * @return its model-to-world transform this tic, or {@link DemoEffects#HIDDEN}
@@ -717,7 +748,7 @@ public final class DemoScene
         final float z = bot.positionZ()
             + BOT_WEAPON_FORWARD_UNITS * cosYaw + BOT_WEAPON_RIGHT_UNITS * sinYaw;
         return placement(x, bot.positionY() + BOT_WEAPON_HEIGHT_UNITS, z,
-            yaw + BOT_WEAPON_YAW_OFFSET_RADIANS, BOT_WEAPON_WORLD_SCALE);
+            yaw + radians(BOT_WEAPON_YAW_DEGREES), BOT_WEAPON_WORLD_SCALE);
     }
 
     // The room the demo is actually meant to show: floor, walls, props.
