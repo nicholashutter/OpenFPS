@@ -89,6 +89,18 @@ class DesktopBindingsTest
         }
 
         @Test
+        @DisplayName("the invert-look toggle is I, and it is bound at all")
+        void shouldBindInvertLookToIWhenUsingDefaults()
+        {
+            // Bound rather than merely declared is the point. An unbound
+            // toggle would leave "is my mouse inverted?" answerable only by
+            // editing source and rebuilding, which is how the wrong sign came
+            // to ship undetected in the first place.
+            assertThat(DesktopBindings.defaults().bindingsFor(GameAction.TOGGLE_INVERT_LOOK))
+                .containsExactly(InputBinding.key(Input.Keys.I));
+        }
+
+        @Test
         @DisplayName("fire also answers to left control, for trackpads")
         void shouldOfferAKeyboardAlternateForFireWhenUsingDefaults()
         {

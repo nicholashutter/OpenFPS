@@ -87,8 +87,13 @@ tasks.named<JavaExec>("run") {
     // saved profile.
     workingDir = rootProject.projectDir
 
+    // openfps.workers pins the worker pool (ThreadPoolFactory sizes it from the
+    // processor count otherwise). It is forwarded for the same reason as the
+    // rest: a -D that lands on the daemon would leave the pool auto-sized while
+    // looking as though it had been pinned, which is the worst of both.
     for (name in listOf("openfps.screenshot", "openfps.screenshotFrame",
-                        "openfps.screenshotExit", "openfps.fpsLog")) {
+                        "openfps.screenshotExit", "openfps.fpsLog",
+                        "openfps.workers", "openfps.debugOverlay")) {
         val value = providers.systemProperty(name).orNull
         if (value != null) {
             systemProperty(name, value)

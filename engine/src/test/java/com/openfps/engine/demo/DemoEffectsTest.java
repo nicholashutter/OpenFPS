@@ -11,6 +11,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.openfps.engine.hal.adapter.nulladapter.NullTimePort;
 import com.openfps.engine.hal.port.I_TimePort;
 import com.openfps.engine.render.adapter.Mat4;
+import com.openfps.engine.render.adapter.Rgba;
 import com.openfps.engine.render.adapter.Scene;
 import com.openfps.engine.render.adapter.SoftwareRenderPort;
 
@@ -157,6 +158,151 @@ final class DemoEffectsTest
         {
             assertThatThrownBy(() -> DemoEffects.addTo(null))
                 .isInstanceOf(IllegalArgumentException.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("visibility — the smoke has to be seen, not merely drawn")
+    final class Visibility
+    {
+        /**
+         * The demo room's lit wall and floor, sampled from a real capture at
+         * 1280x720: {@code (141, 147, 177)}, a pale grey-blue.
+         *
+         * <p>A measured number rather than a derived one, because there is
+         * nothing to derive it from — it is a Kenney atlas texel times whatever
+         * the rasterizer does with it. If the art is restaged and this drifts,
+         * the assertions below are the right thing to fail: they are the whole
+         * question this fixture asks.</p>
+         */
+        private static final int ROOM_RED = 141;
+
+        /** See {@link #ROOM_RED}. */
+        private static final int ROOM_GREEN = 147;
+
+        /** See {@link #ROOM_RED}. */
+        private static final int ROOM_BLUE = 177;
+
+        /**
+         * Least per-channel distance from the background that counts as
+         * visible, on the freshest rung.
+         *
+         * <p>Not a perceptual model, just a floor well above the level at which
+         * the bug lived: the old smoke resolved about ten levels from the wall
+         * on its most opaque rung, which nobody could see.</p>
+         */
+        private static final int VISIBLE_DELTA = 30;
+
+        /** The same floor for the faintest rung, where a wisp is the intent. */
+        private static final int WISP_DELTA = 6;
+
+        @Test
+        @DisplayName("the freshest rung is plainly darker than the room behind it")
+        void freshSmokeStandsOutAgainstTheRoom()
+        {
+            // THE regression guard for "the smoke is not there".
+            //
+            // The smoke was never missing. It was drawn every frame, in the
+            // right place, blended by exactly the right arithmetic — in a grey
+            // that sat about ten levels from the pale grey-blue wall behind it.
+            // Every test passed and the feature was invisible, because nothing
+            // asserted the one property that matters to a player: that the
+            // result differs from what it is drawn over.
+            final int room = Rgba.pack(ROOM_RED, ROOM_GREEN, ROOM_BLUE, Scene.OPAQUE);
+            final int over = Rgba.srcOver(DemoEffects.smokeColour(), room,
+                DemoEffects.coverageFor(0));
+
+            assertThat(Math.abs(Rgba.red(over) - ROOM_RED))
+                .as("red must move; composited %s over the room", over)
+                .isGreaterThanOrEqualTo(VISIBLE_DELTA);
+            assertThat(Math.abs(Rgba.green(over) - ROOM_GREEN))
+                .isGreaterThanOrEqualTo(VISIBLE_DELTA);
+            assertThat(Math.abs(Rgba.blue(over) - ROOM_BLUE))
+                .isGreaterThanOrEqualTo(VISIBLE_DELTA);
+        }
+
+        @Test
+        @DisplayName("every rung moves the pixel, and the faintest is still a wisp")
+        void everyRungIsPerceptible()
+        {
+            // A staircase whose lower steps land on the background is a fade
+            // that stops early and then jumps to nothing. Each rung has to
+            // carry some of the puff, or the stages below it are instances
+            // rendered for no visible result.
+            final int room = Rgba.pack(ROOM_RED, ROOM_GREEN, ROOM_BLUE, Scene.OPAQUE);
+            for (int stage = 0; stage < DemoEffects.PUFF_STAGES; stage++)
+            {
+                final int over = Rgba.srcOver(DemoEffects.smokeColour(), room,
+                    DemoEffects.coverageFor(stage));
+                assertThat(Math.abs(Rgba.red(over) - ROOM_RED))
+                    .as("stage %d must still tint the room", stage)
+                    .isGreaterThanOrEqualTo(WISP_DELTA);
+            }
+        }
+
+        @Test
+        @DisplayName("the smoke stays translucent — a puff you cannot see through is a hole")
+        void smokeIsNeverOpaque()
+        {
+            // The overcorrection this guards against was real: raising the top
+            // rung to 228 against a dark colour produced a block that read as a
+            // hole punched in the room rather than as a cloud. Coverage below
+            // OPAQUE is what Scene needs to put the instance in the translucent
+            // partition at all; leaving visible headroom below it is what makes
+            // the result look like smoke.
+            for (int stage = 0; stage < DemoEffects.PUFF_STAGES; stage++)
+            {
+                assertThat(DemoEffects.coverageFor(stage))
+                    .as("stage %d", stage)
+                    .isLessThan(Scene.OPAQUE)
+                    .isPositive();
+            }
+            final int room = Rgba.pack(ROOM_RED, ROOM_GREEN, ROOM_BLUE, Scene.OPAQUE);
+            final int over = Rgba.srcOver(DemoEffects.smokeColour(), room,
+                DemoEffects.coverageFor(0));
+            assertThat(Rgba.red(over))
+                .as("the room still shows through the thickest rung")
+                .isGreaterThan(Rgba.red(DemoEffects.smokeColour()));
+        }
+
+        @Test
+        @DisplayName("the muzzle is out at the drawn barrel, not back inside the weapon")
+        void theMuzzleSitsAtTheBarrelTip()
+        {
+            // The second half of "the smoke is not there": at 0.9 units right
+            // the puff was centred on the weapon's own body, which draws AFTER
+            // the translucent phase behind its own depth clear and therefore
+            // covers it. DemoScene.WEAPON_VIEW_RIGHT places the model's origin;
+            // the muzzle is at the far end of the barrel, so it has to be
+            // further out than that or the gun hides its own smoke.
+            assertThat(DemoEffects.MUZZLE_RIGHT_UNITS)
+                .as("further right than the weapon's origin")
+                .isGreaterThan(DemoScene.WEAPON_VIEW_RIGHT);
+            assertThat(DemoEffects.MUZZLE_FORWARD_UNITS)
+                .as("and further out than the weapon is held")
+                .isGreaterThan(DemoScene.WEAPON_VIEW_FORWARD);
+        }
+
+        @Test
+        @DisplayName("a puff is a puff, not a pane across the view")
+        void puffStaysSmallEnoughToReadAsSmoke()
+        {
+            // At 2.4 units from the eye and a 60-degree vertical field of view,
+            // a half-extent of r subtends roughly 2*atan(r / 2.4). The end
+            // radius used to be 0.34, which is about a quarter of a 720p window
+            // across — big enough that it read as a translucent sheet rather
+            // than as smoke at a muzzle. Expressed as a fraction of the frame
+            // rather than in units so it survives a resolution change.
+            final double halfAngle =
+                StrictMath.atan(DemoEffects.PUFF_RADIUS_END / DemoEffects.MUZZLE_FORWARD_UNITS);
+            final double fractionOfHeight = 2.0 * halfAngle / (Math.PI / 3.0);
+
+            assertThat(fractionOfHeight)
+                .as("a muzzle puff should not fill a fifth of the window")
+                .isLessThan(0.20);
+            assertThat(DemoEffects.PUFF_RADIUS_END)
+                .as("but it still expands over its life")
+                .isGreaterThan(DemoEffects.PUFF_RADIUS_START);
         }
     }
 

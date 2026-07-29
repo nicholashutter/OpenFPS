@@ -100,6 +100,17 @@ that needs a device does not.**
 | `I_WindowPort` | Create the window, own the frame loop, report close requests | `GdxWindowPort` (`:desktop`), `NullWindowPort` |
 | `I_FrameCallback` | What the platform calls back into per frame — **engine** side, not platform side | `EngineFrameCallback` in `core`, handed to the window by `EngineSession` |
 
+One more port is handed out by `I_AdapterFactory` without living in this
+package: **`I_AudioPort`**, which is `audio/port/I_AudioPort.java`. It is here in
+the factory for the same reason the window is — it is a device the platform owns,
+chosen once at the composition root, with a null implementation that keeps CI
+honest — and it is *not* in `hal/port/` because it belongs to the S_ subsystem,
+which owns its state and its lifecycle. `AudioSubsystem` calls its `init` and
+`shutdown`; no factory does. Backends today: `GdxAudioPort` (in `:gdxshared`,
+wired by `GdxAdapterFactory` and `AndroidAdapterFactory`) and `NullAudioPort`
+everywhere else, including all three backends in this module. See
+`audio/README.md`.
+
 `I_FrameCallback` is the one entry here that is not a thing a platform provides:
 the engine implements it and the platform calls it. It lives in `port/` because
 it is half of the `I_WindowPort` contract, not because an adapter supplies it.

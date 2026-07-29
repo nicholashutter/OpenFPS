@@ -115,8 +115,15 @@ with roughly 2× headroom inside the 10 ms budget.
 
 The demo scene (294 world instances, 1777 triangles after clipping) on an Intel
 Core Ultra 7 155H (16 physical / 22 logical). p50 over 270 timed frames at 720p,
-170 at the higher resolutions. The default pool is `logicalProcessors / 2` = 11
-workers here, which sits between the 8 and 16 columns.
+170 at the higher resolutions. The default pool was `logicalProcessors / 2` = 11
+workers when these rows were measured, which sits between the 8 and 16 columns.
+
+> **This table is what retired that rule.** 16 workers beat 8 by 23% on a part
+> whose extra 14 logical processors are SMT siblings and E-cores — so they were
+> worth collecting, and halving declined to. The default is now
+> `logicalProcessors - 1` (21 here), one processor being held back for the game
+> loop and the platform frame loop. `-Dopenfps.workers=N` still pins it, which
+> is how this sweep was taken and how it can be retaken.
 
 | workers | 0 (serial) | 1 | 2 | 4 | 8 | 16 |
 |---|---|---|---|---|---|---|
@@ -142,10 +149,12 @@ at 1440p, against 24 MB of L3 on this part. 720p fits, 1440p cannot.
    16.7 ms frame with nothing left for simulation or presentation. 1080p is a
    30 Hz option, or a 60 Hz option only once bilinear can be switched off.
 2. **A low-core machine cannot hit 720p60, and this is the portability risk.**
-   At 2 workers the frame is 16.3 ms — it misses 60 Hz outright. Under the
-   `logicalProcessors / 2` rule that is any 4-thread device. A modern 8-core
-   phone gets 4 workers and 8.5 ms, which holds; a 4-core one does not. The
-   Android target should measure before assuming.
+   At 2 workers the frame is 16.3 ms — it misses 60 Hz outright. Under the old
+   `logicalProcessors / 2` rule that was any 4-thread device; under
+   `logicalProcessors - 1` a 4-thread device now gets 3 workers, which lands
+   between the 2- and 4-worker columns instead of on the failing one. A modern
+   8-core phone gets 7 workers rather than 4. Neither figure is measured on the
+   device — the Android target should measure before assuming.
 
 All frame-time figures in this document are **p50**. Reproduced independently on
 2026-07-28 at 8 workers over 270 timed frames: best 3.85 ms, **p50 4.86 ms**,
@@ -437,6 +446,17 @@ repository.
   already a quarter of §5's 20–50 MB payload cap, so this will not survive a real
   level. The fix is a shared-texture section or an atlas-by-reference indirection
   in `ModelFormat`. Measured, not estimated — see `docs/DEMO_ASSETS.md` § 4.
+
+- **Audio has no row in §3, and for now it does not need one.** The demo's only
+  sound — the blaster — is *generated at runtime* by
+  `engine/audio/synth/BlasterSound`, not shipped: no file in git, none in the APK,
+  none fetched, nothing to add to `NOTICE`. That was chosen precisely because a
+  sound file would have forced three unanswered questions at once (which CC0
+  audio sources satisfy §3, what the preprocessed runtime format is, and which
+  container carries it — the last still partly blocked on `render/README.md`
+  §11b). **All three remain open** for a real sound bank; generating one noise
+  declines them rather than answering them. Add the §3 audio row when there is a
+  second sound worth sourcing, not before. See `engine/audio/README.md`.
 
 Two further open questions belong to the renderer rather than to asset policy, but
 are recorded here because both were surfaced by the §2 render target and one of them

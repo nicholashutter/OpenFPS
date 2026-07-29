@@ -6,6 +6,7 @@
 package com.openfps.gdx;
 
 import com.openfps.engine.gameplay.MatchMode;
+import com.openfps.engine.gameplay.MatchSummary;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,12 +33,16 @@ import org.slf4j.LoggerFactory;
  * known point in the frame, and a listener firing from a Scene2D click handler
  * would have them touching GLFW at an arbitrary moment instead.</p>
  *
- * <p><b>Illegal transitions throw.</b> With two states the only illegal move
- * is to the state you are already in, and it is worth throwing over: it means
- * two callers both believe they are the one starting the game (or the one
- * leaving it), and the second is about to re-clear input and re-warp the
- * cursor under the first. Silently ignoring it turns a wiring bug into an
- * intermittent input glitch. See {@link UiState#canTransitionTo}.</p>
+ * <p><b>Illegal transitions throw.</b> The move that matters most is to the
+ * state you are already in, and it is worth throwing over: it means two callers
+ * both believe they are the one starting the game (or the one leaving it), and
+ * the second is about to re-clear input and re-warp the cursor under the first.
+ * Silently ignoring it turns a wiring bug into an intermittent input glitch.
+ * With four states there are also genuinely absent edges —
+ * {@link UiState#SETTINGS} to {@link UiState#PLAYING}, or a rematch out of
+ * {@link UiState#GAME_OVER} — and those throw for the same reason: a caller
+ * asking for one has misunderstood what it is holding. See
+ * {@link UiState#canTransitionTo}.</p>
  *
  * <p><b>Threading:</b> {@link #state()} is safe from any thread — the field is
  * volatile and the value is an immutable enum constant. The mutators are called
@@ -73,6 +78,22 @@ public final class UiStateMachine
      */
     private volatile MatchMode mode = MatchMode.SINGLE_PLAYER;
 
+    /**
+     * The result of the last finished match, or null before one has finished.
+     *
+     * <p>MUTABLE: set on the way into {@link UiState#GAME_OVER} and left alone
+     * afterwards, so the end screen keeps reporting the same numbers for as long
+     * as the player leaves it up. Volatile because the game loop thread may read
+     * it while the render thread writes it.</p>
+     *
+     * <p>It is a {@link MatchSummary} rather than a reference to the live
+     * {@code Match} on purpose — see that class. The result stopped changing the
+     * moment the round ended; holding the mutable object would mean re-reading
+     * simulation state across a thread boundary sixty times a second to learn
+     * something that cannot have moved.</p>
+     */
+    private volatile MatchSummary result;
+
     /** Creates a machine parked in {@link UiState#MENU} — a window opens on the menu. */
     public UiStateMachine()
     {
@@ -91,9 +112,24 @@ public final class UiStateMachine
     }
 
     /**
+     * Returns the result of the last finished match, or null.
+     *
+     * <p>Null before any match has been played through to a decision. Non-null
+     * from the moment {@link #endMatch} runs and for the rest of the process —
+     * it is not cleared on the way back to the menu, because the end screen is
+     * still drawing from it while that transition is being applied.</p>
+     *
+     * @return the frozen result, or null if no match has finished
+     */
+    public MatchSummary result()
+    {
+        return result;
+    }
+
+    /**
      * Returns the current state. Never null, safe from any thread.
      *
-     * @return {@link UiState#MENU} or {@link UiState#PLAYING}
+     * @return one of {@link UiState}'s four constants
      */
     public UiState state()
     {
@@ -148,13 +184,60 @@ public final class UiStateMachine
     }
 
     /**
-     * Leaves the game: {@code PLAYING -> MENU}.
+     * Opens the settings screen: {@code MENU -> SETTINGS}.
      *
-     * <p>Driven by Escape, and it is not optional. A caught cursor is confined
-     * and invisible: with no way back to {@link UiState#MENU} the window cannot
-     * be closed with the mouse, the Quit button cannot be reached, and the only
-     * exit is killing the process. Escape is what stops cursor capture from
-     * being a trap.</p>
+     * <p>Only from the menu, and that restriction is not laziness. Settings
+     * reachable mid-match would be a pause screen, and this game has no pause:
+     * {@code GameLoop} is a fixed-timestep clock that keeps ticking whatever is
+     * on screen, so "settings while playing" means the bots carry on shooting a
+     * player who is reading a menu. The match gate exists to stop exactly
+     * that.</p>
+     *
+     * @throws IllegalStateException if the menu is not the screen in front
+     */
+    public void openSettings()
+    {
+        transitionTo(UiState.SETTINGS);
+    }
+
+    /**
+     * Ends the round and shows its result: {@code PLAYING -> GAME_OVER}.
+     *
+     * <p>Driven by the platform UI noticing that {@code Match.state().isOver()},
+     * which it learns by polling — the same poll-rather-than-callback choice the
+     * class Javadoc explains, and for the sharper version of the same reason:
+     * the match is decided on the game loop thread, and a callback firing from
+     * there would have the simulation building Scene2D actors.</p>
+     *
+     * <p><b>The summary is recorded before the transition, not after</b>, for
+     * the reason {@link #startGame(MatchMode)} records the mode first: the state
+     * field is what other threads poll, so publishing {@code GAME_OVER} first
+     * would leave a window in which a reader sees a finished match and no
+     * result to draw.</p>
+     *
+     * @param summary the frozen result to show; must not be null
+     * @throws IllegalArgumentException if {@code summary} is null
+     * @throws IllegalStateException if the game is not the thing in front
+     */
+    public void endMatch(final MatchSummary summary)
+    {
+        if (summary == null)
+        {
+            throw new IllegalArgumentException("summary must not be null");
+        }
+        this.result = summary;
+        transitionTo(UiState.GAME_OVER);
+    }
+
+    /**
+     * Leaves whatever is in front and shows the menu: {@code * -> MENU}.
+     *
+     * <p>Driven by Escape from the game, and by the Back button on the settings
+     * and end-of-match screens. From {@link UiState#PLAYING} it is not optional.
+     * A caught cursor is confined and invisible: with no way back to
+     * {@link UiState#MENU} the window cannot be closed with the mouse, the Quit
+     * button cannot be reached, and the only exit is killing the process. Escape
+     * is what stops cursor capture from being a trap.</p>
      *
      * @throws IllegalStateException if the menu is already in front
      */

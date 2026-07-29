@@ -359,4 +359,96 @@ class GdxInputPortTest
             assertThat(accumulator.pendingPitchPixels()).isZero();
         }
     }
+
+    @Nested
+    @DisplayName("vertical look")
+    class VerticalLook
+    {
+        @Test
+        @DisplayName("a screen delta reported downward tilts the view down, not up")
+        void shouldNotInvertPitchByDefault()
+        {
+            // THE regression guard for "the mouse is still inverted".
+            //
+            // The port used to negate Gdx.input.getDeltaY() on the way in, on
+            // the theory that GLFW reported vertical motion upside down. It
+            // does not — measured through the real backend by warping the
+            // cursor 100 px up the screen, which reported getDeltaY() == -100
+            // and left the player at pitch=-0.22, i.e. aiming DOWN for a mouse
+            // pushed away. The two negations cancelled into an inverted camera.
+            //
+            // This test pins the surviving contract from the engine's side: the
+            // port hands the accumulator screen-oriented pixels, so a POSITIVE
+            // (downward) delta must come out as NEGATIVE pitch. It cannot call
+            // pollLook — that needs a window — so it asserts the arithmetic the
+            // pass-through relies on, which is the half that was wrong.
+            final InputAccumulator accumulator = new InputAccumulator(1.0f);
+            final GdxInputPort port = new GdxInputPort(accumulator);
+            port.init();
+
+            // What GLFW reports when the mouse is pulled TOWARD the player: the
+            // pointer travels down the screen, so +y.
+            accumulator.accumulateLook(0, 30);
+            port.sampleInput(0);
+            assertThat(port.currentInput().pitchDelta())
+                .as("mouse toward you aims down")
+                .isCloseTo(-30.0f, within(EPSILON));
+
+            // And pushed away: up the screen, so -y.
+            accumulator.accumulateLook(0, -30);
+            port.sampleInput(1);
+            assertThat(port.currentInput().pitchDelta())
+                .as("mouse away from you aims up")
+                .isCloseTo(30.0f, within(EPSILON));
+        }
+
+        @Test
+        @DisplayName("a fresh port is not inverted")
+        void shouldStartWithConventionalLook()
+        {
+            assertThat(new GdxInputPort().isInvertLook()).isFalse();
+        }
+
+        @Test
+        @DisplayName("setInvertLook flips the sign, and flips it back")
+        void shouldInvertPitchWhenAsked()
+        {
+            final InputAccumulator accumulator = new InputAccumulator(1.0f);
+            final GdxInputPort port = new GdxInputPort(accumulator);
+
+            port.setInvertLook(true);
+            assertThat(port.isInvertLook()).isTrue();
+            accumulator.accumulateLook(0, -30);
+            port.sampleInput(0);
+            assertThat(port.currentInput().pitchDelta())
+                .as("inverted: mouse away from you now aims down")
+                .isCloseTo(-30.0f, within(EPSILON));
+
+            port.setInvertLook(false);
+            assertThat(port.isInvertLook()).isFalse();
+            accumulator.accumulateLook(0, -30);
+            port.sampleInput(1);
+            assertThat(port.currentInput().pitchDelta())
+                .as("and back")
+                .isCloseTo(30.0f, within(EPSILON));
+        }
+
+        @Test
+        @DisplayName("the preference rides on the accumulator, so a settings screen and the key agree")
+        void shouldExposeTheSamePreferenceTheAccumulatorHolds()
+        {
+            // One flag, two doors. If these ever became separate pieces of
+            // state, a player who pressed the key and a player who used a
+            // settings screen would disagree about which way the mouse goes —
+            // which is the class of confusion that produced the original bug.
+            final InputAccumulator accumulator = new InputAccumulator(1.0f);
+            final GdxInputPort port = new GdxInputPort(accumulator);
+
+            port.setInvertLook(true);
+            assertThat(accumulator.isInvertPitch()).isTrue();
+
+            accumulator.setInvertPitch(false);
+            assertThat(port.isInvertLook()).isFalse();
+        }
+    }
 }

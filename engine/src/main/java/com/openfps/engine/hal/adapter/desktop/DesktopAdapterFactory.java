@@ -5,6 +5,8 @@
 
 package com.openfps.engine.hal.adapter.desktop;
 
+import com.openfps.engine.audio.adapter.NullAudioPort;
+import com.openfps.engine.audio.port.I_AudioPort;
 import com.openfps.engine.hal.adapter.I_AdapterFactory;
 import com.openfps.engine.hal.adapter.nulladapter.NullFilePort;
 import com.openfps.engine.hal.adapter.nulladapter.NullInputPort;
@@ -57,6 +59,7 @@ public final class DesktopAdapterFactory implements I_AdapterFactory
     private final NullSystemInfoPort systemInfo = new NullSystemInfoPort();
     private final SqliteUserProfilePort userProfile = new SqliteUserProfilePort();
     private final NullWindowPort windowPort = new NullWindowPort();
+    private final NullAudioPort audioPort = new NullAudioPort();
 
     @Override
     public void init()
@@ -129,5 +132,20 @@ public final class DesktopAdapterFactory implements I_AdapterFactory
     public I_WindowPort getWindowPort()
     {
         return windowPort;
+    }
+
+    /**
+     * Returns the audio port (null adapter — needs a device, out of scope).
+     *
+     * The same call as the window and input ports, and for the same reason:
+     * making a noise needs OpenAL, OpenAL is not a dependency of {@code :engine},
+     * and this backend's whole value is that it is headless-safe. {@code
+     * GdxAdapterFactory} in {@code :desktop} decorates this one with a real
+     * {@code GdxAudioPort}, which is where a device may legitimately be opened.
+     */
+    @Override
+    public I_AudioPort getAudioPort()
+    {
+        return audioPort;
     }
 }

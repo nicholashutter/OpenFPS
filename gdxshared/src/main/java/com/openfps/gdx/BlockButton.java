@@ -56,8 +56,15 @@ public final class BlockButton extends Actor
     /** How far the face lifts when the pointer is over it. */
     public static final float HOVER_LIFT_PIXELS = 2.0f;
 
-    /** What the button says. */
-    private final String label;
+    /**
+     * What the button says.
+     *
+     * <p>MUTABLE: replaced by {@link #setLabel}, on the render thread only. A
+     * button whose text is part of its state — "DEBUG OVERLAY  ON" — has to be
+     * able to say the other thing, and relabelling one actor is cheaper and
+     * clearer than swapping between two that differ only in a word.</p>
+     */
+    private String label;
 
     /** The bright top surface. */
     private final Color faceColor;
@@ -127,6 +134,25 @@ public final class BlockButton extends Actor
     public String label()
     {
         return label;
+    }
+
+    /**
+     * Changes what the button says.
+     *
+     * <p>The label is re-measured on the next draw, so nothing else has to be
+     * told. Sizing is not: the actor keeps the bounds the layout gave it, which
+     * is what stops a toggle from resizing itself as its text changes length.</p>
+     *
+     * @param text the new label; must not be null
+     * @throws IllegalArgumentException if {@code text} is null
+     */
+    public void setLabel(final String text)
+    {
+        if (text == null)
+        {
+            throw new IllegalArgumentException("text must not be null");
+        }
+        this.label = text;
     }
 
     /** Returns true while the pointer is held down on this button. */

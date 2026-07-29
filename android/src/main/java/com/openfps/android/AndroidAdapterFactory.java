@@ -9,6 +9,7 @@ import android.content.Context;
 import android.util.Log;
 
 import com.openfps.android.persistence.RoomUserProfilePort;
+import com.openfps.engine.audio.port.I_AudioPort;
 import com.openfps.engine.hal.adapter.AdapterFactorySelector;
 import com.openfps.engine.hal.adapter.HalBackend;
 import com.openfps.engine.hal.adapter.I_AdapterFactory;
@@ -19,6 +20,8 @@ import com.openfps.engine.hal.port.I_SystemInfoPort;
 import com.openfps.engine.hal.port.I_TimePort;
 import com.openfps.engine.hal.port.I_UserProfilePort;
 import com.openfps.engine.hal.port.I_WindowPort;
+import com.openfps.engine.audio.adapter.NullAudioPort;
+import com.openfps.gdx.GdxAudioPort;
 
 /**
  * The Android HAL: every null-backend port, with the real Android window
@@ -66,6 +69,9 @@ public final class AndroidAdapterFactory implements I_AdapterFactory
     /** Touch input, or null to fall back on the null backend's do-nothing port. */
     private final I_InputPort inputPort;
 
+    /** Sound output — real on a device, silent under a unit test. Never null. */
+    private final I_AudioPort audioPort;
+
     /**
      * Creates the factory over the null HAL backend with Room persistence and
      * no input.
@@ -95,7 +101,13 @@ public final class AndroidAdapterFactory implements I_AdapterFactory
         this(AdapterFactorySelector.create(HalBackend.NULL),
             windowPort,
             new RoomUserProfilePort(context),
-            touchInput);
+            touchInput,
+            // getCacheDir() rather than getFilesDir(): the staged WAV is
+            // regenerated on demand from arithmetic, so it is the textbook
+            // definition of a cache — the OS may delete it under storage
+            // pressure and nothing is lost. Putting it in files/ would count an
+            // 8 KB regenerable file against the user's app data forever.
+            new GdxAudioPort(context.getCacheDir()));
     }
 
     /**
@@ -129,6 +141,39 @@ public final class AndroidAdapterFactory implements I_AdapterFactory
                                  final I_UserProfilePort userProfilePort,
                                  final I_InputPort touchInput)
     {
+        this(delegate, windowPort, userProfilePort, touchInput, new NullAudioPort());
+    }
+
+    /**
+     * Creates the factory over explicit collaborators, including sound.
+     *
+     * <p>The audio port is separated out because it is the one collaborator a
+     * unit test cannot construct: {@link GdxAudioPort} needs a
+     * {@code Context.getCacheDir()}, and a JVM test has no Context. Silence is
+     * therefore the default for every other constructor here, and a real device
+     * is opted into by the one that has a Context to open it with.</p>
+     *
+     * @param delegate supplies every port except the window, profile, input and
+     *     audio; must not be null
+     * @param windowPort the Android window port; must not be null
+     * @param userProfilePort profile persistence; must not be null
+     * @param touchInput the port that reads the on-screen controls, or null to
+     *     use the delegate's
+     * @param audio the sound output; must not be null — use a
+     *     {@code NullAudioPort} for a silent build rather than passing null,
+     *     because {@code I_AdapterFactory} requires every getter to be non-null
+     */
+    public AndroidAdapterFactory(final I_AdapterFactory delegate,
+                                 final AndroidWindowPort windowPort,
+                                 final I_UserProfilePort userProfilePort,
+                                 final I_InputPort touchInput,
+                                 final I_AudioPort audio)
+    {
+        if (audio == null)
+        {
+            throw new IllegalArgumentException("audio must not be null");
+        }
+        this.audioPort = audio;
         if (delegate == null)
         {
             throw new IllegalArgumentException("delegate must not be null");
@@ -223,5 +268,20 @@ public final class AndroidAdapterFactory implements I_AdapterFactory
     public I_WindowPort getWindowPort()
     {
         return windowPort;
+    }
+
+    /**
+     * Returns the sound output.
+     *
+     * <p>Deliberately not initialised in {@link #init()} — {@code AudioSubsystem}
+     * owns the audio lifecycle, the same division of labour the input port
+     * already documents above. On Android it could not be opened here in any
+     * case: {@code Gdx.audio} does not exist until {@code initialize()} has run,
+     * and {@code AndroidLauncher} calls that after the engine has started.</p>
+     */
+    @Override
+    public I_AudioPort getAudioPort()
+    {
+        return audioPort;
     }
 }

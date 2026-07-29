@@ -118,6 +118,8 @@ line lands on the daemon and never reaches the forked JVM:
 `-Dopenfps.fpsLog=2` logs platform, presented and rendered frame rates every two
 seconds — the only way to measure the *windowed* rate — and
 `-Dopenfps.screenshot=<path>` writes a frame to PNG.
+`-Dopenfps.workers=N` pins the worker pool, which `ThreadPoolFactory` otherwise
+sizes from the processor count; the boot log says which of the two happened.
 
 ## Files
 

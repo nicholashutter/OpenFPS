@@ -336,25 +336,32 @@ public final class SoftwareRenderPort implements I_RenderPort
     private volatile boolean crosshairEnabled;
 
     /**
-     * Whether tagged entities get a silhouette drawn round them.
+     * Whether tagged entities get a wireframe edge highlight drawn over them.
      *
-     * <p><b>Off by default, and the default is the point.</b> A scene that tags
-     * its entities does so to make hits attributable, not to ask for a glow —
-     * and the outline reads to a player as a hit or damage marker, because that
-     * is what a highlight on an enemy means in every other shooter. It is a
-     * debug aid: it shows where the simulation believes each body is, which is
-     * exactly what you want while wiring bots up and exactly what you do not
-     * want while playing.</p>
+     * <p><b>On by default, and the default has been both ways round.</b> It
+     * shipped on, was reported as making every opponent look permanently
+     * damaged, was turned off, and was then reported missing — because the
+     * highlight is genuinely wanted: it is what tells a player where the
+     * simulation believes each body is, in a demo whose bodies are flat-shaded
+     * boxes against a flat-shaded room.</p>
      *
-     * <p>Tagging and outlining are independent for a reason. Hitscan is
+     * <p>Both reports were right, and what was wrong was the mark rather than
+     * the switch. {@link OutlinePass} now draws a one-pixel wireframe over the
+     * silhouette and the interior creases instead of a three-pixel filled band
+     * round the outside, which reads as geometry rather than as a status
+     * effect. That is the change that let this go back to true.</p>
+     *
+     * <p>Tagging and outlining stay independent for a reason. Hitscan is
      * resolved from geometry and never reads the id buffer (see
-     * {@code DemoGameplayPort.fireIfRequested}), so turning the outline off
-     * costs no hit detection at all.</p>
+     * {@code DemoGameplayPort.fireIfRequested}), so turning the highlight off
+     * costs no hit detection at all — which is what keeps
+     * {@link #setOutlineEnabled} usable by {@code :tools} and by the render
+     * tests that assert exact pixel content.</p>
      *
-     * <p>MUTABLE: toggled at runtime by the debug switch, read on the render
-     * thread. Volatile because those are different threads.</p>
+     * <p>MUTABLE: toggled at runtime by the switch, read on the render thread.
+     * Volatile because those are different threads.</p>
      */
-    private volatile boolean outlineEnabled;
+    private volatile boolean outlineEnabled = true;
 
     private final int chunkCount;
     private final Rasterizer.CullMode cullMode;
@@ -2114,15 +2121,14 @@ public final class SoftwareRenderPort implements I_RenderPort
     }
 
     /**
-     * Turns entity silhouettes on or off. Off until asked.
+     * Turns the entity wireframe highlight on or off. On by default.
      *
-     * <p>A debug aid rather than a game feature — see the field for why a
-     * permanent highlight on every opponent is read as a damage marker by
-     * anyone actually playing. Safe to flip between frames: it is one volatile
-     * read on the render thread, and the id buffer is produced either way, so
-     * nothing else in the frame changes shape when it moves.</p>
+     * <p>Safe to flip between frames: it is one volatile read on the render
+     * thread, and the id buffer is produced either way, so nothing else in the
+     * frame changes shape when it moves. This remains the switch — a tool that
+     * wants a clean frame turns it off here.</p>
      *
-     * @param enabled whether tagged entities should be outlined
+     * @param enabled whether tagged entities should get an edge highlight
      */
     public void setOutlineEnabled(final boolean enabled)
     {
@@ -2130,7 +2136,7 @@ public final class SoftwareRenderPort implements I_RenderPort
     }
 
     /**
-     * Whether entity silhouettes are being drawn.
+     * Whether the entity wireframe highlight is being drawn.
      *
      * @return the current setting
      */

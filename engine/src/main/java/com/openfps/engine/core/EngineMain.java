@@ -5,7 +5,6 @@
 
 package com.openfps.engine.core;
 
-import com.openfps.engine.audio.adapter.NullAudioPort;
 import com.openfps.engine.common.Constants;
 import com.openfps.engine.common.UserProfile;
 import com.openfps.engine.core.event.EventFactory;
@@ -337,8 +336,13 @@ public final class EngineMain
         final I_WindowPort window = hal.getWindowPort();
 
         // -- 3. Worker count from HAL
+        //
+        // The HAL is where availableProcessors() is actually read, and
+        // ThreadPoolFactory is where the rule that turns it into a worker count
+        // lives — including the -Dopenfps.workers override and the log line
+        // that says which rule won. Do not reintroduce the arithmetic here.
         final int logicalCores = sysinfo.logicalProcessorCount();
-        final int workerCount = ThreadPoolFactory.recommendedWorkerCount(logicalCores);
+        final int workerCount = ThreadPoolFactory.resolveWorkerCount(logicalCores);
         LOG.info("System: {} logical cores, {} workers, target rate={} Hz",
             logicalCores, workerCount, config.rate().fps());
 
@@ -378,7 +382,15 @@ public final class EngineMain
         }
         subsystems.register(new GameplaySubsystem(gameplayPort));
         subsystems.register(new RenderSubsystem(renderPort));
-        subsystems.register(new AudioSubsystem(new NullAudioPort()));
+        // From the HAL, not hard-coded. Audio is a device the platform owns, so
+        // which one you get is the same question as which window you get, and it
+        // already has an answer: the factory the launcher handed in. A
+        // hard-coded NullAudioPort here meant :desktop and :android could not
+        // make a noise however they were wired, which is what it meant until now.
+        //
+        // AudioSubsystem owns init/shutdown from this point — no factory calls
+        // them, by the contract on I_AdapterFactory.getAudioPort.
+        subsystems.register(new AudioSubsystem(hal.getAudioPort()));
         subsystems.initAll();
         pool.start();
 

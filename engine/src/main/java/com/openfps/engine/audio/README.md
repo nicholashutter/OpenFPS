@@ -1,205 +1,255 @@
-# Audio (S_) — Sound and Music
+# Audio (S_) — Sound
 
-> S_ is the sound engine. Plays 3D-positioned SFX and background music.
+> The engine says "make this noise". Everything else — device, format, file,
+> mixer — is behind the port.
 
 ## Status
 
 | Field | Value |
 |---|---|
-| **State** | STUB |
-| **Phase** | `PLAN.md` Phase 6 — planned (§ 3.4) |
-| **Tests** | 0 |
-| **Registered** | S_ via `AudioSubsystem`, with a `NullAudioPort` hard-coded in `EngineMain` |
-| **Verified** | 2026-07-28 |
+| **State** | SHIPPING (one sound) |
+| **Phase** | `PLAN.md` Phase 6 — started, deliberately narrow |
+| **Tests** | 42 (`:engine` 39, `:gdxshared` 3 groups over 8) |
+| **Registered** | S_ via `AudioSubsystem`, port supplied by `I_AdapterFactory.getAudioPort()` |
+| **Verified** | 2026-07-29 |
 
-**Built.** The port and the null adapter, and nothing else. `AudioSubsystem`
-forwards only `onInit` / `onShutdown` to the port; it does not override
-`onEvent`, and no SFX or music event types exist. **0 tests** — there is nothing
-here yet to assert.
+**Built.** `I_AudioPort` and `SoundId`; `AudioVolume` (the clamp); `BlasterSound`
+and `WavAudio` (synthesis and container); `NullAudioPort` (silent, recording);
+`GdxAudioPort` in `:gdxshared` (real, lazy, degrades). The weapon fires audibly
+in the demo on desktop and Android, from `DemoGameplayPort.fireIfRequested`.
 
-**Not built.** `SoundEngine`, `SoundEmitter`, `MusicPlayer`, `PcmLoader`. None
-of them exist; everything below is specification written ahead of the code.
+**Not built.** Positional audio, music, a mixer, a voice limit, `SoundEngine`,
+`SoundEmitter`, `MusicPlayer`, `PcmLoader`. None of it exists and none of it is
+half-started. See "What this is not".
 
-**Blocked on.** The audio source-format question. `docs/ASSETS.md` § 8 is "No
-IWADs, ever", which kills the old plan of reading `DS*` lumps from a WAD, and
-§ 3's accepted-sources table has no audio row at all.
+**Blocked on.** Nothing. The source-format question that used to block this
+package is settled *for the demo* by generating the sound (§ "Where the sound
+comes from"); it remains genuinely open for a real sound bank, and that is
+recorded rather than pretended away.
 
-**Next step.** Decide the source, the shipped format and the container together
-— before `PcmLoader` is written, not while writing it.
+**Next step.** Nothing is queued. The next honest piece of work is a second
+sound — a hit confirmation or a bot's shot — because one sound cannot tell you
+whether the port's shape is right.
 
-## What lives here (planned)
-
-- `SoundEngine` — main entry, processes a queue of sound events per tic
-- `SoundEmitter` — 3D-positioned source (openAL/OpenSL source equivalent)
-- `SoundChannel` — one playing sound (loudness curve, position, looping)
-- `MusicPlayer` — background music player (MIDI or streamed audio)
-
-## What exists today
-
-Two files and no implementation — but the subsystem is **wired, not absent**.
-`core/subsystem/impl/AudioSubsystem.java` registers under `SubsystemId.S_` and
-forwards `onInit` / `onShutdown` to whichever `I_AudioPort` it was given, which
-in practice is `NullAudioPort`. It handles **no event types at all**: there is
-no `PlaySfxEvent`, and `onEvent` is not overridden. So S_ starts and stops with
-the engine and does nothing in between, by design, until Phase 6.
-
-That matters when reading the rest of this file: every formula below is
-specification written ahead of the code. **This package has 0 tests**, and that
-is honest rather than an oversight — there is nothing here yet to assert.
-
-## Subsystem layout
+## What lives here
 
 ```
 audio/
 ├── port/
-│   └── I_AudioPort.java   interface — called by core per tic
+│   ├── I_AudioPort.java    the contract: init, shutdown, play, stopAll,
+│   │                       setMasterVolume, masterVolume, isAudible
+│   └── SoundId.java        the closed set of sounds — one, today
+├── synth/
+│   ├── BlasterSound.java   generates the weapon sound as 16-bit PCM
+│   └── WavAudio.java       wraps PCM in a RIFF/WAVE container
+├── AudioVolume.java        the one definition of a legal volume
 └── adapter/
-    └── NullAudioPort.java stub
+    └── NullAudioPort.java  silent, and counts what it was asked to play
 ```
 
-## 3D audio math — what's coming
+The real backend is **not here**, and cannot be: it needs `Gdx.audio`, and
+`:engine` imports no libGDX. `GdxAudioPort` lives in `:gdxshared` and is wired in
+by `GdxAdapterFactory` (`:desktop`) and `AndroidAdapterFactory` (`:android`).
+Same rule, and the same reason, as the window and input ports —
+`hal/README.md` § "Where the window and input actually live".
 
-### Inverse-square distance falloff
+## The port is six methods, and that is the design
 
-Sound loudness falls off as `1 / r²` (r = distance from source to listener).
-To prevent loudness from blowing up at r=0, we clamp the minimum distance:
-
-```
-loudness = 1 / max(MIN_DISTANCE, distance²) * MAX_LOUDNESS
-```
-
-For practical purposes, game audio often uses a **linear** falloff between
-MIN_DISTANCE and MAX_DISTANCE, and 1/r² outside that range. The transition
-point is a tuning knob.
-
-**Source — OpenAL 1.1 specification, section 5.2 ("Distance Attenuation")**:
-https://www.openal.org/documentation/openal-1.1-specification.pdf
-
-**Source — "Game Audio Programming" — Guy Somberg**:
-https://gameaudioprogramming.com/
-
-### Stereo panning
-
-Panning (left/right balance) is computed from the angle between the source-to-listener
-vector and the listener's forward direction:
-
-```
-dot = sourceDir · listenerForward
-angle = acos(dot)            // 0 = directly in front, π = directly behind
-pan = sin(angle)             // [-1, 1], 0 = centered
+```java
+void init();
+void shutdown();
+void play(SoundId sound);
+void stopAll();
+void setMasterVolume(float volume);
+float masterVolume();
+boolean isAudible();
 ```
 
-The sign of the cross product determines left vs. right.
+**What it replaced.** Until 2026-07-29 this interface was
+`playSfx(int soundId, int x, int y, int z)` and `playMusic(String lumpName)`,
+under eighty lines of inverse-square attenuation, panning and Doppler formulae —
+none of it implemented. Both signatures were wrong in ways that would have had to
+be undone before anything could use them:
 
-**Source — "3D Audio for Games" — Dyon Dutil, DSP Dimension**:
-https://www.dspdimension.com/
+- **The position arguments presumed a mixer that does not exist.** Neither
+  libGDX `Sound` nor Android `SoundPool` takes a world position; they take a
+  volume and a pan. Every adapter would therefore have carried its own copy of a
+  listener transform — duplicated, untested arithmetic in exactly the place a
+  port exists to prevent it.
+- **`playMusic(String lumpName)` named a WAD lump.** `docs/ASSETS.md` § 8 is
+  "No IWADs, ever". A parameter named after a container the project has ruled
+  out is worse than no method at all.
 
-### Pitch and Doppler
+The formulae are not deleted, they are relocated: see "The 3D audio that is not
+here" below, which is now honestly labelled as a future extension rather than as
+a specification the code is failing to meet.
 
-The Doppler effect for moving sources:
+**The contract every implementation owes** is on `I_AudioPort` itself and is
+worth repeating in one line: *nothing throws, `play` is callable from any thread,
+`play` never blocks, volume is clamped rather than rejected, and `init` /
+`shutdown` are idempotent.* CI has no sound card, and a game that dies because
+the speakers are missing is worse than a silent one.
+
+## Where the sound comes from — the licence question, answered
+
+**Nothing is downloaded, nothing is committed, nothing is staged.** The blaster
+is arithmetic: a 900 Hz → 120 Hz exponential pitch sweep with a fast exponential
+decay, 180 ms of 22.05 kHz mono, generated by `BlasterSound` into a `short[]` and
+wrapped by `WavAudio` into a 8 KB WAVE file in a cache directory the first time a
+shot is fired.
+
+That is a deliberate answer to the question this README used to be blocked on.
+The three things that had to be settled together —
+
+1. **which CC0 sources satisfy `docs/ASSETS.md` § 3**, whose accepted-sources
+   table was written for art and has no audio row;
+2. **what the shipped format is**, given the project's preprocess-to-flat-binary
+   pattern (§ 4) and audio's lack of a `ModelFormat` equivalent;
+3. **what container carries it**, which is partly blocked on
+   `render/README.md` § 11(b)
+
+— are the right questions for a *sound bank*, and a blaster noise is not one.
+Generating it removes all three: no third-party content, so nothing to add to
+`NOTICE` beyond a statement that there is nothing to add; no binary in git, so
+the "ships no game data in source form" rule is untouched; no staging step, so a
+fresh clone with no `assets/` directory still makes a noise.
+
+**The three questions stay open** for the day a real sound bank arrives. Nothing
+above pre-empts them — it declines to answer them, which is different.
+
+**Why a file at all, having generated the samples.** Because the backends will
+not take samples: libGDX's `Audio.newSound` accepts a `FileHandle` and nothing
+else. The one API that does take raw PCM, `newAudioDevice`, blocks the calling
+thread for the duration of the sound — and the caller is the game loop thread, so
+a 180 ms block would cost eleven tics per shot. A 44-byte header and a temp file
+is the cheap way out. Uncompressed PCM rather than OGG because a decoder is a
+third-party dependency (`AGENTS.md`) and the payload is 8 KB.
+
+## Two pieces of arithmetic worth knowing about
+
+Both are in `BlasterSound`, both are tested, and both are the kind of thing that
+sounds like a broken synthesiser rather than like a mistake.
+
+**The sweep integrates frequency; it does not substitute it.** The intuitive line
+is `sin(2π · f(t) · t)`, and it is wrong: instantaneous frequency is the
+*derivative* of phase, so a time-varying `f` inside that expression makes the
+actual frequency `f(t) + t·f'(t)`. For a falling sweep the second term is
+negative and large, and the pitch dives past zero and runs backwards. The fix is
+to accumulate — `phase += 2π·f(i)/rate` per sample.
+
+**Both ends of the envelope are forced to zero.** A waveform that starts or stops
+mid-cycle is a step discontinuity; a step contains every frequency and is heard
+as a click on top of the sound. The 2 ms attack and 8 ms release ramps exist for
+that and nothing else — the decay alone leaves the sound at ~8% of peak at
+180 ms, which is a very audible cut.
+
+And one in `AudioVolume`: **NaN is checked before the range, not folded into
+it.** `Math.max(0, Math.min(1, x))` propagates NaN, because NaN fails every
+comparison. A NaN gain silences the source on OpenAL and has been observed to
+play at full scale on `SoundPool` — the same "clamped" value inaudible on one
+platform and deafening on the other.
+
+## Lifecycle — who calls what, and when
+
+`AudioSubsystem` owns `init()` and `shutdown()`, and **no adapter factory calls
+either**. That is stated on `I_AdapterFactory.getAudioPort()` and matters because
+the input port already taught the lesson: initialising in both places runs both
+twice, which is harmless (the contract makes them idempotent) and shows up as a
+duplicated line in a log, which is how you find out something is happening twice.
+
+**Everything in `GdxAudioPort` is lazy, and that is not an optimisation.**
+`Gdx.audio` is null when `init()` runs. On desktop the libGDX application does
+not exist until `GdxWindowPort.runFrameLoop` constructs `Lwjgl3Application`, and
+that is long after `EngineMain.start` has brought the subsystems up; on Android
+the equivalent is `initialize()`, called after the engine starts. An
+implementation that loaded its sounds in `init()` would fail on every run,
+permanently and silently, and would look like a broken sound file rather than a
+broken ordering. So the sound is baked on **first play** — by which time a shot
+has been fired, which means a window exists, which means a device does.
+
+A failed bake is **not latched**: "no device yet" is a temporary condition, and
+disabling audio forever over it would be the same permanent-silent-failure bug in
+a different place. The warning is logged once so a genuinely broken setup does
+not scroll the console.
+
+## The path a shot takes
 
 ```
-f_observed = f_source * (c + v_listener) / (c + v_source)
+InputState.fire()                       the trigger, latched once per tic
+  DemoGameplayPort.fireIfRequested      guards, then the cooldown
+    audio.play(SoundId.WEAPON_FIRE)     ← the port, never a libGDX type
+      GdxAudioPort.play                 volume applied, non-blocking
+        bake()  (first time only)       generate PCM → WAV → temp file → Sound
+        Sound.play(volume)              OpenAL / SoundPool
 ```
 
-Where `c` is the speed of sound (~343 m/s). For game purposes we typically
-clamp the observed frequency to `[0.5, 2.0] × f_source` to avoid extreme
-pitches.
+Three properties of where that `play` call sits, all of them tested:
 
-**Source — "Doppler Effect" — Wikipedia**:
-https://en.wikipedia.org/wiki/Doppler_effect
+- **After the cooldown**, so a held trigger makes five sounds a second and not
+  sixty. Before it, the blaster would be a buzz whose pitch depended on `--fps`.
+- **Before the hitscan resolves, and unconditionally**, so a miss sounds exactly
+  like a hit. Same rule as the tracer: a sound that only played when you
+  connected would tell the player the outcome before the game does.
+- **Through the port**, so on a headless run it is a counter increment — which is
+  why CI can assert the cadence without a sound card.
 
-**Source — "Real-time 3D Audio for Interactive Games" — IRCAM, 2019**:
-https://forum.ircam.fr/
+## What this is not
 
-### Mix bus limit
+**There is no mixer, no voice limit, no positional audio and no music.** Not
+"not yet, see the formulae below" — not at all. The port cannot express a
+position, `SoundId` carries no volume or pitch, and nothing here allocates a
+mixing buffer.
 
-**The target is 32 simultaneous voices**, with lowest-priority voices culled
-above that.
+That is a narrowing, and it was chosen. A 32-voice mixer with distance
+attenuation is a real piece of work, and building the *interface* for one before
+building the thing is how this package spent several phases as eighty lines of
+formulae and a stub that did nothing. One sound that actually plays is worth more
+than a specification for a hundred that do not.
 
-The 8 that appears in DOOM-derived writing is the original SoundBlaster's
-practical limit — a 1993 hardware constraint, not one we inherit. Modern
-hardware handles hundreds, and a software mixer's cost here is a per-sample
-add per voice, so 32 is chosen as the number a mix loop can carry without
-thinking about it rather than as a measured ceiling. **Nothing is implemented,
-so treat 32 as an intent; there is no constant to read and no benchmark behind
-it.** If it ever turns out to be wrong it will be wrong in the cheap direction.
+### The 3D audio that is not here
 
-Priority is computed as:
-```
-priority = (distance_penalty) * (volume_boost) * (recency_penalty)
-```
+Kept as a reading list for whoever builds it, explicitly **not** as a description
+of this code:
 
-Distance penalty: louder = higher priority. Recency: recently-triggered sounds
-stay slightly prioritized so they don't get culled mid-playback.
+- **Inverse-square distance falloff.** `loudness = 1 / max(MIN_DIST², distance²)`,
+  usually softened to linear inside a near radius. OpenAL 1.1 specification § 5.2
+  "Distance Attenuation":
+  https://www.openal.org/documentation/openal-1.1-specification.pdf
+- **Stereo panning** from the angle between the source-to-listener vector and the
+  listener's forward: `pan = sin(acos(sourceDir · forward))`, signed by the cross
+  product. "3D Audio for Games", DSP Dimension: https://www.dspdimension.com/
+- **Doppler** for moving sources: `f' = f · (c + vListener) / (c + vSource)`,
+  `c ≈ 343 m/s`, clamped to `[0.5f, 2f]`.
+  https://en.wikipedia.org/wiki/Doppler_effect
+- **Voice priority** for culling above a voice limit, roughly
+  `distance × volume × recency`.
 
-## Audio file formats — OPEN, deliberately
+When these arrive they arrive as a **listener pose plus a source position** — not
+as three ints whose frame of reference nobody wrote down, which is what the old
+`playSfx(int, int, int, int)` was.
 
-**This is not decided, and the previous version of this document decided it by
-accident.** It described SFX as raw 8-bit PCM in WAD lumps named `DS*`
-(`DSPISTOL`, `DSPLDIE`) and a `PcmLoader` that reads them. That cannot be right
-as written:
+Whichever way it goes, one property is worth preserving: **audio is not
+lockstep**. Nothing here has to be identical between two peers, because a sound
+is a consequence of a tic and no tic reads one back. That is what permits float
+volumes, platform mixers and a frame of latency — none of which the gameplay
+state machine could tolerate. `BlasterSound` therefore uses `Math`, not
+`StrictMath`, unlike `Hitscan`.
 
-- `docs/ASSETS.md` § 8 trap 7 is **"No IWADs, ever."** The project ships no id
-  Software content, so there are no `DS*` lumps to read.
-- The WAD subsystem itself has no art left to read at all — see
-  `render/README.md` § 11(b), where its remaining role is explicitly left to the
-  user. Asserting that audio arrives through it would be settling that question
-  from the wrong document.
-- `docs/ASSETS.md` § 3's accepted-sources table covers models and textures only.
-  It has no row for audio, and its per-file-licensing note about Freesound is
-  the only place sound is mentioned at all.
+**Music** is still undecided and still unstarted. MIDI is what 1993 did, OGG
+would mean a decoder, streaming raw PCM costs disk. No preference is recorded and
+no interface pretends otherwise.
 
-So this is the **same family of question as the resource-package one**, and it
-gets the same treatment: recorded, not answered. Three things have to be settled
-together, and none of them is:
+## Files and tests
 
-1. **Where sound comes from** — which CC0 sources satisfy `docs/ASSETS.md` § 3,
-   given that its accepted list was written for art.
-2. **What the shipped format is** — the project's pattern (`docs/ASSETS.md` § 4)
-   is to preprocess at build time into a flat binary the engine reads with
-   near-zero parsing. Audio has no equivalent of `ModelFormat` yet, and whether
-   it needs one or can just ship decoded PCM is unanswered.
-3. **What container carries it** — the resource package, a zip payload, or loose
-   files. Blocked on § 11(b).
+| File | Tests |
+|---|---|
+| `port/I_AudioPort.java` | contract exercised via `NullAudioPortTest` |
+| `port/SoundId.java` | — |
+| `AudioVolume.java` | `AudioVolumeTest` — 8, including the NaN one-liner trap |
+| `synth/BlasterSound.java` | `BlasterSoundTest` — 12 |
+| `synth/WavAudio.java` | `WavAudioTest` — 12, header read back independently |
+| `adapter/NullAudioPort.java` | `NullAudioPortTest` — 10, incl. concurrent play |
+| `:gdxshared` `GdxAudioPort.java` | `GdxAudioPortTest` — 8, all of them the no-device path |
+| `demo/DemoGameplayPort` | `DemoGameplayPortAudioTest` — 9, cadence and silence |
 
-Decide these before writing `PcmLoader`, and record the decision here and in
-`docs/ASSETS.md` rather than in code.
-
-**Music** is not decided either. Original DOOM used MIDI; OGG is the obvious
-modern choice and would mean a decoder the project does not have and cannot add
-casually (`AGENTS.md` rules out new runtime dependencies). Streaming raw PCM
-costs disk instead. No preference is recorded.
-
-**Source — DOOM sound format details**, retained as background on the 1993
-format only, not as a statement of what this engine reads:
-https://doom.fandom.com/wiki/Sound
-
-## Performance constraints
-
-- **32 voices** target, with lowest-priority culling above it (see the mix bus
-  section — this is an intent, not a measurement).
-- **No locks in the audio thread.** All parameter updates are atomic.
-- **Pre-allocated buffers** for every sound, no runtime allocation. The mixing
-  buffers are `float[]`, allocated once at init, which is the shape
-  `STYLE.md` § 13.4 sanctions for direct allocation — they will not go through
-  `I_MemoryPort`. They are not a named site yet because they do not exist yet;
-  add them to that table when they do.
-
-## Files
-
-- `port/I_AudioPort.java`
-- `adapter/NullAudioPort.java`
-
-**0 tests.** Nothing here is implemented; see "What exists today".
-
-## TODO (Phase 6)
-
-- **Settle the source-format question above** — it blocks the loader, and
-  partly blocks itself on `render/README.md` § 11(b)
-- `SoundEngine` — voice allocation, mix loop
-- `SoundEmitter` — 3D position + velocity
-- `MusicPlayer` — streaming, format undecided
-- `PcmLoader` — decode SFX, once there is a decided format for it to read
-- Event types for S_ — `AudioSubsystem` handles none, so nothing can reach the
-  port between init and shutdown
+No test needs an audio device, and none may ever be added that does.

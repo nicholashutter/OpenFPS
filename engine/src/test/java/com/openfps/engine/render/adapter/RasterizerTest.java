@@ -6,6 +6,7 @@
 package com.openfps.engine.render.adapter;
 
 import java.util.concurrent.TimeUnit;
+import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -13,6 +14,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import com.openfps.engine.core.eventbus.EventBusFactory;
@@ -20,6 +22,7 @@ import com.openfps.engine.core.eventbus.I_EventBusPort;
 import com.openfps.engine.core.pool.I_ThreadPoolPort;
 import com.openfps.engine.core.pool.ThreadPoolFactory;
 import com.openfps.engine.core.subsystem.SubsystemRegistry;
+import com.openfps.engine.hal.adapter.nulladapter.NullSystemInfoPort;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -557,6 +560,17 @@ class RasterizerTest
     {
         private static final int SCENE_TRIANGLES = 400;
 
+        // The fixed ladder, plus the count this machine's pool would actually
+        // build. The invariant is "output does not depend on worker count", so
+        // the one count nobody chose deliberately — the auto-sized one — is
+        // exactly the one worth covering, and it differs on every CI runner.
+        // Deduplicated, because a two-processor box would otherwise run 1 twice.
+        static IntStream workerCounts()
+        {
+            return IntStream.of(1, 2, 3, 4, 8, ThreadPoolFactory.resolveWorkerCount(
+                new NullSystemInfoPort().logicalProcessorCount())).distinct();
+        }
+
         // Renders the same scene into a fresh framebuffer, optionally on a pool.
         private Framebuffer render(final float[] vertices, final int[] colors,
             final int chunks, final I_ThreadPoolPort workerPool, final int width,
@@ -573,7 +587,7 @@ class RasterizerTest
         }
 
         @ParameterizedTest
-        @ValueSource(ints = {1, 2, 3, 4, 8})
+        @MethodSource("workerCounts")
         @DisplayName("multi-threaded output is byte-identical to single-threaded")
         void shouldMatchSingleThreadedOutputAtEveryWorkerCount(final int workers)
         {
@@ -589,7 +603,7 @@ class RasterizerTest
         }
 
         @ParameterizedTest
-        @ValueSource(ints = {1, 2, 3, 4, 8})
+        @MethodSource("workerCounts")
         @DisplayName("identical at a resolution that is not a tile multiple")
         void shouldMatchSingleThreadedOutputAtARaggedResolution(final int workers)
         {

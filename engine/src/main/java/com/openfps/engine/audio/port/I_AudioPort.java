@@ -6,80 +6,156 @@
 package com.openfps.engine.audio.port;
 
 /**
- * S_ Port interface — audio playback.
- * Stubbed for Phase 0; implementations wired in Phase 6.
+ * S_ Port interface — the engine's sound output.
  *
- * ====================================================================
- *  3D AUDIO MATH (Phase 6+ — references below)
- * ====================================================================
+ * <p>Six methods, one of which is a getter. That is the whole port, and the
+ * smallness is the point: this is what the demo genuinely needs — fire a
+ * weapon and hear it — expressed so that {@code :engine} names no audio API,
+ * no file format and no device.</p>
  *
- *  Full math is documented in src/main/java/com/openfps/engine/audio/README.md.
- *  Summary:
+ * <h2>What replaced the Phase 0 stub, and why</h2>
  *
- *  1. INVERSE-SQUARE DISTANCE FALLOFF:
- *       distance² = dx*dx + dy*dy + dz*dz
- *       clampedDistance² = max(MIN_DISTANCE², distance²)
- *       loudness = sourceVolume / clampedDistance²
- *     Source: OpenAL 1.1 spec §5.2 "Distance Attenuation"
- *     https://www.openal.org/documentation/openal-1.1-specification.pdf
- *     Alternative (more musical): linear falloff inside [MIN_DIST, MAX_DIST]
- *     and 1/r² outside. The "rolloff factor" tunes the curve shape.
+ * <p>The previous version of this interface was {@code playSfx(int soundId,
+ * int x, int y, int z)} plus {@code playMusic(String lumpName)}, wrapped in
+ * eighty lines of inverse-square attenuation, stereo panning and Doppler
+ * formulae. None of it was implemented, and both signatures were wrong in ways
+ * that would have had to be undone before anything could use them:</p>
  *
- *  2. STEREO PANNING:
- *       sourceDir  = sourcePos - listenerPos    (normalized)
- *       listenerForward = (cos(listenerYaw), sin(listenerYaw))
- *       dot = sourceDir · listenerForward
- *       pan = sin(acos(dot)) × signOfCross     // [-1, +1]
- *     Source: "3D Audio for Games" — Dyon Dutil
- *     https://www.dspdimension.com/
- *     In practice, game engines use a lookup table for the cos/sin calls.
+ * <ul>
+ *   <li><b>The position arguments presumed a mixer that does not exist.</b> A
+ *       port takes what the implementation can honour. Neither libGDX
+ *       {@code Sound} nor Android {@code SoundPool} takes a world position —
+ *       they take a volume and a pan — so every adapter would have had to
+ *       carry its own listener transform to convert one into the other, which
+ *       is precisely the duplicated, untested arithmetic a port exists to
+ *       prevent. Positional audio is a <b>documented future extension</b>
+ *       (see {@code audio/README.md}), and when it arrives it arrives as a
+ *       listener pose plus a source position — not as three ints whose frame
+ *       of reference nobody wrote down.</li>
+ *   <li><b>{@code playMusic(String lumpName)} named a WAD lump.</b>
+ *       {@code docs/ASSETS.md} § 8 is "No IWADs, ever", so there are no
+ *       {@code DS*} or {@code D_*} lumps and never will be. A parameter named
+ *       after a container the project has ruled out is worse than no method
+ *       at all.</li>
+ * </ul>
  *
- *  3. DOPPLER SHIFT (for moving sources):
- *       fObserved = fSource × (c + vListener) / (c + vSource)
- *     where c = speed of sound ≈ 343 m/s.
- *     Always clamp: 0.5 × fSource ≤ fObserved ≤ 2.0 × fSource
- *     Source: https://en.wikipedia.org/wiki/Doppler_effect
+ * <h2>Contract every implementation owes</h2>
  *
- *  4. VOICE PRIORITY (for culling when over voice limit):
- *       priority = distanceWeight × volume × recencyWeight
- *     Lowest-priority voice culled first.
+ * <ul>
+ *   <li><b>Nothing here throws.</b> Not on a machine with no sound card, not
+ *       in a headless JVM, not when a sound fails to load. CI has no audio
+ *       device, and a game that dies because the speakers are missing is worse
+ *       than a silent one. Log once and continue — the log matters, because a
+ *       silent failure and working audio played into a muted mixer look
+ *       identical from the outside.</li>
+ *   <li><b>{@link #play} is callable from any thread.</b> It is called from the
+ *       game loop thread — a shot is a simulation event — while the platform's
+ *       audio backend generally belongs to the render thread. An
+ *       implementation that cannot cross that boundary must serialise
+ *       internally; it must not make the caller do it.</li>
+ *   <li><b>{@link #play} never blocks for the duration of the sound.</b> It
+ *       starts playback and returns. A tic that waited 180 ms for a blaster to
+ *       finish would miss ten of them at 60 Hz.</li>
+ *   <li><b>Volume is clamped, not rejected.</b> See
+ *       {@link #setMasterVolume(float)}.</li>
+ *   <li><b>{@link #init()} and {@link #shutdown()} are idempotent.</b> The
+ *       lifecycle owner is {@code AudioSubsystem}, but a platform launcher may
+ *       reasonably tear down twice on an abrupt exit — Android's
+ *       {@code onDestroy} can arrive with the loop still running.</li>
+ * </ul>
  *
- *  All audio math is float-based (precision matters for audible results).
- *  Unlike the game loop, audio is not lockstep — slight float differences
- *  between machines are fine. We only need determinism in the GAMEPLAY
- *  state machine, not in the sound mixer.
+ * <p><b>Audio is not lockstep.</b> Unlike everything the simulation touches,
+ * nothing here has to be identical between two peers: a sound is a consequence
+ * of a tic and no tic reads one back. That is what allows float volumes,
+ * platform mixers and a frame of latency, none of which the gameplay state
+ * machine could tolerate.</p>
  */
 public interface I_AudioPort
 {
     /**
-     * Plays a sound effect at a 3D world position.
+     * Prepares the audio device. Called once, by {@code AudioSubsystem}.
      *
-     * @param soundId internal sound identifier
-     * @param x fixed-point x
-     * @param y fixed-point y
-     * @param z fixed-point z
-     */
-    void playSfx(int soundId, int x, int y, int z);
-
-    /**
-     * Starts background music from a lump name.
-     *
-     * @param lumpName name of the music lump
-     */
-    void playMusic(String lumpName);
-
-    /**
-     * Stops all audio playback.
-     */
-    void stopAll();
-
-    /**
-     * Initializes the audio subsystem.
+     * <p>Must not throw when there is no device. An implementation that cannot
+     * open one logs and leaves {@link #isAudible()} false; every later call is
+     * then a well-defined no-op rather than a crash.</p>
      */
     void init();
 
     /**
-     * Shuts down the audio subsystem.
+     * Releases the audio device and every sound loaded against it.
+     *
+     * <p>Called once, by {@code AudioSubsystem}. Must tolerate being called
+     * without a matching successful {@link #init()}.</p>
      */
     void shutdown();
+
+    /**
+     * Plays one sound, once, at the current master volume.
+     *
+     * <p>Fire-and-forget: there is no handle to stop this individual playback,
+     * because nothing in the demo needs one and a handle nobody holds is a leak
+     * waiting to be found. {@link #stopAll()} is the escape hatch.</p>
+     *
+     * <p>Overlapping calls overlap in the mix — firing again before the last
+     * shot has decayed must not cut it off. That is what a weapon sounds like,
+     * and it is also what {@code Sound.play} does on both backends, so no
+     * implementation has to work for it.</p>
+     *
+     * @param sound which sound to play; a null or unknown value is ignored
+     *     rather than rejected, because a caller cannot usefully handle "the
+     *     speakers do not know that noise"
+     */
+    void play(SoundId sound);
+
+    /**
+     * Silences everything currently playing.
+     *
+     * <p>For the seams where the world goes away underneath the sound: a match
+     * ending, a menu opening, the application shutting down. Sounds already
+     * started keep no state that outlives this call.</p>
+     */
+    void stopAll();
+
+    /**
+     * Sets the master volume applied to every subsequent {@link #play}.
+     *
+     * <p><b>Clamped, never rejected</b>, to {@code [0, 1]}, and a NaN is
+     * treated as silence. The alternative — throwing on an out-of-range
+     * volume — puts an exception on a settings slider, and a NaN that reaches
+     * a mixer is a spectacularly loud bug on some backends and total silence
+     * on others. {@code AudioVolume.clamp} is the one definition of that
+     * arithmetic and every implementation must use it.</p>
+     *
+     * <p>Whether a change reaches sounds that are <b>already playing</b> is
+     * deliberately unspecified: libGDX's {@code Sound} takes its volume at
+     * {@code play} time, so on both shipped backends it does not. Nothing in
+     * the demo turns the volume down mid-shot.</p>
+     *
+     * @param volume the requested volume; any float, including NaN
+     */
+    void setMasterVolume(float volume);
+
+    /**
+     * Returns the master volume in effect, always within {@code [0, 1]}.
+     *
+     * <p>Reads back the clamped value rather than the requested one — the port
+     * tells you what it will actually do, not what you asked for.</p>
+     *
+     * @return the clamped master volume
+     */
+    float masterVolume();
+
+    /**
+     * Returns whether this port can actually make a noise.
+     *
+     * <p>False for the null adapter, for a headless JVM, and for a real
+     * backend that failed to open a device or load its sounds. It exists so a
+     * launcher can say "running silent" once at startup instead of leaving the
+     * user to wonder, and so tests can assert the degraded path without a sound
+     * card. It is <b>not</b> a precondition for {@link #play} — calling into a
+     * silent port is legal and does nothing.</p>
+     *
+     * @return true if a real device is open and at least one sound is loaded
+     */
+    boolean isAudible();
 }

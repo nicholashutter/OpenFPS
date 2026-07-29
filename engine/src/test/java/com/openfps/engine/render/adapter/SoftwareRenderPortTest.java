@@ -715,29 +715,51 @@ final class SoftwareRenderPortTest
         }
 
         @Test
-        @DisplayName("a tagged entity is NOT outlined unless the outline is switched on")
-        void shouldNotOutlineByDefault()
+        @DisplayName("a tagged entity IS highlighted by default, and the switch still turns it off")
+        void shouldOutlineByDefaultAndStillHonourTheSwitch()
         {
-            // The regression guard for a real report: every opponent glowed
-            // permanently, and a highlight on an enemy reads as a hit or damage
-            // marker to anyone playing. Tagging is for attributing hits, not
-            // for drawing attention — and hitscan is resolved from geometry, so
-            // the id buffer is still produced and still correct here.
-            final SoftwareRenderPort port = renderScene(Scene.builder()
+            // This assertion has been both ways round, and the history is the
+            // reason it is worth reading rather than deleting.
+            //
+            // It first asserted "outlined by default". A player reported that
+            // every opponent looked permanently damaged, because a three-pixel
+            // filled band of saturated colour round a body is what every other
+            // shooter uses to mean exactly that — so the default was flipped to
+            // off and this became shouldNotOutlineByDefault.
+            //
+            // The same player then reported the highlighting missing, because
+            // it is genuinely wanted: flat-shaded boxes against a flat-shaded
+            // room need something that says where a body is. Both reports were
+            // right. What was wrong was the MARK, not the switch — OutlinePass
+            // now draws a one-pixel wireframe over the silhouette and the
+            // interior creases, which reads as geometry rather than as a status
+            // effect, so the default is back on.
+            //
+            // The switch is asserted in the same test on purpose: it is what
+            // :tools and the exact-pixel render tests rely on, and a default
+            // that could not be turned off would break them silently.
+            final Scene tagged = Scene.builder()
                 .addWorldInstance(quad(NEAR_COLOR), Mat4.identity(), PLAYER_ID)
-                .build(), sceneCamera(), null);
+                .build();
+            final SoftwareRenderPort port = renderScene(tagged, sceneCamera(), null);
 
             assertThat(port.isOutlineEnabled())
-                .as("off until asked")
-                .isFalse();
+                .as("on without being asked")
+                .isTrue();
             assertThat(port.scene().hasTaggedEntities())
                 .as("the scene really is tagged — this is not passing by accident")
                 .isTrue();
             assertThat(port.framebuffer().entityIdAt(HALF_WIDTH, HALF_HEIGHT))
-                .as("and the id buffer is still written, so hits stay attributable")
+                .as("the id buffer is written, so hits stay attributable")
                 .isEqualTo(PLAYER_ID);
             assertThat(colorsIn(copy(port)))
-                .as("but no silhouette was painted")
+                .as("and the edge highlight was painted")
+                .contains(OutlinePass.OUTLINE_COLOR);
+
+            port.setOutlineEnabled(false);
+            port.renderFrame(0);
+            assertThat(colorsIn(copy(port)))
+                .as("switched off, nothing is painted — the frame is the bare scene")
                 .doesNotContain(OutlinePass.OUTLINE_COLOR);
             port.shutdown();
         }

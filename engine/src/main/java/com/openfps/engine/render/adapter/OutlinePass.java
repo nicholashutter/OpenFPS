@@ -9,12 +9,48 @@ import com.openfps.engine.core.pool.I_ParallelJob;
 import com.openfps.engine.core.pool.I_ThreadPoolPort;
 
 /**
- * R_ Draws a solid silhouette around every tagged entity, from the per-pixel
- * entity-id buffer.
+ * R_ Draws a wireframe edge highlight over every tagged entity, from the
+ * per-pixel entity-id and depth buffers.
  *
- * Render adapter — it reads {@link Framebuffer#entityIdBuffer()} and writes
+ * Render adapter — it reads {@link Framebuffer#entityIdBuffer()} and
+ * {@link Framebuffer#depthBuffer()} and writes
  * {@link Framebuffer#colorBuffer()}, and imports nothing outside this package
  * but the worker pool.
+ *
+ * <h2>A wireframe, not a glow — and that distinction is a bug report</h2>
+ *
+ * <p>This pass used to paint a {@link #OUTLINE_THICKNESS_PIXELS}-deep band of
+ * solid colour round each entity's silhouette, and it was switched off by
+ * default because of what a player said about it: a permanent saturated halo
+ * round an opponent reads as <b>damage</b>. Every shooter uses a filled
+ * highlight to mean "this one is hurt", so a filled highlight that means "this
+ * one exists" is not a neutral affordance — it is a lie the renderer tells
+ * sixty times a second.</p>
+ *
+ * <p>So the shape of the mark changed rather than the mark going away. It is
+ * now a <b>hairline</b>, one pixel deep, and it is drawn on <b>interior edges
+ * as well as the silhouette</b>: wherever the entity's own surface turns away
+ * from itself — the seam between an arm and a torso, the step from a head to
+ * the shoulders behind it. A line drawing over a body reads as a wireframe
+ * overlay, which is a statement about geometry. A filled band round a body
+ * reads as a status effect. Same colour, same cost, opposite meaning.</p>
+ *
+ * <h2>The two edge tests</h2>
+ *
+ * <p><b>Silhouette</b>, from the id buffer: a pixel is on one when some pixel
+ * within {@link #thickness()} of it along the four axes carries a
+ * <i>different</i> id.</p>
+ *
+ * <p><b>Crease</b>, from the depth buffer: a pixel is on one when an immediate
+ * neighbour carrying the <i>same</i> id sits at a depth differing by more than
+ * {@link #CREASE_DEPTH_RATIO} of the nearer of the two. Relative rather than
+ * absolute because the buffer holds {@code 1/w} — an absolute threshold would
+ * find creases everywhere on a close body and nowhere on a distant one, which
+ * is precisely backwards.</p>
+ *
+ * <p>The crease test is one step, never {@code thickness} steps. A crease is
+ * interior, so widening it fills the body in rather than tracing it, which is
+ * the solid glow this pass exists to stop being.</p>
  *
  * <h2>Where it runs, and why exactly there</h2>
  *
@@ -24,12 +60,7 @@ import com.openfps.engine.core.pool.I_ThreadPoolPort;
  * a player standing behind the barrel should not have an outline painted
  * across it.</p>
  *
- * <h2>The edge test</h2>
- *
- * <p>A pixel is an outline pixel when its own id is not
- * {@link Scene#UNTAGGED} and some pixel within
- * {@link #OUTLINE_THICKNESS_PIXELS} of it along the four axes carries a
- * <b>different</b> id.</p>
+ * <h2>Comparing ids, not merely testing for one</h2>
  *
  * <p><b>Different, not merely "zero versus non-zero".</b> That distinction is
  * the whole point. Two players standing in a line overlap in screen space, and
@@ -47,13 +78,14 @@ import com.openfps.engine.core.pool.I_ThreadPoolPort;
  * down the border of the window, which reads as a rendering fault rather than
  * as a player.</p>
  *
- * <h2>Solid colour, no depth test, no blending</h2>
+ * <h2>Solid colour, no depth <i>test</i>, no blending</h2>
  *
- * <p>Outline pixels are overwritten outright. There is no falloff and no
- * alpha: the point of the feature is that a player is unmistakable, and a
- * blended outline over a light grey wall is exactly the case where it stops
- * being so. Depth is not consulted either — an outline is a UI affordance
- * drawn on top of the frame, not geometry in it.</p>
+ * <p>Edge pixels are overwritten outright. There is no falloff and no alpha:
+ * the line is one pixel wide, and a one-pixel line that is also half
+ * transparent is a line nobody can see over a light grey wall. The depth
+ * buffer is <b>read</b> to find creases but is never <b>tested</b> against —
+ * the mark is a UI affordance drawn on top of the frame, not geometry in
+ * it.</p>
  *
  * <h2>Threading — parallel over tiles, and safe by construction</h2>
  *
@@ -63,12 +95,13 @@ import com.openfps.engine.core.pool.I_ThreadPoolPort;
  * worker owns — and that is safe here for a reason that must not be eroded:
  *
  * <ul>
- *   <li><b>The two buffers are disjoint.</b> This pass <i>reads</i> the id
- *       buffer and <i>writes</i> the colour buffer. Nothing in it writes an id,
- *       so no worker can observe a neighbour's half-finished state.</li>
- *   <li><b>The id buffer is complete before the pass starts.</b> The raster
- *       pass's {@code submitParallel} has already joined, which publishes every
- *       worker's writes.</li>
+ *   <li><b>The buffers are disjoint.</b> This pass <i>reads</i> the id and
+ *       depth buffers and <i>writes</i> the colour buffer. Nothing in it writes
+ *       an id or a depth, so no worker can observe a neighbour's half-finished
+ *       state.</li>
+ *   <li><b>Both read buffers are complete before the pass starts.</b> The
+ *       raster pass's {@code submitParallel} has already joined, which
+ *       publishes every worker's writes.</li>
  *   <li><b>Colour writes stay inside the worker's own tile.</b> Exclusive tile
  *       ownership is unchanged, so no atomic is needed and none is used.</li>
  * </ul>
@@ -103,13 +136,37 @@ public final class OutlinePass
      * How far the outline reaches inward from a silhouette edge, in pixels, at
      * 720p.
      *
-     * <p>Three is thick enough to survive a light grey wall and thin enough
-     * not to swallow a distant player whole. It is a pixel count rather than a
-     * fraction of the frame height because the thing it has to beat — the
-     * one-pixel steps of an aliased silhouette — is also measured in
-     * pixels.</p>
+     * <p><b>One, and the change from three is the whole of the fix for "the
+     * highlighting reads as damage".</b> Three pixels of saturated colour round
+     * a body a hundred pixels tall is a band with area — the eye reads area as
+     * fill, and fill on an enemy means a status effect. One pixel has no area
+     * to read; it is a line, and a line round a shape is a drawing of the
+     * shape. Nothing else about the mark changed.</p>
+     *
+     * <p>It is a pixel count rather than a fraction of the frame height because
+     * the thing it has to beat — the one-pixel steps of an aliased silhouette —
+     * is also measured in pixels. A much higher resolution would want two; that
+     * is what the explicit constructor is for.</p>
      */
-    public static final int OUTLINE_THICKNESS_PIXELS = 3;
+    public static final int OUTLINE_THICKNESS_PIXELS = 1;
+
+    /**
+     * How far apart two same-entity depths must be, as a fraction of the nearer
+     * one, before the pixel between them is an interior crease — 3%.
+     *
+     * <p><b>Relative, because the buffer holds {@code 1/w}.</b> An absolute
+     * threshold is meaningless against a reciprocal: the same physical step in
+     * world units produces a huge difference in {@code 1/w} up close and a
+     * vanishing one far away, so a fixed number would scribble over a body at
+     * arm's length and find nothing at all across the room. A ratio is scale
+     * free and gives the same line on the same geometry at any distance.</p>
+     *
+     * <p>Three percent is well above the per-pixel gradient across a flat
+     * surface even at a grazing angle, and well below the step from a limb to
+     * the torso behind it — which is the seam this exists to draw on the blocky
+     * character art the demo stages.</p>
+     */
+    public static final float CREASE_DEPTH_RATIO = 0.03f;
 
     /**
      * The outline colour, packed RGBA8888: fully saturated cyan.
@@ -140,6 +197,9 @@ public final class OutlinePass
 
     /** The frame's id buffer, read-only to this pass. MUTABLE: rebound per frame. */
     private volatile int[] ids;
+
+    /** The frame's depth buffer, read-only to this pass. MUTABLE: rebound per frame. */
+    private volatile float[] depths;
 
     /** The frame's colour buffer. MUTABLE: rebound per frame. */
     private volatile int[] color;
@@ -211,6 +271,7 @@ public final class OutlinePass
         }
         this.framebuffer = target;
         this.ids = target.entityIdBuffer();
+        this.depths = target.depthBuffer();
         this.color = target.colorBuffer();
         this.width = target.width();
         this.height = target.height();
@@ -257,6 +318,7 @@ public final class OutlinePass
     {
         final Framebuffer target = framebuffer;
         final int[] idBuffer = ids;
+        final float[] depthBuffer = depths;
         final int[] colorBuffer = color;
         final int stride = strideInPixels;
         final int minX = target.tileMinX(tile);
@@ -275,7 +337,7 @@ public final class OutlinePass
                 {
                     continue;
                 }
-                if (onSilhouette(idBuffer, px, py, id))
+                if (onEdge(idBuffer, depthBuffer, px, py, id, depthBuffer[rowBase + px]))
                 {
                     colorBuffer[rowBase + px] = paint;
                 }
@@ -283,9 +345,22 @@ public final class OutlinePass
         }
     }
 
+    // Whether this tagged pixel is on either kind of edge. Only tagged pixels
+    // reach here, so the untagged majority of the frame costs one compare and
+    // nothing else.
+    //
+    // Silhouette first because it is the cheaper of the two — integer compares
+    // against a buffer already in cache — and because on a body of any size it
+    // is the test that answers true for the ring the eye actually follows.
+    private boolean onEdge(final int[] idBuffer, final float[] depthBuffer, final int px,
+        final int py, final int id, final float depth)
+    {
+        return onSilhouette(idBuffer, px, py, id)
+            || onCrease(idBuffer, depthBuffer, px, py, id, depth);
+    }
+
     // Whether any pixel within `thickness` along the four axes carries a
-    // different id. Only tagged pixels reach here, so the untagged majority of
-    // the frame costs one compare and nothing else.
+    // different id.
     private boolean onSilhouette(final int[] idBuffer, final int px, final int py,
         final int id)
     {
@@ -301,6 +376,48 @@ public final class OutlinePass
             }
         }
         return false;
+    }
+
+    // Whether an immediate neighbour of the SAME entity sits far enough away in
+    // depth to be a different surface of it.
+    //
+    // One step in each direction, never `thickness` steps — see the class
+    // Javadoc. A crease is interior, and a wide interior line is a fill.
+    private boolean onCrease(final int[] idBuffer, final float[] depthBuffer, final int px,
+        final int py, final int id, final float depth)
+    {
+        return stepsInDepth(idBuffer, depthBuffer, px - 1, py, id, depth)
+            || stepsInDepth(idBuffer, depthBuffer, px + 1, py, id, depth)
+            || stepsInDepth(idBuffer, depthBuffer, px, py - 1, id, depth)
+            || stepsInDepth(idBuffer, depthBuffer, px, py + 1, id, depth);
+    }
+
+    // Whether one neighbour belongs to the same entity but to a different
+    // surface of it.
+    //
+    // A neighbour with a DIFFERENT id is not a crease — it is a silhouette, and
+    // the other test already owns it. Saying so explicitly keeps the two marks
+    // from double-counting, and keeps a background pixel's cleared depth of
+    // Framebuffer.DEPTH_CLEAR out of the comparison entirely.
+    private boolean stepsInDepth(final int[] idBuffer, final float[] depthBuffer, final int x,
+        final int y, final int id, final float depth)
+    {
+        if (x < 0 || x >= width || y < 0 || y >= height)
+        {
+            return false;
+        }
+        final int at = y * strideInPixels + x;
+        if (idBuffer[at] != id)
+        {
+            return false;
+        }
+        final float neighbour = depthBuffer[at];
+        // Greater 1/w is nearer, so the larger of the two is the near surface —
+        // and the near one is the right denominator: it is the surface the
+        // crease belongs to, and using the far one would make the same physical
+        // step read as a bigger fraction the further away it got.
+        return Math.abs(depth - neighbour)
+            > CREASE_DEPTH_RATIO * Math.max(depth, neighbour);
     }
 
     // Whether one neighbour carries a different id. Off-screen is NOT

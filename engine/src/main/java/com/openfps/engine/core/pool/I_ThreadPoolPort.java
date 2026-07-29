@@ -11,10 +11,12 @@ import com.openfps.engine.core.subsystem.SubsystemRegistry;
 /**
  * Port interface for the worker thread pool.
  *
- * The pool owns N = logicalProcessorCount / 2 hot worker threads. Each
- * worker loops: take event from bus → dispatch to subsystem → return to
- * pool. Threads are pre-started at {@link #start()} and stay alive
- * (blocked on the bus) until {@link #shutdown()}.
+ * The pool owns N hot worker threads, where N is whatever
+ * {@link ThreadPoolFactory#resolveWorkerCount(int)} decided — one per logical
+ * processor bar one, unless it was pinned. Each worker loops: take event from
+ * bus → dispatch to subsystem → return to pool. Threads are pre-started at
+ * {@link #start()} and stay alive (blocked on the bus) until
+ * {@link #shutdown()}.
  *
  * Subsystem dispatch uses a {@link SubsystemRegistry}. The pool itself
  * is a state machine:

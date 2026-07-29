@@ -42,10 +42,11 @@ package com.openfps.engine.hal.port;
  * group them without a second table.</p>
  *
  * <p>The seven entries that reach the simulation line up one-to-one with the
- * fields of {@link InputState}. {@link #LEAVE_MATCH} is the exception and is
- * deliberately included anyway: it is a control the player presses, it deserves
- * to be rebindable like any other, and the fact that the UI consumes it rather
- * than the simulation is not something the player can see.</p>
+ * fields of {@link InputState}. {@link #LEAVE_MATCH} and
+ * {@link #TOGGLE_INVERT_LOOK} are the exceptions and are deliberately included
+ * anyway: they are controls the player presses, they deserve to be rebindable
+ * like any other, and the fact that the UI and the input adapter consume them
+ * rather than the simulation is not something the player can see.</p>
  */
 public enum GameAction
 {
@@ -78,7 +79,23 @@ public enum GameAction
      * same: a player who has moved every other control should not find this one
      * welded to a key.</p>
      */
-    LEAVE_MATCH(false);
+    LEAVE_MATCH(false),
+
+    /**
+     * Flip vertical look between conventional and inverted.
+     *
+     * <p>Consumed by the platform input adapter rather than by the simulation,
+     * like {@link #LEAVE_MATCH}: it changes how a device's numbers are read, so
+     * nothing downstream of {@link InputState} can tell it happened.</p>
+     *
+     * <p><b>It exists because "is the mouse inverted?" must never again be
+     * something the code guesses at.</b> The desktop port carried a hard-coded
+     * sign flip for exactly one release, on a theory about GLFW that turned out
+     * to be wrong, and the only way anyone could tell was to play the game and
+     * say so. A control the player can press settles it in one keystroke and
+     * leaves the preference where a preference belongs.</p>
+     */
+    TOGGLE_INVERT_LOOK(false);
 
     /** True when this action contributes to a movement axis. */
     private final boolean axis;

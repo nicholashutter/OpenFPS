@@ -95,6 +95,30 @@ class AdapterFactoryTest
             assertThat(factory.getSystemInfoPort()).isNotNull();
             assertThat(factory.getUserProfilePort()).isNotNull();
             assertThat(factory.getWindowPort()).isNotNull();
+            assertThat(factory.getAudioPort()).isNotNull();
+        }
+        finally
+        {
+            factory.shutdown();
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(HeadlessBackend.class)
+    @DisplayName("no headless backend claims it can make a noise")
+    void shouldNotReportAudioWhenHeadless(final HeadlessBackend backend)
+    {
+        // The same rule as the window above, and for the same reason: none of
+        // these backends may open a device, because CI has neither a display nor
+        // a sound card and these three are what CI runs. A real audio port is
+        // reached only by decorating one of them from a platform module —
+        // GdxAdapterFactory in :desktop, AndroidAdapterFactory in :android.
+        final I_AdapterFactory factory = create(backend);
+        factory.init();
+        try
+        {
+            assertThat(factory.getAudioPort().isAudible()).isFalse();
+            assertThat(factory.getAudioPort().masterVolume()).isEqualTo(1.0f);
         }
         finally
         {

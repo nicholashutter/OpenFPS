@@ -25,11 +25,24 @@ package com.openfps.gdx;
  * loading screen — is an addition here rather than a second boolean somewhere
  * else that has to be kept consistent with the first.</p>
  *
+ * <p>That prediction has since been collected on twice: {@link #SETTINGS} and
+ * {@link #GAME_OVER} are both here, and neither cost a consumer a new flag —
+ * they cost this table two rows and the predicates below one line each.</p>
+ *
  * <p><b>Transitions.</b> {@code MENU -> PLAYING} on Start Game,
- * {@code PLAYING -> MENU} on Escape. Nothing else is legal, including staying
+ * {@code MENU -> SETTINGS} on Settings, {@code PLAYING -> MENU} on Escape,
+ * {@code PLAYING -> GAME_OVER} when the round is decided, and both of the
+ * latter two back to {@code MENU}. Nothing else is legal, including staying
  * put: asking to enter the state you are already in means two things believe
  * they own the transition, and {@link UiStateMachine} refuses it loudly rather
  * than papering over it.</p>
+ *
+ * <p><b>There is no {@code GAME_OVER -> PLAYING} edge, and its absence is a
+ * decision.</b> A rematch needs a fresh {@code Match} — new bots at full health,
+ * counters back to zero — and the demo builds exactly one before the loop
+ * starts. An edge that led back into a room already cleared would be a button
+ * that lies. Until something can hand the gameplay port a new round, the only
+ * way out of a finished match is the menu.</p>
  *
  * Platform adapter — must not import from core engine packages.
  */
@@ -53,14 +66,41 @@ public enum UiState
      * hidden so GLFW keeps reporting relative motion, and mouse-look, WASD and
      * fire are all live.
      */
-    PLAYING;
+    PLAYING,
+
+    /**
+     * The settings screen is on screen and owns the pointer.
+     *
+     * Reached from the menu and returning only to it. The world is not drawn
+     * and the match does not advance — same as {@link #MENU} in every respect
+     * a consumer cares about, and a separate state only because a different
+     * screen is on the glass.
+     */
+    SETTINGS,
+
+    /**
+     * The round is decided and its result is on screen.
+     *
+     * <p>The world stops being drawn the instant this begins. That is the
+     * point: a summary composited over a live first-person view, with the
+     * player's corpse still able to turn and the bots still patrolling behind
+     * the numbers, is the same mistake {@link #MENU} was introduced to
+     * fix.</p>
+     *
+     * <p>The cursor is free, because the screen has a button on it.</p>
+     */
+    GAME_OVER;
 
     /**
      * Returns whether this state is allowed to hand over to {@code target}.
      *
      * <p>The table is written out per state rather than expressed as
      * "anything but myself" so that adding a state forces a decision here
-     * instead of silently inheriting a rule nobody chose.</p>
+     * instead of silently inheriting a rule nobody chose. Adding
+     * {@link #SETTINGS} and {@link #GAME_OVER} is what that rule was written
+     * for, and it worked — both had to be answered for explicitly, and
+     * {@code GAME_OVER -> PLAYING} was refused on purpose rather than
+     * inherited by accident. See the enum Javadoc.</p>
      *
      * @param target the state being asked for; null is never legal
      * @return true if {@link UiStateMachine} should permit the move
@@ -70,8 +110,12 @@ public enum UiState
         switch (this)
         {
             case MENU:
-                return target == PLAYING;
+                return target == PLAYING || target == SETTINGS;
             case PLAYING:
+                return target == MENU || target == GAME_OVER;
+            case SETTINGS:
+                return target == MENU;
+            case GAME_OVER:
                 return target == MENU;
             default:
                 return false;
@@ -79,13 +123,56 @@ public enum UiState
     }
 
     /**
-     * Returns true while the menu should be drawn and fed input events.
+     * Returns true while the <b>main</b> menu should be drawn and fed input
+     * events.
      *
-     * @return true in {@link #MENU}, false in {@link #PLAYING}
+     * <p>Deliberately not "some Scene2D screen is in front", which is what
+     * {@link #usesPointer()} answers. Three of the four states put a stage on
+     * the glass and they are three different stages; a consumer that conflated
+     * them would draw the main menu over the settings screen.</p>
+     *
+     * @return true in {@link #MENU} only
      */
     public boolean drawsMenu()
     {
         return this == MENU;
+    }
+
+    /**
+     * Returns true while the settings screen should be drawn and fed input.
+     *
+     * @return true in {@link #SETTINGS} only
+     */
+    public boolean drawsSettings()
+    {
+        return this == SETTINGS;
+    }
+
+    /**
+     * Returns true while the end-of-match screen should be drawn and fed input.
+     *
+     * @return true in {@link #GAME_OVER} only
+     */
+    public boolean drawsGameOver()
+    {
+        return this == GAME_OVER;
+    }
+
+    /**
+     * Returns true while a screen with buttons on it is in front.
+     *
+     * <p>The exact complement of {@link #capturesCursor()}, and written as its
+     * own predicate rather than as {@code !capturesCursor()} at three call
+     * sites: "a free cursor" and "something to click" are the same fact stated
+     * from the two ends, and a fifth state that had neither — a loading screen —
+     * would have to break the identity here, once, rather than wherever
+     * somebody had negated the other one.</p>
+     *
+     * @return true in every state except {@link #PLAYING}
+     */
+    public boolean usesPointer()
+    {
+        return this != PLAYING;
     }
 
     /**

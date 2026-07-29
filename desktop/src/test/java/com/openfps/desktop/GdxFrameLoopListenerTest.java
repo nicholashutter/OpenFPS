@@ -7,6 +7,7 @@ package com.openfps.desktop;
 
 import com.openfps.engine.gameplay.MatchMode;
 import com.openfps.engine.hal.adapter.nulladapter.NullWindowPort;
+import com.openfps.gdx.DebugSettings;
 import com.openfps.gdx.DefaultMenuActions;
 import com.openfps.gdx.MenuActions;
 import com.openfps.gdx.UiState;
@@ -190,20 +191,60 @@ class GdxFrameLoopListenerTest
         }
 
         @Test
-        @DisplayName("Settings and Quit are forwarded and change nothing about the UI state")
-        void shouldNotTransitionOnTheOtherButtons()
+        @DisplayName("Settings opens the settings screen, and Back returns")
+        void shouldTransitionOnSettings()
         {
+            // This button used to be inert — it logged "no settings screen yet"
+            // and left the UI where it was. It now owns a transition of its own,
+            // wrapped here exactly as Start Game is.
             final NullWindowPort window = new NullWindowPort();
             window.init();
             final GdxFrameLoopListener listener = new GdxFrameLoopListener(
                 new RecordingFrameCallback(), new DefaultMenuActions(window));
 
             listener.menuActions().onSettings();
+            assertThat(listener.uiState().state()).isEqualTo(UiState.SETTINGS);
+            assertThat(listener.isMenuActive()).isFalse();
+
+            // What the settings screen's Back button raises.
+            listener.uiState().returnToMenu();
             assertThat(listener.uiState().state()).isEqualTo(UiState.MENU);
+        }
+
+        @Test
+        @DisplayName("Quit is forwarded and changes nothing about the UI state")
+        void shouldNotTransitionOnQuit()
+        {
+            final NullWindowPort window = new NullWindowPort();
+            window.init();
+            final GdxFrameLoopListener listener = new GdxFrameLoopListener(
+                new RecordingFrameCallback(), new DefaultMenuActions(window));
 
             listener.menuActions().onQuit();
             assertThat(window.isCloseRequested()).isTrue();
             assertThat(listener.uiState().state()).isEqualTo(UiState.MENU);
+        }
+
+        @Test
+        @DisplayName("every window gets a debug switch, shared or private")
+        void shouldAlwaysHaveDebugSettings()
+        {
+            final NullWindowPort window = new NullWindowPort();
+            window.init();
+            final GdxFrameLoopListener listener = new GdxFrameLoopListener(
+                new RecordingFrameCallback(), new DefaultMenuActions(window));
+
+            // A window built without one keeps a private switch, so the settings
+            // screen still works and nothing outside the window is told.
+            assertThat(listener.debugSettings()).isNotNull();
+            assertThat(listener.debugSettings().isOverlayVisible()).isFalse();
+            assertThat(listener.debugOverlay()).isNotNull();
+
+            final DebugSettings shared = new DebugSettings();
+            final GdxFrameLoopListener wired = new GdxFrameLoopListener(
+                new RecordingFrameCallback(), new DefaultMenuActions(window), null, null,
+                shared);
+            assertThat(wired.debugSettings()).isSameAs(shared);
         }
 
         @Test

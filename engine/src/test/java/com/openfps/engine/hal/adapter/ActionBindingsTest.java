@@ -291,8 +291,8 @@ class ActionBindingsTest
         }
 
         @Test
-        @DisplayName("there are four axis actions and four buttons")
-        void shouldSplitEvenlyBetweenAxesAndButtons()
+        @DisplayName("there are four axis actions and five buttons")
+        void shouldSplitBetweenAxesAndButtons()
         {
             // Not arithmetic for its own sake: it fails when an action is added
             // without deciding which kind it is, which is the moment a bindings
@@ -307,7 +307,14 @@ class ActionBindingsTest
             }
 
             assertThat(axes).isEqualTo(4);
-            assertThat(GameAction.values()).hasSize(8);
+            assertThat(GameAction.values()).hasSize(9);
+        }
+
+        @Test
+        @DisplayName("the invert-look toggle is a button, not an axis")
+        void shouldTreatInvertLookAsAButton()
+        {
+            assertThat(GameAction.TOGGLE_INVERT_LOOK.isAxis()).isFalse();
         }
     }
 }

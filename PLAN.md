@@ -14,7 +14,7 @@ OpenFPS is a ground-up FPS game engine written in Java targeting the JVM runtime
 
 The engine draws direct inspiration from the original Doom (id Software, 1993) subsystem layout — not as cargo culting, but because that architecture genuinely separates concerns well for a real-time game loop. We borrow the letter-prefix convention (D_, P_, R_, S_, G_, W_, Z_, I_) as a loving homage and a clear naming signal.
 
-The engine is now an **event queue processor**: subsystems communicate exclusively by publishing events to a shared bus, and a pool of N dedicated worker threads (where N = logical CPU count / 2) consumes events and dispatches them to the target subsystem.
+The engine is now an **event queue processor**: subsystems communicate exclusively by publishing events to a shared bus, and a pool of N dedicated worker threads (where N = logical CPU count − 1) consumes events and dispatches them to the target subsystem.
 
 ---
 
@@ -303,7 +303,7 @@ backend) and `AndroidWindowPort` / `AndroidAdapterFactory` / `RoomUserProfilePor
 software rasterizer — the engine hands over a finished framebuffer and the
 adapter uploads it (§ 3.3).
 
-**NullSystemInfoPort** returns `Runtime.availableProcessors()` (logical cores). Worker pool size = `max(1, logicalCores / 2)`.
+**NullSystemInfoPort** returns `Runtime.availableProcessors()` (logical cores). Worker pool size = `max(1, logicalCores - 1)`, one processor being held back for the game loop thread and the platform frame loop thread. Override with `-Dopenfps.workers=N`. The rule and the evidence for it live in `ThreadPoolFactory`.
 
 ---
 
@@ -445,7 +445,7 @@ The Gradle **wrapper is pinned at 8.13**, not 8.10: `gdx-backend-android 1.14.2 
 ### Phase 1.2 — Event-driven engine + multi-threaded worker pool — **done**
 - [x] `I_EngineEvent` base + 6 concrete events
 - [x] `SharedEventBus` (single shared queue, blocking backpressure)
-- [x] `WorkerPool` (N = logicalCores / 2 hot threads, pre-started)
+- [x] `WorkerPool` (N = logicalCores − 1 hot threads, pre-started)
 - [x] `Subsystem` state machine + `SubsystemRegistry`
 - [x] `I_SystemInfoPort` (logical core count from HAL)
 - [x] `EngineMain` full event-driven bootstrap

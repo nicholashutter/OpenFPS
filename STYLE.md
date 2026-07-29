@@ -385,7 +385,8 @@ backend stays swappable (Logback on desktop, an Android binding in Phase 3+).
 - **The main thread belongs to the platform**: it runs the window event pump
   (`I_WindowPort.pumpEvents()`), because GLFW requires window calls there.
   Headless, it simply joins the loop thread
-- All event dispatch happens on the `WorkerPool` (N = logical cores / 2)
+- All event dispatch happens on the `WorkerPool` (N = logical cores − 1, or
+  `-Dopenfps.workers=N`)
 - Audio, network, and render each get their own thread when adapters are wired
 - Cross-thread communication goes through the event bus, backed by a bounded
   `java.util.concurrent.LinkedBlockingQueue`. The bound IS the backpressure:

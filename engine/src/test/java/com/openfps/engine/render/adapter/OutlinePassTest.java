@@ -6,6 +6,7 @@
 package com.openfps.engine.render.adapter;
 
 import java.util.concurrent.TimeUnit;
+import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -13,6 +14,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import com.openfps.engine.core.eventbus.EventBusFactory;
@@ -20,6 +22,7 @@ import com.openfps.engine.core.eventbus.I_EventBusPort;
 import com.openfps.engine.core.pool.I_ThreadPoolPort;
 import com.openfps.engine.core.pool.ThreadPoolFactory;
 import com.openfps.engine.core.subsystem.SubsystemRegistry;
+import com.openfps.engine.hal.adapter.nulladapter.NullSystemInfoPort;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -259,6 +262,144 @@ final class OutlinePassTest
     }
 
     @Nested
+    @DisplayName("interior creases — what makes the mark a wireframe and not a halo")
+    class Creases
+    {
+        /** 1/w of the near half of the crease fixture. */
+        private static final float NEAR_INV_W = 0.50f;
+
+        /** 1/w of the far half — a 40% step, well over CREASE_DEPTH_RATIO. */
+        private static final float FAR_INV_W = 0.30f;
+
+        /**
+         * 1/w one flat surface's shading gradient might drift by across a
+         * pixel — 0.2% of {@link #NEAR_INV_W}, far under the threshold.
+         */
+        private static final float GRAZING_INV_W = 0.499f;
+
+        /** Where the depth step falls inside the fixture, inclusive on the near side. */
+        private static final int CREASE_X = 47;
+
+        @Test
+        @DisplayName("one entity folded over itself is drawn on the fold")
+        void shouldPaintAnInteriorDepthStep()
+        {
+            // The whole point of the redesign. Before this, the only thing the
+            // pass could see was the outer border, so the mark was a ring of
+            // colour round a body — which reads as a damage or status effect,
+            // because that is what a filled ring on an enemy means everywhere
+            // else. A line where the body's own surfaces meet reads as
+            // geometry instead.
+            final Framebuffer fb = frame();
+            box(fb, BOX_MIN_X, BOX_MIN_Y, BOX_MAX_X, BOX_MAX_Y, ID_A);
+            depthBox(fb, BOX_MIN_X, BOX_MIN_Y, CREASE_X, BOX_MAX_Y, NEAR_INV_W);
+            depthBox(fb, CREASE_X + 1, BOX_MIN_Y, BOX_MAX_X, BOX_MAX_Y, FAR_INV_W);
+
+            defaultPass().draw(fb, null);
+
+            assertThat(painted(fb, CREASE_X, MID_Y))
+                .as("the near side of the fold")
+                .isTrue();
+            assertThat(painted(fb, CREASE_X + 1, MID_Y))
+                .as("and the far side of it")
+                .isTrue();
+            assertThat(painted(fb, CREASE_X - 4, MID_Y))
+                .as("but not the flat surface leading up to it")
+                .isFalse();
+            assertThat(painted(fb, CREASE_X + 5, MID_Y))
+                .as("nor the flat surface leading away from it")
+                .isFalse();
+        }
+
+        @Test
+        @DisplayName("a flat surface at a grazing angle is not a crease")
+        void shouldNotPaintASmoothDepthGradient()
+        {
+            // The failure mode that would turn the wireframe back into a fill:
+            // a threshold low enough to catch every ordinary per-pixel step
+            // scribbles over the whole body. This is the guard on
+            // CREASE_DEPTH_RATIO being comfortably above that.
+            final Framebuffer fb = frame();
+            box(fb, BOX_MIN_X, BOX_MIN_Y, BOX_MAX_X, BOX_MAX_Y, ID_A);
+            depthBox(fb, BOX_MIN_X, BOX_MIN_Y, CREASE_X, BOX_MAX_Y, NEAR_INV_W);
+            depthBox(fb, CREASE_X + 1, BOX_MIN_Y, BOX_MAX_X, BOX_MAX_Y, GRAZING_INV_W);
+
+            defaultPass().draw(fb, null);
+
+            assertThat(painted(fb, CREASE_X, MID_Y)).isFalse();
+            assertThat(painted(fb, CREASE_X + 1, MID_Y)).isFalse();
+        }
+
+        @Test
+        @DisplayName("the crease line is one pixel each side, however thick the silhouette is")
+        void shouldNotWidenTheCreaseWithThickness()
+        {
+            // A crease is interior. Widening it does not trace the body more
+            // boldly, it fills the body in — so the crease test takes exactly
+            // one step whatever `thickness` says. Asserted at a thickness that
+            // would obviously show if it did not.
+            final Framebuffer fb = frame();
+            box(fb, BOX_MIN_X, BOX_MIN_Y, BOX_MAX_X, BOX_MAX_Y, ID_A);
+            depthBox(fb, BOX_MIN_X, BOX_MIN_Y, CREASE_X, BOX_MAX_Y, NEAR_INV_W);
+            depthBox(fb, CREASE_X + 1, BOX_MIN_Y, BOX_MAX_X, BOX_MAX_Y, FAR_INV_W);
+
+            new OutlinePass(4, OutlinePass.OUTLINE_COLOR).draw(fb, null);
+
+            assertThat(painted(fb, CREASE_X, MID_Y)).isTrue();
+            assertThat(painted(fb, CREASE_X - 1, MID_Y))
+                .as("one step in from the fold, not four")
+                .isFalse();
+            assertThat(painted(fb, CREASE_X + 2, MID_Y))
+                .as("and one step out from it")
+                .isFalse();
+        }
+
+        @Test
+        @DisplayName("a neighbour of a DIFFERENT entity is a silhouette, never a crease")
+        void shouldNotTreatACrossEntityStepAsACrease()
+        {
+            // Two bodies at very different depths share a screen-space border.
+            // The silhouette test already owns that border; letting the crease
+            // test fire there too would double-count, and — worse — would let a
+            // background pixel's cleared DEPTH_CLEAR into the comparison, where
+            // it would find a "crease" against every entity on screen.
+            final Framebuffer fb = frame();
+            box(fb, PAIR_MIN_X, BOX_MIN_Y, PAIR_SPLIT_X, BOX_MAX_Y, ID_A);
+            box(fb, PAIR_SPLIT_X + 1, BOX_MIN_Y, PAIR_MAX_X, BOX_MAX_Y, ID_B);
+            depthBox(fb, PAIR_MIN_X, BOX_MIN_Y, PAIR_SPLIT_X, BOX_MAX_Y, NEAR_INV_W);
+            depthBox(fb, PAIR_SPLIT_X + 1, BOX_MIN_Y, PAIR_MAX_X, BOX_MAX_Y, FAR_INV_W);
+
+            defaultPass().draw(fb, null);
+
+            // The shared border is painted — but by the silhouette test, which
+            // reaches `thickness` pixels. One pixel further in than that, the
+            // depth is uniform and nothing may be painted.
+            assertThat(painted(fb, PAIR_SPLIT_X, MID_Y)).isTrue();
+            assertThat(painted(fb, PAIR_SPLIT_X - OutlinePass.OUTLINE_THICKNESS_PIXELS, MID_Y))
+                .as("inside entity A, past the silhouette band, on uniform depth")
+                .isFalse();
+        }
+
+        @Test
+        @DisplayName("a frame whose depth was never written has no creases anywhere")
+        void shouldFindNoCreaseInAClearedDepthBuffer()
+        {
+            // DEPTH_CLEAR is 0, so every difference and every denominator is
+            // zero. The comparison must come out false rather than NaN-true —
+            // which is what would happen if the ratio were applied the other
+            // way round, as a division.
+            final Framebuffer fb = frame();
+            box(fb, BOX_MIN_X, BOX_MIN_Y, BOX_MAX_X, BOX_MAX_Y, ID_A);
+
+            defaultPass().draw(fb, null);
+
+            assertThat(painted(fb, MID_Y, MID_Y))
+                .as("the middle of a depth-less entity is still hollow")
+                .isFalse();
+        }
+    }
+
+    @Nested
     @DisplayName("thickness")
     class Thickness
     {
@@ -317,8 +458,18 @@ final class OutlinePassTest
     @DisplayName("threading")
     class Threading
     {
+        // The fixed ladder, plus the count this machine's pool would actually
+        // build — the one worker count nobody chose by hand, and the one that
+        // changes from runner to runner. Deduplicated, because a two-processor
+        // box would otherwise run 1 twice.
+        static IntStream workerCounts()
+        {
+            return IntStream.of(1, 2, 3, 4, 8, ThreadPoolFactory.resolveWorkerCount(
+                new NullSystemInfoPort().logicalProcessorCount())).distinct();
+        }
+
         @ParameterizedTest
-        @ValueSource(ints = {1, 2, 3, 4, 8})
+        @MethodSource("workerCounts")
         @DisplayName("the frame is bit-identical to the serial one at every worker count")
         void shouldMatchTheSerialFrameAtEveryWorkerCount(final int workers)
         {
@@ -375,6 +526,19 @@ final class OutlinePassTest
     private static OutlinePass defaultPass()
     {
         return new OutlinePass();
+    }
+
+    // Fills an inclusive rectangle of the depth buffer with one 1/w value.
+    private static void depthBox(final Framebuffer fb, final int minX, final int minY,
+        final int maxX, final int maxY, final float invW)
+    {
+        for (int y = minY; y <= maxY; y++)
+        {
+            for (int x = minX; x <= maxX; x++)
+            {
+                fb.setDepth(x, y, invW);
+            }
+        }
     }
 
     // A cleared frame with a deliberately small tile size.

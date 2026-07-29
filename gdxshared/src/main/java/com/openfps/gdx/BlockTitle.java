@@ -64,6 +64,17 @@ public final class BlockTitle extends Actor
     /** The word, uppercase, in {@link BlockFont}'s alphabet. */
     private final String text;
 
+    /**
+     * The one colour every letter takes, or null to cycle the palette.
+     *
+     * <p>Non-null is for a heading whose colour <b>means</b> something —
+     * {@code GameOverScreen} draws VICTORY green and DEFEAT red, and a rainbow
+     * would be actively misleading there: the drift would carry the word through
+     * the other outcome's colour twice a pass. The welcome screen's title has no
+     * such meaning to carry, so it cycles.</p>
+     */
+    private final Color fixedColour;
+
     /** The 1x1 white pixel every block is drawn from. */
     private final TextureRegion pixel;
 
@@ -77,13 +88,29 @@ public final class BlockTitle extends Actor
     private final Color scratch = new Color();
 
     /**
-     * Creates a title.
+     * Creates a title that drifts through {@link MenuPalette#TITLE_CYCLE}.
      *
      * @param word the text to draw; must not be null and must contain only
      *     characters {@link BlockFont} has glyphs for
      * @param whitePixel a 1x1 white region to tint per block; must not be null
      */
     public BlockTitle(final String word, final TextureRegion whitePixel)
+    {
+        this(word, whitePixel, null);
+    }
+
+    /**
+     * Creates a title, optionally pinned to one colour.
+     *
+     * @param word the text to draw; must not be null and must contain only
+     *     characters {@link BlockFont} has glyphs for
+     * @param whitePixel a 1x1 white region to tint per block; must not be null
+     * @param colour the single colour every letter takes, or null to drift
+     *     through the palette. Copied rather than held, so a caller handing over
+     *     a shared palette constant cannot have it mutated underneath them by
+     *     this actor's scratch colour
+     */
+    public BlockTitle(final String word, final TextureRegion whitePixel, final Color colour)
     {
         if (whitePixel == null)
         {
@@ -95,6 +122,14 @@ public final class BlockTitle extends Actor
         this.widthInBlocks = BlockFont.widthInBlocks(word);
         this.text = word;
         this.pixel = whitePixel;
+        if (colour == null)
+        {
+            this.fixedColour = null;
+        }
+        else
+        {
+            this.fixedColour = new Color(colour);
+        }
     }
 
     /** Returns the word this title draws. */
@@ -169,10 +204,15 @@ public final class BlockTitle extends Actor
      * but the choice can.</p>
      *
      * @param glyphIndex which letter, from 0
-     * @return the palette colour for that letter at the current time
+     * @return the palette colour for that letter at the current time, or the
+     *     fixed colour this title was pinned to
      */
     public Color colourFor(final int glyphIndex)
     {
+        if (fixedColour != null)
+        {
+            return fixedColour;
+        }
         final int cycle = MenuPalette.TITLE_CYCLE.length;
         // floorMod, written out: the index must stay in range for a negative
         // glyph index as readily as a positive one, and % keeps the dividend's

@@ -334,6 +334,24 @@ public final class FramebufferPresenter
         }
     }
 
+    /**
+     * Returns how long the renderer's most recent frame took, in nanoseconds.
+     *
+     * <p>Straight through to {@code SoftwareRenderPort.lastFrameNanos()}. It is
+     * forwarded here rather than read from the port directly by callers because
+     * this class is already the one thing on the platform side that holds a
+     * renderer — a second holder would be a second place to keep in step with
+     * "is there a renderer at all", which is the question the null presenter
+     * answers everywhere else.</p>
+     *
+     * @return the renderer's last frame duration, or 0 before it has finished
+     *     one — which {@link FpsMeter} discards rather than averaging in
+     */
+    public long lastRenderNanos()
+    {
+        return renderPort.lastFrameNanos();
+    }
+
     /** Returns the surface width this presenter is sized for. */
     public int width()
     {

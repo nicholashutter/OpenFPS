@@ -5,6 +5,8 @@
 
 package com.openfps.engine.hal.adapter.nulladapter;
 
+import com.openfps.engine.audio.adapter.NullAudioPort;
+import com.openfps.engine.audio.port.I_AudioPort;
 import com.openfps.engine.hal.adapter.I_AdapterFactory;
 import com.openfps.engine.hal.port.I_DatagramPort;
 import com.openfps.engine.hal.port.I_FilePort;
@@ -34,6 +36,7 @@ public final class NullAdapterFactory implements I_AdapterFactory
     private final NullSystemInfoPort systemInfo = new NullSystemInfoPort();
     private final MemoryUserProfilePort userProfile = new MemoryUserProfilePort();
     private final NullWindowPort windowPort = new NullWindowPort();
+    private final NullAudioPort audioPort = new NullAudioPort();
 
     @Override
     public void init()
@@ -99,5 +102,17 @@ public final class NullAdapterFactory implements I_AdapterFactory
     public I_WindowPort getWindowPort()
     {
         return windowPort;
+    }
+
+    /**
+     * Returns the silent audio port.
+     *
+     * Not initialised by {@link #init()} — {@code AudioSubsystem} owns the
+     * audio lifecycle. See {@code I_AdapterFactory.getAudioPort}.
+     */
+    @Override
+    public I_AudioPort getAudioPort()
+    {
+        return audioPort;
     }
 }

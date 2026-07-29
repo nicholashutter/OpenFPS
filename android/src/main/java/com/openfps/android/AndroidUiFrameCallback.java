@@ -6,6 +6,7 @@
 package com.openfps.android;
 
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 import android.util.Log;
 
@@ -14,9 +15,14 @@ import com.badlogic.gdx.Input;
 import com.badlogic.gdx.utils.ScreenUtils;
 
 import com.openfps.engine.gameplay.MatchMode;
+import com.openfps.engine.gameplay.MatchSummary;
 import com.openfps.engine.hal.port.I_FrameCallback;
+import com.openfps.gdx.DebugOverlay;
+import com.openfps.gdx.DebugSettings;
 import com.openfps.gdx.FramebufferPresenter;
+import com.openfps.gdx.GameOverScreen;
 import com.openfps.gdx.MenuActions;
+import com.openfps.gdx.SettingsScreen;
 import com.openfps.gdx.UiState;
 import com.openfps.gdx.UiStateMachine;
 
@@ -73,6 +79,9 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
     /** Logcat tag. Android has no SLF4J binding, so platform code logs here. */
     private static final String TAG = "OpenFPS";
 
+    /** Nanoseconds in a second, for turning libGDX's frame delta into a sample. */
+    private static final float NANOS_PER_SECOND = 1_000_000_000.0f;
+
     /** The menu. Never null. */
     private final MainMenuFrameCallback menu;
 
@@ -87,6 +96,54 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
 
     /** Draws the touch controls, or null when there are none. */
     private final TouchOverlay overlay;
+
+    /** The switch the settings screen flips and the frame counter reads. Never null. */
+    private final DebugSettings debug;
+
+    /**
+     * The corner frame counter. Never null; it draws only while
+     * {@link DebugSettings#isOverlayVisible()} and builds no GL resource until
+     * the first time it does.
+     */
+    private final DebugOverlay fpsCounter = new DebugOverlay();
+
+    /**
+     * The settings UI.
+     * MUTABLE: built in {@link #onSurfaceReady}, released in
+     * {@link #onSurfaceLost}. It cannot be built earlier — there is no GL
+     * context until the surface exists.
+     */
+    private SettingsScreen settings;
+
+    /**
+     * The end-of-match UI, or null while no match has finished.
+     * MUTABLE: built when the round is decided and released when the player
+     * leaves it. See {@link GameOverScreen} on why it is per result.
+     */
+    private GameOverScreen gameOver;
+
+    /**
+     * Asked once a frame whether the round has been decided, or null.
+     * MUTABLE: set once by {@link #attachMatchResult} before the loop starts.
+     */
+    private Supplier<MatchSummary> matchResult;
+
+    /**
+     * Whether this session has already shown a result.
+     *
+     * <p>MUTABLE: set on the transition into {@link UiState#GAME_OVER} and never
+     * cleared, for the reason the desktop listener records — the demo builds one
+     * {@code Match} and nothing can reset it, so without this guard a player who
+     * read their summary and pressed Single Player again would be thrown
+     * straight back onto the same screen with no way to reach the world.</p>
+     */
+    private boolean resultShown;
+
+    /** The surface size, for placing the frame counter. MUTABLE: set on resize. */
+    private int surfaceWidth;
+
+    /** The surface height. MUTABLE: set on resize. */
+    private int surfaceHeight;
 
     /**
      * The UI state the callback has already reconciled with.
@@ -123,10 +180,38 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
     public AndroidUiFrameCallback(final MenuActions menuActions,
         final FramebufferPresenter framePresenter, final AndroidInputPort touchInput)
     {
+        this(menuActions, framePresenter, touchInput, new DebugSettings());
+    }
+
+    /**
+     * Creates the full UI with a caller-supplied debug switch.
+     *
+     * <p>The launcher supplies one when it wants to observe the switch — which
+     * it does, to put the renderer's outline pass behind the same toggle. A UI
+     * built without one gets a private switch nothing else can see, which is
+     * what every plain-JVM test wants.</p>
+     *
+     * @param menuActions what the buttons do; must not be null
+     * @param framePresenter draws the rasterizer's finished frame, or null for
+     *     a menu-only build
+     * @param touchInput reads the on-screen controls, or null for a build with
+     *     no world to control
+     * @param debugSettings the switch the settings screen flips; must not be
+     *     null
+     */
+    public AndroidUiFrameCallback(final MenuActions menuActions,
+        final FramebufferPresenter framePresenter, final AndroidInputPort touchInput,
+        final DebugSettings debugSettings)
+    {
         if (menuActions == null)
         {
             throw new IllegalArgumentException("menuActions must not be null");
         }
+        if (debugSettings == null)
+        {
+            throw new IllegalArgumentException("debugSettings must not be null");
+        }
+        this.debug = debugSettings;
         this.menu = new MainMenuFrameCallback(new StartGameTransition(menuActions, uiState));
         this.presenter = framePresenter;
         this.input = touchInput;
@@ -179,11 +264,39 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
         notifyMatchGate();
     }
 
+    /**
+     * Names something to ask, once a frame, whether the round has been decided.
+     *
+     * <p>A poll rather than a callback, for the reason the desktop listener
+     * records: the match is decided on the game loop thread, and a callback from
+     * there would have the simulation building a Scene2D stage on a thread with
+     * no GL context.</p>
+     *
+     * @param result asked once a frame; returns null while the match is running
+     *     and a frozen summary once it is not, or null to disable the end screen
+     */
+    public void attachMatchResult(final Supplier<MatchSummary> result)
+    {
+        this.matchResult = result;
+    }
+
+    /** Returns the debug switch this UI's settings screen flips. Never null. */
+    public DebugSettings debugSettings()
+    {
+        return debug;
+    }
+
     @Override
     public void onSurfaceReady(final int width, final int height)
     {
         Log.i(TAG, "Android UI surface ready: " + width + "x" + height);
         menu.onSurfaceReady(width, height);
+        // Laid out at the screen's density, so a button stays the same physical
+        // size on a 160 dpi tablet and a 560 dpi handset — the same rule
+        // MainMenuFrameCallback applies, and the reason these screens take a
+        // scale at all.
+        settings = new SettingsScreen(debug, uiState::returnToMenu, density());
+        settings.resize(width, height);
         resizeWorld(width, height);
         appliedState = uiState.state();
         applyState(appliedState);
@@ -193,6 +306,9 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
     public void onFrame(final float deltaSeconds)
     {
         consumeLeaveRequest();
+        // Before the state sync, so a round decided on this frame is shown on
+        // this frame rather than the next one.
+        checkMatchResult();
         syncUiState();
         draw(deltaSeconds);
     }
@@ -201,7 +317,46 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
     public void onResize(final int width, final int height)
     {
         menu.onResize(width, height);
+        if (settings != null)
+        {
+            settings.resize(width, height);
+        }
+        if (gameOver != null)
+        {
+            gameOver.resize(width, height);
+        }
         resizeWorld(width, height);
+    }
+
+    // The screen's density, or 1 when there is no graphics context to ask —
+    // which is every plain-JVM test.
+    private static float density()
+    {
+        if (Gdx.graphics == null || !(Gdx.graphics.getDensity() > 0.0f))
+        {
+            return 1.0f;
+        }
+        return Gdx.graphics.getDensity();
+    }
+
+    // Notices that the round has been decided, once, and moves onto the end
+    // screen. See attachMatchResult for why this is a poll.
+    private void checkMatchResult()
+    {
+        if (matchResult == null || resultShown || !uiState.isPlaying())
+        {
+            return;
+        }
+        final MatchSummary summary = matchResult.get();
+        if (summary == null)
+        {
+            return;
+        }
+        resultShown = true;
+        gameOver = new GameOverScreen(summary, uiState::returnToMenu, density());
+        gameOver.resize(surfaceWidth, surfaceHeight);
+        Log.i(TAG, "Match decided: " + summary);
+        uiState.endMatch(summary);
     }
 
     @Override
@@ -230,6 +385,19 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
         {
             overlay.dispose();
         }
+        fpsCounter.dispose();
+        if (settings != null)
+        {
+            settings.detachInputProcessor();
+            settings.dispose();
+            settings = null;
+        }
+        if (gameOver != null)
+        {
+            gameOver.detachInputProcessor();
+            gameOver.dispose();
+            gameOver = null;
+        }
         if (presenter != null)
         {
             presenter.dispose();
@@ -237,10 +405,11 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
         menu.onSurfaceLost();
     }
 
-    // Exactly one of the two states draws, and it draws everything.
+    // Exactly one screen draws, and it draws the whole surface.
     private void draw(final float deltaSeconds)
     {
-        if (isMenuActive())
+        final UiState current = uiState.state();
+        if (current.drawsMenu())
         {
             menu.onFrame(deltaSeconds);
             return;
@@ -253,6 +422,22 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
             // decision must not depend on there being a surface.
             return;
         }
+        if (settings != null && current.drawsSettings())
+        {
+            settings.render(deltaSeconds);
+            return;
+        }
+        if (gameOver != null && current.drawsGameOver())
+        {
+            gameOver.render(deltaSeconds);
+            return;
+        }
+        drawGame(deltaSeconds);
+    }
+
+    // The world, the touch controls, and the frame counter if it was asked for.
+    private void drawGame(final float deltaSeconds)
+    {
         if (presenter == null || !presenter.present())
         {
             // Playing, but nothing was uploaded: there is no renderer, or the
@@ -264,12 +449,33 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
         {
             overlay.render(input);
         }
+        sampleFpsCounter(deltaSeconds);
+        if (debug.isOverlayVisible())
+        {
+            // Last, so it sits over the world and the touch controls rather
+            // than under them.
+            fpsCounter.render(surfaceWidth, surfaceHeight);
+        }
     }
 
-    // The world's two sinks for a surface size, kept together so they can never
+    // Feeds the counter whether or not it is drawn, so switching it on shows a
+    // settled reading rather than one climbing out of nothing.
+    private void sampleFpsCounter(final float deltaSeconds)
+    {
+        long rendererNanos = 0L;
+        if (presenter != null)
+        {
+            rendererNanos = presenter.lastRenderNanos();
+        }
+        fpsCounter.sample((long) (deltaSeconds * NANOS_PER_SECOND), rendererNanos);
+    }
+
+    // The world's sinks for a surface size, kept together so they can never
     // disagree about how big a frame is.
     private void resizeWorld(final int width, final int height)
     {
+        this.surfaceWidth = width;
+        this.surfaceHeight = height;
         if (presenter != null)
         {
             presenter.resize(width, height);
@@ -297,12 +503,18 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
         notifyMatchGate();
     }
 
-    // Everything that follows from which half of the UI is in front.
+    // Everything that follows from which screen is in front.
+    //
+    // Branching on usesPointer() rather than on drawsMenu(), which is the change
+    // the settings and end-of-match states forced. The old test was "is this the
+    // menu, else it is the game" — with four states that reads SETTINGS as the
+    // game, hands the touch controls the input processor and swallows the back
+    // key, leaving a settings screen whose buttons do nothing and no way off it.
     private void applyState(final UiState state)
     {
-        if (state.drawsMenu())
+        if (state.usesPointer())
         {
-            menu.attachInputProcessor();
+            attachPointerScreen(state);
             catchBackKey(false);
             if (input != null)
             {
@@ -310,9 +522,14 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
                 // when the player comes back.
                 input.forgetEverything();
             }
+            releaseFinishedResult(state);
             return;
         }
         menu.detachInputProcessor();
+        if (settings != null)
+        {
+            settings.detachInputProcessor();
+        }
         if (input != null)
         {
             input.forgetEverything();
@@ -322,6 +539,38 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
             }
         }
         catchBackKey(true);
+    }
+
+    // Gives the processor to whichever of the three button-bearing screens is
+    // in front. At most one is ever attached — Gdx.input holds exactly one
+    // processor and each attach replaces the last.
+    private void attachPointerScreen(final UiState state)
+    {
+        if (state.drawsSettings() && settings != null)
+        {
+            settings.attachInputProcessor();
+            return;
+        }
+        if (state.drawsGameOver() && gameOver != null)
+        {
+            gameOver.attachInputProcessor();
+            return;
+        }
+        menu.attachInputProcessor();
+    }
+
+    // Drops the end screen once the player has left it. It holds a texture, a
+    // font and a stage, and resultShown is never cleared, so it can never be
+    // shown again — keeping it alive would hold three GPU resources for a
+    // screen with no way back to it.
+    private void releaseFinishedResult(final UiState state)
+    {
+        if (gameOver == null || state.drawsGameOver())
+        {
+            return;
+        }
+        gameOver.dispose();
+        gameOver = null;
     }
 
     // Asks Android not to act on back itself while a match is up. Only for keys
@@ -411,6 +660,7 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
         public void onSettings()
         {
             delegate.onSettings();
+            machine.openSettings();
         }
 
         @Override

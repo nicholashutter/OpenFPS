@@ -441,8 +441,57 @@ public final class GdxInputPort implements I_InputPort
             accumulator.clearAll();
             return;
         }
+        pollInvertToggle(input);
         pollKeys(input);
         pollLook(input);
+    }
+
+    // The invert-look switch, on the edge rather than the level: held down it
+    // would flip once per frame and settle wherever the key happened to be
+    // released, which is a coin toss rather than a setting.
+    //
+    // Before pollLook rather than after, so the tic the key is pressed already
+    // rotates the way the player just asked for. The accumulator applies the
+    // flag at latch, so nothing already banked is rotated twice.
+    private void pollInvertToggle(final Input input)
+    {
+        if (!isJustPressed(input, GameAction.TOGGLE_INVERT_LOOK))
+        {
+            return;
+        }
+        setInvertLook(!accumulator.isInvertPitch());
+    }
+
+    /**
+     * Sets whether vertical look is inverted — mouse away from you aims down.
+     *
+     * <p>The programmatic half of {@link GameAction#TOGGLE_INVERT_LOOK}, so a
+     * settings screen or a restored profile can drive the same preference the
+     * key does. Takes effect on the next tic's latch.</p>
+     *
+     * <p><b>This is a preference and nothing else.</b> It is not the knob for a
+     * platform whose device reports upside down — see {@link #pollLook}, where
+     * exactly that confusion once shipped an inverted mouse. A backend that
+     * disagrees with {@link InputAccumulator}'s "+y downward" contract owes the
+     * accumulator the sign it asks for; it must not spend this flag, or the
+     * player loses the ability to have the preference at all.</p>
+     *
+     * @param inverted true to make pushing the mouse away aim down
+     */
+    public void setInvertLook(final boolean inverted)
+    {
+        accumulator.setInvertPitch(inverted);
+        LOG.info("Invert mouse look: {}", Boolean.valueOf(inverted));
+    }
+
+    /**
+     * Returns whether vertical look is currently inverted.
+     *
+     * @return true if pushing the mouse away aims down
+     */
+    public boolean isInvertLook()
+    {
+        return accumulator.isInvertPitch();
     }
 
     /** Returns the accumulator this port latches from. Never null. */
@@ -599,25 +648,40 @@ public final class GdxInputPort implements I_InputPort
         return false;
     }
 
-    // One frame of relative motion, in screen orientation. The accumulator
-    // owns the units and the invert preference.
+    // One frame of relative motion, handed over EXACTLY as the device reports
+    // it. The accumulator owns the units, the sign convention and the invert
+    // preference; this method owns none of them.
     //
-    // THE VERTICAL DELTA IS NEGATED, and that is not a style choice. The
-    // accumulator's contract is "+y downward", the screen convention, and it
-    // negates once to reach positive-is-up. Feeding it getDeltaY() raw produced
-    // a camera that plays inverted: pushing the mouse away aimed down. So this
-    // backend hands over the sign the contract asks for rather than the sign it
-    // happens to receive.
+    // THERE IS NO NEGATION HERE, and its absence is measured rather than
+    // argued. A negation lived here for a while, on the theory that GLFW
+    // reported vertical motion upside down. It does not, and that extra flip is
+    // what the player kept reporting as "the mouse is still inverted".
     //
-    // Fixed here rather than in InputAccumulator because the accumulator is
-    // shared with Android, where a drag up already tilts up correctly. Flipping
-    // the shared multiply fixed the mouse and broke the touchscreen — the
-    // Android look test caught it immediately, which is the whole argument for
-    // putting a platform's correction inside that platform's adapter.
+    // The measurement, taken through the real LWJGL3 backend with the cursor
+    // caught, by warping the pointer 100 px UP the screen — which is what
+    // pushing the mouse away from you does:
+    //
+    //   warp                    cursor y 0 -> -100   (up the screen)
+    //   Gdx.input.getDeltaY()   -100                 (so +y IS downward)
+    //   with the negation       accumulated pitch pixels = +100
+    //   latch() negates again   pitch = -0.22 rad
+    //   run ended at            PlayerController{..., pitch=-0.22}
+    //
+    // Aimed DOWN for a mouse pushed away: inverted, exactly as reported.
+    // Without the negation the same warp accumulates -100, latch() negates
+    // once, and the view tilts UP — the conventional feel.
+    //
+    // libGDX's own backend agrees in one line. DefaultLwjgl3Input's cursor
+    // callback is deltaY = (int) y - logicalMouseY, straight from GLFW's
+    // top-left-origin cursor position and never flipped. So the desktop mouse
+    // genuinely speaks the accumulator's documented "+y downward" and needs no
+    // correction at all; the correction WAS the bug.
     //
     // A player who WANTS inverted look gets it from
-    // InputAccumulator.setInvertPitch, which is a preference layered on top of
-    // this and deliberately not the same knob.
+    // InputAccumulator.setInvertPitch, reachable at runtime through
+    // GameAction.TOGGLE_INVERT_LOOK and setInvertLook(boolean). That is a
+    // preference, and keeping it distinct from a platform sign fix is exactly
+    // what stops the next person guessing at this line.
     private void pollLook(final Input input)
     {
         if (discardLookPolls > 0)
@@ -626,7 +690,7 @@ public final class GdxInputPort implements I_InputPort
             accumulator.resetLook();
             return;
         }
-        accumulator.accumulateLook(input.getDeltaX(), -input.getDeltaY());
+        accumulator.accumulateLook(input.getDeltaX(), input.getDeltaY());
     }
 
     // Hands the cursor back on the way out. Skipped headless, and skipped when

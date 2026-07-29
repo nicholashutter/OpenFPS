@@ -18,8 +18,11 @@ import com.openfps.engine.demo.DemoAssetException;
 import com.openfps.engine.demo.DemoGameplayPort;
 import com.openfps.engine.demo.DemoModels;
 import com.openfps.engine.demo.DemoScene;
+import com.openfps.engine.gameplay.Match;
+import com.openfps.engine.gameplay.MatchSummary;
 import com.openfps.engine.gameplay.adapter.NullGameplayPort;
 import com.openfps.engine.gameplay.port.I_GameplayPort;
+import com.openfps.gdx.DebugSettings;
 import com.openfps.engine.hal.adapter.AdapterFactorySelector;
 import com.openfps.engine.hal.adapter.desktop.DesktopDatagramPort;
 import com.openfps.engine.net.NetSession;
@@ -190,6 +193,10 @@ public final class DesktopLauncher
         }
 
         final GdxWindowPort window = new GdxWindowPort();
+        // Built here rather than inside the window, because the launcher is the
+        // only object that can see both the settings screen's switch and the
+        // renderer it also drives. That is the composition root's job.
+        final DebugSettings debug = new DebugSettings();
         final GdxAdapterFactory hal = new GdxAdapterFactory(
             AdapterFactorySelector.create(HalBackend.DESKTOP), window);
         final RendererHolder holder = new RendererHolder();
@@ -213,6 +220,12 @@ public final class DesktopLauncher
         bindWorld(renderer, demo, explicitModel);
         window.attachRenderer(renderer);
         attachMatchGate(window, gameplay[0]);
+        // The weapon's noise. From the HAL rather than constructed here, so the
+        // launcher makes no decision about audio beyond "use the platform's" —
+        // which is the same shape as the window and the input port above it.
+        attachAudio(hal, gameplay[0]);
+        attachMatchResult(window, gameplay[0]);
+        attachDebugSettings(window, debug, renderer);
 
         final NetSession netSession;
         try
@@ -336,6 +349,105 @@ public final class DesktopLauncher
             return;
         }
         window.attachMatchGate(live -> gameplay.setMatchLive(live.booleanValue()));
+    }
+
+    /**
+     * Lets the UI find out that the round has been decided.
+     *
+     * <p>The other direction of {@link #attachMatchGate}. Until this existed the
+     * match simply stopped: {@code Match} decided the round on some tic,
+     * {@code DemoGameplayPort} logged one line, the bots went still, and the
+     * player was left standing in a room that had quietly finished without
+     * telling them. Winning and dying looked identical from inside the
+     * window.</p>
+     *
+     * @param window the window whose UI shows the result; must not be null
+     * @param gameplay the match to read, or null when there is no match — the
+     *     {@code --model=} path has none
+     */
+    private static void attachMatchResult(final GdxWindowPort window,
+        final DemoGameplayPort gameplay)
+    {
+        if (gameplay == null)
+        {
+            return;
+        }
+        window.attachMatchResult(() -> finishedMatch(gameplay));
+    }
+
+    /**
+     * Returns the frozen result of a decided round, or null while it runs.
+     *
+     * <p>Called from the render thread, on a {@code Match} the game loop thread
+     * owns. That is a race in form only, and the shape of this method is what
+     * makes it one: nothing is read until {@code state().isOver()} is true, and
+     * once it is, {@code Match.tick} returns early and the trigger is gated on
+     * the same check — so every figure {@link MatchSummary#of} copies has
+     * stopped moving before it is first observed. A stale read costs one
+     * frame's delay and nothing else.</p>
+     *
+     * @param gameplay the port holding the round; must not be null
+     * @return the summary, or null when there is no match or it is still running
+     */
+    private static MatchSummary finishedMatch(final DemoGameplayPort gameplay)
+    {
+        final Match round = gameplay.match();
+        if (round == null || !round.state().isOver())
+        {
+            return null;
+        }
+        return MatchSummary.of(round);
+    }
+
+    /**
+     * Shares the debug switch with the window, and puts the renderer's outline
+     * pass behind it.
+     *
+     * <p><b>Loosely, on purpose.</b> {@code DebugSettings} does not import the
+     * renderer and the renderer has never heard of a settings screen; the
+     * launcher, which already holds both, supplies the one-line observer. And
+     * attaching does not fire it — see {@code DebugSettings.onChange} — so
+     * whatever outline default the renderer was built with survives startup
+     * untouched, and only a player actually pressing the toggle moves it.</p>
+     *
+     * @param window the window whose settings screen flips the switch
+     * @param debug the switch to share; must not be null
+     * @param renderer the renderer whose outline pass follows it, or null when
+     *     there is none
+     */
+    private static void attachDebugSettings(final GdxWindowPort window,
+        final DebugSettings debug, final SoftwareRenderPort renderer)
+    {
+        window.attachDebugSettings(debug);
+        if (renderer == null)
+        {
+            return;
+        }
+        debug.onChange(on -> renderer.setOutlineEnabled(on.booleanValue()));
+    }
+
+    /**
+     * Gives the match somewhere to play the weapon sound.
+     *
+     * <p>Attached after {@code start} rather than passed into it, because the
+     * gameplay port is built inside the bootstrap by a factory that takes only
+     * the input port — see {@code DemoGameplayPort.attachAudio}. Nothing is
+     * opened by this call: the port bakes its sound on the first shot, since
+     * there is no libGDX audio device until {@code runFrameLoop} below has
+     * started the application.</p>
+     *
+     * @param hal the HAL that owns the platform's sound output; must not be null
+     * @param gameplay the match to give a voice to, or null when there is no
+     *     match — the {@code --model=} path has none
+     */
+    private static void attachAudio(final GdxAdapterFactory hal,
+        final DemoGameplayPort gameplay)
+    {
+        if (gameplay == null)
+        {
+            return;
+        }
+        gameplay.attachAudio(hal.getAudioPort());
     }
 
     // Where each bot's model sits among the scene's world instances, so the

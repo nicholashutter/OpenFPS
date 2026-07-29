@@ -7,6 +7,9 @@ package com.openfps.engine.demo;
 
 import java.util.concurrent.locks.ReentrantLock;
 
+import com.openfps.engine.audio.adapter.NullAudioPort;
+import com.openfps.engine.audio.port.I_AudioPort;
+import com.openfps.engine.audio.port.SoundId;
 import com.openfps.engine.core.GameConfig;
 import com.openfps.engine.gameplay.Bot;
 import com.openfps.engine.gameplay.Match;
@@ -167,6 +170,29 @@ public final class DemoGameplayPort implements I_GameplayPort
      * every peer, and everyone else's arrives in the same call.</p>
      */
     private volatile NetSession net;
+
+    /**
+     * Where the weapon's noise goes. Never null.
+     *
+     * <p><b>Starts silent rather than starting absent.</b> A
+     * {@link NullAudioPort} default means {@link #fireIfRequested} has one code
+     * path instead of a null check on the hottest branch in the class, and it
+     * means every test, every headless run and every {@code --model=} session
+     * behaves identically to a windowed one apart from the noise. The
+     * alternative — a null field — puts a conditional in the trigger, which is
+     * exactly where this class has already had one bug that made the weapon
+     * useless for a whole run.</p>
+     *
+     * <p>MUTABLE: replaced by {@link #attachAudio} before the loop starts, the
+     * same shape as {@link #attachNetwork}. Volatile because the launcher
+     * attaches on the platform's main thread and the game loop thread reads it
+     * every shot.</p>
+     *
+     * <p>This is an {@code I_AudioPort} and never a libGDX type. The rule is not
+     * negotiable and it is the reason the port exists: {@code :engine} compiles
+     * and tests with no libGDX, no GLFW and no sound card (hal/README.md).</p>
+     */
+    private volatile I_AudioPort audio = new NullAudioPort();
 
     /**
      * Tic index of the last shot, for the cooldown.
@@ -416,6 +442,46 @@ public final class DemoGameplayPort implements I_GameplayPort
     }
 
     /**
+     * Attaches the sound output the weapon fires through.
+     *
+     * <p>A setter rather than an eighth constructor parameter, and the same
+     * shape as {@link #attachNetwork} for the same reason: the audio port comes
+     * from the HAL factory, which the launcher holds, while this port is built
+     * inside {@code EngineMain.start} by a factory taking only the input port.
+     * Widening that factory signature to carry audio would push the platform's
+     * device choice through the engine's bootstrap, which is precisely what the
+     * {@code I_GameplayPortFactory} indirection exists to avoid.</p>
+     *
+     * <p>Call before the frame loop starts. Safe from any thread.</p>
+     *
+     * @param port where to play the weapon sound; null restores silence rather
+     *     than being rejected, because "this build has no audio" is a
+     *     configuration, not a mistake
+     */
+    public void attachAudio(final I_AudioPort port)
+    {
+        if (port == null)
+        {
+            this.audio = new NullAudioPort();
+            LOG.info("Audio detached — the weapon fires silently");
+            return;
+        }
+        this.audio = port;
+        // The class, not isAudible(): a real backend cannot say yet. Its device
+        // and its sounds are opened lazily, on the first shot, because on
+        // desktop there IS no libGDX audio until the frame loop has started —
+        // and that is after this call. The port logs the answer itself when it
+        // knows it.
+        LOG.info("Audio attached: {}", port.getClass().getSimpleName());
+    }
+
+    /** Returns the port the weapon fires through. Never null. */
+    public I_AudioPort audio()
+    {
+        return audio;
+    }
+
+    /**
      * Advances the player by one tic and points the camera at the result.
      *
      * @param ticIndex the tic being processed
@@ -482,6 +548,27 @@ public final class DemoGameplayPort implements I_GameplayPort
             return;
         }
         this.lastFireTic = ticIndex;
+
+        // The shot is now committed, so this is the noise of a shot rather than
+        // the noise of a trigger. Three things follow from where this line sits:
+        //
+        //  - AFTER the cooldown, so a held trigger makes five sounds a second
+        //    and not sixty. Before it, the blaster would be a buzz whose pitch
+        //    depended on --fps, which is the exact coupling FIRE_INTERVAL_TICS
+        //    exists to break.
+        //  - BEFORE the hitscan resolves, and unconditionally, so a miss sounds
+        //    identical to a hit. The same rule as the tracer: a sound that only
+        //    played when you connected would tell the player the outcome before
+        //    the game does.
+        //  - Through the PORT. The engine says "make this noise" and knows
+        //    nothing else — no device, no file, no format. On a headless run
+        //    this is a counter increment, which is why CI can assert the cadence
+        //    above without a sound card.
+        //
+        // Non-blocking by contract (I_AudioPort#play), which matters here: this
+        // runs on the game loop thread inside tickLock. A port that waited for
+        // the sound to finish would cost eleven tics per shot at 60 Hz.
+        audio.play(SoundId.WEAPON_FIRE);
 
         // Two Vec3 allocations per SHOT, not per tic. The alternative is to
         // recompute the view basis here from yaw and pitch, duplicating the

@@ -333,11 +333,19 @@ public final class InputAccumulator
      * <p><b>The negation is a statement about the caller's numbers, not about
      * the device</b>, which is why it lives here and not in either port. A
      * platform whose device reports the other way round owes this class the
-     * sign it documents rather than a second flag — see
-     * {@code GdxInputPort.pollLook}, which does exactly that for the desktop
-     * mouse. Keeping the correction at the point of the discrepancy is what
-     * stops one platform's quirk from becoming a shared special case that the
-     * other platform then has to opt out of.</p>
+     * sign it documents rather than a second flag; keeping such a correction at
+     * the point of the discrepancy is what stops one platform's quirk from
+     * becoming a shared special case that the other has to opt out of.</p>
+     *
+     * <p><b>As it happens, no platform currently owes one.</b> GLFW reports
+     * cursor motion from a top-left origin and libGDX passes it through
+     * unchanged, so {@code Gdx.input.getDeltaY()} is already +y downward; an
+     * Android drag reports the same way. Both ports therefore hand over raw
+     * deltas and this single negation is the only sign flip in the chain. That
+     * is worth stating plainly, because a second flip did briefly live in
+     * {@code GdxInputPort.pollLook} and the two cancelled into a camera that
+     * played inverted — see that method for the measurement that removed
+     * it.</p>
      *
      * <p>Diagonal normalisation is not done here: the raw −1/0/+1 axes are
      * handed to {@link InputState#of}, which scales any vector longer than 1

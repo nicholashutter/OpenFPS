@@ -9,6 +9,7 @@ import com.openfps.engine.common.UserProfile;
 import com.openfps.engine.hal.adapter.I_AdapterFactory;
 import com.openfps.engine.hal.adapter.nulladapter.MemoryUserProfilePort;
 import com.openfps.engine.hal.adapter.nulladapter.NullAdapterFactory;
+import com.openfps.engine.audio.port.I_AudioPort;
 import com.openfps.engine.hal.port.I_DatagramPort;
 import com.openfps.engine.hal.port.I_FilePort;
 import com.openfps.engine.hal.port.I_InputPort;
@@ -328,6 +329,12 @@ class AndroidAdapterFactoryTest
         public I_WindowPort getWindowPort()
         {
             return delegate.getWindowPort();
+        }
+
+        @Override
+        public I_AudioPort getAudioPort()
+        {
+            return delegate.getAudioPort();
         }
     }
 

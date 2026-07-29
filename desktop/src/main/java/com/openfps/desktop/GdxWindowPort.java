@@ -10,15 +10,18 @@ import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.backends.lwjgl3.Lwjgl3Application;
 import com.badlogic.gdx.backends.lwjgl3.Lwjgl3ApplicationConfiguration;
 
+import com.openfps.engine.gameplay.MatchSummary;
 import com.openfps.engine.hal.port.I_FrameCallback;
 import com.openfps.engine.hal.port.I_WindowPort;
 import com.openfps.engine.render.adapter.SoftwareRenderPort;
+import com.openfps.gdx.DebugSettings;
 import com.openfps.gdx.DefaultMenuActions;
 import com.openfps.gdx.FramebufferPresenter;
 import com.openfps.gdx.MenuActions;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -120,6 +123,20 @@ public final class GdxWindowPort implements I_WindowPort
      */
     private volatile Consumer<Boolean> matchGate;
 
+    /**
+     * Asked once a frame whether the round has been decided, or null when this
+     * window has no match behind it. MUTABLE: set by
+     * {@link #attachMatchResult} before {@link #runFrameLoop}.
+     */
+    private volatile Supplier<MatchSummary> matchResult;
+
+    /**
+     * The debug switch the settings screen flips, or null to let the listener
+     * keep a private one. MUTABLE: set by {@link #attachDebugSettings} before
+     * {@link #runFrameLoop}.
+     */
+    private volatile DebugSettings debugSettings;
+
     @Override
     public void init()
     {
@@ -182,8 +199,10 @@ public final class GdxWindowPort implements I_WindowPort
         try
         {
             final GdxFrameLoopListener listener = new GdxFrameLoopListener(
-                callback, new DefaultMenuActions(this), presenter(), inputPort);
+                callback, new DefaultMenuActions(this), presenter(), inputPort,
+                settings());
             listener.attachMatchGate(matchGate);
+            listener.attachMatchResult(matchResult);
             new Lwjgl3Application(listener, buildConfiguration());
         }
         finally
@@ -292,6 +311,76 @@ public final class GdxWindowPort implements I_WindowPort
     public Consumer<Boolean> matchGate()
     {
         return matchGate;
+    }
+
+    /**
+     * Names something to ask, once a frame, whether the round has been decided.
+     *
+     * <p>The return direction of {@link #attachMatchGate}: that one tells the
+     * match when the player is in the world, this one asks the match whether the
+     * world still has a game in it. Same shape and same reasoning — a
+     * {@link Supplier} of a plain value rather than a gameplay reference, so a
+     * window port does not import the demo package to hold one call. See
+     * {@link GdxFrameLoopListener#attachMatchResult} for why it is a poll.</p>
+     *
+     * <p>Call before {@link #runFrameLoop}. Passing null leaves a window whose
+     * match can never end, which is what every windowless test gets.</p>
+     *
+     * @param result returns null while the match runs and a frozen summary once
+     *     it does not, or null for a window with no match
+     */
+    public void attachMatchResult(final Supplier<MatchSummary> result)
+    {
+        if (state == State.RUNNING)
+        {
+            throw new IllegalStateException("attachMatchResult() while the frame loop is running");
+        }
+        this.matchResult = result;
+    }
+
+    /** Returns the supplier named by {@link #attachMatchResult}, or null. */
+    public Supplier<MatchSummary> matchResult()
+    {
+        return matchResult;
+    }
+
+    /**
+     * Names the debug switch this window's settings screen should flip.
+     *
+     * <p>Supplied by the launcher when it wants to observe the switch — which it
+     * does, to put the renderer's outline pass behind the same toggle without
+     * either of them knowing about the other. Passing null, or not calling this,
+     * leaves the frame loop with a private switch: the settings screen still
+     * works and still shows the counter, and nothing outside the window is
+     * told.</p>
+     *
+     * @param settings the switch to share, or null for a private one
+     */
+    public void attachDebugSettings(final DebugSettings settings)
+    {
+        if (state == State.RUNNING)
+        {
+            throw new IllegalStateException("attachDebugSettings() while the loop is running");
+        }
+        this.debugSettings = settings;
+    }
+
+    /** Returns the switch named by {@link #attachDebugSettings}, or null. */
+    public DebugSettings debugSettings()
+    {
+        return debugSettings;
+    }
+
+    // The attached switch, or a fresh private one. Resolved here so the
+    // listener's five-argument constructor never sees a null.
+    private DebugSettings settings()
+    {
+        final DebugSettings attached = debugSettings;
+        if (attached == null)
+        {
+            return new DebugSettings();
+        }
+        return attached;
     }
 
     // Builds the presenter for one run, or null when no renderer was attached.

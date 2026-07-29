@@ -133,11 +133,36 @@ public final class DemoEffects
      */
     public static final float MUZZLE_FORWARD_UNITS = 2.4f;
 
-    /** How far right of the eye the muzzle is, matching the weapon's own offset. */
-    public static final float MUZZLE_RIGHT_UNITS = 0.9f;
+    /**
+     * How far right of the eye the muzzle is, in world units — 1.55.
+     *
+     * <p><b>Measured off the rendered weapon, not copied from its origin.</b>
+     * This used to be 0.9, to match {@code DemoScene.WEAPON_VIEW_RIGHT} of
+     * 0.92 — but that constant places the weapon model's <i>origin</i>, and a
+     * pistol's muzzle is at the far end of a barrel that runs forward and to
+     * the right of it. At 0.9 the effect appeared over the middle of the gun,
+     * which is not where a shot comes from and is the part of the frame the gun
+     * body itself covers.</p>
+     *
+     * <p>1.55 puts it at the end of the drawn slide: at 720p and the demo's
+     * field of view that is about 400 px right of centre, and the weapon's
+     * barrel tip renders at about 430. Taken from a capture rather than from
+     * the model's bounds, because {@code WEAPON_VIEW_SCALE} sizes the viewmodel
+     * for the screen rather than for the world — where the muzzle
+     * <i>appears</i> is the only definition that makes the smoke look attached
+     * to the gun.</p>
+     */
+    public static final float MUZZLE_RIGHT_UNITS = 1.55f;
 
-    /** How far below the eye the muzzle is. */
-    public static final float MUZZLE_DROP_UNITS = 0.30f;
+    /**
+     * How far below the eye the muzzle is, in world units — 0.22.
+     *
+     * <p>Raised from 0.30 along with {@link #MUZZLE_RIGHT_UNITS} and for the
+     * same reason: the barrel sits along the <i>top</i> of the slide, so the
+     * muzzle is higher than the weapon's origin. It also lifts the puff clear
+     * of the gun body, which was covering its lower half.</p>
+     */
+    public static final float MUZZLE_DROP_UNITS = 0.22f;
 
     /**
      * Half-extent of a puff when it is born, in world units — 0.14.
@@ -149,10 +174,19 @@ public final class DemoEffects
      * as 37 units would at the far wall. Sized in the room's units instead it
      * would fill the screen.</p>
      */
-    public static final float PUFF_RADIUS_START = 0.14f;
+    public static final float PUFF_RADIUS_START = 0.10f;
 
-    /** Half-extent of a puff at the end of its life. See {@link #PUFF_RADIUS_START}. */
-    public static final float PUFF_RADIUS_END = 0.34f;
+    /**
+     * Half-extent of a puff at the end of its life — 0.22. See
+     * {@link #PUFF_RADIUS_START} for why these numbers are so small.
+     *
+     * <p><b>Both were reduced once the puff became visible enough to judge.</b>
+     * At 0.14 growing to 0.34 the cloud ended up around 300 px across at 720p —
+     * a quarter of the window — and a translucent rectangle that size does not
+     * read as smoke at a muzzle, it reads as a pane of glass across the view.
+     * Nobody could tell while it was the colour of the wall.</p>
+     */
+    public static final float PUFF_RADIUS_END = 0.22f;
 
     /**
      * World units a puff drifts upward per tic — 0.010.
@@ -190,14 +224,31 @@ public final class DemoEffects
     private static final int TRACER_COLOUR = Rgba.pack(255, 216, 112, 255);
 
     /**
-     * Mid grey, the colour of powder smoke.
+     * Dark warm grey, the colour of powder smoke — and it is dark on purpose.
      *
-     * <p>Darker than smoke "should" be, and deliberately: the demo room is a
-     * pale grey-blue and a near-white puff composited over it at any coverage
-     * is a slightly brighter patch of nothing. Contrast is what makes it read
-     * as an object rather than a rendering artefact.</p>
+     * <p><b>Measured against the room it is composited over, not chosen from a
+     * palette.</b> The Kenney room's lit walls and floor sample at about
+     * {@code (141, 147, 177)}, a pale grey-blue. This used to be
+     * {@code (158, 158, 152)}, which is that colour with the blue taken out and
+     * almost nothing else changed — the whole puff resolved to within about ten
+     * levels of the background at its most opaque rung. It was drawn correctly,
+     * every frame, and it was invisible; the player's report was "the smoke is
+     * not there", and they were right.</p>
+     *
+     * <p>Dark rather than light because the room is light: there are only 114
+     * levels of headroom upward from the background and 141 downward, and the
+     * pale end of that range is where the walls, the ceiling and the doorway
+     * trim already live. But <b>not as dark as it can be</b> — {@code (74, 72,
+     * 68)} was tried and overshot, resolving to about {@code (84, 84, 91)} at
+     * the first rung, which reads as a solid black block rather than as smoke.
+     * Something you cannot see through is not a cloud, whatever its
+     * coverage.</p>
+     *
+     * <p>{@code (92, 90, 86)} lands the first rung near {@code (104, 104, 109)}
+     * against that wall: a drop of some forty levels, plainly visible, with a
+     * quarter of the background still showing through it.</p>
      */
-    private static final int SMOKE_COLOUR = Rgba.pack(158, 158, 152, 255);
+    private static final int SMOKE_COLOUR = Rgba.pack(92, 90, 86, 255);
 
     /**
      * Coverage of each puff stage, faintest last.
@@ -206,8 +257,19 @@ public final class DemoEffects
      * port and a potential extra batched pass, so this is four values rather
      * than sixteen. Four steps over 18 tics is a step every 4-5 tics, which
      * reads as a fade.</p>
+     *
+     * <p><b>The ladder starts higher now, and that is half of the fix for a
+     * puff nobody could see.</b> It used to top out at 150 — under 60% — and
+     * with the old near-background colour that made even the freshest smoke a
+     * few levels away from the wall behind it. It does not run all the way up
+     * either: 228 was tried and, with a dark enough colour, produced something
+     * you could not see through, which reads as a hole in the world rather than
+     * as smoke. 190 is thick and still translucent.</p>
+     *
+     * <p>The bottom rung is a genuine wisp rather than nothing, which is what
+     * makes the staircase read as a fade instead of as a disappearance.</p>
      */
-    private static final int[] PUFF_COVERAGE = {150, 114, 78, 42};
+    private static final int[] PUFF_COVERAGE = {190, 142, 96, 64};
 
     /** Coordinates per position or direction triple. */
     private static final int AXES = 3;
@@ -552,6 +614,23 @@ public final class DemoEffects
     public static int coverageFor(final int stage)
     {
         return PUFF_COVERAGE[stage];
+    }
+
+    /**
+     * Returns the packed RGBA8888 colour a puff composites in.
+     *
+     * <p>Exposed so a test can assert the thing that actually went wrong:
+     * whether the composited result is far enough from the room behind it to be
+     * seen. The colour on its own says nothing — the previous one was a
+     * perfectly reasonable grey, and it was invisible against this particular
+     * room. Only the pair of (colour, background) means anything, so the test
+     * needs both.</p>
+     *
+     * @return the smoke colour, packed {@code 0xRRGGBBAA}
+     */
+    public static int smokeColour()
+    {
+        return SMOKE_COLOUR;
     }
 
     // Where a tracer's stretched box sits and which way it points.

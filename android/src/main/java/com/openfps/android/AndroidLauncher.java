@@ -18,6 +18,8 @@ import com.openfps.engine.demo.DemoAssetException;
 import com.openfps.engine.demo.DemoGameplayPort;
 import com.openfps.engine.demo.DemoModels;
 import com.openfps.engine.demo.DemoScene;
+import com.openfps.engine.gameplay.Match;
+import com.openfps.engine.gameplay.MatchSummary;
 import com.openfps.engine.gameplay.adapter.NullGameplayPort;
 import com.openfps.engine.gameplay.port.I_GameplayPort;
 import com.openfps.engine.hal.port.I_InputPort;
@@ -25,6 +27,7 @@ import com.openfps.engine.hal.port.I_TimePort;
 import com.openfps.engine.render.adapter.SoftwareRenderPort;
 import com.openfps.engine.render.port.I_RenderPort;
 import com.openfps.engine.render.port.I_RenderPortFactory;
+import com.openfps.gdx.DebugSettings;
 import com.openfps.gdx.DefaultMenuActions;
 import com.openfps.gdx.FramebufferPresenter;
 
@@ -123,8 +126,12 @@ public final class AndroidLauncher extends AndroidApplication
         // bootstrap has returned by then.
         final DemoGameplayPort[] gameplay = new DemoGameplayPort[1];
 
+        // Hoisted into a local because the audio port is read back off it below.
+        // The factory owns the platform's devices; the launcher only wires them.
+        final AndroidAdapterFactory hal = new AndroidAdapterFactory(windowPort, this, input);
+
         session = new EngineMain().start(config,
-            new AndroidAdapterFactory(windowPort, this, input),
+            hal,
             holder,
             inputPort ->
             {
@@ -139,9 +146,24 @@ public final class AndroidLauncher extends AndroidApplication
         final SoftwareRenderPort renderer = holder.renderer();
         bindWorld(renderer, demo);
 
+        // Built here rather than inside the UI, because this Activity is the
+        // only object that can see both the settings screen's switch and the
+        // renderer it also drives. That is the composition root's job.
+        final DebugSettings debug = new DebugSettings();
         final AndroidUiFrameCallback ui = new AndroidUiFrameCallback(
-            new DefaultMenuActions(windowPort), new FramebufferPresenter(renderer), input);
+            new DefaultMenuActions(windowPort), new FramebufferPresenter(renderer), input,
+            debug);
         attachMatchGate(ui, gameplay[0]);
+        attachMatchResult(ui, gameplay[0]);
+        // Loosely, on purpose: DebugSettings does not import the renderer and
+        // the renderer has never heard of a settings screen. Attaching does not
+        // fire, so whatever outline default the renderer was built with survives
+        // startup and only a player pressing the toggle moves it.
+        debug.onChange(on -> renderer.setOutlineEnabled(on.booleanValue()));
+        // The weapon's noise. Nothing is opened yet — there is no Gdx.audio
+        // until initialize() has run, which runFrameLoop below is what does, so
+        // the port bakes its sound on the first shot instead.
+        attachAudio(hal, gameplay[0]);
 
         // The port takes one callback, and two things need the frame: the
         // engine (which watches for the loop ending) and the UI (which draws).
@@ -262,6 +284,72 @@ public final class AndroidLauncher extends AndroidApplication
             return;
         }
         ui.attachMatchGate(live -> gameplay.setMatchLive(live.booleanValue()));
+    }
+
+    /**
+     * Lets the UI find out that the round has been decided.
+     *
+     * <p>The other direction of {@link #attachMatchGate}. Without it a match
+     * simply stops: the bots go still, the log gets one line, and the player is
+     * left holding a phone showing a room that quietly finished without telling
+     * them — winning and dying look identical.</p>
+     *
+     * @param ui the UI that shows the result; must not be null
+     * @param gameplay the match to read, or null when no world was packaged
+     */
+    private static void attachMatchResult(final AndroidUiFrameCallback ui,
+        final DemoGameplayPort gameplay)
+    {
+        if (gameplay == null)
+        {
+            return;
+        }
+        ui.attachMatchResult(() -> finishedMatch(gameplay));
+    }
+
+    /**
+     * Returns the frozen result of a decided round, or null while it runs.
+     *
+     * <p>Called from the render thread on a {@code Match} the game loop thread
+     * owns, which is a race in form only: nothing is read until
+     * {@code state().isOver()} is true, and once it is, {@code Match.tick}
+     * returns early and the trigger is gated on the same check, so every figure
+     * copied has stopped moving. A stale read costs one frame and nothing
+     * else.</p>
+     *
+     * @param gameplay the port holding the round; must not be null
+     * @return the summary, or null when there is no match or it is still running
+     */
+    private static MatchSummary finishedMatch(final DemoGameplayPort gameplay)
+    {
+        final Match round = gameplay.match();
+        if (round == null || !round.state().isOver())
+        {
+            return null;
+        }
+        return MatchSummary.of(round);
+    }
+
+    /**
+     * Gives the match somewhere to play the weapon sound.
+     *
+     * <p>Attached after {@code start} rather than passed into it, because the
+     * gameplay port is built inside the bootstrap by a factory that takes only
+     * the input port — see {@code DemoGameplayPort.attachAudio}. The desktop
+     * launcher carries the same method for the same reason.</p>
+     *
+     * @param hal the HAL that owns the platform's sound output
+     * @param gameplay the match to give a voice to, or null when no world was
+     *     packaged
+     */
+    private static void attachAudio(final AndroidAdapterFactory hal,
+        final DemoGameplayPort gameplay)
+    {
+        if (gameplay == null)
+        {
+            return;
+        }
+        gameplay.attachAudio(hal.getAudioPort());
     }
 
     /**

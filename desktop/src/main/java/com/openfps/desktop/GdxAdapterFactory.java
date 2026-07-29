@@ -5,6 +5,9 @@
 
 package com.openfps.desktop;
 
+import java.io.File;
+
+import com.openfps.engine.audio.port.I_AudioPort;
 import com.openfps.engine.hal.adapter.AdapterFactorySelector;
 import com.openfps.engine.hal.adapter.HalBackend;
 import com.openfps.engine.hal.adapter.I_AdapterFactory;
@@ -15,6 +18,8 @@ import com.openfps.engine.hal.port.I_SystemInfoPort;
 import com.openfps.engine.hal.port.I_TimePort;
 import com.openfps.engine.hal.port.I_UserProfilePort;
 import com.openfps.engine.hal.port.I_WindowPort;
+
+import com.openfps.gdx.GdxAudioPort;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -62,6 +67,21 @@ public final class GdxAdapterFactory implements I_AdapterFactory
 
     /** Real mouse and keyboard, polled by that window's frame loop. */
     private final GdxInputPort inputPort = new GdxInputPort();
+
+    /**
+     * Real sound, through OpenAL — the third getter this factory does not
+     * delegate.
+     *
+     * <p>Staged into the JVM's temp directory rather than beside the executable:
+     * the packaged app-image lives under {@code Program Files}, which is not
+     * writable by the user running it, and a game that needs write access to its
+     * own install directory to make a noise is a game that is silent on every
+     * properly installed machine. {@code java.io.tmpdir} is writable by
+     * definition and is cleaned by the OS, which is the correct lifetime for an
+     * 8 KB file regenerated on demand.</p>
+     */
+    private final GdxAudioPort audioPort =
+        new GdxAudioPort(new File(System.getProperty("java.io.tmpdir", ".")));
 
     /** Creates the factory over the standard desktop HAL backend. */
     public GdxAdapterFactory()
@@ -169,5 +189,21 @@ public final class GdxAdapterFactory implements I_AdapterFactory
     public I_WindowPort getWindowPort()
     {
         return windowPort;
+    }
+
+    /**
+     * Returns the real OpenAL-backed sound output, not the delegate's silent
+     * one.
+     *
+     * <p>Not initialised here, unlike the window: {@code AudioSubsystem} owns
+     * the audio lifecycle, and it could not usefully be opened at this point
+     * anyway. {@link #init()} runs before {@code runFrameLoop} constructs the
+     * {@code Lwjgl3Application}, so {@code Gdx.audio} is still null — which is
+     * exactly why {@link GdxAudioPort} loads its sounds lazily.</p>
+     */
+    @Override
+    public I_AudioPort getAudioPort()
+    {
+        return audioPort;
     }
 }

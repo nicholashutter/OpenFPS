@@ -5,6 +5,7 @@
 
 package com.openfps.engine.hal.adapter;
 
+import com.openfps.engine.audio.port.I_AudioPort;
 import com.openfps.engine.hal.port.I_DatagramPort;
 import com.openfps.engine.hal.port.I_FilePort;
 import com.openfps.engine.hal.port.I_InputPort;
@@ -67,4 +68,23 @@ public interface I_AdapterFactory
      * no-op window whose {@code isRealWindow()} is false.
      */
     I_WindowPort getWindowPort();
+
+    /**
+     * Returns the sound output. Never null — a backend with no audio device
+     * returns a {@code NullAudioPort}, whose {@code isAudible()} is false.
+     *
+     * <b>This factory does NOT init or shut down the port it returns here.</b>
+     * {@code AudioSubsystem} owns that lifecycle, exactly as {@code HalSubsystem}
+     * owns the input port's, and doing it in both places simply runs both twice.
+     * Harmless, since the contract makes them idempotent, but a duplicated line
+     * in a log is how you find out something is happening twice, and the input
+     * port already taught that lesson once (see {@code AndroidAdapterFactory}).
+     *
+     * <b>Audio is here rather than in a factory of its own</b> because it is the
+     * same kind of thing as the window: a device the platform owns, chosen at the
+     * composition root, with a null implementation that keeps CI honest. Giving
+     * it a second selection mechanism would mean two answers to "which platform
+     * am I on".
+     */
+    I_AudioPort getAudioPort();
 }

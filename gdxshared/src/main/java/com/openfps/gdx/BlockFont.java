@@ -113,6 +113,17 @@ public final class BlockFont
         {"9", ".###.", "#...#", "#...#", ".####", "....#", "...#.", ".##.."},
         {"-", ".....", ".....", ".....", "#####", ".....", ".....", "....."},
         {"!", "..#..", "..#..", "..#..", "..#..", "..#..", ".....", "..#.."},
+        // The four below are what the frame counter needs and nothing else does:
+        // a decimal point for "16.7", a slash for "5 / 7", a percent for an
+        // accuracy figure, and a colon for a labelled value. Added when
+        // DebugOverlay was written, because BlockFont REJECTS a character it has
+        // no glyph for rather than skipping it — so a counter formatted with a
+        // decimal point was a startup exception, not a word with a hole in it.
+        // That is the behaviour requireDrawable was written for, and it worked.
+        {".", ".....", ".....", ".....", ".....", ".....", "..##.", "..##."},
+        {":", ".....", "..##.", "..##.", ".....", "..##.", "..##.", "....."},
+        {"/", "....#", "....#", "...#.", "..#..", ".#...", "#....", "#...."},
+        {"%", "##..#", "##..#", "...#.", "..#..", ".#...", "#..##", "#..##"},
         {" ", ".....", ".....", ".....", ".....", ".....", ".....", "....."},
     };
 

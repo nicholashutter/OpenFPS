@@ -42,6 +42,11 @@ import com.openfps.engine.hal.port.InputBinding;
  *       anything else, but it is the way out of a captured cursor, so
  *       {@link GdxInputPort} treats an unbound one as a bug worth logging rather
  *       than a preference.</li>
+ *   <li><b>{@link GameAction#TOGGLE_INVERT_LOOK} is I</b>, for invert. A letter
+ *       key rather than a function key because it is a thing a player reaches
+ *       for in the first minute of play — the vertical axis is the one setting
+ *       a shooter cannot pick correctly on the player's behalf — and because
+ *       nothing else in this scheme wants a letter outside the WASD block.</li>
  * </ul>
  *
  * Platform adapter — must not import from core engine packages.
@@ -80,6 +85,7 @@ public final class DesktopBindings
                 InputBinding.key(Input.Keys.CONTROL_LEFT))
             .bind(GameAction.JUMP, InputBinding.key(Input.Keys.SPACE))
             .bind(GameAction.SPRINT, InputBinding.key(Input.Keys.SHIFT_LEFT))
-            .bind(GameAction.LEAVE_MATCH, InputBinding.key(Input.Keys.ESCAPE));
+            .bind(GameAction.LEAVE_MATCH, InputBinding.key(Input.Keys.ESCAPE))
+            .bind(GameAction.TOGGLE_INVERT_LOOK, InputBinding.key(Input.Keys.I));
     }
 }
