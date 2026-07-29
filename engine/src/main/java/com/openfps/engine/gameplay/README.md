@@ -8,9 +8,9 @@
 |---|---|
 | **State** | SHIPPING |
 | **Phase** | 4 — the match layer landed ahead of its phase, as the controller did |
-| **Tests** | 192 |
+| **Tests** | 257 — counted, not remembered: `gradlew :engine:test --tests 'com.openfps.engine.gameplay.*'` |
 | **Registered** | P_ via `GameplaySubsystem` |
-| **Verified** | 2026-07-28 |
+| **Verified** | 2026-07-29 |
 
 ### The match layer
 
@@ -41,25 +41,35 @@ only implementation that plays anything is `demo/DemoGameplayPort`.
 `gameplay/adapter/NullGameplayPort` is the fallback, so P_ is registered whether
 or not anything is happening.
 
-**Not built.** Everything Phase 4 names, and none of it exists in any form:
-`PlayerState`, `Entity`, `PhysicsWorld` (including `moveWithSlide`),
-`MapSubsector` / `Sector`, `MapLoader`, `LagCompensator`. The design sections
-further down this file are specification written ahead of that code.
+**Built, and new.** `PhysicsWorld` — the player no longer walks through walls.
+It takes a desired ground move and returns the permitted one, so
+`PlayerController` stays a pure function of state and arguments; see
+[Collision](#physicsworld--collision-that-slides) below for the shape and the
+reasoning. `moveWithSlide` landed as the pair `slideX` / `slideZ`, because a
+single call would have to return two floats and therefore allocate, and this
+runs every tic.
 
-**Blocked on.** Nothing for movement — `PhysicsWorld` can be written today
-against `PlayerController` alone. `MapLoader` *is* blocked: `render/README.md`
-§ 11(b) leaves the WAD subsystem's remaining role open, and map geometry is the
-strongest candidate for it, so do not assume `MapLoader` reads a WAD until that
-question closes.
+**Not built.** The rest of what Phase 4 names, and none of it exists in any
+form: `PlayerState`, `Entity`, `MapSubsector` / `Sector`, `MapLoader`,
+`LagCompensator`. The design sections further down this file are specification
+written ahead of that code.
 
-**Next step.** `PhysicsWorld.moveWithSlide` — the player currently walks through
-walls, and every other Phase 4 item is easier once collision exists.
+**Blocked on.** `MapLoader` *is* blocked: `render/README.md` § 11(b) leaves the
+WAD subsystem's remaining role open, and map geometry is the strongest candidate
+for it, so do not assume `MapLoader` reads a WAD until that question closes.
+
+**Next step.** A **floor-height query** on `PhysicsWorld`. Collision is
+horizontal only today, so solids block at every height and the player cannot
+stand on the crates the jump was tuned to clear. That one addition unlocks the
+crates, the staircase and the ramp together — see the list of what is and is not
+solid below.
 
 ## What lives here
 
 Built and tested today:
 
 - `PlayerController` — first-person look and movement in `float`, produces the `Camera`
+- `PhysicsWorld` — the solid geometry a move is clipped against, with sliding
 - `PlayerInputView` — presents the HAL's `InputState` as an `I_PlayerInput`
 - `I_GameplayPort` / `I_GameplayPortFactory` — what the core calls per tic, and
   how a launcher builds one after the HAL exists
@@ -70,7 +80,6 @@ of it:
 
 - `PlayerState` — position (16.16 fixed-point), velocity, angle, pitch, health, armor
 - `Entity` — abstract base for all game objects: players, monsters, projectiles, pickups, doors
-- `PhysicsWorld` — collision detection, gravity, sliding along walls
 - `MapSubsector` / `Sector` — sector data with portal adjacency for movement
 - `MapLoader` — parses map lumps (`THINGS`, `LINEDEFS`, `SECTORS`, `SSECTORS`, `NODES`).
   Where those lumps come from is *not* settled — `render/README.md` § 11(b) has
@@ -85,6 +94,7 @@ this file used not to, and read as an inventory of code that does not exist.
 ```
 gameplay/
 ├── PlayerController.java          first-person look + movement, produces the Camera
+├── PhysicsWorld.java              solid boxes; clips a desired move, slides
 ├── PlayerInputView.java           adapts the HAL InputState onto I_PlayerInput
 ├── port/
 │   ├── I_GameplayPort.java        interface — called by core per tic
@@ -96,7 +106,7 @@ gameplay/
 
 ### The only live implementation
 
-`NullGameplayPort` is a stub and `PhysicsWorld` does not exist, so the one
+`NullGameplayPort` is a stub, so the one
 `I_GameplayPort` that actually plays anything is **`demo/DemoGameplayPort.java`**
 — it latches input, drives a `PlayerController` and aims the software renderer's
 camera, once per tic, under a lock. It is also the only place `PlayerController`
@@ -184,12 +194,121 @@ has no use for them. Whatever consumes them later should read the `InputState`
 directly rather than widening this seam.
 **Do not grow a second copy of `InputState` here.**
 
+## `PhysicsWorld` — collision that slides
+
+The class `PlayerController`'s Javadoc has promised since it was written: it
+"wraps this later and rejects the parts of a move that hit a wall". It holds
+axis-aligned boxes and nothing else — no player, no clock, no state once built —
+so it stays a pure function and the controller in front of it stays
+deterministic.
+
+### The body
+
+An **upright axis-aligned box, half-width 16 world units** (`32` across, `56`
+tall). That is `Constants.PLAYER_RADIUS / MAP_SCALE`, not a new number: the room
+was already dimensioned against it. `DemoScene.KIT_WORLD_SCALE` justifies the
+64-unit grid partly by "a 32-unit-diameter player in a 64-unit doorway has a
+radius of clearance either side", and `BOT_ROUTE_CENTRES` keeps every patrol
+inside the wall by the same 16.
+
+A box rather than a cylinder because every solid in the room is itself
+axis-aligned, which makes the test four comparisons with no square root — DOOM's
+32×32×56 player box, which also called its half-width a radius. The two differ
+only within 4.7 units of a corner. The footprint does not rotate: movement is
+yaw-only, and a square hull that spun with the view would make clearance depend
+on which way the player was looking.
+
+### The two calls, and why the order is fixed
+
+```java
+newX = world.slideX(x, z, deltaX);
+newZ = world.slideZ(newX, z, deltaZ);   // note: the CLIPPED x
+```
+
+Two calls rather than one because a single `moveWithSlide` would have to return
+two floats, and this runs up to 120 times a second.
+
+- **Per-axis clipping is the sliding.** The blocked component is lost, the free
+  one survives, so a diagonal into a wall keeps travelling *along* it. A solver
+  that zeroes the whole move turns every wall into glue, and is the single
+  biggest difference between "has collision" and "feels right".
+- **`slideZ` gets the clipped `x`.** That is what makes an inside corner hold.
+  Measured from the x the player *asked* for rather than the one they reached,
+  a corner leaks diagonally.
+- **x-then-z, always.** Not "the larger component first", not "whichever is
+  blocked less". Two peers whose floats differ by one ulp would take different
+  branches and then disagree about where a player is standing.
+
+Blocked moves are clipped **to the exact contact plane**, not discarded:
+rejecting the step outright leaves the player up to one step short of the wall —
+8.5 units at 30 Hz — which is invisible, tic-rate dependent and jittery.
+
+A body **already inside** a solid is never resolved, only the crossing of a face
+from outside is. An embedded body walks out rather than being teleported to a
+face or pinned forever.
+
+### What is solid in the demo room
+
+`DemoScene.kitRoomPhysics()` owns the answer, because `DemoScene` is the only
+thing that knows where the room is.
+
+| | |
+|---|---|
+| **Solid** | the four perimeter walls, the two doorway jambs, four columns, seven floor-standing crates — 16 boxes |
+| **Open** | the doorway: a 64-unit gap between two south-wall slabs, which a 32-unit body clears with 16 units either side |
+| **Not solid** | the staircase and the ramp |
+
+Each wall is **one slab spanning its whole side**, not the ten tile boxes the
+renderer draws. A row of abutting boxes has nine internal edges, and a body
+sliding along it that drifts an ulp inside the surface catches on every one.
+
+The hull stops at the wall's **visible face at 313.6**, not the centre line at
+320 where `addWalls` places the instance, so the furthest a player may stand is
+**±297.6** with their shoulder against the plaster.
+
+The staircase and ramp are left permeable deliberately: collision is horizontal
+only, so both would need full-height boxes, and an invisible wall in front of a
+ramp you can plainly see reads as a bug where walking through it merely reads as
+unfinished. The staircase also sits at `z = 224` on the way to the door.
+
+### Cost and determinism
+
+Two calls per tic over a flat `float[]` of 16 boxes. **No allocation, no
+`java.lang.Math`, no `sqrt`, no clock, no randomness** — only comparisons and
+sums, which JEP 306 makes bit-reproducible, as `net/README.md`'s lockstep model
+requires. `PhysicsWorldTest` reads the constant pool to enforce it, the same
+guard `PlayerController` carries.
+
+### Driving it without a keyboard
+
+Collision is the one feature nothing automated could reach: everything else the
+screenshot harness photographs is true of a stationary player. `GdxInputPort`
+holds a movement axis for the first N tics when asked, which is what makes the
+proof takeable:
+
+```
+gradlew :desktop:run "--args=--start-in-game" -Dopenfps.autoWalkTics=300
+        -Dopenfps.autoWalkStrafe=-0.0654
+        -Dopenfps.screenshot=C:\tmp\wall.png -Dopenfps.screenshotExit=true
+```
+
+The position on the `Demo gameplay stopped after N tics at …` line is the
+measurement. Walking forward from the spawn: **`z = 1087.998`** before this
+landed — 774 units outside the room — and **`z = 297.6`** after, on the contact
+plane to the last digit.
+
 ## Physics math — what's coming
 
 These are documented in advance so you can verify the formulas before they're coded.
 Implementation will reference this README for the source of each formula.
 
 ### Collision detection
+
+**What shipped is the second layer only, against boxes rather than linedefs** —
+see [`PhysicsWorld`](#physicsworld--collision-that-slides) above. The BSP
+quick-reject below is still specification: a 16-box room is a linear scan of 64
+floats, so a tree to avoid it would cost more than it saved. It becomes worth
+building when a real map's linedef count does.
 
 Two layers, both used together:
 
@@ -256,20 +375,29 @@ http://doom.wikia.com/wiki/WAD
 ## Files
 
 - `PlayerController.java` — first-person look and movement (72 tests)
+- `PhysicsWorld.java` — solid boxes, clipping and sliding (28 tests)
 - `PlayerInputView.java` — the HAL `InputState` adapter (5 tests)
 - `port/I_GameplayPort.java` — interface, called by core per tic
 - `port/I_GameplayPortFactory.java` — deferred construction, mirroring `I_RenderPortFactory`
 - `port/I_PlayerInput.java` — the controller's input seam
 - `adapter/NullGameplayPort.java` — null impl
 
-**77 tests in this package.** Run with `.\gradlew.bat test`.
+**105 tests across those four files**, of 257 in the package once the match
+layer is counted. Run with `.\gradlew.bat test`.
 
 ## TODO (Phase 4)
 
-- `PhysicsWorld` wraps `PlayerController` and rejects the blocked part of a move
+- ~~`PhysicsWorld` wraps `PlayerController` and rejects the blocked part of a
+  move~~ — **done**, as `slideX` / `slideZ`
+- `PhysicsWorld.floorHeightAt(x, z)` — the missing half. Collision is
+  horizontal only, so nothing can be stood on: the crates, the staircase and the
+  ramp are all waiting on this one method, and the jump was tuned to clear a
+  crate it currently cannot land on
+- Clip the **bots** against the same world. They walk fixed routes that happen
+  to stay inside the wall, which is an arithmetic coincidence maintained by a
+  test rather than a physical fact
 - `PlayerState` data class
 - `Entity` base + concrete types (monster, projectile, pickup, door)
-- `PhysicsWorld.moveWithSlide(player, dx, dy)` — collision + slide
 - `MapLoader` — read THINGS / LINEDEFS / SECTORS, once `render/README.md`
   § 11(b) settles what the map container is
 - `BspTraverser` — leaf lookup, reused in both gameplay and render

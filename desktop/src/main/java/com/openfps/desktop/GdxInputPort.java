@@ -122,6 +122,49 @@ public final class GdxInputPort implements I_InputPort
      */
     public static final int DISCARD_LOOK_POLLS_AFTER_CAPTURE = 2;
 
+    /**
+     * System property: hold a movement input for this many tics from the start
+     * of the run. Zero, the default, scripts nothing.
+     *
+     * <p><b>This exists because collision is the one feature nothing automated
+     * could reach.</b> Everything else the screenshot harness photographs is
+     * true of a stationary player: the room is drawn, the weapon is held, the
+     * bots patrol. Walls only prove themselves when somebody walks into one, and
+     * every route into this port needs a hand — {@code Gdx.input} answers for a
+     * physical keyboard, and {@link #pollDevice} refuses to read the device at
+     * all unless the cursor is caught and the window focused, which an
+     * unattended capture run cannot promise. So the automated proof that the
+     * player stops at the wall was impossible to take, and "it works, come and
+     * try it" is not evidence.</p>
+     *
+     * <p>Opt-in and off by default, on the same pattern as
+     * {@code GdxScreenshot.FRAME_PROPERTY} and
+     * {@code DebugSettings.OVERLAY_PROPERTY}. It injects at
+     * {@link #sampleInput}, downstream of the device and the accumulator, so it
+     * needs neither a window nor focus and cannot fight a real key:</p>
+     *
+     * <pre>
+     *   gradlew :desktop:run "--args=--start-in-game" -Dopenfps.autoWalkTics=600
+     * </pre>
+     */
+    public static final String AUTO_WALK_TICS_PROPERTY = "openfps.autoWalkTics";
+
+    /**
+     * System property: the forward axis the scripted walk holds, default 1.
+     * Positive walks forward; see {@link #AUTO_WALK_TICS_PROPERTY}.
+     */
+    public static final String AUTO_WALK_FORWARD_PROPERTY = "openfps.autoWalkForward";
+
+    /**
+     * System property: the strafe axis the scripted walk holds, default 0.
+     *
+     * <p>Given alongside a forward axis it makes the walk a diagonal, which is
+     * the input that tells a sliding wall from a wall that stops the player
+     * dead — the position log after it shows movement along one axis and none
+     * along the other.</p>
+     */
+    public static final String AUTO_WALK_STRAFE_PROPERTY = "openfps.autoWalkStrafe";
+
     private static final Logger LOG = LoggerFactory.getLogger(GdxInputPort.class);
 
     /** Where the render thread deposits readings and the loop thread collects them. */
@@ -187,6 +230,20 @@ public final class GdxInputPort implements I_InputPort
      */
     private volatile ActionBindings bindings = DesktopBindings.defaults();
 
+    /**
+     * How many tics of the run the scripted walk covers, or zero for none.
+     * Read once from {@link #AUTO_WALK_TICS_PROPERTY} at construction, because a
+     * harness setting that could change mid-run would make the run
+     * unreproducible.
+     */
+    private final int autoWalkTics;
+
+    /**
+     * The snapshot the scripted walk latches, or null when none is configured.
+     * Built once and immutable, so the script allocates nothing per tic.
+     */
+    private final InputState autoWalk;
+
     /** Creates a port at the default sensitivity on the default control scheme. */
     public GdxInputPort()
     {
@@ -206,6 +263,40 @@ public final class GdxInputPort implements I_InputPort
             throw new IllegalArgumentException("inputAccumulator must not be null");
         }
         this.accumulator = inputAccumulator;
+        this.autoWalkTics = Integer.getInteger(AUTO_WALK_TICS_PROPERTY, 0).intValue();
+        if (autoWalkTics <= 0)
+        {
+            this.autoWalk = null;
+        }
+        else
+        {
+            // No look deltas and no action flags: the script walks, and nothing
+            // else. A scripted turn would make the position log a function of
+            // two things at once and stop being a measurement of the walls.
+            this.autoWalk = InputState.of(axisProperty(AUTO_WALK_FORWARD_PROPERTY, 1.0f),
+                axisProperty(AUTO_WALK_STRAFE_PROPERTY, 0.0f), 0.0f, 0.0f, false, false, false);
+        }
+    }
+
+    // One movement axis from a system property, or the default if it is absent
+    // or unreadable. A typo falls back loudly rather than aborting the run: the
+    // point of the harness is to get a run and a log out of it.
+    private static float axisProperty(final String name, final float fallback)
+    {
+        final String raw = System.getProperty(name);
+        if (raw == null || raw.isEmpty())
+        {
+            return fallback;
+        }
+        try
+        {
+            return Float.parseFloat(raw);
+        }
+        catch (final NumberFormatException e)
+        {
+            LOG.warn("{} is not a number ({}) — using {}", name, raw, Float.valueOf(fallback));
+            return fallback;
+        }
     }
 
     /**
@@ -256,6 +347,30 @@ public final class GdxInputPort implements I_InputPort
         }
         LOG.info("GdxInputPort initialized — sensitivity {} rad/px, controls {}",
             accumulator.radiansPerPixel(), bindings);
+        if (autoWalk != null)
+        {
+            // Loud, because a run that walks by itself and is not expected to
+            // looks exactly like a stuck key, and the property survives in a
+            // shell's history far longer than the reason for setting it.
+            LOG.info("SCRIPTED WALK: holding forward {} strafe {} for the first {} tics"
+                + " — set {}=0 to disable", Float.valueOf(autoWalk.forwardAxis()),
+                Float.valueOf(autoWalk.strafeAxis()), Integer.valueOf(autoWalkTics),
+                AUTO_WALK_TICS_PROPERTY);
+        }
+    }
+
+    /**
+     * Returns the scripted walk snapshot, or null when none is configured.
+     *
+     * <p>Exists so a test can assert the harness hook is off unless asked for,
+     * which is the property that matters about it — a scripted input that leaked
+     * into an ordinary run would move the player without a key being touched.</p>
+     *
+     * @return the snapshot the script latches, or null
+     */
+    InputState autoWalk()
+    {
+        return autoWalk;
     }
 
     /**
@@ -362,12 +477,21 @@ public final class GdxInputPort implements I_InputPort
      * Runs on the game loop thread and touches no libGDX API, so it is safe
      * while the render thread is mid-frame.
      *
+     * <p>When {@link #AUTO_WALK_TICS_PROPERTY} is set, the first that many tics
+     * latch a fixed scripted snapshot instead. The accumulator is still drained
+     * first, so nothing banks up behind the script and the tic a real player
+     * takes over is not handed a saved-up sweep.</p>
+     *
      * @param ticIndex the tic being processed
      */
     @Override
     public void sampleInput(final int ticIndex)
     {
         latched = accumulator.latch();
+        if (autoWalk != null && ticIndex < autoWalkTics)
+        {
+            latched = autoWalk;
+        }
     }
 
     /**

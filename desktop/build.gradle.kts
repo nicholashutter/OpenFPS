@@ -96,10 +96,18 @@ tasks.named<JavaExec>("run") {
     // are otherwise reachable only through the settings screen, which needs a
     // mouse — so without forwarding them, the two modes most in need of a "does
     // it flip? does it stretch?" capture would be the two nothing can capture.
+    // openfps.autoWalk* holds a movement axis for the first N tics. It is the
+    // only way an unattended run can walk into a wall: Gdx.input answers for a
+    // physical keyboard, and GdxInputPort refuses to read the device unless the
+    // cursor is caught and the window focused, neither of which a capture run
+    // can promise. Without it, collision is the one feature in the game that
+    // nothing but a human at a keyboard could ever demonstrate.
     for (name in listOf("openfps.screenshot", "openfps.screenshotFrame",
                         "openfps.screenshotExit", "openfps.fpsLog",
                         "openfps.workers", "openfps.debugOverlay",
-                        "openfps.renderMode", "openfps.renderFilter")) {
+                        "openfps.renderMode", "openfps.renderFilter",
+                        "openfps.autoWalkTics", "openfps.autoWalkForward",
+                        "openfps.autoWalkStrafe")) {
         val value = providers.systemProperty(name).orNull
         if (value != null) {
             systemProperty(name, value)

@@ -361,6 +361,30 @@ class GdxInputPortTest
     }
 
     @Nested
+    @DisplayName("the scripted walk harness")
+    class ScriptedWalk
+    {
+        @Test
+        @DisplayName("no scripted walk unless the property asks for one")
+        void shouldNotScriptAnythingByDefault()
+        {
+            // The property that matters about a harness hook. A scripted input
+            // that leaked into an ordinary run would walk the player across the
+            // room with nobody touching a key, and it would look exactly like a
+            // stuck keyboard rather than like a debug switch left on.
+            final InputAccumulator accumulator = new InputAccumulator(1.0f);
+            final GdxInputPort port = new GdxInputPort(accumulator);
+            port.init();
+
+            assertThat(port.autoWalk()).isNull();
+
+            port.sampleInput(0);
+            assertThat(port.currentInput().forwardAxis()).isZero();
+            assertThat(port.currentInput().strafeAxis()).isZero();
+        }
+    }
+
+    @Nested
     @DisplayName("vertical look")
     class VerticalLook
     {
