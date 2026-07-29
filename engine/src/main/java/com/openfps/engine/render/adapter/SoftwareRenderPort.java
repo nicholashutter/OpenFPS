@@ -351,6 +351,13 @@ public final class SoftwareRenderPort implements I_RenderPort
      * round the outside, which reads as geometry rather than as a status
      * effect. That is the change that let this go back to true.</p>
      *
+     * <p><b>It is a master switch and not a scope.</b> What it turns on is a
+     * wireframe around the <i>one</i> entity under the point of aim
+     * ({@link #aimedEntityId}), because a mark on all seven opponents at once
+     * still says something about the opponents rather than about the aim — see
+     * {@link OutlinePass}. Turning this off removes the mark entirely, which is
+     * what {@code :tools} and the pixel-exact render tests want.</p>
+     *
      * <p>Tagging and outlining stay independent for a reason. Hitscan is
      * resolved from geometry and never reads the id buffer (see
      * {@code DemoGameplayPort.fireIfRequested}), so turning the highlight off
@@ -604,6 +611,24 @@ public final class SoftwareRenderPort implements I_RenderPort
 
     /** Indexed passes this class has dispatched. MUTABLE: bumped per dispatch. */
     private volatile long parallelPasses;
+
+    /**
+     * The tagged entity under the point of aim on the last frame, or
+     * {@link Scene#UNTAGGED}.
+     *
+     * <p>MUTABLE: written once per frame under {@link #frameLock}, read on
+     * whatever thread asks. Volatile because those differ.</p>
+     *
+     * <p><b>Cosmetic, and that word is doing work.</b> This is a screen-space
+     * read: it depends on the resolution, on where the frame happened to land
+     * relative to a body's edge, and on nothing the simulation knows about. It
+     * drives the reticle's colour and which body gets a wireframe, and it must
+     * never drive anything a peer could disagree about — hitscan is resolved
+     * from geometry for exactly that reason ({@code DemoGameplayPort
+     * .fireIfRequested}). Reading it and shooting at it are different
+     * questions, and this answers only the first.</p>
+     */
+    private volatile int aimedEntityId = Scene.UNTAGGED;
 
     /**
      * The finished frame the presenter reads, de-padded to
@@ -1361,14 +1386,24 @@ public final class SoftwareRenderPort implements I_RenderPort
         int triangles = renderPass(world, world.length, worldStarts, worldTransforms, tagged,
             spanRenderer, sceneTextures, workers);
 
+        // Who the player is pointing at, sampled once, from the finished world
+        // pass. Both the outline and the reticle are driven from this single
+        // read — they are two renderings of one fact, so taking it twice would
+        // be two chances for them to disagree with each other.
+        this.aimedEntityId = sampleAimedEntity(tagged);
+
         // After the world pass, so the id buffer is complete; before the
         // viewmodel, so the weapon draws over the outlines rather than under
         // them. OutlinePass's Javadoc explains why fusing it into the raster
         // pass would break the worker-count invariant.
-        if (tagged != null && outlineEnabled)
+        //
+        // Skipped outright when the crosshair is on nothing, which is most of
+        // the time: the pass reads every visible pixel's id, and there is no
+        // point scanning the frame to mark an entity that is not there.
+        if (tagged != null && outlineEnabled && aimedEntityId != Scene.UNTAGGED)
         {
             this.parallelPasses = parallelPasses + 1L;
-            outlinePass.draw(framebuffer, workers);
+            outlinePass.draw(framebuffer, workers, aimedEntityId);
         }
 
         // Translucent instances, back to front, over the finished opaque world.
@@ -1409,7 +1444,7 @@ public final class SoftwareRenderPort implements I_RenderPort
         // into tiles other workers still own.
         if (crosshairEnabled)
         {
-            Crosshair.draw(framebuffer);
+            Crosshair.draw(framebuffer, aimedEntityId != Scene.UNTAGGED);
         }
 
         publishFrame();
@@ -1418,6 +1453,49 @@ public final class SoftwareRenderPort implements I_RenderPort
             (int) (parallelPasses + rasterizerPasses() - passesBefore);
         this.lastFrameNanos = time.nanos() - started;
         this.framesRendered = framesRendered + 1;
+    }
+
+    /**
+     * Returns the tagged entity under the point of aim as of the last frame,
+     * or {@link Scene#UNTAGGED} if the crosshair was on nothing.
+     *
+     * <p>What turns the reticle red and what the wireframe is drawn around.
+     * Read it for a HUD or a test; do <b>not</b> read it to decide what a shot
+     * hit — see the field for why that is not a style preference.</p>
+     *
+     * @return the aimed entity id, or {@link Scene#UNTAGGED}
+     */
+    public int aimedEntityId()
+    {
+        return aimedEntityId;
+    }
+
+    // Which tagged entity, if any, owns the pixel at the point of aim.
+    //
+    // ONE pixel, at (width/2, height/2). A 1280x720 frame has no centre pixel —
+    // its geometric centre is the corner between columns 639 and 640 — so this
+    // picks the upper of the two candidates on each axis and says so rather
+    // than pretending the choice does not exist. Nothing rests on which: the
+    // reticle's gap is at least 2 x (outline + 1) pixels wide (Crosshair
+    // .centreGap), so anything close enough to the point of aim to be worth
+    // calling "aimed at" covers both columns and both rows.
+    //
+    // Averaging a neighbourhood was the alternative and is worse: it would put
+    // the reticle in a third, in-between state on every silhouette edge, and a
+    // highlight that flickers as you graze a shoulder is less informative than
+    // one that is simply on or off.
+    //
+    // Null `tagged` means the scene has no tagged opaque instance at all, so
+    // the id buffer was never cleared this frame and holds whatever the last
+    // tagged scene left in it. Answering UNTAGGED without reading is both
+    // correct and the reason an untagged scene still pays nothing.
+    private int sampleAimedEntity(final int[] tagged)
+    {
+        if (tagged == null)
+        {
+            return Scene.UNTAGGED;
+        }
+        return framebuffer.entityIdAt(framebuffer.width() / 2, framebuffer.height() / 2);
     }
 
     // Concatenates every world instance's placement into the camera's packed

@@ -158,6 +158,56 @@ class MatchTest
         }
 
         @Test
+        @DisplayName("a killed bot cannot be hit again, however carefully it is aimed at")
+        void shouldNotBeHittableOnceDead()
+        {
+            // The other half of "dead bodies disappear". The model stops being
+            // drawn (DemoScene.botPlacement) and the hitbox stops being offered
+            // to the ray, and the two have to agree: a shot that connected with
+            // a body nobody can see would count as a hit, bump the accuracy
+            // figure, and be completely unexplainable.
+            final Match match = new Match(new Bot[] { sentryAt(2, 200.0f, 600) });
+            shootAhead(match);
+            shootAhead(match);
+            shootAhead(match);
+            assertThat(match.byId(2).isAlive()).isFalse();
+
+            final int hitsBefore = match.playerShotsHit();
+
+            assertThat(shootAhead(match))
+                .as("the corpse is not a target")
+                .isEqualTo(Match.NO_HIT);
+            assertThat(match.playerShotsHit())
+                .as("and a shot at it does not count as a hit")
+                .isEqualTo(hitsBefore);
+            assertThat(match.botsKilled())
+                .as("nor as a second kill")
+                .isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("a killed bot stops moving, so the body does not walk away invisibly")
+        void shouldStopMovingOnceDead()
+        {
+            // Placement is derived from the position, so a dead bot that kept
+            // walking would be a hidden instance being repositioned every tic
+            // forever — harmless to look at and wrong in the logs.
+            final Bot bot = new Bot(2, 0.0f, 0.0f, 200.0f, BotPattern.PACE_X,
+                64.0f, 60, 0, 100_000, 1);
+            final Match match = new Match(new Bot[] { bot });
+            tick(match, 5);
+            final float restingX = bot.positionX();
+
+            bot.damage(Bot.MAX_HEALTH);
+            for (int tic = 6; tic < 40; tic++)
+            {
+                tick(match, tic);
+            }
+
+            assertThat(bot.positionX()).isEqualTo(restingX);
+        }
+
+        @Test
         @DisplayName("reports a miss rather than throwing when every bot is dead")
         void shouldReportAMissWhenNoBotsAreLeft()
         {

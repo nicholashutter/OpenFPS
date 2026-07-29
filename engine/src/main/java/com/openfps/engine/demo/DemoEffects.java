@@ -45,16 +45,32 @@ import com.openfps.engine.render.adapter.SoftwareRenderPort;
  * makes that O(1) and total: there is no failure path to test, and the worst
  * case is that a tracer nobody was looking at disappears a few tics early.</p>
  *
- * <h2>Why the smoke is several instances per puff</h2>
+ * <h2>Why the smoke is twelve instances per puff</h2>
  *
- * <p>A puff has to <b>fade</b>, and coverage is fixed when a {@link Scene} is
- * built — see {@code Scene}'s own note on why that is a deliberate immutability
- * rather than an oversight. So one puff owns {@link #PUFF_STAGES} instances,
- * one per rung of a descending coverage ladder, and exactly one of them is
- * visible at a time: the puff ages, the stage advances, the previous stage is
- * hidden and the next is shown. The fade is a staircase rather than a ramp,
- * which at 60 Hz over 18 tics nobody can see, and it costs the render port
+ * <p>Two independent multipliers, and each of them is forced by something the
+ * renderer will not let a single instance do.</p>
+ *
+ * <p><b>{@link #PUFF_STAGES}, because a puff has to fade</b>, and coverage is
+ * fixed when a {@link Scene} is built — see {@code Scene}'s own note on why that
+ * is a deliberate immutability rather than an oversight. So one puff owns one
+ * set of instances per rung of a descending coverage ladder, and exactly one
+ * rung is visible at a time: the puff ages, the stage advances, the previous
+ * stage is hidden and the next is shown. The fade is a staircase rather than a
+ * ramp, which at 60 Hz over 18 tics nobody can see, and it costs the render port
  * nothing per frame — the hidden stages are culled before the rasterizer.</p>
+ *
+ * <p><b>{@link #PUFF_LOBES}, because a puff has to be soft</b>, and a single
+ * instance at a single coverage has a hard edge and a flat middle by
+ * construction. Three overlapping spheres composite over each other, so one
+ * coverage becomes three densities on screen. That constant's Javadoc has the
+ * argument; {@link #PUFF_COVERAGE} has the arithmetic.</p>
+ *
+ * <p>Twelve instances a puff and thirty-six in the pool sounds like a lot and
+ * costs almost nothing: at most one puff's worth is ever visible per rung, all
+ * three lobes of a rung share a coverage so they are one run in the
+ * back-to-front sort and one batched pass between them, and everything else in
+ * the pool is a degenerate transform the rasterizer throws away before it
+ * reaches a pixel.</p>
  *
  * <p>The <b>expansion</b> is continuous, because scale lives in the transform
  * and the transform is the thing that is allowed to change.</p>
@@ -82,8 +98,34 @@ public final class DemoEffects
     /** Tics a puff lives. Longer than the fire interval, so two can overlap. */
     public static final int PUFF_LIFE_TICS = 18;
 
-    /** Coverage rungs a puff fades down, one instance each. */
+    /** Coverage rungs a puff fades down. */
     public static final int PUFF_STAGES = 4;
+
+    /**
+     * Overlapping spheres one puff is built from — <b>3</b>.
+     *
+     * <p><b>This is what stopped the smoke reading as a block.</b> A puff used
+     * to be one cube, and a cube composited at a uniform coverage has a hard
+     * straight edge and a flat interior — it is a translucent <i>object</i>, and
+     * the eye reads objects. Smoke has no edge; it has a dense middle that
+     * thins out.</p>
+     *
+     * <p>Three lobes produce that for free, because {@code Rgba.srcOver} is
+     * applied per instance and therefore <b>compounds where they overlap</b>.
+     * A pixel covered by one lobe composites once, by two lobes twice, by all
+     * three three times, so a single coverage per stage becomes a three-step
+     * radial falloff on screen without the per-instance coverage ever changing —
+     * which it cannot, because {@link Scene} fixes it at build time. The
+     * compounding is the feature rather than a hazard to be avoided; the whole
+     * of {@link #PUFF_COVERAGE} is chosen against it.</p>
+     *
+     * <p>Three and not more: every lobe is another 36 instances in the pool
+     * ({@code MAX_PUFFS x PUFF_STAGES x PUFF_LOBES}), another sphere in the
+     * back-to-front sort, and one more {@code Mat4} per tic per visible puff.
+     * Three already gives a lumpy silhouette and three density levels, which is
+     * as much structure as a 130-pixel cloud can carry.</p>
+     */
+    public static final int PUFF_LOBES = 3;
 
     /**
      * World units a tracer covers per tic — 60.
@@ -174,19 +216,55 @@ public final class DemoEffects
      * as 37 units would at the far wall. Sized in the room's units instead it
      * would fill the screen.</p>
      */
-    public static final float PUFF_RADIUS_START = 0.10f;
+    public static final float PUFF_RADIUS_START = 0.075f;
 
     /**
-     * Half-extent of a puff at the end of its life — 0.22. See
-     * {@link #PUFF_RADIUS_START} for why these numbers are so small.
+     * Half-extent of the <b>main lobe</b> at the end of a puff's life — 0.19.
+     * See {@link #PUFF_RADIUS_START} for why these numbers are so small.
      *
      * <p><b>Both were reduced once the puff became visible enough to judge.</b>
      * At 0.14 growing to 0.34 the cloud ended up around 300 px across at 720p —
      * a quarter of the window — and a translucent rectangle that size does not
      * read as smoke at a muzzle, it reads as a pane of glass across the view.
      * Nobody could tell while it was the colour of the wall.</p>
+     *
+     * <p><b>Trimmed again, from 0.22, when the puff became three lobes.</b> The
+     * cloud is wider than its main lobe — {@link #cloudExtentRadii()} works out
+     * at about 1.46, against 1.0 for a lone sphere — so keeping the radius would
+     * have made the puff nearly half as big again on screen. It is scaled back
+     * instead, so the cloud spans very nearly what the single 0.22 cube spanned,
+     * which is the size that had already been judged right. Growing the picture
+     * was never the point; softening it was.</p>
      */
-    public static final float PUFF_RADIUS_END = 0.22f;
+    public static final float PUFF_RADIUS_END = 0.16f;
+
+    /**
+     * Each lobe's offset from the puff centre <b>across</b> the shooter's view,
+     * in multiples of the current puff radius.
+     *
+     * <p>Across and up rather than along world axes, and that is deliberate: a
+     * spread laid out in world x and z would collapse into a single blob
+     * whenever the player happened to be shooting along one of them, so the
+     * cloud's shape would depend on which way they were facing. The offsets are
+     * expressed in the shot's own basis — the same {@code across} the muzzle
+     * offset uses, and {@code up = aim x across} — so the lumps are spread
+     * across the screen from every angle.</p>
+     *
+     * <p>The first lobe is at the centre and is the largest; the other two sit
+     * off it in opposite directions, so the silhouette is lopsided. A symmetric
+     * arrangement would read as a flower.</p>
+     */
+    public static final float[] LOBE_ACROSS = {0.00f, 0.62f, -0.50f};
+
+    /** Each lobe's offset <b>up</b> the shooter's view. See {@link #LOBE_ACROSS}. */
+    public static final float[] LOBE_UP = {0.00f, 0.36f, -0.30f};
+
+    /**
+     * Each lobe's radius as a fraction of the puff's. The centre lobe is full
+     * size and the outriders are smaller, which is what makes the cloud read as
+     * one thing with bulges rather than as three balls.
+     */
+    public static final float[] LOBE_SCALE = {1.00f, 0.74f, 0.66f};
 
     /**
      * World units a puff drifts upward per tic — 0.010.
@@ -244,32 +322,62 @@ public final class DemoEffects
      * Something you cannot see through is not a cloud, whatever its
      * coverage.</p>
      *
-     * <p>{@code (92, 90, 86)} lands the first rung near {@code (104, 104, 109)}
-     * against that wall: a drop of some forty levels, plainly visible, with a
-     * quarter of the background still showing through it.</p>
+     * <p>{@code (92, 90, 86)} lands the freshest puff's <b>core</b> near
+     * {@code (103, 103, 107)} against that wall: a drop of some forty levels,
+     * plainly visible, with a fifth of the background still showing through it.
+     * Its rim lands near {@code (122, 125, 141)}, twenty levels down — a wisp
+     * rather than a boundary.</p>
+     *
+     * <p>The colour survived the move from one cube to three spheres unchanged,
+     * which is the point of having derived it: {@link #PUFF_COVERAGE} was solved
+     * to put the composited core back where this colour had already been judged
+     * to work, rather than the colour being re-tuned around a new ladder.</p>
      */
     private static final int SMOKE_COLOUR = Rgba.pack(92, 90, 86, 255);
 
     /**
-     * Coverage of each puff stage, faintest last.
+     * Coverage of <b>one lobe</b> at each puff stage, faintest last.
      *
      * <p>Every rung is a distinct blended {@code SpanRenderer} in the render
      * port and a potential extra batched pass, so this is four values rather
      * than sixteen. Four steps over 18 tics is a step every 4-5 tics, which
-     * reads as a fade.</p>
+     * reads as a fade. All {@link #PUFF_LOBES} lobes of a puff share the stage's
+     * coverage, so they are one contiguous run in the back-to-front sort and
+     * cost one pass between them.</p>
      *
-     * <p><b>The ladder starts higher now, and that is half of the fix for a
-     * puff nobody could see.</b> It used to top out at 150 — under 60% — and
-     * with the old near-background colour that made even the freshest smoke a
-     * few levels away from the wall behind it. It does not run all the way up
-     * either: 228 was tried and, with a dark enough colour, produced something
-     * you could not see through, which reads as a hole in the world rather than
-     * as smoke. 190 is thick and still translucent.</p>
+     * <p><b>These are per-lobe figures and they are much lower than the
+     * single-cube ladder they replace ({190, 142, 96, 64}), because the lobes
+     * compound.</b> Coverage {@code a} applied {@code n} times leaves
+     * {@code 1 - (1 - a)^n} of the smoke, so the numbers were solved backwards
+     * from what the <i>composite</i> should be rather than picked:</p>
+     *
+     * <pre>
+     *   stage  per lobe   1 lobe   2 lobes   3 lobes
+     *     0      100       0.39     0.63      0.78
+     *     1       70       0.27     0.47      0.62
+     *     2       47       0.18     0.33      0.45
+     *     3       29       0.11     0.21      0.30
+     * </pre>
+     *
+     * <p><b>The densest point of a fresh puff therefore lands where the old
+     * single cube's densest point already was</b> — 0.78 against the old 190/255
+     * of 0.75 — so nothing about the peak was regressed. What is new is
+     * everything either side of it: the same puff now also has a 0.63 shoulder
+     * and a 0.39 edge, which is the gradient that makes it a cloud instead of a
+     * pane. Composited over the room's lit wall at {@code (141, 147, 177)} that
+     * is about {@code (103, 103, 107)} in the core, some forty levels down and
+     * plainly visible, thinning to {@code (122, 125, 141)} at the rim.</p>
+     *
+     * <p><b>The top rung deliberately does not go higher.</b> Something you
+     * cannot see through is a hole in the room and not a cloud, and that
+     * overshoot has already happened once here — 228 on the old ladder, with a
+     * dark enough colour, produced a black block. At 0.78 composite, a fifth of
+     * the wall still shows through the thickest part.</p>
      *
      * <p>The bottom rung is a genuine wisp rather than nothing, which is what
      * makes the staircase read as a fade instead of as a disappearance.</p>
      */
-    private static final int[] PUFF_COVERAGE = {190, 142, 96, 64};
+    private static final int[] PUFF_COVERAGE = {100, 70, 47, 29};
 
     /** Coordinates per position or direction triple. */
     private static final int AXES = 3;
@@ -288,10 +396,46 @@ public final class DemoEffects
     /** Corners of a box. */
     private static final int BOX_VERTICES = 8;
 
+    /**
+     * Meridians round the smoke sphere — <b>8</b>.
+     *
+     * <p>Coarse on purpose, and sized against the picture rather than against
+     * taste. A puff subtends about 136 px at 720p, so eight facets put a corner
+     * every 17 px of silhouette — enough that the outline reads as round rather
+     * than as a hexagon, and far below where more would buy anything a
+     * translucent grey blob could show.</p>
+     */
+    private static final int SPHERE_MERIDIANS = 8;
+
+    /**
+     * Stacks from pole to pole — <b>6</b>. With
+     * {@link #SPHERE_MERIDIANS} that is 42 vertices and 80 triangles, against
+     * the cube's 8 and 12. The whole pool is 36 spheres and at most nine are
+     * ever visible, so the pass carries about 720 triangles at its busiest —
+     * beside a room that submits thousands.
+     */
+    private static final int SPHERE_STACKS = 6;
+
+    /** Half-turn in radians, for the sphere's polar sweep. */
+    private static final float HALF_TURN_RADIANS = (float) StrictMath.PI;
+
+    /** Full turn in radians, for the sphere's azimuthal sweep. */
+    private static final float FULL_TURN_RADIANS = (float) (2.0 * StrictMath.PI);
+
+    /**
+     * Radius the smoke sphere is authored at — a half unit, so it occupies
+     * exactly the {@code -0.5 .. +0.5} box the tracer does and the same
+     * {@code scale = diameter} placement arithmetic applies unchanged.
+     */
+    private static final float SPHERE_RADIUS = 0.5f;
+
     /** Scene instance index of each tracer. */
     private final int[] tracerInstance;
 
-    /** Scene instance index of each puff stage, {@code puff * PUFF_STAGES + stage}. */
+    /**
+     * Scene instance index of each puff lobe, addressed by
+     * {@code (puff * PUFF_STAGES + stage) * PUFF_LOBES + lobe}.
+     */
     private final int[] puffInstance;
 
     /** Tics each tracer has left, or {@link #DEAD}. MUTABLE: aged every tic. */
@@ -311,6 +455,20 @@ public final class DemoEffects
 
     /** Where each puff sits, {@link #AXES} floats per slot. MUTABLE. */
     private final float[] puffPosition;
+
+    /**
+     * The shot basis each puff's lobes are laid out in — across the view, then
+     * up it, {@link #AXES} floats each per slot. MUTABLE: written once at spawn.
+     *
+     * <p>Stored rather than recomputed at publish time because the aim it came
+     * from is gone by then: the puff stays where it was made while the player
+     * carries on turning, and a cloud that reshuffled its lumps as the camera
+     * moved would be a very odd thing to watch.</p>
+     */
+    private final float[] puffAcross;
+
+    /** The other half of that basis. See {@link #puffAcross}. MUTABLE. */
+    private final float[] puffUp;
 
     /** Which stage instance of each puff is shown, or {@link #DEAD}. MUTABLE. */
     private final int[] puffShownStage;
@@ -363,6 +521,8 @@ public final class DemoEffects
         this.tracerShown = new boolean[MAX_TRACERS];
         this.puffAge = new int[MAX_PUFFS];
         this.puffPosition = new float[MAX_PUFFS * AXES];
+        this.puffAcross = new float[MAX_PUFFS * AXES];
+        this.puffUp = new float[MAX_PUFFS * AXES];
         this.puffShownStage = new int[MAX_PUFFS];
         for (int slot = 0; slot < MAX_TRACERS; slot++)
         {
@@ -394,7 +554,10 @@ public final class DemoEffects
             throw new IllegalArgumentException("builder must not be null");
         }
         final ModelFormat bolt = box(TRACER_COLOUR);
-        final ModelFormat cloud = box(SMOKE_COLOUR);
+        // One sphere shared by all 36 lobe instances. SoftwareRenderPort.prepare
+        // keys on reference identity, so the flattened submesh table and the mip
+        // chains are built once for the whole pool rather than once per lobe.
+        final ModelFormat cloud = sphere(SMOKE_COLOUR);
 
         final int[] tracers = new int[MAX_TRACERS];
         for (int slot = 0; slot < MAX_TRACERS; slot++)
@@ -403,14 +566,17 @@ public final class DemoEffects
             builder.addWorldInstance(bolt, Mat4.identity());
         }
 
-        final int[] puffs = new int[MAX_PUFFS * PUFF_STAGES];
+        final int[] puffs = new int[MAX_PUFFS * PUFF_STAGES * PUFF_LOBES];
         for (int puff = 0; puff < MAX_PUFFS; puff++)
         {
             for (int stage = 0; stage < PUFF_STAGES; stage++)
             {
-                puffs[puff * PUFF_STAGES + stage] = builder.worldInstanceCount();
-                builder.addTranslucentWorldInstance(cloud, Mat4.identity(), Scene.UNTAGGED,
-                    PUFF_COVERAGE[stage]);
+                for (int lobe = 0; lobe < PUFF_LOBES; lobe++)
+                {
+                    puffs[stageOffset(puff, stage) + lobe] = builder.worldInstanceCount();
+                    builder.addTranslucentWorldInstance(cloud, Mat4.identity(), Scene.UNTAGGED,
+                        PUFF_COVERAGE[stage]);
+                }
             }
         }
         return new DemoEffects(tracers, puffs);
@@ -443,7 +609,7 @@ public final class DemoEffects
         final float muzzleZ = eyeZ + aimZ * MUZZLE_FORWARD_UNITS + right[2] * MUZZLE_RIGHT_UNITS;
 
         spawnTracer(muzzleX, muzzleY, muzzleZ, aimX, aimY, aimZ);
-        spawnPuff(muzzleX, muzzleY, muzzleZ);
+        spawnPuff(muzzleX, muzzleY, muzzleZ, aimX, aimY, aimZ, right);
     }
 
     // One bolt, at the muzzle and not yet moving.
@@ -468,8 +634,13 @@ public final class DemoEffects
         tracerRemaining[slot] = TRACER_LIFE_TICS;
     }
 
-    // One puff, at rest at the muzzle.
-    private void spawnPuff(final float x, final float y, final float z)
+    // One puff, at rest at the muzzle, with the basis its lobes are laid out
+    // in frozen at the moment of the shot.
+    //
+    // `across` is the caller's scratch and is copied rather than kept, because
+    // the caller reuses it — see acrossScratch.
+    private void spawnPuff(final float x, final float y, final float z,
+        final float aimX, final float aimY, final float aimZ, final float[] across)
     {
         final int slot = puffCursor;
         this.puffCursor = (puffCursor + 1) % MAX_PUFFS;
@@ -477,6 +648,17 @@ public final class DemoEffects
         puffPosition[at] = x;
         puffPosition[at + 1] = y;
         puffPosition[at + 2] = z;
+        puffAcross[at] = across[0];
+        puffAcross[at + 1] = across[1];
+        puffAcross[at + 2] = across[2];
+        // up = aim x across, the same operand order tracerPlacement uses to
+        // complete its (across, up, forward) frame. Any unit vector
+        // perpendicular to both would do here — the lobes only need two
+        // independent screen-plane directions — but reusing the one definition
+        // keeps a second cross-product convention out of the file.
+        puffUp[at] = aimY * across[2] - aimZ * across[1];
+        puffUp[at + 1] = aimZ * across[0] - aimX * across[2];
+        puffUp[at + 2] = aimX * across[1] - aimY * across[0];
         puffAge[slot] = 0;
     }
 
@@ -570,8 +752,12 @@ public final class DemoEffects
         }
     }
 
-    // One puff: show the stage its age selects, and hide whichever stage it was
-    // showing before if that has moved on.
+    // One puff: show every lobe of the stage its age selects, and hide whichever
+    // stage it was showing before if that has moved on.
+    //
+    // A stage is all-or-nothing. Showing one lobe of a rung and one of the next
+    // would put two coverages in the same cloud, which is not a fade — it is a
+    // seam.
     private void publishPuff(final SoftwareRenderPort renderer, final int slot)
     {
         final int age = puffAge[slot];
@@ -579,7 +765,7 @@ public final class DemoEffects
         {
             if (puffShownStage[slot] != DEAD)
             {
-                renderer.setWorldTransform(puffInstanceIndex(slot, puffShownStage[slot]), HIDDEN);
+                hideStage(renderer, slot, puffShownStage[slot]);
                 puffShownStage[slot] = DEAD;
             }
             return;
@@ -587,10 +773,23 @@ public final class DemoEffects
         final int stage = stageFor(age);
         if (puffShownStage[slot] != DEAD && puffShownStage[slot] != stage)
         {
-            renderer.setWorldTransform(puffInstanceIndex(slot, puffShownStage[slot]), HIDDEN);
+            hideStage(renderer, slot, puffShownStage[slot]);
         }
-        renderer.setWorldTransform(puffInstanceIndex(slot, stage), puffPlacement(slot, age));
+        for (int lobe = 0; lobe < PUFF_LOBES; lobe++)
+        {
+            renderer.setWorldTransform(puffInstanceIndex(slot, stage, lobe),
+                puffPlacement(slot, lobe, age));
+        }
         puffShownStage[slot] = stage;
+    }
+
+    // Puts every lobe of one rung out of sight.
+    private void hideStage(final SoftwareRenderPort renderer, final int slot, final int stage)
+    {
+        for (int lobe = 0; lobe < PUFF_LOBES; lobe++)
+        {
+            renderer.setWorldTransform(puffInstanceIndex(slot, stage, lobe), HIDDEN);
+        }
     }
 
     /**
@@ -603,6 +802,32 @@ public final class DemoEffects
     {
         final int stage = age * PUFF_STAGES / PUFF_LIFE_TICS;
         return Math.min(stage, PUFF_STAGES - 1);
+    }
+
+    /**
+     * Returns how far the finished cloud reaches from its centre, in multiples
+     * of the puff radius.
+     *
+     * <p>The largest {@code |offset| + scale} over the lobes — the radius of the
+     * smallest sphere containing all of them. It is what decides the puff's
+     * <b>apparent size</b>, and {@link #PUFF_RADIUS_END} is set against it
+     * rather than against a lone lobe: the thing that has to stay under control
+     * is how much of the window the cloud covers, and that is a property of the
+     * arrangement and not of any one sphere in it.</p>
+     *
+     * @return the cloud's bounding radius, as a multiple of the puff radius
+     */
+    public static float cloudExtentRadii()
+    {
+        // MUTABLE local — the farthest reach found so far.
+        float reach = 0.0f;
+        for (int lobe = 0; lobe < PUFF_LOBES; lobe++)
+        {
+            final float offset = (float) StrictMath.sqrt(
+                LOBE_ACROSS[lobe] * LOBE_ACROSS[lobe] + LOBE_UP[lobe] * LOBE_UP[lobe]);
+            reach = Math.max(reach, offset + LOBE_SCALE[lobe]);
+        }
+        return reach;
     }
 
     /**
@@ -668,15 +893,29 @@ public final class DemoEffects
         });
     }
 
-    // Where a puff sits and how big it has grown. A uniform scale, so the
-    // determinant is radius^3 and stays positive for any positive radius.
-    private Mat4 puffPlacement(final int slot, final int age)
+    // Where one lobe of a puff sits and how big it has grown. A uniform scale,
+    // so the determinant is radius^3 and stays positive for any positive radius.
+    //
+    // The expansion is continuous even though the fade is a staircase, because
+    // scale lives in the transform and the transform is the thing that is
+    // allowed to change per tic — see the class Javadoc. The lobe offsets scale
+    // with the puff, so the cloud grows as one shape rather than spreading its
+    // lumps apart.
+    private Mat4 puffPlacement(final int slot, final int lobe, final int age)
     {
         final int at = slot * AXES;
         final float grown = PUFF_RADIUS_START
             + (PUFF_RADIUS_END - PUFF_RADIUS_START) * age / PUFF_LIFE_TICS;
-        return DemoScene.placement(puffPosition[at], puffPosition[at + 1],
-            puffPosition[at + 2], 0.0f, grown * 2.0f);
+        final float outAcross = LOBE_ACROSS[lobe] * grown;
+        final float outUp = LOBE_UP[lobe] * grown;
+        final float centreX = puffPosition[at]
+            + puffAcross[at] * outAcross + puffUp[at] * outUp;
+        final float centreY = puffPosition[at + 1]
+            + puffAcross[at + 1] * outAcross + puffUp[at + 1] * outUp;
+        final float centreZ = puffPosition[at + 2]
+            + puffAcross[at + 2] * outAcross + puffUp[at + 2] * outUp;
+        return DemoScene.placement(centreX, centreY, centreZ, 0.0f,
+            grown * LOBE_SCALE[lobe] * 2.0f);
     }
 
     // The unit vector to the shooter's RIGHT, perpendicular to the aim. Also
@@ -753,7 +992,13 @@ public final class DemoEffects
     }
 
     /**
-     * Returns the scene instance index of one stage of one puff.
+     * Returns the scene instance index of the <b>main lobe</b> of one stage of
+     * one puff.
+     *
+     * <p>Lobe zero, which is the one at the puff's own centre and the largest —
+     * the whole of what a puff used to be. Callers that mean the cloud rather
+     * than a lobe want {@link #PUFF_LOBES} of them; see the three-argument
+     * form.</p>
      *
      * @param slot puff slot in {@code [0, MAX_PUFFS)}
      * @param stage stage index in {@code [0, PUFF_STAGES)}
@@ -761,7 +1006,20 @@ public final class DemoEffects
      */
     public int puffInstanceIndex(final int slot, final int stage)
     {
-        return puffInstance[stageOffset(slot, stage)];
+        return puffInstanceIndex(slot, stage, 0);
+    }
+
+    /**
+     * Returns the scene instance index of one lobe of one stage of one puff.
+     *
+     * @param slot puff slot in {@code [0, MAX_PUFFS)}
+     * @param stage stage index in {@code [0, PUFF_STAGES)}
+     * @param lobe lobe index in {@code [0, PUFF_LOBES)}
+     * @return its index among the scene's world instances
+     */
+    public int puffInstanceIndex(final int slot, final int stage, final int lobe)
+    {
+        return puffInstance[stageOffset(slot, stage) + lobe];
     }
 
     /**
@@ -818,9 +1076,10 @@ public final class DemoEffects
         return tracerInstance.length + puffInstance.length;
     }
 
+    // Where one stage's PUFF_LOBES consecutive instance indices begin.
     private static int stageOffset(final int slot, final int stage)
     {
-        return slot * PUFF_STAGES + stage;
+        return (slot * PUFF_STAGES + stage) * PUFF_LOBES;
     }
 
     /**
@@ -865,6 +1124,102 @@ public final class DemoEffects
             0, 1, 5, 0, 5, 4,
         };
         return ModelFormat.ofGeometry(vertices, indices);
+    }
+
+    /**
+     * Builds a coarse sphere of radius {@link #SPHERE_RADIUS}, one colour
+     * throughout, centred on the model origin.
+     *
+     * <p><b>Built in memory rather than staged as an asset, for the reason
+     * {@link ModelFormat#ofGeometry} exists:</b> nobody is going to model a grey
+     * ball in Blender, and routing one through the offline converter would mean
+     * an extra {@code .ofm} file, a build step to produce it and a staging
+     * failure mode, for geometry that is two nested loops of trigonometry.</p>
+     *
+     * <p>A sphere and not a box because a box has <b>corners and flat faces</b>,
+     * and a translucent flat face composited at a uniform coverage is a pane of
+     * tinted glass — the exact thing the puff kept being reported as. A sphere
+     * has no straight silhouette anywhere, and three overlapping ones have no
+     * flat interior either.</p>
+     *
+     * <p>Wound <b>counter-clockwise seen from outside</b>, the glTF 2.0 rule
+     * that {@code SoftwareRenderPort.BACKFACE_CULL_MODE} was measured against.
+     * That is what culls the far hemisphere, which matters more here than it
+     * does for opaque geometry: a translucent sphere whose back faces also drew
+     * would composite twice everywhere and be twice as dense as the coverage
+     * ladder says.</p>
+     *
+     * <p>No submesh table and no texture, so every triangle takes the flat path
+     * and the baked vertex colour — the same contract the tracer's box uses, and
+     * what the translucent phase requires, since it binds no texture table.</p>
+     *
+     * @param colour the baked vertex colour, packed RGBA8888
+     * @return a sphere of radius {@link #SPHERE_RADIUS} about the origin
+     */
+    static ModelFormat sphere(final int colour)
+    {
+        final int ringVertices = (SPHERE_STACKS - 1) * SPHERE_MERIDIANS;
+        final int south = ringVertices + 1;
+        final int[] vertices = new int[(south + 1) * ModelFormat.VERTEX_STRIDE_INTS];
+        ModelFormat.writeVertex(vertices, 0, 0.0f, SPHERE_RADIUS, 0.0f, 0.0f, 0.0f, colour);
+        ModelFormat.writeVertex(vertices, south, 0.0f, -SPHERE_RADIUS, 0.0f, 0.0f, 0.0f, colour);
+        for (int stack = 1; stack < SPHERE_STACKS; stack++)
+        {
+            final float polar = HALF_TURN_RADIANS * stack / SPHERE_STACKS;
+            final float height = SPHERE_RADIUS * (float) StrictMath.cos(polar);
+            final float ring = SPHERE_RADIUS * (float) StrictMath.sin(polar);
+            for (int meridian = 0; meridian < SPHERE_MERIDIANS; meridian++)
+            {
+                final float azimuth = FULL_TURN_RADIANS * meridian / SPHERE_MERIDIANS;
+                ModelFormat.writeVertex(vertices, ringVertex(stack, meridian),
+                    ring * (float) StrictMath.cos(azimuth), height,
+                    ring * (float) StrictMath.sin(azimuth), 0.0f, 0.0f, colour);
+            }
+        }
+
+        // Two caps of MERIDIANS triangles and STACKS-2 bands of twice that.
+        final int triangles = SPHERE_MERIDIANS * 2 * (SPHERE_STACKS - 1);
+        final int[] indices = new int[triangles * ModelFormat.INDICES_PER_TRIANGLE];
+        // MUTABLE local — the write cursor into the index array.
+        int at = 0;
+        for (int meridian = 0; meridian < SPHERE_MERIDIANS; meridian++)
+        {
+            final int next = (meridian + 1) % SPHERE_MERIDIANS;
+            // North cap. The pole is the degenerate case of the band below with
+            // its upper ring collapsed to a point, so the order is the band's
+            // second triangle with u[j] and u[j+1] both replaced by the pole.
+            at = triangle(indices, at, 0, ringVertex(1, next), ringVertex(1, meridian));
+            for (int stack = 1; stack < SPHERE_STACKS - 1; stack++)
+            {
+                final int upperHere = ringVertex(stack, meridian);
+                final int upperNext = ringVertex(stack, next);
+                final int lowerHere = ringVertex(stack + 1, meridian);
+                final int lowerNext = ringVertex(stack + 1, next);
+                at = triangle(indices, at, upperHere, upperNext, lowerNext);
+                at = triangle(indices, at, upperHere, lowerNext, lowerHere);
+            }
+            // South cap, the same degeneracy at the other end.
+            at = triangle(indices, at, ringVertex(SPHERE_STACKS - 1, meridian),
+                ringVertex(SPHERE_STACKS - 1, next), south);
+        }
+        return ModelFormat.ofGeometry(vertices, indices);
+    }
+
+    // The vertex index of one point on one ring. Ring `stack` runs 1 to
+    // STACKS-1; the two poles are 0 and (STACKS-1) * MERIDIANS + 1.
+    private static int ringVertex(final int stack, final int meridian)
+    {
+        return 1 + (stack - 1) * SPHERE_MERIDIANS + meridian;
+    }
+
+    // Writes one triangle and returns the next write position.
+    private static int triangle(final int[] indices, final int at, final int a, final int b,
+        final int c)
+    {
+        indices[at] = a;
+        indices[at + 1] = b;
+        indices[at + 2] = c;
+        return at + ModelFormat.INDICES_PER_TRIANGLE;
     }
 
     /** Returns a debug rendering of the pool's state. */

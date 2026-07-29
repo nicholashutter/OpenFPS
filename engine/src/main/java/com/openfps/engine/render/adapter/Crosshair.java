@@ -8,74 +8,117 @@ package com.openfps.engine.render.adapter;
 import java.util.Arrays;
 
 /**
- * R_ The aiming reticle: a black-outlined green cross with a centre gap, drawn
- * into the colour buffer after every other pass.
+ * R_ The aiming reticle: a black-outlined cross with a centre gap, white
+ * normally and <b>red while an enemy is under the point of aim</b>, drawn into
+ * the colour buffer after every other pass.
  *
  * Platform adapter — must not import from core engine packages.
  *
  * <b>This class draws and nothing else.</b> It owns no state, allocates
- * nothing, and reads no pixel it is about to write. {@link #draw(Framebuffer)}
- * is a pure function of the framebuffer's dimensions: the same buffer geometry
- * always produces the same bytes, and drawing twice is indistinguishable from
- * drawing once (see <i>Idempotence</i> below).
+ * nothing, and reads no pixel it is about to write.
+ * {@link #draw(Framebuffer, boolean)} is a pure function of the framebuffer's
+ * dimensions and one boolean: the same geometry and the same flag always
+ * produce the same bytes, and drawing twice is indistinguishable from drawing
+ * once (see <i>Idempotence</i> below).
  *
- * <h2>Why a green core inside a black outline — measured against the real scene</h2>
+ * <h2>Two states, and hue is what carries the difference</h2>
  *
- * <p>The colours are not a taste call. They were chosen against a rendered
- * 1280x720 frame of the demo room ({@code tools:demoPreview}, shot
- * {@code 01-down-room}), sampled per pixel. What that frame actually
- * contains, as sRGB and Rec.709 relative luminance:</p>
+ * <p>The reticle is a state display now, not only a sight. The caller passes
+ * whether the entity-id buffer holds a tagged entity at the centre pixel —
+ * {@code SoftwareRenderPort} samples it once per frame — and the core is
+ * {@link #CORE_COLOR} (white) or {@link #ENEMY_CORE_COLOR} (red) accordingly.
+ * Everything else about the figure is identical between the two: same arms,
+ * same gap, same black border, same pixels. Only the fill changes, which is
+ * what makes the change read as a <i>state</i> rather than as a different
+ * reticle.</p>
+ *
+ * <p><b>Sampling the id buffer for this is legitimate, and doing it for
+ * hitscan would not be.</b> The reticle is cosmetic: nothing reads it back,
+ * nothing simulates from it, and a peer that renders at another resolution and
+ * disagrees about the centre pixel has a different-coloured cross and an
+ * identical simulation. Hit detection is resolved from geometry precisely
+ * because it must <i>not</i> depend on resolution or worker count — see
+ * {@code DemoGameplayPort.fireIfRequested} and {@code Framebuffer}'s note on
+ * the id buffer. That boundary is the whole reason this parameter is a boolean
+ * the caller computed rather than a {@code Framebuffer} read done here.</p>
+ *
+ * <h2>Why white by default, measured against the real scene</h2>
+ *
+ * <p>The colours are not a taste call. They were chosen against rendered
+ * 1280x720 frames of the demo room, sampled per pixel. What those frames
+ * actually contain, as sRGB and Rec.709 relative luminance:</p>
  *
  * <pre>
- *   pale side wall      #A1A9CA   lum 170
- *   far wall            #959CBB   lum 157
- *   ceiling / near floor#8D93B1   lum 148
- *   far checker floor   #7E839B   lum 132
- *   dark doorway        #181C26   lum  28   &lt;- darkest pixel in the frame
- *   weapon body, orange #DF5C4A   lum 119
- *   crate decal, amber  #FFC457   lum 201   &lt;- brightest pixel in the frame
+ *   pale side wall      #A9B0D3   lum 177
+ *   ceiling             #8D93B1   lum 148
+ *   near checker floor  #7E839B   lum 132
+ *   dark doorway        #181C26   lum  28
+ *   weapon body, orange #DF5C4A   lum 119   (viewmodel spans  55..211)
+ *   crate decal, amber  #FFC457   lum 201   &lt;- brightest room surface
+ *   character bodies                        (span 0..255, see below)
  * </pre>
  *
- * <p><b>The scene occupies luminance 28 to 201, and it is chromatically almost
- * empty.</b> Every surface is either blue-grey (hue about 230 degrees, barely
- * saturated) or orange-to-amber (hue 8 to 38 degrees). Of 230,400 pixels
- * sampled across that frame, the number in which green is the dominant channel
- * is <b>zero</b>. Green is a hue the demo scene does not use at all.</p>
- *
- * <p>That gives two independent axes to exploit, and the design uses one for
- * each element:</p>
- *
  * <ul>
- *   <li><b>{@link #CORE_COLOR} is pure green, {@code #00FF00}, luminance
- *       182.</b> It sits <i>above</i> every scene surface except the amber
- *       decal, so it carries the contrast against the dark end of the range —
- *       182 against the doorway's 28, and 63 against the orange weapon body,
- *       from which it is additionally 112 degrees away in hue with both
- *       colours fully saturated, so they cannot be read as the same thing.</li>
+ *   <li><b>{@link #CORE_COLOR} is pure white, {@code #FFFFFF}, luminance
+ *       255.</b> It is above <i>every</i> surface in the room, including the
+ *       amber decal that is the brightest of them, so it carries the contrast
+ *       against the dark end of the range.</li>
  *   <li><b>{@link #OUTLINE_COLOR} is pure black, {@code #000000}, luminance
- *       0.</b> It carries the contrast against the bright end — 170 against
- *       the pale walls, 201 against the amber decal, 148 against the floor.</li>
+ *       0.</b> It carries the contrast against the bright end — 177 against
+ *       the pale walls, 201 against the amber decal, 132 against the floor.</li>
  * </ul>
  *
- * <p><b>The pair cannot both be defeated, and that is the point.</b> The
- * scene's whole luminance range (28 to 201, a span of 173) is narrower than
- * the span between the two reticle colours (0 to 182). Any background
- * whatsoever is therefore far from at least one of them: a background bright
- * enough to swallow the green core is by construction miles from the black
- * outline, and one dark enough to swallow the outline is miles from the core.
- * A single-colour reticle has no such guarantee, which is exactly why plain
- * white vanishes on the walls and plain black vanishes in the doorway.</p>
+ * <p><b>The pair cannot both be defeated, and that is the point.</b> The room's
+ * whole luminance range (28 to 201) is strictly inside the span between the two
+ * reticle colours (0 to 255), so any background whatsoever is far from at least
+ * one of them: a background bright enough to swallow the white core is by
+ * construction miles from the black outline, and one dark enough to swallow the
+ * outline is miles from the core. That bracket is <b>wider than the green core
+ * this replaced</b> managed (0 to 182), which is the one respect in which the
+ * new default is strictly better rather than merely different.</p>
  *
- * <p><b>Why green rather than white, cyan or magenta.</b> White would have the
- * best luminance contrast of all, but it is achromatic in an achromatic scene
- * and the weapon's own highlights are already near-white — it reads as part of
- * the picture. Green keeps almost all of white's luminance (182 of 255) and
- * <i>adds</i> a saturation and hue separation that white cannot have. Cyan and
- * blue are the scene's own hue family and would sit inside the blue-grey cast.
- * Magenta's luminance is 105, in the middle of the scene's range, so it has
- * poor luminance contrast against the floor and almost none against the
- * weapon. Amber and red are ruled out by rule: they are the weapon's colours,
- * and the reticle must never be confused with the gun.</p>
+ * <p><b>White was previously rejected here, and the objection was real.</b> The
+ * argument against it was that it is achromatic in an achromatic scene and that
+ * the weapon's own highlights are already near-white, so it reads as part of the
+ * picture. Green kept most of white's luminance and added a hue the room does
+ * not contain a single pixel of. All of that is still true — and it is the price
+ * now being paid on purpose, because <b>hue has been promoted to the state
+ * channel</b> and the neutral state is the one that has to give it up. Two
+ * measurements soften the cost: the weapon viewmodel spans luminance 55 to 211
+ * and so never actually reaches white, and it sits in the bottom right of the
+ * frame while the reticle is at the centre — they do not overlap.</p>
+ *
+ * <h2>Why the enemy colour is red, and why red alone would not be enough</h2>
+ *
+ * <p><b>Red is chosen for meaning, not for contrast, and this Javadoc is not
+ * going to pretend otherwise.</b> {@code #FF0000} has a Rec.709 luminance of
+ * <b>54</b> — red is intrinsically dark, and no fully saturated red is
+ * brighter. Sampled over the demo's character bodies in a real frame, those
+ * bodies span luminance 0 to 255 and between 20% and 50% of their pixels are
+ * already red-dominant. So a red core, on its own, over the thing that makes it
+ * red, is <i>not</i> reliably legible. Three things pay for that:</p>
+ *
+ * <ul>
+ *   <li><b>The black outline, which is why it is not optional.</b> Every core
+ *       pixel is within {@link #OUTLINE_THICKNESS_DIVISOR} of a luminance-0
+ *       border — 2 px each side of a 7 px core at 720p — so the figure is read
+ *       from its banded silhouette rather than from its fill, in either
+ *       state.</li>
+ *   <li><b>The transition, which is the actual signal.</b> White to red on the
+ *       same pixels is a drop of 201 luminance levels together with a jump from
+ *       zero saturation to full. What a player perceives is the change, and
+ *       that is the largest change this figure can make without moving.</li>
+ *   <li><b>{@code OutlinePass} paints the same body cyan</b>, which is red's
+ *       exact complement. The two marks that both mean "this one" are 180
+ *       degrees apart in hue and cannot be mistaken for each other.</li>
+ * </ul>
+ *
+ * <p><b>White to red also survives colour blindness, and green to red would
+ * not.</b> Roughly 8% of men cannot separate red from green; a green-to-red
+ * reticle would have signalled entirely in the one channel they do not have.
+ * White to red is a luminance change first and a hue change second, so the
+ * state is still visible with no colour discrimination at all. That is the
+ * strongest single reason the neutral colour is not simply left green.</p>
  *
  * <h2>Why there is a centre gap, and no centre dot</h2>
  *
@@ -194,16 +237,28 @@ import java.util.Arrays;
 public final class Crosshair
 {
     /**
-     * The reticle's core colour: pure green, {@code #00FF00}, luminance 182.
-     * A hue the demo scene does not contain a single pixel of. See the class
-     * Javadoc for the measurement that chose it.
+     * The reticle's core colour with nothing under the point of aim: pure
+     * white, {@code #FFFFFF}, luminance 255 — above every surface in the demo
+     * room. See the class Javadoc for the measurement that chose it, and for
+     * the objection to white that is being paid on purpose.
      */
-    public static final int CORE_COLOR = Rgba.pack(0, 255, 0, 255);
+    public static final int CORE_COLOR = Rgba.pack(255, 255, 255, 255);
+
+    /**
+     * The reticle's core colour while an enemy is under the point of aim: pure
+     * red, {@code #FF0000}, luminance 54.
+     *
+     * <p>Dark, and knowingly so — see the class Javadoc. It is chosen for what
+     * it means rather than for how far it is from the body behind it, and the
+     * black outline plus the 201-level drop from {@link #CORE_COLOR} are what
+     * make it legible.</p>
+     */
+    public static final int ENEMY_CORE_COLOR = Rgba.pack(255, 0, 0, 255);
 
     /**
      * The colour of the border drawn around the core: pure black, luminance 0.
-     * It supplies the contrast against pale walls, which the green core alone
-     * cannot.
+     * It supplies the contrast against pale walls, which the white core cannot,
+     * and against the character bodies, which the red core cannot.
      */
     public static final int OUTLINE_COLOR = Rgba.pack(0, 0, 0, 255);
 
@@ -220,7 +275,7 @@ public final class Crosshair
     public static final int CENTRE_GAP_DIVISOR = 60;
 
     /**
-     * Frame height divided by this is the thickness of an arm's green core:
+     * Frame height divided by this is the thickness of an arm's coloured core:
      * 7 px at 720p, 14 px at 1440p.
      */
     public static final int CORE_THICKNESS_DIVISOR = 100;
@@ -246,14 +301,12 @@ public final class Crosshair
     }
 
     /**
-     * Draws the reticle into the framebuffer's colour buffer.
+     * Draws the reticle in its neutral state — a white core.
      *
-     * <p>Call once per frame, after the world pass, the outline pass and the
-     * viewmodel pass — the reticle is the topmost thing on screen and is not
-     * depth-tested, because it is not in the world.</p>
-     *
-     * <p>Allocates nothing, reads no pixel, and is idempotent: calling it
-     * twice on one frame is indistinguishable from calling it once.</p>
+     * <p>Exactly {@code draw(target, false)}. It exists because "nothing is
+     * under the point of aim" is the overwhelmingly common case and because the
+     * preview tools and the geometry tests have no notion of an enemy at all.
+     * </p>
      *
      * @param target the framebuffer to draw into; must be
      *     {@link Framebuffer.State#READY}
@@ -261,6 +314,51 @@ public final class Crosshair
      * @throws IllegalStateException if the framebuffer has no buffers
      */
     public static void draw(final Framebuffer target)
+    {
+        draw(target, false);
+    }
+
+    /**
+     * Returns the core colour for one of the two states.
+     *
+     * <p>Public so a caller — or a test asserting that the two states really do
+     * differ perceptibly — can name the colour without restating the constant
+     * and letting the two copies drift.</p>
+     *
+     * @param enemyUnderAim whether a tagged entity is under the point of aim
+     * @return {@link #ENEMY_CORE_COLOR} if it is, {@link #CORE_COLOR} if not
+     */
+    public static int coreColor(final boolean enemyUnderAim)
+    {
+        if (enemyUnderAim)
+        {
+            return ENEMY_CORE_COLOR;
+        }
+        return CORE_COLOR;
+    }
+
+    /**
+     * Draws the reticle into the framebuffer's colour buffer, in whichever of
+     * its two states the caller asks for.
+     *
+     * <p>Call once per frame, after the world pass, the outline pass and the
+     * viewmodel pass — the reticle is the topmost thing on screen and is not
+     * depth-tested, because it is not in the world.</p>
+     *
+     * <p>Allocates nothing, reads no pixel, and is idempotent: calling it
+     * twice on one frame with the same flag is indistinguishable from calling
+     * it once.</p>
+     *
+     * @param target the framebuffer to draw into; must be
+     *     {@link Framebuffer.State#READY}
+     * @param enemyUnderAim true when the entity-id buffer holds a tagged entity
+     *     at the point of aim, which turns the core red. The caller samples
+     *     that, not this method — see the class Javadoc on why the id buffer is
+     *     fair game for a cosmetic mark and forbidden for a hitscan
+     * @throws IllegalArgumentException if the framebuffer is null
+     * @throws IllegalStateException if the framebuffer has no buffers
+     */
+    public static void draw(final Framebuffer target, final boolean enemyUnderAim)
     {
         if (target == null)
         {
@@ -291,7 +389,8 @@ public final class Crosshair
         // for free.
         drawCross(color, width, height, stride, core + 2 * outline, gap - outline,
             gap + arm + outline, OUTLINE_COLOR);
-        drawCross(color, width, height, stride, core, gap, gap + arm, CORE_COLOR);
+        drawCross(color, width, height, stride, core, gap, gap + arm,
+            coreColor(enemyUnderAim));
     }
 
     // ---- derived geometry ----
@@ -330,7 +429,7 @@ public final class Crosshair
     }
 
     /**
-     * Returns the thickness of an arm's green core in pixels.
+     * Returns the thickness of an arm's coloured core in pixels.
      *
      * <p>This is the requested thickness, before the parity adjustment that
      * {@link #draw(Framebuffer)} applies to centre the arm exactly — the drawn

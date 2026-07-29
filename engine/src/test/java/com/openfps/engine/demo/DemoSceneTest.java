@@ -450,69 +450,83 @@ final class DemoSceneTest
     }
 
     @Nested
-    @DisplayName("a fallen body")
-    final class Fallen
+    @DisplayName("a killed body disappears")
+    final class Killed
     {
         @Test
-        @DisplayName("is a rotation, not a reflection, so Scene will accept it")
-        void shouldKeepAPositiveDeterminantWhenToppling()
+        @DisplayName("a live bot stands where the simulation put it")
+        void shouldStandALiveBot(@TempDir final Path root) throws IOException
         {
-            // Scene refuses a negative determinant outright rather than let an
-            // instance render inside-out. The obvious way to lay a body down —
-            // scaling y by -1 — has determinant -s^3 and is a build failure
-            // waiting for whoever tries it.
-            final Mat4 fallen = DemoScene.fallenPlacement(10.0f, 0.0f, -5.0f, 1.1f, 3.0f);
+            final DemoScene demo = DemoScene.build(kitWithCharacters(root));
+            final Bot bot = demo.bots()[0];
 
-            assertThat(determinantOf(fallen)).isCloseTo(27.0f, within(1.0e-3f));
+            final Mat4 standing = DemoScene.botPlacement(bot);
+
+            assertThat(standing.get(1, 1)).as("model up is world up, at the character scale")
+                .isCloseTo(DemoScene.CHARACTER_WORLD_SCALE, within(EPSILON));
+            assertThat(standing.get(0, 3)).as("placed at its own x")
+                .isCloseTo(bot.positionX(), within(EPSILON));
+            assertThat(standing.get(2, 3)).as("placed at its own z")
+                .isCloseTo(bot.positionZ(), within(EPSILON));
         }
 
         @Test
-        @DisplayName("puts the head along the heading, not behind it")
-        void shouldFallFaceFirstWhenToppling()
-        {
-            // The sign of the pitch is invisible in the matrix: the opposite
-            // rotation is equally valid, has the same determinant, and drops
-            // every body backwards. Where the head lands is what says it is
-            // right. At yaw 0 a standing model faces world +z, so a face-first
-            // fall puts its up axis — column 1 — along +z.
-            final Mat4 fallen = DemoScene.fallenPlacement(0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
-
-            assertThat(fallen.get(0, 1)).as("head x").isCloseTo(0.0f, within(EPSILON));
-            assertThat(fallen.get(1, 1)).as("head y — flat on the floor")
-                .isCloseTo(0.0f, within(EPSILON));
-            assertThat(fallen.get(2, 1)).as("head z — along the heading")
-                .isCloseTo(1.0f, within(EPSILON));
-        }
-
-        @Test
-        @DisplayName("lifts the body by half its height, so it does not sink into the floor")
-        void shouldLiftTheBodyWhenToppling()
-        {
-            // A model whose origin is at its feet, laid flat, has half its bulk
-            // below y = 0 unless it is raised. The correction is derived from
-            // the same constant the standing scale uses.
-            final Mat4 fallen = DemoScene.fallenPlacement(0.0f, 0.0f, 0.0f, 0.0f,
-                DemoScene.CHARACTER_WORLD_SCALE);
-
-            assertThat(fallen.get(1, 3)).isCloseTo(
-                DemoScene.PLAYER_HEIGHT_UNITS * 0.5f, within(EPSILON));
-        }
-
-        @Test
-        @DisplayName("a dead bot is drawn lying down and a live one standing")
-        void shouldSwitchPlacementWhenABotDies(@TempDir final Path root) throws IOException
+        @DisplayName("a killed bot is hidden outright, not laid on the floor")
+        void shouldHideAKilledBot(@TempDir final Path root) throws IOException
         {
             final DemoScene demo = DemoScene.build(kitWithCharacters(root));
             final Bot victim = demo.bots()[0];
 
-            final Mat4 standing = DemoScene.botPlacement(victim);
             victim.damage(Bot.MAX_HEALTH);
-            final Mat4 down = DemoScene.botPlacement(victim);
 
-            assertThat(standing.get(1, 1)).as("standing: model up is world up")
+            assertThat(DemoScene.botPlacement(victim))
+                .as("the established hidden transform, shared rather than copied")
+                .isSameAs(DemoEffects.HIDDEN);
+        }
+
+        @Test
+        @DisplayName("the hidden transform really does collapse the model to a point")
+        void shouldCollapseEveryAxis(@TempDir final Path root) throws IOException
+        {
+            // The property, not the identity of the constant: every model axis
+            // maps to the zero vector, so every triangle has zero area and the
+            // rasterizer rejects it before any pixel — no colour, no depth and
+            // no entity id. That last one is what stops a corpse turning the
+            // crosshair red.
+            final DemoScene demo = DemoScene.build(kitWithCharacters(root));
+            final Bot victim = demo.bots()[0];
+            victim.damage(Bot.MAX_HEALTH);
+
+            final Mat4 hidden = DemoScene.botPlacement(victim);
+            for (int row = 0; row < 3; row++)
+            {
+                for (int column = 0; column < 4; column++)
+                {
+                    assertThat(hidden.get(row, column))
+                        .as("hidden transform element (%d,%d)", row, column)
+                        .isZero();
+                }
+            }
+            assertThat(determinantOf(hidden))
+                .as("a collapsed basis has no volume at all")
+                .isZero();
+        }
+
+        @Test
+        @DisplayName("a body that is merely hurt is still drawn standing")
+        void shouldKeepAWoundedBotVisible(@TempDir final Path root) throws IOException
+        {
+            // The gate is death, not damage. A bot two hits down must still be
+            // in the room, or the third hit has nothing to land on.
+            final DemoScene demo = DemoScene.build(kitWithCharacters(root));
+            final Bot victim = demo.bots()[0];
+
+            victim.damage(Bot.MAX_HEALTH - 1);
+
+            assertThat(victim.isAlive()).isTrue();
+            assertThat(DemoScene.botPlacement(victim)).isNotSameAs(DemoEffects.HIDDEN);
+            assertThat(DemoScene.botPlacement(victim).get(1, 1))
                 .isCloseTo(DemoScene.CHARACTER_WORLD_SCALE, within(EPSILON));
-            assertThat(down.get(1, 1)).as("fallen: model up is horizontal")
-                .isCloseTo(0.0f, within(EPSILON));
         }
     }
 

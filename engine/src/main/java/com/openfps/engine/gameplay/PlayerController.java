@@ -35,7 +35,14 @@ import com.openfps.engine.render.adapter.Vec3;
  * </pre>
  *
  * <p>So yaw 0 faces world +z, yaw increases from +z toward +x, and positive
- * pitch looks up. <b>{@code groundRight} is derived as {@code forward x up},
+ * pitch looks up. <b>Because that is a right-handed rotation about the up axis,
+ * an increasing yaw turns the player to their LEFT</b> — which is why
+ * {@link #update} <i>subtracts</i> {@link I_PlayerInput#yawDelta()}, whose
+ * documented convention is "positive turns right". That one sign is the only
+ * place the input convention and the world convention meet, and it has been
+ * wrong; see {@code applyLook}.</p>
+ *
+ * <p><b>{@code groundRight} is derived as {@code forward x up},
  * not {@code up x forward}</b> — the same operand order {@link Camera} pins as
  * normative, for the same reason. Getting it backwards mirrors the world, and
  * a mirrored world is very hard to see: pressing strafe-right would move the
@@ -445,26 +452,50 @@ public final class PlayerController
 
     // Integrates the look deltas, then re-establishes both angle invariants.
     //
-    // THE YAW IS SUBTRACTED, and that minus sign is the whole of the mapping
-    // between "what the player did" and "what this class stores". It is not a
-    // taste question and it is not negotiable:
+    // THE YAW DELTA IS SUBTRACTED, AND THE MINUS SIGN IS THE WHOLE OF A BUG
+    // THAT SHIPPED TWICE. It is not a preference and it is not a platform
+    // correction; it is the conversion between two conventions that this class
+    // sits between, both of which are written down and neither of which is
+    // negotiable:
     //
-    //   I_PlayerInput / InputState define yawDelta > 0 as "turn the view
-    //   RIGHT", deliberately, so that no adapter has to know a renderer's
-    //   basis. InputState's own Javadoc spells out the consequence — "a
-    //   consumer building a forward vector rotates by -yaw about +y".
+    //   I_PlayerInput.yawDelta   positive turns the view RIGHT — a statement
+    //                            about the player's intent, device-neutral, and
+    //                            the same on a mouse, a thumbstick and a replay
+    //   this.yawRadians          increases from +z toward +x, because
+    //                            groundForward is (sin(yaw), 0, cos(yaw)) — a
+    //                            right-handed rotation about +y
     //
-    //   This class's yaw does the opposite: it sweeps +z toward +x, and right
-    //   at yaw 0 is -x (groundRight = groundForward x up). So a LARGER yaw is
-    //   a turn to the LEFT. Adding the delta therefore turns the player away
-    //   from the direction they asked for.
+    // A right-handed rotation about the UP axis is counter-clockwise seen from
+    // above, which for a player is a turn to the LEFT. So "turn right" is a
+    // DECREASE of this angle, and adding the delta instead of subtracting it
+    // pans the camera the opposite way from the hand. InputState's own Javadoc
+    // has said so all along — "a consumer building a forward vector rotates by
+    // -yaw about +y" — and this method was the consumer that did not.
     //
-    // It did exactly that, on both platforms, until it was measured on an
-    // Android emulator: a finger dragged right panned the camera left, with
-    // the whole room sliding the wrong way under a stationary crosshair. The
-    // desktop mouse had the same bug and nobody had caught it, because a mouse
-    // inverted in one axis reads as "sensitivity feels odd" far more readily
-    // than a thumb does — a thumb is dragging the world itself.
+    // <b>Fix it here and nowhere else.</b> Both platforms reach this line: the
+    // desktop mouse and the Android thumb both go through InputAccumulator into
+    // one PlayerController, so this is a shared-consumer bug and not a device
+    // quirk. It was twice diagnosed as one — once by negating in
+    // InputAccumulator.latch and once in GdxInputPort.pollLook — and each time
+    // the symptom moved to the other platform instead of going away, because a
+    // correction applied at one port cannot fix a mistake made downstream of
+    // both. Neither of those files may carry a horizontal sign flip.
+    //
+    // <b>No yaw-versus-yaw test can catch this, which is why it survived.</b> A
+    // mirrored basis is self-consistent: turn and strafe and render all agree
+    // with each other while all three are wrong — exactly what this class's own
+    // Javadoc warns about for groundRight. Every existing yaw assertion passed
+    // with the sign either way round, because each of them compared an angle
+    // against another angle. The guard is PlayerControllerTest's LookDirection
+    // nest, which compares a turn against the player's own STRAFE displacement:
+    // an independent reference that a mirror cannot satisfy.
+    //
+    // It was finally caught on an Android emulator, and the reason it surfaced
+    // there first is worth keeping: a finger dragged right panned the camera
+    // left with the whole room sliding the wrong way under a stationary
+    // crosshair. A mouse inverted in one axis reads as "the sensitivity feels
+    // odd"; a thumb is dragging the world itself, so the same defect is
+    // unmistakable. The desktop had carried it just as long.
     //
     // Pitch needs no such flip: InputState's "positive tilts up" and this
     // class's "positive pitch looks up" already agree.

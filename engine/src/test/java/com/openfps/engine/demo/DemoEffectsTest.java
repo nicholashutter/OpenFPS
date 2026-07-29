@@ -7,10 +7,12 @@ package com.openfps.engine.demo;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.within;
 
 import com.openfps.engine.hal.adapter.nulladapter.NullTimePort;
 import com.openfps.engine.hal.port.I_TimePort;
 import com.openfps.engine.render.adapter.Mat4;
+import com.openfps.engine.render.adapter.ModelFormat;
 import com.openfps.engine.render.adapter.Rgba;
 import com.openfps.engine.render.adapter.Scene;
 import com.openfps.engine.render.adapter.SoftwareRenderPort;
@@ -95,7 +97,256 @@ final class DemoEffectsTest
 
         Mat4 puffOverride(final int slot, final int stage)
         {
-            return renderer.worldTransformOverride(effects.puffInstanceIndex(slot, stage));
+            return puffOverride(slot, stage, 0);
+        }
+
+        Mat4 puffOverride(final int slot, final int stage, final int lobe)
+        {
+            return renderer.worldTransformOverride(
+                effects.puffInstanceIndex(slot, stage, lobe));
+        }
+    }
+
+    @Nested
+    @DisplayName("the smoke sphere")
+    final class SmokeGeometry
+    {
+        /** Float tolerance for the sphere's radius, which is built from sin and cos. */
+        private static final float EPSILON = 1.0e-5f;
+
+        @Test
+        @DisplayName("every vertex is the same distance from the origin — it is a sphere")
+        void everyVertexIsOnTheSphere()
+        {
+            // A box has corners at sqrt(3)/2 times its face distance and that is
+            // precisely why it reads as a box. Nothing on this model may be
+            // further out in one direction than another.
+            final ModelFormat cloud = DemoEffects.sphere(DemoEffects.smokeColour());
+
+            for (int vertex = 0; vertex < cloud.vertexCount(); vertex++)
+            {
+                final float x = cloud.positionX(vertex);
+                final float y = cloud.positionY(vertex);
+                final float z = cloud.positionZ(vertex);
+                assertThat((float) StrictMath.sqrt(x * x + y * y + z * z))
+                    .as("vertex %d distance from the origin", vertex)
+                    .isCloseTo(0.5f, within(EPSILON));
+            }
+        }
+
+        @Test
+        @DisplayName("it occupies the same unit box the tracer does, so the placement scale "
+            + "is unchanged")
+        void fitsTheUnitBox()
+        {
+            final ModelFormat cloud = DemoEffects.sphere(DemoEffects.smokeColour());
+
+            assertThat(cloud.minX()).isCloseTo(-0.5f, within(EPSILON));
+            assertThat(cloud.maxY()).isCloseTo(0.5f, within(EPSILON));
+        }
+
+        @Test
+        @DisplayName("every triangle faces outward, so backface culling leaves ONE layer")
+        void isWoundOutward()
+        {
+            // The property that matters most for a translucent sphere. If the
+            // winding were reversed the far hemisphere would survive the cull
+            // and the near one would not, and every puff would composite the
+            // wrong layer; if the model were not closed, both would draw and the
+            // cloud would be twice as dense as the coverage ladder says.
+            //
+            // For a convex body about the origin, "outward" is exactly
+            // "the face normal points away from the centroid".
+            final ModelFormat cloud = DemoEffects.sphere(DemoEffects.smokeColour());
+            final int[] indices = cloud.indices();
+
+            for (int triangle = 0; triangle * 3 < indices.length; triangle++)
+            {
+                final int a = indices[triangle * 3];
+                final int b = indices[triangle * 3 + 1];
+                final int c = indices[triangle * 3 + 2];
+                final float ux = cloud.positionX(b) - cloud.positionX(a);
+                final float uy = cloud.positionY(b) - cloud.positionY(a);
+                final float uz = cloud.positionZ(b) - cloud.positionZ(a);
+                final float vx = cloud.positionX(c) - cloud.positionX(a);
+                final float vy = cloud.positionY(c) - cloud.positionY(a);
+                final float vz = cloud.positionZ(c) - cloud.positionZ(a);
+                final float nx = uy * vz - uz * vy;
+                final float ny = uz * vx - ux * vz;
+                final float nz = ux * vy - uy * vx;
+                final float outward = nx * cloud.positionX(a)
+                    + ny * cloud.positionY(a) + nz * cloud.positionZ(a);
+                assertThat(outward)
+                    .as("triangle %d normal must point away from the centre", triangle)
+                    .isPositive();
+            }
+        }
+
+        @Test
+        @DisplayName("it is closed: every edge is shared by exactly two triangles")
+        void isClosed()
+        {
+            // An open sphere would show its inside through the gap, which on a
+            // translucent instance is a bright hole rather than a missing patch.
+            final ModelFormat cloud = DemoEffects.sphere(DemoEffects.smokeColour());
+            final int[] indices = cloud.indices();
+            final java.util.Map<Long, Integer> edges = new java.util.HashMap<>();
+
+            for (int triangle = 0; triangle * 3 < indices.length; triangle++)
+            {
+                for (int corner = 0; corner < 3; corner++)
+                {
+                    final int from = indices[triangle * 3 + corner];
+                    final int to = indices[triangle * 3 + (corner + 1) % 3];
+                    final long key = (long) Math.min(from, to) << 32 | Math.max(from, to);
+                    edges.merge(Long.valueOf(key), Integer.valueOf(1), Integer::sum);
+                }
+            }
+            assertThat(edges.values())
+                .as("every edge of a closed surface is walked exactly twice")
+                .allMatch(count -> count.intValue() == 2);
+        }
+
+        @Test
+        @DisplayName("it has no submesh table, so every triangle takes the flat colour path")
+        void isUntextured()
+        {
+            // Required, not incidental: the translucent phase binds no texture
+            // table at all, so a textured submesh here would index into nothing.
+            final ModelFormat cloud = DemoEffects.sphere(DemoEffects.smokeColour());
+
+            assertThat(cloud.submeshCount()).isZero();
+            assertThat(cloud.textureCount()).isZero();
+            assertThat(cloud.colour(0)).isEqualTo(DemoEffects.smokeColour());
+        }
+
+        @Test
+        @DisplayName("it is rounder than the box it replaces, and still cheap")
+        void isCoarseButRound()
+        {
+            final ModelFormat cloud = DemoEffects.sphere(DemoEffects.smokeColour());
+
+            assertThat(cloud.triangleCount())
+                .as("more facets than a cube's twelve, or it is still a block")
+                .isGreaterThan(48);
+            assertThat(cloud.triangleCount())
+                .as("but nowhere near an authored asset — 36 of these are staged")
+                .isLessThan(200);
+        }
+    }
+
+    @Nested
+    @DisplayName("the lobes are laid out across the view")
+    final class LobeLayout
+    {
+        /** Float tolerance for a dot product of unit vectors. */
+        private static final float EPSILON = 1.0e-4f;
+
+        @Test
+        @DisplayName("the lobes spread across the screen, not along the line of sight")
+        void spreadsAcrossTheView()
+        {
+            // The whole reason the offsets use the shot's basis. Laid out along
+            // world axes, a puff fired down +z would put its outriders directly
+            // behind and in front of its centre — invisible from the one place
+            // anybody is looking at it from, so the cloud would collapse back
+            // into a single sphere exactly when the player shoots straight
+            // ahead, which is most of the time.
+            final Fixture fixture = new Fixture();
+            fixture.fire();
+            fixture.tic();
+
+            final Mat4 centre = fixture.puffOverride(0, 0, 0);
+            for (int lobe = 1; lobe < DemoEffects.PUFF_LOBES; lobe++)
+            {
+                final Mat4 out = fixture.puffOverride(0, 0, lobe);
+                final float alongAim = (out.get(2, 3) - centre.get(2, 3)) * AIM_Z;
+                assertThat(Math.abs(alongAim))
+                    .as("lobe %d must not be displaced along the aim", lobe)
+                    .isLessThan(EPSILON);
+                assertThat(separation(centre, out))
+                    .as("lobe %d must actually be somewhere else", lobe)
+                    .isGreaterThan(0.0f);
+            }
+        }
+
+        @Test
+        @DisplayName("no lobe drifts so far that the cloud comes apart")
+        void staysOneCloud()
+        {
+            // Lobes further apart than their radii are three balls, not a
+            // cloud. Each outrider's centre has to be inside the main lobe.
+            final Fixture fixture = new Fixture();
+            fixture.fire();
+            fixture.tic();
+
+            final Mat4 centre = fixture.puffOverride(0, 0, 0);
+            final float mainRadius = centre.get(1, 1) * 0.5f;
+            for (int lobe = 1; lobe < DemoEffects.PUFF_LOBES; lobe++)
+            {
+                assertThat(separation(centre, fixture.puffOverride(0, 0, lobe)))
+                    .as("lobe %d sits inside the main lobe", lobe)
+                    .isLessThan(mainRadius);
+            }
+        }
+
+        @Test
+        @DisplayName("the outriders are smaller than the lobe they hang off")
+        void outridersAreSmaller()
+        {
+            final Fixture fixture = new Fixture();
+            fixture.fire();
+            fixture.tic();
+
+            final float main = fixture.puffOverride(0, 0, 0).get(1, 1);
+            for (int lobe = 1; lobe < DemoEffects.PUFF_LOBES; lobe++)
+            {
+                assertThat(fixture.puffOverride(0, 0, lobe).get(1, 1))
+                    .as("lobe %d scale", lobe)
+                    .isLessThan(main)
+                    .isPositive();
+            }
+        }
+
+        @Test
+        @DisplayName("the lobes grow with the puff rather than drifting apart")
+        void theArrangementScalesWithThePuff()
+        {
+            // Offsets are in multiples of the radius, so the cloud expands as
+            // one shape. Offsets in fixed units would keep the lumps still
+            // while the spheres swelled through each other, and the cloud would
+            // turn into a single ball as it aged.
+            final Fixture fixture = new Fixture();
+            fixture.fire();
+            fixture.tic();
+            final Mat4 youngCentre = fixture.puffOverride(0, 0, 0);
+            final float young = separation(youngCentre, fixture.puffOverride(0, 0, 1))
+                / youngCentre.get(1, 1);
+
+            for (int tic = 0; tic < DemoEffects.PUFF_LIFE_TICS - 2; tic++)
+            {
+                fixture.tic();
+            }
+            final int stage = DemoEffects.stageFor(fixture.effects.puffAge(0));
+            final Mat4 oldCentre = fixture.puffOverride(0, stage, 0);
+            final float old = separation(oldCentre, fixture.puffOverride(0, stage, 1))
+                / oldCentre.get(1, 1);
+
+            assertThat(oldCentre.get(1, 1))
+                .as("the puff really did grow")
+                .isGreaterThan(youngCentre.get(1, 1));
+            assertThat(old)
+                .as("and the lumps kept their proportions")
+                .isCloseTo(young, within(EPSILON));
+        }
+
+        // Distance between two placements' translation columns.
+        private float separation(final Mat4 first, final Mat4 second)
+        {
+            final float dx = second.get(0, 3) - first.get(0, 3);
+            final float dy = second.get(1, 3) - first.get(1, 3);
+            final float dz = second.get(2, 3) - first.get(2, 3);
+            return (float) StrictMath.sqrt(dx * dx + dy * dy + dz * dz);
         }
     }
 
@@ -104,15 +355,90 @@ final class DemoEffectsTest
     final class Placement
     {
         @Test
-        @DisplayName("occupies one instance per tracer and one per puff stage")
+        @DisplayName("occupies one instance per tracer and one per puff stage per lobe")
         void instanceCountIsTheWholePool()
         {
             final Scene.Builder builder = Scene.builder();
             final DemoEffects effects = DemoEffects.addTo(builder);
 
             assertThat(effects.instanceCount()).isEqualTo(DemoEffects.MAX_TRACERS
-                + DemoEffects.MAX_PUFFS * DemoEffects.PUFF_STAGES);
+                + DemoEffects.MAX_PUFFS * DemoEffects.PUFF_STAGES * DemoEffects.PUFF_LOBES);
             assertThat(builder.worldInstanceCount()).isEqualTo(effects.instanceCount());
+        }
+
+        @Test
+        @DisplayName("every lobe of every stage of every puff gets its own instance, all distinct")
+        void everyLobeIsItsOwnInstance()
+        {
+            // Two lobes sharing an instance would look like one lobe and would
+            // fight over the transform every tic — and it is exactly the sort of
+            // index arithmetic that goes wrong silently.
+            final Scene.Builder builder = Scene.builder();
+            final DemoEffects effects = DemoEffects.addTo(builder);
+
+            final java.util.Set<Integer> seen = new java.util.HashSet<>();
+            for (int slot = 0; slot < DemoEffects.MAX_PUFFS; slot++)
+            {
+                for (int stage = 0; stage < DemoEffects.PUFF_STAGES; stage++)
+                {
+                    for (int lobe = 0; lobe < DemoEffects.PUFF_LOBES; lobe++)
+                    {
+                        assertThat(seen.add(
+                            Integer.valueOf(effects.puffInstanceIndex(slot, stage, lobe))))
+                            .as("puff %d stage %d lobe %d is a fresh instance", slot, stage, lobe)
+                            .isTrue();
+                    }
+                }
+            }
+            assertThat(seen).hasSize(
+                DemoEffects.MAX_PUFFS * DemoEffects.PUFF_STAGES * DemoEffects.PUFF_LOBES);
+        }
+
+        @Test
+        @DisplayName("the two-argument index names the main lobe, so old callers get the centre")
+        void theShortIndexIsTheMainLobe()
+        {
+            final Scene.Builder builder = Scene.builder();
+            final DemoEffects effects = DemoEffects.addTo(builder);
+
+            assertThat(effects.puffInstanceIndex(1, 2))
+                .isEqualTo(effects.puffInstanceIndex(1, 2, 0));
+        }
+
+        @Test
+        @DisplayName("all lobes of one stage share that stage's coverage, so they are one run")
+        void lobesOfAStageShareItsCoverage()
+        {
+            // The translucent phase draws maximal runs of EQUAL coverage. Lobes
+            // that disagreed would cut the run and cost a whole extra batched
+            // pass per puff, for a cloud that is meant to be one thing.
+            final Scene.Builder builder = Scene.builder();
+            final DemoEffects effects = DemoEffects.addTo(builder);
+            final Scene scene = builder.build();
+
+            for (int stage = 0; stage < DemoEffects.PUFF_STAGES; stage++)
+            {
+                for (int lobe = 0; lobe < DemoEffects.PUFF_LOBES; lobe++)
+                {
+                    assertThat(scene.worldCoverage(effects.puffInstanceIndex(0, stage, lobe)))
+                        .as("stage %d lobe %d", stage, lobe)
+                        .isEqualTo(DemoEffects.coverageFor(stage));
+                }
+            }
+        }
+
+        @Test
+        @DisplayName("one stage's lobes are consecutive instances, which keeps the run contiguous")
+        void lobesOfAStageAreAdjacent()
+        {
+            final Scene.Builder builder = Scene.builder();
+            final DemoEffects effects = DemoEffects.addTo(builder);
+
+            for (int lobe = 1; lobe < DemoEffects.PUFF_LOBES; lobe++)
+            {
+                assertThat(effects.puffInstanceIndex(2, 1, lobe))
+                    .isEqualTo(effects.puffInstanceIndex(2, 1, lobe - 1) + 1);
+            }
         }
 
         @Test
@@ -124,7 +450,8 @@ final class DemoEffectsTest
             final Scene scene = builder.build();
 
             assertThat(scene.translucentInstanceCount())
-                .isEqualTo(DemoEffects.MAX_PUFFS * DemoEffects.PUFF_STAGES);
+                .isEqualTo(DemoEffects.MAX_PUFFS * DemoEffects.PUFF_STAGES
+                    * DemoEffects.PUFF_LOBES);
             for (int slot = 0; slot < DemoEffects.MAX_TRACERS; slot++)
             {
                 assertThat(scene.isWorldTranslucent(effects.tracerInstanceIndex(slot)))
@@ -208,17 +535,85 @@ final class DemoEffectsTest
             // Every test passed and the feature was invisible, because nothing
             // asserted the one property that matters to a player: that the
             // result differs from what it is drawn over.
-            final int room = Rgba.pack(ROOM_RED, ROOM_GREEN, ROOM_BLUE, Scene.OPAQUE);
-            final int over = Rgba.srcOver(DemoEffects.smokeColour(), room,
-                DemoEffects.coverageFor(0));
+            //
+            // Composited through ALL the lobes, because that is what the frame
+            // does — the per-lobe coverage on its own is meaningless now, and
+            // asserting on it would be the same mistake in a new place.
+            final int core = coreOf(0);
 
-            assertThat(Math.abs(Rgba.red(over) - ROOM_RED))
-                .as("red must move; composited %s over the room", over)
+            assertThat(Math.abs(Rgba.red(core) - ROOM_RED))
+                .as("red must move; composited %s over the room", core)
                 .isGreaterThanOrEqualTo(VISIBLE_DELTA);
-            assertThat(Math.abs(Rgba.green(over) - ROOM_GREEN))
+            assertThat(Math.abs(Rgba.green(core) - ROOM_GREEN))
                 .isGreaterThanOrEqualTo(VISIBLE_DELTA);
-            assertThat(Math.abs(Rgba.blue(over) - ROOM_BLUE))
+            assertThat(Math.abs(Rgba.blue(core) - ROOM_BLUE))
                 .isGreaterThanOrEqualTo(VISIBLE_DELTA);
+        }
+
+        @Test
+        @DisplayName("the puff has a soft edge: rim, shoulder and core are three distinct "
+            + "densities")
+        void theCloudHasAGradient()
+        {
+            // THE reason the puff is three lobes rather than one. A single
+            // instance at a single coverage is flat, and flat is what made the
+            // old puff read as a block. Overlapping instances composite over
+            // each other, so one coverage becomes a falloff — and this asserts
+            // the falloff is real and each step of it is worth having, rather
+            // than three lobes producing one indistinguishable smear.
+            final int rim = compositeLobes(0, 1);
+            final int shoulder = compositeLobes(0, 2);
+            final int core = compositeLobes(0, 3);
+
+            assertThat(Rgba.red(core)).isLessThan(Rgba.red(shoulder));
+            assertThat(Rgba.red(shoulder)).isLessThan(Rgba.red(rim));
+            assertThat(Rgba.red(rim)).isLessThan(ROOM_RED);
+
+            // Each step has to be a step a viewer can see, or the gradient is a
+            // rounding artefact rather than a shape.
+            assertThat(Rgba.red(rim) - Rgba.red(shoulder))
+                .as("rim to shoulder").isGreaterThanOrEqualTo(WISP_DELTA);
+            assertThat(Rgba.red(shoulder) - Rgba.red(core))
+                .as("shoulder to core").isGreaterThanOrEqualTo(WISP_DELTA);
+        }
+
+        @Test
+        @DisplayName("a single lobe is a wisp, not a wall — the rim must not be the core")
+        void theRimIsMuchLighterThanTheCore()
+        {
+            // If one lobe already looked like the finished cloud, the other two
+            // would only be making it denser, and the edge would be as hard as
+            // the old cube's.
+            final int rim = compositeLobes(0, 1);
+            final int core = coreOf(0);
+
+            assertThat(ROOM_RED - Rgba.red(rim))
+                .as("the rim is visible")
+                .isGreaterThanOrEqualTo(WISP_DELTA);
+            assertThat(ROOM_RED - Rgba.red(rim))
+                .as("but is at most two thirds of the core's density")
+                .isLessThan((ROOM_RED - Rgba.red(core)) * 2 / 3 + 1);
+        }
+
+        // The room with `lobes` overlapping lobes of one stage composited over
+        // it, in the order the translucent phase composites them: back to front,
+        // each srcOver the result of the last.
+        private int compositeLobes(final int stage, final int lobes)
+        {
+            // MUTABLE local — the pixel as each successive lobe leaves it.
+            int pixel = Rgba.pack(ROOM_RED, ROOM_GREEN, ROOM_BLUE, Scene.OPAQUE);
+            for (int lobe = 0; lobe < lobes; lobe++)
+            {
+                pixel = Rgba.srcOver(DemoEffects.smokeColour(), pixel,
+                    DemoEffects.coverageFor(stage));
+            }
+            return pixel;
+        }
+
+        // The densest point of a stage: every lobe overlapping.
+        private int coreOf(final int stage)
+        {
+            return compositeLobes(stage, DemoEffects.PUFF_LOBES);
         }
 
         @Test
@@ -229,12 +624,9 @@ final class DemoEffectsTest
             // that stops early and then jumps to nothing. Each rung has to
             // carry some of the puff, or the stages below it are instances
             // rendered for no visible result.
-            final int room = Rgba.pack(ROOM_RED, ROOM_GREEN, ROOM_BLUE, Scene.OPAQUE);
             for (int stage = 0; stage < DemoEffects.PUFF_STAGES; stage++)
             {
-                final int over = Rgba.srcOver(DemoEffects.smokeColour(), room,
-                    DemoEffects.coverageFor(stage));
-                assertThat(Math.abs(Rgba.red(over) - ROOM_RED))
+                assertThat(Math.abs(Rgba.red(coreOf(stage)) - ROOM_RED))
                     .as("stage %d must still tint the room", stage)
                     .isGreaterThanOrEqualTo(WISP_DELTA);
             }
@@ -257,12 +649,18 @@ final class DemoEffectsTest
                     .isLessThan(Scene.OPAQUE)
                     .isPositive();
             }
-            final int room = Rgba.pack(ROOM_RED, ROOM_GREEN, ROOM_BLUE, Scene.OPAQUE);
-            final int over = Rgba.srcOver(DemoEffects.smokeColour(), room,
-                DemoEffects.coverageFor(0));
-            assertThat(Rgba.red(over))
-                .as("the room still shows through the thickest rung")
+            // Against the DENSEST point of the cloud — every lobe overlapping —
+            // because that is where an overshoot would show up, and because the
+            // lobes compound: a per-lobe coverage that looks modest can still
+            // add up to something you cannot see through. That is the new way
+            // the old 228 mistake could come back.
+            final int core = coreOf(0);
+            assertThat(Rgba.red(core))
+                .as("the room still shows through the thickest part of the cloud")
                 .isGreaterThan(Rgba.red(DemoEffects.smokeColour()));
+            assertThat(Rgba.red(core) - Rgba.red(DemoEffects.smokeColour()))
+                .as("and by a visible margin, not by one level")
+                .isGreaterThan(WISP_DELTA);
         }
 
         @Test
@@ -293,8 +691,13 @@ final class DemoEffectsTest
             // across — big enough that it read as a translucent sheet rather
             // than as smoke at a muzzle. Expressed as a fraction of the frame
             // rather than in units so it survives a resolution change.
+            //
+            // Measured on the WHOLE cloud, not on the main lobe: the outriders
+            // stick out past it, so sizing against one sphere would let the
+            // thing the player actually sees grow by half without this noticing.
+            final float extent = DemoEffects.PUFF_RADIUS_END * DemoEffects.cloudExtentRadii();
             final double halfAngle =
-                StrictMath.atan(DemoEffects.PUFF_RADIUS_END / DemoEffects.MUZZLE_FORWARD_UNITS);
+                StrictMath.atan(extent / DemoEffects.MUZZLE_FORWARD_UNITS);
             final double fractionOfHeight = 2.0 * halfAngle / (Math.PI / 3.0);
 
             assertThat(fractionOfHeight)
@@ -303,6 +706,9 @@ final class DemoEffectsTest
             assertThat(DemoEffects.PUFF_RADIUS_END)
                 .as("but it still expands over its life")
                 .isGreaterThan(DemoEffects.PUFF_RADIUS_START);
+            assertThat(DemoEffects.cloudExtentRadii())
+                .as("and the arrangement really is wider than one sphere")
+                .isGreaterThan(1.0f);
         }
     }
 

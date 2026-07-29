@@ -16,6 +16,8 @@ import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import com.openfps.engine.common.Constants;
 import com.openfps.engine.gameplay.port.I_PlayerInput;
@@ -393,17 +395,138 @@ class PlayerControllerTest
     }
 
     @Nested
+    @DisplayName("look direction — which way a turn actually goes")
+    class LookDirection
+    {
+        /**
+         * A turn big enough to be unambiguous and small enough to stay well
+         * inside a quarter circle, so "is the new heading on the right-hand
+         * side" is a question with an obvious answer.
+         */
+        private static final float QUARTER_TURN = 0.5f;
+
+        /**
+         * <b>Every assertion in this nest measures a turn against the player's
+         * own STRAFE DISPLACEMENT, and nothing here compares one angle with
+         * another.</b>
+         *
+         * <p>That is not a stylistic choice. The horizontal look axis shipped
+         * inverted twice, and every yaw test in this file passed both times,
+         * because a mirrored heading is <i>self-consistent</i>: the forward
+         * vector, the strafe basis and the rendered frame all derive from the
+         * same yaw, so they agree with each other while all being wrong — which
+         * is exactly what {@code PlayerController}'s class Javadoc warns about
+         * for {@code groundRight}. An assertion of the form "yaw went up by the
+         * delta" is satisfied by both signs of the bug and by neither
+         * definition of right.</p>
+         *
+         * <p>Walking is the independent reference. {@code strafeAxis > 0} is
+         * documented as "to the player's right" and is integrated through
+         * {@code applyMove}, which never touches {@link I_PlayerInput#yawDelta}.
+         * So: note where a strafe-right step goes, turn right, and check the new
+         * heading leans that way. Flip the sign in {@code applyLook} and this
+         * fails; flip it in an input adapter instead and this still fails,
+         * because the controller is what it tests.</p>
+         */
+        private static Vec3 strafeRightStep(final float yaw)
+        {
+            final PlayerController walker = facing(yaw);
+            walker.update(move(0.0f, 1.0f), TIC_60HZ);
+            return walker.feetPosition();
+        }
+
+        @Test
+        @DisplayName("a positive yaw delta turns the view toward where strafe-right walks")
+        void shouldTurnTowardTheStrafeRightDirection()
+        {
+            final Vec3 right = strafeRightStep(0.0f);
+
+            final PlayerController player = facing(0.0f);
+            player.update(look(QUARTER_TURN, 0.0f), TIC_60HZ);
+
+            assertThat(player.groundForwardVector().dot(right))
+                .as("the new heading must lean the way a right-strafe step went")
+                .isPositive();
+        }
+
+        @Test
+        @DisplayName("a negative yaw delta turns the other way")
+        void shouldTurnAwayFromTheStrafeRightDirection()
+        {
+            final Vec3 right = strafeRightStep(0.0f);
+
+            final PlayerController player = facing(0.0f);
+            player.update(look(-QUARTER_TURN, 0.0f), TIC_60HZ);
+
+            assertThat(player.groundForwardVector().dot(right)).isNegative();
+        }
+
+        @ParameterizedTest
+        @CsvSource({"0.0", "0.7", "1.9", "3.4", "5.8"})
+        @DisplayName("it turns toward strafe-right from every starting heading")
+        void shouldTurnRightFromAnyHeading(final float startYaw)
+        {
+            // A sign error that happened to cancel at yaw 0 would be a very
+            // strange one, but a basis error would not — a mirror about one
+            // world axis leaves that axis alone. Sweeping the circle rules it
+            // out at no cost.
+            final Vec3 right = strafeRightStep(startYaw);
+            final Vec3 origin = facing(startYaw).feetPosition();
+
+            final PlayerController player = facing(startYaw);
+            player.update(look(QUARTER_TURN, 0.0f), TIC_60HZ);
+
+            final Vec3 rightward = new Vec3(right.x() - origin.x(), 0.0f,
+                right.z() - origin.z());
+            assertThat(player.groundForwardVector().dot(rightward))
+                .as("starting at yaw %s", Float.valueOf(startYaw))
+                .isPositive();
+        }
+
+        @Test
+        @DisplayName("turning right then strafing right walks BACKWARDS relative to the "
+            + "original facing")
+        void shouldEndUpBehindTheOriginalHeadingAfterTurningRight()
+        {
+            // The same fact stated as something a player would notice: after a
+            // right turn, "right" is where you were facing and "forward" is
+            // where right used to be. Purely positional — not one angle is read.
+            final PlayerController player = new PlayerController();
+            player.update(look((float) (Math.PI / 2.0), 0.0f), TIC_60HZ);
+            player.update(move(1.0f, 0.0f), TIC_60HZ);
+
+            // Started facing +z; a right turn faces -x, so forward walks -x.
+            assertThat(player.positionX()).isNegative();
+            assertThat(player.positionZ()).isCloseTo(0.0f, within(1.0e-4f));
+        }
+
+        @Test
+        @DisplayName("a full turn's worth of rightward look comes back to the same heading")
+        void shouldReturnToTheStartAfterAFullRightTurn()
+        {
+            final PlayerController player = facing(1.25f);
+            final Vec3 before = player.groundForwardVector();
+            player.update(look(PlayerController.FULL_TURN_RADIANS, 0.0f), TIC_60HZ);
+
+            final Vec3 after = player.groundForwardVector();
+            assertThat(after.x()).isCloseTo(before.x(), within(EPSILON));
+            assertThat(after.z()).isCloseTo(before.z(), within(EPSILON));
+        }
+    }
+
+    @Nested
     @DisplayName("yaw wrap")
     class YawWrap
     {
-        // Every look() argument below carries the OPPOSITE sign to the yaw it
-        // produces, because a positive yawDelta turns the view right and the
-        // stored yaw grows to the LEFT. That is applyLook's minus sign, and
-        // these tests are about the wrap, not about it — see TurnDirection for
-        // the tests that pin the sign itself.
+        // Every expectation in this nest is the NEGATIVE of the delta fed in,
+        // and that is the point rather than an oddity: a look delta is
+        // "positive turns right" and this angle increases leftward, so update()
+        // subtracts. These tests are about the wrap and cannot see the sign —
+        // they passed with it either way round — so LookDirection and
+        // TurnDirection carry that.
 
         @Test
-        @DisplayName("stays inside [0, 2pi) after a large positive turn")
+        @DisplayName("stays inside [0, 2pi) after a large rightward turn")
         void shouldWrapYawIntoRangeWhenTurningFarPositive()
         {
             final PlayerController player = new PlayerController();
@@ -432,9 +555,23 @@ class PlayerControllerTest
         }
 
         @Test
+        @DisplayName("stays inside [0, 2pi) after a large leftward turn")
+        void shouldWrapYawIntoRangeWhenTurningFarLeft()
+        {
+            final PlayerController player = new PlayerController();
+            player.update(look(-PlayerController.FULL_TURN_RADIANS * 5.0f - 2.0f, 0.0f), TIC_60HZ);
+
+            assertThat(player.yawRadians())
+                .isGreaterThanOrEqualTo(0.0f)
+                .isLessThan(PlayerController.FULL_TURN_RADIANS);
+            assertThat(player.yawRadians()).isCloseTo(2.0f, within(EPSILON));
+        }
+
+        @Test
         @DisplayName("crosses the 2pi boundary upward without a discontinuity")
         void shouldWrapAcrossUpperBoundaryWhenTurningLeft()
         {
+            // Leftward, because that is the direction this angle increases in.
             final PlayerController player =
                 facing(PlayerController.FULL_TURN_RADIANS - 0.1f);
             player.update(look(-0.2f, 0.0f), TIC_60HZ);
@@ -913,6 +1050,9 @@ class PlayerControllerTest
 
             assertThat(player.positionX()).isEqualTo(0.0f);
             assertThat(player.positionZ()).isEqualTo(0.0f);
+            // A LEFTWARD look of 0.5 — the delta is negative — and applyLook
+            // subtracts it, so the stored angle grows to +0.5 and never
+            // approaches the wrap. See YawWrap for the boundary cases.
             assertThat(player.yawRadians()).isEqualTo(0.5f);
             assertThat(player.pitchRadians()).isEqualTo(0.25f);
         }
