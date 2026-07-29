@@ -135,6 +135,65 @@ class EndOfMatchTextTest
         }
 
         @Test
+        @DisplayName("both buttons stay on screen at a phone's density, heading or no heading")
+        void shouldKeepBothButtonsReachableOnAShortSurface()
+        {
+            // THE dead-end regression, and the screen has grown twice since it was
+            // first fixed: a fifth summary line and a second button. At a handset's
+            // density the fixed content is about 698 px under a heading top at 929
+            // on a 1080 px surface — six pixels over, with every gap already
+            // collapsed. What falls off is the BACK button, on a screen that has
+            // taken the input processor away from everything else.
+            //
+            // Asserted as "the bottom of the lowest button is at or above the
+            // bottom edge", because that is the property a PLAYER has: a way off
+            // this screen. A gap fraction of zero says nothing about whether it
+            // was enough.
+            final float surfaceHeight = 1080.0f;
+            final float fixedContent = 698.0f;
+
+            final float budget =
+                GameOverScreen.headingHeightBudget(surfaceHeight, fixedContent);
+            final float headingWidth =
+                GameOverScreen.headingWidthFor(2400.0f, surfaceHeight, 41, budget);
+            final float headingHeight =
+                headingWidth / 41.0f * BlockFont.GLYPH_HEIGHT;
+            // Where the layout actually puts the bottom of the stack, with the gaps
+            // fully collapsed — which is what gapFitFraction gives when the budget
+            // is this tight.
+            final float stackBottom = surfaceHeight * (1.0f - 0.14f) - headingHeight
+                - fixedContent;
+
+            assertThat(stackBottom)
+                .as("the lowest button sits %f px below the bottom edge", -stackBottom)
+                .isGreaterThanOrEqualTo(0.0f);
+        }
+
+        @Test
+        @DisplayName("the heading yields all the way to nothing rather than pushing a button off")
+        void shouldGiveUpTheHeadingEntirelyBeforeTheButtons()
+        {
+            // The bound on the correction. The heading is decoration and the single
+            // largest item, so it yields first and as far as it has to; a heading of
+            // zero height is ugly and recoverable, and a button below the bottom
+            // edge is not.
+            assertThat(GameOverScreen.headingHeightBudget(1080.0f, 2000.0f)).isZero();
+            assertThat(GameOverScreen.headingWidthFor(2400.0f, 1080.0f, 41, 0.0f)).isZero();
+        }
+
+        @Test
+        @DisplayName("a roomy surface is not tightened by the new budget")
+        void shouldIgnoreTheBudgetWhenThereIsRoom()
+        {
+            // No window that was correct becomes worse. On a desktop the width
+            // fraction still wins, exactly as it did before the third cap existed.
+            final float generous = GameOverScreen.headingHeightBudget(1080.0f, 100.0f);
+
+            assertThat(GameOverScreen.headingWidthFor(1920.0f, 1080.0f, 41, generous))
+                .isEqualTo(GameOverScreen.headingWidthFor(1920.0f, 1080.0f, 41));
+        }
+
+        @Test
         @DisplayName("a heading with no blocks asks for the width rather than dividing by zero")
         void shouldFallBackWhenTheHeadingIsEmpty()
         {

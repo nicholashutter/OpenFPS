@@ -53,10 +53,11 @@
 <li><a href="engine-resource.html">Resource (W_)</a></li>
 <li><a href="engine-memory.html">Memory (Z_)</a></li>
 </ul></details>
-<details class="grp" data-hue="6"><summary><span class="dot"></span>Reference<span class="count">2</span></summary>
+<details class="grp" data-hue="6"><summary><span class="dot"></span>Reference<span class="count">3</span></summary>
 <ul>
 <li><a href="assets.html">Assets and licensing</a></li>
 <li><a href="demo-assets.html">Demo asset manifest</a></li>
+<li><a href="wasm.html">WebAssembly</a></li>
 </ul></details>
 </nav>
 <p class="generated">Generated from the repository's Markdown by <code>:tools:buildDocsSite</code>.</p>
@@ -66,11 +67,12 @@
 <li class="lv2"><a href="#status">Status</a></li>
 <li class="lv2"><a href="#why-this-module-exists">Why this module exists</a></li>
 <li class="lv2"><a href="#what-the-presenter-is-worth-sharing-for">What the presenter is worth sharing for</a></li>
+<li class="lv2"><a href="#the-render-resolution-is-not-the-surface-resolution">The render resolution is not the surface resolution</a></li>
 <li class="lv2"><a href="#inputaccumulator-imports-nothing">InputAccumulator imports nothing</a></li>
 <li class="lv2"><a href="#files">Files</a></li>
 </ul></details></aside>
 <main id="doc">
-<p class="crumb"><span class="tag">Modules</span><span class="sep">/</span><code>gdxshared/README.md</code><span class="sep">/</span>4 min read</p>
+<p class="crumb"><span class="tag">Modules</span><span class="sep">/</span><code>gdxshared/README.md</code><span class="sep">/</span>5 min read</p>
 <h1 id="gdxshared--the-libgdx-code-that-is-not-platform-specific"><code>:gdxshared</code> — the libGDX code that is not platform-specific<a class="anchor" href="#gdxshared--the-libgdx-code-that-is-not-platform-specific" aria-label="Permalink">#</a></h1>
 <blockquote>
 <p>Both launchers use libGDX. Neither of them should have to write the framebuffer
@@ -148,6 +150,27 @@ explicit flip is the bug, not the fix.</strong></p>
 <p>Every one of those is identical on a phone. A second copy would be a second
 place for them to drift, and drift in any of the three produces an image that is
 wrong in a way that looks like a renderer bug rather than an upload bug.</p>
+<h2 id="the-render-resolution-is-not-the-surface-resolution">The render resolution is not the surface resolution<a class="anchor" href="#the-render-resolution-is-not-the-surface-resolution" aria-label="Permalink">#</a></h2>
+<p>The quad above is a <strong>fullscreen</strong> quad — it covers the viewport whatever the
+texture measures — so a smaller framebuffer is upscaled by the GPU for free.
+<code>RenderMode</code> is the seam that uses that: the surface reports its own size, and
+<code>SoftwareRenderPort.resize</code> is given a scaled one.</p>
+<p>It matters because a software rasterizer's cost is per pixel and a display panel
+is not a budget. A phone handed the panel's native 2400x1080 rasterized 2.59
+megapixels per frame; <code>480P</code> renders 1067x480 instead, and on the
+<code>OpenFPS_API36</code> emulator that took the same scene from <strong>262 ms to 91 ms</strong> and
+the platform frame rate from 22 to 41 fps. The remaining floor is
+resolution-independent — 7,844 triangles transformed and clipped per pass, and
+eight publish/join boundaries — which is why 5.4x fewer pixels buys 2.9x rather
+than 5.4x.</p>
+<p>Three modes, cycled from the settings screen and changeable mid-session:
+<code>480P</code> (the default on <strong>both</strong> platforms), <code>720P</code>, and <code>NATIVE</code>. A mode names
+the <strong>short</strong> edge and is a <strong>ceiling</strong>: a window already smaller than the mode
+is left alone, because rasterizing 480 rows into a 320-row window would be
+slower and blurrier at once.</p>
+<p>The UI, the touch pad and the debug counter are drawn separately at the surface
+size and stay sharp — that is the payoff of scaling the world alone rather than
+the whole framebuffer.</p>
 <h2 id="inputaccumulator-imports-nothing"><code>InputAccumulator</code> imports nothing<a class="anchor" href="#inputaccumulator-imports-nothing" aria-label="Permalink">#</a></h2>
 <p>It is in this module because both input ports use it, not because it needs
 libGDX — it does not import anything at all. That is deliberate: the tricky part
@@ -163,6 +186,8 @@ tell which produced a given <code>InputState</code>.</p>
 <thead><tr><th>File</th><th>What it does</th></tr></thead>
 <tbody>
 <tr><td><code>FramebufferPresenter.java</code></td><td>Uploads R_'s finished frame and draws it fullscreen</td></tr>
+<tr><td><code>RenderMode.java</code></td><td>480p / 720p / native, and the surface-to-framebuffer arithmetic</td></tr>
+<tr><td><code>RenderSettings.java</code></td><td>The switch the settings screen cycles; the presenter listens</td></tr>
 <tr><td><code>InputAccumulator.java</code></td><td>Accumulate-and-latch between platform and tic rates</td></tr>
 <tr><td><code>UiState.java</code> / <code>UiStateMachine.java</code></td><td>Menu or game, and what each permits</td></tr>
 <tr><td><code>MenuActions.java</code></td><td>What the menu can ask the application to do</td></tr>

@@ -8,15 +8,15 @@
 |---|---|
 | **State** | SHIPPING |
 | **Phase** | 4 — the match layer landed ahead of its phase, as the controller did |
-| **Tests** | 192 |
+| **Tests** | 262 |
 | **Registered** | P_ via `GameplaySubsystem` |
-| **Verified** | 2026-07-28 |
+| **Verified** | 2026-07-29 |
 
 ### The match layer
 
-`Bot`, `BotPattern`, `Match`, `MatchState` and `MatchMode` turn a room with
-bodies in it into a game. Two decisions are worth knowing before touching any
-of it:
+`Bot`, `BotPattern`, `BotRng`, `BotSkill`, `Match`, `MatchState`, `MatchStatus`,
+`MatchSummary` and `MatchMode` turn a room with bodies in it into a game. Four
+decisions are worth knowing before touching any of it:
 
 **A bot's position at tic *n* is a pure function of *n*.** Not an integration.
 It cannot drift over a long match, a peer that joins late computes the same
@@ -29,6 +29,23 @@ bot standing in the line of fire genuinely blocks the shot and takes no damage
 for it. That was worth more than the emergent cover it produces: it means
 seven opponents a second are exercising the same slab test the player's
 trigger uses.
+
+**A bot's *shooting* is random, and the randomness is `BotRng` — seeded,
+stateless, addressed by `(tic, entity, channel)`.** Read that class before
+touching anything that fires. `Math.random()`, a time-seeded `Random`,
+`System.nanoTime()` and `ThreadLocalRandom` are all forbidden on the tick path
+and would desync two lockstep peers on the first shot, silently, for minutes
+before anybody noticed. Stateless matters more than seeded: a seeded generator is
+reproducible only if drawn from in the same order the same number of times, so a
+single added `if` in the firing path would desync a build against its own
+previous version. `BotRngTest` reads the constant pool to enforce all of it.
+
+**Dying is a score, not an ending.** `MatchState.LOST` needs a `deathLimit`,
+which defaults to `Match.UNLIMITED_DEATHS`; a death respawns the player after
+`RESPAWN_DELAY_TICS` and a round ends when the room is empty. That delay is
+counted in **tics** and never in milliseconds — a wall-clock delay would elapse
+on different tics on two peers, which is the same class of desync `BotRng` exists
+to prevent arriving by a different door.
 
 **Built.** `PlayerController` — first-person look and movement, `StrictMath`
 throughout so lockstep peers stay bit-identical, pitch clamped to ±89°, eye at
@@ -59,8 +76,17 @@ walls, and every other Phase 4 item is easier once collision exists.
 
 Built and tested today:
 
-- `PlayerController` — first-person look and movement in `float`, produces the `Camera`
+- `PlayerController` — first-person look and movement in `float`, produces the
+  `Camera`; `respawnAt` puts the player back at a spawn placement
 - `PlayerInputView` — presents the HAL's `InputState` as an `I_PlayerInput`
+- `Bot` / `BotPattern` — one opponent's route, memory, cooldown and health
+- `BotRng` — **the only source of randomness the simulation may have.** Seeded,
+  stateless, addressed by `(tic, entity, channel)`
+- `BotSkill` — every number that makes the opponents dumb, plus a `MARKSMAN`
+  profile that exists so the geometry tests stay about geometry rather than dice
+- `Match` / `MatchState` — the rules, the score, the respawn, and `reset()`
+- `MatchStatus` / `MatchSummary` — the two immutable copies that cross to the
+  render thread: one per frame while a round runs, one when it ends
 - `I_GameplayPort` / `I_GameplayPortFactory` — what the core calls per tic, and
   how a launcher builds one after the HAL exists
 

@@ -111,6 +111,21 @@ required, albedo only (`docs/ASSETS.md` § 5).
 | Model | Source file | Triangles | % of budget | Verts | Texture | Extent (x·y·z) |
 |---|---|---|---|---|---|---|
 | `blaster-b.ofm` | Blaster Kit `blaster-b.glb` | **368** | 24.5% | 632 | 512×512, 10 mips | 0.16 · 0.31 · 0.42 |
+| `blaster-p.ofm` | Blaster Kit `blaster-p.glb` | **882** | 58.8% | 1,506 | 512×512, 10 mips | 0.16 · 0.37 · 0.86 |
+
+**Two blasters, and they must stay visibly different from each other.**
+`blaster-b` is the player's viewmodel — a compact orange pistol, 0.42 units
+long. `blaster-p` is what the **bots** carry: a green two-handed carbine at
+0.86, twice the length and a different colour, so the silhouette is
+distinguishable across the room. An opponent holding what looks like your own
+gun tells the player nothing.
+
+Chosen off the pack's own preview renders rather than by taking the next letter:
+several of the eighteen blasters are near-duplicates of `blaster-b` with a
+different grip, and any of those would have been a change nobody could see.
+`blaster-p` is also the **largest model in either pack** at 882 triangles — 59%
+of the per-model budget, and seven of them in the room is 6,174 triangles beside
+a scene that already submits tens of thousands.
 
 ### Level — `assets/models/level/`
 
@@ -125,14 +140,15 @@ required, albedo only (`docs/ASSETS.md` § 5).
 | `column.ofm` | Prototype Kit `column.glb` | **12** | 0.8% | 24 | 512×512, 10 mips | 0.20 · 1.00 · 0.20 |
 | `crate.ofm` | Prototype Kit `crate.glb` | **204** | 13.6% | 312 | 512×512, 10 mips | 0.50 · 0.50 · 0.50 |
 
-**Nothing is close to the cap.** The largest piece is the blaster at a quarter
-of it, and the whole level kit together is 452 triangles — under a third of
-what one model is allowed. `docs/ASSETS.md` § 2's remark that "Kenney's kits
-remain comfortably inside whatever the real budget turns out to be" is
-confirmed: across the *entire* Blaster Kit and Prototype Kit, all 187 models,
-the worst case is `blaster-p.glb` at 882 triangles. **No piece in either pack
-exceeds the 1,500 cap**, so the cap constrains imports from elsewhere and not
-this art direction.
+**Nothing is over the cap, though the bots' carbine is now the piece that comes
+closest to it.** `blaster-p` is 59% of the per-model budget, and the whole level
+kit together is 452 triangles — under a third of what one model is allowed.
+`docs/ASSETS.md` § 2's remark that "Kenney's kits remain comfortably inside
+whatever the real budget turns out to be" is confirmed: across the *entire*
+Blaster Kit and Prototype Kit, all 187 models, the worst case is `blaster-p.glb`
+at 882 triangles — which the demo now ships, so that figure is measured rather
+than surveyed. **No piece in either pack exceeds the 1,500 cap**, so the cap
+constrains imports from elsewhere and not this art direction.
 
 ### Scale — read this before placing anything
 

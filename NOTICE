@@ -177,8 +177,11 @@ contains the following.
         Source:      https://kenney.nl/assets/blaster-kit
         License:     CC0 1.0 Universal
         License URL: http://creativecommons.org/publicdomain/zero/1.0/
-        Shipped as:  assets/models/weapon/blaster-b.ofm — the first-person
-                     viewmodel.
+        Shipped as:  assets/models/weapon/blaster-b.ofm — the player's
+                     first-person viewmodel; blaster-p.ofm — the weapon the
+                     opponents carry. Two deliberately different pieces from the
+                     one pack, so a bot's silhouette cannot be mistaken for the
+                     player's own gun.
 
     Kenney Blocky Characters
         Author:      Kenney (Kenney Vleugels / kenney.nl)

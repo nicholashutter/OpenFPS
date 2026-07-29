@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Audio (S_) — Sound and Music — OpenFPS documentation</title>
-<meta name="description" content="S_ is the sound engine. Plays 3D-positioned SFX and background music.">
+<title>Audio (S_) — Sound — OpenFPS documentation</title>
+<meta name="description" content="The engine says &quot;make this noise&quot;. Everything else — device, format, file, mixer — is behind the port.">
 <link rel="stylesheet" href="site.css">
 <script>try{var t=localStorage.getItem('openfps-theme');if(t){document.documentElement.setAttribute('data-theme',t);}}catch(e){}</script>
 </head>
@@ -53,10 +53,11 @@
 <li><a href="engine-resource.html">Resource (W_)</a></li>
 <li><a href="engine-memory.html">Memory (Z_)</a></li>
 </ul></details>
-<details class="grp" data-hue="6"><summary><span class="dot"></span>Reference<span class="count">2</span></summary>
+<details class="grp" data-hue="6"><summary><span class="dot"></span>Reference<span class="count">3</span></summary>
 <ul>
 <li><a href="assets.html">Assets and licensing</a></li>
 <li><a href="demo-assets.html">Demo asset manifest</a></li>
+<li><a href="wasm.html">WebAssembly</a></li>
 </ul></details>
 </nav>
 <p class="generated">Generated from the repository's Markdown by <code>:tools:buildDocsSite</code>.</p>
@@ -64,216 +65,262 @@
 <aside class="rail"><details class="toc" id="toc" open><summary>On this page</summary>
 <ul>
 <li class="lv2"><a href="#status">Status</a></li>
-<li class="lv2"><a href="#what-lives-here-planned">What lives here (planned)</a></li>
-<li class="lv2"><a href="#what-exists-today">What exists today</a></li>
-<li class="lv2"><a href="#subsystem-layout">Subsystem layout</a></li>
-<li class="lv2"><a href="#3d-audio-math--whats-coming">3D audio math — what's coming</a></li>
-<li class="lv3"><a href="#inverse-square-distance-falloff">Inverse-square distance falloff</a></li>
-<li class="lv3"><a href="#stereo-panning">Stereo panning</a></li>
-<li class="lv3"><a href="#pitch-and-doppler">Pitch and Doppler</a></li>
-<li class="lv3"><a href="#mix-bus-limit">Mix bus limit</a></li>
-<li class="lv2"><a href="#audio-file-formats--open-deliberately">Audio file formats — OPEN, deliberately</a></li>
-<li class="lv2"><a href="#performance-constraints">Performance constraints</a></li>
-<li class="lv2"><a href="#files">Files</a></li>
-<li class="lv2"><a href="#todo-phase-6">TODO (Phase 6)</a></li>
+<li class="lv2"><a href="#what-lives-here">What lives here</a></li>
+<li class="lv2"><a href="#the-port-is-six-methods-and-that-is-the-design">The port is six methods, and that is the design</a></li>
+<li class="lv2"><a href="#where-the-sound-comes-from--the-licence-question-answered">Where the sound comes from — the licence question, answered</a></li>
+<li class="lv2"><a href="#two-pieces-of-arithmetic-worth-knowing-about">Two pieces of arithmetic worth knowing about</a></li>
+<li class="lv2"><a href="#lifecycle--who-calls-what-and-when">Lifecycle — who calls what, and when</a></li>
+<li class="lv2"><a href="#the-path-a-shot-takes">The path a shot takes</a></li>
+<li class="lv2"><a href="#what-this-is-not">What this is not</a></li>
+<li class="lv3"><a href="#the-3d-audio-that-is-not-here">The 3D audio that is not here</a></li>
+<li class="lv2"><a href="#files-and-tests">Files and tests</a></li>
 </ul></details></aside>
 <main id="doc">
-<p class="crumb"><span class="tag">Packages</span><span class="sep">/</span><code>engine/src/main/java/com/openfps/engine/audio/README.md</code><span class="sep">/</span>6 min read</p>
-<h1 id="audio-s_--sound-and-music">Audio (S_) — Sound and Music<a class="anchor" href="#audio-s_--sound-and-music" aria-label="Permalink">#</a></h1>
+<p class="crumb"><span class="tag">Packages</span><span class="sep">/</span><code>engine/src/main/java/com/openfps/engine/audio/README.md</code><span class="sep">/</span>10 min read</p>
+<h1 id="audio-s_--sound">Audio (S_) — Sound<a class="anchor" href="#audio-s_--sound" aria-label="Permalink">#</a></h1>
 <blockquote>
-<p>S_ is the sound engine. Plays 3D-positioned SFX and background music.</p>
+<p>The engine says "make this noise". Everything else — device, format, file,
+mixer — is behind the port.</p>
 </blockquote>
 <h2 id="status">Status<a class="anchor" href="#status" aria-label="Permalink">#</a></h2>
 <div class="tablewrap"><table>
 <thead><tr><th>Field</th><th>Value</th></tr></thead>
 <tbody>
-<tr><td><strong>State</strong></td><td>STUB</td></tr>
-<tr><td><strong>Phase</strong></td><td><code>PLAN.md</code> Phase 6 — planned (§ 3.4)</td></tr>
-<tr><td><strong>Tests</strong></td><td>0</td></tr>
-<tr><td><strong>Registered</strong></td><td>S_ via <code>AudioSubsystem</code>, with a <code>NullAudioPort</code> hard-coded in <code>EngineMain</code></td></tr>
-<tr><td><strong>Verified</strong></td><td>2026-07-28</td></tr>
+<tr><td><strong>State</strong></td><td>SHIPPING (one sound)</td></tr>
+<tr><td><strong>Phase</strong></td><td><code>PLAN.md</code> Phase 6 — started, deliberately narrow</td></tr>
+<tr><td><strong>Tests</strong></td><td>42 (<code>:engine</code> 39, <code>:gdxshared</code> 3 groups over 8)</td></tr>
+<tr><td><strong>Registered</strong></td><td>S_ via <code>AudioSubsystem</code>, port supplied by <code>I_AdapterFactory.getAudioPort()</code></td></tr>
+<tr><td><strong>Verified</strong></td><td>2026-07-29</td></tr>
 </tbody>
 </table></div>
-<p><strong>Built.</strong> The port and the null adapter, and nothing else. <code>AudioSubsystem</code>
-forwards only <code>onInit</code> / <code>onShutdown</code> to the port; it does not override
-<code>onEvent</code>, and no SFX or music event types exist. <strong>0 tests</strong> — there is nothing
-here yet to assert.</p>
-<p><strong>Not built.</strong> <code>SoundEngine</code>, <code>SoundEmitter</code>, <code>MusicPlayer</code>, <code>PcmLoader</code>. None
-of them exist; everything below is specification written ahead of the code.</p>
-<p><strong>Blocked on.</strong> The audio source-format question. <code>docs/ASSETS.md</code> § 8 is "No
-IWADs, ever", which kills the old plan of reading <code>DS*</code> lumps from a WAD, and
-§ 3's accepted-sources table has no audio row at all.</p>
-<p><strong>Next step.</strong> Decide the source, the shipped format and the container together
-— before <code>PcmLoader</code> is written, not while writing it.</p>
-<h2 id="what-lives-here-planned">What lives here (planned)<a class="anchor" href="#what-lives-here-planned" aria-label="Permalink">#</a></h2>
-<ul>
-<li>
-<p><code>SoundEngine</code> — main entry, processes a queue of sound events per tic</p>
-</li>
-<li>
-<p><code>SoundEmitter</code> — 3D-positioned source (openAL/OpenSL source equivalent)</p>
-</li>
-<li>
-<p><code>SoundChannel</code> — one playing sound (loudness curve, position, looping)</p>
-</li>
-<li>
-<p><code>MusicPlayer</code> — background music player (MIDI or streamed audio)</p>
-</li>
-</ul>
-<h2 id="what-exists-today">What exists today<a class="anchor" href="#what-exists-today" aria-label="Permalink">#</a></h2>
-<p>Two files and no implementation — but the subsystem is <strong>wired, not absent</strong>.
-<code>core/subsystem/impl/AudioSubsystem.java</code> registers under <code>SubsystemId.S_</code> and
-forwards <code>onInit</code> / <code>onShutdown</code> to whichever <code>I_AudioPort</code> it was given, which
-in practice is <code>NullAudioPort</code>. It handles <strong>no event types at all</strong>: there is
-no <code>PlaySfxEvent</code>, and <code>onEvent</code> is not overridden. So S_ starts and stops with
-the engine and does nothing in between, by design, until Phase 6.</p>
-<p>That matters when reading the rest of this file: every formula below is
-specification written ahead of the code. <strong>This package has 0 tests</strong>, and that
-is honest rather than an oversight — there is nothing here yet to assert.</p>
-<h2 id="subsystem-layout">Subsystem layout<a class="anchor" href="#subsystem-layout" aria-label="Permalink">#</a></h2>
+<p><strong>Built.</strong> <code>I_AudioPort</code> and <code>SoundId</code>; <code>AudioVolume</code> (the clamp); <code>BlasterSound</code>
+and <code>WavAudio</code> (synthesis and container); <code>NullAudioPort</code> (silent, recording);
+<code>GdxAudioPort</code> in <code>:gdxshared</code> (real, lazy, degrades). The weapon fires audibly
+in the demo on desktop and Android, from <code>DemoGameplayPort.fireIfRequested</code>.</p>
+<p><strong>Not built.</strong> Positional audio, music, a mixer, a voice limit, <code>SoundEngine</code>,
+<code>SoundEmitter</code>, <code>MusicPlayer</code>, <code>PcmLoader</code>. None of it exists and none of it is
+half-started. See "What this is not".</p>
+<p><strong>Blocked on.</strong> Nothing. The source-format question that used to block this
+package is settled <em>for the demo</em> by generating the sound (§ "Where the sound
+comes from"); it remains genuinely open for a real sound bank, and that is
+recorded rather than pretended away.</p>
+<p><strong>Next step.</strong> Nothing is queued. The next honest piece of work is a second
+sound — a hit confirmation or a bot's shot — because one sound cannot tell you
+whether the port's shape is right.</p>
+<h2 id="what-lives-here">What lives here<a class="anchor" href="#what-lives-here" aria-label="Permalink">#</a></h2>
 <div class="code"><pre><code>audio/
 ├── port/
-│   └── I_AudioPort.java   interface — called by core per tic
+│   ├── I_AudioPort.java    the contract: init, shutdown, play, stopAll,
+│   │                       setMasterVolume, masterVolume, isAudible
+│   └── SoundId.java        the closed set of sounds — one, today
+├── synth/
+│   ├── BlasterSound.java   generates the weapon sound as 16-bit PCM
+│   └── WavAudio.java       wraps PCM in a RIFF/WAVE container
+├── AudioVolume.java        the one definition of a legal volume
 └── adapter/
-    └── NullAudioPort.java stub
+    └── NullAudioPort.java  silent, and counts what it was asked to play
 </code></pre></div>
-<h2 id="3d-audio-math--whats-coming">3D audio math — what's coming<a class="anchor" href="#3d-audio-math--whats-coming" aria-label="Permalink">#</a></h2>
-<h3 id="inverse-square-distance-falloff">Inverse-square distance falloff<a class="anchor" href="#inverse-square-distance-falloff" aria-label="Permalink">#</a></h3>
-<p>Sound loudness falls off as <code>1 / r²</code> (r = distance from source to listener).
-To prevent loudness from blowing up at r=0, we clamp the minimum distance:</p>
-<div class="code"><pre><code>loudness = 1 / max(MIN_DISTANCE, distance²) * MAX_LOUDNESS
+<p>The real backend is <strong>not here</strong>, and cannot be: it needs <code>Gdx.audio</code>, and
+<code>:engine</code> imports no libGDX. <code>GdxAudioPort</code> lives in <code>:gdxshared</code> and is wired in
+by <code>GdxAdapterFactory</code> (<code>:desktop</code>) and <code>AndroidAdapterFactory</code> (<code>:android</code>).
+Same rule, and the same reason, as the window and input ports —
+<code>hal/README.md</code> § "Where the window and input actually live".</p>
+<h2 id="the-port-is-six-methods-and-that-is-the-design">The port is six methods, and that is the design<a class="anchor" href="#the-port-is-six-methods-and-that-is-the-design" aria-label="Permalink">#</a></h2>
+<div class="code" data-lang="java"><pre><code>void init();
+void shutdown();
+void play(SoundId sound);
+void stopAll();
+void setMasterVolume(float volume);
+float masterVolume();
+boolean isAudible();
 </code></pre></div>
-<p>For practical purposes, game audio often uses a <strong>linear</strong> falloff between
-MIN_DISTANCE and MAX_DISTANCE, and 1/r² outside that range. The transition
-point is a tuning knob.</p>
-<p><strong>Source — OpenAL 1.1 specification, section 5.2 ("Distance Attenuation")</strong>:
-https://www.openal.org/documentation/openal-1.1-specification.pdf</p>
-<p><strong>Source — "Game Audio Programming" — Guy Somberg</strong>:
-https://gameaudioprogramming.com/</p>
-<h3 id="stereo-panning">Stereo panning<a class="anchor" href="#stereo-panning" aria-label="Permalink">#</a></h3>
-<p>Panning (left/right balance) is computed from the angle between the source-to-listener
-vector and the listener's forward direction:</p>
-<div class="code"><pre><code>dot = sourceDir · listenerForward
-angle = acos(dot)            // 0 = directly in front, π = directly behind
-pan = sin(angle)             // [-1, 1], 0 = centered
-</code></pre></div>
-<p>The sign of the cross product determines left vs. right.</p>
-<p><strong>Source — "3D Audio for Games" — Dyon Dutil, DSP Dimension</strong>:
-https://www.dspdimension.com/</p>
-<h3 id="pitch-and-doppler">Pitch and Doppler<a class="anchor" href="#pitch-and-doppler" aria-label="Permalink">#</a></h3>
-<p>The Doppler effect for moving sources:</p>
-<div class="code"><pre><code>f_observed = f_source * (c + v_listener) / (c + v_source)
-</code></pre></div>
-<p>Where <code>c</code> is the speed of sound (~343 m/s). For game purposes we typically
-clamp the observed frequency to <code>[0.5, 2.0] × f_source</code> to avoid extreme
-pitches.</p>
-<p><strong>Source — "Doppler Effect" — Wikipedia</strong>:
-https://en.wikipedia.org/wiki/Doppler_effect</p>
-<p><strong>Source — "Real-time 3D Audio for Interactive Games" — IRCAM, 2019</strong>:
-https://forum.ircam.fr/</p>
-<h3 id="mix-bus-limit">Mix bus limit<a class="anchor" href="#mix-bus-limit" aria-label="Permalink">#</a></h3>
-<p><strong>The target is 32 simultaneous voices</strong>, with lowest-priority voices culled
-above that.</p>
-<p>The 8 that appears in DOOM-derived writing is the original SoundBlaster's
-practical limit — a 1993 hardware constraint, not one we inherit. Modern
-hardware handles hundreds, and a software mixer's cost here is a per-sample
-add per voice, so 32 is chosen as the number a mix loop can carry without
-thinking about it rather than as a measured ceiling. <strong>Nothing is implemented,
-so treat 32 as an intent; there is no constant to read and no benchmark behind
-it.</strong> If it ever turns out to be wrong it will be wrong in the cheap direction.</p>
-<p>Priority is computed as:</p>
-<div class="code"><pre><code>priority = (distance_penalty) * (volume_boost) * (recency_penalty)
-</code></pre></div>
-<p>Distance penalty: louder = higher priority. Recency: recently-triggered sounds
-stay slightly prioritized so they don't get culled mid-playback.</p>
-<h2 id="audio-file-formats--open-deliberately">Audio file formats — OPEN, deliberately<a class="anchor" href="#audio-file-formats--open-deliberately" aria-label="Permalink">#</a></h2>
-<p><strong>This is not decided, and the previous version of this document decided it by
-accident.</strong> It described SFX as raw 8-bit PCM in WAD lumps named <code>DS*</code>
-(<code>DSPISTOL</code>, <code>DSPLDIE</code>) and a <code>PcmLoader</code> that reads them. That cannot be right
-as written:</p>
+<p><strong>What it replaced.</strong> Until 2026-07-29 this interface was
+<code>playSfx(int soundId, int x, int y, int z)</code> and <code>playMusic(String lumpName)</code>,
+under eighty lines of inverse-square attenuation, panning and Doppler formulae —
+none of it implemented. Both signatures were wrong in ways that would have had to
+be undone before anything could use them:</p>
 <ul>
 <li>
-<p><code>docs/ASSETS.md</code> § 8 trap 7 is <strong>"No IWADs, ever."</strong> The project ships no id
-Software content, so there are no <code>DS*</code> lumps to read.</p>
+<p><strong>The position arguments presumed a mixer that does not exist.</strong> Neither
+libGDX <code>Sound</code> nor Android <code>SoundPool</code> takes a world position; they take a
+volume and a pan. Every adapter would therefore have carried its own copy of a
+listener transform — duplicated, untested arithmetic in exactly the place a
+port exists to prevent it.</p>
 </li>
 <li>
-<p>The WAD subsystem itself has no art left to read at all — see
-<code>render/README.md</code> § 11(b), where its remaining role is explicitly left to the
-user. Asserting that audio arrives through it would be settling that question
-from the wrong document.</p>
-</li>
-<li>
-<p><code>docs/ASSETS.md</code> § 3's accepted-sources table covers models and textures only.
-It has no row for audio, and its per-file-licensing note about Freesound is
-the only place sound is mentioned at all.</p>
+<p><strong><code>playMusic(String lumpName)</code> named a WAD lump.</strong> <code>docs/ASSETS.md</code> § 8 is
+"No IWADs, ever". A parameter named after a container the project has ruled
+out is worse than no method at all.</p>
 </li>
 </ul>
-<p>So this is the <strong>same family of question as the resource-package one</strong>, and it
-gets the same treatment: recorded, not answered. Three things have to be settled
-together, and none of them is:</p>
+<p>The formulae are not deleted, they are relocated: see "The 3D audio that is not
+here" below, which is now honestly labelled as a future extension rather than as
+a specification the code is failing to meet.</p>
+<p><strong>The contract every implementation owes</strong> is on <code>I_AudioPort</code> itself and is
+worth repeating in one line: *nothing throws, <code>play</code> is callable from any thread,
+<code>play</code> never blocks, volume is clamped rather than rejected, and <code>init</code> /
+<code>shutdown</code> are idempotent.* CI has no sound card, and a game that dies because
+the speakers are missing is worse than a silent one.</p>
+<h2 id="where-the-sound-comes-from--the-licence-question-answered">Where the sound comes from — the licence question, answered<a class="anchor" href="#where-the-sound-comes-from--the-licence-question-answered" aria-label="Permalink">#</a></h2>
+<p><strong>Nothing is downloaded, nothing is committed, nothing is staged.</strong> The blaster
+is arithmetic: a 900 Hz → 120 Hz exponential pitch sweep with a fast exponential
+decay, 180 ms of 22.05 kHz mono, generated by <code>BlasterSound</code> into a <code>short[]</code> and
+wrapped by <code>WavAudio</code> into a 8 KB WAVE file in a cache directory the first time a
+shot is fired.</p>
+<p>That is a deliberate answer to the question this README used to be blocked on.
+The three things that had to be settled together —</p>
 <ol>
 <li>
-<p><strong>Where sound comes from</strong> — which CC0 sources satisfy <code>docs/ASSETS.md</code> § 3,
-given that its accepted list was written for art.</p>
+<p><strong>which CC0 sources satisfy <code>docs/ASSETS.md</code> § 3</strong>, whose accepted-sources
+table was written for art and has no audio row;</p>
 </li>
 <li>
-<p><strong>What the shipped format is</strong> — the project's pattern (<code>docs/ASSETS.md</code> § 4)
-is to preprocess at build time into a flat binary the engine reads with
-near-zero parsing. Audio has no equivalent of <code>ModelFormat</code> yet, and whether
-it needs one or can just ship decoded PCM is unanswered.</p>
+<p><strong>what the shipped format is</strong>, given the project's preprocess-to-flat-binary
+pattern (§ 4) and audio's lack of a <code>ModelFormat</code> equivalent;</p>
 </li>
 <li>
-<p><strong>What container carries it</strong> — the resource package, a zip payload, or loose
-files. Blocked on § 11(b).</p>
+<p><strong>what container carries it</strong>, which is partly blocked on
+<code>render/README.md</code> § 11(b)</p>
 </li>
 </ol>
-<p>Decide these before writing <code>PcmLoader</code>, and record the decision here and in
-<code>docs/ASSETS.md</code> rather than in code.</p>
-<p><strong>Music</strong> is not decided either. Original DOOM used MIDI; OGG is the obvious
-modern choice and would mean a decoder the project does not have and cannot add
-casually (<code>AGENTS.md</code> rules out new runtime dependencies). Streaming raw PCM
-costs disk instead. No preference is recorded.</p>
-<p><strong>Source — DOOM sound format details</strong>, retained as background on the 1993
-format only, not as a statement of what this engine reads:
-https://doom.fandom.com/wiki/Sound</p>
-<h2 id="performance-constraints">Performance constraints<a class="anchor" href="#performance-constraints" aria-label="Permalink">#</a></h2>
+<p>— are the right questions for a <em>sound bank</em>, and a blaster noise is not one.
+Generating it removes all three: no third-party content, so nothing to add to
+<code>NOTICE</code> beyond a statement that there is nothing to add; no binary in git, so
+the "ships no game data in source form" rule is untouched; no staging step, so a
+fresh clone with no <code>assets/</code> directory still makes a noise.</p>
+<p><strong>The three questions stay open</strong> for the day a real sound bank arrives. Nothing
+above pre-empts them — it declines to answer them, which is different.</p>
+<p><strong>Why a file at all, having generated the samples.</strong> Because the backends will
+not take samples: libGDX's <code>Audio.newSound</code> accepts a <code>FileHandle</code> and nothing
+else. The one API that does take raw PCM, <code>newAudioDevice</code>, blocks the calling
+thread for the duration of the sound — and the caller is the game loop thread, so
+a 180 ms block would cost eleven tics per shot. A 44-byte header and a temp file
+is the cheap way out. Uncompressed PCM rather than OGG because a decoder is a
+third-party dependency (<code>AGENTS.md</code>) and the payload is 8 KB.</p>
+<h2 id="two-pieces-of-arithmetic-worth-knowing-about">Two pieces of arithmetic worth knowing about<a class="anchor" href="#two-pieces-of-arithmetic-worth-knowing-about" aria-label="Permalink">#</a></h2>
+<p>Both are in <code>BlasterSound</code>, both are tested, and both are the kind of thing that
+sounds like a broken synthesiser rather than like a mistake.</p>
+<p><strong>The sweep integrates frequency; it does not substitute it.</strong> The intuitive line
+is <code>sin(2π · f(t) · t)</code>, and it is wrong: instantaneous frequency is the
+<em>derivative</em> of phase, so a time-varying <code>f</code> inside that expression makes the
+actual frequency <code>f(t) + t·f'(t)</code>. For a falling sweep the second term is
+negative and large, and the pitch dives past zero and runs backwards. The fix is
+to accumulate — <code>phase += 2π·f(i)/rate</code> per sample.</p>
+<p><strong>Both ends of the envelope are forced to zero.</strong> A waveform that starts or stops
+mid-cycle is a step discontinuity; a step contains every frequency and is heard
+as a click on top of the sound. The 2 ms attack and 8 ms release ramps exist for
+that and nothing else — the decay alone leaves the sound at ~8% of peak at
+180 ms, which is a very audible cut.</p>
+<p>And one in <code>AudioVolume</code>: <strong>NaN is checked before the range, not folded into
+it.</strong> <code>Math.max(0, Math.min(1, x))</code> propagates NaN, because NaN fails every
+comparison. A NaN gain silences the source on OpenAL and has been observed to
+play at full scale on <code>SoundPool</code> — the same "clamped" value inaudible on one
+platform and deafening on the other.</p>
+<h2 id="lifecycle--who-calls-what-and-when">Lifecycle — who calls what, and when<a class="anchor" href="#lifecycle--who-calls-what-and-when" aria-label="Permalink">#</a></h2>
+<p><code>AudioSubsystem</code> owns <code>init()</code> and <code>shutdown()</code>, and <strong>no adapter factory calls
+either</strong>. That is stated on <code>I_AdapterFactory.getAudioPort()</code> and matters because
+the input port already taught the lesson: initialising in both places runs both
+twice, which is harmless (the contract makes them idempotent) and shows up as a
+duplicated line in a log, which is how you find out something is happening twice.</p>
+<p><strong>Everything in <code>GdxAudioPort</code> is lazy, and that is not an optimisation.</strong>
+<code>Gdx.audio</code> is null when <code>init()</code> runs. On desktop the libGDX application does
+not exist until <code>GdxWindowPort.runFrameLoop</code> constructs <code>Lwjgl3Application</code>, and
+that is long after <code>EngineMain.start</code> has brought the subsystems up; on Android
+the equivalent is <code>initialize()</code>, called after the engine starts. An
+implementation that loaded its sounds in <code>init()</code> would fail on every run,
+permanently and silently, and would look like a broken sound file rather than a
+broken ordering. So the sound is baked on <strong>first play</strong> — by which time a shot
+has been fired, which means a window exists, which means a device does.</p>
+<p>A failed bake is <strong>not latched</strong>: "no device yet" is a temporary condition, and
+disabling audio forever over it would be the same permanent-silent-failure bug in
+a different place. The warning is logged once so a genuinely broken setup does
+not scroll the console.</p>
+<h2 id="the-path-a-shot-takes">The path a shot takes<a class="anchor" href="#the-path-a-shot-takes" aria-label="Permalink">#</a></h2>
+<div class="code"><pre><code>InputState.fire()                       the trigger, latched once per tic
+  DemoGameplayPort.fireIfRequested      guards, then the cooldown
+    audio.play(SoundId.WEAPON_FIRE)     ← the port, never a libGDX type
+      GdxAudioPort.play                 volume applied, non-blocking
+        bake()  (first time only)       generate PCM → WAV → temp file → Sound
+        Sound.play(volume)              OpenAL / SoundPool
+</code></pre></div>
+<p>Three properties of where that <code>play</code> call sits, all of them tested:</p>
 <ul>
 <li>
-<p><strong>32 voices</strong> target, with lowest-priority culling above it (see the mix bus
-section — this is an intent, not a measurement).</p>
+<p><strong>After the cooldown</strong>, so a held trigger makes five sounds a second and not
+sixty. Before it, the blaster would be a buzz whose pitch depended on <code>--fps</code>.</p>
 </li>
 <li>
-<p><strong>No locks in the audio thread.</strong> All parameter updates are atomic.</p>
+<p><strong>Before the hitscan resolves, and unconditionally</strong>, so a miss sounds exactly
+like a hit. Same rule as the tracer: a sound that only played when you
+connected would tell the player the outcome before the game does.</p>
 </li>
 <li>
-<p><strong>Pre-allocated buffers</strong> for every sound, no runtime allocation. The mixing
-buffers are <code>float[]</code>, allocated once at init, which is the shape
-<code>STYLE.md</code> § 13.4 sanctions for direct allocation — they will not go through
-<code>I_MemoryPort</code>. They are not a named site yet because they do not exist yet;
-add them to that table when they do.</p>
+<p><strong>Through the port</strong>, so on a headless run it is a counter increment — which is
+why CI can assert the cadence without a sound card.</p>
 </li>
 </ul>
-<h2 id="files">Files<a class="anchor" href="#files" aria-label="Permalink">#</a></h2>
+<h2 id="what-this-is-not">What this is not<a class="anchor" href="#what-this-is-not" aria-label="Permalink">#</a></h2>
+<p><strong>There is no mixer, no voice limit, no positional audio and no music.</strong> Not
+"not yet, see the formulae below" — not at all. The port cannot express a
+position, <code>SoundId</code> carries no volume or pitch, and nothing here allocates a
+mixing buffer.</p>
+<p>That is a narrowing, and it was chosen. A 32-voice mixer with distance
+attenuation is a real piece of work, and building the <em>interface</em> for one before
+building the thing is how this package spent several phases as eighty lines of
+formulae and a stub that did nothing. One sound that actually plays is worth more
+than a specification for a hundred that do not.</p>
+<h3 id="the-3d-audio-that-is-not-here">The 3D audio that is not here<a class="anchor" href="#the-3d-audio-that-is-not-here" aria-label="Permalink">#</a></h3>
+<p>Kept as a reading list for whoever builds it, explicitly <strong>not</strong> as a description
+of this code:</p>
 <ul>
 <li>
-<p><code>port/I_AudioPort.java</code></p>
+<p><strong>Inverse-square distance falloff.</strong> <code>loudness = 1 / max(MIN_DIST², distance²)</code>,
+usually softened to linear inside a near radius. OpenAL 1.1 specification § 5.2
+"Distance Attenuation":
+https://www.openal.org/documentation/openal-1.1-specification.pdf</p>
 </li>
 <li>
-<p><code>adapter/NullAudioPort.java</code></p>
+<p><strong>Stereo panning</strong> from the angle between the source-to-listener vector and the
+listener's forward: <code>pan = sin(acos(sourceDir · forward))</code>, signed by the cross
+product. "3D Audio for Games", DSP Dimension: https://www.dspdimension.com/</p>
+</li>
+<li>
+<p><strong>Doppler</strong> for moving sources: <code>f' = f · (c + vListener) / (c + vSource)</code>,
+<code>c ≈ 343 m/s</code>, clamped to <code>[0.5f, 2f]</code>.
+https://en.wikipedia.org/wiki/Doppler_effect</p>
+</li>
+<li>
+<p><strong>Voice priority</strong> for culling above a voice limit, roughly
+<code>distance × volume × recency</code>.</p>
 </li>
 </ul>
-<p><strong>0 tests.</strong> Nothing here is implemented; see "What exists today".</p>
-<h2 id="todo-phase-6">TODO (Phase 6)<a class="anchor" href="#todo-phase-6" aria-label="Permalink">#</a></h2>
-<ul>
-<li><strong>Settle the source-format question above</strong> — it blocks the loader, and
-partly blocks itself on <code>render/README.md</code> § 11(b)</li>
-<li><code>SoundEngine</code> — voice allocation, mix loop</li>
-<li><code>SoundEmitter</code> — 3D position + velocity</li>
-<li><code>MusicPlayer</code> — streaming, format undecided</li>
-<li><code>PcmLoader</code> — decode SFX, once there is a decided format for it to read</li>
-<li>Event types for S_ — <code>AudioSubsystem</code> handles none, so nothing can reach the
-port between init and shutdown</li>
-</ul>
+<p>When these arrive they arrive as a <strong>listener pose plus a source position</strong> — not
+as three ints whose frame of reference nobody wrote down, which is what the old
+<code>playSfx(int, int, int, int)</code> was.</p>
+<p>Whichever way it goes, one property is worth preserving: <strong>audio is not
+lockstep</strong>. Nothing here has to be identical between two peers, because a sound
+is a consequence of a tic and no tic reads one back. That is what permits float
+volumes, platform mixers and a frame of latency — none of which the gameplay
+state machine could tolerate. <code>BlasterSound</code> therefore uses <code>Math</code>, not
+<code>StrictMath</code>, unlike <code>Hitscan</code>.</p>
+<p><strong>Music</strong> is still undecided and still unstarted. MIDI is what 1993 did, OGG
+would mean a decoder, streaming raw PCM costs disk. No preference is recorded and
+no interface pretends otherwise.</p>
+<h2 id="files-and-tests">Files and tests<a class="anchor" href="#files-and-tests" aria-label="Permalink">#</a></h2>
+<div class="tablewrap"><table>
+<thead><tr><th>File</th><th>Tests</th></tr></thead>
+<tbody>
+<tr><td><code>port/I_AudioPort.java</code></td><td>contract exercised via <code>NullAudioPortTest</code></td></tr>
+<tr><td><code>port/SoundId.java</code></td><td>—</td></tr>
+<tr><td><code>AudioVolume.java</code></td><td><code>AudioVolumeTest</code> — 8, including the NaN one-liner trap</td></tr>
+<tr><td><code>synth/BlasterSound.java</code></td><td><code>BlasterSoundTest</code> — 12</td></tr>
+<tr><td><code>synth/WavAudio.java</code></td><td><code>WavAudioTest</code> — 12, header read back independently</td></tr>
+<tr><td><code>adapter/NullAudioPort.java</code></td><td><code>NullAudioPortTest</code> — 10, incl. concurrent play</td></tr>
+<tr><td><code>:gdxshared</code> <code>GdxAudioPort.java</code></td><td><code>GdxAudioPortTest</code> — 8, all of them the no-device path</td></tr>
+<tr><td><code>demo/DemoGameplayPort</code></td><td><code>DemoGameplayPortAudioTest</code> — 9, cadence and silence</td></tr>
+</tbody>
+</table></div>
+<p>No test needs an audio device, and none may ever be added that does.</p>
 <footer class="pagefoot"><p>Source: <a class="ext" rel="noopener noreferrer" target="_blank" href="https://github.com/nicholashutter/OpenFPS/blob/main/engine/src/main/java/com/openfps/engine/audio/README.md">engine/src/main/java/com/openfps/engine/audio/README.md</a>. This page is generated — edit the Markdown, not the HTML.</p></footer>
 </main>
 </div>

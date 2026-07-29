@@ -53,10 +53,11 @@
 <li><a href="engine-resource.html">Resource (W_)</a></li>
 <li><a href="engine-memory.html">Memory (Z_)</a></li>
 </ul></details>
-<details class="grp" data-hue="6"><summary><span class="dot"></span>Reference<span class="count">2</span></summary>
+<details class="grp" data-hue="6"><summary><span class="dot"></span>Reference<span class="count">3</span></summary>
 <ul>
 <li><a href="assets.html">Assets and licensing</a></li>
 <li><a href="demo-assets.html">Demo asset manifest</a></li>
+<li><a href="wasm.html">WebAssembly</a></li>
 </ul></details>
 </nav>
 <p class="generated">Generated from the repository's Markdown by <code>:tools:buildDocsSite</code>.</p>
@@ -76,7 +77,7 @@
 <li class="lv2"><a href="#files">Files</a></li>
 </ul></details></aside>
 <main id="doc">
-<p class="crumb"><span class="tag">Modules</span><span class="sep">/</span><code>android/README.md</code><span class="sep">/</span>10 min read</p>
+<p class="crumb"><span class="tag">Modules</span><span class="sep">/</span><code>android/README.md</code><span class="sep">/</span>11 min read</p>
 <h1 id="android--the-android-launcher"><code>:android</code> — the Android launcher<a class="anchor" href="#android--the-android-launcher" aria-label="Permalink">#</a></h1>
 <blockquote>
 <p>libGDX's Android backend, the software rasterizer on a GLSurfaceView, a
@@ -106,9 +107,10 @@ presented as a fullscreen quad, showing the real Kenney room read out of the
 APK's own assets — <code>source=KENNEY_KIT</code>, 301 world instances, GLES 3.0.</p>
 </li>
 <li>
-<p><strong>The touch controls drive the engine.</strong> A floating thumbstick on the left
-half walks; a drag on the right half turns; the fire, jump and leave buttons
-work; the system back key leaves the match.</p>
+<p><strong>The touch controls drive the engine.</strong> A drawn control pad — a stick with a
+thumb in it and three glyphed buttons — walks, turns, fires, jumps and leaves;
+the stick still anchors wherever the left thumb lands; the system back key
+leaves the match.</p>
 </li>
 <li>
 <p><strong>Combat works end to end</strong>: <code>HIT entity 2</code>, <code>HIT entity 2</code>,
@@ -264,19 +266,33 @@ through <code>slf4j-android</code>, which tags by logger name and <strong>trunca
 <code>-s OpenFPS:V</code> filter to see them.</p>
 <h2 id="the-controls">The controls<a class="anchor" href="#the-controls" aria-label="Permalink">#</a></h2>
 <div class="tablewrap"><table>
-<thead><tr><th>Control</th><th>Where</th></tr></thead>
+<thead><tr><th>Control</th><th>Where</th><th>Drawn as</th></tr></thead>
 <tbody>
-<tr><td>Move</td><td>anywhere on the left half — the stick appears under your thumb</td></tr>
-<tr><td>Look</td><td>anywhere on the right half — drag to turn</td></tr>
-<tr><td>Fire</td><td>the large disc, bottom right</td></tr>
-<tr><td>Jump</td><td>the smaller disc, inboard of fire</td></tr>
-<tr><td>Leave the match</td><td>the disc top right, or the system back key</td></tr>
+<tr><td>Move</td><td>anywhere on the left half — the stick appears under your thumb</td><td>a ring with a thumb in it, resting at the lower left</td></tr>
+<tr><td>Look</td><td>anywhere on the right half — drag to turn</td><td>nothing; the whole half is the control</td></tr>
+<tr><td>Fire</td><td>the large button, bottom right</td><td>warm orange, crosshair</td></tr>
+<tr><td>Jump</td><td>the smaller button, inboard of fire</td><td>green, chevron over a bar</td></tr>
+<tr><td>Leave the match</td><td>the button top right, or the system back key</td><td>grey, cross</td></tr>
 </tbody>
 </table></div>
-<p>The stick <strong>floats</strong>: it appears wherever the left thumb lands rather than at a
+<p>The stick <strong>floats</strong>: it anchors wherever the left thumb lands rather than at a
 painted spot. A fixed stick makes the player look at their thumb to find it, and
 on a screen they are also trying to aim at, that is the difference between a
-control and an obstacle.</p>
+control and an obstacle. It is nevertheless <em>drawn</em> at a resting place while
+nobody is holding it — <code>TouchLayout.stickHomeX()</code>/<code>stickHomeY()</code> — because an
+invisible control is indistinguishable from a broken one, and the first thing a
+new player does is look for the buttons. Touching down anywhere in the left half
+still works, and still anchors under the thumb rather than at the resting place.</p>
+<p>Every button is four sprites: a dark halo, a tinted fill, a near-white rim at
+exactly the radius the finger is tested against, and a glyph. The halo is what
+makes a translucent HUD readable over a brightly lit wall; the rim is what makes
+the edge you aim at the edge that works. Holding a button grows it by
+<code>TouchLayout.PRESSED_SCALE</code> and takes the fill, rim and glyph to full opacity —
+a phone gives no click, so a press that changes nothing on screen cannot be told
+from a miss. The growth is drawn only: the hit radius never moves, or a held
+button would start stealing its neighbour from a second finger.</p>
+<p>All of it — disc, ring and the three glyphs — is generated in code at the first
+resize. No PNGs, no density variants, nothing to go missing from an APK.</p>
 <p>There is no sprint, deliberately. Screen space beside the fire button is the
 scarcest thing on a phone, and a modifier held while aiming and firing wants a
 thumb nobody has. <code>AndroidInputPort.init()</code> says so in logcat rather than
@@ -313,11 +329,12 @@ so it fits the surface it is given</p>
 <p><code>AndroidInputPort.java</code> — touch events → <code>InputState</code>, one finger at a time</p>
 </li>
 <li>
-<p><code>TouchLayout.java</code> — where the controls are and how far the stick is pushed.
-<strong>Imports nothing</strong>, so all of it is unit-tested</p>
+<p><code>TouchLayout.java</code> — where the controls are, how big they are drawn, and how
+far the stick is pushed. <strong>Imports nothing</strong>, so all of it is unit-tested</p>
 </li>
 <li>
-<p><code>TouchOverlay.java</code> — draws the controls, from one generated disc texture</p>
+<p><code>TouchOverlay.java</code> — draws the control pad from generated discs, rings and
+glyphs; owns no geometry of its own</p>
 </li>
 <li>
 <p><code>AndroidBindings.java</code> — the default touch scheme; the only file here that
@@ -332,11 +349,15 @@ names a control</p>
 <code>UserProfileDao</code> and <code>OpenFpsDatabase</code></p>
 </li>
 </ul>
-<p><strong>123 tests in this module</strong> — all plain JVM unit tests, no Robolectric and no
+<p><strong>142 tests in this module</strong> — all plain JVM unit tests, no Robolectric and no
 instrumentation. They cover what can honestly be covered off a device: the whole
 touch-gesture layer (which control a pixel belongs to, stick deflection and its
-dead zone, two fingers not interfering, a tap shorter than one tic still firing,
-a cancelled touch releasing), the UI transitions and the match gate, the menu's
+dead zone, the drawn thumb clamped to its ring, the resting stick clearing the
+buttons on the smallest screen still in use, no two buttons touching even at
+their held size, every button reporting itself held, and every button having a
+glyph on it, two fingers not interfering, a tap shorter than one tic still
+firing, a cancelled touch releasing), the UI transitions and the match gate,
+the menu's
 fit rule, the frame-callback fan-out and its load-bearing ordering, the entity
 mapping in both directions, the window port's close-flag and re-arm semantics,
 the adapter factory's delegation and its profile-closed-before-delegate

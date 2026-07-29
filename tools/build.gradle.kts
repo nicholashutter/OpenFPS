@@ -251,7 +251,13 @@ tasks.register<JavaExec>("convertModels") {
 // here rather than in Java because it is curation, not logic: changing the
 // selection should not mean recompiling a converter.
 val demoWeaponPack = "blaster-kit"
-val demoWeaponPieces = listOf("blaster-b")
+// Two blasters, and they must stay visibly different from each other: blaster-b
+// is the player's viewmodel and blaster-p is what the bots carry. b is a compact
+// orange pistol 0.42 units long; p is a green two-handed carbine at 0.86. Several
+// of the pack's eighteen blasters are near-duplicates of b with a different grip,
+// and picking one of those would have been a change nobody could see across a
+// room. Chosen off the pack's own preview renders, not by taking the next letter.
+val demoWeaponPieces = listOf("blaster-b", "blaster-p")
 val demoLevelPack = "prototype-kit"
 val demoLevelPieces = listOf(
     "floor-square",   // floor tile

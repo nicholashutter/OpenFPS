@@ -53,10 +53,11 @@
 <li><a href="engine-resource.html">Resource (W_)</a></li>
 <li><a href="engine-memory.html">Memory (Z_)</a></li>
 </ul></details>
-<details class="grp" data-hue="6" open><summary><span class="dot"></span>Reference<span class="count">2</span></summary>
+<details class="grp" data-hue="6" open><summary><span class="dot"></span>Reference<span class="count">3</span></summary>
 <ul>
 <li><a href="assets.html" class="cur" aria-current="page">Assets and licensing</a></li>
 <li><a href="demo-assets.html">Demo asset manifest</a></li>
+<li><a href="wasm.html">WebAssembly</a></li>
 </ul></details>
 </nav>
 <p class="generated">Generated from the repository's Markdown by <code>:tools:buildDocsSite</code>.</p>
@@ -84,7 +85,7 @@
 <li class="lv2"><a href="#10-history">10. History</a></li>
 </ul></details></aside>
 <main id="doc">
-<p class="crumb"><span class="tag">Reference</span><span class="sep">/</span><code>docs/ASSETS.md</code><span class="sep">/</span>20 min read</p>
+<p class="crumb"><span class="tag">Reference</span><span class="sep">/</span><code>docs/ASSETS.md</code><span class="sep">/</span>22 min read</p>
 <h1 id="game-data-and-asset-licensing">Game Data and Asset Licensing<a class="anchor" href="#game-data-and-asset-licensing" aria-label="Permalink">#</a></h1>
 <blockquote>
 <p>Policy document. What game data OpenFPS may legally ship, what technical shape it
@@ -188,8 +189,16 @@ with roughly 2× headroom inside the 10 ms budget.</p>
 <h3 id="full-resolution-and-worker-sweep--measured-2026-07-28">Full resolution and worker sweep — measured 2026-07-28<a class="anchor" href="#full-resolution-and-worker-sweep--measured-2026-07-28" aria-label="Permalink">#</a></h3>
 <p>The demo scene (294 world instances, 1777 triangles after clipping) on an Intel
 Core Ultra 7 155H (16 physical / 22 logical). p50 over 270 timed frames at 720p,
-170 at the higher resolutions. The default pool is <code>logicalProcessors / 2</code> = 11
-workers here, which sits between the 8 and 16 columns.</p>
+170 at the higher resolutions. The default pool was <code>logicalProcessors / 2</code> = 11
+workers when these rows were measured, which sits between the 8 and 16 columns.</p>
+<blockquote>
+<p><strong>This table is what retired that rule.</strong> 16 workers beat 8 by 23% on a part
+whose extra 14 logical processors are SMT siblings and E-cores — so they were
+worth collecting, and halving declined to. The default is now
+<code>logicalProcessors - 1</code> (21 here), one processor being held back for the game
+loop and the platform frame loop. <code>-Dopenfps.workers=N</code> still pins it, which
+is how this sweep was taken and how it can be retaken.</p>
+</blockquote>
 <div class="tablewrap"><table>
 <thead><tr><th>workers</th><th>0 (serial)</th><th>1</th><th>2</th><th>4</th><th>8</th><th>16</th></tr></thead>
 <tbody>
@@ -220,10 +229,12 @@ already the whole 10 ms renderer budget, and p99 was 16.1 ms — inside the
 </li>
 <li>
 <p><strong>A low-core machine cannot hit 720p60, and this is the portability risk.</strong>
-At 2 workers the frame is 16.3 ms — it misses 60 Hz outright. Under the
-<code>logicalProcessors / 2</code> rule that is any 4-thread device. A modern 8-core
-phone gets 4 workers and 8.5 ms, which holds; a 4-core one does not. The
-Android target should measure before assuming.</p>
+At 2 workers the frame is 16.3 ms — it misses 60 Hz outright. Under the old
+<code>logicalProcessors / 2</code> rule that was any 4-thread device; under
+<code>logicalProcessors - 1</code> a 4-thread device now gets 3 workers, which lands
+between the 2- and 4-worker columns instead of on the failing one. A modern
+8-core phone gets 7 workers rather than 4. Neither figure is measured on the
+device — the Android target should measure before assuming.</p>
 </li>
 </ol>
 <p>All frame-time figures in this document are <strong>p50</strong>. Reproduced independently on
@@ -519,6 +530,18 @@ structure §3 praises Kenney for is paid for once per model. Nine models is
 already a quarter of §5's 20–50 MB payload cap, so this will not survive a real
 level. The fix is a shared-texture section or an atlas-by-reference indirection
 in <code>ModelFormat</code>. Measured, not estimated — see <code>docs/DEMO_ASSETS.md</code> § 4.</p>
+</li>
+<li>
+<p><strong>Audio has no row in §3, and for now it does not need one.</strong> The demo's only
+sound — the blaster — is <em>generated at runtime</em> by
+<code>engine/audio/synth/BlasterSound</code>, not shipped: no file in git, none in the APK,
+none fetched, nothing to add to <code>NOTICE</code>. That was chosen precisely because a
+sound file would have forced three unanswered questions at once (which CC0
+audio sources satisfy §3, what the preprocessed runtime format is, and which
+container carries it — the last still partly blocked on <code>render/README.md</code>
+§11b). <strong>All three remain open</strong> for a real sound bank; generating one noise
+declines them rather than answering them. Add the §3 audio row when there is a
+second sound worth sourcing, not before. See <code>engine/audio/README.md</code>.</p>
 </li>
 </ul>
 <p>Two further open questions belong to the renderer rather than to asset policy, but

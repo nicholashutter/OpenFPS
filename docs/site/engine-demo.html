@@ -53,10 +53,11 @@
 <li><a href="engine-resource.html">Resource (W_)</a></li>
 <li><a href="engine-memory.html">Memory (Z_)</a></li>
 </ul></details>
-<details class="grp" data-hue="6"><summary><span class="dot"></span>Reference<span class="count">2</span></summary>
+<details class="grp" data-hue="6"><summary><span class="dot"></span>Reference<span class="count">3</span></summary>
 <ul>
 <li><a href="assets.html">Assets and licensing</a></li>
 <li><a href="demo-assets.html">Demo asset manifest</a></li>
+<li><a href="wasm.html">WebAssembly</a></li>
 </ul></details>
 </nav>
 <p class="generated">Generated from the repository's Markdown by <code>:tools:buildDocsSite</code>.</p>
@@ -64,6 +65,8 @@
 <aside class="rail"><details class="toc" id="toc" open><summary>On this page</summary>
 <ul>
 <li class="lv2"><a href="#status">Status</a></li>
+<li class="lv2"><a href="#the-rematch-and-why-it-is-a-reset-rather-than-a-rebuild">The rematch, and why it is a reset rather than a rebuild</a></li>
+<li class="lv2"><a href="#dying-is-a-score">Dying is a score</a></li>
 <li class="lv2"><a href="#not-a-subsystem">Not a subsystem</a></li>
 <li class="lv2"><a href="#the-only-live-i_gameplayport">The only live I_GameplayPort</a></li>
 <li class="lv2"><a href="#art--a-fresh-clone-has-none">Art — a fresh clone has none</a></li>
@@ -71,7 +74,7 @@
 <li class="lv2"><a href="#files">Files</a></li>
 </ul></details></aside>
 <main id="doc">
-<p class="crumb"><span class="tag">Packages</span><span class="sep">/</span><code>engine/src/main/java/com/openfps/engine/demo/README.md</code><span class="sep">/</span>4 min read</p>
+<p class="crumb"><span class="tag">Packages</span><span class="sep">/</span><code>engine/src/main/java/com/openfps/engine/demo/README.md</code><span class="sep">/</span>8 min read</p>
 <h1 id="demo--the-playable-first-person-scene">Demo — the playable first-person scene<a class="anchor" href="#demo--the-playable-first-person-scene" aria-label="Permalink">#</a></h1>
 <blockquote>
 <p>A room to stand in and a blaster to hold. This package is what turns the
@@ -83,22 +86,57 @@ engine's working parts into something you can walk around in.</p>
 <tbody>
 <tr><td><strong>State</strong></td><td>SHIPPING</td></tr>
 <tr><td><strong>Phase</strong></td><td>not a phase item — this is the playable demo content</td></tr>
-<tr><td><strong>Tests</strong></td><td>58</td></tr>
+<tr><td><strong>Tests</strong></td><td>79</td></tr>
 <tr><td><strong>Registered</strong></td><td>not registered — not a subsystem; it is a composition root that consumes the engine</td></tr>
-<tr><td><strong>Verified</strong></td><td>2026-07-28</td></tr>
+<tr><td><strong>Verified</strong></td><td>2026-07-29</td></tr>
 </tbody>
 </table></div>
-<p><strong>Built.</strong> <code>DemoScene</code> builds the room layout, the kit scale and the weapon pose
-once and hands back an immutable <code>Scene</code>; <code>DemoModels</code> loads the model set and
-reports honestly which of its three asset outcomes it got; <code>DemoGameplayPort</code> is
-the only live <code>I_GameplayPort</code> in the codebase, driving a <code>PlayerController</code> and
-aiming the software renderer once per tic; <code>DemoAssetException</code> refuses to start
-a demo with no floor. <code>:desktop:run</code> shows all of it in a window.</p>
+<p><strong>Built.</strong> <code>DemoScene</code> builds the room layout, the kit scale, the weapon pose and
+one blaster per bot once and hands back an immutable <code>Scene</code>; <code>DemoModels</code> loads
+the model set and reports honestly which of its three asset outcomes it got;
+<code>DemoGameplayPort</code> is the only live <code>I_GameplayPort</code> in the codebase, driving a
+<code>PlayerController</code>, aiming the software renderer once per tic, respawning the
+player and restoring the whole world for a rematch; <code>DemoAssetException</code> refuses
+to start a demo with no floor. <code>:desktop:run</code> shows all of it in a window.</p>
 <p><strong>Not built.</strong> Nothing outstanding.</p>
 <p><strong>Blocked on.</strong> Nothing.</p>
 <p><strong>Next step.</strong> This package follows the renderer. There is nothing to do here
 until the <code>render/README.md</code> polish items — the bilinear quality toggle and the
 independent internal render resolution — land.</p>
+<h2 id="the-rematch-and-why-it-is-a-reset-rather-than-a-rebuild">The rematch, and why it is a reset rather than a rebuild<a class="anchor" href="#the-rematch-and-why-it-is-a-reset-rather-than-a-rebuild" aria-label="Permalink">#</a></h2>
+<p><code>DemoGameplayPort.restartMatch()</code> is what the end screen's PLAY AGAIN button
+runs. It restores four things with four different owners, and <strong>together is the
+operative word</strong> — a reset that missed one would produce a room that was only
+mostly new:</p>
+<div class="tablewrap"><table>
+<thead><tr><th>What</th><th>Who owns it</th><th>What would go wrong</th></tr></thead>
+<tbody>
+<tr><td>bots alive, at spawn, cooldowns and memory cleared; every counter zeroed</td><td><code>Match.reset()</code></td><td>a summary that is the sum of two rounds</td></tr>
+<tr><td>position, yaw, pitch, vertical velocity</td><td><code>PlayerController.respawnAt</code></td><td>the second round starts wherever the first ended</td></tr>
+<tr><td>in-flight tracers and smoke</td><td><code>DemoEffects.clear()</code></td><td>bolts from the last round still crossing the room</td></tr>
+<tr><td><strong>the bot placements, republished</strong></td><td><code>publishBotPlacements()</code></td><td><strong>seven live, shooting, INVISIBLE opponents</strong></td></tr>
+</tbody>
+</table></div>
+<p>That last row is the one worth knowing about. A dead bot is hidden by a
+<strong>degenerate transform override held in the renderer</strong> — not by anything in the
+simulation — so reviving it in <code>Match</code> does not make it visible again. Only
+publishing its placement does. Every simulation assertion in the suite passes
+while the room looks empty, which is why <code>DemoGameplayPortTest.Rematch</code> asserts
+the transform the <em>render port</em> is holding rather than the state of the match.</p>
+<p>A rebuilt <code>Match</code> was the other candidate and is worse. <code>Scene</code> is immutable and
+a bot's model occupies an instance index fixed when the scene was built, so a
+rebuild cannot have new <code>Bot</code> objects — it would be handed the same seven, still
+dead, still where they fell. It needs a per-bot reset anyway, and all it adds is
+an object identity the render thread would have to be re-published to see.</p>
+<h2 id="dying-is-a-score">Dying is a score<a class="anchor" href="#dying-is-a-score" aria-label="Permalink">#</a></h2>
+<p>A death respawns the player at the spawn point after
+<code>Match.RESPAWN_DELAY_TICS</code> — counted in <strong>tics</strong>, because a wall-clock delay
+would elapse on different tics on two peers. <code>MatchState.LOST</code> now needs a
+<code>deathLimit</code>, which defaults to <code>UNLIMITED_DEATHS</code>; a round ends when the room is
+empty. <code>ScoreOverlay</code> shows kills, deaths and health, and a counting-down
+<code>ELIMINATED!</code> band while the player is down — without it, a view that snaps back
+to the spawn point is indistinguishable from a teleport bug, and was reported as
+one.</p>
 <h2 id="not-a-subsystem">Not a subsystem<a class="anchor" href="#not-a-subsystem" aria-label="Permalink">#</a></h2>
 <p><code>demo</code> has <strong>no <code>SubsystemId</code>, no <code>Subsystem</code> wrapper, and is never registered
 with the core.</strong> It is a <em>consumer</em> of the engine, sitting where a game would
@@ -138,8 +176,19 @@ any of them. The short version:</p>
 <tr><td><code>WEAPON_VIEW_SCALE</code></td><td>1.9</td><td>Sized to look right on a screen, not in the world — see below</td></tr>
 <tr><td><code>WEAPON_VIEW_YAW_DEGREES</code></td><td>174</td><td>180° because the blaster's muzzle points down model <strong>−z</strong> while view space is <strong>+z forward</strong>, minus 6° of toe-in so a weapon sitting right of centre reads as aimed rather than carried</td></tr>
 <tr><td><code>WEAPON_VIEW_FORWARD</code> / <code>_RIGHT</code> / <code>_DOWN</code></td><td>1.85 / 0.92 / −0.38</td><td>Far enough forward to clear the near plane (nearest vertex ≈ 1.43 against a 1.0 near plane), close enough that perspective does not flatten it into a decal</td></tr>
+<tr><td><code>BOT_WEAPON_WORLD_SCALE</code></td><td>= <code>CHARACTER_WORLD_SCALE</code></td><td><strong>A finding, not a shortcut.</strong> The two packs turn out to be authored at very nearly one common metre — a 2.70-unit character stands for 1.7 m and a 0.42-unit pistol is a pistol, so one unit is about 0.6 m in both. The bots' 0.86-unit carbine therefore lands at 17.8 world units against a 56-unit body: a third of the holder's height</td></tr>
+<tr><td><code>BOT_WEAPON_YAW_DEGREES</code></td><td>240</td><td>180° for the same muzzle flip the viewmodel needs, plus <strong>60° of carry angle — the number that made the weapon visible at all.</strong> Pointed down the bot's facing it was aimed at the camera, so what the player saw was its <em>cross-section</em>: 3 units by 8, on a 56-unit body, which reads as a smudge on a shirt. Identical mistake to the one <code>DemoEffects.TRACER_WIDTH_UNITS</code> records, made again in the same package</td></tr>
+<tr><td><code>BOT_WEAPON_RIGHT</code> / <code>_FORWARD</code> / <code>_HEIGHT</code></td><td>9 / 7 / 30</td><td>A hand's position on a 33-unit-wide, 17-unit-deep, 56-unit-tall body. Below eye height on purpose: a weapon level with the eyes reads as aimed down a sight, and the whole of <code>BotSkill</code> is about how badly these opponents aim</td></tr>
 </tbody>
 </table></div>
+<p><strong>Angled rather than scaled up</strong>, which was the other candidate fix for the
+invisible weapon. The scale is <em>derived</em> from the two packs agreeing about a
+metre, and inflating it to solve a foreshortening problem would have thrown that
+away and given the bots comically large guns to look at from the side. The weapon
+was the right size all along and pointing the wrong way. <code>DemoSceneTest</code> asserts
+the <em>projected</em> length across the viewer's screen, in world units — an assertion
+that the weapon's yaw merely differed from the bot's would have passed at one
+degree.</p>
 <p><strong>The corroboration is the interesting part.</strong> <code>KIT_WORLD_SCALE</code> was chosen from
 the eye height — 41 of a 128-unit ceiling is 32% up, the same fraction as a 1.7 m
 person in a 5.3 m room. Only afterwards did it turn out that two Kenney courses
@@ -164,13 +213,16 @@ table above, follow the real values.</p>
 <p><code>DemoModels.java</code> — loads the model set, with the honest three-outcome fallback</p>
 </li>
 <li>
-<p><code>DemoGameplayPort.java</code> — the per-tic loop</p>
+<p><code>DemoGameplayPort.java</code> — the per-tic loop, the respawn, and the rematch</p>
+</li>
+<li>
+<p><code>DemoEffects.java</code> — the pre-placed tracer and smoke pool</p>
 </li>
 <li>
 <p><code>DemoAssetException.java</code> — thrown when there is nothing to stand on</p>
 </li>
 </ul>
-<p><strong>35 tests.</strong> Run with <code>.\gradlew.bat test</code>.</p>
+<p><strong>79 tests.</strong> Run with <code>.\gradlew.bat test</code>.</p>
 <footer class="pagefoot"><p>Source: <a class="ext" rel="noopener noreferrer" target="_blank" href="https://github.com/nicholashutter/OpenFPS/blob/main/engine/src/main/java/com/openfps/engine/demo/README.md">engine/src/main/java/com/openfps/engine/demo/README.md</a>. This page is generated — edit the Markdown, not the HTML.</p></footer>
 </main>
 </div>
