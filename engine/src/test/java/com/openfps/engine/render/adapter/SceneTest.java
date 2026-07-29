@@ -324,6 +324,84 @@ final class SceneTest
         }
     }
 
+    @Nested
+    @DisplayName("per-instance translucency")
+    class Translucency
+    {
+        @Test
+        @DisplayName("instances are opaque unless a coverage says otherwise")
+        void shouldDefaultToOpaque()
+        {
+            final Scene scene = Scene.builder()
+                .addWorldInstance(quad(), Mat4.identity())
+                .addViewInstance(quad(), Mat4.translation(0.0f, 0.0f, 1.0f))
+                .build();
+
+            assertThat(scene.worldCoverage(0)).isEqualTo(Scene.OPAQUE);
+            assertThat(scene.isWorldTranslucent(0)).isFalse();
+            assertThat(scene.translucentInstanceCount())
+                .as("a scene built the old way must cost the translucent phase nothing")
+                .isZero();
+        }
+
+        @Test
+        @DisplayName("a coverage below opaque marks the instance translucent and is counted")
+        void shouldCountTranslucentInstances()
+        {
+            final Scene scene = Scene.builder()
+                .addWorldInstance(quad(), Mat4.identity())
+                .addTranslucentWorldInstance(quad(), Mat4.identity(), Scene.UNTAGGED, 128)
+                .addTranslucentWorldInstance(quad(), Mat4.identity(), Scene.UNTAGGED, 64)
+                .build();
+
+            assertThat(scene.isWorldTranslucent(0)).isFalse();
+            assertThat(scene.isWorldTranslucent(1)).isTrue();
+            assertThat(scene.worldCoverage(1)).isEqualTo(128);
+            assertThat(scene.worldCoverage(2)).isEqualTo(64);
+            assertThat(scene.translucentInstanceCount()).isEqualTo(2);
+        }
+
+        @Test
+        @DisplayName("passing OPAQUE is exactly the opaque overload, not an error")
+        void shouldAcceptOpaqueThroughTheTranslucentOverload()
+        {
+            final Scene scene = Scene.builder()
+                .addTranslucentWorldInstance(quad(), Mat4.identity(), Scene.UNTAGGED,
+                    Scene.OPAQUE)
+                .build();
+
+            assertThat(scene.translucentInstanceCount()).isZero();
+            assertThat(scene.isWorldTranslucent(0)).isFalse();
+        }
+
+        @Test
+        @DisplayName("a coverage outside 0-255 is refused")
+        void shouldRefuseCoverageOutOfRange()
+        {
+            final Scene.Builder builder = Scene.builder();
+
+            assertThatThrownBy(() -> builder.addTranslucentWorldInstance(quad(),
+                Mat4.identity(), Scene.UNTAGGED, -1))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("coverage");
+            assertThatThrownBy(() -> builder.addTranslucentWorldInstance(quad(),
+                Mat4.identity(), Scene.UNTAGGED, Scene.OPAQUE + 1))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("coverage");
+        }
+
+        @Test
+        @DisplayName("a translucent instance still has to pass the transform checks")
+        void shouldStillValidateTheTransform()
+        {
+            final Scene.Builder builder = Scene.builder();
+
+            assertThatThrownBy(() -> builder.addTranslucentWorldInstance(quad(),
+                TransformFixture.uniformScale(-1.0f), Scene.UNTAGGED, 128))
+                .isInstanceOf(IllegalArgumentException.class);
+        }
+    }
+
     private static ModelFormat quad()
     {
         return ModelFormat.read(QuadFixture.square(HALF, COLOUR));

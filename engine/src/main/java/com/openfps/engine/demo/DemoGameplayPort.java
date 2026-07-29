@@ -147,6 +147,19 @@ public final class DemoGameplayPort implements I_GameplayPort
     private final int[] botInstances;
 
     /**
+     * The pre-placed instances a shot makes visible, or null when this port has
+     * no scene behind it.
+     *
+     * <p>Not part of the simulation and deliberately so. A tracer and a puff of
+     * smoke are consequences of a shot rather than causes of anything: the
+     * hitscan is already resolved from geometry by the time either exists, and
+     * nothing reads them back. That is what lets them be null without a second
+     * code path, and what stops a peer that renders them differently from
+     * desyncing.</p>
+     */
+    private final DemoEffects effects;
+
+    /**
      * The networked half of the match, or null for a local one.
      *
      * <p>MUTABLE: attached by the launcher before the loop starts, or left null.
@@ -230,6 +243,35 @@ public final class DemoGameplayPort implements I_GameplayPort
         final PlayerController playerController, final GameConfig config,
         final Match round, final int[] botInstanceIndices)
     {
+        this(input, renderPort, playerController, config, round, botInstanceIndices, null);
+    }
+
+    /**
+     * Creates the demo gameplay port for a round against bots, with visible
+     * shots.
+     *
+     * @param input the HAL input port to latch each tic; must not be null
+     * @param renderPort the renderer to aim; must not be null
+     * @param playerController the player to move; must not be null
+     * @param config the running configuration; must not be null
+     * @param round the match to drive, or null for a camera-only demo. <b>Its
+     *     bots must not include a box around this player</b>: a ray origin
+     *     inside a box is a hit at distance zero, so a shooter listed among its
+     *     own targets shoots itself on every trigger pull
+     * @param botInstanceIndices where each bot's model sits among the scene's
+     *     world instances, in {@code round.bots()} order; must be non-null and
+     *     at least as long as the roster whenever {@code round} is given
+     * @param shotEffects the pre-placed tracer and smoke instances a shot
+     *     drives, or null to fire invisibly. Null is a legitimate state, not a
+     *     degraded one: the effects belong to a {@link DemoScene}, and a port
+     *     built over a bare {@code PlayerController} — which is what most of
+     *     this class's own tests do — has no scene to have placed them in
+     */
+    public DemoGameplayPort(final I_InputPort input, final SoftwareRenderPort renderPort,
+        final PlayerController playerController, final GameConfig config,
+        final Match round, final int[] botInstanceIndices, final DemoEffects shotEffects)
+    {
+        this.effects = shotEffects;
         if (round != null && botInstanceIndices == null)
         {
             throw new IllegalArgumentException(
@@ -398,7 +440,15 @@ public final class DemoGameplayPort implements I_GameplayPort
             advanceMatch(ticIndex);
             exchangeNetwork(ticIndex, inputPort.currentInput());
             fireIfRequested(inputPort.currentInput().fire(), ticIndex);
+            // AFTER the trigger and BEFORE the publish, which is not an
+            // arbitrary order: a tracer spawned this tic sits at the muzzle,
+            // 2.4 units from the eye, and it is 40 units long. Published from
+            // there it would enclose the camera. Advancing first puts it out in
+            // the room, one step down the ray, which is where a bolt leaving a
+            // barrel is by the time anyone could see it anyway.
+            advanceEffects();
             publishBotPlacements();
+            publishEffects();
             aimCamera();
             this.ticsApplied = ticsApplied + 1;
         }
@@ -440,6 +490,17 @@ public final class DemoGameplayPort implements I_GameplayPort
         // camera also uses keeps a single definition of "forward".
         final Vec3 eye = controller.eyePosition();
         final Vec3 aim = controller.forwardVector();
+        // The visible shot, from the same eye and the same ray the hitscan uses
+        // — one definition of where a shot comes from and which way it goes, so
+        // the tracer cannot drift away from what was actually resolved.
+        //
+        // Spawned BEFORE the hit is resolved and unconditionally: a miss throws
+        // exactly as much light and smoke as a hit, and a tracer that only
+        // appeared when you connected would be an aimbot's tell.
+        if (effects != null)
+        {
+            effects.spawn(eye.x(), eye.y(), eye.z(), aim.x(), aim.y(), aim.z());
+        }
         final int struck = match.firePlayerShot(eye.x(), eye.y(), eye.z(),
             aim.x(), aim.y(), aim.z());
         if (struck == Match.NO_HIT)
@@ -504,6 +565,38 @@ public final class DemoGameplayPort implements I_GameplayPort
             this.reportedState = now;
             LOG.info("MATCH {} — {}", now, match);
         }
+    }
+
+    // Ages every tracer and puff of smoke by one tic.
+    //
+    // NOT gated on matchLive, unlike the bots. A menu opening mid-burst must not
+    // freeze a tracer in the air: the effects are consequences of shots that
+    // have already happened, so what a frozen match owes them is to let them
+    // finish, not to suspend them. They cannot start while the match is frozen
+    // in any case, because the trigger is gated.
+    private void advanceEffects()
+    {
+        if (effects == null)
+        {
+            return;
+        }
+        effects.advance();
+    }
+
+    // Writes every live effect's placement into the renderer, and hides the
+    // instances whose effect has just ended.
+    //
+    // Guarded on a bound scene for exactly the reason publishBotPlacements is:
+    // the game loop publishes tics from the moment it starts, which on desktop
+    // is before the launcher has called setScene, and setWorldTransform would
+    // throw against a renderer with no instance table.
+    private void publishEffects()
+    {
+        if (effects == null || renderer.scene() == null)
+        {
+            return;
+        }
+        effects.publish(renderer);
     }
 
     // Makes each bot's model sit where the simulation says its body is.

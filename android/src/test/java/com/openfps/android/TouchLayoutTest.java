@@ -43,6 +43,14 @@ class TouchLayoutTest
         return layout;
     }
 
+    /** 1280x720 at 2x — 640x360 dp, about the smallest landscape surface still in use. */
+    private static TouchLayout smallPhone()
+    {
+        final TouchLayout layout = new TouchLayout(2.0f);
+        layout.resize(1280, 720);
+        return layout;
+    }
+
     @Nested
     @DisplayName("construction and sizing")
     class Sizing
@@ -194,11 +202,128 @@ class TouchLayoutTest
             // A layout measured from the right and bottom edges cannot run off
             // them, but it CAN run into the left half and steal the stick, and
             // that would be a phone on which the player cannot walk.
-            final TouchLayout layout = new TouchLayout(2.0f);
-            layout.resize(1280, 720);
+            final TouchLayout layout = smallPhone();
 
             assertThat(layout.jumpCentreX() - layout.jumpRadius())
                 .isGreaterThan(layout.width() * TouchLayout.MOVE_HALF_FRACTION);
+        }
+    }
+
+    @Nested
+    @DisplayName("the button table")
+    class Buttons
+    {
+        @Test
+        @DisplayName("the table answers for every button it names")
+        void shouldDescribeEveryButtonItLists()
+        {
+            // The renderer draws whatever this table returns. A region listed
+            // here but not answered for would be drawn at the origin, at zero
+            // size — which is to say, not drawn, on a control the hit test
+            // still happily accepts.
+            final TouchLayout layout = sized();
+
+            for (final int region : TouchLayout.buttonRegions())
+            {
+                assertThat(layout.buttonRadius(region)).isPositive();
+                assertThat(layout.buttonCentreX(region)).isPositive();
+                assertThat(layout.buttonCentreY(region)).isPositive();
+            }
+        }
+
+        @Test
+        @DisplayName("the table is handed out as a copy, not as the scheme itself")
+        void shouldNotLeakTheControlScheme()
+        {
+            final int[] first = TouchLayout.buttonRegions();
+            first[0] = TouchLayout.REGION_LOOK;
+
+            assertThat(TouchLayout.buttonRegions()).isNotEqualTo(first);
+        }
+
+        @Test
+        @DisplayName("every button the table names can actually be pressed")
+        void shouldHitEveryListedButton()
+        {
+            // The point of the table: what is drawn and what is hit come from
+            // one place. This is the assertion that keeps them there.
+            final TouchLayout layout = sized();
+
+            for (final int region : TouchLayout.buttonRegions())
+            {
+                assertThat(layout.regionAt(layout.buttonCentreX(region),
+                    layout.buttonCentreY(region))).isEqualTo(region);
+            }
+        }
+
+        @Test
+        @DisplayName("anything that is not a button has no circle at all")
+        void shouldReportNothingForANonButton()
+        {
+            final TouchLayout layout = sized();
+
+            assertThat(layout.buttonRadius(TouchLayout.REGION_MOVE_STICK)).isZero();
+            assertThat(layout.buttonRadius(TouchLayout.REGION_LOOK)).isZero();
+            assertThat(layout.buttonCentreX(TouchLayout.REGION_NONE)).isZero();
+            assertThat(layout.buttonCentreY(TouchLayout.REGION_NONE)).isZero();
+        }
+
+        @Test
+        @DisplayName("a held button is drawn bigger than an idle one")
+        void shouldGrowWhileHeld()
+        {
+            // The whole of the press feedback. A phone gives no click, so if
+            // this is ever equal the player cannot tell a press from a miss.
+            final TouchLayout layout = sized();
+
+            for (final int region : TouchLayout.buttonRegions())
+            {
+                assertThat(layout.drawnRadius(region, true))
+                    .isGreaterThan(layout.drawnRadius(region, false));
+                assertThat(layout.drawnRadius(region, false))
+                    .isEqualTo(layout.buttonRadius(region));
+            }
+        }
+
+        @Test
+        @DisplayName("growing a held button does not move what a finger hits")
+        void shouldNotGrowTheHitArea()
+        {
+            // Drawn size and hit size are deliberately different numbers. If
+            // the hit area grew too, a thumb resting on fire would start
+            // swallowing the jump button from the other thumb reaching for it.
+            final TouchLayout layout = sized();
+            final float grown = layout.drawnRadius(TouchLayout.REGION_FIRE, true);
+            final float justOutsideTheRim = layout.fireCentreX() + layout.fireRadius() + 1.0f;
+
+            assertThat(grown).isGreaterThan(layout.fireRadius());
+            assertThat(layout.regionAt(justOutsideTheRim, layout.fireCentreY()))
+                .isEqualTo(TouchLayout.REGION_LOOK);
+        }
+
+        @Test
+        @DisplayName("no two buttons overlap, even drawn at their held size")
+        void shouldKeepEveryPairApartWhileHeld()
+        {
+            // The idle case is checked above for fire; this is every pair, at
+            // the largest size any of them is ever drawn. Two buttons whose
+            // artwork touches read as one wide control, and the player aims at
+            // the seam.
+            final TouchLayout layout = sized();
+            final int[] regions = TouchLayout.buttonRegions();
+
+            for (int first = 0; first < regions.length; first++)
+            {
+                for (int second = first + 1; second < regions.length; second++)
+                {
+                    assertThat(distance(layout.buttonCentreX(regions[first]),
+                        layout.buttonCentreY(regions[first]),
+                        layout.buttonCentreX(regions[second]),
+                        layout.buttonCentreY(regions[second])))
+                        .isGreaterThan(layout.drawnRadius(regions[first], true)
+                            + layout.drawnRadius(regions[second], true));
+                }
+            }
         }
     }
 
@@ -321,6 +446,90 @@ class TouchLayoutTest
         void shouldTolerateAZeroDisplacement()
         {
             assertThat(sized().knobOffset(300.0f, 300.0f, 800.0f, 800.0f)).isZero();
+        }
+
+        @Test
+        @DisplayName("the drawn thumb sits under the finger while it is inside the ring")
+        void shouldPutTheThumbUnderTheFinger()
+        {
+            final TouchLayout layout = sized();
+
+            assertThat(layout.knobCentreX(300.0f, 800.0f, 340.0f, 780.0f)).isEqualTo(340.0f);
+            assertThat(layout.knobCentreY(300.0f, 800.0f, 340.0f, 780.0f)).isEqualTo(780.0f);
+        }
+
+        @Test
+        @DisplayName("the drawn thumb stops at the rim rather than following the finger away")
+        void shouldClampTheThumbToTheRim()
+        {
+            // A thumb dragged to the far side of the screen must leave the
+            // thumb ON the ring: a knob drawn out in the scenery is not a
+            // control any more, it is a bug the player watches happen.
+            final TouchLayout layout = sized();
+            final float anchorX = 300.0f;
+            final float anchorY = 800.0f;
+
+            final float knobX = layout.knobCentreX(anchorX, anchorY, 9000.0f, -4000.0f);
+            final float knobY = layout.knobCentreY(anchorX, anchorY, 9000.0f, -4000.0f);
+
+            assertThat(distance(anchorX, anchorY, knobX, knobY))
+                .isCloseTo(layout.stickRange(), within(0.01f));
+        }
+
+        @Test
+        @DisplayName("the thumb is smaller than the ring it moves in")
+        void shouldDrawTheThumbInsideItsRing()
+        {
+            // Otherwise the ring is invisible at full deflection and the stick
+            // reads as one blob that grew sideways.
+            final TouchLayout layout = sized();
+
+            assertThat(layout.stickKnobRadius()).isLessThan(layout.stickRange());
+        }
+
+        @Test
+        @DisplayName("the stick has somewhere to rest, and it is in the movement half")
+        void shouldRestInsideTheMovementHalf()
+        {
+            // The resting place is drawn only — but a resting place drawn in
+            // the LOOK half would advertise a stick where dragging turns the
+            // camera, which is worse than drawing nothing.
+            final TouchLayout layout = sized();
+
+            assertThat(layout.stickHomeX() + layout.stickRange())
+                .isLessThan(layout.width() * TouchLayout.MOVE_HALF_FRACTION);
+            assertThat(layout.regionAt(layout.stickHomeX(), layout.stickHomeY()))
+                .isEqualTo(TouchLayout.REGION_MOVE_STICK);
+        }
+
+        @Test
+        @DisplayName("the resting ring fits on screen on a small phone")
+        void shouldKeepTheRestingRingOnScreen()
+        {
+            final TouchLayout layout = smallPhone();
+
+            assertThat(layout.stickHomeX() - layout.stickRange()).isPositive();
+            assertThat(layout.stickHomeY() + layout.stickRange())
+                .isLessThan(layout.height());
+            assertThat(layout.stickHomeY() - layout.stickRange()).isPositive();
+        }
+
+        @Test
+        @DisplayName("the resting ring does not reach the buttons on a small phone")
+        void shouldKeepTheRestingRingClearOfTheButtons()
+        {
+            // The smallest screen is where this can go wrong: the buttons are
+            // measured from the right edge and the stick from the left, so a
+            // narrow surface is what brings them together.
+            final TouchLayout layout = smallPhone();
+
+            for (final int region : TouchLayout.buttonRegions())
+            {
+                assertThat(distance(layout.stickHomeX(), layout.stickHomeY(),
+                    layout.buttonCentreX(region), layout.buttonCentreY(region)))
+                    .isGreaterThan(layout.stickRange()
+                        + layout.drawnRadius(region, true));
+            }
         }
     }
 

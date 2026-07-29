@@ -272,7 +272,7 @@ public final class DesktopLauncher
         // distance zero, so a shooter listed among its own targets would shoot
         // itself on every trigger pull.
         return new DemoGameplayPort(input, holder.renderer(), demo.spawnController(), config,
-            demo.newMatch(), botInstanceIndices(demo));
+            demo.newMatch(), botInstanceIndices(demo), demo.effects());
     }
 
     /**

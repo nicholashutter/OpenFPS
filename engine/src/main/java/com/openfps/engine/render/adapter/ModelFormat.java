@@ -245,6 +245,9 @@ public final class ModelFormat
     /** Number of floats in the axis-aligned bounding box: min xyz then max xyz. */
     private static final int BOUNDS_FLOATS = 6;
 
+    /** Floats in one half of the bounding box, which is also the axis count. */
+    private static final int BOUNDS_HALF = BOUNDS_FLOATS / 2;
+
     /** Slot offsets inside one submesh record. */
     private static final int SUBMESH_FIRST_INDEX = 0;
     private static final int SUBMESH_INDEX_COUNT = 1;
@@ -287,6 +290,170 @@ public final class ModelFormat
             throw new ModelFormatException("model data is null");
         }
         return new ModelFormat(data);
+    }
+
+    /**
+     * Builds a model from geometry already in memory, with no file behind it.
+     *
+     * <h2>Why this exists beside a format whose whole point is being read</h2>
+     *
+     * <p>Some geometry has no author and never will. A tracer is a stretched
+     * cube; a smoke puff is a box. Nobody is going to model those in Blender,
+     * and routing them through the offline converter would mean shipping two
+     * more {@code .ofm} files, a build step to produce them, and a staging
+     * failure mode for art that is four lines of arithmetic. The converter
+     * exists to move <i>expensive</i> work offline — triangulation, texture
+     * decode, mip generation — and none of that applies to eight vertices.</p>
+     *
+     * <p><b>It is not a back door around validation.</b> Every invariant the
+     * parser enforces on the sections it is given is enforced here, by the same
+     * code: counts within the reader's safety caps, an index count that is a
+     * multiple of {@link #INDICES_PER_TRIANGLE}, and every index addressing a
+     * vertex that exists. The parser's remaining checks are all about a
+     * <i>file</i> — magic, version, declared length, section offsets and
+     * alignment — and there is no file here to get any of them wrong.</p>
+     *
+     * <p><b>No submeshes and no textures</b>, and that is the whole of the
+     * material model rather than an omission. A model with an empty submesh
+     * table has every triangle at {@link Rasterizer#NO_MATERIAL}, which is the
+     * pre-existing path that shades a triangle flat from the baked colour of its
+     * first vertex. So a caller colours geometry by colouring its vertices, and
+     * the renderer needs no new case at all.</p>
+     *
+     * <p>The bounding box is <b>computed</b> from the positions rather than
+     * declared, because a caller-supplied box is one more thing that can be
+     * wrong and nothing downstream could tell. Both arrays are copied, so the
+     * caller may reuse its scratch immediately.</p>
+     *
+     * @param vertexSlots interleaved vertex records, {@link #VERTEX_STRIDE_INTS}
+     *     slots each, in the layout the {@code VERTEX_*} constants describe —
+     *     see {@link #writeVertex}, which is how you fill it without
+     *     reinterpreting floats by hand
+     * @param triangleIndices three indices per triangle, each addressing a
+     *     vertex in {@code vertexSlots}
+     * @return the model
+     * @throws ModelFormatException if either array is null, the vertex block is
+     *     not a whole number of vertices, the index count is not a multiple of
+     *     three, either count exceeds the reader's safety cap, or any index
+     *     addresses outside the vertices present
+     */
+    public static ModelFormat ofGeometry(final int[] vertexSlots, final int[] triangleIndices)
+    {
+        if (vertexSlots == null)
+        {
+            throw new ModelFormatException("vertexSlots must not be null");
+        }
+        if (triangleIndices == null)
+        {
+            throw new ModelFormatException("triangleIndices must not be null");
+        }
+        if (vertexSlots.length % VERTEX_STRIDE_INTS != 0)
+        {
+            throw new ModelFormatException("vertex block is " + vertexSlots.length
+                + " slots, not a multiple of the " + VERTEX_STRIDE_INTS + "-slot vertex stride");
+        }
+        final int vertexCount = vertexSlots.length / VERTEX_STRIDE_INTS;
+        if (vertexCount > MAX_VERTEX_COUNT)
+        {
+            throw new ModelFormatException("vertexCount " + vertexCount
+                + " is outside [0, " + MAX_VERTEX_COUNT + "]");
+        }
+        if (triangleIndices.length % INDICES_PER_TRIANGLE != 0)
+        {
+            throw new ModelFormatException("indexCount must be a multiple of "
+                + INDICES_PER_TRIANGLE + ", got " + triangleIndices.length);
+        }
+        if (triangleIndices.length > MAX_INDEX_COUNT)
+        {
+            throw new ModelFormatException("indexCount " + triangleIndices.length
+                + " is outside [0, " + MAX_INDEX_COUNT + "]");
+        }
+        return new ModelFormat(vertexSlots.clone(), triangleIndices.clone(), vertexCount);
+    }
+
+    /**
+     * Writes one vertex into a block destined for {@link #ofGeometry}.
+     *
+     * <p>Exists so callers do not each grow their own copy of
+     * {@link Float#floatToRawIntBits} and the slot arithmetic. The block holds
+     * mixed float and int data in one {@code int[}{@code ]} — see the class
+     * Javadoc on why — and hand-packing it is exactly the kind of duplication
+     * that agrees with itself until one caller transposes u and v.</p>
+     *
+     * @param slots the vertex block being filled; must be long enough
+     * @param vertex which vertex to write, from zero
+     * @param x model-space x
+     * @param y model-space y
+     * @param z model-space z
+     * @param u texture coordinate u; pass zero for untextured geometry
+     * @param v texture coordinate v; pass zero for untextured geometry
+     * @param colour baked vertex colour, packed RGBA8888 — see {@link Rgba}
+     */
+    public static void writeVertex(final int[] slots, final int vertex, final float x,
+        final float y, final float z, final float u, final float v, final int colour)
+    {
+        final int base = vertex * VERTEX_STRIDE_INTS;
+        slots[base + VERTEX_POSITION_X] = Float.floatToRawIntBits(x);
+        slots[base + VERTEX_POSITION_Y] = Float.floatToRawIntBits(y);
+        slots[base + VERTEX_POSITION_Z] = Float.floatToRawIntBits(z);
+        slots[base + VERTEX_TEXCOORD_U] = Float.floatToRawIntBits(u);
+        slots[base + VERTEX_TEXCOORD_V] = Float.floatToRawIntBits(v);
+        slots[base + VERTEX_COLOUR] = colour;
+    }
+
+    // Takes ownership of two already-copied arrays and validates what a file
+    // image would have had validated for it. Every field is assigned once, as
+    // in the reading constructor.
+    private ModelFormat(final int[] slots, final int[] triangleIndices, final int vertexCount)
+    {
+        this.versionMajor = VERSION_MAJOR;
+        this.versionMinor = VERSION_MINOR;
+        this.vertexData = slots;
+        this.indices = triangleIndices;
+        // Empty rather than absent: submeshCount() and textureCount() are
+        // derived from these lengths, so an empty table IS "no submeshes" and
+        // needs no null check anywhere downstream.
+        this.submeshes = new int[0];
+        this.textures = new int[0];
+        this.mipChains = new MipChain[0];
+
+        checkIndices(indices, vertexCount);
+        this.bounds = boundsOf(slots, vertexCount);
+    }
+
+    // The axis-aligned bounding box of a vertex block, in the min-xyz then
+    // max-xyz order the header stores it in.
+    //
+    // A model with no vertices gets an all-zero box rather than the empty
+    // infinities, because the box is consumed by SoftwareRenderPort's orbit
+    // camera, which subtracts min from max and would produce NaN from them.
+    // Scene refuses an instance with no triangles anyway, so the degenerate box
+    // is never framed in practice.
+    private static float[] boundsOf(final int[] slots, final int vertexCount)
+    {
+        final float[] box = new float[BOUNDS_FLOATS];
+        if (vertexCount == 0)
+        {
+            return box;
+        }
+        // `axis` is also the slot offset: VERTEX_POSITION_X, _Y and _Z are 0, 1
+        // and 2, which is what lets one loop cover all three.
+        for (int axis = 0; axis < BOUNDS_HALF; axis++)
+        {
+            // MUTABLE locals — the running extremes along one axis.
+            float low = Float.intBitsToFloat(slots[axis]);
+            float high = low;
+            for (int vertex = 1; vertex < vertexCount; vertex++)
+            {
+                final float value =
+                    Float.intBitsToFloat(slots[(vertex * VERTEX_STRIDE_INTS) + axis]);
+                low = Math.min(low, value);
+                high = Math.max(high, value);
+            }
+            box[axis] = low;
+            box[axis + BOUNDS_HALF] = high;
+        }
+        return box;
     }
 
     // Reads and fully validates the file image. Every field is assigned once.

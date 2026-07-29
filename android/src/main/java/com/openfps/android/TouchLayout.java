@@ -30,25 +30,40 @@ package com.openfps.android;
  *   +--------------------------------------------------+
  *   |                                          ( X )   |  leave
  *   |                                                  |
- *   |                                                  |
  *   |            look  (anywhere on the right)         |
- *   |   move                                           |
- *   |  (anywhere                              ( ^ )    |  jump
- *   |   on the left)                    ( FIRE )       |
+ *   |     .--.                                         |
+ *   |    ( () )   stick, resting              ( ^ )    |  jump
+ *   |     `--'    (grab anywhere left)   ( + )         |  fire
  *   +--------------------------------------------------+
  * </pre>
  *
- * <p><b>The stick has no fixed home.</b> It appears wherever the left thumb
- * lands and measures deflection from there. A stick painted at a fixed spot
- * requires the player to look at their thumb to find it; a floating one does
- * not, and on a screen the player is also trying to aim at, that is the whole
- * difference between a control and an obstacle.</p>
+ * <p><b>The stick has no fixed home — but it has a resting place.</b> The
+ * control still floats: it anchors wherever the left thumb lands and measures
+ * deflection from there, because a stick that must be found before it can be
+ * pushed makes the player look at their own thumb on a screen they are trying
+ * to aim at. What {@link #stickHomeX()} and {@link #stickHomeY()} add is
+ * somewhere to <i>draw</i> it while nobody is holding it. That is not a
+ * contradiction, it is the missing half: an invisible control is indistinguishable
+ * from a broken one, and the first thing a new player does with this game is
+ * look for the buttons. Touching down anywhere in the left half still works,
+ * and still anchors under the thumb rather than at the resting place.</p>
  *
  * <p><b>Buttons are tested before halves.</b> Fire and jump sit in the right
  * half, which is also the look region, so the order in
  * {@link #regionAt} is load-bearing rather than incidental: halves first would
  * make the fire button unreachable and every tap on it would spin the camera
  * instead.</p>
+ *
+ * <h2>One table both draws and hits</h2>
+ *
+ * <p>{@link #buttonRegions()} names the buttons, and
+ * {@link #buttonCentreX(int)}, {@link #buttonCentreY(int)} and
+ * {@link #buttonRadius(int)} answer for any of them. {@link #regionAt} walks
+ * that same table, and so does {@link TouchOverlay}. The alternative — a hit
+ * test that lists three circles and a renderer that lists them again — has
+ * exactly one failure mode and it is the worst one available here: a button
+ * drawn somewhere it cannot be pressed, which looks to the player like a game
+ * that ignores them.</p>
  *
  * <h2>Sizes are in dp, not pixels</h2>
  *
@@ -131,8 +146,55 @@ public final class TouchLayout
      */
     public static final float STICK_DEAD_ZONE_DP = 6f;
 
+    /**
+     * Radius of the stick's drawn thumb, in dp.
+     *
+     * <p>52 dp across — a Material touch target, even though nothing hit-tests
+     * against it. The thumb is not a button; it is the readout that tells the
+     * player how far they have pushed, and a readout smaller than the finger
+     * covering it reports nothing at all.</p>
+     */
+    public static final float STICK_KNOB_RADIUS_DP = 26f;
+
+    /**
+     * Distance from the left edge to the stick's resting centre, in dp.
+     *
+     * <p>Far enough in that the base ring — {@link #STICK_RANGE_DP} of it —
+     * clears the edge, and the whole control sits under a thumb that is also
+     * holding the phone up.</p>
+     */
+    public static final float STICK_HOME_LEFT_INSET_DP = 112f;
+
+    /** Distance from the bottom edge to the stick's resting centre, in dp. */
+    public static final float STICK_HOME_BOTTOM_INSET_DP = 100f;
+
+    /**
+     * How much bigger a button is drawn while it is held.
+     *
+     * <p>Feedback, and the cheapest kind there is. A phone gives no click and
+     * no travel, so a press that changes nothing on screen is a press the
+     * player cannot distinguish from a miss — and their next move is to press
+     * harder, which does nothing either. 8% is small enough not to shift the
+     * apparent target and large enough to be seen under a thumb.</p>
+     *
+     * <p>It is a <b>drawn</b> size only: {@link #buttonRadius(int)} is what the
+     * finger is tested against and it does not move. A button that grew its hit
+     * area under the finger already on it would start stealing the neighbouring
+     * control from a second finger arriving.</p>
+     */
+    public static final float PRESSED_SCALE = 1.08f;
+
     /** Fraction of the screen width given to the movement half. */
     public static final float MOVE_HALF_FRACTION = 0.5f;
+
+    /**
+     * The buttons, in hit-test order — see {@link #regionAt}.
+     *
+     * <p>Private and copied out by {@link #buttonRegions()}: an array constant
+     * is not a constant, and a public one is a caller away from a control
+     * scheme that changed itself.</p>
+     */
+    private static final int[] BUTTON_REGIONS = {REGION_LEAVE, REGION_FIRE, REGION_JUMP};
 
     /** Pixels per density-independent pixel. Fixed at construction. */
     private final float density;
@@ -277,12 +339,146 @@ public final class TouchLayout
         return pixels(STICK_DEAD_ZONE_DP);
     }
 
+    /** Returns the radius of the stick's drawn thumb, in pixels. */
+    public float stickKnobRadius()
+    {
+        return pixels(STICK_KNOB_RADIUS_DP);
+    }
+
+    /**
+     * Returns where the stick is drawn while nobody is holding it, in pixels.
+     *
+     * <p>A resting place, not an anchor: a touch anywhere in the left half
+     * still anchors the live stick under the thumb that made it.</p>
+     *
+     * @return the resting centre's x in pixels
+     */
+    public float stickHomeX()
+    {
+        return pixels(STICK_HOME_LEFT_INSET_DP);
+    }
+
+    /**
+     * Returns where the stick is drawn while nobody is holding it, in pixels.
+     *
+     * @return the resting centre's y in pixels down from the top
+     */
+    public float stickHomeY()
+    {
+        return height - pixels(STICK_HOME_BOTTOM_INSET_DP);
+    }
+
+    /**
+     * Returns the buttons, in the order {@link #regionAt} tests them.
+     *
+     * <p>A fresh array per call, so a caller cannot edit the control scheme by
+     * accident. Call it once and keep the result — {@link TouchOverlay} does,
+     * because this is read every frame and a per-frame allocation for three
+     * ints is three ints of garbage sixty times a second.</p>
+     *
+     * @return the {@code REGION_} codes of the drawn, pressable buttons
+     */
+    public static int[] buttonRegions()
+    {
+        return BUTTON_REGIONS.clone();
+    }
+
+    /**
+     * Returns a button's centre x in pixels, or 0 for anything that is not a
+     * button.
+     *
+     * @param region one of the {@code REGION_} constants
+     * @return the centre x in pixels
+     */
+    public float buttonCentreX(final int region)
+    {
+        switch (region)
+        {
+            case REGION_FIRE:
+                return fireCentreX();
+            case REGION_JUMP:
+                return jumpCentreX();
+            case REGION_LEAVE:
+                return leaveCentreX();
+            default:
+                return 0.0f;
+        }
+    }
+
+    /**
+     * Returns a button's centre y in pixels down from the top, or 0 for
+     * anything that is not a button.
+     *
+     * @param region one of the {@code REGION_} constants
+     * @return the centre y in pixels from the top
+     */
+    public float buttonCentreY(final int region)
+    {
+        switch (region)
+        {
+            case REGION_FIRE:
+                return fireCentreY();
+            case REGION_JUMP:
+                return jumpCentreY();
+            case REGION_LEAVE:
+                return leaveCentreY();
+            default:
+                return 0.0f;
+        }
+    }
+
+    /**
+     * Returns a button's radius in pixels, or 0 for anything that is not a
+     * button.
+     *
+     * <p>This is the radius a <b>finger</b> is tested against. It never
+     * changes; see {@link #PRESSED_SCALE} for why the drawn one does.</p>
+     *
+     * @param region one of the {@code REGION_} constants
+     * @return the radius in pixels
+     */
+    public float buttonRadius(final int region)
+    {
+        switch (region)
+        {
+            case REGION_FIRE:
+                return fireRadius();
+            case REGION_JUMP:
+                return jumpRadius();
+            case REGION_LEAVE:
+                return leaveRadius();
+            default:
+                return 0.0f;
+        }
+    }
+
+    /**
+     * Returns the radius a button is drawn at, which grows while it is held.
+     *
+     * <p>Lives here rather than in the renderer for the reason the whole class
+     * exists: it is arithmetic, and arithmetic in a draw call is arithmetic
+     * nothing runs until a device is in someone's hand.</p>
+     *
+     * @param region one of the {@code REGION_} constants
+     * @param pressed whether a finger is on it
+     * @return the drawn radius in pixels
+     */
+    public float drawnRadius(final int region, final boolean pressed)
+    {
+        if (pressed)
+        {
+            return buttonRadius(region) * PRESSED_SCALE;
+        }
+        return buttonRadius(region);
+    }
+
     /**
      * Returns which control a touch landed on.
      *
      * <p>Buttons first, then halves — see the class Javadoc on why that order
      * is the difference between a working fire button and a camera that spins
-     * whenever you shoot.</p>
+     * whenever you shoot. The buttons are walked from the same table the
+     * renderer draws, so "drawn" and "pressable" cannot drift apart.</p>
      *
      * @param screenX x in pixels
      * @param screenY y in pixels, down from the top
@@ -295,17 +491,14 @@ public final class TouchLayout
         {
             return REGION_NONE;
         }
-        if (within(screenX, screenY, leaveCentreX(), leaveCentreY(), leaveRadius()))
+        for (int index = 0; index < BUTTON_REGIONS.length; index++)
         {
-            return REGION_LEAVE;
-        }
-        if (within(screenX, screenY, fireCentreX(), fireCentreY(), fireRadius()))
-        {
-            return REGION_FIRE;
-        }
-        if (within(screenX, screenY, jumpCentreX(), jumpCentreY(), jumpRadius()))
-        {
-            return REGION_JUMP;
+            final int region = BUTTON_REGIONS[index];
+            if (within(screenX, screenY, buttonCentreX(region), buttonCentreY(region),
+                buttonRadius(region)))
+            {
+                return region;
+            }
         }
         if (screenX < width * MOVE_HALF_FRACTION)
         {
@@ -378,6 +571,41 @@ public final class TouchLayout
             return along;
         }
         return along * range / distance;
+    }
+
+    /**
+     * Returns where the stick's thumb should be drawn, in pixels.
+     *
+     * <p>The absolute counterpart of {@link #knobOffset}, so the renderer asks
+     * for a position rather than assembling one out of two offsets and an
+     * anchor — which is four chances to swap an x for a y in the one file that
+     * has no test behind it.</p>
+     *
+     * @param anchorX where the thumb went down, in pixels
+     * @param anchorY where the thumb went down, in pixels from the top
+     * @param currentX where it is now
+     * @param currentY where it is now
+     * @return the thumb's centre x in pixels, clamped to the base ring
+     */
+    public float knobCentreX(final float anchorX, final float anchorY,
+        final float currentX, final float currentY)
+    {
+        return anchorX + knobOffset(anchorX, currentX, anchorY, currentY);
+    }
+
+    /**
+     * Returns where the stick's thumb should be drawn, in pixels.
+     *
+     * @param anchorX where the thumb went down, in pixels
+     * @param anchorY where the thumb went down, in pixels from the top
+     * @param currentX where it is now
+     * @param currentY where it is now
+     * @return the thumb's centre y in pixels from the top, clamped to the ring
+     */
+    public float knobCentreY(final float anchorX, final float anchorY,
+        final float currentX, final float currentY)
+    {
+        return anchorY + knobOffset(anchorY, currentY, anchorX, currentX);
     }
 
     // One axis of the stick: the raw displacement scaled by the range, zeroed

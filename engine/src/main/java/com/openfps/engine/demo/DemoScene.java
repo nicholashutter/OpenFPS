@@ -370,6 +370,7 @@ public final class DemoScene
     private final Scene scene;
     private final Bot[] bots;
     private final int[] botInstances;
+    private final DemoEffects effects;
     private final float spawnX;
     private final float spawnY;
     private final float spawnZ;
@@ -378,12 +379,13 @@ public final class DemoScene
 
     // Takes ownership of a finished scene and the spawn that belongs to it.
     private DemoScene(final Scene builtScene, final Bot[] roster, final int[] instanceIndices,
-        final float feetX, final float feetY, final float feetZ, final float yawRadians,
-        final DemoModels.Source modelSource)
+        final DemoEffects shotEffects, final float feetX, final float feetY, final float feetZ,
+        final float yawRadians, final DemoModels.Source modelSource)
     {
         this.scene = builtScene;
         this.bots = roster;
         this.botInstances = instanceIndices;
+        this.effects = shotEffects;
         this.spawnX = feetX;
         this.spawnY = feetY;
         this.spawnZ = feetZ;
@@ -424,17 +426,21 @@ public final class DemoScene
         }
         final int[] instanceIndices = new int[BOT_ROUTE_CENTRES.length / BOT_STRIDE];
         final Bot[] roster = addBots(builder, models, instanceIndices);
+        // Unconditionally, and independent of which art is staged: the tracer
+        // and the smoke are generated geometry, so they are the one part of the
+        // demo that cannot be missing from a fresh clone.
+        final DemoEffects shots = DemoEffects.addTo(builder);
         addViewmodel(builder, models.weapon());
 
         final Scene built = builder.build();
-        LOG.info("Demo scene built from {}: {} world instances, {} view instances,"
-            + " largest {} triangles, world scale {}", models.source(),
-            built.worldInstanceCount(), built.viewInstanceCount(),
-            built.maxInstanceTriangles(), worldScaleOf(models));
+        LOG.info("Demo scene built from {}: {} world instances ({} translucent),"
+            + " {} view instances, largest {} triangles, world scale {}", models.source(),
+            built.worldInstanceCount(), built.translucentInstanceCount(),
+            built.viewInstanceCount(), built.maxInstanceTriangles(), worldScaleOf(models));
         // Facing +z, which is yaw 0 (PlayerController's convention), standing
         // back from the origin so the whole room is ahead rather than around.
-        return new DemoScene(built, roster, instanceIndices, 0.0f, 0.0f, -spawnDepth, 0.0f,
-            models.source());
+        return new DemoScene(built, roster, instanceIndices, shots, 0.0f, 0.0f, -spawnDepth,
+            0.0f, models.source());
     }
 
     /**
@@ -934,6 +940,20 @@ public final class DemoScene
     public int botCount()
     {
         return bots.length;
+    }
+
+    /**
+     * Returns the pool of pre-placed tracer and smoke instances.
+     *
+     * <p>Never null: the effect geometry is generated rather than loaded, so
+     * unlike every other model in this scene it cannot fail to be staged. Hand
+     * it to {@code DemoGameplayPort}, which is what actually fires it.</p>
+     *
+     * @return the effect pool this scene placed
+     */
+    public DemoEffects effects()
+    {
+        return effects;
     }
 
     /**

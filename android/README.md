@@ -22,9 +22,10 @@ The whole loop works on a phone. Measured on the OpenFPS_API36 AVD, API 36,
 - **Single Player enters the world**: the software rasterizer's frame is
   presented as a fullscreen quad, showing the real Kenney room read out of the
   APK's own assets — `source=KENNEY_KIT`, 301 world instances, GLES 3.0.
-- **The touch controls drive the engine.** A floating thumbstick on the left
-  half walks; a drag on the right half turns; the fire, jump and leave buttons
-  work; the system back key leaves the match.
+- **The touch controls drive the engine.** A drawn control pad — a stick with a
+  thumb in it and three glyphed buttons — walks, turns, fires, jumps and leaves;
+  the stick still anchors wherever the left thumb lands; the system back key
+  leaves the match.
 - **Combat works end to end**: `HIT entity 2`, `HIT entity 2`,
   `KILL entity 2 — 1 of 7 down`. Three shots kill a bot, exactly as designed,
   and the body is drawn lying flat afterwards.
@@ -192,18 +193,34 @@ through `slf4j-android`, which tags by logger name and **truncates to Android's
 
 ## The controls
 
-| Control | Where |
-|---|---|
-| Move | anywhere on the left half — the stick appears under your thumb |
-| Look | anywhere on the right half — drag to turn |
-| Fire | the large disc, bottom right |
-| Jump | the smaller disc, inboard of fire |
-| Leave the match | the disc top right, or the system back key |
+| Control | Where | Drawn as |
+|---|---|---|
+| Move | anywhere on the left half — the stick appears under your thumb | a ring with a thumb in it, resting at the lower left |
+| Look | anywhere on the right half — drag to turn | nothing; the whole half is the control |
+| Fire | the large button, bottom right | warm orange, crosshair |
+| Jump | the smaller button, inboard of fire | green, chevron over a bar |
+| Leave the match | the button top right, or the system back key | grey, cross |
 
-The stick **floats**: it appears wherever the left thumb lands rather than at a
+The stick **floats**: it anchors wherever the left thumb lands rather than at a
 painted spot. A fixed stick makes the player look at their thumb to find it, and
 on a screen they are also trying to aim at, that is the difference between a
-control and an obstacle.
+control and an obstacle. It is nevertheless *drawn* at a resting place while
+nobody is holding it — `TouchLayout.stickHomeX()`/`stickHomeY()` — because an
+invisible control is indistinguishable from a broken one, and the first thing a
+new player does is look for the buttons. Touching down anywhere in the left half
+still works, and still anchors under the thumb rather than at the resting place.
+
+Every button is four sprites: a dark halo, a tinted fill, a near-white rim at
+exactly the radius the finger is tested against, and a glyph. The halo is what
+makes a translucent HUD readable over a brightly lit wall; the rim is what makes
+the edge you aim at the edge that works. Holding a button grows it by
+`TouchLayout.PRESSED_SCALE` and takes the fill, rim and glyph to full opacity —
+a phone gives no click, so a press that changes nothing on screen cannot be told
+from a miss. The growth is drawn only: the hit radius never moves, or a held
+button would start stealing its neighbour from a second finger.
+
+All of it — disc, ring and the three glyphs — is generated in code at the first
+resize. No PNGs, no density variants, nothing to go missing from an APK.
 
 There is no sprint, deliberately. Screen space beside the fire button is the
 scarcest thing on a phone, and a modifier held while aiming and firing wants a
@@ -223,9 +240,10 @@ leaving it to be discovered.
   so it fits the surface it is given
 - `MenuSkinFactory.java` — the skin built in code, as *managed* GL resources
 - `AndroidInputPort.java` — touch events → `InputState`, one finger at a time
-- `TouchLayout.java` — where the controls are and how far the stick is pushed.
-  **Imports nothing**, so all of it is unit-tested
-- `TouchOverlay.java` — draws the controls, from one generated disc texture
+- `TouchLayout.java` — where the controls are, how big they are drawn, and how
+  far the stick is pushed. **Imports nothing**, so all of it is unit-tested
+- `TouchOverlay.java` — draws the control pad from generated discs, rings and
+  glyphs; owns no geometry of its own
 - `AndroidBindings.java` — the default touch scheme; the only file here that
   names a control
 - `ApkModelSource.java` — the demo's models, read through the platform
@@ -233,11 +251,15 @@ leaving it to be discovered.
 - `persistence/` — `RoomUserProfilePort` over `UserProfileEntity`,
   `UserProfileDao` and `OpenFpsDatabase`
 
-**123 tests in this module** — all plain JVM unit tests, no Robolectric and no
+**142 tests in this module** — all plain JVM unit tests, no Robolectric and no
 instrumentation. They cover what can honestly be covered off a device: the whole
 touch-gesture layer (which control a pixel belongs to, stick deflection and its
-dead zone, two fingers not interfering, a tap shorter than one tic still firing,
-a cancelled touch releasing), the UI transitions and the match gate, the menu's
+dead zone, the drawn thumb clamped to its ring, the resting stick clearing the
+buttons on the smallest screen still in use, no two buttons touching even at
+their held size, every button reporting itself held, and every button having a
+glyph on it, two fingers not interfering, a tap shorter than one tic still
+firing, a cancelled touch releasing), the UI transitions and the match gate,
+the menu's
 fit rule, the frame-callback fan-out and its load-bearing ordering, the entity
 mapping in both directions, the window port's close-flag and re-arm semantics,
 the adapter factory's delegation and its profile-closed-before-delegate

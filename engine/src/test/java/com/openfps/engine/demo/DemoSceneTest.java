@@ -722,8 +722,10 @@ final class DemoSceneTest
             final int walls = DemoScene.ROOM_TILES * DemoScene.WALL_COURSES * 4;
             final int props = 4 + 8 + 1 + 1;
 
-            // Floor and ceiling are the same grid twice.
-            assertThat(scene.worldInstanceCount()).isEqualTo(2 * tiles + walls + props);
+            // Floor and ceiling are the same grid twice, plus the tracer and
+            // smoke instances every scene carries whether or not art is staged.
+            assertThat(scene.worldInstanceCount())
+                .isEqualTo(2 * tiles + walls + props + demo.effects().instanceCount());
             assertThat(scene.viewInstanceCount()).isEqualTo(1);
         }
 
@@ -768,7 +770,10 @@ final class DemoSceneTest
             final DemoScene demo = DemoScene.build(DemoModels.load(root));
 
             assertThat(demo.source()).isEqualTo(DemoModels.Source.GENERATED_ROOM);
-            assertThat(demo.scene().worldInstanceCount()).isEqualTo(1);
+            // The room, plus the effect pool — which is generated geometry and
+            // so is present even when no art at all was staged.
+            assertThat(demo.scene().worldInstanceCount())
+                .isEqualTo(1 + demo.effects().instanceCount());
             assertThat(demo.scene().viewInstanceCount()).isZero();
         }
 

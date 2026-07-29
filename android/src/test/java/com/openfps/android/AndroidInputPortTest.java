@@ -278,6 +278,42 @@ class AndroidInputPortTest
         }
 
         @Test
+        @DisplayName("every button reports itself held while a finger is on it")
+        void shouldReportEveryButtonAsHeld()
+        {
+            // What the overlay draws its pressed state from. It walks the
+            // layout's button table rather than naming the three controls, so
+            // this walks the same table: a button that never reports itself
+            // held is a button that gives the player no feedback at all, and on
+            // a screen with no click that is indistinguishable from a miss.
+            final AndroidInputPort port = playing();
+            final TouchLayout layout = port.layout();
+
+            for (final int region : TouchLayout.buttonRegions())
+            {
+                port.touchDown((int) layout.buttonCentreX(region),
+                    (int) layout.buttonCentreY(region), 0, 0);
+
+                assertThat(port.isHeld(region)).as("region %d held", region).isTrue();
+
+                port.touchUp((int) layout.buttonCentreX(region),
+                    (int) layout.buttonCentreY(region), 0, 0);
+
+                assertThat(port.isHeld(region)).as("region %d released", region).isFalse();
+            }
+        }
+
+        @Test
+        @DisplayName("an idle slot is not ten fingers holding nothing")
+        void shouldNotReportTheEmptyRegionAsHeld()
+        {
+            // Every untouched pointer slot holds REGION_NONE, so asking the
+            // question literally would answer yes on a screen nobody is
+            // touching — and the overlay would draw everything pressed.
+            assertThat(playing().isHeld(TouchLayout.REGION_NONE)).isFalse();
+        }
+
+        @Test
         @DisplayName("the back key asks to leave")
         void shouldRequestLeaveOnBack()
         {

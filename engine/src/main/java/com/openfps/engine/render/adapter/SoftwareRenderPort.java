@@ -57,6 +57,11 @@ import org.slf4j.LoggerFactory;
  *   <li><b>{@link OutlinePass}</b>, if and only if the scene has tagged
  *       entities. It reads the finished world-pass id buffer and paints
  *       silhouettes into colour.</li>
+ *   <li><b>Translucent world instances</b>, if the scene has any, sorted
+ *       back-to-front by view depth and composited over the opaque frame. They
+ *       test the world's depth and write none of their own, which is why they
+ *       have to be drawn after it and why their order has to be decided here
+ *       rather than by the depth buffer — {@link #drawTranslucent}.</li>
  *   <li><b>Clear depth, not colour.</b></li>
  *   <li><b>View instances</b> — the first-person viewmodel — which are already
  *       in view space and take the projection alone
@@ -372,8 +377,28 @@ public final class SoftwareRenderPort implements I_RenderPort
     /** The bound scene, or null before one is set. MUTABLE: rebound by {@link #setScene}. */
     private volatile Scene scene;
 
-    /** Derived tables for the scene's world instances. MUTABLE: rebuilt by {@link #setScene}. */
+    /**
+     * Derived tables for the scene's <b>opaque</b> world instances, in scene
+     * order. MUTABLE: rebuilt by {@link #setScene}.
+     *
+     * <p>Translucent instances are absent from this list and drawn afterwards
+     * by {@link #drawTranslucent}. For a scene with none — every scene that
+     * existed before translucency did — this is the whole world list and the
+     * pass is unchanged.</p>
+     */
     private volatile Instance[] worldInstances;
+
+    /**
+     * The {@link Scene} index of each entry in {@link #worldInstances}.
+     * MUTABLE: rebuilt by {@link #setScene}.
+     *
+     * <p>Needed because {@link #worldOverrides} is addressed by <i>scene</i>
+     * index — that is the handle {@link #setWorldTransform} was given and
+     * callers recorded — while the opaque pass is addressed by position within
+     * itself. The two stopped being the same number when the translucent
+     * instances were lifted out. Identity for an entirely opaque scene.</p>
+     */
+    private volatile int[] worldSceneIndex;
 
     /** Derived tables for the scene's view instances. MUTABLE: rebuilt by {@link #setScene}. */
     private volatile Instance[] viewInstances;
@@ -443,11 +468,68 @@ public final class SoftwareRenderPort implements I_RenderPort
     /** The same for the view pass, packed view-to-clip. MUTABLE: rewritten per frame. */
     private volatile float[] viewTransforms;
 
+    /**
+     * Prepared tables for the scene's translucent world instances, in scene
+     * order, or <b>null when the scene has none</b>. MUTABLE: rebuilt by
+     * {@link #setScene}.
+     *
+     * <p>Null is the gate for the entire translucent feature, exactly as
+     * {@link #worldEntityIds} is for the outline: a scene with nothing
+     * translucent pays no sort, no second set of packed transforms, no blended
+     * renderer and no extra parallel pass.</p>
+     */
+    private volatile Instance[] translucentInstances;
+
+    /** The {@link Scene} index of each translucent instance. MUTABLE: rebuilt by setScene. */
+    private volatile int[] translucentScene;
+
+    /** The coverage each translucent instance composites at. MUTABLE: rebuilt by setScene. */
+    private volatile int[] translucentCoverage;
+
+    /**
+     * Translucent instance slots in back-to-front order, rewritten every frame.
+     * MUTABLE, and pre-allocated so the per-frame sort allocates nothing.
+     */
+    private volatile int[] translucentOrder;
+
+    /** View depth of each translucent instance, the sort key. MUTABLE: per frame. */
+    private volatile float[] translucentDepth;
+
+    /** One sorted run's instances, handed to {@link #renderPass}. MUTABLE: per run. */
+    private volatile Instance[] translucentPassInstances;
+
+    /** That run's stream offsets. MUTABLE: per run. */
+    private volatile int[] translucentPassStarts;
+
+    /** That run's packed model-to-clip transforms. MUTABLE: per run. */
+    private volatile float[] translucentPassTransforms;
+
+    /**
+     * A blended {@link SpanRenderer} per coverage the scene actually uses,
+     * indexed by coverage. MUTABLE: rebuilt by {@link #setScene}.
+     *
+     * <p>Indexed rather than searched because the lookup is per run per frame
+     * and the table is 256 references. Only the coverages present are populated;
+     * every other slot stays null and is never read.</p>
+     */
+    private volatile SpanRenderer[] blendedRenderers;
+
     /** Largest pass the geometry buffers are sized for. MUTABLE: grows, never shrinks. */
     private volatile int sizedForTriangles;
 
     /** The instances the geometry pass is transforming. MUTABLE: rebound per pass. */
     private volatile Instance[] geometryInstances;
+
+    /**
+     * How many leading entries of {@link #geometryInstances} the pass covers.
+     * MUTABLE: rebound per pass.
+     *
+     * <p>Not simply the array's length, because a translucent run reuses one
+     * scratch array sized for every translucent instance and fills only the
+     * leading part of it. Passing the count keeps that array off the
+     * per-frame allocation path.</p>
+     */
+    private volatile int geometryInstanceCount;
 
     /** The stream offsets of those instances. MUTABLE: rebound per pass. */
     private volatile int[] geometryStarts;
@@ -751,11 +833,11 @@ public final class SoftwareRenderPort implements I_RenderPort
         {
             frameLock.unlock();
         }
-        LOG.info("Scene bound: {} world instances ({} triangles), {} view instances ({}),"
-            + " {} textures, buffers sized for {}",
+        LOG.info("Scene bound: {} world instances ({} triangles, {} translucent),"
+            + " {} view instances ({}), {} textures, buffers sized for {}",
             newScene.worldInstanceCount(), newScene.worldTriangleCount(),
-            newScene.viewInstanceCount(), newScene.viewTriangleCount(),
-            sceneTextures.length, sizedForTriangles);
+            newScene.translucentInstanceCount(), newScene.viewInstanceCount(),
+            newScene.viewTriangleCount(), sceneTextures.length, sizedForTriangles);
     }
 
     /** Returns the bound scene, or null before {@link #setScene} has been called. */
@@ -835,18 +917,137 @@ public final class SoftwareRenderPort implements I_RenderPort
         growBuffersFor(newScene.maxPassTriangles());
         final Instance[] world = prepareWorld(newScene);
         final Instance[] hand = prepareView(newScene);
+        // Built over BOTH partitions: a translucent instance's textures still
+        // occupy the scene-wide table even though the translucent phase binds
+        // no table, because the rebase walks every instance exactly once and a
+        // partial rebase would shift the opaque indices onto the wrong slots.
         this.sceneTextures = buildSceneTextures(world, hand);
-        this.worldStarts = streamOffsets(world);
+
+        final int[] solid = sceneIndices(newScene, false);
+        final Instance[] opaque = subset(world, solid);
+        this.worldSceneIndex = solid;
+        this.worldInstances = opaque;
+        this.worldStarts = streamOffsets(opaque);
+        this.worldEntityIds = entityIdsFor(newScene, solid);
+        this.worldTransforms = new float[opaque.length * Camera.WORLD_TO_CLIP_FLOATS];
+
+        bindTranslucent(newScene, world, sceneIndices(newScene, true));
+
         this.viewStarts = streamOffsets(hand);
-        this.worldEntityIds = worldEntityIdsOf(newScene);
-        this.worldTransforms = new float[world.length * Camera.WORLD_TO_CLIP_FLOATS];
         // One slot per instance, all null: a scene starts entirely static and
         // pays nothing for the override path until something is actually moved.
+        // Indexed by SCENE index, not by pass position — see worldSceneIndex.
         this.worldOverrides = new Mat4[newScene.worldInstanceCount()];
         this.viewTransforms = new float[hand.length * Camera.WORLD_TO_CLIP_FLOATS];
-        this.worldInstances = world;
         this.viewInstances = hand;
         this.scene = newScene;
+    }
+
+    // Prepares the translucent phase's tables, or clears them all to null when
+    // the scene has nothing translucent in it. Null is the gate the per-frame
+    // path tests — see the field.
+    private void bindTranslucent(final Scene newScene, final Instance[] world,
+        final int[] indices)
+    {
+        if (indices.length == 0)
+        {
+            this.translucentInstances = null;
+            this.translucentScene = null;
+            this.translucentCoverage = null;
+            this.translucentOrder = null;
+            this.translucentDepth = null;
+            this.translucentPassInstances = null;
+            this.translucentPassStarts = null;
+            this.translucentPassTransforms = null;
+            this.blendedRenderers = null;
+            return;
+        }
+        final int[] coverage = new int[indices.length];
+        for (int slot = 0; slot < indices.length; slot++)
+        {
+            coverage[slot] = newScene.worldCoverage(indices[slot]);
+        }
+        this.translucentScene = indices;
+        this.translucentInstances = subset(world, indices);
+        this.translucentCoverage = coverage;
+        this.translucentOrder = new int[indices.length];
+        this.translucentDepth = new float[indices.length];
+        this.translucentPassInstances = new Instance[indices.length];
+        this.translucentPassStarts = new int[indices.length + 1];
+        this.translucentPassTransforms =
+            new float[indices.length * Camera.WORLD_TO_CLIP_FLOATS];
+        this.blendedRenderers = blendedRenderersFor(coverage);
+    }
+
+    // One blended span renderer per coverage the scene actually uses, indexed
+    // by coverage so the per-run lookup is an array read.
+    //
+    // TEXTURED with ATTRIBUTE_COUNT attributes like the opaque renderer, and
+    // that is required rather than cosmetic: the whole port shares one
+    // Rasterizer, whose records carry exactly two attribute planes. A renderer
+    // built for a different attribute count would read past them.
+    private static SpanRenderer[] blendedRenderersFor(final int[] coverage)
+    {
+        final SpanRenderer[] table = new SpanRenderer[Scene.OPAQUE + 1];
+        for (final int level : coverage)
+        {
+            if (table[level] == null)
+            {
+                table[level] = new SpanRenderer(SpanRenderer.ShadingMode.TEXTURED,
+                    ATTRIBUTE_COUNT, level);
+            }
+        }
+        return table;
+    }
+
+    // The scene indices of one partition of the world list, in SCENE order.
+    //
+    // Scene order is preserved rather than regrouped because it is what makes
+    // the batched stream bit-identical to the per-instance render it replaced:
+    // instances are laid into the stream in submission order and the depth test
+    // rejects ties, so each pixel sees the same triangle sequence it always did.
+    // Partitioning reorders nothing within a pass — it only removes from the
+    // opaque pass instances that could not have been drawn in it anyway.
+    private static int[] sceneIndices(final Scene source, final boolean translucent)
+    {
+        // MUTABLE local — how many instances fall in this partition.
+        int found = 0;
+        for (int index = 0; index < source.worldInstanceCount(); index++)
+        {
+            if (source.isWorldTranslucent(index) == translucent)
+            {
+                found++;
+            }
+        }
+        final int[] out = new int[found];
+        // MUTABLE local — the write cursor into the partition.
+        int at = 0;
+        for (int index = 0; index < source.worldInstanceCount(); index++)
+        {
+            if (source.isWorldTranslucent(index) == translucent)
+            {
+                out[at] = index;
+                at++;
+            }
+        }
+        return out;
+    }
+
+    // The prepared entries named by a partition, in the partition's order.
+    // Returns the source array untouched when the partition is the whole of it,
+    // so an entirely opaque scene allocates nothing and shares one array.
+    private static Instance[] subset(final Instance[] all, final int[] indices)
+    {
+        if (indices.length == all.length)
+        {
+            return all;
+        }
+        final Instance[] out = new Instance[indices.length];
+        for (int slot = 0; slot < indices.length; slot++)
+        {
+            out[slot] = all[indices[slot]];
+        }
+        return out;
     }
 
     // Sizes the clip-space stream, the per-chunk scratch and the rasterizer for
@@ -906,16 +1107,26 @@ public final class SoftwareRenderPort implements I_RenderPort
     // prepare() shares one prepared entry between duplicate ModelFormats, so
     // two players built from the same model would otherwise collapse onto one
     // id and stop being outlined apart from each other.
-    private static int[] worldEntityIdsOf(final Scene source)
+    // The ids are read for the OPAQUE partition only, and the "is anything
+    // tagged" question is asked of that partition rather than of the scene: a
+    // translucent instance writes no id at any pixel, so a scene whose only
+    // tagged instance is translucent must still take the cheap path. Answering
+    // it from Scene.hasTaggedEntities() would have such a scene clear the id
+    // buffer, store an id per covered pixel and dispatch an outline pass that
+    // could not possibly find an edge.
+    private static int[] entityIdsFor(final Scene source, final int[] indices)
     {
-        if (!source.hasTaggedEntities())
+        final int[] out = new int[indices.length];
+        // MUTABLE local — whether any instance in this partition is tagged.
+        boolean any = false;
+        for (int slot = 0; slot < indices.length; slot++)
+        {
+            out[slot] = source.worldEntityId(indices[slot]);
+            any = any || out[slot] != Scene.UNTAGGED;
+        }
+        if (!any)
         {
             return null;
-        }
-        final int[] out = new int[source.worldInstanceCount()];
-        for (int index = 0; index < out.length; index++)
-        {
-            out[index] = source.worldEntityId(index);
         }
         return out;
     }
@@ -1140,7 +1351,8 @@ public final class SoftwareRenderPort implements I_RenderPort
         final Instance[] world = worldInstances;
         packWorld(current, view, world.length);
         // MUTABLE local — triangles the whole scene handed the rasterizer.
-        int triangles = renderPass(world, worldStarts, worldTransforms, tagged, workers);
+        int triangles = renderPass(world, world.length, worldStarts, worldTransforms, tagged,
+            spanRenderer, sceneTextures, workers);
 
         // After the world pass, so the id buffer is complete; before the
         // viewmodel, so the weapon draws over the outlines rather than under
@@ -1152,6 +1364,19 @@ public final class SoftwareRenderPort implements I_RenderPort
             outlinePass.draw(framebuffer, workers);
         }
 
+        // Translucent instances, back to front, over the finished opaque world.
+        //
+        // AFTER the outline rather than before it, so smoke drifting across a
+        // body dims that body's silhouette along with the body. The outline
+        // reads the id buffer, which this phase never writes, so the two cannot
+        // be reordered for any reason except how they should look — and a
+        // silhouette painted on top of the smoke in front of it would look like
+        // a bug.
+        //
+        // BEFORE the viewmodel's depth clear, because it depth-tests against
+        // the world and that depth is about to be thrown away.
+        triangles += drawTranslucent(current, view, workers);
+
         // The viewmodel is depth-tested only against itself. Colour is NOT
         // cleared: the weapon composites over the world it was just occluded
         // by. See the class Javadoc. Ids are not cleared either: view
@@ -1162,7 +1387,8 @@ public final class SoftwareRenderPort implements I_RenderPort
         {
             framebuffer.clearDepth();
             packView(current, view, hand.length);
-            triangles += renderPass(hand, viewStarts, viewTransforms, null, workers);
+            triangles += renderPass(hand, hand.length, viewStarts, viewTransforms, null,
+                spanRenderer, sceneTextures, workers);
         }
 
         // The reticle is the topmost thing on screen and is not in the world:
@@ -1195,9 +1421,12 @@ public final class SoftwareRenderPort implements I_RenderPort
     {
         final float[] slots = worldTransforms;
         final Mat4[] moved = worldOverrides;
+        // The pass position and the scene index are the same number only for an
+        // entirely opaque scene; the override table is addressed by the latter.
+        final int[] sceneOf = worldSceneIndex;
         for (int index = 0; index < count; index++)
         {
-            view.packModelToClip(placementOf(current, moved, index), slots,
+            view.packModelToClip(placementOf(current, moved, sceneOf[index]), slots,
                 index * Camera.WORLD_TO_CLIP_FLOATS);
         }
     }
@@ -1234,16 +1463,17 @@ public final class SoftwareRenderPort implements I_RenderPort
     // because records and bins are indexed by position within one submitted
     // stream. It does not touch the framebuffer, so the depth buffer carries
     // across the two passes.
-    private int renderPass(final Instance[] instances, final int[] starts,
-        final float[] transforms, final int[] instanceEntityIds,
-        final I_ThreadPoolPort workers)
+    private int renderPass(final Instance[] instances, final int count, final int[] starts,
+        final float[] transforms, final int[] instanceEntityIds, final SpanRenderer renderer,
+        final MipChain[] textures, final I_ThreadPoolPort workers)
     {
-        final int total = starts[instances.length];
+        final int total = starts[count];
         if (total == 0)
         {
             return 0;
         }
         this.geometryInstances = instances;
+        this.geometryInstanceCount = count;
         this.geometryStarts = starts;
         this.geometryTransforms = transforms;
         this.geometryEntityIds = instanceEntityIds;
@@ -1259,8 +1489,160 @@ public final class SoftwareRenderPort implements I_RenderPort
         setup.beginFrame(framebuffer);
         setup.setupAndBin(clipVertices, triangles, clipMaterials, clipColors,
             idStreamFor(instanceEntityIds), workers);
-        setup.rasterize(spanRenderer, sceneTextures, workers);
+        setup.rasterize(renderer, textures, workers);
         return triangles;
+    }
+
+    // ---- the translucent phase ----
+
+    /**
+     * Draws every translucent instance, back to front, composited over the
+     * finished opaque frame.
+     *
+     * <h2>Back-to-front is the whole of the correctness argument</h2>
+     *
+     * <p>A translucent fragment tests depth but does not write it, so nothing
+     * in this phase occludes anything else in it and the depth buffer cannot
+     * resolve the order for us. {@link Rgba#srcOver} is not commutative:
+     * compositing two puffs the wrong way round gives different pixels. So the
+     * instances are sorted by view depth every frame — <b>farthest first</b> —
+     * and drawn in that order. The sort is per instance rather than per
+     * triangle, which is the usual approximation and is exact whenever
+     * translucent instances do not interpenetrate; the effects this exists for
+     * are small, convex and separate, so they do not.</p>
+     *
+     * <h2>Runs, not one pass and not one pass per instance</h2>
+     *
+     * <p>A {@link SpanRenderer}'s coverage is fixed when it is built, so one
+     * batched pass can only draw one coverage. The sorted list is therefore cut
+     * into <b>maximal runs of equal coverage</b> and each run is one batched
+     * pass. Cutting at coverage <i>changes</i> rather than grouping by coverage
+     * is what preserves the sorted order exactly — a run is contiguous in it,
+     * so concatenating the runs reproduces it. Grouping would have been fewer
+     * passes and the wrong picture.</p>
+     *
+     * <p>A scene whose translucent instances all share one coverage — the
+     * ordinary case, and what the demo's smoke does — is therefore exactly one
+     * extra batched pass, four parallel dispatches, however many puffs are in
+     * the air.</p>
+     *
+     * <p><b>No texture table is bound</b>, so every triangle falls to the flat
+     * path and takes the baked colour of its first vertex. See
+     * {@link Scene.Builder#addTranslucentWorldInstance} for why that is the
+     * contract rather than a limitation to be fixed later.</p>
+     *
+     * @param current the scene being drawn
+     * @param view the camera this frame is rendered from
+     * @param workers the pool, or null for the serial path
+     * @return the triangles this phase submitted to the rasterizer
+     */
+    private int drawTranslucent(final Scene current, final Camera view,
+        final I_ThreadPoolPort workers)
+    {
+        final int[] indices = translucentScene;
+        if (indices == null)
+        {
+            return 0;
+        }
+        sortBackToFront(current, view, indices);
+
+        final int[] order = translucentOrder;
+        final int[] coverage = translucentCoverage;
+        // MUTABLE locals — triangles submitted so far, and the cursor walking
+        // the sorted list one equal-coverage run at a time.
+        int triangles = 0;
+        int from = 0;
+        while (from < order.length)
+        {
+            final int level = coverage[order[from]];
+            // MUTABLE local — the end of the run starting at `from`.
+            int to = from;
+            while (to < order.length && coverage[order[to]] == level)
+            {
+                to++;
+            }
+            triangles += drawTranslucentRun(current, view, from, to, level, workers);
+            from = to;
+        }
+        return triangles;
+    }
+
+    // Fills the sort key of every translucent instance and orders the slots
+    // farthest first.
+    //
+    // The key is the instance origin's distance along the camera's forward
+    // axis — its view-space z. Taken from the placement's translation column
+    // rather than by transforming a bound, because a bound would need the whole
+    // model walked per frame to say something the origin already says for the
+    // small, roughly centred geometry this phase draws.
+    //
+    // Insertion sort, and not apologetically: the list is a handful of entries,
+    // it is nearly sorted from one frame to the next because the instances move
+    // a little rather than teleport, and it allocates nothing. The comparison
+    // is strict, so equal depths keep scene order — which is what makes the
+    // frame reproducible when two puffs sit at the same distance.
+    private void sortBackToFront(final Scene current, final Camera view, final int[] indices)
+    {
+        final Mat4[] moved = worldOverrides;
+        final Vec3 eye = view.eye();
+        final Vec3 forward = view.forward();
+        final float[] depths = translucentDepth;
+        final int[] order = translucentOrder;
+
+        for (int slot = 0; slot < indices.length; slot++)
+        {
+            final Mat4 placement = placementOf(current, moved, indices[slot]);
+            final float dx = placement.get(0, Mat4.ORDER - 1) - eye.x();
+            final float dy = placement.get(1, Mat4.ORDER - 1) - eye.y();
+            final float dz = placement.get(2, Mat4.ORDER - 1) - eye.z();
+            depths[slot] = dx * forward.x() + dy * forward.y() + dz * forward.z();
+            order[slot] = slot;
+        }
+
+        for (int slot = 1; slot < order.length; slot++)
+        {
+            final int moving = order[slot];
+            final float depth = depths[moving];
+            // MUTABLE local — the gap the moving entry is sifted down through.
+            int gap = slot - 1;
+            while (gap >= 0 && depths[order[gap]] < depth)
+            {
+                order[gap + 1] = order[gap];
+                gap--;
+            }
+            order[gap + 1] = moving;
+        }
+    }
+
+    // One maximal run of equal coverage, in the order the sort put it.
+    //
+    // The run's instances, stream offsets and packed transforms are gathered
+    // into scratch sized for every translucent instance at bind time, so a run
+    // costs no allocation whatever its length. Entity ids are null: a
+    // translucent pixel writes none, by construction.
+    private int drawTranslucentRun(final Scene current, final Camera view, final int from,
+        final int to, final int coverage, final I_ThreadPoolPort workers)
+    {
+        final Instance[] pass = translucentPassInstances;
+        final int[] starts = translucentPassStarts;
+        final float[] slots = translucentPassTransforms;
+        final Instance[] all = translucentInstances;
+        final int[] indices = translucentScene;
+        final int[] order = translucentOrder;
+        final Mat4[] moved = worldOverrides;
+
+        final int count = to - from;
+        starts[0] = 0;
+        for (int slot = 0; slot < count; slot++)
+        {
+            final int which = order[from + slot];
+            pass[slot] = all[which];
+            starts[slot + 1] = starts[slot] + pass[slot].model.triangleCount();
+            view.packModelToClip(placementOf(current, moved, indices[which]), slots,
+                slot * Camera.WORLD_TO_CLIP_FLOATS);
+        }
+        return renderPass(pass, count, starts, slots, null, blendedRenderers[coverage],
+            null, workers);
     }
 
     // The per-output-triangle id stream, or null when this pass carries no
@@ -1300,7 +1682,7 @@ public final class SoftwareRenderPort implements I_RenderPort
         // MUTABLE locals — the flat triangle reached, the instance it belongs
         // to, and the output triangles emitted so far.
         int flat = from;
-        int index = instanceContaining(starts, instances.length, from);
+        int index = instanceContaining(starts, geometryInstanceCount, from);
         int produced = 0;
         while (flat < to)
         {
@@ -1786,7 +2168,10 @@ public final class SoftwareRenderPort implements I_RenderPort
      * 1,180 came from.</p>
      *
      * <p>A scene with tagged entities costs one more — {@link OutlinePass} —
-     * and a scene without them costs exactly the same eight it always did.</p>
+     * and a scene without them costs exactly the same eight it always did. A
+     * scene with translucent instances costs four more per <b>run</b> of equal
+     * coverage in the back-to-front order, which for effects that share one
+     * coverage is four however many of them are on screen.</p>
      *
      * @return the last frame's parallel pass count, or zero before the first
      *     frame

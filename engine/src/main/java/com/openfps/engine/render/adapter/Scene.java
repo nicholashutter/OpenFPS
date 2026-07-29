@@ -92,6 +92,31 @@ import java.util.ArrayList;
  * <p><b>View instances are always {@link #UNTAGGED}.</b> There is no overload
  * that says otherwise. The held weapon fills a large part of the screen and
  * outlining it would be an unbroken band down one side of every frame.</p>
+ *
+ * <h2>Translucency</h2>
+ *
+ * <p>A world instance carries a <b>coverage</b>, 0-255. {@link #OPAQUE} — the
+ * default, and what every instance added before this existed still gets — means
+ * the instance goes through the ordinary world pass and is written over what is
+ * behind it. Anything below it makes the instance <b>translucent</b>:
+ * {@link SoftwareRenderPort} takes it out of the opaque pass and draws it in a
+ * later phase, composited with {@link Rgba#srcOver}.</p>
+ *
+ * <p><b>Coverage is fixed when the scene is built, and that is deliberate.</b>
+ * It is the one property of an instance that changes how the frame is
+ * <i>structured</i> — which pass it belongs to, how many blended passes there
+ * are, and what has to be sorted against what — so it is decided once, where
+ * {@link SoftwareRenderPort#setScene} can derive all of that from it. A caller
+ * that wants an effect to fade allocates one instance per step of the fade and
+ * shows one at a time, which costs a handful of instances that are hidden most
+ * of the time and keeps the per-frame path free of a per-instance re-derivation.
+ * Compare {@code setWorldTransform}, which is mutable precisely because moving
+ * an instance changes nothing structural at all.</p>
+ *
+ * <p><b>Only world instances may be translucent.</b> The view pass is the held
+ * weapon, drawn last over a cleared depth buffer with nothing after it to sort
+ * against; a translucent viewmodel would be compositing over a frame that is
+ * already finished, which is a decal rather than a scene element.</p>
  */
 public final class Scene
 {
@@ -101,6 +126,16 @@ public final class Scene
      * {@link Framebuffer#entityIdBuffer()} already reads "nothing here".
      */
     public static final int UNTAGGED = 0;
+
+    /**
+     * The coverage of ordinary, solid geometry — 255.
+     *
+     * <p>{@link SpanRenderer#OPAQUE_COVERAGE}, named again here so a caller
+     * building a scene does not have to reach into the span loop to say
+     * "solid". An instance at this coverage takes the opaque world pass and is
+     * byte-for-byte what it was before translucency existed.</p>
+     */
+    public static final int OPAQUE = SpanRenderer.OPAQUE_COVERAGE;
 
     /**
      * The scene with nothing in it. Renders a cleared frame and no geometry,
@@ -117,6 +152,7 @@ public final class Scene
     private final int worldTriangles;
     private final int viewTriangles;
     private final boolean tagged;
+    private final int translucent;
 
     // Takes ownership of two arrays the builder has already finished with.
     private Scene(final Instance[] worldInstances, final Instance[] viewInstances)
@@ -128,6 +164,7 @@ public final class Scene
         this.worldTriangles = totalTriangles(worldInstances);
         this.viewTriangles = totalTriangles(viewInstances);
         this.tagged = anyTagged(worldInstances);
+        this.translucent = countTranslucent(worldInstances);
     }
 
     /**
@@ -214,6 +251,48 @@ public final class Scene
     public boolean hasTaggedEntities()
     {
         return tagged;
+    }
+
+    /**
+     * Returns one world instance's coverage, 0-255.
+     *
+     * <p>{@link #OPAQUE} for ordinary geometry. Anything below it is the source
+     * alpha the translucent phase composites the instance at.</p>
+     *
+     * @param index instance index in {@code [0, worldInstanceCount())}
+     * @return the coverage the instance was built with
+     */
+    public int worldCoverage(final int index)
+    {
+        return world[index].coverage;
+    }
+
+    /**
+     * Reports whether one world instance is drawn in the translucent phase.
+     *
+     * @param index instance index in {@code [0, worldInstanceCount())}
+     * @return true if its coverage is below {@link #OPAQUE}
+     */
+    public boolean isWorldTranslucent(final int index)
+    {
+        return world[index].coverage < OPAQUE;
+    }
+
+    /**
+     * Returns how many world instances are translucent.
+     *
+     * <p>Counted once at build time, for the same reason
+     * {@link #hasTaggedEntities()} is: it is the gate the render port tests
+     * before it does any work. A scene with none — which is every scene that
+     * existed before translucency did — pays no sort, no second set of packed
+     * transforms and no blended pass, and its opaque pass is the whole world
+     * list exactly as it was.</p>
+     *
+     * @return the translucent instance count, zero for an entirely solid scene
+     */
+    public int translucentInstanceCount()
+    {
+        return translucent;
     }
 
     /** Returns how many view-space instances this scene holds. */
@@ -305,7 +384,7 @@ public final class Scene
         return "Scene{world=" + world.length + ", view=" + view.length
             + ", maxInstanceTriangles=" + maxInstanceTriangles
             + ", maxPassTriangles=" + maxPassTriangles()
-            + ", tagged=" + tagged + "}";
+            + ", tagged=" + tagged + ", translucent=" + translucent + "}";
     }
 
     // The largest triangle count in one list, or zero for an empty one.
@@ -333,6 +412,22 @@ public final class Scene
             }
         }
         return false;
+    }
+
+    // How many instances in one list are drawn in the translucent phase.
+    // Decided once, at build time — see translucentInstanceCount().
+    private static int countTranslucent(final Instance[] instances)
+    {
+        // MUTABLE local — running count.
+        int found = 0;
+        for (final Instance instance : instances)
+        {
+            if (instance.coverage < OPAQUE)
+            {
+                found++;
+            }
+        }
+        return found;
     }
 
     // Every triangle in one list. Duplicated models count once per instance:
@@ -433,12 +528,60 @@ public final class Scene
         public Builder addWorldInstance(final ModelFormat model, final Mat4 modelToWorld,
             final int entityId)
         {
+            return addTranslucentWorldInstance(model, modelToWorld, entityId, OPAQUE);
+        }
+
+        /**
+         * Adds a model to the world pass at a coverage below {@link #OPAQUE},
+         * so that it is composited over what is behind it.
+         *
+         * <p>{@link SoftwareRenderPort} takes such an instance <b>out</b> of the
+         * opaque world pass and draws it afterwards, back-to-front against every
+         * other translucent instance. Two consequences a caller has to know
+         * about, both of them properties of what translucency <i>is</i> rather
+         * than of this implementation:</p>
+         *
+         * <ul>
+         *   <li><b>It writes no depth and no entity id.</b> A fragment you can
+         *       see through does not occlude what is behind it, and does not own
+         *       hits that belong to whatever it is drifting in front of.</li>
+         *   <li><b>It is shaded flat, from the baked vertex colour of each
+         *       triangle's first vertex, and its textures are ignored.</b> The
+         *       translucent phase binds no texture table at all — which is a
+         *       decision rather than a gap: the effects this exists for are
+         *       untextured by nature, and a half-supported textured path that
+         *       silently rendered opaque would be worse than none.</li>
+         * </ul>
+         *
+         * <p>Passing {@link #OPAQUE} is exactly the opaque overload and is not
+         * an error — it is how a caller that varies coverage expresses "solid"
+         * without branching.</p>
+         *
+         * @param model the model to draw; same restrictions as
+         *     {@link #addWorldInstance(ModelFormat, Mat4)}
+         * @param modelToWorld where it sits in the world; same restrictions
+         * @param entityId an opaque, positive entity id, or {@link #UNTAGGED};
+         *     recorded, but no translucent pixel ever writes it
+         * @param coverage source coverage, 0-255; {@link #OPAQUE} is solid and
+         *     0 is invisible
+         * @return this builder
+         * @throws IllegalArgumentException if the model or the transform is
+         *     unusable, the id is negative, or the coverage is outside 0-255
+         */
+        public Builder addTranslucentWorldInstance(final ModelFormat model,
+            final Mat4 modelToWorld, final int entityId, final int coverage)
+        {
             if (entityId < UNTAGGED)
             {
                 throw new IllegalArgumentException("entityId must be positive, or "
                     + UNTAGGED + " for untagged geometry; got " + entityId);
             }
-            world.add(validated(model, modelToWorld, "modelToWorld", entityId));
+            if (coverage < 0 || coverage > OPAQUE)
+            {
+                throw new IllegalArgumentException(
+                    "coverage must be 0-" + OPAQUE + ", got " + coverage);
+            }
+            world.add(validated(model, modelToWorld, "modelToWorld", entityId, coverage));
             return this;
         }
 
@@ -461,9 +604,11 @@ public final class Scene
          */
         public Builder addViewInstance(final ModelFormat model, final Mat4 modelToView)
         {
-            // UNTAGGED, and there is no overload that says otherwise: the
-            // viewmodel must never be outlined. See the class Javadoc.
-            view.add(validated(model, modelToView, "modelToView", UNTAGGED));
+            // UNTAGGED and OPAQUE, and there is no overload that says
+            // otherwise: the viewmodel must never be outlined, and it is drawn
+            // last over a cleared depth buffer with nothing to sort against.
+            // See the class Javadoc for both.
+            view.add(validated(model, modelToView, "modelToView", UNTAGGED, OPAQUE));
             return this;
         }
 
@@ -482,7 +627,7 @@ public final class Scene
 
         // Every rule an instance has to satisfy, in one place.
         private static Instance validated(final ModelFormat model, final Mat4 transform,
-            final String name, final int entityId)
+            final String name, final int entityId, final int coverage)
         {
             if (model == null)
             {
@@ -498,7 +643,7 @@ public final class Scene
             }
             requireAffine(transform, name);
             requireOrientationPreserving(transform, name);
-            return new Instance(model, transform, entityId);
+            return new Instance(model, transform, entityId, coverage);
         }
 
         // The packed three-row transform has no fourth row, so a projective
@@ -556,20 +701,22 @@ public final class Scene
     }
 
     // One model and where it sits. Immutable, and never handed out: the scene
-    // exposes the two fields by index so no caller can hold one and outlive
-    // the scene's validation.
+    // exposes the fields by index so no caller can hold one and outlive the
+    // scene's validation.
     private static final class Instance
     {
         private final ModelFormat model;
         private final Mat4 transform;
         private final int entityId;
+        private final int coverage;
 
         Instance(final ModelFormat instanceModel, final Mat4 instanceTransform,
-            final int instanceEntityId)
+            final int instanceEntityId, final int instanceCoverage)
         {
             this.model = instanceModel;
             this.transform = instanceTransform;
             this.entityId = instanceEntityId;
+            this.coverage = instanceCoverage;
         }
     }
 }

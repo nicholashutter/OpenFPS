@@ -566,18 +566,35 @@ public final class AndroidInputPort implements I_InputPort, InputProcessor
     /** Returns whether any finger is holding the fire button. */
     public boolean isFireHeld()
     {
-        return isRegionHeld(TouchLayout.REGION_FIRE);
+        return isHeld(TouchLayout.REGION_FIRE);
     }
 
     /** Returns whether any finger is holding the jump button. */
     public boolean isJumpHeld()
     {
-        return isRegionHeld(TouchLayout.REGION_JUMP);
+        return isHeld(TouchLayout.REGION_JUMP);
     }
 
-    // True while at least one finger is on a given control.
-    private boolean isRegionHeld(final int region)
+    /**
+     * Returns whether any finger is currently on a given control.
+     *
+     * <p>The general form of the two above, and the one {@link TouchOverlay}
+     * uses: the overlay walks {@link TouchLayout#buttonRegions()} rather than
+     * naming the buttons a second time, so a fourth button becomes drawable and
+     * pressable without either file learning its name.</p>
+     *
+     * @param region one of {@link TouchLayout}'s region constants
+     * @return true while at least one finger is on it; always false for
+     *     {@link TouchLayout#REGION_NONE}, which is what an idle slot holds
+     */
+    public boolean isHeld(final int region)
     {
+        if (region == TouchLayout.REGION_NONE)
+        {
+            // Every unused slot reads REGION_NONE, so asking this question
+            // literally would answer "yes, ten fingers are holding nothing".
+            return false;
+        }
         for (int index = 0; index < MAX_POINTERS; index++)
         {
             if (pointerRegion[index] == region)
