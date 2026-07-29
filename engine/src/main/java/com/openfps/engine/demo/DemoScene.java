@@ -9,6 +9,7 @@ import com.openfps.engine.common.Constants;
 import com.openfps.engine.gameplay.Bot;
 import com.openfps.engine.gameplay.BotPattern;
 import com.openfps.engine.gameplay.Match;
+import com.openfps.engine.gameplay.PhysicsWorld;
 import com.openfps.engine.gameplay.PlayerController;
 import com.openfps.engine.render.adapter.Mat4;
 import com.openfps.engine.render.adapter.ModelFormat;
@@ -213,6 +214,58 @@ public final class DemoScene
     /** Interior half-extent of the generated fallback room, in its own units. */
     private static final float FALLBACK_INTERIOR_HALF_EXTENT = 8.0f;
 
+    /**
+     * Wall thickness in Kenney grid units — <b>0.20</b>, so 12.8 world units.
+     *
+     * <p>Read off the model, not chosen: {@code docs/DEMO_ASSETS.md} § 3 measures
+     * {@code wall.ofm} at {@code 0.20 x 1.00 x 1.00}, thickness along x and
+     * length along z. It exists as a constant because {@link #addWalls} places
+     * the wall's <b>centre</b> on {@link #HALF_ROOM_UNITS} while the collision
+     * hull has to stop at the face the player can see, and the difference
+     * between those two — 6.4 units — is exactly half of this.</p>
+     */
+    private static final float WALL_THICKNESS_GRID = 0.20f;
+
+    /**
+     * Where the inside face of the perimeter wall is, in world units —
+     * <b>313.6</b>, not 320.
+     *
+     * <p>The wall's <i>centre</i> is on {@link #HALF_ROOM_UNITS};
+     * {@link #addWalls} places it there, and half its 12.8-unit thickness
+     * projects inward. This is the surface a player can touch and the plane
+     * {@link #kitRoomPhysics} stops them against, so it is the number to reason
+     * about clearances with. Public because it is what a test asserts a stopping
+     * position against, and re-deriving it at the assertion would let the test
+     * agree with a broken solver.</p>
+     */
+    public static final float WALL_INNER_FACE_UNITS =
+        HALF_ROOM_UNITS - WALL_THICKNESS_GRID * KIT_WORLD_SCALE * 0.5f;
+
+    /**
+     * The doorway's low x edge in world units — <b>0</b>.
+     *
+     * <p>The doorway replaces one floor tile's worth of the south wall, so the
+     * opening is exactly {@link #KIT_WORLD_SCALE} wide and centred on
+     * {@link #DOORWAY_TILE}'s centre. That tile happens to straddle the origin's
+     * east side, which is why this edge lands on zero rather than somewhere
+     * memorable.</p>
+     */
+    public static final float DOORWAY_MIN_X_UNITS =
+        tileCentre(DOORWAY_TILE) - KIT_WORLD_SCALE * 0.5f;
+
+    /** The doorway's high x edge in world units — 64. See {@link #DOORWAY_MIN_X_UNITS}. */
+    public static final float DOORWAY_MAX_X_UNITS =
+        tileCentre(DOORWAY_TILE) + KIT_WORLD_SCALE * 0.5f;
+
+    /** Column footprint in Kenney grid units — {@code column.ofm} is 0.20 x 1.00 x 0.20. */
+    private static final float COLUMN_FOOTPRINT_GRID = 0.20f;
+
+    /** Crate footprint in Kenney grid units — {@code crate.ofm} is 0.50 cubed. */
+    private static final float CRATE_FOOTPRINT_GRID = 0.50f;
+
+    /** Stride of {@link #CRATE_PLACEMENTS}: x, y and z. */
+    private static final int CRATE_STRIDE = 3;
+
     /** Column placement, as a fraction of the room half-span. */
     private static final float COLUMN_FRACTION = 0.4f;
 
@@ -376,12 +429,15 @@ public final class DemoScene
     private final float spawnZ;
     private final float spawnYawRadians;
     private final DemoModels.Source source;
+    private final PhysicsWorld physics;
 
     // Takes ownership of a finished scene and the spawn that belongs to it.
     private DemoScene(final Scene builtScene, final Bot[] roster, final int[] instanceIndices,
         final DemoEffects shotEffects, final float feetX, final float feetY, final float feetZ,
-        final float yawRadians, final DemoModels.Source modelSource)
+        final float yawRadians, final DemoModels.Source modelSource,
+        final PhysicsWorld solidGeometry)
     {
+        this.physics = solidGeometry;
         this.scene = builtScene;
         this.bots = roster;
         this.botInstances = instanceIndices;
@@ -412,15 +468,22 @@ public final class DemoScene
 
         final Scene.Builder builder = Scene.builder();
         final float spawnDepth;
+        // The solid geometry is built beside the visible geometry, in the same
+        // branch, from the same constants. That adjacency is the point: the two
+        // descriptions of the room cannot be given different extents without
+        // someone editing both halves of one if-statement.
+        final PhysicsWorld solidGeometry;
         if (models.isRealArt())
         {
             addKitRoom(builder, models);
+            solidGeometry = kitRoomPhysics();
             spawnDepth = HALF_ROOM_UNITS * SPAWN_DEPTH_FRACTION;
         }
         else
         {
             builder.addWorldInstance(models.room(), placement(0.0f, 0.0f, 0.0f, 0.0f,
                 FALLBACK_WORLD_SCALE));
+            solidGeometry = fallbackRoomPhysics();
             spawnDepth =
                 FALLBACK_INTERIOR_HALF_EXTENT * FALLBACK_WORLD_SCALE * SPAWN_DEPTH_FRACTION;
         }
@@ -437,10 +500,12 @@ public final class DemoScene
             + " {} view instances, largest {} triangles, world scale {}", models.source(),
             built.worldInstanceCount(), built.translucentInstanceCount(),
             built.viewInstanceCount(), built.maxInstanceTriangles(), worldScaleOf(models));
+        LOG.info("Demo collision: {} — walls, doorway jambs, columns and crates are solid;"
+            + " the staircase and the ramp are not", solidGeometry);
         // Facing +z, which is yaw 0 (PlayerController's convention), standing
         // back from the origin so the whole room is ahead rather than around.
         return new DemoScene(built, roster, instanceIndices, shots, 0.0f, 0.0f, -spawnDepth,
-            0.0f, models.source());
+            0.0f, models.source(), solidGeometry);
     }
 
     /**
@@ -668,7 +733,7 @@ public final class DemoScene
         builder.addWorldInstance(models.column(),
             placement(columnOffset, 0.0f, columnOffset, 0.0f, KIT_WORLD_SCALE));
 
-        for (int crate = 0; crate < CRATE_PLACEMENTS.length; crate += 3)
+        for (int crate = 0; crate < CRATE_PLACEMENTS.length; crate += CRATE_STRIDE)
         {
             builder.addWorldInstance(models.crate(),
                 placement(CRATE_PLACEMENTS[crate], CRATE_PLACEMENTS[crate + 1],
@@ -679,6 +744,146 @@ public final class DemoScene
             placement(0.0f, 0.0f, 224.0f, 0.0f, KIT_WORLD_SCALE));
         builder.addWorldInstance(models.slope(),
             placement(-96.0f, 0.0f, -160.0f, QUARTER_TURN_RADIANS, KIT_WORLD_SCALE));
+    }
+
+    /**
+     * Builds the solid geometry of the kit room — the same room
+     * {@link #addKitRoom} draws, expressed as boxes a player cannot enter.
+     *
+     * <h2>Why this lives here and not in {@code PhysicsWorld}</h2>
+     *
+     * <p>Because this class is the only thing that knows where the room is.
+     * Every number below is read from a constant that also places a model:
+     * {@link #HALF_ROOM_UNITS} positions the wall instances,
+     * {@link #WALL_THICKNESS_GRID} is the wall model's own measured extent,
+     * {@link #DOORWAY_TILE} picks which south tile is a hole. Restating any of
+     * them inside the physics layer would let the room you can see and the room
+     * you can walk in drift apart, and a wall that is solid four units from
+     * where it is drawn is the sort of defect that survives for months because
+     * every screenshot of it looks correct.</p>
+     *
+     * <h2>What is solid, and what is deliberately not</h2>
+     *
+     * <p><b>Solid:</b> all four perimeter walls, the two jambs of the doorway,
+     * the four columns and the seven crates.</p>
+     *
+     * <p><b>The doorway stays open.</b> It is a 64-unit gap in the bottom course
+     * of the south wall, so the wall is emitted as two slabs with a hole between
+     * them rather than as one. A 32-unit-wide player passes with 16 units of
+     * clearance either side, which is the clearance
+     * {@link #KIT_WORLD_SCALE}'s Javadoc claimed as a reason for the scale in
+     * the first place — this is the first code that actually depends on it being
+     * true. Sealing the room would have been one fewer box and a demo that lies
+     * about the one piece of level geometry it went to the trouble of
+     * modelling.</p>
+     *
+     * <p><b>Not solid: the staircase and the ramp.</b> Both would have to be
+     * full-height boxes, because {@link PhysicsWorld} blocks at every height,
+     * and a full-height box around a staircase is an invisible wall in front of
+     * something the player can plainly see they should be able to walk up. The
+     * honest failure is the one that was already there — you walk through it —
+     * rather than a new one that reads as a bug. They become solid the day
+     * floor-height queries exist, and not before. The staircase sits at
+     * {@code z = 224} on the way to the doorway, so making it a wall would also
+     * have blocked the exit.</p>
+     *
+     * <p><b>Not solid: the bots.</b> They are target practice on fixed routes;
+     * bodies that shoved the player would change what {@code Match} means and is
+     * a gameplay decision, not a collision one.</p>
+     *
+     * <h2>Where the walls actually stop</h2>
+     *
+     * <p>{@link #addWalls} places each wall's <b>centre</b> on
+     * {@code +-}{@link #HALF_ROOM_UNITS}, and the model is 12.8 units thick, so
+     * the surface the player can see is 6.4 units inside that at +-313.6. The
+     * hull uses the surface, not the centre line: a player stopped on the centre
+     * line would have a third of their body buried in the wall they are looking
+     * at. With the 16-unit half-width that puts the furthest a player may stand
+     * at <b>+-297.6</b>, and their shoulder exactly against the plaster.</p>
+     *
+     * <p>Each wall is <b>one slab spanning the full side</b>, corners included,
+     * rather than the ten tile-sized boxes the renderer draws. That is not just
+     * cheaper, it is more correct: a row of abutting boxes has nine internal
+     * edges, and a player sliding along it who drifts a single ulp inside the
+     * surface catches on every one of them. One box has no internal edges, so
+     * sliding along a wall is smooth by construction rather than by tolerance.
+     * The four slabs overlap in the corner squares, which costs nothing — a
+     * point inside two solids is as blocked as a point inside one.</p>
+     *
+     * @return the room's solid geometry, sized for a player of
+     *     {@link PhysicsWorld#PLAYER_HALF_WIDTH_UNITS}
+     */
+    public static PhysicsWorld kitRoomPhysics()
+    {
+        final PhysicsWorld.Builder solid =
+            PhysicsWorld.builder(PhysicsWorld.PLAYER_HALF_WIDTH_UNITS);
+        final float inner = WALL_INNER_FACE_UNITS;
+        final float outer = HALF_ROOM_UNITS + WALL_THICKNESS_GRID * KIT_WORLD_SCALE * 0.5f;
+
+        // The two walls at constant x, each spanning the whole side.
+        solid.addBox(-outer, -outer, -inner, outer);
+        solid.addBox(inner, -outer, outer, outer);
+        // The wall at -z, unbroken.
+        solid.addBox(-outer, -outer, outer, -inner);
+        // The wall at +z, in two pieces with the doorway between them. The gap
+        // is one floor tile wide and centred on the tile the doorway model
+        // replaced, so it is the opening you can see rather than an
+        // approximation of it.
+        solid.addBox(-outer, inner, DOORWAY_MIN_X_UNITS, outer);
+        solid.addBox(DOORWAY_MAX_X_UNITS, inner, outer, outer);
+
+        final float columnOffset = HALF_ROOM_UNITS * COLUMN_FRACTION;
+        final float columnHalf = COLUMN_FOOTPRINT_GRID * KIT_WORLD_SCALE * 0.5f;
+        solid.addBoxAt(-columnOffset, -columnOffset, columnHalf, columnHalf);
+        solid.addBoxAt(columnOffset, -columnOffset, columnHalf, columnHalf);
+        solid.addBoxAt(-columnOffset, columnOffset, columnHalf, columnHalf);
+        solid.addBoxAt(columnOffset, columnOffset, columnHalf, columnHalf);
+
+        final float crateHalf = CRATE_FOOTPRINT_GRID * KIT_WORLD_SCALE * 0.5f;
+        for (int crate = 0; crate < CRATE_PLACEMENTS.length; crate += CRATE_STRIDE)
+        {
+            // Only the crates resting on the floor. The stacked one sits at
+            // y = 32 directly above another and would add a box identical to the
+            // one already there — solids block at every height, so a stack of
+            // two is one obstacle, not two.
+            if (CRATE_PLACEMENTS[crate + 1] != 0.0f)
+            {
+                continue;
+            }
+            solid.addBoxAt(CRATE_PLACEMENTS[crate], CRATE_PLACEMENTS[crate + 2],
+                crateHalf, crateHalf);
+        }
+        return solid.build();
+    }
+
+    /**
+     * Builds the solid geometry of the generated fallback room — four walls and
+     * no way out.
+     *
+     * <p>{@code ProceduralRoom} authors a sealed 16x16 box with no doorway in
+     * it, so this one really is a closed room and the player really is meant to
+     * stay in it. Its interior half-extent is the room's own
+     * {@code FALLBACK_INTERIOR_HALF_EXTENT} at {@link #FALLBACK_WORLD_SCALE},
+     * which is the surface the player stops against; the slabs are given the
+     * same thickness the kit walls have purely so the boxes are well formed,
+     * since nothing can reach their far side.</p>
+     *
+     * <p>This is the room a fresh clone with no art staged gets, and it is worth
+     * it being solid: it is the only room some contributors will ever see.</p>
+     *
+     * @return the fallback room's solid geometry
+     */
+    public static PhysicsWorld fallbackRoomPhysics()
+    {
+        final PhysicsWorld.Builder solid =
+            PhysicsWorld.builder(PhysicsWorld.PLAYER_HALF_WIDTH_UNITS);
+        final float inner = FALLBACK_INTERIOR_HALF_EXTENT * FALLBACK_WORLD_SCALE;
+        final float outer = inner + WALL_THICKNESS_GRID * KIT_WORLD_SCALE;
+        solid.addBox(-outer, -outer, -inner, outer);
+        solid.addBox(inner, -outer, outer, outer);
+        solid.addBox(-outer, -outer, outer, -inner);
+        solid.addBox(-outer, inner, outer, outer);
+        return solid.build();
     }
 
     // The held weapon, or nothing at all when none was staged. A null model is
@@ -910,13 +1115,35 @@ public final class DemoScene
     }
 
     /**
-     * Returns a controller standing at the demo's spawn point.
+     * Returns a controller standing at the demo's spawn point, already bound to
+     * the room's solid geometry.
      *
-     * @return a fresh controller placed on the floor, facing down the room
+     * <p>Bound here rather than by the launcher on purpose. This is the only
+     * method that produces a player for this room, so a player who can walk
+     * through its walls is not constructible — which is the state the demo was
+     * in until now, and it was in it because the collision had nowhere obvious
+     * to be attached.</p>
+     *
+     * @return a fresh controller placed on the floor, facing down the room, that
+     *     collides with it
      */
     public PlayerController spawnController()
     {
-        return new PlayerController(spawnX, spawnY, spawnZ, spawnYawRadians, 0.0f);
+        return new PlayerController(spawnX, spawnY, spawnZ, spawnYawRadians, 0.0f, physics);
+    }
+
+    /**
+     * Returns the room's solid geometry.
+     *
+     * <p>Immutable and shared. Whatever else comes to move inside this room —
+     * bots, projectiles, a remote peer's body — should clip against this one
+     * instance rather than build a second description of the same walls.</p>
+     *
+     * @return the collision world this scene's players move in, never null
+     */
+    public PhysicsWorld physics()
+    {
+        return physics;
     }
 
     /** Returns the spawn feet position, world x. */

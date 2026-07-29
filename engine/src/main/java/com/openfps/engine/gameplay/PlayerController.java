@@ -17,10 +17,17 @@ import com.openfps.engine.render.adapter.Vec3;
  * <p>Holds the three pieces of state a first-person view needs: a world
  * position (the player's <b>feet</b>), a yaw and a pitch. {@link #update}
  * integrates one tic of {@link I_PlayerInput} into them; the accessors and
- * {@link #camera} read them back. There is no rendering here, no I/O, and no
- * collision — {@code PhysicsWorld} will wrap this later and reject the parts of
- * a move that hit a wall. Everything on this class is a pure function of state
- * and arguments.</p>
+ * {@link #camera} read them back. There is no rendering here and no I/O.
+ * Everything on this class is a pure function of state and arguments.</p>
+ *
+ * <p><b>Collision arrived exactly where this Javadoc said it would.</b> The
+ * ground move is handed to a {@link PhysicsWorld}, which rejects the parts of it
+ * that hit a wall and returns the rest — see {@link #applyMove}. The world is an
+ * immutable collaborator supplied at construction and defaulting to
+ * {@link PhysicsWorld#OPEN}, so a controller built without a room walks through
+ * everything exactly as this class always did, and every property below still
+ * holds: the update path allocates nothing, touches no clock, and is a pure
+ * function of the state, the arguments and that one final field.</p>
  *
  * <h2>World and angle conventions</h2>
  *
@@ -244,11 +251,12 @@ public final class PlayerController
     /**
      * The floor plane, in world units.
      *
-     * <p>Zero, and flat, because this controller has no collision — the demo
-     * room's floor tiles are all at {@code y = 0}. When {@code PhysicsWorld}
-     * lands it will replace this with the height of whatever the player is
-     * actually standing on, and the landing test below is the one line that
-     * changes.</p>
+     * <p>Zero, and flat, because the demo room's floor tiles are all at
+     * {@code y = 0}. {@link PhysicsWorld} has landed and deliberately did
+     * <b>not</b> change this: it clips movement in the horizontal plane only,
+     * and its solids block at every height. Standing on a crate needs a floor
+     * <i>height</i> query rather than a blocking test, and when that arrives the
+     * landing clamp below is still the one line that changes.</p>
      */
     public static final float GROUND_LEVEL_UNITS = 0.0f;
 
@@ -311,7 +319,18 @@ public final class PlayerController
     private float velocityY;
 
     /**
-     * Creates a controller standing at the world origin, facing world +z, level.
+     * What the ground move is clipped against. Never null.
+     *
+     * <p>Final, and the only collaborator this class has. It is immutable and
+     * stateless once built, so it changes none of the determinism arguments
+     * above — two peers holding the same world and the same state compute the
+     * same clipped step, bit for bit.</p>
+     */
+    private final PhysicsWorld world;
+
+    /**
+     * Creates a controller standing at the world origin, facing world +z, level,
+     * in a world with nothing solid in it.
      */
     public PlayerController()
     {
@@ -319,7 +338,8 @@ public final class PlayerController
     }
 
     /**
-     * Creates a controller at a given spawn placement.
+     * Creates a controller at a given spawn placement, in a world with nothing
+     * solid in it.
      *
      * The yaw is wrapped and the pitch clamped exactly as {@link #update} would
      * do, so no caller can construct a state the controller could not reach.
@@ -335,11 +355,45 @@ public final class PlayerController
     public PlayerController(final float feetX, final float feetY, final float feetZ,
         final float spawnYawRadians, final float spawnPitchRadians)
     {
+        this(feetX, feetY, feetZ, spawnYawRadians, spawnPitchRadians, PhysicsWorld.OPEN);
+    }
+
+    /**
+     * Creates a controller at a given spawn placement inside a given world.
+     *
+     * <p>This is the constructor a map uses. The world is not validated against
+     * the spawn — a spawn point inside a wall is the map's mistake to make, and
+     * {@link PhysicsWorld}'s "never resolve a body already inside a solid" rule
+     * means the player walks out of it rather than being pinned. Check it with
+     * {@link PhysicsWorld#isBlocked} if the placement is generated rather than
+     * authored.</p>
+     *
+     * @param feetX spawn position, world x
+     * @param feetY spawn position, world y — the floor the player stands on,
+     *     not the eye
+     * @param feetZ spawn position, world z
+     * @param spawnYawRadians initial heading; wrapped into {@code [0, 2pi)}
+     * @param spawnPitchRadians initial elevation; clamped to
+     *     {@code +-}{@link #MAX_PITCH_RADIANS}
+     * @param collisionWorld the solid geometry to clip movement against; must
+     *     not be null. Pass {@link PhysicsWorld#OPEN} for no collision at all
+     * @throws IllegalArgumentException if {@code collisionWorld} is null
+     */
+    public PlayerController(final float feetX, final float feetY, final float feetZ,
+        final float spawnYawRadians, final float spawnPitchRadians,
+        final PhysicsWorld collisionWorld)
+    {
+        if (collisionWorld == null)
+        {
+            throw new IllegalArgumentException(
+                "collisionWorld must not be null; use PhysicsWorld.OPEN for no collision");
+        }
         this.positionX = feetX;
         this.positionY = feetY;
         this.positionZ = feetZ;
         this.yawRadians = wrapYaw(spawnYawRadians);
         this.pitchRadians = clampPitch(spawnPitchRadians);
+        this.world = collisionWorld;
     }
 
     /**
@@ -505,7 +559,32 @@ public final class PlayerController
         this.pitchRadians = clampPitch(pitchRadians + input.pitchDelta());
     }
 
-    // Integrates the movement axes along the yaw-relative ground basis.
+    /**
+     * Integrates the movement axes along the yaw-relative ground basis, then
+     * lets the world take back whatever hit something.
+     *
+     * <h2>The desired move is computed first and clipped second</h2>
+     *
+     * <p>That split is the entire integration with {@link PhysicsWorld} and it
+     * is deliberately this shape. The basis, the diagonal clamp and the speed
+     * are the player's business; what the room permits is the room's. Neither
+     * half knows anything about the other, so the movement maths stayed exactly
+     * as it was when collision landed — no wall case leaked into the yaw basis,
+     * which is the one piece of arithmetic in this engine that has already been
+     * wrong once.</p>
+     *
+     * <p><b>x is clipped, and then z is clipped from the x the player actually
+     * reached.</b> Both halves of that sentence matter. Clipping each axis
+     * separately is what makes a diagonal into a wall <i>slide</i> along it
+     * rather than stop dead — the blocked component is lost and the free one
+     * survives — and feeding the second call the clipped x is what stops an
+     * inside corner leaking, because the z step is then measured from a position
+     * the player can really occupy. {@link PhysicsWorld} has the full argument,
+     * including why the order is fixed rather than chosen per tic.</p>
+     *
+     * @param input this tic's movement axes
+     * @param deltaSeconds the tic duration in seconds
+     */
     private void applyMove(final I_PlayerInput input, final float deltaSeconds)
     {
         final float forwardAxis = clampAxis(input.forwardAxis());
@@ -537,8 +616,14 @@ public final class PlayerController
         final float deltaX = (sinYaw * forwardAxis - cosYaw * strafeAxis) * step;
         final float deltaZ = (cosYaw * forwardAxis + sinYaw * strafeAxis) * step;
 
-        this.positionX = positionX + deltaX;
-        this.positionZ = positionZ + deltaZ;
+        // The one place a wall can touch this class. PhysicsWorld.OPEN returns
+        // both sums unchanged, so a controller with no room behind it takes the
+        // identical path and lands on the identical float.
+        final float clippedX = world.slideX(positionX, positionZ, deltaX);
+        final float clippedZ = world.slideZ(clippedX, positionZ, deltaZ);
+
+        this.positionX = clippedX;
+        this.positionZ = clippedZ;
     }
 
     // Reduces an angle into [0, 2pi). A yaw already in range is returned bit
@@ -610,6 +695,19 @@ public final class PlayerController
     public float positionZ()
     {
         return positionZ;
+    }
+
+    /**
+     * Returns the solid geometry this player's movement is clipped against.
+     *
+     * <p>Never null; {@link PhysicsWorld#OPEN} when the controller was built
+     * without a room. Immutable, so handing it out shares nothing mutable.</p>
+     *
+     * @return the collision world, never null
+     */
+    public PhysicsWorld world()
+    {
+        return world;
     }
 
     /** Returns the feet position as a vector. */
