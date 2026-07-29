@@ -110,6 +110,18 @@ public final class GdxInputPort implements I_InputPort
     public static final float MOUSE_SENSITIVITY_RADIANS_PER_PIXEL =
         InputAccumulator.DEFAULT_RADIANS_PER_PIXEL;
 
+    /**
+     * Polls of mouse motion discarded after the cursor is caught.
+     *
+     * <p>Two, not one. The catch and the warp delta it provokes do not land on
+     * the same frame — see {@link #discardLookPolls} for the measurement that
+     * settled it. Two covers the observed one-frame lag with a frame in hand;
+     * the cost of an extra discarded poll is at most one frame of look at the
+     * instant a match begins, which no player can perceive, against a view that
+     * snaps a quarter turn if it is too low.</p>
+     */
+    public static final int DISCARD_LOOK_POLLS_AFTER_CAPTURE = 2;
+
     private static final Logger LOG = LoggerFactory.getLogger(GdxInputPort.class);
 
     /** Where the render thread deposits readings and the loop thread collects them. */
@@ -124,11 +136,24 @@ public final class GdxInputPort implements I_InputPort
     private volatile InputState latched = InputState.NEUTRAL;
 
     /**
-     * Drop the next frame's mouse delta.
-     * MUTABLE: set when the cursor is caught, cleared by the next poll. Only
-     * ever touched on the render thread.
+     * How many more polls of mouse delta to throw away.
+     *
+     * <p>MUTABLE: reloaded when the cursor is caught, counted down by
+     * {@link #pollLook}. Only ever touched on the render thread.</p>
+     *
+     * <p><b>A counter and not a boolean, because one frame was not enough.</b>
+     * Catching the cursor warps the pointer to the window centre, and GLFW
+     * reports that warp as an ordinary motion delta — but not on the frame that
+     * did the catching. It arrives on a later one. A single-frame flag is
+     * therefore spent before the delta it exists to eat ever shows up, and the
+     * whole warp lands on the camera.</p>
+     *
+     * <p>Measured, not guessed: entering a match with the mouse untouched
+     * snapped the view by exactly 512 px of yaw — the
+     * {@link InputAccumulator#MAX_PIXELS_PER_POLL} clamp, saturated — and
+     * 412 px of pitch, reproducibly, to the same two angles on every run.</p>
      */
-    private boolean discardNextLook;
+    private int discardLookPolls;
 
     /**
      * True once the window has gone and no GLFW call is safe any more.
@@ -213,7 +238,12 @@ public final class GdxInputPort implements I_InputPort
     {
         accumulator.clearAll();
         latched = InputState.NEUTRAL;
-        discardNextLook = false;
+        // Armed, not cleared. A port that comes up already in PLAYING — which
+        // --start-in-game does, because the match begins before this runs —
+        // sees no MENU->PLAYING transition, so syncUiState() never arms the
+        // discard and the capture warp lands on the camera unopposed. That is
+        // not a harness quirk: any path that starts captured has the same hole.
+        discardLookPolls = DISCARD_LOOK_POLLS_AFTER_CAPTURE;
         windowClosed = false;
         appliedState = uiState.state();
         final GameAction unbound = bindings.firstUnbound();
@@ -437,9 +467,9 @@ public final class GdxInputPort implements I_InputPort
         // across the menu; crossing back it is a key still held at the moment
         // Escape was pressed.
         accumulator.clearAll();
-        // Capture warps the pointer to the window centre, so the first delta
-        // reported afterwards is the warp and not a hand movement.
-        discardNextLook = true;
+        // Capture warps the pointer to the window centre, so the next delta
+        // reported is the warp and not a hand movement.
+        discardLookPolls = DISCARD_LOOK_POLLS_AFTER_CAPTURE;
     }
 
     // Makes GLFW agree with the UI state. Reconciled rather than toggled on the
@@ -590,9 +620,9 @@ public final class GdxInputPort implements I_InputPort
     // this and deliberately not the same knob.
     private void pollLook(final Input input)
     {
-        if (discardNextLook)
+        if (discardLookPolls > 0)
         {
-            discardNextLook = false;
+            discardLookPolls = discardLookPolls - 1;
             accumulator.resetLook();
             return;
         }
