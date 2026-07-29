@@ -54,7 +54,35 @@ public final class InputBinding
         TOUCH_REGION,
 
         /** A gamepad button. The code is a platform button index. */
-        GAMEPAD_BUTTON
+        GAMEPAD_BUTTON,
+
+        /**
+         * A gamepad axis — a stick's deflection or a trigger's pull. The code
+         * identifies which axis, and the platform owns what the number means.
+         *
+         * <p><b>A separate source from {@link #GAMEPAD_BUTTON} because the
+         * query is genuinely different</b>, which is the bar this enum sets. A
+         * button answers a boolean; an axis answers a float that has to be
+         * dead-zoned, curved and — for a stick — read as half of a pair. No
+         * platform reads the two with one call, so folding them together would
+         * put a discriminator back inside every polling loop.</p>
+         *
+         * <p><b>What an axis binding is for, and what it is not.</b> A
+         * <i>trigger</i> axis on a button action ({@link GameAction#FIRE}) is
+         * resolved exactly like a button: the platform compares its pull
+         * against a threshold and reports held or not. A <i>stick</i> axis is
+         * different — it names a control that has a direction, so "is the left
+         * stick held?" has no answer, and a platform reports it inactive rather
+         * than inventing one. Binding a stick to the four movement actions is
+         * still worth doing, and both default tables do it: it is what makes
+         * the scheme reportable and, later, rebindable. The stick's
+         * <i>deflection</i> then reaches the game the way a touch stick already
+         * does — read directly by the port, because the four directions are not
+         * four controls but one control read four ways. {@code AndroidBindings}
+         * has made exactly that argument for a thumb since before there was a
+         * gamepad.</p>
+         */
+        GAMEPAD_AXIS
     }
 
     /** Which kind of device. Never null. */
@@ -112,6 +140,31 @@ public final class InputBinding
     public static InputBinding touchRegion(final int regionId)
     {
         return new InputBinding(Source.TOUCH_REGION, regionId);
+    }
+
+    /**
+     * Creates a gamepad-button binding.
+     *
+     * @param buttonIndex the platform's identifier for the button. A GLFW
+     *     gamepad button index on desktop and a libGDX {@code Input.Keys}
+     *     constant on Android, because that is genuinely how each platform
+     *     reports a pad button — see the class Javadoc on why a code is opaque
+     * @return a binding on {@link Source#GAMEPAD_BUTTON}
+     */
+    public static InputBinding gamepadButton(final int buttonIndex)
+    {
+        return new InputBinding(Source.GAMEPAD_BUTTON, buttonIndex);
+    }
+
+    /**
+     * Creates a gamepad-axis binding.
+     *
+     * @param axisIndex the platform's identifier for the axis
+     * @return a binding on {@link Source#GAMEPAD_AXIS}
+     */
+    public static InputBinding gamepadAxis(final int axisIndex)
+    {
+        return new InputBinding(Source.GAMEPAD_AXIS, axisIndex);
     }
 
     /** Returns which kind of device this binding names. Never null. */
