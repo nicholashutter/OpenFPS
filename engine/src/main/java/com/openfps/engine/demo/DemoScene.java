@@ -186,6 +186,17 @@ public final class DemoScene
     /** How far below the eye the weapon sits, in view-space units. Negative is down. */
     public static final float WEAPON_VIEW_DOWN = -0.38f;
 
+    /**
+     * The instance index meaning "there is no such instance in this scene".
+     *
+     * <p>Negative, so it can never collide with a real index — those are
+     * positions in the builder's list and start at zero. Returned by
+     * {@link #botWeaponInstanceIndex} when no bot weapon model was staged, which
+     * is a supported state rather than a failure: the demo's art is gitignored
+     * and a fresh clone has none of it.</p>
+     */
+    public static final int NO_INSTANCE = -1;
+
     private static final Logger LOG = LoggerFactory.getLogger(DemoScene.class);
 
     /** Degrees in half a turn, for the degrees-to-radians conversion. */
@@ -329,6 +340,107 @@ public final class DemoScene
     public static final float CHARACTER_WORLD_SCALE =
         PLAYER_HEIGHT_UNITS / CHARACTER_MODEL_HEIGHT;
 
+    /**
+     * Scale from the bots' blaster model to world units — the same number as
+     * {@link #CHARACTER_WORLD_SCALE}, and <b>that is a finding rather than a
+     * shortcut</b>.
+     *
+     * <p>The two packs turn out to be authored at very nearly one common metre.
+     * A Blocky Character is 2.70 model units tall and stands for a person of
+     * about 1.7 m, so one unit is 0.63 m. A Blaster Kit pistol
+     * ({@code blaster-b}) is 0.42 units long and is plainly a pistol, so one
+     * unit is about 0.6 m there too. Nothing was tuned to make that happen — it
+     * is the same corroboration {@link #KIT_WORLD_SCALE} and
+     * {@link #CHARACTER_WORLD_SCALE} both turned out to have.</p>
+     *
+     * <p>So the bots' carbine ({@code blaster-p}, 0.86 units long) lands at
+     * <b>17.8 world units</b> against a 56-unit body: a third of the holder's
+     * height, which is what a two-handed weapon looks like. Deriving it rather
+     * than picking a number matters because the failure mode is not subtle —
+     * this is the constant that decides between a rifle and a car.</p>
+     *
+     * <p><b>Unrelated to {@link #WEAPON_VIEW_SCALE}, which sizes the player's
+     * own gun.</b> That one is a viewmodel: it lives in view space, it is sized
+     * to look right on a screen, and deriving one from the other would be a
+     * coincidence dressed as a rule. See the class Javadoc.</p>
+     */
+    public static final float BOT_WEAPON_WORLD_SCALE = CHARACTER_WORLD_SCALE;
+
+    /**
+     * How far right of a bot's centre line its weapon sits, in world units — 9.
+     *
+     * <p>A Blocky Character is 1.60 model units across, which is 33 world units,
+     * so a shoulder is about 16 units out and a hand held in front of the body
+     * is a little inside that. The three offsets below place the weapon's origin
+     * rather than its muzzle, which is why they are smaller than a look at the
+     * body would suggest — the same distinction {@code DemoEffects} had to make
+     * for the muzzle smoke, and got wrong first time.</p>
+     */
+    public static final float BOT_WEAPON_RIGHT_UNITS = 9.0f;
+
+    /**
+     * How far in front of a bot its weapon sits, in world units — 7.
+     *
+     * <p>The body is 0.80 model units deep, which is 17 world units, so its
+     * front face is 8 units ahead of its centre. Seven puts the weapon's origin
+     * just inside that, so the model reads as held rather than as floating in
+     * front of a chest.</p>
+     */
+    public static final float BOT_WEAPON_FORWARD_UNITS = 7.0f;
+
+    /**
+     * How high above a bot's feet its weapon sits, in world units — 30.
+     *
+     * <p>Just over half of the 56-unit body, which on these proportions is where
+     * a lowered pair of hands is. Not at {@link Bot#EYE_HEIGHT_UNITS}: a weapon
+     * level with the eyes reads as aimed down a sight, and these are not
+     * aiming — the whole of {@code BotSkill} is about how badly they aim.</p>
+     */
+    public static final float BOT_WEAPON_HEIGHT_UNITS = 30.0f;
+
+    /**
+     * Weapon yaw within a bot's own frame, in degrees — <b>240</b>.
+     *
+     * <p>Two rotations that compose into one number, so both are written down —
+     * the same shape of statement {@link #WEAPON_VIEW_YAW_DEGREES} makes for the
+     * player's own gun.</p>
+     *
+     * <ul>
+     *   <li><b>180 degrees</b> because a Blaster Kit muzzle points along model
+     *       <b>-z</b>, verified by rendering one, while a placement's yaw of zero
+     *       puts model +z along the holder's facing. Without the flip every bot in
+     *       the room holds its carbine backwards — which is surprisingly hard to
+     *       notice in a still, because the grip end is the chunkier one.</li>
+     *   <li><b>60 degrees of carry angle</b>, and <b>this is the number that made
+     *       the weapon visible at all.</b> Pointed straight down the bot's facing
+     *       it was aimed at the camera, so what the player saw was its
+     *       <i>cross-section</i> — 3 units by 8, on a 56-unit body, which reads as
+     *       a smudge on a shirt rather than as a gun. It is the identical mistake
+     *       {@code DemoEffects.TRACER_WIDTH_UNITS} records for the tracer bolt,
+     *       and it was made again here.</li>
+     * </ul>
+     *
+     * <p>Sixty rather than ninety: at ninety the weapon is exactly side-on and
+     * shows its full 17.8 units, but a body holding a carbine dead across its
+     * chest reads as a guard of honour. At sixty the visible length is
+     * {@code sin(60) = 87%} of it — about a third of the body's height across the
+     * screen, unmistakably a weapon — while the muzzle still points forward
+     * enough to read as carried rather than presented.</p>
+     *
+     * <p><b>Angled rather than scaled up, which was the other candidate fix.</b>
+     * The scale is <i>derived</i> ({@link #BOT_WEAPON_WORLD_SCALE}) from two packs
+     * that turn out to agree about a metre, and inflating it to solve a
+     * foreshortening problem would have thrown that away and given the bots
+     * comically large guns to look at from the side. The weapon was the right
+     * size all along and pointing the wrong way.</p>
+     *
+     * <p>It also happens to suit these opponents: a weapon held across the body is
+     * a weapon that is not being aimed, and {@link Bot}'s whole skill model is
+     * about how badly they aim. The same reasoning put
+     * {@link #BOT_WEAPON_HEIGHT_UNITS} below eye level.</p>
+     */
+    public static final float BOT_WEAPON_YAW_DEGREES = 240.0f;
+
 
     /**
      * Where the bots patrol: route centre {x, z} in world units, in id order.
@@ -423,6 +535,7 @@ public final class DemoScene
     private final Scene scene;
     private final Bot[] bots;
     private final int[] botInstances;
+    private final int[] botWeaponInstances;
     private final DemoEffects effects;
     private final float spawnX;
     private final float spawnY;
@@ -433,14 +546,15 @@ public final class DemoScene
 
     // Takes ownership of a finished scene and the spawn that belongs to it.
     private DemoScene(final Scene builtScene, final Bot[] roster, final int[] instanceIndices,
-        final DemoEffects shotEffects, final float feetX, final float feetY, final float feetZ,
-        final float yawRadians, final DemoModels.Source modelSource,
-        final PhysicsWorld solidGeometry)
+        final int[] weaponIndices, final DemoEffects shotEffects, final float feetX,
+        final float feetY, final float feetZ, final float yawRadians,
+        final DemoModels.Source modelSource, final PhysicsWorld solidGeometry)
     {
         this.physics = solidGeometry;
         this.scene = builtScene;
         this.bots = roster;
         this.botInstances = instanceIndices;
+        this.botWeaponInstances = weaponIndices;
         this.effects = shotEffects;
         this.spawnX = feetX;
         this.spawnY = feetY;
@@ -488,7 +602,8 @@ public final class DemoScene
                 FALLBACK_INTERIOR_HALF_EXTENT * FALLBACK_WORLD_SCALE * SPAWN_DEPTH_FRACTION;
         }
         final int[] instanceIndices = new int[BOT_ROUTE_CENTRES.length / BOT_STRIDE];
-        final Bot[] roster = addBots(builder, models, instanceIndices);
+        final int[] weaponIndices = new int[instanceIndices.length];
+        final Bot[] roster = addBots(builder, models, instanceIndices, weaponIndices);
         // Unconditionally, and independent of which art is staged: the tracer
         // and the smoke are generated geometry, so they are the one part of the
         // demo that cannot be missing from a fresh clone.
@@ -504,8 +619,8 @@ public final class DemoScene
             + " the staircase and the ramp are not", solidGeometry);
         // Facing +z, which is yaw 0 (PlayerController's convention), standing
         // back from the origin so the whole room is ahead rather than around.
-        return new DemoScene(built, roster, instanceIndices, shots, 0.0f, 0.0f, -spawnDepth,
-            0.0f, models.source(), solidGeometry);
+        return new DemoScene(built, roster, instanceIndices, weaponIndices, shots, 0.0f, 0.0f,
+            -spawnDepth, 0.0f, models.source(), solidGeometry);
     }
 
     /**
@@ -531,14 +646,27 @@ public final class DemoScene
      * the first check. That is a degraded demo rather than a broken one, and it
      * is what a checkout with no assets fetched will produce.</p>
      *
+     * <h2>Each bot also gets a weapon instance, for the same reason</h2>
+     *
+     * <p>A {@link Scene} is immutable, so a bot's blaster cannot be created when
+     * it is needed any more than a bot can. One instance per bot is placed here
+     * and moved every tic beside the body — the identical pattern
+     * {@link DemoEffects} uses for a tracer, and the identical reason. It is
+     * tagged with the <b>bot's own entity id</b> rather than left untagged, so
+     * the outline pass draws one silhouette round the body and what it is
+     * holding, and so the crosshair does not go dead when it crosses the gun.</p>
+     *
      * @param builder the scene under construction; instances are appended
      * @param models the loaded model set
      * @param instanceIndices filled with the scene index of each placed bot;
      *     must be at least as long as the bot roster
+     * @param weaponIndices filled with the scene index of each bot's weapon, or
+     *     {@link #NO_INSTANCE} where no bot weapon model was staged; must be at
+     *     least as long as the bot roster
      * @return one bot per placement, in id order, never null
      */
     private static Bot[] addBots(final Scene.Builder builder, final DemoModels models,
-        final int[] instanceIndices)
+        final int[] instanceIndices, final int[] weaponIndices)
     {
         if (!models.hasCharacters())
         {
@@ -546,6 +674,7 @@ public final class DemoScene
         }
 
         final ModelFormat[] people = models.characters();
+        final ModelFormat blaster = models.botWeapon();
         final int count = BOT_ROUTE_CENTRES.length / BOT_STRIDE;
         final Bot[] roster = new Bot[count];
         for (int index = 0; index < count; index++)
@@ -555,8 +684,7 @@ public final class DemoScene
             final int entityId = Match.FIRST_BOT_ENTITY_ID + index;
 
             final Bot bot = new Bot(entityId, homeX, 0.0f, homeZ, BOT_PATTERNS[index],
-                BOT_AMPLITUDES[index], BOT_PERIODS[index], BOT_PHASES[index],
-                Match.BOT_FIRE_INTERVAL_TICS, fireOffsetFor(index, count));
+                BOT_AMPLITUDES[index], BOT_PERIODS[index], BOT_PHASES[index]);
 
             // Cycles through however many models were staged, so a partially
             // staged pack still puts a body at every placement rather than
@@ -565,12 +693,30 @@ public final class DemoScene
             final ModelFormat model = people[index % people.length];
             instanceIndices[index] = builder.worldInstanceCount();
             builder.addWorldInstance(model, botPlacement(bot), entityId);
+            weaponIndices[index] = addBotWeapon(builder, blaster, bot);
             roster[index] = bot;
         }
         LOG.info("Demo bots: {} placed from {} model(s), ids {}..{}, {} world units tall,"
-            + " radius {}", count, people.length, Match.FIRST_BOT_ENTITY_ID,
-            Match.FIRST_BOT_ENTITY_ID + count - 1, PLAYER_HEIGHT_UNITS, PLAYER_RADIUS_UNITS);
+            + " radius {}, armed: {}", count, people.length, Match.FIRST_BOT_ENTITY_ID,
+            Match.FIRST_BOT_ENTITY_ID + count - 1, PLAYER_HEIGHT_UNITS, PLAYER_RADIUS_UNITS,
+            blaster != null);
         return roster;
+    }
+
+    // One bot's blaster, or nothing at all when none was staged. A null model is
+    // not an error here — DemoModels has already said so at WARN — and the
+    // sentinel is what lets publishBotPlacements skip the weapon without a
+    // second flag that could disagree with this one.
+    private static int addBotWeapon(final Scene.Builder builder, final ModelFormat blaster,
+        final Bot bot)
+    {
+        if (blaster == null)
+        {
+            return NO_INSTANCE;
+        }
+        final int at = builder.worldInstanceCount();
+        builder.addWorldInstance(blaster, botWeaponPlacement(bot), bot.entityId());
+        return at;
     }
 
     /**
@@ -621,22 +767,52 @@ public final class DemoScene
     }
 
     /**
-     * Staggers the bots' firing so seven of them do not volley on the same tic.
+     * Returns the placement transform for one bot's weapon this tic.
      *
-     * <p>{@code Bot.wantsToFire} is true when {@code (tic + offset)} is a
-     * multiple of the interval, so distinct offsets put distinct bots on
-     * distinct tics. Spreading them evenly across the interval turns one shot
-     * every 150 tics per bot into one shot every 21 tics somewhere in the room —
-     * the same total rate, but a rate the player experiences as pressure rather
-     * than as a periodic broadside.</p>
+     * <p>Public and called every tic from outside, exactly as
+     * {@link #botPlacement} is, and it has to be: a held weapon that did not
+     * move with its holder would be a blaster hanging in the air where a bot
+     * used to be.</p>
      *
-     * @param index which bot, from zero
-     * @param count how many bots there are; must be positive
-     * @return the firing offset in tics
+     * <p><b>Hidden when the bot is dead, on the same tic and by the same
+     * mechanism as the body.</b> That is not a detail — a corpse's weapon left
+     * floating over the spot where it fell is the most conspicuous thing in the
+     * room, and it is what makes "the body goes away" look like a rendering
+     * fault rather than a kill. The reset brings it back with everything
+     * else.</p>
+     *
+     * <h2>The transform, since it is not one of {@link #placement}'s</h2>
+     *
+     * <p><b>Two angles that are deliberately different, which is why this is
+     * written out rather than composed from {@link #placement} alone.</b> The
+     * <i>offset</i> is a position in the bot's own frame, so it is rotated by the
+     * bot's yaw using {@code PlayerController}'s basis —
+     * {@code groundForward = (sin, 0, cos)} and
+     * {@code groundRight = groundForward x up = (-cos, 0, sin)}. The <i>model</i>
+     * is turned by the bot's yaw plus {@link #BOT_WEAPON_YAW_DEGREES}, which is
+     * the muzzle flip and the carry angle together. Using one angle for both would
+     * put the gun in the correct hand pointing backwards, or in the wrong hand
+     * pointing forwards, depending on which one was picked.</p>
+     *
+     * @param bot the bot holding it; must not be null
+     * @return its model-to-world transform this tic, or {@link DemoEffects#HIDDEN}
+     *     if it is dead
      */
-    private static int fireOffsetFor(final int index, final int count)
+    public static Mat4 botWeaponPlacement(final Bot bot)
     {
-        return index * (Match.BOT_FIRE_INTERVAL_TICS / count);
+        if (!bot.isAlive())
+        {
+            return DemoEffects.HIDDEN;
+        }
+        final float yaw = bot.yawRadians();
+        final float sinYaw = (float) StrictMath.sin(yaw);
+        final float cosYaw = (float) StrictMath.cos(yaw);
+        final float x = bot.positionX()
+            + BOT_WEAPON_FORWARD_UNITS * sinYaw - BOT_WEAPON_RIGHT_UNITS * cosYaw;
+        final float z = bot.positionZ()
+            + BOT_WEAPON_FORWARD_UNITS * cosYaw + BOT_WEAPON_RIGHT_UNITS * sinYaw;
+        return placement(x, bot.positionY() + BOT_WEAPON_HEIGHT_UNITS, z,
+            yaw + radians(BOT_WEAPON_YAW_DEGREES), BOT_WEAPON_WORLD_SCALE);
     }
 
     // The room the demo is actually meant to show: floor, walls, props.
@@ -1088,6 +1264,37 @@ public final class DemoScene
     public int botInstanceIndex(final int botIndex)
     {
         return botInstances[botIndex];
+    }
+
+    /**
+     * Returns the scene instance index of one bot's weapon.
+     *
+     * <p>The same handle as {@link #botInstanceIndex}, for the blaster the bot is
+     * holding. A held weapon has to be moved every tic beside the body, so the
+     * gameplay port needs both indices for every bot.</p>
+     *
+     * @param botIndex which bot, in the same order as {@link #bots()}
+     * @return its weapon's index among the scene's world instances, or
+     *     {@link #NO_INSTANCE} when no bot weapon model was staged
+     */
+    public int botWeaponInstanceIndex(final int botIndex)
+    {
+        return botWeaponInstances[botIndex];
+    }
+
+    /**
+     * Returns whether the bots in this scene are holding anything.
+     *
+     * <p>False on a checkout with no weapon art staged, which is a degraded demo
+     * and not a broken one — the opponents still shoot. Exposed so a test can
+     * say which of the two it is looking at rather than inferring it from an
+     * instance index it would then have to interpret.</p>
+     *
+     * @return true when a bot weapon model was staged and placed
+     */
+    public boolean hasBotWeapons()
+    {
+        return botWeaponInstances.length > 0 && botWeaponInstances[0] != NO_INSTANCE;
     }
 
     /**

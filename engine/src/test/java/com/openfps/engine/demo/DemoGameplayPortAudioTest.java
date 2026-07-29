@@ -91,7 +91,7 @@ final class DemoGameplayPortAudioTest
     private static Match match()
     {
         return new Match(new Bot[] {new Bot(TARGET_ID, 0.0f, OUT_OF_REACH_HEIGHT, 0.0f,
-            BotPattern.SENTRY, 0.0f, 120, 0, 90, 0)});
+            BotPattern.SENTRY, 0.0f, 120, 0)});
     }
 
     /** An input port that replays one snapshot forever. */

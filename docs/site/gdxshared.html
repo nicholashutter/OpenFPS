@@ -70,10 +70,12 @@
 <li class="lv2"><a href="#what-the-presenter-is-worth-sharing-for">What the presenter is worth sharing for</a></li>
 <li class="lv2"><a href="#the-render-resolution-is-not-the-surface-resolution">The render resolution is not the surface resolution</a></li>
 <li class="lv2"><a href="#inputaccumulator-imports-nothing">InputAccumulator imports nothing</a></li>
+<li class="lv2"><a href="#a-mouse-and-a-stick-are-different-kinds-of-quantity">A mouse and a stick are different kinds of quantity</a></li>
+<li class="lv2"><a href="#analogstick-holds-every-number-a-player-can-feel">AnalogStick holds every number a player can feel</a></li>
 <li class="lv2"><a href="#files">Files</a></li>
 </ul></details></aside>
 <main id="doc">
-<p class="crumb"><span class="tag">Modules</span><span class="sep">/</span><code>gdxshared/README.md</code><span class="sep">/</span>5 min read</p>
+<p class="crumb"><span class="tag">Modules</span><span class="sep">/</span><code>gdxshared/README.md</code><span class="sep">/</span>7 min read</p>
 <h1 id="gdxshared--the-libgdx-code-that-is-not-platform-specific"><code>:gdxshared</code> — the libGDX code that is not platform-specific<a class="anchor" href="#gdxshared--the-libgdx-code-that-is-not-platform-specific" aria-label="Permalink">#</a></h1>
 <blockquote>
 <p>Both launchers use libGDX. Neither of them should have to write the framebuffer
@@ -182,6 +184,39 @@ makes it the part CI can actually test.</p>
 only ever reaches its stops, so <code>setMovementKeys</code> reduces to <code>setMovementAxes</code>
 and the Android thumbstick uses the analog path directly. Nothing downstream can
 tell which produced a given <code>InputState</code>.</p>
+<p>A gamepad is a <strong>second channel, not a second mode</strong>: every pad reading is stored
+beside the keyboard/touch reading and <code>latch()</code> sums the two, so a player may
+walk with the stick and turn with the mouse in one tic and neither device can
+zero the other by being polled second. <code>clearGamepad()</code> empties that channel
+alone — which is what a controller unplugged at full deflection needs, and why it
+is not simply <code>clearAll()</code>.</p>
+<h2 id="a-mouse-and-a-stick-are-different-kinds-of-quantity">A mouse and a stick are different kinds of quantity<a class="anchor" href="#a-mouse-and-a-stick-are-different-kinds-of-quantity" aria-label="Permalink">#</a></h2>
+<p>The one thing in this module most expensive to get wrong. A mouse reports a
+<strong>displacement</strong> — an integral, so it is summed and drained exactly once by
+<code>getAndSet</code>. A held stick reports a <strong>position</strong>, meaning "keep turning at this
+rate", so it is <em>overwritten</em> by each poll and converted exactly once per tic:</p>
+<p>radians = deflection × GAMEPAD_LOOK_RADIANS_PER_SECOND × ticDuration</p>
+<p>The poll count cancels out of that expression entirely, which is the whole point.
+Push a held stick through the pixel accumulator instead and a 144 Hz machine
+banks twice the contributions of a 72 Hz one — so the player spins twice as fast
+for the same thumb, on the same game, because of vsync. <code>latch()</code> is the right
+home for the conversion because it is the only thing here that happens exactly
+once per tic, which is the interval being integrated over.</p>
+<p><code>setTicDuration</code> is how the accumulator learns that interval. It cannot ask: the
+frame rate is <code>engine.core</code> configuration and this module is a platform adapter,
+so each launcher tells it.</p>
+<h2 id="analogstick-holds-every-number-a-player-can-feel"><code>AnalogStick</code> holds every number a player can feel<a class="anchor" href="#analogstick-holds-every-number-a-player-can-feel" aria-label="Permalink">#</a></h2>
+<p>The dead zone is <strong>radial, on the pair</strong> — never per-axis. A per-axis threshold
+makes the ignored region a square, so a stick pushed diagonally escapes it while
+one pushed the same physical distance along a cardinal does not; the player
+experiences that as a smaller dead zone diagonally than straight ahead, and as
+diagonals snapping to a cardinal as they cross the boundary. A circle has no
+corners.</p>
+<p>It is <strong>rescaled rather than clipped</strong>, so the dead zone costs resolution instead
+of range and output rises continuously from zero. A resting stick returns
+<em>exactly</em> <code>0.0f</code>, not something small — a value that merely rounds to nothing
+still fails <code>InputState.isNeutral()</code>, which would send a non-neutral tic command
+every tic of an idle player.</p>
 <h2 id="files">Files<a class="anchor" href="#files" aria-label="Permalink">#</a></h2>
 <div class="tablewrap"><table>
 <thead><tr><th>File</th><th>What it does</th></tr></thead>
@@ -189,7 +224,8 @@ tell which produced a given <code>InputState</code>.</p>
 <tr><td><code>FramebufferPresenter.java</code></td><td>Uploads R_'s finished frame and draws it fullscreen</td></tr>
 <tr><td><code>RenderMode.java</code></td><td>480p / 720p / native, and the surface-to-framebuffer arithmetic</td></tr>
 <tr><td><code>RenderSettings.java</code></td><td>The switch the settings screen cycles; the presenter listens</td></tr>
-<tr><td><code>InputAccumulator.java</code></td><td>Accumulate-and-latch between platform and tic rates</td></tr>
+<tr><td><code>InputAccumulator.java</code></td><td>Accumulate-and-latch between platform and tic rates; mouse displacement and stick rate</td></tr>
+<tr><td><code>AnalogStick.java</code></td><td>Radial dead zone, response curve, trigger threshold — no toolkit imports</td></tr>
 <tr><td><code>UiState.java</code> / <code>UiStateMachine.java</code></td><td>Menu or game, and what each permits</td></tr>
 <tr><td><code>MenuActions.java</code></td><td>What the menu can ask the application to do</td></tr>
 <tr><td><code>DefaultMenuActions.java</code></td><td>The default wiring — Quit goes through <code>I_WindowPort</code></td></tr>

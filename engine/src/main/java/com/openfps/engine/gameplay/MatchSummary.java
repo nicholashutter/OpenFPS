@@ -42,6 +42,17 @@ public final class MatchSummary
     /** Bots the player put down. */
     private final int botsKilled;
 
+    /**
+     * Times the player was put down.
+     *
+     * <p>A score rather than a failure count, which is the whole of the change
+     * that put it here: a death respawns the player after
+     * {@link Match#RESPAWN_DELAY_TICS} and ends nothing. Reported beside the
+     * kills because the pair is the result — "seven for two" says something
+     * about a round that "seven" on its own does not.</p>
+     */
+    private final int playerDeaths;
+
     /** Bots the match started with. */
     private final int botCount;
 
@@ -66,6 +77,7 @@ public final class MatchSummary
      * @param finalState how the match finished; must not be null and must not
      *     be {@link MatchState#IN_PROGRESS} — an unfinished match has no summary
      * @param kills bots put down; must not be negative
+     * @param deaths times the player was put down; must not be negative
      * @param opponents bots the match started with; must not be negative
      * @param fired shots the player took; must not be negative
      * @param hits shots that connected; must not be negative and must not
@@ -75,8 +87,9 @@ public final class MatchSummary
      *     because the killing shot is not clamped
      * @throws IllegalArgumentException if any rule above is broken
      */
-    public MatchSummary(final MatchState finalState, final int kills, final int opponents,
-        final int fired, final int hits, final int damage, final int healthLeft)
+    public MatchSummary(final MatchState finalState, final int kills, final int deaths,
+        final int opponents, final int fired, final int hits, final int damage,
+        final int healthLeft)
     {
         if (finalState == null)
         {
@@ -87,7 +100,7 @@ public final class MatchSummary
             throw new IllegalArgumentException(
                 "a match still in progress has no summary, got " + finalState);
         }
-        if (kills < 0 || opponents < 0 || fired < 0 || hits < 0 || damage < 0)
+        if (kills < 0 || deaths < 0 || opponents < 0 || fired < 0 || hits < 0 || damage < 0)
         {
             throw new IllegalArgumentException("match counters must not be negative");
         }
@@ -98,6 +111,7 @@ public final class MatchSummary
         }
         this.outcome = finalState;
         this.botsKilled = kills;
+        this.playerDeaths = deaths;
         this.botCount = opponents;
         this.shotsFired = fired;
         this.shotsHit = hits;
@@ -118,17 +132,16 @@ public final class MatchSummary
         {
             throw new IllegalArgumentException("match must not be null");
         }
-        // Health lost rather than shots landed times damage, even though the two
-        // agree today. This is what the player watched happen to their health
-        // bar, so it stays right if the damage constant ever varies per shot.
-        final int lost = Match.PLAYER_MAX_HEALTH - match.playerHealth();
-        int damage = lost;
-        if (damage < 0)
-        {
-            damage = 0;
-        }
-        return new MatchSummary(match.state(), match.botsKilled(), match.botCount(),
-            match.playerShotsFired(), match.playerShotsHit(), damage, match.playerHealth());
+        // Landed shots times the damage per shot, and NOT "max health minus what
+        // is left" — which is what this used to be, and which stopped being the
+        // same number the moment a death respawned the player at full health.
+        // Over a round with two deaths in it the health bar goes back up twice,
+        // so the difference at the end understates the damage taken by two
+        // hundred. What the player actually absorbed is the sum of the hits.
+        final int damage = match.botShotsLanded() * Match.BOT_SHOT_DAMAGE;
+        return new MatchSummary(match.state(), match.botsKilled(), match.playerDeaths(),
+            match.botCount(), match.playerShotsFired(), match.playerShotsHit(), damage,
+            match.playerHealth());
     }
 
     /** Returns how the match finished. Never null, never in progress. */
@@ -151,6 +164,12 @@ public final class MatchSummary
     public int botsKilled()
     {
         return botsKilled;
+    }
+
+    /** Returns how many times the player was put down. */
+    public int playerDeaths()
+    {
+        return playerDeaths;
     }
 
     /** Returns how many bots the match started with. */
@@ -209,7 +228,8 @@ public final class MatchSummary
     public String toString()
     {
         return "MatchSummary{" + outcome + ", killed=" + botsKilled + "/" + botCount
-            + ", accuracy=" + shotsHit + "/" + shotsFired + " (" + accuracyPercent()
-            + "%), damage=" + damageTaken + ", hp=" + playerHealth + "}";
+            + ", deaths=" + playerDeaths + ", accuracy=" + shotsHit + "/" + shotsFired
+            + " (" + accuracyPercent() + "%), damage=" + damageTaken + ", hp="
+            + playerHealth + "}";
     }
 }

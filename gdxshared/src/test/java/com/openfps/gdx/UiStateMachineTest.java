@@ -32,13 +32,13 @@ class UiStateMachineTest
     /** A finished round, for driving the end-of-match transition. */
     private static MatchSummary won()
     {
-        return new MatchSummary(MatchState.WON, 7, 7, 21, 13, 44, 56);
+        return new MatchSummary(MatchState.WON, 7, 1, 7, 21, 13, 44, 56);
     }
 
     /** A lost round. */
     private static MatchSummary lost()
     {
-        return new MatchSummary(MatchState.LOST, 3, 7, 18, 9, 100, 0);
+        return new MatchSummary(MatchState.LOST, 3, 4, 7, 18, 9, 100, 0);
     }
 
     @Nested
@@ -134,15 +134,75 @@ class UiStateMachineTest
             assertThat(UiState.SETTINGS.canTransitionTo(UiState.PLAYING)).isFalse();
             assertThat(UiState.SETTINGS.canTransitionTo(UiState.GAME_OVER)).isFalse();
 
-            // No rematch edge. A round needs a fresh Match — new bots at full
-            // health, counters at zero — and the demo builds exactly one before
-            // the loop starts, so an edge back into the world would lead into a
-            // room already cleared. See UiState's Javadoc.
-            assertThat(UiState.GAME_OVER.canTransitionTo(UiState.PLAYING)).isFalse();
+            // The rematch edge, which was refused for as long as it would have
+            // been a lie: the demo built one Match and nothing could restore it,
+            // so an edge back into the world led into a room already cleared.
+            // Match.reset() is what earned this line — see UiState's Javadoc.
+            assertThat(UiState.GAME_OVER.canTransitionTo(UiState.PLAYING)).isTrue();
+            // Settings from the end screen stays refused, for the same reason it
+            // is refused mid-match: it would be a pause screen, and this game has
+            // no pause.
             assertThat(UiState.GAME_OVER.canTransitionTo(UiState.SETTINGS)).isFalse();
 
             // The menu cannot jump to a result it has not played for.
             assertThat(UiState.MENU.canTransitionTo(UiState.GAME_OVER)).isFalse();
+        }
+
+        @Test
+        @DisplayName("Play Again moves GAME_OVER -> PLAYING")
+        void shouldRestartFromTheEndScreen()
+        {
+            final UiStateMachine machine = new UiStateMachine();
+            machine.startGame();
+            machine.endMatch(won());
+
+            machine.restartMatch();
+
+            assertThat(machine.state()).isEqualTo(UiState.PLAYING);
+            assertThat(machine.isPlaying()).isTrue();
+        }
+
+        @Test
+        @DisplayName("a round can be played, finished and replayed indefinitely")
+        void shouldCycleThroughRematches()
+        {
+            // The property that matters to a player rather than to the table: the
+            // end screen is not a dead end and never becomes one. Before the
+            // rematch edge existed, the second round of a session was unreachable
+            // — the guard that stopped the end screen re-firing was latched for
+            // the life of the process.
+            final UiStateMachine machine = new UiStateMachine();
+            machine.startGame();
+            for (int round = 0; round < 5; round++)
+            {
+                machine.endMatch(won());
+                assertThat(machine.state()).isEqualTo(UiState.GAME_OVER);
+                machine.restartMatch();
+                assertThat(machine.state()).isEqualTo(UiState.PLAYING);
+            }
+        }
+
+        @Test
+        @DisplayName("a rematch cannot be asked for by a game that is already running")
+        void shouldRefuseARestartWhileAlreadyPlaying()
+        {
+            // The same refusal startGame carries, and for the same reason: two
+            // callers each believing they own the move into the world means the
+            // second re-clears input and re-warps the cursor under the first.
+            //
+            // It is NOT refused from the menu, and that is deliberate rather than
+            // an oversight — the edge {@code MENU -> PLAYING} is legal because
+            // that is how a game starts. What restartMatch adds is a legal move
+            // out of GAME_OVER, and the honest statement of its precondition is
+            // the transition table, not a second copy of it here.
+            final UiStateMachine machine = new UiStateMachine();
+            machine.startGame();
+
+            assertThatThrownBy(machine::restartMatch)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("PLAYING -> PLAYING");
+
+            assertThat(machine.state()).isEqualTo(UiState.PLAYING);
         }
 
         @Test

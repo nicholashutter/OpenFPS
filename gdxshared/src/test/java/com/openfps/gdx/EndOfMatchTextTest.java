@@ -36,13 +36,13 @@ class EndOfMatchTextTest
     /** A cleared room. */
     private static MatchSummary won()
     {
-        return new MatchSummary(MatchState.WON, 7, 7, 21, 13, 44, 56);
+        return new MatchSummary(MatchState.WON, 7, 1, 7, 21, 13, 44, 56);
     }
 
     /** A dead player. */
     private static MatchSummary lost()
     {
-        return new MatchSummary(MatchState.LOST, 3, 7, 18, 9, 100, 0);
+        return new MatchSummary(MatchState.LOST, 3, 4, 7, 18, 9, 100, 0);
     }
 
     /**
@@ -135,6 +135,65 @@ class EndOfMatchTextTest
         }
 
         @Test
+        @DisplayName("both buttons stay on screen at a phone's density, heading or no heading")
+        void shouldKeepBothButtonsReachableOnAShortSurface()
+        {
+            // THE dead-end regression, and the screen has grown twice since it was
+            // first fixed: a fifth summary line and a second button. At a handset's
+            // density the fixed content is about 698 px under a heading top at 929
+            // on a 1080 px surface — six pixels over, with every gap already
+            // collapsed. What falls off is the BACK button, on a screen that has
+            // taken the input processor away from everything else.
+            //
+            // Asserted as "the bottom of the lowest button is at or above the
+            // bottom edge", because that is the property a PLAYER has: a way off
+            // this screen. A gap fraction of zero says nothing about whether it
+            // was enough.
+            final float surfaceHeight = 1080.0f;
+            final float fixedContent = 698.0f;
+
+            final float budget =
+                GameOverScreen.headingHeightBudget(surfaceHeight, fixedContent);
+            final float headingWidth =
+                GameOverScreen.headingWidthFor(2400.0f, surfaceHeight, 41, budget);
+            final float headingHeight =
+                headingWidth / 41.0f * BlockFont.GLYPH_HEIGHT;
+            // Where the layout actually puts the bottom of the stack, with the gaps
+            // fully collapsed — which is what gapFitFraction gives when the budget
+            // is this tight.
+            final float stackBottom = surfaceHeight * (1.0f - 0.14f) - headingHeight
+                - fixedContent;
+
+            assertThat(stackBottom)
+                .as("the lowest button sits %f px below the bottom edge", -stackBottom)
+                .isGreaterThanOrEqualTo(0.0f);
+        }
+
+        @Test
+        @DisplayName("the heading yields all the way to nothing rather than pushing a button off")
+        void shouldGiveUpTheHeadingEntirelyBeforeTheButtons()
+        {
+            // The bound on the correction. The heading is decoration and the single
+            // largest item, so it yields first and as far as it has to; a heading of
+            // zero height is ugly and recoverable, and a button below the bottom
+            // edge is not.
+            assertThat(GameOverScreen.headingHeightBudget(1080.0f, 2000.0f)).isZero();
+            assertThat(GameOverScreen.headingWidthFor(2400.0f, 1080.0f, 41, 0.0f)).isZero();
+        }
+
+        @Test
+        @DisplayName("a roomy surface is not tightened by the new budget")
+        void shouldIgnoreTheBudgetWhenThereIsRoom()
+        {
+            // No window that was correct becomes worse. On a desktop the width
+            // fraction still wins, exactly as it did before the third cap existed.
+            final float generous = GameOverScreen.headingHeightBudget(1080.0f, 100.0f);
+
+            assertThat(GameOverScreen.headingWidthFor(1920.0f, 1080.0f, 41, generous))
+                .isEqualTo(GameOverScreen.headingWidthFor(1920.0f, 1080.0f, 41));
+        }
+
+        @Test
         @DisplayName("a heading with no blocks asks for the width rather than dividing by zero")
         void shouldFallBackWhenTheHeadingIsEmpty()
         {
@@ -193,13 +252,27 @@ class EndOfMatchTextTest
         }
 
         @Test
+        @DisplayName("report the deaths, directly under the kills")
+        void shouldReportDeaths()
+        {
+            // Second line, and the position is the assertion as much as the text
+            // is: "seven for none" and "seven for nine" are very different rounds,
+            // and a death count at the bottom of the list reads as an
+            // afterthought. It is a SCORE — a death respawns the player.
+            assertThat(GameOverScreen.summaryText(won())[1])
+                .contains("DEATHS").contains("1");
+            assertThat(GameOverScreen.summaryText(lost())[1])
+                .contains("DEATHS").contains("4");
+        }
+
+        @Test
         @DisplayName("report accuracy as a percentage, with the raw counts behind it")
         void shouldReportAccuracy()
         {
             // Both, because neither alone is enough: the percentage is what a
             // player compares between rounds, and the counts are what makes a
             // 100% round of one shot readable as the fluke it is.
-            final String line = GameOverScreen.summaryText(won())[1];
+            final String line = GameOverScreen.summaryText(won())[2];
             assertThat(line).contains("ACCURACY").contains("62%")
                 .contains("13 of 21");
         }
@@ -209,8 +282,8 @@ class EndOfMatchTextTest
         void shouldReportHealth()
         {
             final String[] lines = GameOverScreen.summaryText(won());
-            assertThat(lines[2]).contains("DAMAGE TAKEN").contains("44");
-            assertThat(lines[3]).contains("HEALTH LEFT").contains("56");
+            assertThat(lines[3]).contains("DAMAGE TAKEN").contains("44");
+            assertThat(lines[4]).contains("HEALTH LEFT").contains("56");
         }
 
         @Test
@@ -221,8 +294,8 @@ class EndOfMatchTextTest
             // below zero — and "HEALTH LEFT -2" is a detail of the damage model
             // leaking onto a screen where it means nothing.
             final MatchSummary overkilled =
-                new MatchSummary(MatchState.LOST, 2, 7, 10, 4, 102, -2);
-            assertThat(GameOverScreen.summaryText(overkilled)[3])
+                new MatchSummary(MatchState.LOST, 2, 3, 7, 10, 4, 102, -2);
+            assertThat(GameOverScreen.summaryText(overkilled)[4])
                 .contains("HEALTH LEFT").contains("0").doesNotContain("-2");
         }
 
@@ -233,8 +306,8 @@ class EndOfMatchTextTest
             // Standing still in the open is how a new player loses their first
             // round, so this is a real path rather than a contrived one.
             final MatchSummary silent =
-                new MatchSummary(MatchState.LOST, 0, 7, 0, 0, 100, 0);
-            assertThat(GameOverScreen.summaryText(silent)[1])
+                new MatchSummary(MatchState.LOST, 0, 1, 7, 0, 0, 100, 0);
+            assertThat(GameOverScreen.summaryText(silent)[2])
                 .contains("0%").contains("0 of 0");
         }
 

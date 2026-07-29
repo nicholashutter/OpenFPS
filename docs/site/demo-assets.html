@@ -78,7 +78,7 @@
 <li class="lv2"><a href="#6-intake-checklist--docsassetsmd--7">6. Intake checklist — docs/ASSETS.md § 7</a></li>
 </ul></details></aside>
 <main id="doc">
-<p class="crumb"><span class="tag">Reference</span><span class="sep">/</span><code>docs/DEMO_ASSETS.md</code><span class="sep">/</span>9 min read</p>
+<p class="crumb"><span class="tag">Reference</span><span class="sep">/</span><code>docs/DEMO_ASSETS.md</code><span class="sep">/</span>10 min read</p>
 <h1 id="demo-asset-manifest">Demo Asset Manifest<a class="anchor" href="#demo-asset-manifest" aria-label="Permalink">#</a></h1>
 <blockquote>
 <p>Provenance record for the first-person demo's model set: one weapon and eight
@@ -177,8 +177,21 @@ required, albedo only (<code>docs/ASSETS.md</code> § 5).</p>
 <thead><tr><th>Model</th><th>Source file</th><th>Triangles</th><th>% of budget</th><th>Verts</th><th>Texture</th><th>Extent (x·y·z)</th></tr></thead>
 <tbody>
 <tr><td><code>blaster-b.ofm</code></td><td>Blaster Kit <code>blaster-b.glb</code></td><td><strong>368</strong></td><td>24.5%</td><td>632</td><td>512×512, 10 mips</td><td>0.16 · 0.31 · 0.42</td></tr>
+<tr><td><code>blaster-p.ofm</code></td><td>Blaster Kit <code>blaster-p.glb</code></td><td><strong>882</strong></td><td>58.8%</td><td>1,506</td><td>512×512, 10 mips</td><td>0.16 · 0.37 · 0.86</td></tr>
 </tbody>
 </table></div>
+<p><strong>Two blasters, and they must stay visibly different from each other.</strong>
+<code>blaster-b</code> is the player's viewmodel — a compact orange pistol, 0.42 units
+long. <code>blaster-p</code> is what the <strong>bots</strong> carry: a green two-handed carbine at
+0.86, twice the length and a different colour, so the silhouette is
+distinguishable across the room. An opponent holding what looks like your own
+gun tells the player nothing.</p>
+<p>Chosen off the pack's own preview renders rather than by taking the next letter:
+several of the eighteen blasters are near-duplicates of <code>blaster-b</code> with a
+different grip, and any of those would have been a change nobody could see.
+<code>blaster-p</code> is also the <strong>largest model in either pack</strong> at 882 triangles — 59%
+of the per-model budget, and seven of them in the room is 6,174 triangles beside
+a scene that already submits tens of thousands.</p>
 <h3 id="level--assetsmodelslevel">Level — <code>assets/models/level/</code><a class="anchor" href="#level--assetsmodelslevel" aria-label="Permalink">#</a></h3>
 <div class="tablewrap"><table>
 <thead><tr><th>Model</th><th>Source file</th><th>Triangles</th><th>% of budget</th><th>Verts</th><th>Texture</th><th>Extent (x·y·z)</th></tr></thead>
@@ -193,14 +206,15 @@ required, albedo only (<code>docs/ASSETS.md</code> § 5).</p>
 <tr><td><code>crate.ofm</code></td><td>Prototype Kit <code>crate.glb</code></td><td><strong>204</strong></td><td>13.6%</td><td>312</td><td>512×512, 10 mips</td><td>0.50 · 0.50 · 0.50</td></tr>
 </tbody>
 </table></div>
-<p><strong>Nothing is close to the cap.</strong> The largest piece is the blaster at a quarter
-of it, and the whole level kit together is 452 triangles — under a third of
-what one model is allowed. <code>docs/ASSETS.md</code> § 2's remark that "Kenney's kits
-remain comfortably inside whatever the real budget turns out to be" is
-confirmed: across the <em>entire</em> Blaster Kit and Prototype Kit, all 187 models,
-the worst case is <code>blaster-p.glb</code> at 882 triangles. <strong>No piece in either pack
-exceeds the 1,500 cap</strong>, so the cap constrains imports from elsewhere and not
-this art direction.</p>
+<p><strong>Nothing is over the cap, though the bots' carbine is now the piece that comes
+closest to it.</strong> <code>blaster-p</code> is 59% of the per-model budget, and the whole level
+kit together is 452 triangles — under a third of what one model is allowed.
+<code>docs/ASSETS.md</code> § 2's remark that "Kenney's kits remain comfortably inside
+whatever the real budget turns out to be" is confirmed: across the <em>entire</em>
+Blaster Kit and Prototype Kit, all 187 models, the worst case is <code>blaster-p.glb</code>
+at 882 triangles — which the demo now ships, so that figure is measured rather
+than surveyed. <strong>No piece in either pack exceeds the 1,500 cap</strong>, so the cap
+constrains imports from elsewhere and not this art direction.</p>
 <h3 id="scale--read-this-before-placing-anything">Scale — read this before placing anything<a class="anchor" href="#scale--read-this-before-placing-anything" aria-label="Permalink">#</a></h3>
 <p>The Prototype Kit is authored on a <strong>1-unit grid</strong>: a floor tile is 1×1, a wall
 is 1 unit wide and 1 unit tall. The blaster is 0.42 units long. A 1-unit wall

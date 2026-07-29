@@ -234,6 +234,8 @@ public final class DesktopLauncher
         // which is the same shape as the window and the input port above it.
         attachAudio(hal, gameplay[0]);
         attachMatchResult(window, gameplay[0]);
+        attachMatchRestart(window, gameplay[0]);
+        attachMatchStatus(window, gameplay[0], rate);
         attachDebugSettings(window, debug, renderer);
 
         final NetSession netSession;
@@ -294,7 +296,8 @@ public final class DesktopLauncher
         // distance zero, so a shooter listed among its own targets would shoot
         // itself on every trigger pull.
         return new DemoGameplayPort(input, holder.renderer(), demo.spawnController(), config,
-            demo.newMatch(), botInstanceIndices(demo), demo.effects());
+            demo.newMatch(), botInstanceIndices(demo), demo.effects(),
+            botWeaponInstanceIndices(demo));
     }
 
     /**
@@ -385,6 +388,57 @@ public final class DesktopLauncher
     }
 
     /**
+     * Lets the end screen's Play Again button put the world back.
+     *
+     * <p>The third leg beside {@link #attachMatchGate} and
+     * {@link #attachMatchResult}, and the one that turns a summary into a
+     * rematch. Until it existed the only way out of a finished round was the
+     * menu, and pressing Single Player from there led back into the room the
+     * player had already cleared — which is why {@code UiState} refused a
+     * {@code GAME_OVER -> PLAYING} edge at all.</p>
+     *
+     * <p>{@code restartMatch} takes the gameplay port's tic lock, which is what
+     * makes it safe to call from the render thread's Scene2D click handler while
+     * the game loop thread is mid-tic.</p>
+     *
+     * @param window the window whose end screen offers the rematch; must not be
+     *     null
+     * @param gameplay the match to restore, or null when there is no match — the
+     *     {@code --model=} path has none, and the button is then not offered
+     */
+    private static void attachMatchRestart(final GdxWindowPort window,
+        final DemoGameplayPort gameplay)
+    {
+        if (gameplay == null)
+        {
+            return;
+        }
+        window.attachMatchRestart(gameplay::restartMatch);
+    }
+
+    /**
+     * Lets the on-screen score and the death notice read the live figures.
+     *
+     * <p>The tic rate is passed through because the respawn delay is counted in
+     * <b>tics</b> — see {@code Match.RESPAWN_DELAY_TICS} — and a countdown shown
+     * in seconds has to divide by something. The configuration is the only thing
+     * that knows which rate this run is using, and it is right here.</p>
+     *
+     * @param window the window that draws the score; must not be null
+     * @param gameplay the match to read, or null when there is no match
+     * @param rate the simulation rate this run was started at; must not be null
+     */
+    private static void attachMatchStatus(final GdxWindowPort window,
+        final DemoGameplayPort gameplay, final FrameRate rate)
+    {
+        if (gameplay == null)
+        {
+            return;
+        }
+        window.attachMatchStatus(gameplay::status, rate.fps());
+    }
+
+    /**
      * Returns the frozen result of a decided round, or null while it runs.
      *
      * <p>Called from the render thread, on a {@code Match} the game loop thread
@@ -467,6 +521,20 @@ public final class DesktopLauncher
         for (int index = 0; index < indices.length; index++)
         {
             indices[index] = demo.botInstanceIndex(index);
+        }
+        return indices;
+    }
+
+    // The same, for the blaster each bot is holding. A second table rather than
+    // an interleaved one, because the port publishes the two in the same loop and
+    // the arithmetic to unpack a stride is exactly the kind of thing that ends up
+    // moving a weapon to a body's position.
+    private static int[] botWeaponInstanceIndices(final DemoScene demo)
+    {
+        final int[] indices = new int[demo.botCount()];
+        for (int index = 0; index < indices.length; index++)
+        {
+            indices[index] = demo.botWeaponInstanceIndex(index);
         }
         return indices;
     }

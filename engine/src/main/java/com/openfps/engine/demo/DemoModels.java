@@ -85,6 +85,30 @@ public final class DemoModels
     /** File name of the viewmodel. */
     public static final String WEAPON_MODEL = "blaster-b.ofm";
 
+    /**
+     * File name of the weapon the <b>bots</b> carry — and it is not the
+     * player's.
+     *
+     * <p>Both come from Kenney's Blaster Kit, so there is no new attribution to
+     * make ({@code NOTICE} already credits the pack), but they are deliberately
+     * two different models. {@code blaster-b} is a compact pistol, 0.42 units
+     * long and predominantly orange; {@code blaster-p} is a long two-handed
+     * carbine, <b>0.86</b> units long and predominantly green. Twice the length
+     * and a different colour is a silhouette the player can tell apart at the
+     * far side of the room, which is the entire requirement — an opponent
+     * holding what looks like your own gun tells you nothing.</p>
+     *
+     * <p>Chosen off the pack's own preview renders rather than by picking the
+     * next letter: several of the eighteen blasters are near-duplicates of
+     * {@code blaster-b} with a different grip, and any of those would have been
+     * a change nobody could see. {@code blaster-p} is also the largest model in
+     * either demo pack at 882 triangles ({@code docs/DEMO_ASSETS.md} § 4), which
+     * is 59% of the per-model budget and the reason that figure is worth
+     * knowing: seven of them is 6,174 triangles beside a room that already
+     * submits tens of thousands.</p>
+     */
+    public static final String BOT_WEAPON_MODEL = "blaster-p.ofm";
+
     /** File name of the generated fallback room. Matches {@code DemoAssetsMain}. */
     public static final String FALLBACK_MODEL = "generated-room.ofm";
 
@@ -138,17 +162,19 @@ public final class DemoModels
     private final ModelFormat slope;
     private final ModelFormat room;
     private final ModelFormat weapon;
+    private final ModelFormat botWeapon;
     private final ModelFormat[] characters;
 
     // Takes ownership of an already-validated set. One of `floor` (kit) and
     // `room` (fallback) is non-null and the other is null; `source` says which.
     private DemoModels(final Source modelSource, final ModelFormat[] kit,
         final ModelFormat fallbackRoom, final ModelFormat viewmodel,
-        final ModelFormat[] people)
+        final ModelFormat opponentWeapon, final ModelFormat[] people)
     {
         this.source = modelSource;
         this.room = fallbackRoom;
         this.weapon = viewmodel;
+        this.botWeapon = opponentWeapon;
         this.characters = people;
         if (kit == null)
         {
@@ -215,6 +241,7 @@ public final class DemoModels
         }
 
         final ModelFormat viewmodel = loadWeapon(source);
+        final ModelFormat opponentWeapon = loadBotWeapon(source);
         final ModelFormat[] people = loadCharacters(source);
         final List<String> missing = missingKitFiles(source);
         if (missing.isEmpty())
@@ -222,7 +249,7 @@ public final class DemoModels
             LOG.info("Demo level: REAL Kenney Prototype Kit, {} pieces from {}",
                 KIT_FILES.length, source.describe(LEVEL_DIRECTORY));
             return new DemoModels(Source.KENNEY_KIT, loadKit(source), null, viewmodel,
-                people);
+                opponentWeapon, people);
         }
 
         if (!source.has(FALLBACK_MODEL))
@@ -239,7 +266,25 @@ public final class DemoModels
             + " intended demo run: {}", source.describe(FALLBACK_MODEL), missing.size(),
             String.join(", ", missing), REGENERATE_COMMAND);
         return new DemoModels(Source.GENERATED_ROOM, null, read(source, FALLBACK_MODEL),
-            viewmodel, people);
+            viewmodel, opponentWeapon, people);
+    }
+
+    // The weapon the bots hold, or null with a WARN. Same rule as the
+    // viewmodel: absent art degrades the demo rather than ending it, and the
+    // bots stand there empty-handed as they did before this model existed.
+    private static ModelFormat loadBotWeapon(final ModelSource source)
+    {
+        final String path = WEAPON_DIRECTORY + "/" + BOT_WEAPON_MODEL;
+        if (!source.has(path))
+        {
+            LOG.warn("Demo bot weapon: NONE. {} is missing, so the opponents will be"
+                + " unarmed to look at — they still shoot. Produce it with: {}",
+                source.describe(path), REGENERATE_COMMAND);
+            return null;
+        }
+        LOG.info("Demo bot weapon: REAL Kenney Blaster Kit model from {} — deliberately a"
+            + " different blaster from the player's {}", source.describe(path), WEAPON_MODEL);
+        return read(source, path);
     }
 
     // The viewmodel, or null with a WARN. Absent art degrades the demo rather
@@ -466,10 +511,26 @@ public final class DemoModels
         return weapon;
     }
 
+    /**
+     * Returns the weapon the bots carry, or null when it was not staged.
+     *
+     * <p>Never the same model as {@link #weapon()} — see
+     * {@link #BOT_WEAPON_MODEL}. Null here is reported and survivable exactly as
+     * a missing viewmodel is: the opponents stand there unarmed and still shoot,
+     * which is odd to look at and is not a broken demo.</p>
+     *
+     * @return the bots' blaster, or null
+     */
+    public ModelFormat botWeapon()
+    {
+        return botWeapon;
+    }
+
     /** Returns a debug rendering of which models were loaded. */
     @Override
     public String toString()
     {
-        return "DemoModels{source=" + source + ", weapon=" + (weapon != null) + "}";
+        return "DemoModels{source=" + source + ", weapon=" + (weapon != null)
+            + ", botWeapon=" + (botWeapon != null) + "}";
     }
 }

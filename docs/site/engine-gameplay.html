@@ -91,7 +91,7 @@
 <li class="lv2"><a href="#todo-phase-4">TODO (Phase 4)</a></li>
 </ul></details></aside>
 <main id="doc">
-<p class="crumb"><span class="tag">Packages</span><span class="sep">/</span><code>engine/src/main/java/com/openfps/engine/gameplay/README.md</code><span class="sep">/</span>15 min read</p>
+<p class="crumb"><span class="tag">Packages</span><span class="sep">/</span><code>engine/src/main/java/com/openfps/engine/gameplay/README.md</code><span class="sep">/</span>16 min read</p>
 <h1 id="gameplay-p_--player-entities-map-logic">Gameplay (P_) — Player, Entities, Map Logic<a class="anchor" href="#gameplay-p_--player-entities-map-logic" aria-label="Permalink">#</a></h1>
 <blockquote>
 <p>P_ is the gameplay / physics layer. Holds everything that <em>changes during play</em>.</p>
@@ -102,15 +102,15 @@
 <tbody>
 <tr><td><strong>State</strong></td><td>SHIPPING</td></tr>
 <tr><td><strong>Phase</strong></td><td>4 — the match layer landed ahead of its phase, as the controller did</td></tr>
-<tr><td><strong>Tests</strong></td><td>257 — counted, not remembered: <code>gradlew :engine:test --tests 'com.openfps.engine.gameplay.*'</code></td></tr>
+<tr><td><strong>Tests</strong></td><td>321 — counted, not remembered: <code>gradlew :engine:test --tests 'com.openfps.engine.gameplay.*'</code></td></tr>
 <tr><td><strong>Registered</strong></td><td>P_ via <code>GameplaySubsystem</code></td></tr>
 <tr><td><strong>Verified</strong></td><td>2026-07-29</td></tr>
 </tbody>
 </table></div>
 <h3 id="the-match-layer">The match layer<a class="anchor" href="#the-match-layer" aria-label="Permalink">#</a></h3>
-<p><code>Bot</code>, <code>BotPattern</code>, <code>Match</code>, <code>MatchState</code> and <code>MatchMode</code> turn a room with
-bodies in it into a game. Two decisions are worth knowing before touching any
-of it:</p>
+<p><code>Bot</code>, <code>BotPattern</code>, <code>BotRng</code>, <code>BotSkill</code>, <code>Match</code>, <code>MatchState</code>, <code>MatchStatus</code>,
+<code>MatchSummary</code> and <code>MatchMode</code> turn a room with bodies in it into a game. Four
+decisions are worth knowing before touching any of it:</p>
 <p><strong>A bot's position at tic <em>n</em> is a pure function of <em>n</em>.</strong> Not an integration.
 It cannot drift over a long match, a peer that joins late computes the same
 answer without replaying history, and — the actual requirement — a player can
@@ -121,6 +121,21 @@ bot standing in the line of fire genuinely blocks the shot and takes no damage
 for it. That was worth more than the emergent cover it produces: it means
 seven opponents a second are exercising the same slab test the player's
 trigger uses.</p>
+<p><strong>A bot's <em>shooting</em> is random, and the randomness is <code>BotRng</code> — seeded,
+stateless, addressed by <code>(tic, entity, channel)</code>.</strong> Read that class before
+touching anything that fires. <code>Math.random()</code>, a time-seeded <code>Random</code>,
+<code>System.nanoTime()</code> and <code>ThreadLocalRandom</code> are all forbidden on the tick path
+and would desync two lockstep peers on the first shot, silently, for minutes
+before anybody noticed. Stateless matters more than seeded: a seeded generator is
+reproducible only if drawn from in the same order the same number of times, so a
+single added <code>if</code> in the firing path would desync a build against its own
+previous version. <code>BotRngTest</code> reads the constant pool to enforce all of it.</p>
+<p><strong>Dying is a score, not an ending.</strong> <code>MatchState.LOST</code> needs a <code>deathLimit</code>,
+which defaults to <code>Match.UNLIMITED_DEATHS</code>; a death respawns the player after
+<code>RESPAWN_DELAY_TICS</code> and a round ends when the room is empty. That delay is
+counted in <strong>tics</strong> and never in milliseconds — a wall-clock delay would elapse
+on different tics on two peers, which is the same class of desync <code>BotRng</code> exists
+to prevent arriving by a different door.</p>
 <p><strong>Built.</strong> <code>PlayerController</code> — first-person look and movement, <code>StrictMath</code>
 throughout so lockstep peers stay bit-identical, pitch clamped to ±89°, eye at
 <code>EYE_HEIGHT_UNITS</code> 41 — plus <code>PlayerInputView</code>, the one class that adapts the
@@ -154,13 +169,32 @@ solid below.</p>
 <p>Built and tested today:</p>
 <ul>
 <li>
-<p><code>PlayerController</code> — first-person look and movement in <code>float</code>, produces the <code>Camera</code></p>
+<p><code>PlayerController</code> — first-person look and movement in <code>float</code>, produces the
+<code>Camera</code>; <code>respawnAt</code> puts the player back at a spawn placement</p>
 </li>
 <li>
 <p><code>PhysicsWorld</code> — the solid geometry a move is clipped against, with sliding</p>
 </li>
 <li>
 <p><code>PlayerInputView</code> — presents the HAL's <code>InputState</code> as an <code>I_PlayerInput</code></p>
+</li>
+<li>
+<p><code>Bot</code> / <code>BotPattern</code> — one opponent's route, memory, cooldown and health</p>
+</li>
+<li>
+<p><code>BotRng</code> — <strong>the only source of randomness the simulation may have.</strong> Seeded,
+stateless, addressed by <code>(tic, entity, channel)</code></p>
+</li>
+<li>
+<p><code>BotSkill</code> — every number that makes the opponents dumb, plus a <code>MARKSMAN</code>
+profile that exists so the geometry tests stay about geometry rather than dice</p>
+</li>
+<li>
+<p><code>Match</code> / <code>MatchState</code> — the rules, the score, the respawn, and <code>reset()</code></p>
+</li>
+<li>
+<p><code>MatchStatus</code> / <code>MatchSummary</code> — the two immutable copies that cross to the
+render thread: one per frame while a round runs, one when it ends</p>
 </li>
 <li>
 <p><code>I_GameplayPort</code> / <code>I_GameplayPortFactory</code> — what the core calls per tic, and

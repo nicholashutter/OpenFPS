@@ -10,6 +10,7 @@ import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.backends.lwjgl3.Lwjgl3Application;
 import com.badlogic.gdx.backends.lwjgl3.Lwjgl3ApplicationConfiguration;
 
+import com.openfps.engine.gameplay.MatchStatus;
 import com.openfps.engine.gameplay.MatchSummary;
 import com.openfps.engine.hal.port.I_FrameCallback;
 import com.openfps.engine.hal.port.I_WindowPort;
@@ -131,6 +132,25 @@ public final class GdxWindowPort implements I_WindowPort
     private volatile Supplier<MatchSummary> matchResult;
 
     /**
+     * Restores the world for another round, or null when nothing can be.
+     * MUTABLE: set by {@link #attachMatchRestart} before {@link #runFrameLoop}.
+     */
+    private volatile Runnable matchRestart;
+
+    /**
+     * Asked once a frame for the live score, or null when this window has no
+     * match behind it. MUTABLE: set by {@link #attachMatchStatus} before
+     * {@link #runFrameLoop}.
+     */
+    private volatile Supplier<MatchStatus> matchStatus;
+
+    /**
+     * The simulation rate the respawn countdown is expressed against. MUTABLE:
+     * set with {@link #matchStatus}, and zero until then.
+     */
+    private volatile int matchTicsPerSecond;
+
+    /**
      * The debug switch the settings screen flips, or null to let the listener
      * keep a private one. MUTABLE: set by {@link #attachDebugSettings} before
      * {@link #runFrameLoop}.
@@ -203,6 +223,8 @@ public final class GdxWindowPort implements I_WindowPort
                 settings());
             listener.attachMatchGate(matchGate);
             listener.attachMatchResult(matchResult);
+            listener.attachMatchRestart(matchRestart);
+            listener.attachMatchStatus(matchStatus, matchTicsPerSecond);
             new Lwjgl3Application(listener, buildConfiguration());
         }
         finally
@@ -342,6 +364,71 @@ public final class GdxWindowPort implements I_WindowPort
     public Supplier<MatchSummary> matchResult()
     {
         return matchResult;
+    }
+
+    /**
+     * Names the thing that restores the world for another round.
+     *
+     * <p>Third leg of the same tripod as {@link #attachMatchGate} and
+     * {@link #attachMatchResult}: one says the player has entered the world, one
+     * asks whether the round is over, and this one starts a new one. All three
+     * are plain functional interfaces so the window port holds no reference into
+     * the demo package.</p>
+     *
+     * <p>Call before {@link #runFrameLoop}. Passing null leaves the end screen
+     * with no Play Again button at all, which is the correct presentation for a
+     * window that cannot restart anything.</p>
+     *
+     * @param restart run on the render thread when the player asks for another
+     *     round; must take the tic lock, or null for a window with no match
+     */
+    public void attachMatchRestart(final Runnable restart)
+    {
+        if (state == State.RUNNING)
+        {
+            throw new IllegalStateException(
+                "attachMatchRestart() while the frame loop is running");
+        }
+        this.matchRestart = restart;
+    }
+
+    /** Returns the restart named by {@link #attachMatchRestart}, or null. */
+    public Runnable matchRestart()
+    {
+        return matchRestart;
+    }
+
+    /**
+     * Names something to ask, once a frame, how the round is going.
+     *
+     * <p>What the in-game score panel and the death notice are drawn from. Unlike
+     * {@link #attachMatchResult} this is asked on every frame rather than on one,
+     * which is why it hands over an immutable {@code MatchStatus} rather than
+     * letting the render thread read the live match — see that class.</p>
+     *
+     * <p>Call before {@link #runFrameLoop}. Passing null draws no score at all,
+     * which is what a window with no match wants.</p>
+     *
+     * @param status returns the live figures, or null for a window with no match
+     * @param simulationTicsPerSecond the configured tic rate, which turns the
+     *     respawn countdown into seconds
+     */
+    public void attachMatchStatus(final Supplier<MatchStatus> status,
+        final int simulationTicsPerSecond)
+    {
+        if (state == State.RUNNING)
+        {
+            throw new IllegalStateException(
+                "attachMatchStatus() while the frame loop is running");
+        }
+        this.matchStatus = status;
+        this.matchTicsPerSecond = simulationTicsPerSecond;
+    }
+
+    /** Returns the supplier named by {@link #attachMatchStatus}, or null. */
+    public Supplier<MatchStatus> matchStatus()
+    {
+        return matchStatus;
     }
 
     /**

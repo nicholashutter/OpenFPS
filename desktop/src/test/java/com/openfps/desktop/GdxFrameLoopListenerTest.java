@@ -6,6 +6,8 @@
 package com.openfps.desktop;
 
 import com.openfps.engine.gameplay.MatchMode;
+import com.openfps.engine.gameplay.MatchState;
+import com.openfps.engine.gameplay.MatchSummary;
 import com.openfps.engine.hal.adapter.nulladapter.NullWindowPort;
 import com.openfps.gdx.DebugSettings;
 import com.openfps.gdx.DefaultMenuActions;
@@ -245,6 +247,97 @@ class GdxFrameLoopListenerTest
                 new RecordingFrameCallback(), new DefaultMenuActions(window), null, null,
                 shared);
             assertThat(wired.debugSettings()).isSameAs(shared);
+        }
+
+        @Test
+        @DisplayName("a window with nothing to restart does not offer Play Again")
+        void shouldNotOfferARematchWithoutSomethingToRestart()
+        {
+            // The presentation rule, and the reason it is a rule: a button that
+            // appeared and did nothing would be exactly the "button that lies"
+            // UiState refused a GAME_OVER -> PLAYING edge over for so long. The
+            // --model= path and every windowless test have no match at all.
+            final GdxFrameLoopListener listener =
+                listenerFor(new RecordingFrameCallback());
+
+            assertThat(listener.canRestart()).isFalse();
+
+            listener.attachMatchRestart(() -> { });
+
+            assertThat(listener.canRestart()).isTrue();
+        }
+
+        @Test
+        @DisplayName("the world is restored BEFORE the UI enters it, never after")
+        void shouldRestoreTheWorldBeforeTransitioning()
+        {
+            // The ordering is the whole of the correctness here and it is not
+            // interchangeable. The UI transition is what un-freezes the match gate
+            // and gives the cursor back, so a transition that landed first would
+            // leave one or more frames in which the player is standing in the room
+            // they just cleared, with seven invisible corpses, before the reset
+            // arrived.
+            //
+            // Asserted by recording what the UI state WAS at the moment the restore
+            // ran, which is the only way to observe an ordering from outside.
+            final GdxFrameLoopListener listener =
+                listenerFor(new RecordingFrameCallback());
+            final UiStateMachine machine = listener.uiState();
+            final UiState[] seenByTheRestore = new UiState[1];
+            listener.attachMatchRestart(() -> seenByTheRestore[0] = machine.state());
+
+            machine.startGame();
+            machine.endMatch(new MatchSummary(MatchState.WON, 7, 1, 7, 21, 13, 44, 56));
+
+            // The listener's own Play Again path — exactly what the button runs.
+            listener.restartMatch();
+
+            assertThat(seenByTheRestore[0])
+                .as("the UI had already entered the world before the world was restored")
+                .isEqualTo(UiState.GAME_OVER);
+            assertThat(machine.state()).isEqualTo(UiState.PLAYING);
+        }
+
+        @Test
+        @DisplayName("a rematch re-arms the end screen, so a second round can also finish")
+        void shouldAllowASecondRoundToEnd()
+        {
+            // The guard that stops the end screen re-firing used to be latched for
+            // the life of the process, because nothing could restore the round. It
+            // is cleared by the restart and NOWHERE else — clearing it anywhere
+            // else would let the end screen fire again for a round that had not
+            // been restarted, which is the trap the latch existed to prevent.
+            final GdxFrameLoopListener listener =
+                listenerFor(new RecordingFrameCallback());
+            final UiStateMachine machine = listener.uiState();
+            listener.attachMatchRestart(() -> { });
+
+            machine.startGame();
+            for (int round = 0; round < 3; round++)
+            {
+                machine.endMatch(new MatchSummary(MatchState.WON, 7, round, 7, 21, 13, 44, 56));
+                assertThat(machine.state()).isEqualTo(UiState.GAME_OVER);
+                listener.restartMatch();
+                assertThat(machine.state()).isEqualTo(UiState.PLAYING);
+            }
+        }
+
+        @Test
+        @DisplayName("Play Again with nothing attached leaves the UI where it was")
+        void shouldDoNothingWhenThereIsNothingToRestart()
+        {
+            // Belt and braces beside canRestart(): if the button is ever offered
+            // when it should not be, the honest outcome is that nothing happens
+            // rather than a UI that claims to be in a world it never restored.
+            final GdxFrameLoopListener listener =
+                listenerFor(new RecordingFrameCallback());
+            final UiStateMachine machine = listener.uiState();
+            machine.startGame();
+            machine.endMatch(new MatchSummary(MatchState.WON, 7, 1, 7, 21, 13, 44, 56));
+
+            listener.restartMatch();
+
+            assertThat(machine.state()).isEqualTo(UiState.GAME_OVER);
         }
 
         @Test

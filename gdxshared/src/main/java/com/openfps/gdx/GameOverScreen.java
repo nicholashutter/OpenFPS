@@ -92,8 +92,14 @@ public final class GameOverScreen
     /** Gap between summary lines, in pixels. */
     private static final float LINE_GAP = 12.0f;
 
-    /** Gap under the last summary line before the button, in pixels. */
+    /** Gap under the last summary line before the first button, in pixels. */
     private static final float BUTTON_GAP = 48.0f;
+
+    /** Gap between the two buttons, in pixels. */
+    private static final float BUTTON_SPACING = 16.0f;
+
+    /** How many buttons this screen stacks. */
+    private static final int BUTTON_COUNT = 2;
 
     /** Button width in pixels. */
     private static final float BUTTON_WIDTH = 380.0f;
@@ -128,7 +134,18 @@ public final class GameOverScreen
     /** The summary lines, top to bottom. */
     private final Label[] summaryLines;
 
-    /** The one way off this screen. */
+    /**
+     * The rematch, and the first thing on the screen a player reaches for.
+     *
+     * <p>First in the stack and in the menu's primary-action green, because it is
+     * what somebody who has just cleared a room wants. It exists at all only
+     * because {@code Match.reset()} does — the end screen carried a single Back
+     * button for as long as a rematch would have dropped the player into the room
+     * they had already emptied.</p>
+     */
+    private final BlockButton playAgainButton;
+
+    /** The other way off this screen. */
     private final BlockButton backButton;
 
     /** How far to magnify the fixed pixel metrics — 1 on desktop, density on a phone. */
@@ -138,11 +155,13 @@ public final class GameOverScreen
      * Builds the screen at desktop metrics. Requires a live GL context.
      *
      * @param result the finished match to report; must not be null
+     * @param onPlayAgain run when the player wants another round; must not be null
      * @param onBackToMenu run when the player leaves; must not be null
      */
-    public GameOverScreen(final MatchSummary result, final Runnable onBackToMenu)
+    public GameOverScreen(final MatchSummary result, final Runnable onPlayAgain,
+        final Runnable onBackToMenu)
     {
-        this(result, onBackToMenu, 1.0f);
+        this(result, onPlayAgain, onBackToMenu, 1.0f);
     }
 
     /**
@@ -150,6 +169,9 @@ public final class GameOverScreen
      * {@code ApplicationListener.create()} or later, never earlier.
      *
      * @param result the finished match to report; must not be null
+     * @param onPlayAgain run when the player wants another round; must not be
+     *     null. <b>It must restore the world before it changes the UI state</b> —
+     *     see {@code UiStateMachine.restartMatch}
      * @param onBackToMenu run when the player leaves; must not be null
      * @param scale multiplies every fixed pixel metric. 1 on a desktop monitor;
      *     a phone passes its density so a button stays the same physical size on
@@ -157,12 +179,16 @@ public final class GameOverScreen
      * @throws IllegalArgumentException if anything is null or {@code scale} is
      *     not positive
      */
-    public GameOverScreen(final MatchSummary result, final Runnable onBackToMenu,
-        final float scale)
+    public GameOverScreen(final MatchSummary result, final Runnable onPlayAgain,
+        final Runnable onBackToMenu, final float scale)
     {
         if (result == null)
         {
             throw new IllegalArgumentException("result must not be null");
+        }
+        if (onPlayAgain == null)
+        {
+            throw new IllegalArgumentException("onPlayAgain must not be null");
         }
         if (onBackToMenu == null)
         {
@@ -190,16 +216,20 @@ public final class GameOverScreen
                 SUMMARY_FONT_SCALE * scale);
         }
 
+        this.playAgainButton = new BlockButton("PLAY AGAIN", MenuPalette.PLAY_FACE,
+            MenuPalette.PLAY_SHADE, pixel, font, BUTTON_FONT_SCALE * scale, onPlayAgain);
         this.backButton = new BlockButton("BACK TO MENU", MenuPalette.NEUTRAL_FACE,
             MenuPalette.NEUTRAL_SHADE, pixel, font, BUTTON_FONT_SCALE * scale, onBackToMenu);
 
-        // Painter's order: backdrop, then heading, then the numbers, then the key.
+        // Painter's order: backdrop, then heading, then the numbers, then the keys.
         stage.addActor(background);
         stage.addActor(heading);
         for (final Label line : summaryLines)
         {
             stage.addActor(line);
         }
+        playAgainButton.setSize(BUTTON_WIDTH * scale, BUTTON_HEIGHT * scale);
+        stage.addActor(playAgainButton);
         backButton.setSize(BUTTON_WIDTH * scale, BUTTON_HEIGHT * scale);
         stage.addActor(backButton);
     }
@@ -259,6 +289,11 @@ public final class GameOverScreen
         return new String[]
         {
             "KILLS   " + result.botsKilled() + " of " + result.botCount(),
+            // Second, directly under the kills, because the two are one figure:
+            // seven for none and seven for nine are very different rounds, and a
+            // death count buried at the bottom would be read as an afterthought.
+            // It is a SCORE — a death respawns the player and ends nothing.
+            "DEATHS   " + result.playerDeaths(),
             "ACCURACY   " + result.accuracyPercent() + "%   ("
                 + result.shotsHit() + " of " + result.shotsFired() + " shots)",
             "DAMAGE TAKEN   " + result.damageTaken(),
@@ -276,6 +311,12 @@ public final class GameOverScreen
     public BlockTitle heading()
     {
         return heading;
+    }
+
+    /** Returns the button that starts another round. */
+    public BlockButton playAgainButton()
+    {
+        return playAgainButton;
     }
 
     /** Returns the button that leaves this screen. */
@@ -318,16 +359,9 @@ public final class GameOverScreen
     {
         background.setBounds(0.0f, 0.0f, width, height);
 
-        final float headingWidth = headingWidthFor(width, height, heading.widthInBlocks());
-        final float cell = heading.cellSizeFor(headingWidth);
-        final float headingHeight = cell * BlockFont.GLYPH_HEIGHT;
-        final float headingTop = height * (1.0f - TITLE_TOP_FRACTION);
-        heading.setBounds((width - headingWidth) * 0.5f, headingTop - headingHeight,
-            headingWidth, headingHeight);
-
-        // Packed before anything is measured: the gap budget below is the
-        // surface minus the things whose size is already decided, and a label
-        // that has not been packed reports a size it will not keep.
+        // Packed FIRST, because the heading's own budget now depends on how tall
+        // they turn out to be, and a label that has not been packed reports a size
+        // it will not keep.
         for (final Label line : summaryLines)
         {
             line.pack();
@@ -335,6 +369,16 @@ public final class GameOverScreen
 
         final float buttonWidth = BUTTON_WIDTH * uiScale;
         final float buttonHeight = BUTTON_HEIGHT * uiScale;
+        final float headingTop = height * (1.0f - TITLE_TOP_FRACTION);
+        final float mustFit = summaryLinesHeight() + buttonHeight * BUTTON_COUNT
+            + BOTTOM_MARGIN * uiScale;
+        final float headingWidth = headingWidthFor(width, height, heading.widthInBlocks(),
+            headingHeightBudget(height, mustFit));
+        final float cell = heading.cellSizeFor(headingWidth);
+        final float headingHeight = cell * BlockFont.GLYPH_HEIGHT;
+        heading.setBounds((width - headingWidth) * 0.5f, headingTop - headingHeight,
+            headingWidth, headingHeight);
+
         final float gapScale = gapScaleFor(headingTop - headingHeight, buttonHeight);
 
         float nextTop = headingTop - headingHeight - SUMMARY_GAP * uiScale * gapScale;
@@ -344,9 +388,18 @@ public final class GameOverScreen
             nextTop = nextTop - line.getHeight() - LINE_GAP * uiScale * gapScale;
         }
 
+        final float firstButtonTop = nextTop - BUTTON_GAP * uiScale * gapScale;
+        playAgainButton.setSize(buttonWidth, buttonHeight);
+        playAgainButton.setPosition((width - buttonWidth) * 0.5f,
+            firstButtonTop - buttonHeight);
+        // The spacing between the two buttons is scaled with the other gaps, but
+        // NEITHER button's own box ever is — see layoutFor's Javadoc. A screen
+        // that fits by shrinking its own touch targets has solved the wrong
+        // problem, and one of these two is now the only way to play again.
         backButton.setSize(buttonWidth, buttonHeight);
         backButton.setPosition((width - buttonWidth) * 0.5f,
-            nextTop - BUTTON_GAP * uiScale * gapScale - buttonHeight);
+            firstButtonTop - buttonHeight * BUTTON_COUNT
+                - BUTTON_SPACING * uiScale * gapScale);
     }
 
     /**
@@ -372,18 +425,83 @@ public final class GameOverScreen
      */
     public static float headingWidthFor(final float width, final float height, final int blocks)
     {
+        return headingWidthFor(width, height, blocks, Float.MAX_VALUE);
+    }
+
+    /**
+     * Returns the width to draw the heading at, capped by the surface and by
+     * whatever vertical room the rest of the screen has left.
+     *
+     * <p><b>The third cap was added when the screen grew a fifth summary line and
+     * a second button, and it is the same dead end returning.</b> Laid out at a
+     * phone's density the stack is about 698 px of fixed content under a heading
+     * top at 929 px on a 1080 px surface — six pixels over, with every gap already
+     * collapsed to nothing. What falls off the bottom is the <b>BACK</b> button,
+     * on a screen that has taken the input processor away from everything else.
+     * The first time this happened the emulator showed DEFEAT, four tidy figures,
+     * and a sliver of yellow along the bottom edge.</p>
+     *
+     * <p>So the correction is the one {@link #layoutFor} already documents,
+     * extended: the heading is <b>decoration and the single largest item</b>, so it
+     * yields first and it yields as far as it has to. Nothing that is touched,
+     * sized or read is scaled — the buttons keep their full pointer-sized boxes and
+     * the figures keep their font — because a screen that fits by shrinking its own
+     * touch target has solved the wrong problem.</p>
+     *
+     * @param width the surface width in pixels
+     * @param height the surface height in pixels
+     * @param blocks the heading's width in {@link BlockFont} cells
+     * @param heightBudget the most vertical room the heading may take, in pixels —
+     *     see {@link #headingHeightBudget}. {@link Float#MAX_VALUE} means "no such
+     *     limit", which is the three-argument form
+     * @return the heading width in pixels
+     */
+    public static float headingWidthFor(final float width, final float height,
+        final int blocks, final float heightBudget)
+    {
         final float wanted = width * TITLE_WIDTH_FRACTION;
         if (blocks <= 0)
         {
             return wanted;
         }
-        final float capped =
-            (height * HEADING_MAX_HEIGHT_FRACTION / BlockFont.GLYPH_HEIGHT) * blocks;
+        // BlockTitle derives its cell size from its WIDTH and draws downward, so
+        // every height limit has to be expressed as a width by inverting that
+        // arithmetic. Doing it here rather than guessing a second constant is what
+        // keeps the two from drifting apart.
+        final float allowedHeight =
+            Math.min(height * HEADING_MAX_HEIGHT_FRACTION, heightBudget);
+        final float capped = (allowedHeight / BlockFont.GLYPH_HEIGHT) * blocks;
         if (capped < wanted)
         {
             return capped;
         }
         return wanted;
+    }
+
+    /**
+     * Returns how much vertical room is left for the heading once everything that
+     * must be reachable has taken its share.
+     *
+     * <p>Static and public because it is the half of the fit rule that decides
+     * whether the player has a way off this screen, and it is assertable without a
+     * window — which the rest of {@link #layoutFor} is not. Never negative: a
+     * heading of zero height is ugly and a button below the bottom edge is a dead
+     * end, and only one of those two is recoverable.</p>
+     *
+     * @param surfaceHeight the surface height in pixels
+     * @param contentHeight the height of everything below the heading that must
+     *     stay on screen — the summary lines, both buttons, and the bottom margin
+     * @return pixels the heading may occupy, zero or more
+     */
+    public static float headingHeightBudget(final float surfaceHeight,
+        final float contentHeight)
+    {
+        final float budget = surfaceHeight * (1.0f - TITLE_TOP_FRACTION) - contentHeight;
+        if (budget < 0.0f)
+        {
+            return 0.0f;
+        }
+        return budget;
     }
 
     /**
@@ -427,18 +545,27 @@ public final class GameOverScreen
     // lives and where it is tested.
     private float gapScaleFor(final float spaceBelowHeading, final float buttonHeight)
     {
+        // One gap under the heading, one after each line — the layout loop
+        // subtracts LINE_GAP after the last line too — one above the first
+        // button, and one between the two buttons.
+        final float natural = (SUMMARY_GAP + BUTTON_GAP + BUTTON_SPACING
+            + LINE_GAP * summaryLines.length) * uiScale;
+        final float available = spaceBelowHeading - summaryLinesHeight()
+            - buttonHeight * BUTTON_COUNT - BOTTOM_MARGIN * uiScale;
+        return gapFitFraction(available, natural);
+    }
+
+    // The packed height of every summary line. Measured rather than computed,
+    // because a Label's height is the font's business and depends on the scale it
+    // was given.
+    private float summaryLinesHeight()
+    {
         float lines = 0.0f;
         for (final Label line : summaryLines)
         {
             lines = lines + line.getHeight();
         }
-        // One gap under the heading, one after each line — the layout loop
-        // subtracts LINE_GAP after the last line too — and one above the button.
-        final float natural = (SUMMARY_GAP + BUTTON_GAP
-            + LINE_GAP * summaryLines.length) * uiScale;
-        final float available = spaceBelowHeading - lines - buttonHeight
-            - BOTTOM_MARGIN * uiScale;
-        return gapFitFraction(available, natural);
+        return lines;
     }
 
     /**

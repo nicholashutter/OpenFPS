@@ -14,6 +14,7 @@ import com.openfps.engine.core.GameConfig;
 import com.openfps.engine.gameplay.Bot;
 import com.openfps.engine.gameplay.Match;
 import com.openfps.engine.gameplay.MatchState;
+import com.openfps.engine.gameplay.MatchStatus;
 import com.openfps.engine.gameplay.PlayerController;
 import com.openfps.engine.gameplay.PlayerInputView;
 import com.openfps.engine.gameplay.port.I_GameplayPort;
@@ -150,6 +151,31 @@ public final class DemoGameplayPort implements I_GameplayPort
     private final int[] botInstances;
 
     /**
+     * The scene instance each bot's weapon occupies, in the same order as
+     * {@link Match#bots()}, or null when nothing is armed.
+     *
+     * <p>Null is the no-art case and the camera-only case. Entries may
+     * individually be {@link DemoScene#NO_INSTANCE} for the same reason, which is
+     * what a checkout with characters staged and no weapon produces.</p>
+     */
+    private final int[] botWeaponInstances;
+
+    /** Where the player started, world x — the point a respawn returns them to. */
+    private final float spawnX;
+
+    /** Where the player started, world y. */
+    private final float spawnY;
+
+    /** Where the player started, world z. */
+    private final float spawnZ;
+
+    /** The heading the player started with. */
+    private final float spawnYawRadians;
+
+    /** The elevation the player started with. */
+    private final float spawnPitchRadians;
+
+    /**
      * The pre-placed instances a shot makes visible, or null when this port has
      * no scene behind it.
      *
@@ -217,6 +243,18 @@ public final class DemoGameplayPort implements I_GameplayPort
 
     /** MUTABLE: the match state already reported, so the result is logged once. */
     private MatchState reportedState = MatchState.IN_PROGRESS;
+
+    /**
+     * The tic most recently applied, for turning the match's absolute respawn tic
+     * into a countdown the HUD can draw.
+     *
+     * <p>MUTABLE, written under the tic lock and read from the platform's render
+     * thread, hence volatile. A stale read costs one frame of a countdown that
+     * ticks sixty times a second, which is not a class of error anybody can
+     * see — and taking the lock on the render thread to avoid it would put the
+     * simulation behind the display.</p>
+     */
+    private volatile int lastTicIndex;
 
     /**
      * Whether the match is live, or frozen behind a menu.
@@ -297,6 +335,38 @@ public final class DemoGameplayPort implements I_GameplayPort
         final PlayerController playerController, final GameConfig config,
         final Match round, final int[] botInstanceIndices, final DemoEffects shotEffects)
     {
+        this(input, renderPort, playerController, config, round, botInstanceIndices,
+            shotEffects, null);
+    }
+
+    /**
+     * Creates the demo gameplay port for a round against armed bots.
+     *
+     * @param input the HAL input port to latch each tic; must not be null
+     * @param renderPort the renderer to aim; must not be null
+     * @param playerController the player to move; must not be null. <b>Its
+     *     current placement is taken as the spawn point</b>, which is what a
+     *     death and a rematch both return the player to — see
+     *     {@link #restartMatch()}
+     * @param config the running configuration; must not be null
+     * @param round the match to drive, or null for a camera-only demo. <b>Its
+     *     bots must not include a box around this player</b>: a ray origin
+     *     inside a box is a hit at distance zero, so a shooter listed among its
+     *     own targets shoots itself on every trigger pull
+     * @param botInstanceIndices where each bot's model sits among the scene's
+     *     world instances, in {@code round.bots()} order; must be non-null and
+     *     at least as long as the roster whenever {@code round} is given
+     * @param shotEffects the pre-placed tracer and smoke instances a shot
+     *     drives, or null to fire invisibly
+     * @param botWeaponIndices where each bot's weapon sits among the scene's
+     *     world instances, in the same order, or null when the bots hold
+     *     nothing. Individual entries may be {@link DemoScene#NO_INSTANCE}
+     */
+    public DemoGameplayPort(final I_InputPort input, final SoftwareRenderPort renderPort,
+        final PlayerController playerController, final GameConfig config,
+        final Match round, final int[] botInstanceIndices, final DemoEffects shotEffects,
+        final int[] botWeaponIndices)
+    {
         this.effects = shotEffects;
         if (round != null && botInstanceIndices == null)
         {
@@ -337,6 +407,26 @@ public final class DemoGameplayPort implements I_GameplayPort
         {
             this.botInstances = botInstanceIndices.clone();
         }
+        if (botWeaponIndices == null)
+        {
+            this.botWeaponInstances = null;
+        }
+        else
+        {
+            this.botWeaponInstances = botWeaponIndices.clone();
+        }
+        // The controller's placement AT CONSTRUCTION is the spawn, captured here
+        // rather than passed in. Two reasons, and the second is the one that
+        // decided it: DemoScene.spawnController() is what built this object's
+        // controller, so the two can never disagree — whereas a spawn handed in
+        // separately is a second copy of the same fact, and the failure mode of a
+        // second copy is a respawn that puts the player somewhere the level
+        // designer never chose. It also keeps every existing caller unchanged.
+        this.spawnX = playerController.positionX();
+        this.spawnY = playerController.positionY();
+        this.spawnZ = playerController.positionZ();
+        this.spawnYawRadians = playerController.yawRadians();
+        this.spawnPitchRadians = playerController.pitchRadians();
     }
 
     @Override
@@ -517,6 +607,7 @@ public final class DemoGameplayPort implements I_GameplayPort
             publishEffects();
             aimCamera();
             this.ticsApplied = ticsApplied + 1;
+            this.lastTicIndex = ticIndex;
         }
         finally
         {
@@ -541,6 +632,16 @@ public final class DemoGameplayPort implements I_GameplayPort
     {
         if (!triggerDown || match == null || !matchLive || match.state().isOver())
         {
+            return;
+        }
+        if (match.isPlayerDown())
+        {
+            // A corpse does not shoot. Gating here rather than inside Match for
+            // the reason firePlayerShot's Javadoc gives: whether a trigger MAY be
+            // pulled is the caller's rule, and this caller's rule is that the two
+            // seconds on the floor are two seconds of not playing. Without it a
+            // player who held the mouse down would keep firing from where they
+            // fell and would spend their own accuracy figure on it.
             return;
         }
         if (ticIndex - lastFireTic < FIRE_INTERVAL_TICS)
@@ -642,9 +743,24 @@ public final class DemoGameplayPort implements I_GameplayPort
         }
         final int damage = match.tick(ticIndex, controller.positionX(), controller.positionY(),
             controller.positionZ());
-        if (damage > 0)
+        if (damage > 0 && match.isPlayerDown())
+        {
+            LOG.info("KILLED (tic {}) — death {}, respawning in {} tics", ticIndex,
+                match.playerDeaths(), match.respawnTicsRemaining(ticIndex));
+        }
+        else if (damage > 0)
         {
             LOG.info("took {} damage — {} hp left", damage, match.playerHealth());
+        }
+        // AFTER the tick, because the tick is what decides it, and consuming the
+        // flag here means exactly one thing acts on each respawn. Match owns WHEN
+        // a respawn happens; it has never heard of a spawn point, so putting the
+        // body back is this object's half of the split.
+        if (match.consumePlayerRespawned())
+        {
+            controller.respawnAt(spawnX, spawnY, spawnZ, spawnYawRadians, spawnPitchRadians);
+            LOG.info("RESPAWNED at ({}, {}, {}) with {} hp", spawnX, spawnY, spawnZ,
+                match.playerHealth());
         }
         final MatchState now = match.state();
         if (now != reportedState)
@@ -709,7 +825,123 @@ public final class DemoGameplayPort implements I_GameplayPort
         {
             renderer.setWorldTransform(botInstances[index],
                 DemoScene.botPlacement(roster[index]));
+            publishBotWeapon(index, roster[index]);
         }
+    }
+
+    // One bot's blaster, moved to wherever its holder's hand is — or hidden,
+    // because DemoScene.botWeaponPlacement returns the degenerate transform for a
+    // dead bot exactly as botPlacement does.
+    //
+    // The two MUST agree about death, and this is the pairing that makes them: a
+    // weapon left visible over a corpse is the most conspicuous object in the
+    // room, and it would make "the body goes away" read as a rendering fault
+    // rather than as a kill. They are published in the same loop iteration so
+    // there is no tic on which one has been updated and the other has not.
+    private void publishBotWeapon(final int index, final Bot bot)
+    {
+        if (botWeaponInstances == null || index >= botWeaponInstances.length)
+        {
+            return;
+        }
+        final int instance = botWeaponInstances[index];
+        if (instance == DemoScene.NO_INSTANCE)
+        {
+            return;
+        }
+        renderer.setWorldTransform(instance, DemoScene.botWeaponPlacement(bot));
+    }
+
+    /**
+     * Puts the whole world back to how it was before the round started.
+     *
+     * <p>This is the rematch. Everything that carries match state is restored
+     * together, and <b>together is the operative word</b> — the state is spread
+     * across four objects with four owners, and a reset that missed one would
+     * produce a room that was mostly new:</p>
+     *
+     * <ul>
+     *   <li>{@link Match#reset()} — every bot alive at full health, back on its
+     *       route at tic 0, cooldown cleared, memory of the player forgotten;
+     *       and every counter zeroed, so the next summary is this round's rather
+     *       than the sum of two.</li>
+     *   <li>{@link PlayerController#respawnAt} — position, yaw, pitch and
+     *       vertical velocity back to the spawn this port captured at
+     *       construction.</li>
+     *   <li>{@link DemoEffects#clear()} — the tracers and smoke of the last shot
+     *       of the last round, which would otherwise still be crossing the room
+     *       when the new one began.</li>
+     *   <li>{@link #publishBotPlacements()} — and this is the one that is easy to
+     *       forget and impossible to miss. A dead bot is hidden by a
+     *       <i>degenerate transform override</i> held in the renderer, not by
+     *       anything in the simulation. Reviving a bot in {@code Match} does not
+     *       un-hide it; only publishing its placement again does. Without this
+     *       line the rematch is seven live, shooting, invisible opponents.</li>
+     * </ul>
+     *
+     * <p>Under the tic lock, so a rematch cannot land halfway through a tic and
+     * leave the bots reset and the player not. Called from the platform's UI
+     * thread when the player leaves the game-over screen, which is why it needs
+     * to be — every other write to this state happens on the game loop
+     * thread.</p>
+     *
+     * <p>Harmless on a port with no match: the {@code --model=} path has none,
+     * and "restart nothing" is the correct answer rather than a reason to make
+     * the caller check.</p>
+     */
+    public void restartMatch()
+    {
+        tickLock.lock();
+        try
+        {
+            if (match == null)
+            {
+                return;
+            }
+            match.reset();
+            controller.respawnAt(spawnX, spawnY, spawnZ, spawnYawRadians, spawnPitchRadians);
+            if (effects != null)
+            {
+                effects.clear();
+            }
+            this.reportedState = MatchState.IN_PROGRESS;
+            this.lastFireTic = -FIRE_INTERVAL_TICS;
+            // The un-hide. See the Javadoc above: this is what makes the corpses
+            // visible again, and nothing in Match can do it.
+            publishBotPlacements();
+            publishEffects();
+            LOG.info("MATCH RESTARTED — {} opponents back up, {}", match.botCount(), match);
+        }
+        finally
+        {
+            tickLock.unlock();
+        }
+    }
+
+    /**
+     * Returns a one-frame snapshot of the live score, or null when there is no
+     * match.
+     *
+     * <p>What the on-screen counter and the death notice are drawn from. Called
+     * from the platform's render thread once a frame; see {@link MatchStatus} for
+     * why it is a copy rather than a reference to the live {@code Match}.</p>
+     *
+     * <p>Deliberately does <b>not</b> take the tic lock. Every field it reads is
+     * an {@code int} or a {@code boolean}, so the worst a concurrent tic can do
+     * is give the frame a health value from one tic beside a kill count from the
+     * next — a discrepancy that lasts 16 ms and that nobody can see. Taking the
+     * lock would put the simulation behind the display, which is a defect anybody
+     * can see.</p>
+     *
+     * @return the live figures, or null for a camera-only demo
+     */
+    public MatchStatus status()
+    {
+        if (match == null)
+        {
+            return null;
+        }
+        return MatchStatus.of(match, lastTicIndex);
     }
 
     // Points the renderer at the player's eye.

@@ -17,6 +17,7 @@ import com.openfps.engine.core.FrameRate;
 import com.openfps.engine.core.GameConfig;
 import com.openfps.engine.gameplay.Bot;
 import com.openfps.engine.gameplay.Match;
+import com.openfps.engine.gameplay.MatchState;
 import com.openfps.engine.gameplay.PlayerController;
 import com.openfps.engine.hal.adapter.nulladapter.NullTimePort;
 import com.openfps.engine.hal.port.I_InputPort;
@@ -46,6 +47,17 @@ final class DemoGameplayPortTest
 {
     /** Viewport used where a surface is needed; small, because nothing looks at it. */
     private static final int SURFACE = 64;
+
+    /**
+     * Tics to run a frozen match for before concluding that nothing happened.
+     *
+     * <p>Firing is a per-tic roll now rather than a fixed cadence, so "long enough
+     * for every bot's cadence to come round" is no longer a thing that can be
+     * counted exactly. Six thousand tics is around forty shots per bot at
+     * {@code BotSkill.DUMB}'s mean interval — if the gate leaked at all, it would
+     * have leaked by then.</p>
+     */
+    private static final int FROZEN_SAMPLE_TICS = 6000;
 
     /** Floating-point slack for position comparisons, in world units. */
     private static final float EPSILON = 1.0e-3f;
@@ -318,55 +330,62 @@ final class DemoGameplayPortTest
         }
     }
 
+    // The demo world, with all seven character models and both blasters staged.
+    //
+    // At the OUTER level rather than inside one nest, because two nests now build
+    // a world: the bot handoff and the rematch. A second copy is how the two would
+    // come to disagree about which art is staged, and "the bots have no weapon in
+    // this test" is a difference that would look like a feature not working.
+    private static DemoScene world(final Path root) throws IOException
+    {
+        for (final String person : new String[] {"character-a.ofm", "character-d.ofm",
+            "character-h.ofm", "character-k.ofm", "character-n.ofm", "character-q.ofm",
+            "character-r.ofm"})
+        {
+            DemoModelFixture.write(
+                root.resolve(DemoModels.CHARACTER_DIRECTORY).resolve(person));
+        }
+        for (final String piece : new String[] {"floor-square.ofm", "wall.ofm",
+            "wall-doorway.ofm", "column.ofm", "crate.ofm", "stairs.ofm", "shape-slope.ofm"})
+        {
+            DemoModelFixture.write(root.resolve(DemoModels.LEVEL_DIRECTORY).resolve(piece));
+        }
+        DemoModelFixture.write(
+            root.resolve(DemoModels.WEAPON_DIRECTORY).resolve(DemoModels.WEAPON_MODEL));
+        DemoModelFixture.write(
+            root.resolve(DemoModels.WEAPON_DIRECTORY).resolve(DemoModels.BOT_WEAPON_MODEL));
+        return DemoScene.build(DemoModels.load(root));
+    }
+
+    // The scene index of every bot, exactly as DesktopLauncher builds it.
+    private static int[] indicesOf(final DemoScene demo)
+    {
+        final int[] indices = new int[demo.botCount()];
+        for (int index = 0; index < indices.length; index++)
+        {
+            indices[index] = demo.botInstanceIndex(index);
+        }
+        return indices;
+    }
+
+    // A port with the match already running. Most tests are about what a LIVE
+    // match does; the frozen case has its own.
+    private static DemoGameplayPort portFor(final DemoScene demo,
+        final SoftwareRenderPort render, final Match round)
+    {
+        final DemoGameplayPort port = new DemoGameplayPort(
+            new ScriptedInput(InputState.NEUTRAL), render, demo.spawnController(),
+            config(), round, indicesOf(demo));
+        port.setMatchLive(true);
+        return port;
+    }
+
     @Nested
     @DisplayName("the bot handoff")
     final class BotHandoff
     {
         /** Tics to run before checking placements. Past a quarter of every route. */
         private static final int SETTLE_TICS = 130;
-
-        // The demo world, with all seven character models staged.
-        private static DemoScene world(final Path root) throws IOException
-        {
-            for (final String person : new String[] {"character-a.ofm", "character-d.ofm",
-                "character-h.ofm", "character-k.ofm", "character-n.ofm", "character-q.ofm",
-                "character-r.ofm"})
-            {
-                DemoModelFixture.write(
-                    root.resolve(DemoModels.CHARACTER_DIRECTORY).resolve(person));
-            }
-            for (final String piece : new String[] {"floor-square.ofm", "wall.ofm",
-                "wall-doorway.ofm", "column.ofm", "crate.ofm", "stairs.ofm", "shape-slope.ofm"})
-            {
-                DemoModelFixture.write(root.resolve(DemoModels.LEVEL_DIRECTORY).resolve(piece));
-            }
-            DemoModelFixture.write(
-                root.resolve(DemoModels.WEAPON_DIRECTORY).resolve(DemoModels.WEAPON_MODEL));
-            return DemoScene.build(DemoModels.load(root));
-        }
-
-        // The scene index of every bot, exactly as DesktopLauncher builds it.
-        private static int[] indicesOf(final DemoScene demo)
-        {
-            final int[] indices = new int[demo.botCount()];
-            for (int index = 0; index < indices.length; index++)
-            {
-                indices[index] = demo.botInstanceIndex(index);
-            }
-            return indices;
-        }
-
-        // A port with the match already running. Every test below is about what
-        // a LIVE match does; the frozen case has its own test.
-        private static DemoGameplayPort portFor(final DemoScene demo,
-            final SoftwareRenderPort render, final Match round)
-        {
-            final DemoGameplayPort port = new DemoGameplayPort(
-                new ScriptedInput(InputState.NEUTRAL), render, demo.spawnController(),
-                config(), round, indicesOf(demo));
-            port.setMatchLive(true);
-            return port;
-        }
 
         @Test
         @DisplayName("a match does not start until the UI says the player is in the world")
@@ -390,8 +409,8 @@ final class DemoGameplayPortTest
 
             assertThat(port.isMatchLive()).as("a new port starts frozen").isFalse();
 
-            // Long enough that every bot's cadence has come round several times.
-            for (int tic = 0; tic <= Match.BOT_FIRE_INTERVAL_TICS * 3; tic++)
+            // Long enough that every bot has had many opportunities to fire.
+            for (int tic = 0; tic <= FROZEN_SAMPLE_TICS; tic++)
             {
                 port.tick(tic);
             }
@@ -668,6 +687,247 @@ final class DemoGameplayPortTest
                 }
             }
             throw new IllegalStateException("the roster has no sentry to test with");
+        }
+    }
+
+    @Nested
+    @DisplayName("the rematch")
+    class Rematch
+    {
+        @Test
+        @DisplayName("a cleared room becomes VISIBLE again, which no simulation reset can do")
+        void shouldUnhideEveryBodyWhenRestarting(@TempDir final Path root) throws IOException
+        {
+            // THE test for the whole feature, and the one thing a Match-level test
+            // cannot express. A dead bot is hidden by a DEGENERATE TRANSFORM
+            // OVERRIDE held in the RENDERER — not by anything in the simulation —
+            // so reviving it in Match does not make it visible. Only re-publishing
+            // its placement does.
+            //
+            // Without restartMatch's publish call the rematch is seven live,
+            // shooting, INVISIBLE opponents, and every simulation assertion in the
+            // suite passes while the room looks empty. So this asserts the pixel
+            // side of the seam: the transform the renderer is actually holding.
+            final DemoScene demo = world(root);
+            final SoftwareRenderPort render = renderer();
+            render.resize(SURFACE, SURFACE);
+            render.setScene(demo.scene());
+
+            final Match round = demo.newMatch();
+            final DemoGameplayPort port = portFor(demo, render, round);
+            port.setMatchLive(true);
+            port.tick(0);
+
+            // Clear the room the way a player would — through the match, so the
+            // hide happens by the normal path rather than by poking a flag.
+            for (final Bot bot : round.bots())
+            {
+                bot.damage(Bot.MAX_HEALTH);
+            }
+            port.tick(1);
+            for (int index = 0; index < round.botCount(); index++)
+            {
+                assertThat(hiddenAt(render, demo.botInstanceIndex(index)))
+                    .as("bot %d is still visible after being killed", index)
+                    .isTrue();
+            }
+
+            port.restartMatch();
+
+            for (int index = 0; index < round.botCount(); index++)
+            {
+                assertThat(hiddenAt(render, demo.botInstanceIndex(index)))
+                    .as("bot %d is alive and shooting but INVISIBLE after the rematch", index)
+                    .isFalse();
+            }
+            assertThat(round.livingBots()).isEqualTo(round.botCount());
+            assertThat(round.state()).isEqualTo(MatchState.IN_PROGRESS);
+        }
+
+        @Test
+        @DisplayName("each bot's weapon comes back with its body, not a tic later")
+        void shouldUnhideEveryWeaponWhenRestarting(@TempDir final Path root) throws IOException
+        {
+            // A weapon left hidden while its holder is visible is an unarmed bot;
+            // one left visible while its holder is not is a gun floating over a
+            // grave. The two are published in the same loop iteration precisely so
+            // there is no tic on which they disagree, and this is the assertion
+            // that keeps them there.
+            final DemoScene demo = world(root);
+            final SoftwareRenderPort render = renderer();
+            render.resize(SURFACE, SURFACE);
+            render.setScene(demo.scene());
+
+            final Match round = demo.newMatch();
+            final DemoGameplayPort port = new DemoGameplayPort(
+                new ScriptedInput(InputState.NEUTRAL), render, demo.spawnController(),
+                config(), round, indicesOf(demo), demo.effects(), weaponIndicesOf(demo));
+            port.setMatchLive(true);
+            port.tick(0);
+            assertThat(demo.hasBotWeapons()).as("no weapon art was staged").isTrue();
+
+            for (final Bot bot : round.bots())
+            {
+                bot.damage(Bot.MAX_HEALTH);
+            }
+            port.tick(1);
+            for (int index = 0; index < round.botCount(); index++)
+            {
+                assertThat(hiddenAt(render, demo.botWeaponInstanceIndex(index)))
+                    .as("bot %d's weapon is floating over its corpse", index)
+                    .isTrue();
+            }
+
+            port.restartMatch();
+
+            for (int index = 0; index < round.botCount(); index++)
+            {
+                assertThat(hiddenAt(render, demo.botWeaponInstanceIndex(index)))
+                    .as("bot %d came back unarmed", index)
+                    .isFalse();
+            }
+        }
+
+        @Test
+        @DisplayName("the player is put back at the spawn point, wherever they had walked to")
+        void shouldReturnThePlayerToTheSpawnWhenRestarting(@TempDir final Path root)
+            throws IOException
+        {
+            final DemoScene demo = world(root);
+            final SoftwareRenderPort render = renderer();
+            render.resize(SURFACE, SURFACE);
+            render.setScene(demo.scene());
+
+            final PlayerController player = demo.spawnController();
+            final float spawnZ = player.positionZ();
+            final Match round = demo.newMatch();
+            final DemoGameplayPort port = new DemoGameplayPort(
+                new ScriptedInput(InputState.of(1.0f, 0.0f, 0.0f, 0.0f, false, false, false)),
+                render, player, config(), round, indicesOf(demo));
+            port.setMatchLive(true);
+
+            for (int tic = 0; tic < 60; tic++)
+            {
+                port.tick(tic);
+            }
+            assertThat(player.positionZ()).as("the player never moved").isNotEqualTo(spawnZ);
+
+            port.restartMatch();
+
+            assertThat(player.positionZ()).isEqualTo(spawnZ);
+            assertThat(player.yawRadians()).isEqualTo(demo.spawnYawRadians());
+        }
+
+        @Test
+        @DisplayName("in-flight tracers and smoke are cleared, so the new round starts empty")
+        void shouldClearTheEffectsWhenRestarting(@TempDir final Path root) throws IOException
+        {
+            // A rematch that inherited three bolts from the last round would be a
+            // room visibly remembering a match it is supposed to have forgotten —
+            // and the bolts would be halfway across it, going nowhere.
+            final DemoScene demo = world(root);
+            final SoftwareRenderPort render = renderer();
+            render.resize(SURFACE, SURFACE);
+            render.setScene(demo.scene());
+
+            final DemoEffects effects = demo.effects();
+            final Match round = demo.newMatch();
+            final DemoGameplayPort port = new DemoGameplayPort(
+                new ScriptedInput(InputState.of(0.0f, 0.0f, 0.0f, 0.0f, true, false, false)),
+                render, demo.spawnController(), config(), round, indicesOf(demo), effects);
+            port.setMatchLive(true);
+            port.tick(0);
+            assertThat(effects.liveTracerCount()).as("nothing was fired").isGreaterThan(0);
+
+            port.restartMatch();
+
+            assertThat(effects.liveTracerCount()).isEqualTo(0);
+            assertThat(effects.livePuffCount()).isEqualTo(0);
+        }
+
+        @Test
+        @DisplayName("the summary of a second round is that round's, not the sum of two")
+        void shouldNotCarryCountersIntoTheNextRound(@TempDir final Path root) throws IOException
+        {
+            // What the player sees on the end screen. A reset that zeroed the bots
+            // and forgot the counters would report fourteen kills out of seven.
+            final DemoScene demo = world(root);
+            final SoftwareRenderPort render = renderer();
+            render.resize(SURFACE, SURFACE);
+            render.setScene(demo.scene());
+
+            final Match round = demo.newMatch();
+            final DemoGameplayPort port = portFor(demo, render, round);
+            port.setMatchLive(true);
+            port.tick(0);
+            for (final Bot bot : round.bots())
+            {
+                bot.damage(Bot.MAX_HEALTH);
+            }
+            port.tick(1);
+
+            port.restartMatch();
+            for (final Bot bot : round.bots())
+            {
+                bot.damage(Bot.MAX_HEALTH);
+            }
+
+            assertThat(round.botsKilled())
+                .as("the kills of two rounds were added together")
+                .isEqualTo(0);
+            assertThat(round.playerShotsFired()).isEqualTo(0);
+            assertThat(round.playerDeaths()).isEqualTo(0);
+        }
+
+        @Test
+        @DisplayName("restarting a camera-only port does nothing rather than throwing")
+        void shouldTolerateARestartWithNoMatch()
+        {
+            final DemoGameplayPort port = new DemoGameplayPort(
+                new ScriptedInput(InputState.NEUTRAL), renderer(), new PlayerController(),
+                config());
+
+            assertThatCode(port::restartMatch).doesNotThrowAnyException();
+            assertThat(port.status()).isNull();
+        }
+
+        // Whether the renderer is currently holding the degenerate "not right now"
+        // transform for one instance.
+        //
+        // Tested by the property that makes it work rather than by comparing to
+        // DemoEffects.HIDDEN by reference: every vertex collapses onto one point,
+        // so the whole upper-left 3x3 is zero and no triangle survives to a pixel.
+        // Reference equality would pass for any Mat4 that happened to be that
+        // constant and fail for an equal one built elsewhere.
+        private static boolean hiddenAt(final SoftwareRenderPort render, final int instance)
+        {
+            final Mat4 placed = render.worldTransformOverride(instance);
+            if (placed == null)
+            {
+                return false;
+            }
+            for (int row = 0; row < 3; row++)
+            {
+                for (int column = 0; column < 3; column++)
+                {
+                    if (placed.get(row, column) != 0.0f)
+                    {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+
+        // The scene index of every bot's weapon, in roster order.
+        private static int[] weaponIndicesOf(final DemoScene demo)
+        {
+            final int[] indices = new int[demo.botCount()];
+            for (int index = 0; index < indices.length; index++)
+            {
+                indices[index] = demo.botWeaponInstanceIndex(index);
+            }
+            return indices;
         }
     }
 }

@@ -39,9 +39,9 @@ import org.slf4j.LoggerFactory;
  * the second is about to re-clear input and re-warp the cursor under the first.
  * Silently ignoring it turns a wiring bug into an intermittent input glitch.
  * With four states there are also genuinely absent edges —
- * {@link UiState#SETTINGS} to {@link UiState#PLAYING}, or a rematch out of
- * {@link UiState#GAME_OVER} — and those throw for the same reason: a caller
- * asking for one has misunderstood what it is holding. See
+ * {@link UiState#SETTINGS} to {@link UiState#PLAYING}, or the menu jumping
+ * straight to a result it has not played for — and those throw for the same
+ * reason: a caller asking for one has misunderstood what it is holding. See
  * {@link UiState#canTransitionTo}.</p>
  *
  * <p><b>Threading:</b> {@link #state()} is safe from any thread — the field is
@@ -227,6 +227,30 @@ public final class UiStateMachine
         }
         this.result = summary;
         transitionTo(UiState.GAME_OVER);
+    }
+
+    /**
+     * Starts the round again from the end screen: {@code GAME_OVER -> PLAYING}.
+     *
+     * <p><b>The transition is the easy half and the caller owes the hard half.</b>
+     * This method moves a state field; it does not put seven bots back on their
+     * feet. Whoever calls it must first have restored the world —
+     * {@code DemoGameplayPort.restartMatch()} — because a UI that says PLAYING
+     * over a room that is still cleared and still full of invisible corpses is
+     * precisely the "button that lies" this edge was refused for so long to
+     * avoid.</p>
+     *
+     * <p>The mode is left alone: a rematch is another round of the same kind of
+     * match the player chose, not a new choice. The stored {@link #result} is
+     * left alone too, for the reason {@link #returnToMenu} leaves it — the end
+     * screen is still on the glass while this transition is being applied, and
+     * it is drawing from it.</p>
+     *
+     * @throws IllegalStateException if the end screen is not the thing in front
+     */
+    public void restartMatch()
+    {
+        transitionTo(UiState.PLAYING);
     }
 
     /**

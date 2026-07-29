@@ -15,6 +15,9 @@ import java.nio.file.Path;
 
 import com.openfps.engine.common.Constants;
 import com.openfps.engine.gameplay.Bot;
+import com.openfps.engine.gameplay.BotPattern;
+import com.openfps.engine.gameplay.BotRng;
+import com.openfps.engine.gameplay.BotSkill;
 import com.openfps.engine.gameplay.HitResult;
 import com.openfps.engine.gameplay.Hitscan;
 import com.openfps.engine.gameplay.Match;
@@ -100,6 +103,15 @@ final class DemoSceneTest
      */
     private static final int LONGEST_ROUTE_TICS = 600;
 
+    /**
+     * Tics to watch the whole roster's firing over.
+     *
+     * <p>Long enough that every bot has had many opportunities to fire — at
+     * {@link BotSkill#DUMB}'s mean interval that is around forty shots each — so
+     * a room that WOULD volley has had ample chance to.</p>
+     */
+    private static final int VOLLEY_SAMPLE_TICS = 6000;
+
     /** Every bot's hitbox where it currently stands, for a Hitscan sweep. */
     private static Target[] hitboxesOf(final DemoScene demo)
     {
@@ -154,6 +166,14 @@ final class DemoSceneTest
                 .resolve(person));
         }
         return kit(root);
+    }
+
+    /** The same, plus the blaster the bots carry, so they are placed armed. */
+    private static DemoModels kitWithArmedCharacters(final Path root) throws IOException
+    {
+        DemoModelFixture.write(root.resolve(DemoModels.WEAPON_DIRECTORY)
+            .resolve(DemoModels.BOT_WEAPON_MODEL));
+        return kitWithCharacters(root);
     }
 
     @Nested
@@ -367,28 +387,37 @@ final class DemoSceneTest
         }
 
         @Test
-        @DisplayName("no two bots fire on the same tic")
+        @DisplayName("the room never volleys — no tic has the whole roster firing")
         void shouldStaggerTheWholeRosterWhenFiring(@TempDir final Path root) throws IOException
         {
-            // Seven bots on one cadence with no offsets would volley together,
-            // which is both harder to survive and much harder to read than the
-            // same total rate spread out.
+            // Seven bots on one shared cadence would volley together, which is
+            // both harder to survive and much harder to read than the same total
+            // rate spread out. The old scene staggered them with arithmetic
+            // offsets; the firing is now a per-bot, per-tic draw, which
+            // decorrelates the room by construction rather than by bookkeeping —
+            // so this asserts the property the player experiences instead of the
+            // mechanism that used to produce it.
             final DemoScene demo = DemoScene.build(kitWithCharacters(root));
             final Bot[] roster = demo.bots();
+            final BotRng rng = new BotRng();
 
-            for (int tic = 0; tic < Match.BOT_FIRE_INTERVAL_TICS * 2; tic++)
+            int busiestTic = 0;
+            for (int tic = 0; tic < VOLLEY_SAMPLE_TICS; tic++)
             {
                 int firing = 0;
                 for (final Bot bot : roster)
                 {
-                    if (bot.wantsToFire(tic))
+                    if (bot.wantsToFire(tic, rng, BotSkill.DUMB))
                     {
                         firing++;
                     }
                 }
-                assertThat(firing).as("tic %d had %d bots fire at once", tic, firing)
-                    .isLessThanOrEqualTo(1);
+                busiestTic = Math.max(busiestTic, firing);
             }
+            assertThat(busiestTic)
+                .as("%d of %d bots fired on one tic — that is a broadside",
+                    busiestTic, roster.length)
+                .isLessThan(roster.length);
         }
 
         @Test
@@ -828,5 +857,177 @@ final class DemoSceneTest
         return m.get(0, 0) * (m.get(1, 1) * m.get(2, 2) - m.get(1, 2) * m.get(2, 1))
             - m.get(0, 1) * (m.get(1, 0) * m.get(2, 2) - m.get(1, 2) * m.get(2, 0))
             + m.get(0, 2) * (m.get(1, 0) * m.get(2, 1) - m.get(1, 1) * m.get(2, 0));
+    }
+
+    @Nested
+    @DisplayName("the weapon each bot carries")
+    final class BotWeapons
+    {
+        /**
+         * The bots' blaster along its own axis, in model units.
+         *
+         * <p>{@code blaster-p.ofm} measures {@code 0.16 x 0.37 x 0.86}, read off
+         * {@code gradlew :tools:verifyModels} rather than guessed. Length is the z
+         * extent, because a Blaster Kit muzzle points down model -z.</p>
+         */
+        private static final float BOT_BLASTER_LENGTH = 0.86f;
+
+        @Test
+        @DisplayName("is a DIFFERENT model from the player's, which is the whole requirement")
+        void shouldNotBeThePlayersOwnBlaster()
+        {
+            // An opponent holding what looks like your own gun tells you nothing.
+            // The two files are the assertion: same pack, so no new attribution,
+            // and deliberately not the same piece.
+            assertThat(DemoModels.BOT_WEAPON_MODEL).isNotEqualTo(DemoModels.WEAPON_MODEL);
+        }
+
+        @Test
+        @DisplayName("one instance per bot, tagged with that bot's own entity id")
+        void shouldPlaceOneWeaponPerBot(@TempDir final Path root) throws IOException
+        {
+            // Tagged rather than left untagged, and it matters twice: the outline
+            // pass draws one silhouette round a body and what it is holding, and
+            // the crosshair does not go dead when it crosses the gun.
+            final DemoScene demo = DemoScene.build(kitWithArmedCharacters(root));
+            final Scene scene = demo.scene();
+            assertThat(demo.hasBotWeapons()).isTrue();
+
+            for (int index = 0; index < demo.botCount(); index++)
+            {
+                final int instance = demo.botWeaponInstanceIndex(index);
+                assertThat(instance).isNotEqualTo(DemoScene.NO_INSTANCE);
+                assertThat(instance).isNotEqualTo(demo.botInstanceIndex(index));
+                assertThat(scene.worldEntityId(instance))
+                    .as("weapon instance %d must carry bot %d's id", instance, index)
+                    .isEqualTo(demo.bots()[index].entityId());
+            }
+        }
+
+        @Test
+        @DisplayName("goes away with the body, so no gun floats over a corpse")
+        void shouldHideTheWeaponWhenTheBotDies()
+        {
+            // The two have to agree about death on the same tic. A weapon left
+            // visible over the spot where a bot fell is the most conspicuous object
+            // in the room, and it would make "the body goes away" read as a
+            // rendering fault rather than as a kill.
+            final Bot victim = new Bot(2, 40.0f, 0.0f, 120.0f, BotPattern.SENTRY,
+                0.0f, 300, 0);
+            assertThat(DemoScene.botWeaponPlacement(victim)).isNotSameAs(DemoEffects.HIDDEN);
+
+            victim.damage(Bot.MAX_HEALTH);
+
+            assertThat(DemoScene.botWeaponPlacement(victim))
+                .as("the weapon is still drawn after its holder died")
+                .isSameAs(DemoEffects.HIDDEN);
+            assertThat(DemoScene.botPlacement(victim)).isSameAs(DemoEffects.HIDDEN);
+        }
+
+        @Test
+        @DisplayName("is a plausible size against the body holding it")
+        void shouldBeSizedAgainstTheHolder()
+        {
+            // The derived scale, checked against the thing it is derived FROM. A
+            // weapon is somewhere between a fifth and two thirds of its holder's
+            // height; outside that it is a pistol on a giant or a cannon on a
+            // child, and this is the constant that decides between a rifle and a
+            // car.
+            final float lengthUnits = BOT_BLASTER_LENGTH * DemoScene.BOT_WEAPON_WORLD_SCALE;
+
+            assertThat(lengthUnits / DemoScene.PLAYER_HEIGHT_UNITS)
+                .as("the blaster is %f units long against a %f-unit body",
+                    lengthUnits, DemoScene.PLAYER_HEIGHT_UNITS)
+                .isBetween(0.2f, 0.65f);
+        }
+
+        @Test
+        @DisplayName("is held ACROSS the body, so its length is visible rather than end-on")
+        void shouldNotPointAtTheViewer()
+        {
+            // THE REGRESSION, and it is the whole reason the carry angle exists.
+            // Pointed straight down the bot's facing, the weapon is aimed at
+            // whoever it is facing — so what they see is its CROSS-SECTION, three
+            // units by eight on a 56-unit body, which reads as a smudge on a shirt.
+            // It was drawn correctly, every frame, and it was invisible.
+            //
+            // Asserted as a PROJECTED LENGTH in world units, not as an angle: the
+            // question is how much of the weapon the viewer can see, and only a
+            // length can answer that. An assertion that the yaw differed from the
+            // bot's would have passed at one degree of difference.
+            final Bot bot = new Bot(2, 0.0f, 0.0f, 200.0f, BotPattern.SENTRY, 0.0f, 300, 0);
+            bot.observePlayer(0, 0.0f, 0.0f, BotSkill.MARKSMAN);
+            bot.faceRemembered();
+
+            final Mat4 held = DemoScene.botWeaponPlacement(bot);
+            // Column 2 is the image of the model's +z axis — the weapon's own long
+            // axis — scaled by BOT_WEAPON_WORLD_SCALE. The viewer is at the origin
+            // looking up +z, so what they see across the screen is the x component.
+            final float acrossScreen = StrictMath.abs(held.get(0, 2)) * BOT_BLASTER_LENGTH;
+            final float alongTheView = StrictMath.abs(held.get(2, 2)) * BOT_BLASTER_LENGTH;
+
+            assertThat(acrossScreen)
+                .as("only %f units of the weapon's %f-unit length face the viewer;"
+                    + " %f units are pointing away and cannot be seen",
+                    acrossScreen, BOT_BLASTER_LENGTH * DemoScene.BOT_WEAPON_WORLD_SCALE,
+                    alongTheView)
+                .isGreaterThan(Bot.RADIUS_UNITS * 0.5f);
+        }
+
+        @Test
+        @DisplayName("sits at a hand's height, below the eyes — these bots are not aiming")
+        void shouldSitBelowEyeHeight()
+        {
+            // A weapon level with the eyes reads as aimed down a sight, and the
+            // whole of BotSkill is about how badly these opponents aim.
+            assertThat(DemoScene.BOT_WEAPON_HEIGHT_UNITS)
+                .isLessThan(Bot.EYE_HEIGHT_UNITS)
+                .isGreaterThan(DemoScene.PLAYER_HEIGHT_UNITS * 0.4f);
+        }
+
+        @Test
+        @DisplayName("follows its holder, rather than staying where the bot started")
+        void shouldFollowTheBotAlongItsRoute()
+        {
+            final Bot walker = new Bot(2, 0.0f, 0.0f, 200.0f, BotPattern.PACE_X,
+                80.0f, 300, 0);
+            final float atSpawn = DemoScene.botWeaponPlacement(walker).get(0, 3);
+
+            walker.moveTo(75);
+
+            assertThat(DemoScene.botWeaponPlacement(walker).get(0, 3))
+                .as("the weapon stayed behind when the bot walked away")
+                .isNotEqualTo(atSpawn);
+        }
+
+        @Test
+        @DisplayName("is not mirrored, so the model does not render inside-out")
+        void shouldKeepAPositiveDeterminant()
+        {
+            // Scene refuses a negative determinant outright rather than let an
+            // instance render inside-out, so a mirrored transform here is a build
+            // failure at scene-build time rather than something to look at.
+            final Bot bot = new Bot(2, 30.0f, 0.0f, 90.0f, BotPattern.SENTRY, 0.0f, 300, 0);
+            bot.observePlayer(0, -100.0f, 0.0f, BotSkill.MARKSMAN);
+            bot.faceRemembered();
+
+            assertThat(determinant(DemoScene.botWeaponPlacement(bot))).isPositive();
+        }
+
+        @Test
+        @DisplayName("an unstaged weapon leaves the bots unarmed rather than failing the build")
+        void shouldTolerateMissingWeaponArt(@TempDir final Path root) throws IOException
+        {
+            // The demo's art is gitignored, so a fresh clone has none of it. Bots
+            // standing there empty-handed is a degraded demo; they still shoot.
+            final DemoScene demo = DemoScene.build(kitWithCharacters(root));
+
+            assertThat(demo.hasBotWeapons()).isFalse();
+            for (int index = 0; index < demo.botCount(); index++)
+            {
+                assertThat(demo.botWeaponInstanceIndex(index))
+                    .isEqualTo(DemoScene.NO_INSTANCE);
+            }
+        }
     }
 }

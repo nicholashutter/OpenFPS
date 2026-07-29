@@ -38,12 +38,20 @@ class BotTest
     /** A patrol reach in world units. */
     private static final float AMPLITUDE = 100.0f;
 
-    /** A firing cadence. */
-    private static final int FIRE_INTERVAL = 150;
+    /**
+     * Tics to run a statistical assertion over.
+     *
+     * <p>Long enough that a random firing rate settles — about forty shots at
+     * {@link BotSkill#DUMB}'s mean interval — and short enough that a nest of
+     * these runs in milliseconds. Every bound asserted against it is loose on
+     * purpose: this is a random process, and an assertion tight enough to pin the
+     * exact count would be a test that fails for being correct.</p>
+     */
+    private static final int LONG_RUN_TICS = 6000;
 
     private static Bot bot(final BotPattern pattern)
     {
-        return new Bot(2, 0.0f, 0.0f, 0.0f, pattern, AMPLITUDE, PERIOD, 0, FIRE_INTERVAL, 0);
+        return new Bot(2, 0.0f, 0.0f, 0.0f, pattern, AMPLITUDE, PERIOD, 0);
     }
 
     @Nested
@@ -55,7 +63,7 @@ class BotTest
         void shouldStayPutWhenThePatternIsSentry()
         {
             final Bot sentry = new Bot(2, 25.0f, 0.0f, -60.0f, BotPattern.SENTRY,
-                AMPLITUDE, PERIOD, 0, FIRE_INTERVAL, 0);
+                AMPLITUDE, PERIOD, 0);
 
             for (int tic = 0; tic < PERIOD * 3; tic++)
             {
@@ -207,9 +215,9 @@ class BotTest
         void shouldStaggerTwoBotsWhenTheirPhasesDiffer()
         {
             final Bot leading = new Bot(2, 0.0f, 0.0f, 0.0f, BotPattern.ORBIT,
-                AMPLITUDE, PERIOD, 0, FIRE_INTERVAL, 0);
+                AMPLITUDE, PERIOD, 0);
             final Bot trailing = new Bot(3, 0.0f, 0.0f, 0.0f, BotPattern.ORBIT,
-                AMPLITUDE, PERIOD, PERIOD / 2, FIRE_INTERVAL, 0);
+                AMPLITUDE, PERIOD, PERIOD / 2);
 
             leading.moveTo(0);
             trailing.moveTo(0);
@@ -224,7 +232,7 @@ class BotTest
         void shouldStandOnItsRouteWhenConstructed()
         {
             final Bot orbiter = new Bot(2, 0.0f, 0.0f, 0.0f, BotPattern.ORBIT,
-                AMPLITUDE, PERIOD, PERIOD / 4, FIRE_INTERVAL, 0);
+                AMPLITUDE, PERIOD, PERIOD / 4);
 
             // A quarter turn in, so a bot left at its home point by the
             // constructor would be at the origin instead and would visibly jump
@@ -242,7 +250,7 @@ class BotTest
         void shouldFaceZeroYawWhenTheTargetIsOnPositiveZ()
         {
             final Bot sentry = new Bot(2, 0.0f, 0.0f, 0.0f, BotPattern.SENTRY,
-                0.0f, PERIOD, 0, FIRE_INTERVAL, 0);
+                0.0f, PERIOD, 0);
 
             sentry.faceToward(0.0f, 100.0f);
 
@@ -254,7 +262,7 @@ class BotTest
         void shouldFaceAQuarterTurnWhenTheTargetIsOnPositiveX()
         {
             final Bot sentry = new Bot(2, 0.0f, 0.0f, 0.0f, BotPattern.SENTRY,
-                0.0f, PERIOD, 0, FIRE_INTERVAL, 0);
+                0.0f, PERIOD, 0);
 
             sentry.faceToward(100.0f, 0.0f);
 
@@ -270,7 +278,7 @@ class BotTest
         void shouldKeepItsHeadingWhenTheTargetIsAtItsOwnPosition()
         {
             final Bot sentry = new Bot(2, 10.0f, 0.0f, 20.0f, BotPattern.SENTRY,
-                0.0f, PERIOD, 0, FIRE_INTERVAL, 0);
+                0.0f, PERIOD, 0);
             sentry.faceToward(10.0f, 120.0f);
             final float before = sentry.yawRadians();
 
@@ -329,14 +337,17 @@ class BotTest
         void shouldNeverWantToFireWhenDead()
         {
             final Bot victim = new Bot(2, 0.0f, 0.0f, 0.0f, BotPattern.SENTRY,
-                0.0f, PERIOD, 0, FIRE_INTERVAL, 0);
-            assertThat(victim.wantsToFire(0)).isTrue();
+                0.0f, PERIOD, 0);
+            final BotRng rng = new BotRng();
+            assertThat(victim.wantsToFire(0, rng, BotSkill.MARKSMAN))
+                .as("a live marksman fires whenever it is ready")
+                .isTrue();
 
             victim.damage(Bot.MAX_HEALTH);
 
-            for (int tic = 0; tic < FIRE_INTERVAL * 3; tic++)
+            for (int tic = 0; tic < 500; tic++)
             {
-                assertThat(victim.wantsToFire(tic)).isFalse();
+                assertThat(victim.wantsToFire(tic, rng, BotSkill.MARKSMAN)).isFalse();
             }
         }
 
@@ -352,41 +363,288 @@ class BotTest
     }
 
     @Nested
-    @DisplayName("firing cadence")
+    @DisplayName("firing — random, but never faster than the cooldown")
     class Cadence
     {
         @Test
-        @DisplayName("asks to fire once per interval and no more often")
-        void shouldFireOncePerIntervalWhenAlive()
+        @DisplayName("never fires twice inside its cooldown")
+        void shouldRespectTheCooldownWhenFiringRandomly()
         {
+            // The one hard guarantee left now that the cadence is a die roll. A
+            // bot that could fire on two adjacent tics would be a machine gun the
+            // moment the generator came up twice, and the player would have no
+            // way to read it as anything but a bug.
             final Bot shooter = bot(BotPattern.SENTRY);
-            int shots = 0;
-            for (int tic = 0; tic < FIRE_INTERVAL * 4; tic++)
+            final BotRng rng = new BotRng();
+            int previous = Integer.MIN_VALUE;
+
+            for (int tic = 0; tic < LONG_RUN_TICS; tic++)
             {
-                if (shooter.wantsToFire(tic))
+                if (!shooter.wantsToFire(tic, rng, BotSkill.DUMB))
+                {
+                    continue;
+                }
+                if (previous != Integer.MIN_VALUE)
+                {
+                    assertThat(tic - previous)
+                        .as("tic %d came only %d tics after the last shot", tic, tic - previous)
+                        .isGreaterThanOrEqualTo(BotSkill.DUMB.cooldownTics());
+                }
+                previous = tic;
+            }
+            assertThat(previous).as("nothing fired at all over %d tics", LONG_RUN_TICS)
+                .isNotEqualTo(Integer.MIN_VALUE);
+        }
+
+        @Test
+        @DisplayName("fires at roughly the rate the skill profile predicts")
+        void shouldFireAtAboutTheMeanIntervalWhenAlive()
+        {
+            // The profile publishes meanShotIntervalTics() and the whole balance
+            // argument for BOT_SHOT_DAMAGE rests on it, so the arithmetic and the
+            // behaviour have to be pinned against each other. Loose bounds on
+            // purpose: this is a random process, and a tight assertion here would
+            // be a test that fails for being correct.
+            final Bot shooter = bot(BotPattern.SENTRY);
+            final BotRng rng = new BotRng();
+            int shots = 0;
+            for (int tic = 0; tic < LONG_RUN_TICS; tic++)
+            {
+                if (shooter.wantsToFire(tic, rng, BotSkill.DUMB))
                 {
                     shots++;
                 }
             }
 
-            assertThat(shots).isEqualTo(4);
+            final int expected = LONG_RUN_TICS / BotSkill.DUMB.meanShotIntervalTics();
+            assertThat(shots).isBetween(expected / 2, expected * 2);
         }
 
         @Test
-        @DisplayName("offsets stop two bots volleying on the same tic")
-        void shouldStaggerTwoBotsWhenTheirFireOffsetsDiffer()
+        @DisplayName("seven bots do not volley: no tic has them all firing together")
+        void shouldNotSynchroniseWhenSevenBotsShareOneGenerator()
         {
-            final Bot first = new Bot(2, 0.0f, 0.0f, 0.0f, BotPattern.SENTRY,
-                0.0f, PERIOD, 0, FIRE_INTERVAL, 0);
-            final Bot second = new Bot(3, 0.0f, 0.0f, 0.0f, BotPattern.SENTRY,
-                0.0f, PERIOD, 0, FIRE_INTERVAL, FIRE_INTERVAL / 2);
-
-            for (int tic = 0; tic < FIRE_INTERVAL * 4; tic++)
+            // What replaced the old fixed offsets. The old cadence needed
+            // arithmetic to stagger the room; a per-bot, per-tic draw decorrelates
+            // it by construction, and this asserts the property a PLAYER
+            // experiences — a broadside rather than pressure.
+            final BotRng rng = new BotRng();
+            final Bot[] room = new Bot[Match.DEFAULT_BOT_COUNT];
+            for (int index = 0; index < room.length; index++)
             {
-                assertThat(first.wantsToFire(tic) && second.wantsToFire(tic))
-                    .as("tic %d: both bots fired at once", tic)
-                    .isFalse();
+                room[index] = new Bot(Match.FIRST_BOT_ENTITY_ID + index, 0.0f, 0.0f, 0.0f,
+                    BotPattern.SENTRY, 0.0f, PERIOD, 0);
             }
+
+            int busiestTic = 0;
+            for (int tic = 0; tic < LONG_RUN_TICS; tic++)
+            {
+                int firing = 0;
+                for (final Bot shooter : room)
+                {
+                    if (shooter.wantsToFire(tic, rng, BotSkill.DUMB))
+                    {
+                        firing++;
+                    }
+                }
+                busiestTic = Math.max(busiestTic, firing);
+            }
+
+            assertThat(busiestTic)
+                .as("%d of seven bots fired on one tic — that is a volley", busiestTic)
+                .isLessThan(room.length);
+        }
+
+        @Test
+        @DisplayName("the same seed and tics give the same shots; a different seed does not")
+        void shouldBeReproducibleUnderOneSeedWhenFiring()
+        {
+            // The lockstep guarantee, stated as the thing it protects: two peers
+            // running the same tics must produce the same shots. Math.random()
+            // here would fail this test on the second run, which is the point of
+            // having it.
+            final String underOneSeed = shotPattern(1234L);
+            assertThat(shotPattern(1234L))
+                .as("the same seed must replay exactly")
+                .isEqualTo(underOneSeed);
+            assertThat(shotPattern(9876L))
+                .as("a different seed must produce a different match")
+                .isNotEqualTo(underOneSeed);
+        }
+
+        // Which tics one bot fires on under a given seed, as a string so a
+        // mismatch prints the divergence rather than "expected false, was true".
+        private static String shotPattern(final long seed)
+        {
+            final Bot shooter = new Bot(2, 0.0f, 0.0f, 0.0f, BotPattern.SENTRY,
+                0.0f, PERIOD, 0);
+            final BotRng rng = new BotRng(seed);
+            final StringBuilder fired = new StringBuilder();
+            for (int tic = 0; tic < LONG_RUN_TICS; tic++)
+            {
+                if (shooter.wantsToFire(tic, rng, BotSkill.DUMB))
+                {
+                    fired.append(tic).append(' ');
+                }
+            }
+            return fired.toString();
+        }
+    }
+
+    @Nested
+    @DisplayName("reaction — it shoots at where you were")
+    class Reaction
+    {
+        @Test
+        @DisplayName("does not know where the player is until it has been told once")
+        void shouldNotHaveSeenThePlayerWhenFreshlyBuilt()
+        {
+            // Without this a fresh bot remembers the world origin, turns to stare
+            // at it, and shoots at it — seven bodies aiming at the middle of the
+            // floor for the first half-second of every match.
+            final Bot fresh = bot(BotPattern.SENTRY);
+
+            assertThat(fresh.hasSeenPlayer()).isFalse();
+            assertThat(fresh.yawRadians()).isEqualTo(0.0f);
+        }
+
+        @Test
+        @DisplayName("aims a whole body-width behind a running player")
+        void shouldLagBehindARunningPlayer()
+        {
+            // The perceptible property, and asserted as a DISTANCE IN WORLD UNITS
+            // rather than as an angle or a tic count. That choice is the test:
+            // "the memory is stale" can be satisfied by a lag of one micron, which
+            // no player could ever exploit. What matters is whether the gap is big
+            // enough to run out of, so the assertion is against the player's own
+            // hitbox — a bot aiming more than a body-width behind you is a bot you
+            // can outrun, and that is what dumb has to mean on screen.
+            //
+            // A test comparing the remembered angle to the real one would have
+            // passed with the memory wired straight through, which is exactly the
+            // class of mistake this project has already shipped twice.
+            final Bot watcher = bot(BotPattern.SENTRY);
+            final float stepPerTic = PlayerController.MOVE_SPEED_UNITS_PER_SECOND / 60.0f;
+            float worstLag = 0.0f;
+
+            for (int tic = 0; tic < BotSkill.DUMB.reactionTics() * 4; tic++)
+            {
+                final float truthX = tic * stepPerTic;
+                watcher.observePlayer(tic, truthX, 0.0f, BotSkill.DUMB);
+                worstLag = StrictMath.max(worstLag,
+                    StrictMath.abs(truthX - watcher.rememberedPlayerX()));
+            }
+
+            assertThat(worstLag)
+                .as("the bot never aimed more than %f units behind a sprinting player",
+                    worstLag)
+                .isGreaterThan(Bot.RADIUS_UNITS * 2.0f);
+        }
+
+        @Test
+        @DisplayName("refreshes eventually, so a bot is not permanently blind")
+        void shouldRefreshOnceTheReactionIntervalElapses()
+        {
+            final Bot watcher = bot(BotPattern.SENTRY);
+            for (int tic = 0; tic < BotSkill.DUMB.reactionTics() * 3; tic++)
+            {
+                watcher.observePlayer(tic, 200.0f, 0.0f, BotSkill.DUMB);
+            }
+
+            assertThat(watcher.rememberedPlayerX()).isEqualTo(200.0f);
+        }
+
+        @Test
+        @DisplayName("faces the remembered position, not the real one")
+        void shouldTurnTowardTheMemoryWhenFacing()
+        {
+            // Independent reference rather than angle-against-angle: the bot sits
+            // at the origin, remembers the player at +x, and is then told about a
+            // player at -x it is not allowed to notice yet. A body facing the NEW
+            // position would have a positive-x forward vector; one facing the
+            // memory has a negative one. Sines, not radians.
+            final Bot watcher = bot(BotPattern.SENTRY);
+            watcher.observePlayer(0, 300.0f, 0.0f, BotSkill.DUMB);
+            watcher.faceRemembered();
+            final float towardMemory = (float) StrictMath.sin(watcher.yawRadians());
+
+            watcher.observePlayer(1, -300.0f, 0.0f, BotSkill.DUMB);
+            watcher.faceRemembered();
+
+            assertThat(towardMemory).as("yaw 0 must face +z, and +x must be a positive sine")
+                .isGreaterThan(0.0f);
+            assertThat((float) StrictMath.sin(watcher.yawRadians()))
+                .as("the bot swung round to the player's real position immediately")
+                .isGreaterThan(0.0f);
+        }
+
+        @Test
+        @DisplayName("a dead bot notices nothing, so a corpse does not swivel")
+        void shouldStopObservingWhenDead()
+        {
+            final Bot victim = bot(BotPattern.SENTRY);
+            victim.damage(Bot.MAX_HEALTH);
+
+            victim.observePlayer(0, 300.0f, 0.0f, BotSkill.DUMB);
+
+            assertThat(victim.hasSeenPlayer()).isFalse();
+        }
+    }
+
+    @Nested
+    @DisplayName("reset")
+    class Reset
+    {
+        @Test
+        @DisplayName("a reset bot is indistinguishable from a freshly built one")
+        void shouldBeIdenticalToAFreshBotAfterReset()
+        {
+            // The invariant, asserted against a fresh object rather than against a
+            // list of fields somebody has to remember to extend. A field added to
+            // Bot later and not restored in reset() fails HERE.
+            final Bot fresh = bot(BotPattern.ORBIT);
+            final Bot used = bot(BotPattern.ORBIT);
+            final BotRng rng = new BotRng();
+
+            used.observePlayer(0, 120.0f, 40.0f, BotSkill.DUMB);
+            used.faceRemembered();
+            used.moveTo(137);
+            used.wantsToFire(137, rng, BotSkill.MARKSMAN);
+            used.damage(Bot.MAX_HEALTH);
+            assertThat(used.isAlive()).isFalse();
+
+            used.reset();
+
+            assertThat(used.health()).isEqualTo(fresh.health());
+            assertThat(used.isAlive()).isTrue();
+            assertThat(used.positionX()).isEqualTo(fresh.positionX());
+            assertThat(used.positionZ()).isEqualTo(fresh.positionZ());
+            assertThat(used.yawRadians()).isEqualTo(fresh.yawRadians());
+            assertThat(used.readyAtTic()).isEqualTo(fresh.readyAtTic());
+            assertThat(used.lastFiredTic()).isEqualTo(fresh.lastFiredTic());
+            assertThat(used.hasSeenPlayer()).isEqualTo(fresh.hasSeenPlayer());
+            assertThat(used.rememberedPlayerX()).isEqualTo(fresh.rememberedPlayerX());
+            assertThat(used.rememberedPlayerZ()).isEqualTo(fresh.rememberedPlayerZ());
+        }
+
+        @Test
+        @DisplayName("a reset corpse is back on its route, not left where it fell")
+        void shouldMoveTheBodyBackWhenResetting()
+        {
+            // The ordering trap inside reset(): moveTo does nothing to a dead bot,
+            // so reviving must happen BEFORE the placement. A reset that ran them
+            // the other way round would restart the room with every survivor
+            // standing where the last round killed it.
+            final Bot pacer = new Bot(2, 0.0f, 0.0f, 0.0f, BotPattern.PACE_X,
+                AMPLITUDE, PERIOD, 0);
+            final float atSpawn = pacer.positionX();
+            pacer.moveTo(PERIOD / 4);
+            assertThat(pacer.positionX()).isNotEqualTo(atSpawn);
+            pacer.damage(Bot.MAX_HEALTH);
+
+            pacer.reset();
+
+            assertThat(pacer.positionX()).isEqualTo(atSpawn);
         }
     }
 
@@ -399,7 +657,7 @@ class BotTest
         void shouldMatchThePlayerBoxWhenBuildingAHitbox()
         {
             final Bot standing = new Bot(4, 10.0f, 0.0f, -20.0f, BotPattern.SENTRY,
-                0.0f, PERIOD, 0, FIRE_INTERVAL, 0);
+                0.0f, PERIOD, 0);
 
             final Target box = standing.hitbox();
 
@@ -436,22 +694,22 @@ class BotTest
         void shouldRejectAnIdBelowTheMinimumWhenConstructed()
         {
             assertThatThrownBy(() -> new Bot(0, 0.0f, 0.0f, 0.0f, BotPattern.SENTRY,
-                0.0f, PERIOD, 0, FIRE_INTERVAL, 0))
+                0.0f, PERIOD, 0))
                 .isInstanceOf(IllegalArgumentException.class);
         }
 
         @Test
-        @DisplayName("rejects a zero period and a zero fire interval")
+        @DisplayName("rejects a zero route period")
         void shouldRejectNonPositiveCyclesWhenConstructed()
         {
+            // The fire interval used to be checked here too. It is no longer a
+            // constructor argument at all — the cadence moved into BotSkill when
+            // firing became a per-tic roll — and BotSkillTest carries its range
+            // checks now.
             assertThatThrownBy(() -> new Bot(2, 0.0f, 0.0f, 0.0f, BotPattern.SENTRY,
-                0.0f, 0, 0, FIRE_INTERVAL, 0))
+                0.0f, 0, 0))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("period");
-            assertThatThrownBy(() -> new Bot(2, 0.0f, 0.0f, 0.0f, BotPattern.SENTRY,
-                0.0f, PERIOD, 0, 0, 0))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("fire interval");
         }
 
         @Test
@@ -459,10 +717,10 @@ class BotTest
         void shouldRejectNonFiniteGeometryWhenConstructed()
         {
             assertThatThrownBy(() -> new Bot(2, 0.0f, 0.0f, 0.0f, BotPattern.SENTRY,
-                Float.NaN, PERIOD, 0, FIRE_INTERVAL, 0))
+                Float.NaN, PERIOD, 0))
                 .isInstanceOf(IllegalArgumentException.class);
             assertThatThrownBy(() -> new Bot(2, Float.POSITIVE_INFINITY, 0.0f, 0.0f,
-                BotPattern.SENTRY, 0.0f, PERIOD, 0, FIRE_INTERVAL, 0))
+                BotPattern.SENTRY, 0.0f, PERIOD, 0))
                 .isInstanceOf(IllegalArgumentException.class);
         }
 
@@ -471,7 +729,7 @@ class BotTest
         void shouldRejectANullPatternWhenConstructed()
         {
             assertThatThrownBy(() -> new Bot(2, 0.0f, 0.0f, 0.0f, null,
-                0.0f, PERIOD, 0, FIRE_INTERVAL, 0))
+                0.0f, PERIOD, 0))
                 .isInstanceOf(IllegalArgumentException.class);
         }
     }

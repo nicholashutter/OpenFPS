@@ -192,6 +192,8 @@ public final class AndroidLauncher extends AndroidApplication
             debug);
         attachMatchGate(ui, gameplay[0], hal.getAudioPort());
         attachMatchResult(ui, gameplay[0]);
+        attachMatchRestart(ui, gameplay[0]);
+        attachMatchStatus(ui, gameplay[0], config);
         // Loosely, on purpose: DebugSettings does not import the renderer and
         // the renderer has never heard of a settings screen. Attaching does not
         // fire, so whatever outline default the renderer was built with survives
@@ -411,7 +413,8 @@ public final class AndroidLauncher extends AndroidApplication
         // distance zero, so a shooter listed among its own targets would shoot
         // itself on every trigger pull.
         return new DemoGameplayPort(input, holder.renderer(), demo.spawnController(), config,
-            demo.newMatch(), botInstanceIndices(demo), demo.effects());
+            demo.newMatch(), botInstanceIndices(demo), demo.effects(),
+            botWeaponInstanceIndices(demo));
     }
 
     // Where each bot's model sits among the scene's world instances, so the
@@ -422,6 +425,17 @@ public final class AndroidLauncher extends AndroidApplication
         for (int index = 0; index < indices.length; index++)
         {
             indices[index] = demo.botInstanceIndex(index);
+        }
+        return indices;
+    }
+
+    // The same, for the blaster each bot is holding.
+    private static int[] botWeaponInstanceIndices(final DemoScene demo)
+    {
+        final int[] indices = new int[demo.botCount()];
+        for (int index = 0; index < indices.length; index++)
+        {
+            indices[index] = demo.botWeaponInstanceIndex(index);
         }
         return indices;
     }
@@ -507,6 +521,49 @@ public final class AndroidLauncher extends AndroidApplication
             return;
         }
         ui.attachMatchResult(() -> finishedMatch(gameplay));
+    }
+
+    /**
+     * Lets the end screen's Play Again button put the world back.
+     *
+     * <p>The Android half of the rematch. {@code restartMatch} takes the gameplay
+     * port's tic lock, which is what makes it safe to call from the GL thread's
+     * Scene2D click handler while the game loop thread is mid-tic.</p>
+     *
+     * @param ui the UI whose end screen offers the rematch; must not be null
+     * @param gameplay the match to restore, or null when no world was packaged —
+     *     the button is then not offered at all
+     */
+    private static void attachMatchRestart(final AndroidUiFrameCallback ui,
+        final DemoGameplayPort gameplay)
+    {
+        if (gameplay == null)
+        {
+            return;
+        }
+        ui.attachMatchRestart(gameplay::restartMatch);
+    }
+
+    /**
+     * Lets the on-screen score and the death notice read the live figures.
+     *
+     * <p>The tic rate is passed because the respawn delay is counted in
+     * <b>tics</b> — see {@code Match.RESPAWN_DELAY_TICS} — and a countdown shown
+     * in seconds has to divide by something.</p>
+     *
+     * @param ui the UI that draws the score; must not be null
+     * @param gameplay the match to read, or null when no world was packaged
+     * @param config the running configuration, which fixes the tic rate; must not
+     *     be null
+     */
+    private static void attachMatchStatus(final AndroidUiFrameCallback ui,
+        final DemoGameplayPort gameplay, final GameConfig config)
+    {
+        if (gameplay == null)
+        {
+            return;
+        }
+        ui.attachMatchStatus(gameplay::status, config.rate().fps());
     }
 
     /**

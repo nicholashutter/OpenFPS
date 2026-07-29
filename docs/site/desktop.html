@@ -68,12 +68,13 @@
 <li class="lv2"><a href="#status">Status</a></li>
 <li class="lv2"><a href="#why-the-window-and-input-are-not-in-haladapterdesktop">Why the window and input are not in hal/adapter/desktop/</a></li>
 <li class="lv2"><a href="#accumulate-on-one-thread-latch-on-the-other">Accumulate on one thread, latch on the other</a></li>
+<li class="lv2"><a href="#a-controller-and-why-a-stick-is-not-a-mouse">A controller, and why a stick is not a mouse</a></li>
 <li class="lv2"><a href="#desktoplauncher-is-a-composition-root">DesktopLauncher is a composition root</a></li>
 <li class="lv2"><a href="#arguments">Arguments</a></li>
 <li class="lv2"><a href="#files">Files</a></li>
 </ul></details></aside>
 <main id="doc">
-<p class="crumb"><span class="tag">Modules</span><span class="sep">/</span><code>desktop/README.md</code><span class="sep">/</span>5 min read</p>
+<p class="crumb"><span class="tag">Modules</span><span class="sep">/</span><code>desktop/README.md</code><span class="sep">/</span>7 min read</p>
 <h1 id="desktop--the-windowed-launcher"><code>:desktop</code> — the windowed launcher<a class="anchor" href="#desktop--the-windowed-launcher" aria-label="Permalink">#</a></h1>
 <blockquote>
 <p>The only module allowed to touch LWJGL3 and GLFW. It gives the engine a real
@@ -86,14 +87,15 @@ produced.</p>
 <tbody>
 <tr><td><strong>State</strong></td><td>SHIPPING</td></tr>
 <tr><td><strong>Phase</strong></td><td>1.5 complete (§ 7); presentation landed with Phase 5</td></tr>
-<tr><td><strong>Tests</strong></td><td>118</td></tr>
+<tr><td><strong>Tests</strong></td><td>151</td></tr>
 <tr><td><strong>Registered</strong></td><td>provides the windowed HAL (<code>GdxAdapterFactory</code>) and the <code>main</code> behind <code>gradlew :desktop:run</code></td></tr>
 <tr><td><strong>Verified</strong></td><td>2026-07-28</td></tr>
 </tbody>
 </table></div>
 <p><strong>Built.</strong> <code>GdxWindowPort</code> (LWJGL3, 1280x720 default) with an explicit state
-machine, <code>GdxInputPort</code> for mouse-look and WASD, <code>DesktopBindings</code> (the only
-file here that names a key), <code>GdxFrameLoopListener</code> bridging libGDX's
+machine, <code>GdxInputPort</code> for mouse-look, WASD and a gamepad, <code>GlfwGamepad</code> behind
+the <code>GamepadSource</code> seam, <code>DesktopBindings</code> (the only
+file here that names a key or a pad button), <code>GdxFrameLoopListener</code> bridging libGDX's
 <code>ApplicationListener</code> to the engine's <code>I_FrameCallback</code>, <code>GdxScreenshot</code> for
 reading the window back off the GPU, <code>WindowIcon</code> and <code>IconFileMain</code> for the
 native launcher's identity, <code>NetArgs</code> for <code>--net=</code>/<code>--peer=</code>, <code>GdxAdapterFactory</code>
@@ -145,6 +147,31 @@ still arrives.</p>
 <p>The payoff is testability: <code>InputAccumulator</code> imports no platform type, so all
 29 of its tests run headless. <code>GdxInputPort</code> keeps only the thin "ask GLFW what
 the mouse did" layer that no test can cover.</p>
+<h2 id="a-controller-and-why-a-stick-is-not-a-mouse">A controller, and why a stick is not a mouse<a class="anchor" href="#a-controller-and-why-a-stick-is-not-a-mouse" aria-label="Permalink">#</a></h2>
+<p><strong>A stick must not go through the pixel accumulator above.</strong> A mouse reports a
+displacement; a held stick reports a <em>position</em>, meaning "keep turning at this
+rate". Summing it per poll would tie turn speed to vsync — 144 Hz would spin
+twice as fast as 72 for the same thumb. So stick look is a level, converted once
+per tic as <code>deflection × rad/s × ticDuration</code>, which is why <code>DesktopLauncher</code>
+tells the port the configured frame rate. See <code>gdxshared/README.md</code>.</p>
+<p><strong>No gamepad library is shipped.</strong> <code>gdx-controllers</code>' desktop backend is Jamepad
+and therefore SDL — megabytes of native library per platform to reach the SDL
+mapping database GLFW already has loaded in this very process. <code>GlfwGamepad</code>
+calls GLFW's copy: six functions, no new dependency, distribution unchanged.
+<code>NOTICE</code> records that decision and the mapping table's provenance.</p>
+<p>It is an <strong>extra path, never a mode</strong>. Keyboard, mouse and pad are all polled
+every frame into the same accumulator, so you can walk with the left stick, aim
+with the mouse and fire with a trigger in one tic. Pad <em>buttons</em> resolve through
+the ordinary <code>ActionBindings</code> lookup (alternates, not chords — "left mouse OR
+right trigger" is just a row); pad <em>sticks</em> go into a second accumulator channel
+that is summed with the keyboard's. A stick axis reports "not held" on purpose,
+so <code>MOVE_FORWARD</code> naming the left stick — which it does, so the scheme stays
+reportable — does not also read as a held key whenever the player strafes.</p>
+<p>Hot-plug is the failure that matters: a pad unplugged at full deflection would
+leave a level nothing ever overwrites, walking the player into a wall forever.
+<code>pollGamepad</code> clears the gamepad channel alone, leaving the keyboard the player
+still has a hand on. <code>GamepadSource</code> exists so that path is an ordinary unit test
+rather than something only a human with a USB cable can check.</p>
 <h2 id="desktoplauncher-is-a-composition-root"><code>DesktopLauncher</code> is a composition root<a class="anchor" href="#desktoplauncher-is-a-composition-root" aria-label="Permalink">#</a></h2>
 <p><code>STYLE.md</code> § 1.1 lets a composition root name concrete types, and this one does:
 it constructs <code>SoftwareRenderPort</code>, <code>GdxWindowPort</code>, <code>DemoScene</code> and
@@ -195,6 +222,13 @@ sizes from the processor count; the boot log says which of the two happened.</p>
 <p><code>GdxInputPort.java</code> — the platform half of input (11 tests)</p>
 </li>
 <li>
+<p><code>GamepadSource.java</code> — the controller seam, so hot-plug is a unit test</p>
+</li>
+<li>
+<p><code>GlfwGamepad.java</code> — the whole desktop gamepad backend: six GLFW calls, no
+new dependency. See <code>NOTICE</code> on why not <code>gdx-controllers</code>/SDL</p>
+</li>
+<li>
 <p><code>InputAccumulator.java</code> — the testable half: accumulate and latch (29 tests)</p>
 </li>
 <li>
@@ -211,7 +245,7 @@ sizes from the processor count; the boot log says which of the two happened.</p>
 <code>MenuButtonListener.java</code> — the Scene2D menu and its testable seam (9 tests)</p>
 </li>
 </ul>
-<p><strong>99 tests in this module.</strong> Run with <code>.\gradlew.bat :desktop:test</code>.</p>
+<p><strong>151 tests in this module.</strong> Run with <code>.\gradlew.bat :desktop:test</code>.</p>
 <footer class="pagefoot"><p>Source: <a class="ext" rel="noopener noreferrer" target="_blank" href="https://github.com/nicholashutter/OpenFPS/blob/main/desktop/README.md">desktop/README.md</a>. This page is generated — edit the Markdown, not the HTML.</p></footer>
 </main>
 </div>

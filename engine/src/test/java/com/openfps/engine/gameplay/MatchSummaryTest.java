@@ -39,7 +39,7 @@ class MatchSummaryTest
         return new Match(new Bot[]
         {
             new Bot(Match.FIRST_BOT_ENTITY_ID, 0.0f, 0.0f, BOT_DISTANCE, BotPattern.SENTRY,
-                0.0f, 60, 0, 100_000, 1),
+                0.0f, 60, 0),
         });
     }
 
@@ -96,7 +96,7 @@ class MatchSummaryTest
         // A summary that differs only in its shot counts.
         private MatchSummary summaryWithShots(final int fired, final int hits)
         {
-            return new MatchSummary(MatchState.WON, 7, 7, fired, hits, 20, 80);
+            return new MatchSummary(MatchState.WON, 7, 0, 7, fired, hits, 20, 80);
         }
     }
 
@@ -108,9 +108,9 @@ class MatchSummaryTest
         @DisplayName("a win is a win and a loss is not")
         void shouldDistinguishWinFromLoss()
         {
-            assertThat(new MatchSummary(MatchState.WON, 7, 7, 21, 13, 44, 56).isWin())
+            assertThat(new MatchSummary(MatchState.WON, 7, 1, 7, 21, 13, 44, 56).isWin())
                 .isTrue();
-            assertThat(new MatchSummary(MatchState.LOST, 3, 7, 18, 9, 100, 0).isWin())
+            assertThat(new MatchSummary(MatchState.LOST, 3, 4, 7, 18, 9, 100, 0).isWin())
                 .isFalse();
         }
 
@@ -122,7 +122,7 @@ class MatchSummaryTest
             // anything else. A summary of a running match would be a set of
             // numbers still moving.
             assertThatThrownBy(() ->
-                new MatchSummary(MatchState.IN_PROGRESS, 0, 7, 0, 0, 0, 100))
+                new MatchSummary(MatchState.IN_PROGRESS, 0, 0, 7, 0, 0, 0, 100))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("in progress");
         }
@@ -131,7 +131,7 @@ class MatchSummaryTest
         @DisplayName("a null outcome is rejected")
         void shouldRefuseANullOutcome()
         {
-            assertThatThrownBy(() -> new MatchSummary(null, 0, 7, 0, 0, 0, 100))
+            assertThatThrownBy(() -> new MatchSummary(null, 0, 0, 7, 0, 0, 0, 100))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("finalState");
         }
@@ -145,7 +145,7 @@ class MatchSummaryTest
         @DisplayName("more hits than shots is refused")
         void shouldRefuseMoreHitsThanShots()
         {
-            assertThatThrownBy(() -> new MatchSummary(MatchState.WON, 7, 7, 3, 5, 0, 100))
+            assertThatThrownBy(() -> new MatchSummary(MatchState.WON, 7, 0, 7, 3, 5, 0, 100))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("hits");
         }
@@ -154,9 +154,9 @@ class MatchSummaryTest
         @DisplayName("negative counters are refused")
         void shouldRefuseNegativeCounters()
         {
-            assertThatThrownBy(() -> new MatchSummary(MatchState.WON, -1, 7, 0, 0, 0, 100))
+            assertThatThrownBy(() -> new MatchSummary(MatchState.WON, -1, 0, 7, 0, 0, 0, 100))
                 .isInstanceOf(IllegalArgumentException.class);
-            assertThatThrownBy(() -> new MatchSummary(MatchState.WON, 0, 7, -2, 0, 0, 100))
+            assertThatThrownBy(() -> new MatchSummary(MatchState.WON, 0, 0, 7, -2, 0, 0, 100))
                 .isInstanceOf(IllegalArgumentException.class);
         }
 
@@ -165,7 +165,7 @@ class MatchSummaryTest
         void shouldAllowNegativeHealth()
         {
             final MatchSummary summary =
-                new MatchSummary(MatchState.LOST, 2, 7, 10, 4, 102, -2);
+                new MatchSummary(MatchState.LOST, 2, 3, 7, 10, 4, 102, -2);
             assertThat(summary.playerHealth()).isEqualTo(-2);
         }
     }
@@ -255,7 +255,7 @@ class MatchSummaryTest
         void shouldDescribeItself()
         {
             final String text =
-                new MatchSummary(MatchState.LOST, 3, 7, 18, 9, 100, 0).toString();
+                new MatchSummary(MatchState.LOST, 3, 4, 7, 18, 9, 100, 0).toString();
             assertThat(text).contains("LOST").contains("3/7").contains("9/18")
                 .contains("50%");
         }
