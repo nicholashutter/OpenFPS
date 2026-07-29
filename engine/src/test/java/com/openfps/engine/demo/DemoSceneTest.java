@@ -15,6 +15,8 @@ import java.nio.file.Path;
 
 import com.openfps.engine.common.Constants;
 import com.openfps.engine.gameplay.Bot;
+import com.openfps.engine.gameplay.BotRng;
+import com.openfps.engine.gameplay.BotSkill;
 import com.openfps.engine.gameplay.HitResult;
 import com.openfps.engine.gameplay.Hitscan;
 import com.openfps.engine.gameplay.Match;
@@ -99,6 +101,15 @@ final class DemoSceneTest
      * still gets caught.</p>
      */
     private static final int LONGEST_ROUTE_TICS = 600;
+
+    /**
+     * Tics to watch the whole roster's firing over.
+     *
+     * <p>Long enough that every bot has had many opportunities to fire — at
+     * {@link BotSkill#DUMB}'s mean interval that is around forty shots each — so
+     * a room that WOULD volley has had ample chance to.</p>
+     */
+    private static final int VOLLEY_SAMPLE_TICS = 6000;
 
     /** Every bot's hitbox where it currently stands, for a Hitscan sweep. */
     private static Target[] hitboxesOf(final DemoScene demo)
@@ -367,28 +378,37 @@ final class DemoSceneTest
         }
 
         @Test
-        @DisplayName("no two bots fire on the same tic")
+        @DisplayName("the room never volleys — no tic has the whole roster firing")
         void shouldStaggerTheWholeRosterWhenFiring(@TempDir final Path root) throws IOException
         {
-            // Seven bots on one cadence with no offsets would volley together,
-            // which is both harder to survive and much harder to read than the
-            // same total rate spread out.
+            // Seven bots on one shared cadence would volley together, which is
+            // both harder to survive and much harder to read than the same total
+            // rate spread out. The old scene staggered them with arithmetic
+            // offsets; the firing is now a per-bot, per-tic draw, which
+            // decorrelates the room by construction rather than by bookkeeping —
+            // so this asserts the property the player experiences instead of the
+            // mechanism that used to produce it.
             final DemoScene demo = DemoScene.build(kitWithCharacters(root));
             final Bot[] roster = demo.bots();
+            final BotRng rng = new BotRng();
 
-            for (int tic = 0; tic < Match.BOT_FIRE_INTERVAL_TICS * 2; tic++)
+            int busiestTic = 0;
+            for (int tic = 0; tic < VOLLEY_SAMPLE_TICS; tic++)
             {
                 int firing = 0;
                 for (final Bot bot : roster)
                 {
-                    if (bot.wantsToFire(tic))
+                    if (bot.wantsToFire(tic, rng, BotSkill.DUMB))
                     {
                         firing++;
                     }
                 }
-                assertThat(firing).as("tic %d had %d bots fire at once", tic, firing)
-                    .isLessThanOrEqualTo(1);
+                busiestTic = Math.max(busiestTic, firing);
             }
+            assertThat(busiestTic)
+                .as("%d of %d bots fired on one tic — that is a broadside",
+                    busiestTic, roster.length)
+                .isLessThan(roster.length);
         }
 
         @Test

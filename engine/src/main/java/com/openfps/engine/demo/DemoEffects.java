@@ -663,6 +663,45 @@ public final class DemoEffects
     }
 
     /**
+     * Kills every tracer and puff outright, as though nothing had ever been
+     * fired.
+     *
+     * <p>For the world <b>reset</b> when the player leaves the game-over screen.
+     * A rematch that inherited three bolts and a cloud of smoke from the last
+     * round would be a room that visibly remembered a match that is supposed to
+     * have been forgotten — and the bolts would be halfway across it, in the
+     * air, going nowhere.</p>
+     *
+     * <p><b>Deliberately not called on a respawn</b>, which is the other place
+     * it plausibly belongs. The distinction is the one {@code DemoGameplayPort}
+     * already draws for the menu: an effect is a consequence of a shot that has
+     * already happened, so what a <i>pause</i> owes it is to let it finish. A
+     * death is a pause. Restarting the world is not, and this is the difference
+     * between the two.</p>
+     *
+     * <p>The instances are not hidden here — this only forgets the state. The
+     * next {@link #publish} does the hiding, which is the same division of
+     * labour every other transition in this class uses.</p>
+     */
+    public void clear()
+    {
+        for (int slot = 0; slot < MAX_TRACERS; slot++)
+        {
+            tracerRemaining[slot] = DEAD;
+        }
+        for (int slot = 0; slot < MAX_PUFFS; slot++)
+        {
+            puffAge[slot] = DEAD;
+        }
+        // The cursors go back to zero too, so a fresh round claims slots in the
+        // same order the first one did. Nothing looks different either way, and
+        // "indistinguishable from a fresh start" is easier to assert than
+        // "indistinguishable apart from two cursors nobody can see".
+        this.tracerCursor = 0;
+        this.puffCursor = 0;
+    }
+
+    /**
      * Ages every live effect by one tic, expiring those that are finished.
      *
      * <p>Purely simulation: nothing is drawn and no transform is written. Call

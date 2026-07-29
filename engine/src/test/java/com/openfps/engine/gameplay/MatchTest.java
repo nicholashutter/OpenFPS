@@ -49,23 +49,42 @@ class MatchTest
     /** The player's eye, where their shots leave from. */
     private static final float PLAYER_EYE_Y = PlayerController.EYE_HEIGHT_UNITS;
 
-    // A stationary bot at a given distance straight down +z, firing every
-    // fireInterval tics starting at tic 0.
-    private static Bot sentryAt(final int id, final float distance, final int fireInterval)
+    /** A route period; irrelevant to a sentry, but the constructor needs one. */
+    private static final int PERIOD = 60;
+
+    // A stationary bot at a given distance straight down +z.
+    //
+    // The firing cadence used to be an argument here and is not one any more: it
+    // moved into BotSkill when a bot started rolling for the trigger instead of
+    // running on a timer. Which of these bots shoots, and how well, is now a
+    // property of the MATCH rather than of the body — see marksmanMatch below.
+    private static Bot sentryAt(final int id, final float distance)
     {
-        return new Bot(id, 0.0f, 0.0f, distance, BotPattern.SENTRY,
-            0.0f, 60, 0, fireInterval, 0);
+        return new Bot(id, 0.0f, 0.0f, distance, BotPattern.SENTRY, 0.0f, PERIOD, 0);
     }
 
-    // A stationary bot that never fires within any tic count these tests reach.
-    //
-    // The offset is load-bearing: a huge interval alone still fires on tic 0,
-    // because tic 0 is the start of the very first cycle. Offsetting by one puts
-    // the first shot a hundred thousand tics away instead.
-    private static Bot silentSentryAt(final int id, final float distance)
+    /**
+     * A match whose bots never miss, never hesitate and always know exactly where
+     * the player is.
+     *
+     * <p><b>Most of this file wants this rather than the shipped opponents, and
+     * the reason is worth stating once here.</b> The questions below are
+     * <i>geometric</i>: does a body in the line of fire block a shot, does a
+     * shooter appear in its own target set, is a shot resolved from the position a
+     * bot has moved to rather than the one it left. None of those can be asked of
+     * an opponent that misses seven shots in eight — the answer would come back as
+     * a probability, every assertion would need thousands of tics, and the suite
+     * would fail once a month for no reason at all.</p>
+     *
+     * <p>The dumbness gets its own nests, where it is the subject rather than the
+     * noise. See {@link BotSkill#MARKSMAN}.</p>
+     *
+     * @param roster the bots to fight
+     * @return a match with deterministic, unerring return fire
+     */
+    private static Match marksmanMatch(final Bot... roster)
     {
-        return new Bot(id, 0.0f, 0.0f, distance, BotPattern.SENTRY,
-            0.0f, 60, 0, 100_000, 1);
+        return new Match(roster, new BotRng(), BotSkill.MARKSMAN, Match.UNLIMITED_DEATHS);
     }
 
     // Advances the match one tic with the player standing at the origin.
@@ -88,7 +107,7 @@ class MatchTest
         @DisplayName("hits the bot the shot is aimed at")
         void shouldHitTheBotAheadWhenShootingAlongPositiveZ()
         {
-            final Match match = new Match(new Bot[] { sentryAt(2, 200.0f, 600) });
+            final Match match = new Match(new Bot[] { sentryAt(2, 200.0f) });
 
             assertThat(shootAhead(match)).isEqualTo(2);
             assertThat(match.playerShotsHit()).isEqualTo(1);
@@ -98,7 +117,7 @@ class MatchTest
         @DisplayName("takes three shots to kill, and counts the kill once")
         void shouldTakeThreeShotsToKillWhenDamageIs34()
         {
-            final Match match = new Match(new Bot[] { sentryAt(2, 200.0f, 600) });
+            final Match match = new Match(new Bot[] { sentryAt(2, 200.0f) });
 
             shootAhead(match);
             shootAhead(match);
@@ -115,8 +134,8 @@ class MatchTest
         {
             final Match match = new Match(new Bot[]
             {
-                sentryAt(2, 400.0f, 600),
-                sentryAt(3, 150.0f, 600),
+                sentryAt(2, 400.0f),
+                sentryAt(3, 150.0f),
             });
 
             assertThat(shootAhead(match)).isEqualTo(3);
@@ -126,7 +145,7 @@ class MatchTest
         @DisplayName("misses when nothing is in the way")
         void shouldMissWhenAimedAtEmptySpace()
         {
-            final Match match = new Match(new Bot[] { sentryAt(2, 200.0f, 600) });
+            final Match match = new Match(new Bot[] { sentryAt(2, 200.0f) });
 
             // Straight up. Nothing is above the player.
             final int struck =
@@ -143,8 +162,8 @@ class MatchTest
         {
             final Match match = new Match(new Bot[]
             {
-                sentryAt(2, 400.0f, 600),
-                sentryAt(3, 150.0f, 600),
+                sentryAt(2, 400.0f),
+                sentryAt(3, 150.0f),
             });
 
             shootAhead(match);
@@ -166,7 +185,7 @@ class MatchTest
             // to the ray, and the two have to agree: a shot that connected with
             // a body nobody can see would count as a hit, bump the accuracy
             // figure, and be completely unexplainable.
-            final Match match = new Match(new Bot[] { sentryAt(2, 200.0f, 600) });
+            final Match match = new Match(new Bot[] { sentryAt(2, 200.0f) });
             shootAhead(match);
             shootAhead(match);
             shootAhead(match);
@@ -193,7 +212,7 @@ class MatchTest
             // walking would be a hidden instance being repositioned every tic
             // forever — harmless to look at and wrong in the logs.
             final Bot bot = new Bot(2, 0.0f, 0.0f, 200.0f, BotPattern.PACE_X,
-                64.0f, 60, 0, 100_000, 1);
+                64.0f, 60, 0);
             final Match match = new Match(new Bot[] { bot });
             tick(match, 5);
             final float restingX = bot.positionX();
@@ -211,7 +230,7 @@ class MatchTest
         @DisplayName("reports a miss rather than throwing when every bot is dead")
         void shouldReportAMissWhenNoBotsAreLeft()
         {
-            final Match match = new Match(new Bot[] { sentryAt(2, 200.0f, 600) });
+            final Match match = new Match(new Bot[] { sentryAt(2, 200.0f) });
             shootAhead(match);
             shootAhead(match);
             shootAhead(match);
@@ -221,14 +240,14 @@ class MatchTest
     }
 
     @Nested
-    @DisplayName("bots shooting back")
+    @DisplayName("bots shooting back — the geometry, with the dice taken out")
     class ReturnFire
     {
         @Test
         @DisplayName("a bot in range and in the clear lands its shot")
         void shouldDamageThePlayerWhenABotHasAClearLine()
         {
-            final Match match = new Match(new Bot[] { sentryAt(2, 200.0f, 1) });
+            final Match match = marksmanMatch(sentryAt(2, 200.0f));
 
             final int damage = tick(match, 0);
 
@@ -236,17 +255,22 @@ class MatchTest
             assertThat(match.playerHealth())
                 .isEqualTo(Match.PLAYER_MAX_HEALTH - Match.BOT_SHOT_DAMAGE);
             assertThat(match.botShotsLanded()).isEqualTo(1);
+            assertThat(match.botShotsFired()).isEqualTo(1);
         }
 
         @Test
         @DisplayName("a bot beyond BOT_RANGE_UNITS cannot reach the player")
         void shouldNotDamageThePlayerWhenTheBotIsOutOfRange()
         {
-            final Match match =
-                new Match(new Bot[] { sentryAt(2, Match.BOT_RANGE_UNITS + 100.0f, 1) });
+            final Match match = marksmanMatch(sentryAt(2, Match.BOT_RANGE_UNITS + 100.0f));
 
             assertThat(tick(match, 0)).isEqualTo(0);
             assertThat(match.playerHealth()).isEqualTo(Match.PLAYER_MAX_HEALTH);
+            // It pulled the trigger and the shot went nowhere, which is the
+            // distinction botShotsFired exists to record: a bot out of range still
+            // spends its cooldown.
+            assertThat(match.botShotsFired()).isEqualTo(1);
+            assertThat(match.botShotsLanded()).isEqualTo(0);
         }
 
         @Test
@@ -255,25 +279,24 @@ class MatchTest
         {
             // The shooter is at z = 300 and the player at the origin; a third
             // body at z = 150 sits squarely between them.
-            final Match match = new Match(new Bot[]
-            {
-                sentryAt(2, 300.0f, 1),
-                silentSentryAt(3, 150.0f),
-            });
+            final Match match = marksmanMatch(sentryAt(2, 300.0f), sentryAt(3, 150.0f));
 
-            assertThat(tick(match, 0)).as("the shot must not reach the player").isEqualTo(0);
-            assertThat(match.playerHealth()).isEqualTo(Match.PLAYER_MAX_HEALTH);
+            // Bot 3 is also a marksman and would hit, so only bot 2's blocked
+            // shot is interesting — hence the count rather than the damage: two
+            // triggers pulled, one landing.
+            tick(match, 0);
+
+            assertThat(match.botShotsFired()).isEqualTo(2);
+            assertThat(match.botShotsLanded())
+                .as("the shot from behind the blocker must not have reached the player")
+                .isEqualTo(1);
         }
 
         @Test
         @DisplayName("the blocking bot takes no damage — there is no friendly fire")
         void shouldNotHurtTheBlockerWhenABotShootsThroughIt()
         {
-            final Match match = new Match(new Bot[]
-            {
-                sentryAt(2, 300.0f, 1),
-                silentSentryAt(3, 150.0f),
-            });
+            final Match match = marksmanMatch(sentryAt(2, 300.0f), sentryAt(3, 150.0f));
 
             for (int tic = 0; tic < 200; tic++)
             {
@@ -293,7 +316,7 @@ class MatchTest
             // Hitscan treats a ray origin inside a box as a hit at distance
             // zero, so a shooter listed among its own targets would kill itself
             // on the first tic. The exclusion is what stops that.
-            final Match match = new Match(new Bot[] { sentryAt(2, 200.0f, 1) });
+            final Match match = marksmanMatch(sentryAt(2, 200.0f));
 
             for (int tic = 0; tic < 100; tic++)
             {
@@ -307,32 +330,33 @@ class MatchTest
         @DisplayName("a dead bot stops shooting")
         void shouldStopFiringWhenKilled()
         {
-            final Match match = new Match(new Bot[] { sentryAt(2, 200.0f, 1) });
+            final Match match = marksmanMatch(sentryAt(2, 200.0f));
             shootAhead(match);
             shootAhead(match);
             shootAhead(match);
-            final int healthAfterTheKill = match.playerHealth();
+            final int shotsBefore = match.botShotsFired();
 
             for (int tic = 0; tic < 100; tic++)
             {
                 tick(match, tic);
             }
 
-            assertThat(match.playerHealth()).isEqualTo(healthAfterTheKill);
+            assertThat(match.botShotsFired()).isEqualTo(shotsBefore);
+            assertThat(match.playerHealth()).isEqualTo(Match.PLAYER_MAX_HEALTH);
         }
 
         @Test
         @DisplayName("bots move before they shoot, so fire comes from where the body is")
         void shouldShootFromThePostMoveePositionWhenABotIsPatrolling()
         {
-            // A bot pacing along x, half a period in, is 200 units to the side
+            // A bot pacing along x, a quarter period in, is 400 units to the side
             // of its home point — from which the player is out of range even
             // though the home point is not. If the shot were resolved before the
             // move it would come from the home point and land.
             final float reach = Match.BOT_RANGE_UNITS - 50.0f;
             final Bot pacer = new Bot(2, 0.0f, 0.0f, reach, BotPattern.PACE_X,
-                400.0f, 4, 0, 1, 0);
-            final Match match = new Match(new Bot[] { pacer });
+                400.0f, 4, 0);
+            final Match match = marksmanMatch(pacer);
 
             // At its home point — where the constructor placed it, and where it
             // still is when tick() is entered — the player is 462 units away and
@@ -348,6 +372,25 @@ class MatchTest
             // sort of discrepancy a player notices and cannot explain.
             assertThat(match.playerHealth()).isEqualTo(Match.PLAYER_MAX_HEALTH);
         }
+
+        @Test
+        @DisplayName("a bot that has never seen the player does not shoot at the origin")
+        void shouldNotFireBeforeItHasSeenAnything()
+        {
+            // A bot's shot is aimed at what it REMEMBERS, and a fresh bot
+            // remembers nothing. Without the guard the memory reads as the world
+            // origin, which in the demo room is the middle of the floor — seven
+            // bodies firing into it for the first half-second of every match.
+            final Bot fresh = sentryAt(2, 200.0f);
+            final Match match = marksmanMatch(fresh);
+
+            assertThat(fresh.hasSeenPlayer()).isFalse();
+            // One tic is enough for the observation to happen, so the shot lands;
+            // the assertion that matters is that the bot knew first.
+            tick(match, 0);
+
+            assertThat(fresh.hasSeenPlayer()).isTrue();
+        }
     }
 
     @Nested
@@ -358,7 +401,7 @@ class MatchTest
         @DisplayName("starts in progress with everyone alive")
         void shouldStartInProgressWhenConstructed()
         {
-            final Match match = new Match(new Bot[] { sentryAt(2, 200.0f, 600) });
+            final Match match = new Match(new Bot[] { sentryAt(2, 200.0f) });
 
             assertThat(match.state()).isEqualTo(MatchState.IN_PROGRESS);
             assertThat(match.state().isOver()).isFalse();
@@ -369,7 +412,7 @@ class MatchTest
         @DisplayName("is won when the last bot goes down")
         void shouldBeWonWhenEveryBotIsDead()
         {
-            final Match match = new Match(new Bot[] { sentryAt(2, 200.0f, 100_000) });
+            final Match match = new Match(new Bot[] { sentryAt(2, 200.0f) });
 
             shootAhead(match);
             shootAhead(match);
@@ -381,46 +424,61 @@ class MatchTest
         }
 
         @Test
-        @DisplayName("is lost when the player runs out of health")
-        void shouldBeLostWhenThePlayerDies()
+        @DisplayName("running out of health is NOT a loss — it is a death, and the round goes on")
+        void shouldNotBeLostWhenThePlayerDies()
         {
-            final Match match = new Match(new Bot[] { sentryAt(2, 200.0f, 1) });
+            // The change at the heart of this: LOST used to mean "health reached
+            // zero once", which made every death terminal. A death is now a score.
+            // A round ends when the room is empty, which is something the player
+            // earns rather than survives.
+            final Match match = marksmanMatch(sentryAt(2, 200.0f));
 
             for (int tic = 0; tic < 500; tic++)
             {
                 tick(match, tic);
             }
 
-            assertThat(match.playerHealth()).isLessThanOrEqualTo(0);
-            assertThat(match.state()).isEqualTo(MatchState.LOST);
+            assertThat(match.playerDeaths()).as("nobody was killed at all").isGreaterThan(0);
+            assertThat(match.state())
+                .as("a death ended the round, which is the behaviour this replaced")
+                .isEqualTo(MatchState.IN_PROGRESS);
         }
 
         @Test
-        @DisplayName("takes exactly PLAYER_MAX_HEALTH / BOT_SHOT_DAMAGE hits to kill the player")
+        @DisplayName("takes exactly PLAYER_MAX_HEALTH / BOT_SHOT_DAMAGE hits to put the player down")
         void shouldSurviveTheExpectedNumberOfHitsWhenUnderFire()
         {
-            final Match match = new Match(new Bot[] { sentryAt(2, 200.0f, 1) });
+            final Match match = marksmanMatch(sentryAt(2, 200.0f));
             final int hitsToKill = Match.PLAYER_MAX_HEALTH / Match.BOT_SHOT_DAMAGE;
 
             for (int tic = 0; tic < hitsToKill - 1; tic++)
             {
                 tick(match, tic);
             }
-            assertThat(match.state()).as("one hit short").isEqualTo(MatchState.IN_PROGRESS);
+            assertThat(match.isPlayerDown()).as("one hit short").isFalse();
+            assertThat(match.playerDeaths()).isEqualTo(0);
             tick(match, hitsToKill - 1);
 
-            assertThat(match.state()).isEqualTo(MatchState.LOST);
+            assertThat(match.isPlayerDown()).isTrue();
+            assertThat(match.playerDeaths()).isEqualTo(1);
+            assertThat(match.playerHealth()).isEqualTo(0);
         }
 
         @Test
-        @DisplayName("a dead player loses, even having cleared the room on the same tic")
+        @DisplayName("with a death limit set, the last death loses even if the room emptied too")
         void shouldReportLostWhenThePlayerAndTheLastBotBothDie()
         {
-            final Match match = new Match(new Bot[] { sentryAt(2, 200.0f, 1) });
-            for (int tic = 0; tic < 500 && match.playerHealth() > 0; tic++)
+            // UNLIMITED_DEATHS is the default and the demo's choice, so LOST is
+            // now reachable only by asking for it. The ordering inside state() is
+            // still worth pinning for the build that does: reporting a win to
+            // somebody who has just spent their last life is funny exactly once.
+            final Match match = new Match(new Bot[] { sentryAt(2, 200.0f) },
+                new BotRng(), BotSkill.MARKSMAN, 1);
+            for (int tic = 0; tic < 500 && match.playerDeaths() == 0; tic++)
             {
                 tick(match, tic);
             }
+            assertThat(match.playerDeaths()).isEqualTo(1);
 
             // Now clear the room from beyond the grave.
             shootAhead(match);
@@ -428,8 +486,6 @@ class MatchTest
             shootAhead(match);
 
             assertThat(match.livingBots()).isEqualTo(0);
-            // Reporting a win to a corpse is the kind of thing that is funny
-            // once. LOST is checked first for exactly this case.
             assertThat(match.state()).isEqualTo(MatchState.LOST);
         }
 
@@ -437,7 +493,7 @@ class MatchTest
         @DisplayName("stops simulating once it is over")
         void shouldStopTickingWhenTheMatchIsDecided()
         {
-            final Match match = new Match(new Bot[] { sentryAt(2, 200.0f, 1) });
+            final Match match = marksmanMatch(sentryAt(2, 200.0f));
             shootAhead(match);
             shootAhead(match);
             shootAhead(match);
@@ -468,7 +524,7 @@ class MatchTest
         {
             assertThatThrownBy(() -> new Match(new Bot[]
             {
-                sentryAt(Match.PLAYER_ENTITY_ID, 100.0f, 600),
+                sentryAt(Match.PLAYER_ENTITY_ID, 100.0f),
             }))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("reserved player id");
@@ -483,8 +539,8 @@ class MatchTest
             // the lookup found first.
             assertThatThrownBy(() -> new Match(new Bot[]
             {
-                sentryAt(5, 100.0f, 600),
-                sentryAt(5, 200.0f, 600),
+                sentryAt(5, 100.0f),
+                sentryAt(5, 200.0f),
             }))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("share entity id");
@@ -504,10 +560,10 @@ class MatchTest
         @DisplayName("copies the caller's array, so the roster cannot be swapped afterwards")
         void shouldCopyTheRosterWhenConstructed()
         {
-            final Bot[] roster = { sentryAt(2, 200.0f, 600) };
+            final Bot[] roster = { sentryAt(2, 200.0f) };
             final Match match = new Match(roster);
 
-            roster[0] = sentryAt(9, 50.0f, 600);
+            roster[0] = sentryAt(9, 50.0f);
 
             assertThat(match.byId(2)).isNotNull();
             assertThat(match.byId(9)).isNull();
@@ -541,7 +597,7 @@ class MatchTest
                 // Stacked along +z so a single bearing reaches all of them in
                 // turn as each one falls.
                 roster[index] = sentryAt(Match.FIRST_BOT_ENTITY_ID + index,
-                    100.0f + index * 50.0f, 100_000);
+                    100.0f + index * 50.0f);
             }
             final Match match = new Match(roster);
 

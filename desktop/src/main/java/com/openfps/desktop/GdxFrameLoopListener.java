@@ -12,6 +12,7 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import com.openfps.engine.gameplay.MatchMode;
+import com.openfps.engine.gameplay.MatchStatus;
 import com.openfps.engine.gameplay.MatchSummary;
 import com.openfps.engine.hal.port.I_FrameCallback;
 import com.openfps.gdx.DebugOverlay;
@@ -22,6 +23,7 @@ import com.openfps.gdx.GameOverScreen;
 import com.openfps.gdx.MainMenuScreen;
 import com.openfps.gdx.MenuActions;
 import com.openfps.gdx.RenderSettings;
+import com.openfps.gdx.ScoreOverlay;
 import com.openfps.gdx.SettingsScreen;
 import com.openfps.gdx.UiState;
 import com.openfps.gdx.UiStateMachine;
@@ -182,20 +184,58 @@ public final class GdxFrameLoopListener implements ApplicationListener
     private Supplier<MatchSummary> matchResult;
 
     /**
-     * Whether this session has already shown a result.
+     * Whether the end screen has been shown for the round currently in the
+     * gameplay port.
      *
-     * <p>MUTABLE: set once, on the transition into {@link UiState#GAME_OVER},
-     * and never cleared. <b>It is what stops the end screen reappearing.</b> The
-     * demo builds exactly one {@code Match} before the loop starts and nothing
-     * can reset it, so a finished round stays finished: without this guard, a
-     * player who read their summary, returned to the menu and pressed Single
-     * Player again would be thrown straight back onto the same screen, with no
-     * way to reach the world at all. The guard leaves them able to walk around
-     * the room they cleared, which is a poor rematch but is not a trap. A real
-     * rematch needs a new {@code Match}, which is why {@code UiState} has no
-     * {@code GAME_OVER -> PLAYING} edge.</p>
+     * <p>MUTABLE, and <b>it is now cleared rather than latched for the life of
+     * the process</b> — that change is the whole of the rematch on this side of
+     * the seam. It used to be set once and never reset, because the demo built
+     * exactly one {@code Match} and nothing could restore it: a finished round
+     * stayed finished, and without the latch a player who read their summary,
+     * went back to the menu and pressed Single Player would be thrown straight
+     * onto the same screen with no way to reach the world at all.</p>
+     *
+     * <p>{@link #restartMatch} now genuinely restores the round, so the guard is
+     * cleared there — and only there, in the same call that resets the
+     * simulation. Clearing it anywhere else would let the end screen fire again
+     * for a round that had not been restarted, which is the trap the latch
+     * existed to prevent.</p>
      */
     private boolean resultShown;
+
+    /**
+     * Restores the world for another round, or null when nothing can be.
+     *
+     * <p>MUTABLE: set once by {@link #attachMatchRestart} before the loop starts.
+     * Null is the {@code --model=} case and every windowless test, and it is what
+     * makes Play Again <b>refuse to appear</b> rather than appear and lie: see
+     * {@link #canRestart()}.</p>
+     */
+    private Runnable matchRestart;
+
+    /**
+     * Asked once a frame for the live score, or null.
+     *
+     * <p>MUTABLE: set once by {@link #attachMatchStatus} before the loop starts.
+     * Null is a window with no match, and {@link ScoreOverlay} draws nothing at
+     * all for it.</p>
+     */
+    private Supplier<MatchStatus> matchStatus;
+
+    /**
+     * The simulation rate, for turning the respawn countdown into seconds.
+     *
+     * <p>MUTABLE: set with the status supplier. Zero until then, which
+     * {@link MatchStatus#respawnSecondsRemaining} answers with a zero rather than
+     * a division by it.</p>
+     */
+    private int ticsPerSecond;
+
+    /**
+     * The in-game score and the death notice. Never null; it builds no GL
+     * resource until a match first gives it something to draw.
+     */
+    private final ScoreOverlay score = new ScoreOverlay();
 
     /**
      * The UI state the menu has already been reconciled with.
@@ -368,6 +408,69 @@ public final class GdxFrameLoopListener implements ApplicationListener
         this.matchResult = result;
     }
 
+    /**
+     * Names the thing that restores the world for another round.
+     *
+     * <p>The counterpart to {@link #attachMatchResult}: one direction learns that
+     * a round has finished, this one starts a new one. It is a bare
+     * {@link Runnable} rather than a gameplay reference for the reason
+     * {@link #attachMatchGate} takes a {@code Consumer<Boolean>} — this class is
+     * the desktop UI and must not import the simulation it is a front end
+     * for.</p>
+     *
+     * <p><b>It runs on the render thread, from a Scene2D click handler, and it
+     * mutates simulation state the game loop thread owns.</b> That is only safe
+     * because {@code DemoGameplayPort.restartMatch} takes the tic lock, which is
+     * the same lock a tic is atomic under. Anything attached here has the same
+     * obligation.</p>
+     *
+     * <p>Null leaves the end screen with a Back button and no Play Again, which is
+     * the honest presentation for a window that cannot restart anything — a
+     * button that appeared and did nothing would be the "button that lies"
+     * {@code UiState} refused a rematch edge over for so long.</p>
+     *
+     * @param restart run before the {@code GAME_OVER -> PLAYING} transition, or
+     *     null for a window with no match
+     */
+    public void attachMatchRestart(final Runnable restart)
+    {
+        this.matchRestart = restart;
+    }
+
+    /**
+     * Names something to ask, once a frame, how the round is going.
+     *
+     * <p>A poll for the same reason {@link #attachMatchResult} is one, and the
+     * argument is sharper here because this is asked on <i>every</i> frame rather
+     * than on one: the figures live on the game loop thread, and
+     * {@link MatchStatus} is the immutable copy that crosses over. See that
+     * class.</p>
+     *
+     * @param status asked once a frame; returns null for a window with no match,
+     *     or null itself to draw no score at all
+     * @param simulationTicsPerSecond the configured tic rate, which is what turns
+     *     the respawn countdown into seconds; must be positive to show a count
+     */
+    public void attachMatchStatus(final Supplier<MatchStatus> status,
+        final int simulationTicsPerSecond)
+    {
+        this.matchStatus = status;
+        this.ticsPerSecond = simulationTicsPerSecond;
+    }
+
+    /**
+     * Returns whether this window can start another round.
+     *
+     * <p>Exposed so a headless test can assert the presentation rule rather than
+     * the wiring: a window with nothing to restart must not offer Play Again.</p>
+     *
+     * @return true when something was attached by {@link #attachMatchRestart}
+     */
+    public boolean canRestart()
+    {
+        return matchRestart != null;
+    }
+
     /** Returns the debug switch this window's settings screen flips. Never null. */
     public DebugSettings debugSettings()
     {
@@ -471,9 +574,37 @@ public final class GdxFrameLoopListener implements ApplicationListener
         // Built here rather than in the draw, because a screen is a GL resource
         // and building one inside the paint of the frame that needs it is how
         // you get a first frame that is half old and half new.
-        gameOver = new GameOverScreen(summary, uiState::returnToMenu);
+        gameOver = new GameOverScreen(summary, this::restartMatch, uiState::returnToMenu);
         gameOver.layoutFor(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
         uiState.endMatch(summary);
+    }
+
+    // Play Again: restore the world, THEN move the UI into it.
+    //
+    // The order is the whole of the correctness here and it is not
+    // interchangeable. The UI transition is what un-freezes the match gate and
+    // gives the cursor back, so a transition that happened first would leave one
+    // or more frames in which the player is standing in the room they cleared,
+    // with seven invisible corpses, before the reset landed. Restoring first means
+    // the first frame of PLAYING is already the first frame of a new round.
+    //
+    // Runs on the render thread from a Scene2D click. restartMatch takes the tic
+    // lock, which is what makes that safe — see attachMatchRestart.
+    private void restartMatch()
+    {
+        if (matchRestart == null)
+        {
+            // Nothing to restart, so there is nothing honest to do. The button
+            // should not have been offered; canRestart() is the check that stops
+            // it being.
+            return;
+        }
+        matchRestart.run();
+        // Cleared here and nowhere else, in the same call that reset the
+        // simulation, so the end screen can only re-arm for a round that has
+        // actually been restarted.
+        resultShown = false;
+        uiState.restartMatch();
     }
 
     // Exactly one screen draws, and it draws the whole window.
@@ -511,6 +642,11 @@ public final class GdxFrameLoopListener implements ApplicationListener
             // to own the clear or the window shows the driver's leftovers.
             MainMenuScreen.clearBackground();
         }
+        // BEFORE the debug counter, so the frame counter is the topmost thing on
+        // screen when both are up. The score panel is right-aligned and the
+        // counter left-aligned, so they do not overlap in any case — but the
+        // ordering is what makes that a choice rather than a coincidence.
+        drawScore();
         sampleDebugOverlay(deltaSeconds);
         if (debug.isOverlayVisible())
         {
@@ -521,6 +657,27 @@ public final class GdxFrameLoopListener implements ApplicationListener
             overlay.render(Gdx.graphics.getWidth(), Gdx.graphics.getHeight(),
                 renderWidth(), renderHeight());
         }
+    }
+
+    // The kill and death count, and the notice a dead player needs to see.
+    //
+    // Drawn at the WINDOW size while the world behind it was rasterized at the
+    // render size, exactly as the frame counter is: the score is UI, so it stays
+    // sharp when the world is scaled down.
+    //
+    // Unconditional — there is no setting behind this. A player must be able to
+    // see that they died without having opened a debug menu first, which is the
+    // whole reason it exists; the frame counter is diagnostics and is behind a
+    // toggle, and conflating the two would put "why did I teleport" behind a
+    // switch nobody knows about.
+    private void drawScore()
+    {
+        if (matchStatus == null)
+        {
+            return;
+        }
+        score.render(matchStatus.get(), Gdx.graphics.getWidth(), Gdx.graphics.getHeight(),
+            ticsPerSecond);
     }
 
     // The framebuffer the rasterizer is filling, or 0 when there is no
@@ -636,10 +793,16 @@ public final class GdxFrameLoopListener implements ApplicationListener
         releaseFinishedResult(state);
     }
 
-    // Drops the end screen once the player has left it. It holds a texture, a
-    // font and a stage, and it can never be shown again — resultShown is never
-    // cleared — so keeping it alive would be keeping three GPU resources for a
-    // screen with no way back to it.
+    // Drops the end screen once the player has left it, by either door — Back to
+    // the menu or Play Again into a new round. It holds a texture, a font and a
+    // stage, so keeping it alive would be keeping three GPU resources for a
+    // screen nobody is looking at.
+    //
+    // Rebuilding it for the NEXT result rather than reusing it is the cheap
+    // direction here, and deliberately so: every figure on that screen is fixed
+    // at construction (see GameOverScreen), so a reused instance would be one
+    // object holding two headings and seven mutable labels that have to be kept
+    // in step with whichever round last ended. A match ends once per round.
     private void releaseFinishedResult(final UiState state)
     {
         if (gameOver == null || state.drawsGameOver())
@@ -708,6 +871,7 @@ public final class GdxFrameLoopListener implements ApplicationListener
             gameOver = null;
         }
         overlay.dispose();
+        score.dispose();
         if (presenter != null)
         {
             presenter.dispose();

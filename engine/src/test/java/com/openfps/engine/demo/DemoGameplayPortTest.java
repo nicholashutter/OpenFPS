@@ -47,6 +47,17 @@ final class DemoGameplayPortTest
     /** Viewport used where a surface is needed; small, because nothing looks at it. */
     private static final int SURFACE = 64;
 
+    /**
+     * Tics to run a frozen match for before concluding that nothing happened.
+     *
+     * <p>Firing is a per-tic roll now rather than a fixed cadence, so "long enough
+     * for every bot's cadence to come round" is no longer a thing that can be
+     * counted exactly. Six thousand tics is around forty shots per bot at
+     * {@code BotSkill.DUMB}'s mean interval — if the gate leaked at all, it would
+     * have leaked by then.</p>
+     */
+    private static final int FROZEN_SAMPLE_TICS = 6000;
+
     /** Floating-point slack for position comparisons, in world units. */
     private static final float EPSILON = 1.0e-3f;
 
@@ -390,8 +401,8 @@ final class DemoGameplayPortTest
 
             assertThat(port.isMatchLive()).as("a new port starts frozen").isFalse();
 
-            // Long enough that every bot's cadence has come round several times.
-            for (int tic = 0; tic <= Match.BOT_FIRE_INTERVAL_TICS * 3; tic++)
+            // Long enough that every bot has had many opportunities to fire.
+            for (int tic = 0; tic <= FROZEN_SAMPLE_TICS; tic++)
             {
                 port.tick(tic);
             }

@@ -36,13 +36,13 @@ class EndOfMatchTextTest
     /** A cleared room. */
     private static MatchSummary won()
     {
-        return new MatchSummary(MatchState.WON, 7, 7, 21, 13, 44, 56);
+        return new MatchSummary(MatchState.WON, 7, 1, 7, 21, 13, 44, 56);
     }
 
     /** A dead player. */
     private static MatchSummary lost()
     {
-        return new MatchSummary(MatchState.LOST, 3, 7, 18, 9, 100, 0);
+        return new MatchSummary(MatchState.LOST, 3, 4, 7, 18, 9, 100, 0);
     }
 
     /**
@@ -193,13 +193,27 @@ class EndOfMatchTextTest
         }
 
         @Test
+        @DisplayName("report the deaths, directly under the kills")
+        void shouldReportDeaths()
+        {
+            // Second line, and the position is the assertion as much as the text
+            // is: "seven for none" and "seven for nine" are very different rounds,
+            // and a death count at the bottom of the list reads as an
+            // afterthought. It is a SCORE — a death respawns the player.
+            assertThat(GameOverScreen.summaryText(won())[1])
+                .contains("DEATHS").contains("1");
+            assertThat(GameOverScreen.summaryText(lost())[1])
+                .contains("DEATHS").contains("4");
+        }
+
+        @Test
         @DisplayName("report accuracy as a percentage, with the raw counts behind it")
         void shouldReportAccuracy()
         {
             // Both, because neither alone is enough: the percentage is what a
             // player compares between rounds, and the counts are what makes a
             // 100% round of one shot readable as the fluke it is.
-            final String line = GameOverScreen.summaryText(won())[1];
+            final String line = GameOverScreen.summaryText(won())[2];
             assertThat(line).contains("ACCURACY").contains("62%")
                 .contains("13 of 21");
         }
@@ -209,8 +223,8 @@ class EndOfMatchTextTest
         void shouldReportHealth()
         {
             final String[] lines = GameOverScreen.summaryText(won());
-            assertThat(lines[2]).contains("DAMAGE TAKEN").contains("44");
-            assertThat(lines[3]).contains("HEALTH LEFT").contains("56");
+            assertThat(lines[3]).contains("DAMAGE TAKEN").contains("44");
+            assertThat(lines[4]).contains("HEALTH LEFT").contains("56");
         }
 
         @Test
@@ -221,8 +235,8 @@ class EndOfMatchTextTest
             // below zero — and "HEALTH LEFT -2" is a detail of the damage model
             // leaking onto a screen where it means nothing.
             final MatchSummary overkilled =
-                new MatchSummary(MatchState.LOST, 2, 7, 10, 4, 102, -2);
-            assertThat(GameOverScreen.summaryText(overkilled)[3])
+                new MatchSummary(MatchState.LOST, 2, 3, 7, 10, 4, 102, -2);
+            assertThat(GameOverScreen.summaryText(overkilled)[4])
                 .contains("HEALTH LEFT").contains("0").doesNotContain("-2");
         }
 
@@ -233,8 +247,8 @@ class EndOfMatchTextTest
             // Standing still in the open is how a new player loses their first
             // round, so this is a real path rather than a contrived one.
             final MatchSummary silent =
-                new MatchSummary(MatchState.LOST, 0, 7, 0, 0, 100, 0);
-            assertThat(GameOverScreen.summaryText(silent)[1])
+                new MatchSummary(MatchState.LOST, 0, 1, 7, 0, 0, 100, 0);
+            assertThat(GameOverScreen.summaryText(silent)[2])
                 .contains("0%").contains("0 of 0");
         }
 

@@ -15,6 +15,7 @@ import com.badlogic.gdx.Input;
 import com.badlogic.gdx.utils.ScreenUtils;
 
 import com.openfps.engine.gameplay.MatchMode;
+import com.openfps.engine.gameplay.MatchStatus;
 import com.openfps.engine.gameplay.MatchSummary;
 import com.openfps.engine.hal.port.I_FrameCallback;
 import com.openfps.gdx.DebugOverlay;
@@ -23,6 +24,7 @@ import com.openfps.gdx.FramebufferPresenter;
 import com.openfps.gdx.GameOverScreen;
 import com.openfps.gdx.MenuActions;
 import com.openfps.gdx.RenderSettings;
+import com.openfps.gdx.ScoreOverlay;
 import com.openfps.gdx.SettingsScreen;
 import com.openfps.gdx.UiState;
 import com.openfps.gdx.UiStateMachine;
@@ -130,15 +132,37 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
     private Supplier<MatchSummary> matchResult;
 
     /**
-     * Whether this session has already shown a result.
+     * Whether the end screen has been shown for the round currently in the
+     * gameplay port.
      *
-     * <p>MUTABLE: set on the transition into {@link UiState#GAME_OVER} and never
-     * cleared, for the reason the desktop listener records — the demo builds one
-     * {@code Match} and nothing can reset it, so without this guard a player who
-     * read their summary and pressed Single Player again would be thrown
-     * straight back onto the same screen with no way to reach the world.</p>
+     * <p>MUTABLE: set on the transition into {@link UiState#GAME_OVER} and
+     * cleared by {@link #restartMatch} — and only there, in the same call that
+     * resets the simulation, for the reason the desktop listener records at
+     * greater length. It used to be latched for the life of the process, because
+     * the demo built one {@code Match} and nothing could restore it.</p>
      */
     private boolean resultShown;
+
+    /**
+     * Restores the world for another round, or null when nothing can be.
+     * MUTABLE: set once by {@link #attachMatchRestart} before the loop starts.
+     */
+    private Runnable matchRestart;
+
+    /**
+     * Asked once a frame for the live score, or null.
+     * MUTABLE: set once by {@link #attachMatchStatus} before the loop starts.
+     */
+    private Supplier<MatchStatus> matchStatus;
+
+    /** The simulation rate, for the respawn countdown. MUTABLE: set with the supplier. */
+    private int ticsPerSecond;
+
+    /**
+     * The in-game score and the death notice. Never null; it builds no GL
+     * resource until a match first gives it something to draw.
+     */
+    private final ScoreOverlay score = new ScoreOverlay();
 
     /** The surface size, for placing the frame counter. MUTABLE: set on resize. */
     private int surfaceWidth;
@@ -281,6 +305,37 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
         this.matchResult = result;
     }
 
+    /**
+     * Names the thing that restores the world for another round.
+     *
+     * <p>The Android half of the rematch, and identical in shape and in obligation
+     * to the desktop one: it runs on the GL thread from a Scene2D click and
+     * mutates state the game loop thread owns, which is safe only because
+     * {@code DemoGameplayPort.restartMatch} takes the tic lock.</p>
+     *
+     * @param restart run before the {@code GAME_OVER -> PLAYING} transition, or
+     *     null for a build with no match — which leaves the end screen with only
+     *     its Back button, the honest presentation when nothing can be restarted
+     */
+    public void attachMatchRestart(final Runnable restart)
+    {
+        this.matchRestart = restart;
+    }
+
+    /**
+     * Names something to ask, once a frame, how the round is going.
+     *
+     * @param status asked once a frame; returns null for a build with no match
+     * @param simulationTicsPerSecond the configured tic rate, which turns the
+     *     respawn countdown into seconds
+     */
+    public void attachMatchStatus(final Supplier<MatchStatus> status,
+        final int simulationTicsPerSecond)
+    {
+        this.matchStatus = status;
+        this.ticsPerSecond = simulationTicsPerSecond;
+    }
+
     /** Returns the debug switch this UI's settings screen flips. Never null. */
     public DebugSettings debugSettings()
     {
@@ -354,10 +409,26 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
             return;
         }
         resultShown = true;
-        gameOver = new GameOverScreen(summary, uiState::returnToMenu, density());
+        gameOver = new GameOverScreen(summary, this::restartMatch, uiState::returnToMenu,
+            density());
         gameOver.resize(surfaceWidth, surfaceHeight);
         Log.i(TAG, "Match decided: " + summary);
         uiState.endMatch(summary);
+    }
+
+    // Play Again: restore the world, THEN move the UI into it. The order is not
+    // interchangeable — see the desktop listener's restartMatch, which carries the
+    // argument. A UI that entered PLAYING first would show one or more frames of
+    // the room the player had just cleared.
+    private void restartMatch()
+    {
+        if (matchRestart == null)
+        {
+            return;
+        }
+        matchRestart.run();
+        resultShown = false;
+        uiState.restartMatch();
     }
 
     @Override
@@ -387,6 +458,7 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
             overlay.dispose();
         }
         fpsCounter.dispose();
+        score.dispose();
         if (settings != null)
         {
             settings.detachInputProcessor();
@@ -450,6 +522,10 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
         {
             overlay.render(input);
         }
+        // Over the touch controls but under the frame counter, and unconditional —
+        // there is no setting behind it. A player has to be able to see that they
+        // died without having found a debug menu first, which is what this is for.
+        drawScore();
         sampleFpsCounter(deltaSeconds);
         if (debug.isOverlayVisible())
         {
@@ -459,6 +535,20 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
             // of scaling the world alone, and is why the counter reports both.
             fpsCounter.render(surfaceWidth, surfaceHeight, renderWidth(), renderHeight());
         }
+    }
+
+    // The kill and death count, and the notice a dead player needs to see.
+    //
+    // Drawn at the SURFACE size while the world behind it was rasterized at the
+    // render size, exactly as the frame counter is: the score is UI, so it stays
+    // sharp on a phone that scales the world down.
+    private void drawScore()
+    {
+        if (matchStatus == null)
+        {
+            return;
+        }
+        score.render(matchStatus.get(), surfaceWidth, surfaceHeight, ticsPerSecond);
     }
 
     // The framebuffer the rasterizer is filling, or 0 when there is no presenter

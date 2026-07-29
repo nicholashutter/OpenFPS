@@ -8,22 +8,47 @@ package com.openfps.engine.gameplay;
 import com.openfps.engine.common.Constants;
 
 /**
- * One computer-controlled opponent: a body that walks a fixed route, turns to
- * face the player, shoots back on a timer, and dies after enough hits.
+ * One computer-controlled opponent: a body that walks a fixed route, turns
+ * toward where it last saw the player, shoots back when a die says so, and dies
+ * after enough hits.
  *
  * <h2>What this deliberately is not</h2>
  *
- * <p>There is no pathfinding, no state machine, no line-of-sight memory and no
- * aggression model. That is the specification, not a shortcut: these are
- * <b>target practice</b>. A bot that flanks and takes cover makes the shooting
- * hard to evaluate, and right now the thing being evaluated is whether the
- * hitscan, the outline pass and the crosshair agree with each other. A player
- * needs to be able to watch a bot for two seconds and know where it will be.</p>
+ * <p>There is no pathfinding, no cover, no flanking and no squad behaviour. That
+ * is the specification, not a shortcut: these are <b>target practice</b>. A bot
+ * that manoeuvres makes the shooting hard to evaluate, and the thing being
+ * evaluated is whether the hitscan, the outline pass and the crosshair agree
+ * with each other. A player needs to be able to watch a bot for two seconds and
+ * know where it will be.</p>
  *
- * <p>So the movement is a closed-form route ({@link BotPattern}) and the firing
- * is a fixed cadence. Both are pure functions of the tic index, which is what
- * makes a bot reproducible on every peer without exchanging a single byte about
- * it.</p>
+ * <p>So the movement is still a closed-form route ({@link BotPattern}) and a
+ * pure function of the tic index. What is no longer fixed is the <b>shooting</b>
+ * — see below.</p>
+ *
+ * <h2>The firing is random, and the randomness is deterministic</h2>
+ *
+ * <p>A bot used to fire on a fixed cadence and hit every time it was in range.
+ * It now rolls for the trigger on every tic its weapon is ready, and the shot it
+ * takes is scattered into a cone by {@link Match}. Both draws come from
+ * {@link BotRng}, which is <b>seeded, stateless and addressed by (tic, entity,
+ * channel)</b> — so the same tic sequence produces the same shots on every
+ * machine, and the lockstep model in {@code engine/net/README.md} survives.</p>
+ *
+ * <p><b>{@code Math.random()} here would desync two peers on the first shot.</b>
+ * {@link BotRng}'s Javadoc lists everything else that would do the same, and
+ * explains why a seeded {@code java.util.Random} held in a field is not good
+ * enough either. There is a constant-pool test on this class that fails on any
+ * {@code java/lang/Math} reference at all, for the reason {@link #cyclicIndex}
+ * records.</p>
+ *
+ * <h2>It shoots at where you were, not where you are</h2>
+ *
+ * <p>{@link #observePlayer} refreshes the remembered player position only every
+ * {@link BotSkill#reactionTics}, and both the body's facing and the shot's
+ * direction come off that memory. That is the whole of "reacts slowly" and "does
+ * not lead a moving target", and it is the one piece of the dumbness a player
+ * can <b>see</b> rather than infer from a health bar: strafe past a bot and it
+ * swings round behind you.</p>
  *
  * <h2>Same size as a player, on purpose</h2>
  *
@@ -37,6 +62,10 @@ import com.openfps.engine.common.Constants;
  * <p>Mutable by design — it <i>is</i> an entity's state — and therefore not
  * thread-safe. It belongs to whichever thread owns the match, which is the game
  * loop thread. {@link Match} holds the lock that makes a tic atomic.</p>
+ *
+ * <p>{@link #reset()} returns every one of those mutable fields to its
+ * construction value, which is what makes a rematch possible without rebuilding
+ * the immutable {@code Scene} the body's model lives in.</p>
  */
 public final class Bot
 {
@@ -61,6 +90,9 @@ public final class Bot
      * player is judging their own line of sight against.</p>
      */
     public static final float EYE_HEIGHT_UNITS = PlayerController.EYE_HEIGHT_UNITS;
+
+    /** Sentinel meaning "this bot's weapon has never been fired". */
+    public static final int NEVER_FIRED = Integer.MIN_VALUE;
 
     /** One full turn in radians, for the phase computation. */
     private static final float FULL_TURN_RADIANS = (float) (2.0 * StrictMath.PI);
@@ -89,26 +121,57 @@ public final class Bot
     /** Where in the circuit this bot starts, so a group does not move in unison. */
     private final int phaseTics;
 
-    /** Tics between this bot's shots. Always positive. */
-    private final int fireIntervalTics;
-
-    /** Offset into the firing cadence, so a group does not volley together. */
-    private final int fireOffsetTics;
-
     /** Current feet position, world x. MUTABLE: recomputed every tic. */
     private float positionX;
 
     /** Current feet position, world z. MUTABLE: recomputed every tic. */
     private float positionZ;
 
-    /** Current heading in radians. MUTABLE: turned toward the player every tic. */
+    /** Current heading in radians. MUTABLE: turned toward the memory every tic. */
     private float yawRadians;
 
     /** Remaining health. MUTABLE: reduced by {@link #damage}. Zero means dead. */
     private int health = MAX_HEALTH;
 
     /**
+     * The tic this bot's weapon becomes ready again. MUTABLE: pushed forward by
+     * every shot.
+     *
+     * <p>Starts at {@link Integer#MIN_VALUE} — "ready, and has been for as long
+     * as there has been a match" — rather than at zero, because a match may be
+     * ticked from a negative index and {@code ticIndex >= readyAtTic} has to be
+     * true on the very first tic whatever that index is.</p>
+     */
+    private int readyAtTic = Integer.MIN_VALUE;
+
+    /** The tic this bot last fired, or {@link #NEVER_FIRED}. MUTABLE. */
+    private int lastFiredTic = NEVER_FIRED;
+
+    /** Where the player was last seen, world x. MUTABLE: refreshed on reaction tics. */
+    private float rememberedPlayerX;
+
+    /** Where the player was last seen, world z. MUTABLE. */
+    private float rememberedPlayerZ;
+
+    /**
+     * Whether this bot has ever seen the player. MUTABLE.
+     *
+     * <p>False until the first {@link #observePlayer}, and it matters: without
+     * it a fresh bot remembers the world origin, turns to face it, and shoots at
+     * it — which in this room is seven bodies staring at the middle of the floor
+     * for the first half-second of every match.</p>
+     */
+    private boolean hasSeenPlayer;
+
+    /**
      * Creates a bot on a route.
+     *
+     * <p><b>The firing cadence is no longer a constructor argument.</b> It used
+     * to be an interval and an offset, because a bot fired on a fixed timer and
+     * the offsets were what stopped seven of them volleying together. Both are
+     * gone: firing is now a per-tic roll against {@link BotSkill}, which
+     * decorrelates the room by construction rather than by arithmetic, and the
+     * profile belongs to the {@link Match} rather than to each body.</p>
      *
      * @param id the entity id this bot owns; must be at least
      *     {@link Target#MIN_ENTITY_ID}
@@ -121,14 +184,11 @@ public final class Bot
      * @param routePeriodTics tics for one circuit; must be positive
      * @param routePhaseTics where in the circuit to start; any value, reduced
      *     modulo the period
-     * @param shotIntervalTics tics between shots; must be positive
-     * @param shotOffsetTics offset into the firing cadence
      * @throws IllegalArgumentException if any argument is out of range
      */
     public Bot(final int id, final float routeCentreX, final float routeCentreY,
         final float routeCentreZ, final BotPattern routePattern,
-        final float routeAmplitudeUnits, final int routePeriodTics, final int routePhaseTics,
-        final int shotIntervalTics, final int shotOffsetTics)
+        final float routeAmplitudeUnits, final int routePeriodTics, final int routePhaseTics)
     {
         if (id < Target.MIN_ENTITY_ID)
         {
@@ -154,11 +214,6 @@ public final class Bot
             throw new IllegalArgumentException(
                 "period must be positive, got " + routePeriodTics);
         }
-        if (shotIntervalTics <= 0)
-        {
-            throw new IllegalArgumentException(
-                "fire interval must be positive, got " + shotIntervalTics);
-        }
 
         this.entityId = id;
         this.homeX = routeCentreX;
@@ -168,10 +223,42 @@ public final class Bot
         this.amplitudeUnits = routeAmplitudeUnits;
         this.periodTics = routePeriodTics;
         this.phaseTics = routePhaseTics;
-        this.fireIntervalTics = shotIntervalTics;
-        this.fireOffsetTics = shotOffsetTics;
         // Place it on its route immediately, so a bot is never at its home
         // point for one tic before the first update moves it there.
+        moveTo(0);
+    }
+
+    /**
+     * Puts this bot back exactly as it was constructed.
+     *
+     * <p><b>This is what makes a rematch possible at all.</b> A {@code Scene} is
+     * immutable and a bot's model occupies a fixed instance index in it, so a
+     * fresh round cannot build fresh bodies — it has to reuse these ones. Every
+     * mutable field is therefore restored: alive at {@link #MAX_HEALTH}, back at
+     * the position tic 0 puts it, facing the way a bot that has seen nobody
+     * faces, weapon ready, and with no memory of where the player was.</p>
+     *
+     * <p>The last of those is easy to forget and immediately visible: a bot that
+     * kept its memory across a reset would spawn already turned toward wherever
+     * the previous round happened to end.</p>
+     *
+     * <p>{@code MatchTest} asserts the invariant that matters — a reset bot is
+     * indistinguishable from a newly constructed one — rather than checking each
+     * field one at a time, so a field added later and not reset here fails
+     * it.</p>
+     */
+    public void reset()
+    {
+        this.health = MAX_HEALTH;
+        this.yawRadians = 0.0f;
+        this.readyAtTic = Integer.MIN_VALUE;
+        this.lastFiredTic = NEVER_FIRED;
+        this.rememberedPlayerX = 0.0f;
+        this.rememberedPlayerZ = 0.0f;
+        this.hasSeenPlayer = false;
+        // Last, and after the health: moveTo does nothing to a dead bot, so a
+        // reset that placed the body before reviving it would leave every corpse
+        // where it fell and restart the room with the survivors misplaced.
         moveTo(0);
     }
 
@@ -222,14 +309,14 @@ public final class Bot
      *
      * <p>{@code %} alone will not do: it keeps the sign of the <i>dividend</i>,
      * so a negative tic index yields a negative phase. That is harmless to a
-     * sine but violates the {@code [0, 2pi)} contract above and makes the
-     * cadence in {@link #wantsToFire} misfire on the tics either side of
-     * zero.</p>
+     * sine but violates the {@code [0, 2pi)} contract above, and it would make
+     * the reaction stagger in {@link #observePlayer} misfire on the tics either
+     * side of zero.</p>
      *
      * <p><b>Written out rather than calling {@code Math.floorMod}</b>, which
      * does exactly this and is bit-exact for integers. The reason is the guard,
-     * not the arithmetic: {@code PlayerControllerTest} enforces its determinism
-     * rule by reading the compiled constant pool and failing on any
+     * not the arithmetic: {@code BotTest} enforces its determinism rule by
+     * reading the compiled constant pool and failing on any
      * {@code java/lang/Math} reference at all, and that check works precisely
      * because it is flat with no exceptions to remember. One legitimate integer
      * call here would mean the same class could also carry {@code Math.sin} —
@@ -248,12 +335,67 @@ public final class Bot
     }
 
     /**
-     * Turns this bot to face a point on the ground plane.
+     * Lets this bot notice where the player is — occasionally.
      *
-     * <p>Cosmetic — nothing about aiming reads {@link #yawRadians()}, because a
-     * bot's shot is aimed at the player directly. It is done anyway because a
-     * body that shoots you while facing a wall reads as broken, and because the
-     * outline pass makes exactly which way a bot is turned very visible.</p>
+     * <p><b>The point of this method is the tics on which it does nothing.</b> A
+     * bot refreshes its memory once every {@link BotSkill#reactionTics}, and
+     * everything it then does — which way it faces, where it shoots — comes off
+     * that memory rather than off the arguments. At the player's 256 units a
+     * second and a 24-tic reaction, a bot works from a position about a hundred
+     * units stale, which is three player diameters.</p>
+     *
+     * <p>The refresh tic is <b>staggered by entity id</b>, so seven bots do not
+     * all snap round on the same tic. Two bodies turning in unison read as one
+     * mechanism, which is the same reason their routes have different periods
+     * ({@code DemoScene}'s BOT_PERIODS).</p>
+     *
+     * <p>Dead bots notice nothing, so a corpse does not swivel.</p>
+     *
+     * @param ticIndex the tic being processed
+     * @param playerX the player's true feet position, world x
+     * @param playerZ the player's true feet position, world z
+     * @param skill how slowly this bot reacts; must not be null
+     */
+    public void observePlayer(final int ticIndex, final float playerX, final float playerZ,
+        final BotSkill skill)
+    {
+        if (!isAlive())
+        {
+            return;
+        }
+        if (hasSeenPlayer && cyclicIndex(ticIndex + entityId, skill.reactionTics()) != 0)
+        {
+            return;
+        }
+        this.rememberedPlayerX = playerX;
+        this.rememberedPlayerZ = playerZ;
+        this.hasSeenPlayer = true;
+    }
+
+    /**
+     * Turns this bot to face the position it last remembered the player at.
+     *
+     * <p>Cosmetic in the sense that no hit is decided by it — a shot's direction
+     * is built from the same memory in {@link Match} rather than read back off
+     * this angle — but very far from decorative. It is the one part of the
+     * dumbness the player can watch happen: a body facing where you were half a
+     * second ago is legible in a way a miss statistic never is.</p>
+     *
+     * <p>Does nothing until the bot has seen the player once, so a fresh bot
+     * keeps its spawn heading instead of turning to stare at the world
+     * origin.</p>
+     */
+    public void faceRemembered()
+    {
+        if (!hasSeenPlayer)
+        {
+            return;
+        }
+        faceToward(rememberedPlayerX, rememberedPlayerZ);
+    }
+
+    /**
+     * Turns this bot to face a point on the ground plane.
      *
      * <p>The convention is {@link PlayerController}'s: yaw 0 faces world +z and
      * increases toward +x, hence {@code atan2(dx, dz)} rather than the more
@@ -278,22 +420,52 @@ public final class Bot
     }
 
     /**
-     * Returns whether this bot's weapon is ready on a given tic.
+     * Rolls for the trigger, and books the cooldown if it comes up.
      *
-     * <p>A fixed cadence with a per-bot offset. The offset is what stops seven
-     * bots firing on the same tic — a synchronised volley is both harder to
-     * survive and much harder to read than the same total rate spread out.</p>
+     * <p><b>Not a pure predicate: it has a side effect.</b> A bot that decides to
+     * fire schedules its own next opportunity here, because the cooldown is
+     * drawn from the same tic's randomness and doing it anywhere else would mean
+     * two places had to agree about when a shot happened. Call it exactly once
+     * per bot per tic, from {@link Match#tick}.</p>
+     *
+     * <p>Every draw is addressed by {@code (tic, entityId, channel)}, so two
+     * bots asked on the same tic get independent answers and the room never
+     * volleys. Nothing here depends on how many times the generator has been
+     * called before, which is what lets the early-outs above the roll exist at
+     * all — see {@link BotRng}.</p>
      *
      * @param ticIndex the tic being processed
-     * @return true if this bot should take a shot this tic
+     * @param rng the match's generator; must not be null
+     * @param skill how eager and how slow this bot is; must not be null
+     * @return true if this bot takes a shot this tic
      */
-    public boolean wantsToFire(final int ticIndex)
+    public boolean wantsToFire(final int ticIndex, final BotRng rng, final BotSkill skill)
     {
-        if (!isAlive())
+        if (!isAlive() || ticIndex < readyAtTic)
         {
             return false;
         }
-        return cyclicIndex(ticIndex + fireOffsetTics, fireIntervalTics) == 0;
+        if (!rng.chance(ticIndex, entityId, BotRng.CHANNEL_FIRE, skill.fireChancePermille()))
+        {
+            return false;
+        }
+        this.lastFiredTic = ticIndex;
+        this.readyAtTic = ticIndex + skill.cooldownTics() + extraCooldown(ticIndex, rng, skill);
+        return true;
+    }
+
+    // The random tail on a cooldown. A spread of zero is legal and means a fixed
+    // floor, which is what BotSkill.MARKSMAN uses to be able to fire every tic;
+    // boundedInt would reject a bound of zero, so the case is answered here
+    // rather than by widening the generator's contract for one caller.
+    private int extraCooldown(final int ticIndex, final BotRng rng, final BotSkill skill)
+    {
+        if (skill.cooldownSpreadTics() <= 0)
+        {
+            return 0;
+        }
+        return rng.boundedInt(ticIndex, entityId, BotRng.CHANNEL_COOLDOWN,
+            skill.cooldownSpreadTics());
     }
 
     /**
@@ -397,6 +569,49 @@ public final class Bot
     public boolean isAlive()
     {
         return health > 0;
+    }
+
+    /** Returns whether this bot has ever been told where the player is. */
+    public boolean hasSeenPlayer()
+    {
+        return hasSeenPlayer;
+    }
+
+    /**
+     * Returns the player position this bot is working from, world x.
+     *
+     * <p>Exposed because it is the whole of the reaction model, and because a
+     * test that could not see it would have to infer the lag from a heading —
+     * which is an angle compared against another angle, and this package has
+     * already learned what that kind of assertion is worth.</p>
+     *
+     * @return the remembered x, or zero before the bot has seen anything
+     */
+    public float rememberedPlayerX()
+    {
+        return rememberedPlayerX;
+    }
+
+    /**
+     * Returns the player position this bot is working from, world z.
+     *
+     * @return the remembered z, or zero before the bot has seen anything
+     */
+    public float rememberedPlayerZ()
+    {
+        return rememberedPlayerZ;
+    }
+
+    /** Returns the tic this bot's weapon next becomes ready. */
+    public int readyAtTic()
+    {
+        return readyAtTic;
+    }
+
+    /** Returns the tic this bot last fired on, or {@link #NEVER_FIRED}. */
+    public int lastFiredTic()
+    {
+        return lastFiredTic;
     }
 
     // Rejects NaN and both infinities before either can reach a position.

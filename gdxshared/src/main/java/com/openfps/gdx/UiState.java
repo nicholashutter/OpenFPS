@@ -31,18 +31,27 @@ package com.openfps.gdx;
  *
  * <p><b>Transitions.</b> {@code MENU -> PLAYING} on Start Game,
  * {@code MENU -> SETTINGS} on Settings, {@code PLAYING -> MENU} on Escape,
- * {@code PLAYING -> GAME_OVER} when the round is decided, and both of the
- * latter two back to {@code MENU}. Nothing else is legal, including staying
- * put: asking to enter the state you are already in means two things believe
- * they own the transition, and {@link UiStateMachine} refuses it loudly rather
- * than papering over it.</p>
+ * {@code PLAYING -> GAME_OVER} when the round is decided,
+ * {@code GAME_OVER -> PLAYING} on Play Again, and the other two screens back to
+ * {@code MENU}. Nothing else is legal, including staying put: asking to enter
+ * the state you are already in means two things believe they own the transition,
+ * and {@link UiStateMachine} refuses it loudly rather than papering over it.</p>
  *
- * <p><b>There is no {@code GAME_OVER -> PLAYING} edge, and its absence is a
- * decision.</b> A rematch needs a fresh {@code Match} — new bots at full health,
- * counters back to zero — and the demo builds exactly one before the loop
- * starts. An edge that led back into a room already cleared would be a button
- * that lies. Until something can hand the gameplay port a new round, the only
- * way out of a finished match is the menu.</p>
+ * <p><b>{@code GAME_OVER -> PLAYING} exists now, and its arrival is worth as
+ * much comment as its absence was.</b> It used to be refused, on the grounds
+ * that a rematch needs a fresh {@code Match} — new bots at full health, counters
+ * back to zero — while the demo builds exactly one before the loop starts, so an
+ * edge back into the world would have led into a room already cleared: a button
+ * that lies.</p>
+ *
+ * <p>What changed is not the state machine's mind but the simulation's
+ * capability. {@code Match.reset()} now genuinely restores a round —
+ * {@code DemoGameplayPort.restartMatch} puts the bots, the player, the counters
+ * and the effects all back, and re-publishes the bot placements so the corpses
+ * become visible again. The transition is legal because the room really is new;
+ * it was correctly refused for as long as that was not true. See
+ * {@code Match.reset} on why the answer is a reset rather than a rebuilt
+ * {@code Match}, which the immutability of {@code Scene} decides.</p>
  *
  * Platform adapter — must not import from core engine packages.
  */
@@ -99,8 +108,9 @@ public enum UiState
      * instead of silently inheriting a rule nobody chose. Adding
      * {@link #SETTINGS} and {@link #GAME_OVER} is what that rule was written
      * for, and it worked — both had to be answered for explicitly, and
-     * {@code GAME_OVER -> PLAYING} was refused on purpose rather than
-     * inherited by accident. See the enum Javadoc.</p>
+     * {@code GAME_OVER -> PLAYING} was refused on purpose rather than inherited
+     * by accident. It is now permitted, also on purpose and for a reason the
+     * enum Javadoc records: the thing that made it a lie has been built.</p>
      *
      * @param target the state being asked for; null is never legal
      * @return true if {@link UiStateMachine} should permit the move
@@ -116,7 +126,7 @@ public enum UiState
             case SETTINGS:
                 return target == MENU;
             case GAME_OVER:
-                return target == MENU;
+                return target == MENU || target == PLAYING;
             default:
                 return false;
         }

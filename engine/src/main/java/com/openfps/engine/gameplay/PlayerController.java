@@ -343,6 +343,45 @@ public final class PlayerController
     }
 
     /**
+     * Puts the player back at a spawn placement, as if they had just arrived.
+     *
+     * <p>Used twice, and the two uses are why this exists rather than a caller
+     * constructing a fresh {@code PlayerController}: a <b>respawn</b> after a
+     * death, and the world <b>reset</b> when the player leaves the game-over
+     * screen. Neither can build a new controller, because the gameplay port
+     * holds this one in a {@code final} field that the camera, the trigger and
+     * the network encoder all read every tic.</p>
+     *
+     * <p><b>The vertical velocity is cleared, and forgetting it is a real bug
+     * rather than a tidiness point.</b> A player killed mid-jump is falling at
+     * several hundred units a second; put back on the floor with that velocity
+     * intact they are immediately below {@link #GROUND_LEVEL_UNITS}, the landing
+     * clamp fires on the next tic, and the first thing a respawned player sees
+     * is their view snapping downward for no reason they can name.</p>
+     *
+     * <p>The yaw is wrapped and the pitch clamped exactly as {@link #update}
+     * would do, so no caller can put the player into a state the controller
+     * could not otherwise reach.</p>
+     *
+     * @param feetX spawn position, world x
+     * @param feetY spawn position, world y — the floor, not the eye
+     * @param feetZ spawn position, world z
+     * @param spawnYawRadians heading to face; wrapped into {@code [0, 2pi)}
+     * @param spawnPitchRadians elevation to look at; clamped to
+     *     {@code +-}{@link #MAX_PITCH_RADIANS}
+     */
+    public void respawnAt(final float feetX, final float feetY, final float feetZ,
+        final float spawnYawRadians, final float spawnPitchRadians)
+    {
+        this.positionX = feetX;
+        this.positionY = feetY;
+        this.positionZ = feetZ;
+        this.yawRadians = wrapYaw(spawnYawRadians);
+        this.pitchRadians = clampPitch(spawnPitchRadians);
+        this.velocityY = 0.0f;
+    }
+
+    /**
      * Advances the player by one tic of input.
      *
      * Look is applied before movement, so a turn takes effect on the same tic
