@@ -59,6 +59,58 @@ public final class Rgba
     }
 
     /**
+     * Composites a source colour over a destination one — the source-over
+     * operator, {@code out = src * a + dst * (1 - a)} per channel.
+     *
+     * <h2>Integer, not float, and that is a correctness decision</h2>
+     *
+     * <p>This runs once per covered translucent pixel in the hottest loop in
+     * the engine, but speed is the lesser reason. Two peers rendering the same
+     * tic must agree on the bytes — the render path is already held to that
+     * standard, which is why the pooled frame is asserted bit-identical to the
+     * serial one at every worker count. Integer arithmetic is exact and
+     * reproducible on every JVM; a float multiply-add here would be neither
+     * guaranteed to round the same way nor cheaper.</p>
+     *
+     * <p>The division by 255 is the rounded form
+     * {@code (x + 127 + ((x + 127) >> 8)) >> 8}, which equals
+     * {@code round(x / 255.0)} for every {@code x} a channel product can
+     * produce. The naive {@code x >> 8} divides by 256 instead and loses a step
+     * of brightness, so an {@code alpha} of 255 would not reproduce the source
+     * exactly. That round trip is asserted rather than assumed.</p>
+     *
+     * <p><b>Alpha out is the destination's.</b> The colour buffer is opaque and
+     * must stay opaque — it is presented to a window, not composited again — so
+     * carrying the source's alpha through would quietly make the frame
+     * translucent.</p>
+     *
+     * @param src the incoming colour, packed {@code 0xRRGGBBAA}; its own alpha
+     *     channel is ignored in favour of {@code coverage}
+     * @param dst the colour already in the buffer, packed {@code 0xRRGGBBAA}
+     * @param coverage coverage of the source, 0-255; 0 leaves {@code dst}
+     *     untouched and 255 reproduces {@code src} exactly
+     * @return the composited colour, carrying {@code dst}'s alpha channel
+     */
+    public static int srcOver(final int src, final int dst, final int coverage)
+    {
+        final int a = coverage & CHANNEL_MASK;
+        final int inverse = CHANNEL_MASK - a;
+        return pack(
+            div255(red(src) * a + red(dst) * inverse),
+            div255(green(src) * a + green(dst) * inverse),
+            div255(blue(src) * a + blue(dst) * inverse),
+            alpha(dst));
+    }
+
+    // Rounded division by 255, exact across the whole range a channel product
+    // can occupy. See srcOver for why this is not a shift.
+    private static int div255(final int value)
+    {
+        final int biased = value + 127;
+        return (biased + (biased >> 8)) >> 8;
+    }
+
+    /**
      * Packs four channels into one {@code 0xRRGGBBAA} value.
      *
      * Each channel is masked to 8 bits; out-of-range inputs truncate rather
