@@ -134,8 +134,28 @@ public final class SpanRenderer
     /** Mask selecting the offset of a pixel within its mip segment. */
     private static final int MIP_SEGMENT_MASK = MIP_SEGMENT_PIXELS - 1;
 
+    /**
+     * The coverage at which a span is opaque and takes the ordinary path.
+     *
+     * <p>255, the full-scale channel value. A renderer built at this coverage
+     * is byte-for-byte the renderer that existed before blending did — same
+     * loop, same depth writes, same entity ids — which is what lets the
+     * translucent path be added without putting a branch in the opaque one.</p>
+     */
+    public static final int OPAQUE_COVERAGE = 255;
+
     private final ShadingMode mode;
     private final int attributeCount;
+
+    /**
+     * Source coverage, 0-255, applied to every span this renderer draws.
+     *
+     * <p>Per-renderer rather than per-triangle: a translucent phase builds one
+     * of these for the material it is drawing, exactly as it already builds one
+     * per shading mode. Making it per-triangle would put the test back inside
+     * the inner loop, which is the thing the separate loop exists to avoid.</p>
+     */
+    private final int coverage;
 
     /**
      * Creates a span renderer for one shading mode.
@@ -148,6 +168,30 @@ public final class SpanRenderer
      */
     public SpanRenderer(final ShadingMode mode, final int attributeCount)
     {
+        this(mode, attributeCount, OPAQUE_COVERAGE);
+    }
+
+    /**
+     * Creates a span renderer that composites its spans over the buffer.
+     *
+     * <p>At {@link #OPAQUE_COVERAGE} this is exactly the opaque renderer. Below
+     * it, spans are blended, depth is tested but not written, and entity ids
+     * are left alone — see {@code renderFlatBlended} for why each of those is
+     * required rather than a choice.</p>
+     *
+     * <p><b>The caller owes a translucent renderer back-to-front order.</b>
+     * Blending is not commutative and nothing here can enforce it: this class
+     * sees one triangle in one tile and has no idea what else is coming.</p>
+     *
+     * @param mode how a covered pixel gets its colour
+     * @param attributeCount floats per vertex beyond position
+     * @param sourceCoverage source coverage, 0-255
+     * @throws IllegalArgumentException if the mode is null, the attribute count
+     *     is too small for it, or the coverage is outside 0-255
+     */
+    public SpanRenderer(final ShadingMode mode, final int attributeCount,
+        final int sourceCoverage)
+    {
         if (mode == null)
         {
             throw new IllegalArgumentException("mode must not be null");
@@ -157,8 +201,26 @@ public final class SpanRenderer
             throw new IllegalArgumentException(mode + " needs at least "
                 + mode.requiredAttributes() + " vertex attributes, got " + attributeCount);
         }
+        if (sourceCoverage < 0 || sourceCoverage > OPAQUE_COVERAGE)
+        {
+            throw new IllegalArgumentException(
+                "coverage must be 0-" + OPAQUE_COVERAGE + ", got " + sourceCoverage);
+        }
         this.mode = mode;
         this.attributeCount = attributeCount;
+        this.coverage = sourceCoverage;
+    }
+
+    /** Returns the source coverage every span this renderer draws is blended at. */
+    public int coverage()
+    {
+        return coverage;
+    }
+
+    /** Returns true if this renderer composites rather than overwrites. */
+    public boolean isBlended()
+    {
+        return coverage < OPAQUE_COVERAGE;
     }
 
     /**
@@ -240,6 +302,12 @@ public final class SpanRenderer
             if (mode == ShadingMode.VERTEX_COLOR)
             {
                 renderVertexColor(target, records, recordOffset, entityIds, entityId,
+                    minX, minY, maxX, maxY);
+                return;
+            }
+            if (isBlended())
+            {
+                renderFlatBlended(target, records, recordOffset, flatColor, coverage,
                     minX, minY, maxX, maxY);
                 return;
             }
