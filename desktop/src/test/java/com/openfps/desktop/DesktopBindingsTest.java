@@ -12,6 +12,8 @@ import java.util.List;
 
 import com.badlogic.gdx.Input;
 
+import org.lwjgl.glfw.GLFW;
+
 import com.openfps.engine.hal.adapter.ActionBindings;
 import com.openfps.engine.hal.port.GameAction;
 import com.openfps.engine.hal.port.InputBinding;
@@ -81,11 +83,12 @@ class DesktopBindingsTest
         }
 
         @Test
-        @DisplayName("jump is the space bar")
+        @DisplayName("jump is the space bar, with the pad's bottom face button alongside")
         void shouldBindJumpToSpaceWhenUsingDefaults()
         {
             assertThat(DesktopBindings.defaults().bindingsFor(GameAction.JUMP))
-                .containsExactly(InputBinding.key(Input.Keys.SPACE));
+                .startsWith(InputBinding.key(Input.Keys.SPACE))
+                .contains(InputBinding.gamepadButton(GLFW.GLFW_GAMEPAD_BUTTON_A));
         }
 
         @Test
@@ -101,37 +104,78 @@ class DesktopBindingsTest
         }
 
         @Test
-        @DisplayName("fire also answers to left control, for trackpads")
+        @DisplayName("fire answers to left control for trackpads, and to a trigger and a face button")
         void shouldOfferAKeyboardAlternateForFireWhenUsingDefaults()
         {
+            // Four alternates — the cap ActionBindings sets — and the reason the
+            // cap is four: a primary, a device alternate, and a pad needing two
+            // of its own because a trigger and a face button are different
+            // sources.
             assertThat(DesktopBindings.defaults().bindingsFor(GameAction.FIRE))
                 .contains(InputBinding.key(Input.Keys.CONTROL_LEFT))
-                .hasSize(2);
+                .hasSize(4);
         }
 
         @Test
-        @DisplayName("leaving the match is Escape — the only way out of a captured cursor")
+        @DisplayName("leaving the match is Escape, or either of the pad's two menu buttons")
         void shouldBindLeaveMatchToEscapeWhenUsingDefaults()
         {
+            // Escape stays first and stays the documented way out of a captured
+            // cursor. Start AND Back because pads label and place those two very
+            // differently, and being unable to leave a match is not cosmetic.
             assertThat(DesktopBindings.defaults().bindingsFor(GameAction.LEAVE_MATCH))
-                .containsExactly(InputBinding.key(Input.Keys.ESCAPE));
+                .startsWith(InputBinding.key(Input.Keys.ESCAPE))
+                .contains(InputBinding.gamepadButton(GLFW.GLFW_GAMEPAD_BUTTON_START),
+                    InputBinding.gamepadButton(GLFW.GLFW_GAMEPAD_BUTTON_BACK));
         }
 
         @Test
-        @DisplayName("movement is WASD with the arrow keys as alternates")
+        @DisplayName("movement is WASD, the arrow keys, and the left stick")
         void shouldBindMovementToWasdAndArrowsWhenUsingDefaults()
         {
             final ActionBindings bindings = DesktopBindings.defaults();
+            // All four name the SAME stick, which on a stick is the literal
+            // truth: the four directions are one control read four ways.
+            final InputBinding stick =
+                InputBinding.gamepadAxis(GLFW.GLFW_GAMEPAD_AXIS_LEFT_X);
 
             assertThat(bindings.bindingsFor(GameAction.MOVE_FORWARD))
-                .containsExactly(InputBinding.key(Input.Keys.W), InputBinding.key(Input.Keys.UP));
+                .startsWith(InputBinding.key(Input.Keys.W), InputBinding.key(Input.Keys.UP))
+                .contains(stick);
             assertThat(bindings.bindingsFor(GameAction.MOVE_BACKWARD))
-                .containsExactly(InputBinding.key(Input.Keys.S), InputBinding.key(Input.Keys.DOWN));
+                .startsWith(InputBinding.key(Input.Keys.S), InputBinding.key(Input.Keys.DOWN))
+                .contains(stick);
             assertThat(bindings.bindingsFor(GameAction.STRAFE_LEFT))
-                .containsExactly(InputBinding.key(Input.Keys.A), InputBinding.key(Input.Keys.LEFT));
+                .startsWith(InputBinding.key(Input.Keys.A), InputBinding.key(Input.Keys.LEFT))
+                .contains(stick);
             assertThat(bindings.bindingsFor(GameAction.STRAFE_RIGHT))
-                .containsExactly(InputBinding.key(Input.Keys.D),
-                    InputBinding.key(Input.Keys.RIGHT));
+                .startsWith(InputBinding.key(Input.Keys.D), InputBinding.key(Input.Keys.RIGHT))
+                .contains(stick);
+        }
+
+        @Test
+        @DisplayName("sprint is a shoulder rather than a stick click, so it is not under the aiming thumb")
+        void shouldBindSprintToAShoulder()
+        {
+            assertThat(DesktopBindings.defaults().bindingsFor(GameAction.SPRINT))
+                .startsWith(InputBinding.key(Input.Keys.SHIFT_LEFT))
+                .contains(InputBinding.gamepadButton(GLFW.GLFW_GAMEPAD_BUTTON_LEFT_BUMPER));
+        }
+
+        @Test
+        @DisplayName("no action exceeds the four-binding cap")
+        void shouldStayWithinTheBindingCap()
+        {
+            // Adding pad alternates to a table that already had keyboard ones is
+            // exactly how a row quietly overflows. bind() throws, so this would
+            // fail loudly — but it would fail at startup rather than in review.
+            final ActionBindings bindings = DesktopBindings.defaults();
+            for (final GameAction action : GameAction.values())
+            {
+                assertThat(bindings.bindingsFor(action))
+                    .as("%s", action)
+                    .hasSizeLessThanOrEqualTo(ActionBindings.MAX_BINDINGS_PER_ACTION);
+            }
         }
 
         @Test
@@ -144,7 +188,7 @@ class DesktopBindingsTest
             first.bind(GameAction.JUMP, InputBinding.key(Input.Keys.J));
 
             assertThat(second.bindingsFor(GameAction.JUMP))
-                .containsExactly(InputBinding.key(Input.Keys.SPACE));
+                .startsWith(InputBinding.key(Input.Keys.SPACE));
         }
     }
 

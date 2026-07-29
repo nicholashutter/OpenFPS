@@ -6,9 +6,12 @@
 package com.openfps.android;
 
 import android.util.Log;
+import android.view.MotionEvent;
 
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.InputProcessor;
+
+import com.openfps.gdx.AnalogStick;
 
 import com.openfps.engine.hal.adapter.ActionBindings;
 import com.openfps.engine.hal.port.GameAction;
@@ -94,6 +97,24 @@ public final class AndroidInputPort implements I_InputPort, InputProcessor
      */
     public static final int MAX_POINTERS = 10;
 
+    /**
+     * Which platform axis the movement stick's horizontal half is.
+     *
+     * <p>Named as a constant so {@link AndroidBindings} can put it in the table
+     * and a settings screen can report "movement: left stick" without this file
+     * and that one each knowing the number. The value is Android's own
+     * {@code MotionEvent.AXIS_X}, which is what makes it a meaningful platform
+     * code rather than an index this project invented — see
+     * {@code InputBinding}'s note on codes being opaque and platform-owned.</p>
+     */
+    public static final int AXIS_LEFT_STICK = MotionEvent.AXIS_X;
+
+    /** Which platform axis the look stick's horizontal half is. */
+    public static final int AXIS_RIGHT_STICK = MotionEvent.AXIS_Z;
+
+    /** Which platform axis the right trigger is. */
+    public static final int AXIS_RIGHT_TRIGGER = MotionEvent.AXIS_RTRIGGER;
+
     /** Logcat tag. Android has no SLF4J binding, so platform code logs here. */
     private static final String TAG = "OpenFPS";
 
@@ -146,6 +167,41 @@ public final class AndroidInputPort implements I_InputPort, InputProcessor
      * {@link #consumeLeaveRequest()} on the same thread.
      */
     private boolean leaveRequested;
+
+    /**
+     * Whether a gamepad button bound to fire is held.
+     *
+     * <p>MUTABLE: set and cleared by {@link #keyDown}/{@link #keyUp} on the
+     * render thread. Separate from the touch button state because the two are
+     * separate devices and either may be in use — a player with a controller
+     * plugged into a phone can still reach the screen.</p>
+     */
+    private boolean padFire;
+
+    /** Whether a gamepad button bound to jump is held. MUTABLE: render thread. */
+    private boolean padJump;
+
+    /** Whether a gamepad button bound to sprint is held. MUTABLE: render thread. */
+    private boolean padSprint;
+
+    /**
+     * The right trigger's pull, 0 released to 1 fully pulled.
+     *
+     * <p>MUTABLE: overwritten by {@link #onGamepadAxes}. Held as the raw travel
+     * rather than a boolean so the threshold lives in one place
+     * ({@link AnalogStick#TRIGGER_THRESHOLD}) and applies identically on both
+     * platforms.</p>
+     */
+    private float padRightTrigger;
+
+    /**
+     * Whether a gamepad has been seen at all this session.
+     *
+     * <p>MUTABLE: render thread. Logged once on the edge, exactly as the desktop
+     * port does, so a connected pad is discoverable in logcat without writing a
+     * line every frame.</p>
+     */
+    private boolean padSeen;
 
     /**
      * Creates a port for one screen density at the default sensitivity.
@@ -342,12 +398,21 @@ public final class AndroidInputPort implements I_InputPort, InputProcessor
      * Without it a thumb held on the stick at the moment the menu appears is
      * still "held" afterwards, walking the player into a wall while they read
      * the buttons.</p>
+     *
+     * <p>The controller goes with it. Android delivers no key-up when the app is
+     * backgrounded, so a pad button held at that moment would still be held on
+     * the way back — the same reason every finger is dropped, and a real one:
+     * {@code AndroidUiFrameCallback} calls this on exactly that edge.</p>
      */
     public void forgetEverything()
     {
         clearPointers();
         accumulator.clearAll();
         leaveRequested = false;
+        padFire = false;
+        padJump = false;
+        padSprint = false;
+        padRightTrigger = 0.0f;
     }
 
     @Override
@@ -432,21 +497,147 @@ public final class AndroidInputPort implements I_InputPort, InputProcessor
         return touchUp(screenX, screenY, pointer, button);
     }
 
+    /**
+     * Records a gamepad's stick and trigger positions.
+     *
+     * <p><b>Pushed in as plain floats, on purpose.</b> Android reports joystick
+     * axes only inside a {@code MotionEvent}, which cannot be constructed in a
+     * local unit test — so the Activity does the six {@code getAxisValue} calls
+     * and everything that can actually be wrong happens here, where CI can see
+     * it. The same split as {@link TouchLayout} and for the same reason.</p>
+     *
+     * <p>Values are handed to the accumulator raw. The dead zone and the response
+     * curve are applied inside it, so this port and the desktop one cannot drift
+     * apart on the numbers a player feels.</p>
+     *
+     * @param leftX movement stick, −1 left to 1 right
+     * @param leftY movement stick, −1 <b>away</b> from the player to 1 toward
+     *     them — Android's own convention, passed through unchanged
+     * @param rightX look stick, −1 left to 1 right
+     * @param rightY look stick, −1 away from the player to 1 toward them, which
+     *     is already the accumulator's documented "+y downward"
+     * @param rightTrigger the right trigger's pull, 0 released to 1 pulled
+     */
+    public void onGamepadAxes(final float leftX, final float leftY,
+        final float rightX, final float rightY, final float rightTrigger)
+    {
+        if (!uiState.isPlaying())
+        {
+            // Same rule as a touch: a stick leaning while the menu is up is not
+            // a request to walk.
+            accumulator.clearGamepad();
+            return;
+        }
+        noteGamepad();
+        // Forward is positive here and "pushed away" is negative on the device,
+        // so the vertical axis is negated — as a pair, leaving the magnitude and
+        // therefore the radial dead zone untouched.
+        accumulator.setGamepadMovementAxes(0.0f - leftY, leftX);
+        // No sign flip on the look stick. Android reports the same "+y downward"
+        // the accumulator documents and the desktop mouse already speaks; a
+        // second negation here is exactly what shipped an inverted camera once
+        // before. See InputAccumulator.setGamepadLookAxes.
+        accumulator.setGamepadLookAxes(rightX, rightY);
+        padRightTrigger = rightTrigger;
+        publishGamepadActions();
+    }
+
+    /**
+     * Drops every gamepad reading, leaving the touch controls untouched.
+     *
+     * <p><b>The hot-plug fix.</b> A stick deflection is a level: it persists
+     * until something overwrites it, and a controller that has been unplugged —
+     * or a wireless one whose battery has died — never will. Without this, a pad
+     * removed at full deflection walks the player into a wall for the rest of
+     * the match with nobody touching anything. It is the same failure
+     * {@code touchCancelled} handles for a finger that Android takes away
+     * mid-gesture, and the same one {@code InputAccumulator.clearAll()} was
+     * written for.</p>
+     *
+     * <p>Partial rather than total: a player whose controller dies still has a
+     * touchscreen, and clearing a thumb that is on the stick right now would be
+     * a second bug.</p>
+     */
+    public void onGamepadDisconnected()
+    {
+        if (padSeen)
+        {
+            padSeen = false;
+            Log.i(TAG, "Controller disconnected — gamepad input dropped,"
+                + " touch controls unaffected");
+        }
+        padFire = false;
+        padJump = false;
+        padSprint = false;
+        padRightTrigger = 0.0f;
+        accumulator.clearGamepad();
+    }
+
+    /**
+     * Tells the accumulator how long a tic lasts, from the configured frame
+     * rate.
+     *
+     * <p>Only stick look depends on this, and it depends on it completely: a
+     * held stick is a rate, and a rate is not an angle until something supplies
+     * the seconds. A drag is a displacement and needs none.</p>
+     *
+     * @param ticsPerSecond the simulation rate in Hz; must be greater than zero
+     * @throws IllegalArgumentException if the rate is not positive
+     */
+    public void setTicRate(final int ticsPerSecond)
+    {
+        if (ticsPerSecond <= 0)
+        {
+            throw new IllegalArgumentException(
+                "tic rate must be positive, got " + ticsPerSecond);
+        }
+        accumulator.setTicDuration(1.0f / ticsPerSecond);
+    }
+
+    /**
+     * Handles a key or gamepad button going down.
+     *
+     * <p><b>On Android a gamepad button IS a key event</b> — libGDX delivers
+     * {@code Input.Keys.BUTTON_A} through this same callback, because the
+     * platform numbers pad buttons in the same key space as the back button.
+     * That is why {@code AndroidBindings} carries libGDX key constants in its
+     * {@code GAMEPAD_BUTTON} codes while the desktop table carries GLFW gamepad
+     * indices: a binding code is opaque and belongs to the platform that wrote
+     * it, which is the whole reason {@code InputBinding.Source} exists.</p>
+     *
+     * @param keycode the libGDX key or button constant
+     * @return true if this port consumed the press
+     */
     @Override
     public boolean keyDown(final int keycode)
     {
-        if (isAnyActive(GameAction.LEAVE_MATCH, InputBinding.Source.KEY, keycode))
+        if (namesControl(GameAction.LEAVE_MATCH, keycode))
         {
             leaveRequested = true;
             return true;
         }
-        return false;
+        if (!uiState.isPlaying())
+        {
+            return false;
+        }
+        return applyPadButton(keycode, true);
     }
 
+    /**
+     * Handles a key or gamepad button coming up.
+     *
+     * <p>Needed only because of the pad. A touch button is released by
+     * {@code touchUp}, and the back key is edge-triggered — but a pad's fire
+     * button is a level, and a level that is never released is a weapon that
+     * fires for the rest of the match.</p>
+     *
+     * @param keycode the libGDX key or button constant
+     * @return true if this port consumed the release
+     */
     @Override
     public boolean keyUp(final int keycode)
     {
-        return false;
+        return applyPadButton(keycode, false);
     }
 
     @Override
@@ -640,16 +831,20 @@ public final class AndroidInputPort implements I_InputPort, InputProcessor
         publishButtons();
     }
 
-    // Pushes the current button levels into the accumulator. Sprint is always
-    // false: no control is bound to it on this platform — see AndroidBindings.
+    // Pushes the current TOUCH button levels into the accumulator's keyboard and
+    // touch channel. Sprint is always false here because no screen region is
+    // bound to it — see AndroidBindings on why a phone has no sprint button and
+    // a controller's shoulder is a different question. A pad's sprint arrives
+    // through publishGamepadActions and the accumulator ORs the two, so this
+    // false does not hold the pad's true down.
     private void publishButtons()
     {
         accumulator.setActionKeys(isFireHeld(), isJumpHeld(), false);
     }
 
     // Whether an action names a given control. The touch regions are resolved
-    // by the geometry rather than here, so this exists for the one binding kind
-    // that arrives as an opaque code from the platform: a key.
+    // by the geometry rather than here, so this exists for the binding kinds
+    // that arrive as an opaque code from the platform: a key and a pad button.
     private boolean isAnyActive(final GameAction action, final InputBinding.Source source,
         final int code)
     {
@@ -662,6 +857,76 @@ public final class AndroidInputPort implements I_InputPort, InputProcessor
             }
         }
         return false;
+    }
+
+    // Whether an action names a given key code, as either a keyboard key or a
+    // gamepad button. Both, because on Android the two arrive through one
+    // callback in one number space — see keyDown — and an action may legitimately
+    // name each: LEAVE_MATCH is the system back key AND the pad's Start.
+    private boolean namesControl(final GameAction action, final int keycode)
+    {
+        return isAnyActive(action, InputBinding.Source.KEY, keycode)
+            || isAnyActive(action, InputBinding.Source.GAMEPAD_BUTTON, keycode);
+    }
+
+    // Applies a pad button edge to the three action levels, and reports whether
+    // the code meant anything. Each action is tested separately because one
+    // button may legitimately drive two — the same way A both jumps and fires in
+    // the desktop scheme.
+    private boolean applyPadButton(final int keycode, final boolean down)
+    {
+        boolean consumed = false;
+        if (isAnyActive(GameAction.FIRE, InputBinding.Source.GAMEPAD_BUTTON, keycode))
+        {
+            padFire = down;
+            consumed = true;
+        }
+        if (isAnyActive(GameAction.JUMP, InputBinding.Source.GAMEPAD_BUTTON, keycode))
+        {
+            padJump = down;
+            consumed = true;
+        }
+        if (isAnyActive(GameAction.SPRINT, InputBinding.Source.GAMEPAD_BUTTON, keycode))
+        {
+            padSprint = down;
+            consumed = true;
+        }
+        if (!consumed)
+        {
+            return false;
+        }
+        if (down)
+        {
+            noteGamepad();
+        }
+        publishGamepadActions();
+        return true;
+    }
+
+    // Pushes the pad's action levels into the accumulator's gamepad channel —
+    // never into the touch channel, so neither device can release the other's
+    // trigger. The trigger is folded in here rather than at the axis event
+    // because a trigger IS a fire control and the accumulator should not have to
+    // hear about it twice.
+    private void publishGamepadActions()
+    {
+        final boolean triggerFires =
+            isAnyActive(GameAction.FIRE, InputBinding.Source.GAMEPAD_AXIS, AXIS_RIGHT_TRIGGER)
+                && AnalogStick.isTriggerPulled(padRightTrigger);
+        accumulator.setGamepadActions(padFire || triggerFires, padJump, padSprint);
+    }
+
+    // Logs the arrival of a controller once. A phone that has had a pad attached
+    // since launch should say so somewhere, and a line per frame is not that.
+    private void noteGamepad()
+    {
+        if (padSeen)
+        {
+            return;
+        }
+        padSeen = true;
+        Log.i(TAG, "Controller in use — left stick moves, right stick looks;"
+            + " the touch controls still work");
     }
 
     // Forgets every finger without touching the accumulator.

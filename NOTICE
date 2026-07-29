@@ -51,6 +51,31 @@ lwjgl-stb)
     (zlib/libpng), OpenAL Soft (LGPL 2.1), jemalloc (BSD 2-Clause) and
     stb (MIT / public domain). See https://www.lwjgl.org/license.
 
+    Gamepad support is GLFW's, through lwjgl-glfw, and it carries one piece of
+    third-party DATA worth naming separately from the code above:
+
+        SDL_GameControllerDB gamepad mappings
+            Author:   Sam Lantinga / the SDL project and contributors
+            Source:   https://github.com/mdqinc/SDL_GameControllerDB (upstream),
+                      vendored into GLFW as src/mappings.h
+            License:  zlib — the same license as GLFW itself, which is why it
+                      needs no separate grant here
+
+    That table is what makes glfwGetGamepadState report a standardised
+    Xbox-shaped layout for a DualShock, a Switch Pro pad or a third-party clone,
+    so DesktopBindings can name "button A" once instead of once per brand.
+
+    NO GAMEPAD LIBRARY IS SHIPPED, and that is a decision rather than an
+    omission. libGDX's gdx-controllers extension is the obvious route; its
+    desktop backend is Jamepad and therefore SDL, which would add several
+    megabytes of precompiled native library per platform and a second license
+    chain to this file — to reach the same mapping database GLFW already has
+    loaded in the same process. OpenFPS calls GLFW's copy. See GlfwGamepad.
+
+    The Android build needs no equivalent: gamepad buttons arrive as ordinary
+    key events and stick axes as MotionEvent axes, both from the platform. See
+    AndroidInputPort.
+
 JLayer (jlayer, libGDX fork)
     Copyright (c) 1999-2010 JavaZOOM
     License: LGPL 2.1

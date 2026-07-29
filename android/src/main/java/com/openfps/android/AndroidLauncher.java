@@ -5,8 +5,11 @@
 
 package com.openfps.android;
 
+import android.hardware.input.InputManager;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.InputDevice;
+import android.view.MotionEvent;
 
 import com.badlogic.gdx.backends.android.AndroidApplication;
 
@@ -104,6 +107,32 @@ public final class AndroidLauncher extends AndroidApplication
     /** The running engine. MUTABLE: started in onCreate, stopped in onDestroy. */
     private EngineSession session;
 
+    /**
+     * The input port, kept so generic motion events and controller
+     * connect/disconnect callbacks can reach it.
+     *
+     * MUTABLE: assigned in onCreate, cleared in onDestroy. UI thread only —
+     * which is also where {@code dispatchGenericMotionEvent} and the
+     * {@link InputManager.InputDeviceListener} callbacks arrive.
+     */
+    private AndroidInputPort inputPort;
+
+    /**
+     * Watches for controllers coming and going, or null when the platform did
+     * not give us an InputManager.
+     *
+     * MUTABLE: registered in onCreate, unregistered in onDestroy — an
+     * unregistered listener leaks the Activity.
+     */
+    private InputManager inputManager;
+
+    /**
+     * The registered listener, kept only so it can be handed back to
+     * {@code unregisterInputDeviceListener}. MUTABLE: paired with
+     * {@link #inputManager}.
+     */
+    private InputManager.InputDeviceListener deviceListener;
+
     @Override
     protected void onCreate(final Bundle savedInstanceState)
     {
@@ -120,8 +149,15 @@ public final class AndroidLauncher extends AndroidApplication
         // layout has to exist before the engine is handed the input port.
         final AndroidInputPort input =
             new AndroidInputPort(getResources().getDisplayMetrics().density);
+        inputPort = input;
         final RendererHolder holder = new RendererHolder();
         final GameConfig config = GameConfig.unbounded(EngineMain.parseFpsArg(null));
+        // A gamepad's look stick reports a RATE, and a rate is not an angle until
+        // something supplies the duration. This Activity is the only object that
+        // knows the configured frame rate. Nothing else in the input path cares:
+        // a drag is a displacement that has already happened.
+        input.setTicRate(config.rate().fps());
+        registerControllerWatch(input);
         // MUTABLE: assigned once on this thread by the factory below, before
         // the frame loop that reads it starts. There is no race — the engine
         // bootstrap has returned by then.
@@ -182,6 +218,12 @@ public final class AndroidLauncher extends AndroidApplication
         // port is told the window is gone.
         super.onDestroy();
 
+        // Before anything else that can fail: an InputManager listener holds a
+        // reference to this Activity, so leaving it registered leaks the whole
+        // Activity — and its renderer, and its scene — on every rotation.
+        unregisterControllerWatch();
+        inputPort = null;
+
         // Then the engine: stop() halts the game loop, joins it, drains the
         // bus and saves the profile. It is idempotent, and it deliberately
         // does not assume the window ever closed gracefully — onDestroy can
@@ -197,6 +239,142 @@ public final class AndroidLauncher extends AndroidApplication
             windowPort = null;
         }
         Log.i(TAG, "AndroidLauncher destroyed");
+    }
+
+    /**
+     * Reads a controller's sticks and triggers on their way through the Activity.
+     *
+     * <p><b>{@code dispatchGenericMotionEvent} rather than
+     * {@code onGenericMotionEvent}</b>, and the difference matters. Joystick axes
+     * arrive only as generic motion events, and libGDX's {@code AndroidInput}
+     * registers its own {@code View.OnGenericMotionListener} on the surface to
+     * pick up mouse scroll. A view-level listener runs first, so anything it
+     * consumes never reaches {@code onGenericMotionEvent} at all — which would
+     * make controller support depend on an implementation detail of somebody
+     * else's backend. Dispatch sees every event before the view hierarchy does,
+     * and {@code super} is still called, so libGDX loses nothing.</p>
+     *
+     * <p><b>Why the axis extraction lives here and nothing else does.</b> A
+     * {@code MotionEvent} cannot be constructed in a local unit test, so any
+     * logic on this side of the call is logic CI cannot see. So this method is
+     * five {@code getAxisValue} calls and a source check, and every decision —
+     * the dead zone, the curve, the sign of the vertical axis, the rate
+     * integration — happens in {@link AndroidInputPort#onGamepadAxes} and
+     * {@code InputAccumulator}, where it is tested. Same split as
+     * {@link TouchLayout}.</p>
+     *
+     * <p>{@code AXIS_Z} and {@code AXIS_RZ} are the right stick, not a typo for
+     * a third dimension: Android inherited that numbering from the flight-stick
+     * era, and every game controller reports its second stick there.</p>
+     *
+     * @param event the motion event; never null in practice
+     * @return whatever the normal dispatch decides — this method observes and
+     *     never consumes, because swallowing an event here would break mouse
+     *     scroll and anything else downstream
+     */
+    @Override
+    public boolean dispatchGenericMotionEvent(final MotionEvent event)
+    {
+        if (inputPort != null && isFromJoystick(event))
+        {
+            inputPort.onGamepadAxes(
+                event.getAxisValue(MotionEvent.AXIS_X),
+                event.getAxisValue(MotionEvent.AXIS_Y),
+                event.getAxisValue(MotionEvent.AXIS_Z),
+                event.getAxisValue(MotionEvent.AXIS_RZ),
+                event.getAxisValue(MotionEvent.AXIS_RTRIGGER));
+        }
+        return super.dispatchGenericMotionEvent(event);
+    }
+
+    /**
+     * Returns whether a motion event came from a controller rather than a mouse
+     * or a trackpad.
+     *
+     * <p>Checked because a mouse also produces generic motion events, and
+     * reading {@code AXIS_X} off one would be reading the cursor position as a
+     * stick deflection — a camera that spins according to where the pointer
+     * happens to be.</p>
+     *
+     * @param event the event to classify
+     * @return true if a joystick or gamepad produced it
+     */
+    private static boolean isFromJoystick(final MotionEvent event)
+    {
+        final int source = event.getSource();
+        return (source & InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK
+            || (source & InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD;
+    }
+
+    /**
+     * Asks the platform to tell us when a controller appears or disappears.
+     *
+     * <p><b>This is the hot-plug half that a phone cannot do without.</b> On
+     * desktop a poll simply stops finding the pad; Android pushes events, so a
+     * controller that is unplugged — or a Bluetooth pad that goes out of range,
+     * which on a phone is the common case rather than the exotic one — sends no
+     * final event at all. The last stick position it reported would sit in the
+     * accumulator forever, walking the player into a wall. There is nothing to
+     * notice it except this callback.</p>
+     *
+     * <p>Registered defensively: {@code getSystemService} can return null on an
+     * unusual device or a stubbed test platform, and a controller is a
+     * convenience that must never be the reason the app fails to start.</p>
+     *
+     * @param input the port to notify; must not be null
+     */
+    private void registerControllerWatch(final AndroidInputPort input)
+    {
+        final Object service = getSystemService(INPUT_SERVICE);
+        if (!(service instanceof InputManager))
+        {
+            Log.w(TAG, "No InputManager — a controller that disconnects cannot be"
+                + " noticed, so gamepad input will not be offered");
+            return;
+        }
+        inputManager = (InputManager) service;
+        deviceListener = new InputManager.InputDeviceListener()
+        {
+            @Override
+            public void onInputDeviceAdded(final int deviceId)
+            {
+                Log.i(TAG, "Input device added: " + deviceId);
+            }
+
+            @Override
+            public void onInputDeviceRemoved(final int deviceId)
+            {
+                // Deliberately not checked against a remembered device id. Any
+                // input device going away is a good enough reason to drop a
+                // deflection nobody is holding any more, and the cost of being
+                // wrong is that a still-connected pad reports its position again
+                // on its very next event — microseconds later. The cost of being
+                // too clever is the bug this exists to prevent.
+                Log.i(TAG, "Input device removed: " + deviceId);
+                input.onGamepadDisconnected();
+            }
+
+            @Override
+            public void onInputDeviceChanged(final int deviceId)
+            {
+                // A reconfiguration mid-session. Same reasoning as removal: drop
+                // what was banked and let the device restate it.
+                input.onGamepadDisconnected();
+            }
+        };
+        inputManager.registerInputDeviceListener(deviceListener, null);
+    }
+
+    // Hands the listener back. An InputManager listener holds this Activity, so
+    // failing to unregister leaks it across every rotation.
+    private void unregisterControllerWatch()
+    {
+        if (inputManager != null && deviceListener != null)
+        {
+            inputManager.unregisterInputDeviceListener(deviceListener);
+        }
+        inputManager = null;
+        deviceListener = null;
     }
 
     // The demo world from the APK's assets, or null when none was packaged.

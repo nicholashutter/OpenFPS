@@ -54,6 +54,23 @@ import org.slf4j.LoggerFactory;
  * versus a fixed 30/60/120 Hz — and {@code InputAccumulator} exists to make
  * that not matter.</p>
  *
+ * <h2>A controller is an extra path, never a mode</h2>
+ *
+ * <p>There is no "gamepad mode" and no detection that switches one on. Keyboard,
+ * mouse and pad are all polled every frame and all of them reach the same
+ * accumulator, so a player may walk with the left stick, aim with the mouse and
+ * fire with a trigger inside one tic. That falls out of two decisions rather
+ * than needing arbitration: pad <b>buttons</b> resolve through the same
+ * {@link ActionBindings} lookup as everything else (multiple bindings on an
+ * action are alternates, so "left mouse OR right trigger" is just a row), and
+ * pad <b>sticks</b> go into a second accumulator channel that is summed with the
+ * keyboard's rather than overwriting it.</p>
+ *
+ * <p>{@link GamepadSource} is the seam: {@link GlfwGamepad} behind it in
+ * production, a fake in tests, which is what makes hot-plug — the failure that
+ * matters and the one no CI machine can stage — an ordinary unit test. See
+ * {@link #pollGamepad}.</p>
+ *
  * <h2>Mouse look</h2>
  *
  * <p>Relative motion only. {@code Gdx.input.getDeltaX()/getDeltaY()} report
@@ -244,6 +261,26 @@ public final class GdxInputPort implements I_InputPort
      */
     private final InputState autoWalk;
 
+    /**
+     * The controller, if there is one.
+     *
+     * MUTABLE: replaced by {@link #bindGamepad}, polled on the render thread.
+     * Volatile for the same reason as the bindings table. Defaults to the real
+     * GLFW-backed source, which reports no controller — and touches no native
+     * call at all — until something actually polls it, so a windowless test is
+     * unaffected by its presence.
+     */
+    private volatile GamepadSource gamepad = new GlfwGamepad();
+
+    /**
+     * Whether a controller was present at the previous poll.
+     *
+     * MUTABLE: render thread only. Exists so connecting and disconnecting are
+     * each logged once rather than every frame, and so the accumulator's
+     * gamepad channel is cleared on the edge — see {@link #pollGamepad}.
+     */
+    private boolean gamepadConnected;
+
     /** Creates a port at the default sensitivity on the default control scheme. */
     public GdxInputPort()
     {
@@ -324,6 +361,55 @@ public final class GdxInputPort implements I_InputPort
         return bindings;
     }
 
+    /**
+     * Replaces the controller this port reads.
+     *
+     * <p>Exists so a test can drive every gamepad path — including the pad being
+     * unplugged mid-match — in a JVM with no GLFW and no controller. See
+     * {@link GamepadSource}.</p>
+     *
+     * @param source the gamepad to poll; must not be null
+     * @throws IllegalArgumentException if {@code source} is null
+     */
+    public void bindGamepad(final GamepadSource source)
+    {
+        if (source == null)
+        {
+            throw new IllegalArgumentException("source must not be null");
+        }
+        this.gamepad = source;
+    }
+
+    /** Returns the controller this port polls. Never null. */
+    public GamepadSource gamepad()
+    {
+        return gamepad;
+    }
+
+    /**
+     * Tells the accumulator how long a tic lasts, from the configured frame
+     * rate.
+     *
+     * <p><b>Only stick look depends on this, and it depends on it completely.</b>
+     * A mouse delta is a displacement that already happened and needs no
+     * duration; a held stick is a rate, and a rate is not an angle until
+     * something supplies the seconds — see {@code InputAccumulator}. The
+     * launcher is the only object that knows the rate, so the launcher is who
+     * calls this.</p>
+     *
+     * @param ticsPerSecond the simulation rate in Hz; must be greater than zero
+     * @throws IllegalArgumentException if the rate is not positive
+     */
+    public void setTicRate(final int ticsPerSecond)
+    {
+        if (ticsPerSecond <= 0)
+        {
+            throw new IllegalArgumentException(
+                "tic rate must be positive, got " + ticsPerSecond);
+        }
+        accumulator.setTicDuration(1.0f / ticsPerSecond);
+    }
+
     @Override
     public void init()
     {
@@ -336,6 +422,11 @@ public final class GdxInputPort implements I_InputPort
         // not a harness quirk: any path that starts captured has the same hole.
         discardLookPolls = DISCARD_LOOK_POLLS_AFTER_CAPTURE;
         windowClosed = false;
+        // Not "no controller" — "nothing known about a controller yet", so the
+        // first poll that finds one logs it. A restarted port must announce the
+        // pad again; the alternative is a second window in which a connected
+        // controller is never mentioned anywhere.
+        gamepadConnected = false;
         appliedState = uiState.state();
         final GameAction unbound = bindings.firstUnbound();
         if (unbound != null)
@@ -541,14 +632,21 @@ public final class GdxInputPort implements I_InputPort
             return;
         }
         applyCursorMode(input);
+        final GamepadSource pad = gamepad;
         if (!appliedState.capturesCursor())
         {
             // The menu is in front. The pointer belongs to the buttons, so bank
-            // nothing and forget anything still pending.
+            // nothing and forget anything still pending — the stick included. A
+            // controller left leaning while the player reads the menu is not a
+            // request to walk.
             accumulator.clearAll();
             return;
         }
-        if (isJustPressed(input, GameAction.LEAVE_MATCH))
+        // Before any question is asked of the pad, and specifically before
+        // LEAVE_MATCH: that action may be bound to Start, and a button edge is
+        // only available on the frame the poll that saw it ran.
+        pollGamepad(pad);
+        if (isJustPressed(input, pad, GameAction.LEAVE_MATCH))
         {
             // Leaving play. Do the whole handover now rather than next frame,
             // so the cursor is free before the menu is drawn over it.
@@ -565,9 +663,68 @@ public final class GdxInputPort implements I_InputPort
             accumulator.clearAll();
             return;
         }
-        pollInvertToggle(input);
-        pollKeys(input);
+        pollInvertToggle(input, pad);
+        pollKeys(input, pad);
         pollLook(input);
+    }
+
+    /**
+     * Reads the controller and keeps the accumulator's gamepad channel honest
+     * about whether there is one.
+     *
+     * <p><b>The disconnect branch is the whole point of this method.</b> A stick
+     * deflection is a level: it persists until something overwrites it, and a
+     * pad that has been unplugged never will. Without the clear, a controller
+     * yanked out — or a wireless one whose battery dies — at full deflection
+     * leaves the player walking into a wall for the rest of the match with
+     * nobody touching anything. {@code InputAccumulator.clearGamepad()} is
+     * deliberately partial, so the keyboard the player still has a hand on is
+     * untouched.</p>
+     *
+     * <p>Cleared unconditionally while absent rather than only on the edge. The
+     * edge is what gets logged; the clear is idempotent and costs seven field
+     * writes, which is a cheaper guarantee than reasoning about whether some
+     * later path could reintroduce a stale level.</p>
+     *
+     * <p><b>Package-private so a test can call it directly</b>, exactly as
+     * {@link #isAnyActive} is. In production this runs behind the
+     * {@code Gdx.input} null check, which is what guarantees GLFW is initialised
+     * before {@link GlfwGamepad} touches it — so reaching the logic through
+     * {@link #pollDevice()} would need a window, and the one behaviour most
+     * worth testing would be the one nothing could test.</p>
+     *
+     * @param pad the controller to read; must not be null
+     */
+    void pollGamepad(final GamepadSource pad)
+    {
+        pad.poll();
+        if (!pad.isConnected())
+        {
+            if (gamepadConnected)
+            {
+                gamepadConnected = false;
+                LOG.info("Controller disconnected — gamepad input dropped,"
+                    + " keyboard and mouse unaffected");
+            }
+            accumulator.clearGamepad();
+            return;
+        }
+        if (!gamepadConnected)
+        {
+            gamepadConnected = true;
+            LOG.info("Controller connected: {}", pad.name());
+        }
+        // Left stick moves. The vertical axis is negated because a pad reports
+        // "pushed away from the player" as NEGATIVE y, and forward is positive
+        // here; the pair is negated together so the magnitude — and therefore
+        // the radial dead zone — is unchanged.
+        accumulator.setGamepadMovementAxes(0.0f - pad.leftStickY(), pad.leftStickX());
+        // Right stick looks. Handed over EXACTLY as reported, with no sign flip,
+        // because the pad's vertical convention already IS the accumulator's
+        // documented "+y downward" — the same fact that makes the desktop mouse
+        // need no correction. See GdxInputPort.pollLook for what a second flip
+        // cost the last time someone added one on a theory.
+        accumulator.setGamepadLookAxes(pad.rightStickX(), pad.rightStickY());
     }
 
     // The invert-look switch, on the edge rather than the level: held down it
@@ -577,9 +734,9 @@ public final class GdxInputPort implements I_InputPort
     // Before pollLook rather than after, so the tic the key is pressed already
     // rotates the way the player just asked for. The accumulator applies the
     // flag at latch, so nothing already banked is rotated twice.
-    private void pollInvertToggle(final Input input)
+    private void pollInvertToggle(final Input input, final GamepadSource pad)
     {
-        if (!isJustPressed(input, GameAction.TOGGLE_INVERT_LOOK))
+        if (!isJustPressed(input, pad, GameAction.TOGGLE_INVERT_LOOK))
         {
             return;
         }
@@ -659,17 +816,29 @@ public final class GdxInputPort implements I_InputPort
 
     // Every control this frame, resolved through the bindings table. No key
     // constant appears here on purpose — see the class Javadoc.
-    private void pollKeys(final Input input)
+    //
+    // The pad's BUTTONS come through this path rather than a separate one,
+    // because on desktop every device is polled and the bindings table already
+    // knows how to say "fire is left mouse OR left control OR the right
+    // trigger". Alternates, not chords: isAnyActive answers "any". A pad button
+    // therefore needs no channel of its own here — a disconnected pad simply
+    // reports nothing down, so nothing can go stale.
+    //
+    // The pad's STICKS cannot come through here, and that asymmetry is the point
+    // of the whole design. A stick has a direction, so "is the left stick held"
+    // has no answer; isDown reports a stick axis inactive, and pollGamepad reads
+    // the deflection into its own channel instead.
+    private void pollKeys(final Input input, final GamepadSource pad)
     {
         accumulator.setMovementKeys(
-            isHeld(input, GameAction.MOVE_FORWARD),
-            isHeld(input, GameAction.MOVE_BACKWARD),
-            isHeld(input, GameAction.STRAFE_LEFT),
-            isHeld(input, GameAction.STRAFE_RIGHT));
+            isHeld(input, pad, GameAction.MOVE_FORWARD),
+            isHeld(input, pad, GameAction.MOVE_BACKWARD),
+            isHeld(input, pad, GameAction.STRAFE_LEFT),
+            isHeld(input, pad, GameAction.STRAFE_RIGHT));
         accumulator.setActionKeys(
-            isHeld(input, GameAction.FIRE),
-            isHeld(input, GameAction.JUMP),
-            isHeld(input, GameAction.SPRINT));
+            isHeld(input, pad, GameAction.FIRE),
+            isHeld(input, pad, GameAction.JUMP),
+            isHeld(input, pad, GameAction.SPRINT));
     }
 
     /**
@@ -725,9 +894,10 @@ public final class GdxInputPort implements I_InputPort
     }
 
     // Held: true for every frame the control is down.
-    private boolean isHeld(final Input input, final GameAction action)
+    private boolean isHeld(final Input input, final GamepadSource pad,
+        final GameAction action)
     {
-        return isAnyActive(bindings, action, binding -> isDown(input, binding));
+        return isAnyActive(bindings, action, binding -> isDown(input, pad, binding));
     }
 
     // Edge: true on the single frame a control goes down.
@@ -735,17 +905,25 @@ public final class GdxInputPort implements I_InputPort
     // Edge rather than level, because the actions that use this are toggles:
     // leaving the match on "held" would fire again every frame the key stayed
     // down and bounce the player straight back out of the menu.
-    private boolean isJustPressed(final Input input, final GameAction action)
+    private boolean isJustPressed(final Input input, final GamepadSource pad,
+        final GameAction action)
     {
-        return isAnyActive(bindings, action, binding -> wentDown(input, binding));
+        return isAnyActive(bindings, action, binding -> wentDown(input, pad, binding));
     }
 
-    // Dispatches one binding onto the right GLFW query. The two device kinds
-    // this port can answer are keys and mouse buttons; a touch region or a
-    // gamepad binding in a desktop table reads as not-down rather than
+    // Dispatches one binding onto the right platform query. Four device kinds
+    // this port can answer — keys, mouse buttons, gamepad buttons and gamepad
+    // triggers; a touch region in a desktop table reads as not-down rather than
     // throwing, so a shared scheme across platforms degrades instead of
     // crashing.
-    private static boolean isDown(final Input input, final InputBinding binding)
+    //
+    // GAMEPAD_AXIS deliberately does NOT mean "any axis". GamepadSource answers
+    // only for triggers and reports a stick axis inactive, which is what lets
+    // the left stick be bound to MOVE_FORWARD — so a settings screen can report
+    // and rebind it — without that binding also reading as a held movement key
+    // whenever the player strafes.
+    private static boolean isDown(final Input input, final GamepadSource pad,
+        final InputBinding binding)
     {
         if (binding.source() == InputBinding.Source.KEY)
         {
@@ -755,11 +933,26 @@ public final class GdxInputPort implements I_InputPort
         {
             return input.isButtonPressed(binding.code());
         }
+        if (binding.source() == InputBinding.Source.GAMEPAD_BUTTON)
+        {
+            return pad.isButtonDown(binding.code());
+        }
+        if (binding.source() == InputBinding.Source.GAMEPAD_AXIS)
+        {
+            return pad.isAxisPressed(binding.code());
+        }
         return false;
     }
 
     // The edge-triggered counterpart of isDown.
-    private static boolean wentDown(final Input input, final InputBinding binding)
+    //
+    // A gamepad has no platform-supplied "just pressed": GLFW reports levels, so
+    // the edge is computed by GlfwGamepad against the previous poll. An axis has
+    // no edge at all here — a trigger bound to a toggle would need its own
+    // hysteresis to avoid chattering at the threshold, and nothing needs it, so
+    // it reads inactive rather than shipping a half-considered answer.
+    private static boolean wentDown(final Input input, final GamepadSource pad,
+        final InputBinding binding)
     {
         if (binding.source() == InputBinding.Source.KEY)
         {
@@ -768,6 +961,10 @@ public final class GdxInputPort implements I_InputPort
         if (binding.source() == InputBinding.Source.MOUSE_BUTTON)
         {
             return input.isButtonJustPressed(binding.code());
+        }
+        if (binding.source() == InputBinding.Source.GAMEPAD_BUTTON)
+        {
+            return pad.didButtonGoDown(binding.code());
         }
         return false;
     }

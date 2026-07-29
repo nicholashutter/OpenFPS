@@ -132,6 +132,22 @@ public final class GdxAdapterFactory implements I_AdapterFactory
         LOG.info("Windowed desktop HAL shut down");
     }
 
+    /**
+     * Returns the real input port, typed.
+     *
+     * <p>{@link #getInputPort()} hands the engine an {@code I_InputPort} and that
+     * is all the engine should see. The launcher needs more: it is the only
+     * object that knows the configured frame rate, and stick look cannot be
+     * converted from a rate into an angle without it. See
+     * {@link GdxInputPort#setTicRate(int)}.</p>
+     *
+     * @return the GLFW-backed mouse, keyboard and controller; never null
+     */
+    public GdxInputPort inputPort()
+    {
+        return inputPort;
+    }
+
     /** Returns the delegate's real JDK-backed time port. */
     @Override
     public I_TimePort getTimePort()

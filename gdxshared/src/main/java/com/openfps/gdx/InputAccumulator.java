@@ -62,6 +62,49 @@ import com.openfps.engine.hal.port.InputState;
  *       intervening poll is not lost either.</li>
  * </ul>
  *
+ * <h2>A gamepad is a second channel, not a second mode</h2>
+ *
+ * <p>Every gamepad reading is stored beside the keyboard/touch reading rather
+ * than on top of it, and {@link #latch} sums the two. That is what makes a pad
+ * an <b>additional</b> input path: a player may walk with the left stick and
+ * turn with the mouse in the same tic, and neither device can zero the other by
+ * being polled second. Opposing inputs cancel — stick forward and the back key
+ * together is a zero axis — which is the rule
+ * {@link #setMovementKeys} already applies within one device, extended across
+ * two. {@link #clearGamepad()} empties that channel alone, which is what a
+ * controller unplugged at full deflection needs.</p>
+ *
+ * <h2>A STICK IS NOT A MOUSE, and mixing them up is the bug this guards</h2>
+ *
+ * <p>The two look devices report different <i>kinds</i> of quantity and the
+ * arithmetic must not be shared:</p>
+ * <ul>
+ *   <li>A mouse reports a <b>displacement</b> — "the hand moved 40 px since the
+ *       last poll". It is an integral, so it is summed and drained exactly
+ *       once, as described above.</li>
+ *   <li>A stick reports a <b>position</b> — "I am held two thirds of the way
+ *       right", which means "keep turning right at that rate for as long as
+ *       this is true". It is a level, and it is <i>re-read</i>, not
+ *       consumed.</li>
+ * </ul>
+ *
+ * <p><b>Pushing a held stick through the pixel accumulator would make turn
+ * speed depend on the polling rate.</b> Each poll would add the same deflection
+ * again, so a 144 Hz machine would bank twice as many contributions per tic as a
+ * 72 Hz one and the player would spin twice as fast for the same thumb — on the
+ * same game, with the same settings, because of vsync. That is not a
+ * sensitivity difference anyone can compensate for.</p>
+ *
+ * <p>So {@link #setGamepadLookAxes} <b>overwrites</b> a level, and
+ * {@link #latch} converts it exactly once per tic:
+ * {@code radians = deflection × }{@link #GAMEPAD_LOOK_RADIANS_PER_SECOND}
+ * {@code × }{@link #ticDurationSeconds()}. Radians per second times seconds is
+ * radians, the poll count cancels out of the expression entirely, and the
+ * result is the same rotation for the same deflection held for the same
+ * <i>duration</i> at any frame rate. {@link #latch} is the right place for it
+ * because {@code latch} is the only thing in this class that happens exactly
+ * once per tic — which is the interval being integrated over.</p>
+ *
  * <p><b>Threading:</b> the setters run on the render thread and {@link #latch}
  * on the game loop thread, concurrently, with no lock between them. Each field
  * is individually atomic, which is all this needs: a snapshot is allowed to
@@ -105,6 +148,40 @@ public final class InputAccumulator
      * comes back.
      */
     public static final int MAX_ACCUMULATED_PIXELS = 1 << 24;
+
+    /**
+     * How fast a fully deflected look stick turns the view, in <b>radians per
+     * second</b>.
+     *
+     * <p>The unit is the point, and it is a different unit from
+     * {@link #DEFAULT_RADIANS_PER_PIXEL} on purpose — see the class Javadoc.
+     * Radians per <i>pixel</i> is a conversion factor for a displacement that
+     * already happened; radians per <i>second</i> is a rate, and the only thing
+     * that can turn a rate into an angle is a duration.</p>
+     *
+     * <p>3.5 rad/s is a full 360° turn in about 1.8 seconds at the stop. That
+     * is the range console shooters sit in for a pad with no aim assist and no
+     * turn acceleration: fast enough to answer someone behind you inside a
+     * second, slow enough that the top of the range is still controllable. The
+     * response curve ({@link AnalogStick#LOOK_EXPONENT}) means the stop is
+     * genuinely reachable and the middle of the range is much slower than a
+     * linear reading of this number suggests — half deflection is 0.875 rad/s,
+     * a 360 in seven seconds, which is the deliberate aiming speed.</p>
+     */
+    public static final float GAMEPAD_LOOK_RADIANS_PER_SECOND = 3.5f;
+
+    /**
+     * Tic duration assumed until a launcher says otherwise, in seconds.
+     *
+     * <p>1/60 s, matching the engine's default {@code FrameRate}. A default is
+     * needed because this class must not import {@code com.openfps.engine.core}
+     * to ask — it is a platform adapter, and the frame rate is engine
+     * configuration. A launcher running at 30 or 120 Hz owes this object
+     * {@link #setTicDuration}; getting it wrong scales stick look by exactly the
+     * ratio of the two rates and nothing else, which is a sensitivity error
+     * rather than a frame-rate dependence.</p>
+     */
+    public static final float DEFAULT_TIC_SECONDS = 1.0f / 60.0f;
 
     /** Radians of view rotation per pixel of mouse motion. Fixed at construction. */
     private final float radiansPerPixel;
@@ -166,6 +243,56 @@ public final class InputAccumulator
 
     /** Sprint level. MUTABLE: overwritten by every poll. */
     private volatile boolean sprintHeld;
+
+    /**
+     * Forward/back deflection contributed by a gamepad, −1..1, already shaped.
+     *
+     * <p>MUTABLE: overwritten by every poll, zeroed by {@link #clearGamepad()}.
+     * Separate from {@link #forwardAxis} so the two devices sum rather than
+     * overwrite each other — see the class Javadoc.</p>
+     */
+    private volatile float padForwardAxis;
+
+    /** Gamepad left/right deflection, −1..1, positive right. MUTABLE: per poll. */
+    private volatile float padStrafeAxis;
+
+    /**
+     * Look-stick yaw deflection, −1..1, positive turns right.
+     *
+     * <p>MUTABLE: overwritten by every poll — a <b>level</b>, never summed. This
+     * is the field the class Javadoc's warning is about: summing it would tie
+     * turn speed to the poll rate.</p>
+     */
+    private volatile float padYawAxis;
+
+    /**
+     * Look-stick pitch deflection, −1..1, in <b>screen</b> orientation —
+     * positive is downward, exactly like {@link #pitchPixels}.
+     *
+     * <p>MUTABLE: overwritten by every poll. Sharing the mouse's convention is
+     * what lets {@link #latch} apply one negation and one
+     * {@link #setInvertPitch} flag to both devices, rather than growing a
+     * second sign rule that would drift out of step with the first.</p>
+     */
+    private volatile float padPitchAxis;
+
+    /** Gamepad fire level. MUTABLE: per poll, cleared by {@link #clearGamepad()}. */
+    private volatile boolean padFireHeld;
+
+    /** Gamepad jump level. MUTABLE: per poll, cleared by {@link #clearGamepad()}. */
+    private volatile boolean padJumpHeld;
+
+    /** Gamepad sprint level. MUTABLE: per poll, cleared by {@link #clearGamepad()}. */
+    private volatile boolean padSprintHeld;
+
+    /**
+     * Seconds of simulated time one tic covers.
+     *
+     * <p>MUTABLE: set once by a launcher that knows the configured frame rate,
+     * read once per {@link #latch}. Volatile because those are different
+     * threads, though in practice it is written before the loop starts.</p>
+     */
+    private volatile float ticSeconds = DEFAULT_TIC_SECONDS;
 
     /** Creates an accumulator at {@link #DEFAULT_RADIANS_PER_PIXEL}. */
     public InputAccumulator()
@@ -296,12 +423,139 @@ public final class InputAccumulator
     }
 
     /**
+     * Records a gamepad's movement-stick deflection, raw as the device reports
+     * it.
+     *
+     * <p><b>Raw in, shaped stored.</b> The dead zone and the response curve are
+     * applied here rather than by the caller, for the reason
+     * {@link InputState#of} clamps the unit disc rather than trusting each
+     * adapter to: they are properties of a thumbstick and not of a platform, so
+     * a third backend added later cannot forget them. See {@link AnalogStick}
+     * for what "shaped" means and why the dead zone is radial.</p>
+     *
+     * <p>Stored beside {@link #setMovementAxes}, never over it: a player using
+     * the keyboard and the stick at once gets the sum, clamped by
+     * {@code InputState.of}.</p>
+     *
+     * @param rawForward forward/back deflection as reported, positive forward
+     * @param rawStrafe left/right deflection as reported, positive right
+     * @throws IllegalArgumentException if either value is not finite
+     */
+    public void setGamepadMovementAxes(final float rawForward, final float rawStrafe)
+    {
+        final float scale =
+            AnalogStick.responseScale(rawForward, rawStrafe, AnalogStick.MOVE_EXPONENT);
+        padForwardAxis = rawForward * scale;
+        padStrafeAxis = rawStrafe * scale;
+    }
+
+    /**
+     * Records a gamepad's look-stick deflection, raw as the device reports it.
+     *
+     * <p><b>A rate, not a displacement.</b> The value overwrites whatever the
+     * previous poll left — it describes where the stick <i>is</i>, not how far
+     * it has moved — and {@link #latch} turns it into an angle by multiplying
+     * by {@link #GAMEPAD_LOOK_RADIANS_PER_SECOND} and the tic duration. Calling
+     * this twice between two tics therefore turns the view once, which is the
+     * whole point; calling {@link #accumulateLook} twice turns it twice, which
+     * is equally the point for a mouse. The class Javadoc explains why those
+     * are both correct.</p>
+     *
+     * <p>{@code rawPitch} is in the accumulator's <b>screen</b> orientation:
+     * positive is downward. A stick pushed away from the player reports a
+     * negative Y on every gamepad API this project has met — GLFW and Android
+     * both — so a backend hands the value over untouched, exactly as the desktop
+     * mouse does. There is no sign flip in either port and there must not be
+     * one; {@link #latch} owns the single negation.</p>
+     *
+     * @param rawYaw horizontal deflection as reported, positive turns right
+     * @param rawPitch vertical deflection as reported, positive downward
+     * @throws IllegalArgumentException if either value is not finite
+     */
+    public void setGamepadLookAxes(final float rawYaw, final float rawPitch)
+    {
+        final float scale =
+            AnalogStick.responseScale(rawYaw, rawPitch, AnalogStick.LOOK_EXPONENT);
+        padYawAxis = rawYaw * scale;
+        padPitchAxis = rawPitch * scale;
+    }
+
+    /**
+     * Records the action levels a gamepad poll saw.
+     *
+     * <p>The gamepad half of {@link #setActionKeys}, stored separately so
+     * neither device can release the other's trigger. The sticky "seen since
+     * the last latch" flags are <b>shared</b> with the keyboard, because their
+     * meaning is "the player fired", which has no device in it.</p>
+     *
+     * @param fire true if the pad's fire control is down
+     * @param jump true if the pad's jump control is down
+     * @param sprint true if the pad's sprint control is down
+     */
+    public void setGamepadActions(final boolean fire, final boolean jump,
+        final boolean sprint)
+    {
+        padFireHeld = fire;
+        padJumpHeld = jump;
+        padSprintHeld = sprint;
+        if (fire)
+        {
+            fireSeen.set(true);
+        }
+        if (jump)
+        {
+            jumpSeen.set(true);
+        }
+        if (sprint)
+        {
+            sprintSeen.set(true);
+        }
+    }
+
+    /**
+     * Returns the gamepad channel to rest, leaving the keyboard, mouse and
+     * touch channels exactly as they were.
+     *
+     * <p><b>This is the hot-plug fix, and it exists for a failure that has
+     * already happened once on this project in another guise.</b>
+     * {@link #clearAll()} was written because a key held at the moment the
+     * window lost focus stayed held forever and walked the player into a wall.
+     * A controller unplugged — or a wireless pad whose battery dies — at full
+     * deflection is the same failure with no keyboard event to end it: the last
+     * poll's axis is a level, levels persist by design, and nothing else would
+     * ever overwrite it. A backend that notices a pad has gone calls this, and
+     * the player stops walking.</p>
+     *
+     * <p>Partial rather than total on purpose: a player who unplugs a pad
+     * mid-match usually still has a hand on the keyboard, and clearing that
+     * would drop a key they are holding right now.</p>
+     *
+     * <p>The shared sticky action flags are deliberately <b>not</b> cleared.
+     * They mean "the player fired since the last tic", which was true when it
+     * was set — and clearing them here would also discard a keyboard press made
+     * in the same interval. The cost is at most one tic of a shot the player
+     * really did take.</p>
+     */
+    public void clearGamepad()
+    {
+        padForwardAxis = 0.0f;
+        padStrafeAxis = 0.0f;
+        padYawAxis = 0.0f;
+        padPitchAxis = 0.0f;
+        padFireHeld = false;
+        padJumpHeld = false;
+        padSprintHeld = false;
+    }
+
+    /**
      * Drops every pending reading and returns the accumulator to rest.
      *
      * Used when input stops being meaningful — the cursor was released to the
      * desktop, or the window lost focus. Without it a key held at the moment
      * of release would stay "held" forever, walking the player into a wall
-     * while they use another application.
+     * while they use another application. The gamepad channel goes with it, for
+     * the same reason: a stick held while the window is in the background is
+     * not a player asking to move.
      */
     public void clearAll()
     {
@@ -313,6 +567,7 @@ public final class InputAccumulator
         fireSeen.set(false);
         jumpSeen.set(false);
         sprintSeen.set(false);
+        clearGamepad();
     }
 
     /**
@@ -358,20 +613,44 @@ public final class InputAccumulator
     {
         final int rawYaw = yawPixels.getAndSet(0);
         final int rawPitch = pitchPixels.getAndSet(0);
-        final float yaw = rawYaw * radiansPerPixel;
-        float pitch = -rawPitch * radiansPerPixel;
+        // The whole rate-versus-displacement conversion, in one expression and
+        // one place. The mouse term consumes an integral of pixels; the stick
+        // term integrates a held rate over the tic that is ending. Both come out
+        // as radians, so they add, and a player using both at once gets both.
+        //
+        // ticSeconds is what makes the stick term frame-rate independent: the
+        // number of polls that ran between two latches does not appear in it at
+        // all. Doubling the poll rate doubles how often padYawAxis is
+        // overwritten with the same value and changes nothing here.
+        final float radiansPerFullDeflection = GAMEPAD_LOOK_RADIANS_PER_SECOND * ticSeconds;
+        final float yaw = rawYaw * radiansPerPixel + padYawAxis * radiansPerFullDeflection;
+        // One negation for both devices — the screen-to-view sign flip the
+        // method contract documents — and therefore one invert preference.
+        //
+        // Written as `0 - x` rather than `-x`, and that is not decoration.
+        // Negating a float zero produces NEGATIVE zero, and Float.compare
+        // separates the two: -0.0f is not equal to 0.0f, so a completely idle
+        // accumulator would stop reporting InputState.NEUTRAL and every
+        // "nothing is happening" assertion in the suite would fail on a value
+        // that prints as "-0.0". Subtracting from positive zero yields positive
+        // zero and is otherwise identical arithmetic. The old single-device
+        // expression avoided this by accident — it negated an int before the
+        // multiply, where -0 is 0.
+        final float pitchScreen =
+            rawPitch * radiansPerPixel + padPitchAxis * radiansPerFullDeflection;
+        float pitch = 0.0f - pitchScreen;
         if (invertPitch)
         {
-            pitch = -pitch;
+            pitch = 0.0f - pitch;
         }
         return InputState.of(
-            forwardAxis,
-            strafeAxis,
+            forwardAxis + padForwardAxis,
+            strafeAxis + padStrafeAxis,
             yaw,
             pitch,
-            fireSeen.getAndSet(false) || fireHeld,
-            jumpSeen.getAndSet(false) || jumpHeld,
-            sprintSeen.getAndSet(false) || sprintHeld);
+            fireSeen.getAndSet(false) || fireHeld || padFireHeld,
+            jumpSeen.getAndSet(false) || jumpHeld || padJumpHeld,
+            sprintSeen.getAndSet(false) || sprintHeld || padSprintHeld);
     }
 
     /** Returns the sensitivity in radians of view rotation per pixel of mouse motion. */
@@ -425,6 +704,87 @@ public final class InputAccumulator
     public float movementStrafeAxis()
     {
         return strafeAxis;
+    }
+
+    /**
+     * Tells this accumulator how much simulated time one tic covers.
+     *
+     * <p>The other half of {@link #GAMEPAD_LOOK_RADIANS_PER_SECOND}: a rate is
+     * not an angle until something supplies a duration, and this is it. Called
+     * once by a launcher, which is the only object that knows the configured
+     * frame rate — this class may not ask, being forbidden the engine's core
+     * packages.</p>
+     *
+     * @param seconds the tic duration; must be finite and greater than zero
+     * @throws IllegalArgumentException if the duration is not a positive finite
+     *     number
+     */
+    public void setTicDuration(final float seconds)
+    {
+        if (!(seconds > 0.0f) || Float.isInfinite(seconds))
+        {
+            throw new IllegalArgumentException(
+                "tic duration must be finite and positive, got " + seconds);
+        }
+        this.ticSeconds = seconds;
+    }
+
+    /**
+     * Returns how much simulated time one tic covers, in seconds.
+     *
+     * @return the tic duration, {@link #DEFAULT_TIC_SECONDS} until a launcher
+     *     says otherwise
+     */
+    public float ticDurationSeconds()
+    {
+        return ticSeconds;
+    }
+
+    /**
+     * Returns the gamepad's shaped forward/back deflection.
+     *
+     * <p>Shaped, not raw: the dead zone and curve were applied on the way in.
+     * For tests and diagnostics.</p>
+     *
+     * @return the deflection, positive forward
+     */
+    public float gamepadForwardAxis()
+    {
+        return padForwardAxis;
+    }
+
+    /**
+     * Returns the gamepad's shaped left/right deflection.
+     *
+     * @return the deflection, positive right
+     */
+    public float gamepadStrafeAxis()
+    {
+        return padStrafeAxis;
+    }
+
+    /**
+     * Returns the look stick's shaped horizontal deflection.
+     *
+     * <p>A level, so reading it does not consume it — the difference from
+     * {@link #pendingYawPixels()} that the class Javadoc is entirely about.</p>
+     *
+     * @return the deflection, positive turns right
+     */
+    public float gamepadYawAxis()
+    {
+        return padYawAxis;
+    }
+
+    /**
+     * Returns the look stick's shaped vertical deflection, in screen
+     * orientation (positive downward).
+     *
+     * @return the deflection, positive aims down before any invert preference
+     */
+    public float gamepadPitchAxis()
+    {
+        return padPitchAxis;
     }
 
     /** Returns the horizontal pixels gathered but not yet latched. For tests and diagnostics. */
