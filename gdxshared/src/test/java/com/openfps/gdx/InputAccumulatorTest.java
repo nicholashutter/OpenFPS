@@ -232,26 +232,63 @@ class InputAccumulatorTest
         }
 
         @Test
-        @DisplayName("screen y grows downward, so a negative deltaY tilts the view up")
+        @DisplayName("a caller's negative deltaY tilts the view up")
         void shouldInvertPitchAgainstScreenOrientation()
         {
             final InputAccumulator accumulator = unitAccumulator();
-            // Mouse pushed away from the player: the pointer moves up the
-            // screen, which the windowing system reports as a NEGATIVE deltaY.
+            assertThat(accumulator.isInvertPitch())
+                .as("the conventional scheme is the default")
+                .isFalse();
+            // The contract is "+y downward". A caller whose device reports the
+            // other way round owes this class a negated delta — see
+            // GdxInputPort.pollLook.
             accumulator.accumulateLook(0, -30);
             assertThat(accumulator.latch().pitchDelta())
-                .as("pushing the mouse away must look up")
+                .as("a negative delta must look up")
                 .isCloseTo(30.0f, within(EPSILON));
         }
 
         @Test
-        @DisplayName("pulling the mouse back tilts the view down")
+        @DisplayName("a caller's positive deltaY tilts the view down")
         void shouldLookDownOnPositiveDeltaY()
         {
             final InputAccumulator accumulator = unitAccumulator();
             accumulator.accumulateLook(0, 30);
             assertThat(accumulator.latch().pitchDelta())
                 .isCloseTo(-30.0f, within(EPSILON));
+        }
+
+        @Test
+        @DisplayName("the invert setting negates pitch and leaves yaw untouched")
+        void shouldNegateOnlyPitchWhenInverted()
+        {
+            final InputAccumulator accumulator = unitAccumulator();
+            accumulator.setInvertPitch(true);
+            assertThat(accumulator.isInvertPitch()).isTrue();
+
+            accumulator.accumulateLook(12, -30);
+            final InputState inverted = accumulator.latch();
+            assertThat(inverted.pitchDelta())
+                .as("inverting flips the vertical axis")
+                .isCloseTo(-30.0f, within(EPSILON));
+            assertThat(inverted.yawDelta())
+                .as("and does nothing at all to the horizontal one")
+                .isCloseTo(12.0f, within(EPSILON));
+        }
+
+        @Test
+        @DisplayName("the invert setting is exactly a sign flip, both ways")
+        void shouldBeASignFlipBothWays()
+        {
+            final InputAccumulator plain = unitAccumulator();
+            plain.accumulateLook(0, 42);
+            final float upright = plain.latch().pitchDelta();
+
+            final InputAccumulator flipped = unitAccumulator();
+            flipped.setInvertPitch(true);
+            flipped.accumulateLook(0, 42);
+            assertThat(flipped.latch().pitchDelta())
+                .isCloseTo(-upright, within(EPSILON));
         }
 
         @Test

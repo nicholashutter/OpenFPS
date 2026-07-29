@@ -330,6 +330,27 @@ public final class SoftwareRenderPort implements I_RenderPort
      */
     private volatile boolean crosshairEnabled;
 
+    /**
+     * Whether tagged entities get a silhouette drawn round them.
+     *
+     * <p><b>Off by default, and the default is the point.</b> A scene that tags
+     * its entities does so to make hits attributable, not to ask for a glow —
+     * and the outline reads to a player as a hit or damage marker, because that
+     * is what a highlight on an enemy means in every other shooter. It is a
+     * debug aid: it shows where the simulation believes each body is, which is
+     * exactly what you want while wiring bots up and exactly what you do not
+     * want while playing.</p>
+     *
+     * <p>Tagging and outlining are independent for a reason. Hitscan is
+     * resolved from geometry and never reads the id buffer (see
+     * {@code DemoGameplayPort.fireIfRequested}), so turning the outline off
+     * costs no hit detection at all.</p>
+     *
+     * <p>MUTABLE: toggled at runtime by the debug switch, read on the render
+     * thread. Volatile because those are different threads.</p>
+     */
+    private volatile boolean outlineEnabled;
+
     private final int chunkCount;
     private final Rasterizer.CullMode cullMode;
 
@@ -1125,7 +1146,7 @@ public final class SoftwareRenderPort implements I_RenderPort
         // viewmodel, so the weapon draws over the outlines rather than under
         // them. OutlinePass's Javadoc explains why fusing it into the raster
         // pass would break the worker-count invariant.
-        if (tagged != null)
+        if (tagged != null && outlineEnabled)
         {
             this.parallelPasses = parallelPasses + 1L;
             outlinePass.draw(framebuffer, workers);
@@ -1708,6 +1729,32 @@ public final class SoftwareRenderPort implements I_RenderPort
     public boolean isCrosshairEnabled()
     {
         return crosshairEnabled;
+    }
+
+    /**
+     * Turns entity silhouettes on or off. Off until asked.
+     *
+     * <p>A debug aid rather than a game feature — see the field for why a
+     * permanent highlight on every opponent is read as a damage marker by
+     * anyone actually playing. Safe to flip between frames: it is one volatile
+     * read on the render thread, and the id buffer is produced either way, so
+     * nothing else in the frame changes shape when it moves.</p>
+     *
+     * @param enabled whether tagged entities should be outlined
+     */
+    public void setOutlineEnabled(final boolean enabled)
+    {
+        this.outlineEnabled = enabled;
+    }
+
+    /**
+     * Whether entity silhouettes are being drawn.
+     *
+     * @return the current setting
+     */
+    public boolean isOutlineEnabled()
+    {
+        return outlineEnabled;
     }
 
     /**

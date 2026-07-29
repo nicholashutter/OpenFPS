@@ -144,6 +144,20 @@ public final class InputAccumulator
     /** Left/right deflection, −1..1, positive right. MUTABLE: overwritten by every poll. */
     private volatile float strafeAxis;
 
+    /**
+     * Whether vertical look is inverted — mouse away from you aims down.
+     *
+     * <p>MUTABLE: flipped by a settings screen, read once per {@link #latch}.
+     * Volatile because the two are different threads.</p>
+     *
+     * <p><b>False is the non-inverted, conventional default</b>, and
+     * {@link #latch} is the single multiply that implements it. This is a
+     * player preference and nothing else — a platform correcting for a device
+     * that reports upside down must not spend this flag on it, or the player
+     * loses the ability to have the preference.</p>
+     */
+    private volatile boolean invertPitch;
+
     /** Fire level. MUTABLE: overwritten by every poll. */
     private volatile boolean fireHeld;
 
@@ -310,11 +324,20 @@ public final class InputAccumulator
      * from nothing; the movement key levels are left alone, because a held key
      * is still held.</p>
      *
-     * <p><b>Pitch sign.</b> The windowing system reports +y downward — moving
-     * the mouse away from you gives a negative {@code deltaY}. The snapshot's
-     * convention is positive-is-up, the standard non-inverted shooter feel, so
-     * the accumulated pixels are negated exactly here. An "invert mouse"
-     * setting would flip this one multiply and nothing else.</p>
+     * <p><b>Pitch sign.</b> Callers report +y downward — that is the screen
+     * convention on both platforms — and the snapshot's convention is
+     * positive-is-up, the standard non-inverted feel, so the accumulated pixels
+     * are negated exactly here. {@link #setInvertPitch} flips that one multiply
+     * and nothing else.</p>
+     *
+     * <p><b>The negation is a statement about the caller's numbers, not about
+     * the device</b>, which is why it lives here and not in either port. A
+     * platform whose device reports the other way round owes this class the
+     * sign it documents rather than a second flag — see
+     * {@code GdxInputPort.pollLook}, which does exactly that for the desktop
+     * mouse. Keeping the correction at the point of the discrepancy is what
+     * stops one platform's quirk from becoming a shared special case that the
+     * other platform then has to opt out of.</p>
      *
      * <p>Diagonal normalisation is not done here: the raw −1/0/+1 axes are
      * handed to {@link InputState#of}, which scales any vector longer than 1
@@ -328,7 +351,11 @@ public final class InputAccumulator
         final int rawYaw = yawPixels.getAndSet(0);
         final int rawPitch = pitchPixels.getAndSet(0);
         final float yaw = rawYaw * radiansPerPixel;
-        final float pitch = -rawPitch * radiansPerPixel;
+        float pitch = -rawPitch * radiansPerPixel;
+        if (invertPitch)
+        {
+            pitch = -pitch;
+        }
         return InputState.of(
             forwardAxis,
             strafeAxis,
@@ -343,6 +370,29 @@ public final class InputAccumulator
     public float radiansPerPixel()
     {
         return radiansPerPixel;
+    }
+
+    /**
+     * Sets whether vertical look is inverted.
+     *
+     * <p>Takes effect on the next {@link #latch} — never mid-tic, so a player
+     * flipping the switch cannot get half a tic of rotation each way.</p>
+     *
+     * @param inverted true to make mouse-away aim down
+     */
+    public void setInvertPitch(final boolean inverted)
+    {
+        this.invertPitch = inverted;
+    }
+
+    /**
+     * Returns whether vertical look is inverted.
+     *
+     * @return true if mouse-away aims down
+     */
+    public boolean isInvertPitch()
+    {
+        return invertPitch;
     }
 
     /**

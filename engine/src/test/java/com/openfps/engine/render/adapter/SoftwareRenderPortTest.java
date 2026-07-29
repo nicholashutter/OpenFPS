@@ -700,9 +700,9 @@ final class SoftwareRenderPortTest
         @DisplayName("a tagged entity is outlined, and the outline is inside its silhouette")
         void shouldOutlineATaggedEntity()
         {
-            final SoftwareRenderPort port = renderScene(Scene.builder()
+            final SoftwareRenderPort port = renderOutlined(Scene.builder()
                 .addWorldInstance(quad(NEAR_COLOR), Mat4.identity(), PLAYER_ID)
-                .build(), sceneCamera(), null);
+                .build(), sceneCamera());
             final int[] frame = copy(port);
 
             assertThat(colorsIn(frame))
@@ -711,6 +711,34 @@ final class SoftwareRenderPortTest
             assertThat(pixel(frame, HALF_WIDTH, HALF_HEIGHT))
                 .as("the middle of the entity is not an edge")
                 .isEqualTo(NEAR_COLOR);
+            port.shutdown();
+        }
+
+        @Test
+        @DisplayName("a tagged entity is NOT outlined unless the outline is switched on")
+        void shouldNotOutlineByDefault()
+        {
+            // The regression guard for a real report: every opponent glowed
+            // permanently, and a highlight on an enemy reads as a hit or damage
+            // marker to anyone playing. Tagging is for attributing hits, not
+            // for drawing attention — and hitscan is resolved from geometry, so
+            // the id buffer is still produced and still correct here.
+            final SoftwareRenderPort port = renderScene(Scene.builder()
+                .addWorldInstance(quad(NEAR_COLOR), Mat4.identity(), PLAYER_ID)
+                .build(), sceneCamera(), null);
+
+            assertThat(port.isOutlineEnabled())
+                .as("off until asked")
+                .isFalse();
+            assertThat(port.scene().hasTaggedEntities())
+                .as("the scene really is tagged — this is not passing by accident")
+                .isTrue();
+            assertThat(port.framebuffer().entityIdAt(HALF_WIDTH, HALF_HEIGHT))
+                .as("and the id buffer is still written, so hits stay attributable")
+                .isEqualTo(PLAYER_ID);
+            assertThat(colorsIn(copy(port)))
+                .as("but no silhouette was painted")
+                .doesNotContain(OutlinePass.OUTLINE_COLOR);
             port.shutdown();
         }
 
@@ -745,12 +773,12 @@ final class SoftwareRenderPortTest
             // Two players standing in a line. A naive "is my neighbour
             // untagged" edge test finds nothing along their junction and draws
             // one blob; comparing ids finds it.
-            final SoftwareRenderPort port = renderScene(Scene.builder()
+            final SoftwareRenderPort port = renderOutlined(Scene.builder()
                 .addWorldInstance(quad(NEAR_COLOR),
                     Mat4.translation(-QUAD_HALF, 0.0f, 0.0f), PLAYER_ID)
                 .addWorldInstance(quad(FAR_COLOR),
                     Mat4.translation(QUAD_HALF, 0.0f, -0.5f), SECOND_PLAYER_ID)
-                .build(), sceneCamera(), null);
+                .build(), sceneCamera());
             final int[] frame = copy(port);
 
             // The junction runs down the middle of the frame, where the two
@@ -772,6 +800,10 @@ final class SoftwareRenderPortTest
                 newPort(null, SoftwareRenderPort.BACKFACE_CULL_MODE);
             port.resize(WIDTH, HEIGHT);
             port.setCamera(sceneCamera());
+            // Without this the "no ghost" assertion below passes for the wrong
+            // reason: nothing is outlined anywhere, so of course the vacated
+            // columns are clean.
+            port.setOutlineEnabled(true);
 
             port.setScene(taggedAt(-GHOST_SHIFT));
             port.renderFrame(0);
@@ -818,9 +850,9 @@ final class SoftwareRenderPortTest
         @DisplayName("a tagged scene costs exactly one more parallel pass")
         void shouldCostOneExtraPassWhenSomethingIsTagged()
         {
-            final SoftwareRenderPort port = renderScene(Scene.builder()
+            final SoftwareRenderPort port = renderOutlined(Scene.builder()
                 .addWorldInstance(quad(NEAR_COLOR), Mat4.identity(), PLAYER_ID)
-                .build(), sceneCamera(), null);
+                .build(), sceneCamera());
 
             assertThat(port.lastFrameParallelPasses()).isEqualTo(PASSES_PER_PASS + 1);
             port.shutdown();
@@ -1173,6 +1205,27 @@ final class SoftwareRenderPortTest
         {
             port.setCamera(camera);
         }
+        port.setScene(scene);
+        port.renderFrame(0);
+        return port;
+    }
+
+    // Renders one frame with entity silhouettes switched on.
+    //
+    // The outline is OFF by default — it is a debug aid, and a permanent
+    // highlight on every opponent reads as a hit marker to anyone playing. So
+    // a test that asserts on outline pixels has to ask for it, which is also
+    // the honest shape: the assertion and the switch that makes it true sit in
+    // the same place.
+    private static SoftwareRenderPort renderOutlined(final Scene scene, final Camera camera)
+    {
+        final SoftwareRenderPort port = newPort(null, SoftwareRenderPort.BACKFACE_CULL_MODE);
+        port.resize(WIDTH, HEIGHT);
+        if (camera != null)
+        {
+            port.setCamera(camera);
+        }
+        port.setOutlineEnabled(true);
         port.setScene(scene);
         port.renderFrame(0);
         return port;

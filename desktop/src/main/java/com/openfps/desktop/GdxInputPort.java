@@ -570,7 +570,24 @@ public final class GdxInputPort implements I_InputPort
     }
 
     // One frame of relative motion, in screen orientation. The accumulator
-    // owns the units and the pitch sign.
+    // owns the units and the invert preference.
+    //
+    // THE VERTICAL DELTA IS NEGATED, and that is not a style choice. The
+    // accumulator's contract is "+y downward", the screen convention, and it
+    // negates once to reach positive-is-up. Feeding it getDeltaY() raw produced
+    // a camera that plays inverted: pushing the mouse away aimed down. So this
+    // backend hands over the sign the contract asks for rather than the sign it
+    // happens to receive.
+    //
+    // Fixed here rather than in InputAccumulator because the accumulator is
+    // shared with Android, where a drag up already tilts up correctly. Flipping
+    // the shared multiply fixed the mouse and broke the touchscreen — the
+    // Android look test caught it immediately, which is the whole argument for
+    // putting a platform's correction inside that platform's adapter.
+    //
+    // A player who WANTS inverted look gets it from
+    // InputAccumulator.setInvertPitch, which is a preference layered on top of
+    // this and deliberately not the same knob.
     private void pollLook(final Input input)
     {
         if (discardNextLook)
@@ -579,7 +596,7 @@ public final class GdxInputPort implements I_InputPort
             accumulator.resetLook();
             return;
         }
-        accumulator.accumulateLook(input.getDeltaX(), input.getDeltaY());
+        accumulator.accumulateLook(input.getDeltaX(), -input.getDeltaY());
     }
 
     // Hands the cursor back on the way out. Skipped headless, and skipped when
