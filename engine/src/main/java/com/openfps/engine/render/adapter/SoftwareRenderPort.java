@@ -2493,6 +2493,43 @@ public final class SoftwareRenderPort implements I_RenderPort
      * turns away: the demo scene measures 20 with its smoke in view and 8 with
      * the smoke culled. Do not read a fixed number out of this.</p>
      *
+     * <h2>How much a barrier actually costs — MEASURED, and it is not much</h2>
+     *
+     * <p>This number was the headline suspect for the resolution-independent
+     * cost, on the reasonable theory that a publish/join boundary is pure
+     * overhead every worker pays. <b>It was measured, and on a 22-thread desktop
+     * host the boundaries are cheap enough that removing them is not worth
+     * doing.</b> Recorded here so the experiment is not repeated:</p>
+     *
+     * <ul>
+     *   <li>A frame is full of small passes — the viewmodel is one model, a
+     *       smoke run is three lobes — and each pays four boundaries to spread a
+     *       few hundred triangles. Running the three <i>geometry-bound</i>
+     *       dispatches of a small pass on the calling thread instead removes
+     *       three boundaries per small pass and is <b>bit-identical by the
+     *       pooled-equals-serial invariant</b>, so it was safe to try.</li>
+     *   <li>At a 2048-triangle threshold, over three interleaved A/B rounds at
+     *       640x360 on eight workers, the result was <b>inconsistent in sign and
+     *       inside the run-to-run noise</b>: one pose slightly better, the other
+     *       slightly worse, and under load the viewmodel-heavy pose was clearly
+     *       worse at 1280x720 because the serial work cost more than the
+     *       boundaries saved.</li>
+     *   <li>That last point is the useful one, and it is a direct measurement
+     *       rather than an inference: <b>a boundary here costs less than the
+     *       serial execution of the few hundred triangles it was distributing.</b>
+     *       So the remaining barrier count is not where a frame's fixed cost is
+     *       going on this hardware, and the invasive options — folding the
+     *       count-then-scatter pair in {@link Rasterizer#setupAndBin} into one
+     *       pass, which needs the serial prefix sum between them gone — are not
+     *       justified by anything measured.</li>
+     * </ul>
+     *
+     * <p><b>This conclusion is hardware-specific and should be re-measured on a
+     * phone before it is trusted there.</b> The original 5.4x-pixels-for-2.9x-time
+     * observation came from an Android emulator, whose scheduler and core count
+     * are nothing like a desktop's, and no barrier measurement has been taken on
+     * one.</p>
+     *
      * @return the last frame's parallel pass count, or zero before the first
      *     frame
      */
