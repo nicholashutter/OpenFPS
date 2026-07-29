@@ -346,6 +346,91 @@ public final class SpanRenderer
         }
     }
 
+    /**
+     * The translucent counterpart of {@code renderFlat}: coverage and a depth
+     * <i>test</i>, one constant colour composited over what is already there.
+     *
+     * <p>Package-private and driven directly by its tests until the translucent
+     * phase that will call it exists. It is written as a separate loop rather
+     * than a flag inside the opaque one on purpose — the opaque path is the
+     * hottest code in the engine and stays branch-free.</p>
+     *
+     * <h2>Three differences from the opaque loop, all of them required</h2>
+     *
+     * <ul>
+     *   <li><b>Depth is tested but never written.</b> A translucent fragment
+     *       does not occlude what is behind it — that is what translucent
+     *       means. Writing depth here would have the first puff of smoke punch
+     *       a hole in the room, because everything drawn afterwards would fail
+     *       the test against it.</li>
+     *   <li><b>Entity ids are not written.</b> An id names the thing a hit is
+     *       attributed to, and a fragment you can see through is not that
+     *       thing. Letting smoke overwrite the id under the crosshair would
+     *       make it own hits that belong to whatever it is drifting in front
+     *       of.</li>
+     *   <li><b>The colour buffer is read.</b> Every other pass writes only.
+     *       This is safe for exactly one reason: the tile pass gives each
+     *       worker sole ownership of its tile, so a read-modify-write inside
+     *       one is uncontended. It would not be safe in a pass that crosses
+     *       tile boundaries — see {@code Crosshair}, which must therefore run
+     *       serially after the join.</li>
+     * </ul>
+     *
+     * <p>Because depth is not written, the caller owes this method
+     * back-to-front order. Blending is not commutative: two puffs composited
+     * in the wrong order give different pixels.</p>
+     *
+     * @param target the framebuffer to draw into
+     * @param records the packed triangle setup records
+     * @param base offset of this triangle's record
+     * @param flatColor the source colour, packed {@code 0xRRGGBBAA}
+     * @param coverage source coverage, 0-255; 255 is indistinguishable from
+     *     the opaque loop except that it still writes no depth
+     * @param minX left edge of the tile, inclusive
+     * @param minY top edge of the tile, inclusive
+     * @param maxX right edge of the tile, inclusive
+     * @param maxY bottom edge of the tile, inclusive
+     */
+    void renderFlatBlended(final Framebuffer target, final float[] records, final int base,
+        final int flatColor, final int coverage, final int minX, final int minY,
+        final int maxX, final int maxY)
+    {
+        final int[] color = target.colorBuffer();
+        final float[] depth = target.depthBuffer();
+        final int stride = target.strideInPixels();
+
+        final float e0dx = records[base + Rasterizer.EDGE0_DX];
+        final float e1dx = records[base + Rasterizer.EDGE1_DX];
+        final float e2dx = records[base + Rasterizer.EDGE2_DX];
+        final float bias0 = records[base + Rasterizer.EDGE0_BIAS];
+        final float bias1 = records[base + Rasterizer.EDGE1_BIAS];
+        final float bias2 = records[base + Rasterizer.EDGE2_BIAS];
+        final float wdx = records[base + Rasterizer.INV_W_DX];
+
+        for (int py = minY; py <= maxY; py++)
+        {
+            final float row0 = rowConstant(records, base + Rasterizer.EDGE0_DY, py);
+            final float row1 = rowConstant(records, base + Rasterizer.EDGE1_DY, py);
+            final float row2 = rowConstant(records, base + Rasterizer.EDGE2_DY, py);
+            final float rowW = rowConstant(records, base + Rasterizer.INV_W_DY, py);
+            final int rowBase = py * stride;
+            for (int px = minX; px <= maxX; px++)
+            {
+                if (!covered(e0dx, row0, bias0, e1dx, row1, bias1, e2dx, row2, bias2, px))
+                {
+                    continue;
+                }
+                final float invW = wdx * px + rowW;
+                final int index = rowBase + px;
+                if (!(invW > depth[index]))
+                {
+                    continue;
+                }
+                color[index] = Rgba.srcOver(flatColor, color[index], coverage);
+            }
+        }
+    }
+
     // Attributes 0, 1 and 2 interpolated perspective-correctly as R, G and B.
     private void renderVertexColor(final Framebuffer target, final float[] records,
         final int base, final int[] ids, final int entityId, final int minX, final int minY,
