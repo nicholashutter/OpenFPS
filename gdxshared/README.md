@@ -116,6 +116,48 @@ only ever reaches its stops, so `setMovementKeys` reduces to `setMovementAxes`
 and the Android thumbstick uses the analog path directly. Nothing downstream can
 tell which produced a given `InputState`.
 
+A gamepad is a **second channel, not a second mode**: every pad reading is stored
+beside the keyboard/touch reading and `latch()` sums the two, so a player may
+walk with the stick and turn with the mouse in one tic and neither device can
+zero the other by being polled second. `clearGamepad()` empties that channel
+alone — which is what a controller unplugged at full deflection needs, and why it
+is not simply `clearAll()`.
+
+## A mouse and a stick are different kinds of quantity
+
+The one thing in this module most expensive to get wrong. A mouse reports a
+**displacement** — an integral, so it is summed and drained exactly once by
+`getAndSet`. A held stick reports a **position**, meaning "keep turning at this
+rate", so it is *overwritten* by each poll and converted exactly once per tic:
+
+    radians = deflection × GAMEPAD_LOOK_RADIANS_PER_SECOND × ticDuration
+
+The poll count cancels out of that expression entirely, which is the whole point.
+Push a held stick through the pixel accumulator instead and a 144 Hz machine
+banks twice the contributions of a 72 Hz one — so the player spins twice as fast
+for the same thumb, on the same game, because of vsync. `latch()` is the right
+home for the conversion because it is the only thing here that happens exactly
+once per tic, which is the interval being integrated over.
+
+`setTicDuration` is how the accumulator learns that interval. It cannot ask: the
+frame rate is `engine.core` configuration and this module is a platform adapter,
+so each launcher tells it.
+
+## `AnalogStick` holds every number a player can feel
+
+The dead zone is **radial, on the pair** — never per-axis. A per-axis threshold
+makes the ignored region a square, so a stick pushed diagonally escapes it while
+one pushed the same physical distance along a cardinal does not; the player
+experiences that as a smaller dead zone diagonally than straight ahead, and as
+diagonals snapping to a cardinal as they cross the boundary. A circle has no
+corners.
+
+It is **rescaled rather than clipped**, so the dead zone costs resolution instead
+of range and output rises continuously from zero. A resting stick returns
+*exactly* `0.0f`, not something small — a value that merely rounds to nothing
+still fails `InputState.isNeutral()`, which would send a non-neutral tic command
+every tic of an idle player.
+
 ## Files
 
 | File | What it does |
@@ -123,7 +165,8 @@ tell which produced a given `InputState`.
 | `FramebufferPresenter.java` | Uploads R_'s finished frame and draws it fullscreen |
 | `RenderMode.java` | 480p / 720p / native, and the surface-to-framebuffer arithmetic |
 | `RenderSettings.java` | The switch the settings screen cycles; the presenter listens |
-| `InputAccumulator.java` | Accumulate-and-latch between platform and tic rates |
+| `InputAccumulator.java` | Accumulate-and-latch between platform and tic rates; mouse displacement and stick rate |
+| `AnalogStick.java` | Radial dead zone, response curve, trigger threshold — no toolkit imports |
 | `UiState.java` / `UiStateMachine.java` | Menu or game, and what each permits |
 | `MenuActions.java` | What the menu can ask the application to do |
 | `DefaultMenuActions.java` | The default wiring — Quit goes through `I_WindowPort` |
