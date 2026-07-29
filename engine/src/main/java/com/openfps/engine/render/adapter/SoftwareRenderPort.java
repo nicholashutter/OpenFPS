@@ -106,6 +106,72 @@ import org.slf4j.LoggerFactory;
  * batched. The parallel machinery was never the problem; the granularity
  * was.</p>
  *
+ * <h2>An instance the camera cannot see is not transformed at all</h2>
+ *
+ * <p>Batching fixed the barrier count but left something else untouched:
+ * <b>every instance in the scene was transformed and clipped every frame
+ * regardless of where the camera looked</b>. A room is a box the player stands
+ * inside, so much of it is behind the eye at any moment, and the pipeline
+ * discovered that only after transforming every vertex of it — the near clip
+ * emitted nothing, or the rasterizer's screen bounding box missed the
+ * viewport.</p>
+ *
+ * <p>{@link #packVisibleWorld} now asks {@link InstanceCull} the same question
+ * one instance earlier, from the packed transform it has just built and the
+ * model's own bounding box, and appends only the survivors to the stream.
+ * {@link #sortBackToFront} does the same for the translucent phase, where it
+ * additionally collapses the run count — see that method.</p>
+ *
+ * <p><b>The measured effect, and it is smaller than it first looked.</b> The
+ * demo room, 340 world instances, all four {@code :tools:demoPreview} poses at
+ * 640x360 on eight workers, with the culling and non-culling builds compiled and
+ * run alternately in one session:</p>
+ *
+ * <pre>
+ *   pose                triangles   dispatches   best     p50
+ *   01 down the room  7400 -&gt; 6556   57 -&gt; 57    -4.0%   -1.4%
+ *   02 corner         1425 -&gt;  617   20 -&gt;  8    -9.5%  -13.7%
+ *   03 weapon at wall  963 -&gt;  448   20 -&gt;  8    -0.3%   -6.3%
+ *   04 after movement  788 -&gt;  416   20 -&gt;  8    -7.0%   -5.4%
+ * </pre>
+ *
+ * <p>The triangle and dispatch counts are exact. <b>The frame-time gain is real
+ * but modest — about 5% averaged over the poses, consistently signed but only a
+ * small multiple of the run-to-run noise.</b> Do not quote it as more than that,
+ * and do not quote pose 02 or 04 alone: the first table this Javadoc carried did
+ * exactly that and overstated the change threefold.</p>
+ *
+ * <p><b>Pose 01 is the honest case and it is the least impressive.</b> Looking
+ * down the length of an open room is a normal thing to do, and there the cull
+ * removes 11% of the triangles and not one dispatch. A single open room is close
+ * to the worst case for frustum culling; the gain grows with occlusion and with
+ * scenes larger than one room, and neither exists yet.</p>
+ *
+ * <p>Why the gain is small, which is more useful than the number: the geometry
+ * removed was <b>already spread over eight workers</b>, so several thousand
+ * triangles of transform-and-clip is a fraction of a millisecond of wall time.
+ * Whatever dominates the resolution-independent cost, it is mostly not this.</p>
+ *
+ * <p>Pose 01's 57 dispatches are largely an artefact of the preview tool, which
+ * never publishes {@code DemoEffects}: all 36 smoke lobes therefore sit at the
+ * origin at unit scale and are genuinely visible. A running game has one puff
+ * stage live at a time, whose three lobes share a coverage and so form one
+ * run.</p>
+ *
+ * <p><b>The image does not change, and that is checked rather than argued.</b>
+ * {@link InstanceCull}'s Javadoc carries the proof that a culled instance could
+ * not have produced a pixel; the four {@code :tools:demoPreview} reference
+ * frames are byte-identical across the change; and the pooled-equals-serial
+ * bit-identity tests are unaffected because culling happens once, on the frame
+ * thread, before any worker starts.</p>
+ *
+ * <p><b>Nothing the simulation can see depends on this.</b> Hitscan is resolved
+ * from geometry rather than from the id buffer
+ * ({@code DemoGameplayPort.fireIfRequested}), precisely so that hit detection
+ * cannot depend on resolution or worker count. Culling is one more thing it must
+ * not depend on, and it does not: the cull is read by the geometry pass and by
+ * nothing else.</p>
+ *
  * <p><b>The result is bit-for-bit what rendering instances one at a time
  * produced</b>, and that is a property of the ordering rather than a hope.
  * Instances are laid into the stream in submission order, {@link Rasterizer}
@@ -423,13 +489,7 @@ public final class SoftwareRenderPort implements I_RenderPort
      */
     private volatile MipChain[] sceneTextures;
 
-    /**
-     * Where each world instance's triangles begin in the batched stream, with a
-     * terminator holding the pass total. MUTABLE: rebuilt by {@link #setScene}.
-     */
-    private volatile int[] worldStarts;
-
-    /** The same for the view pass. MUTABLE: rebuilt by {@link #setScene}. */
+    /** The view pass's stream offsets. MUTABLE: rebuilt by {@link #setScene}. */
     private volatile int[] viewStarts;
 
     /**
@@ -443,19 +503,12 @@ public final class SoftwareRenderPort implements I_RenderPort
     private volatile int[] worldEntityIds;
 
     /**
-     * One packed model-to-clip transform per world instance,
-     * {@link Camera#WORLD_TO_CLIP_FLOATS} floats each. MUTABLE: every slot is
-     * rewritten once per frame, before the geometry pass reads any of them.
-     */
-    private volatile float[] worldTransforms;
-
-    /**
      * Per-instance placement overrides, or null when the scene has none.
      *
      * <p>MUTABLE: the array is allocated by {@link #setScene}, and individual
      * slots are replaced by {@link #setWorldTransform} from the game loop
      * thread while the render workers read them. A slot holds null until
-     * something moves that instance, and {@link #packWorld} falls back to the
+     * something moves that instance, and {@link #packVisibleWorld} falls back to the
      * {@link Scene}'s own transform for every null.</p>
      *
      * <p><b>This is how anything moves.</b> {@link Scene} is immutable and that
@@ -478,6 +531,58 @@ public final class SoftwareRenderPort implements I_RenderPort
      * patrolling body.</p>
      */
     private volatile Mat4[] worldOverrides;
+
+    /**
+     * The opaque world instances the frustum cull kept this frame, in scene
+     * order, filling the leading {@code visibleWorldCount} slots. MUTABLE:
+     * sized by {@link #setScene}, refilled every frame.
+     *
+     * <p>Scene order is preserved rather than merely "some order", and that is
+     * the whole of the bit-identity argument for culling: removing entries from
+     * a sequence does not reorder the ones that remain, so every surviving
+     * triangle still reaches the rasterizer in the position it always did and
+     * every pixel still sees the same triangles in the same sequence.</p>
+     */
+    private volatile Instance[] visibleWorld;
+
+    /**
+     * Where each kept instance's triangles begin in the batched stream, with a
+     * terminator holding the pass total.
+     *
+     * <p>Per <b>frame</b> rather than per scene, which is the one structural
+     * consequence of culling: the stream is now the visible instances rather
+     * than all of them, so the offsets into it change as the camera turns.
+     * MUTABLE: sized by {@link #setScene}, refilled every frame.</p>
+     */
+    private volatile int[] visibleWorldStarts;
+
+    /**
+     * One packed model-to-clip transform per kept instance,
+     * {@link Camera#WORLD_TO_CLIP_FLOATS} floats each.
+     *
+     * <p>MUTABLE: refilled every frame, before the geometry pass reads any of
+     * it. An instance is packed into the slot it <i>would</i> occupy and then
+     * tested; a cull simply leaves the slot to be overwritten by the next
+     * survivor, so the cull needs no scratch buffer of its own.</p>
+     */
+    private volatile float[] visibleWorldTransforms;
+
+    /**
+     * Entity ids for {@link #visibleWorld}, or null when the opaque partition
+     * tags nothing. MUTABLE: refilled per frame.
+     */
+    private volatile int[] visibleWorldIds;
+
+    /**
+     * One packed transform, reused by the translucent cull.
+     *
+     * <p>The opaque pass packs straight into the slot the instance will occupy
+     * if it survives, so it needs no scratch. The translucent phase cannot: it
+     * decides visibility before it knows the sorted order, and therefore before
+     * it knows which slot anything lands in. MUTABLE: overwritten per instance,
+     * on the frame thread only.</p>
+     */
+    private final float[] cullTransform = new float[Camera.WORLD_TO_CLIP_FLOATS];
 
     /** The same for the view pass, packed view-to-clip. MUTABLE: rewritten per frame. */
     private volatile float[] viewTransforms;
@@ -959,9 +1064,8 @@ public final class SoftwareRenderPort implements I_RenderPort
         final Instance[] opaque = subset(world, solid);
         this.worldSceneIndex = solid;
         this.worldInstances = opaque;
-        this.worldStarts = streamOffsets(opaque);
         this.worldEntityIds = entityIdsFor(newScene, solid);
-        this.worldTransforms = new float[opaque.length * Camera.WORLD_TO_CLIP_FLOATS];
+        bindVisibleWorld(opaque.length, worldEntityIds != null);
 
         bindTranslucent(newScene, world, sceneIndices(newScene, true));
 
@@ -973,6 +1077,25 @@ public final class SoftwareRenderPort implements I_RenderPort
         this.viewTransforms = new float[hand.length * Camera.WORLD_TO_CLIP_FLOATS];
         this.viewInstances = hand;
         this.scene = newScene;
+    }
+
+    // Sizes the opaque pass's per-frame tables for the worst case — nothing
+    // culled — so that the cull itself never allocates however the camera moves.
+    //
+    // The id table is allocated only when the opaque partition tags something,
+    // because null there is the switch for the whole outline feature and a
+    // freshly allocated array of zeroes would silently turn it on.
+    private void bindVisibleWorld(final int count, final boolean tagged)
+    {
+        this.visibleWorld = new Instance[count];
+        this.visibleWorldStarts = new int[count + 1];
+        this.visibleWorldTransforms = new float[count * Camera.WORLD_TO_CLIP_FLOATS];
+        if (tagged)
+        {
+            this.visibleWorldIds = new int[count];
+            return;
+        }
+        this.visibleWorldIds = null;
     }
 
     // Prepares the translucent phase's tables, or clears them all to null when
@@ -1255,7 +1378,56 @@ public final class SoftwareRenderPort implements I_RenderPort
         }
         final int triangles = source.triangleCount();
         return new Instance(source, buildTriangleMaterials(source, triangles),
-            buildTriangleColors(source, triangles), buildTextures(source));
+            buildTriangleColors(source, triangles), buildTextures(source),
+            buildBounds(source));
+    }
+
+    // The model-space bounding box the frustum cull tests, measured HERE from
+    // the vertex block rather than read from ModelFormat's bounds accessors.
+    //
+    // That is not redundancy for its own sake. ModelFormat's box is a header
+    // field written offline by GltfConverter and never checked against the
+    // vertices on load — which was harmless while the only consumer was the
+    // orbit camera, where a wrong box frames a model badly and nothing worse.
+    // A cull is a different contract: a box that understates the geometry
+    // deletes part of the world, silently, and only from some angles. So the
+    // box the cull trusts is derived from the same array the geometry pass
+    // transforms, once per distinct model per setScene, and cannot disagree
+    // with it.
+    private static float[] buildBounds(final ModelFormat source)
+    {
+        final float[] box = new float[InstanceCull.BOX_FLOATS];
+        final int vertices = source.vertexCount();
+        if (vertices == 0)
+        {
+            return box;
+        }
+        // MUTABLE locals — the running box over the vertex block.
+        float minX = source.positionX(0);
+        float minY = source.positionY(0);
+        float minZ = source.positionZ(0);
+        float maxX = minX;
+        float maxY = minY;
+        float maxZ = minZ;
+        for (int vertex = 1; vertex < vertices; vertex++)
+        {
+            final float x = source.positionX(vertex);
+            final float y = source.positionY(vertex);
+            final float z = source.positionZ(vertex);
+            minX = Math.min(minX, x);
+            minY = Math.min(minY, y);
+            minZ = Math.min(minZ, z);
+            maxX = Math.max(maxX, x);
+            maxY = Math.max(maxY, y);
+            maxZ = Math.max(maxZ, z);
+        }
+        box[0] = minX;
+        box[1] = minY;
+        box[2] = minZ;
+        box[3] = maxX;
+        box[4] = maxY;
+        box[5] = maxZ;
+        return box;
     }
 
     // Flattens the submesh table into one material index per triangle. A
@@ -1380,11 +1552,14 @@ public final class SoftwareRenderPort implements I_RenderPort
             framebuffer.clearEntityIds();
         }
 
-        final Instance[] world = worldInstances;
-        packWorld(current, view, world.length);
+        // Packs and culls in one walk: an instance the frustum cannot see is
+        // never transformed, never clipped, and never reaches the stream. When
+        // the whole opaque partition is culled the pass costs no parallel
+        // dispatches at all, because renderPass sees a zero triangle total.
+        final int visible = packVisibleWorld(current, view, tagged);
         // MUTABLE local — triangles the whole scene handed the rasterizer.
-        int triangles = renderPass(world, world.length, worldStarts, worldTransforms, tagged,
-            spanRenderer, sceneTextures, workers);
+        int triangles = renderPass(visibleWorld, visible, visibleWorldStarts,
+            visibleWorldTransforms, visibleWorldIds, spanRenderer, sceneTextures, workers);
 
         // Who the player is pointing at, sampled once, from the finished world
         // pass. Both the outline and the reticle are driven from this single
@@ -1498,22 +1673,53 @@ public final class SoftwareRenderPort implements I_RenderPort
         return framebuffer.entityIdAt(framebuffer.width() / 2, framebuffer.height() / 2);
     }
 
-    // Concatenates every world instance's placement into the camera's packed
-    // transform, one slot each. Once per instance per frame, exactly as before
-    // — the batched geometry pass simply needs them all at once rather than one
-    // at a time, so they go into slots instead of over the top of each other.
-    private void packWorld(final Scene current, final Camera view, final int count)
+    // Concatenates every opaque world instance's placement into the camera's
+    // packed transform, and drops the ones the frustum cannot see. Returns how
+    // many were kept.
+    //
+    // Pack-then-test rather than test-then-pack: the cull is expressed in the
+    // packed transform's own coefficients (InstanceCull pulls each clip-space
+    // frustum plane back through it into model space), so the packing is the
+    // input to the decision rather than a cost the decision could avoid. It is
+    // 48 multiplies against a saving of the whole instance.
+    //
+    // The write cursor is what makes the result bit-identical: survivors are
+    // appended in scene order, so the stream is the old stream with entries
+    // deleted, never rearranged.
+    private int packVisibleWorld(final Scene current, final Camera view, final int[] tagged)
     {
-        final float[] slots = worldTransforms;
+        final Instance[] all = worldInstances;
+        final Instance[] kept = visibleWorld;
+        final int[] starts = visibleWorldStarts;
+        final float[] slots = visibleWorldTransforms;
+        final int[] keptIds = visibleWorldIds;
         final Mat4[] moved = worldOverrides;
         // The pass position and the scene index are the same number only for an
         // entirely opaque scene; the override table is addressed by the latter.
         final int[] sceneOf = worldSceneIndex;
-        for (int index = 0; index < count; index++)
+        final float near = view.near();
+
+        starts[0] = 0;
+        // MUTABLE local — the write cursor, and therefore the kept count.
+        int count = 0;
+        for (int index = 0; index < all.length; index++)
         {
-            view.packModelToClip(placementOf(current, moved, sceneOf[index]), slots,
-                index * Camera.WORLD_TO_CLIP_FLOATS);
+            final int at = count * Camera.WORLD_TO_CLIP_FLOATS;
+            view.packModelToClip(placementOf(current, moved, sceneOf[index]), slots, at);
+            final Instance instance = all[index];
+            if (InstanceCull.isOutsideFrustum(slots, at, near, instance.bounds, 0))
+            {
+                continue;
+            }
+            kept[count] = instance;
+            starts[count + 1] = starts[count] + instance.model.triangleCount();
+            if (keptIds != null)
+            {
+                keptIds[count] = tagged[index];
+            }
+            count++;
         }
+        return count;
     }
 
     // Where one world instance actually is this frame: its override if something
@@ -1629,7 +1835,7 @@ public final class SoftwareRenderPort implements I_RenderPort
         {
             return 0;
         }
-        sortBackToFront(current, view, indices);
+        final int visible = sortBackToFront(current, view, indices);
 
         final int[] order = translucentOrder;
         final int[] coverage = translucentCoverage;
@@ -1637,12 +1843,12 @@ public final class SoftwareRenderPort implements I_RenderPort
         // the sorted list one equal-coverage run at a time.
         int triangles = 0;
         int from = 0;
-        while (from < order.length)
+        while (from < visible)
         {
             final int level = coverage[order[from]];
             // MUTABLE local — the end of the run starting at `from`.
             int to = from;
-            while (to < order.length && coverage[order[to]] == level)
+            while (to < visible && coverage[order[to]] == level)
             {
                 to++;
             }
@@ -1652,8 +1858,21 @@ public final class SoftwareRenderPort implements I_RenderPort
         return triangles;
     }
 
-    // Fills the sort key of every translucent instance and orders the slots
-    // farthest first.
+    // Fills the sort key of every VISIBLE translucent instance and orders those
+    // slots farthest first. Returns how many there are — the leading part of
+    // `order` that means anything.
+    //
+    // Culling here does something the opaque pass's cull does not: it collapses
+    // the RUN COUNT. Runs are cut at coverage changes in the sorted order, so a
+    // puff of a different coverage sitting between two others splits them into
+    // three passes — twelve parallel dispatches — even when it is behind the
+    // camera and draws nothing. Dropping it first merges its neighbours into
+    // one run and one pass. That is the largest single barrier saving in the
+    // demo scene, and it is a consequence of the cull rather than a separate
+    // mechanism.
+    //
+    // Removing entries cannot change the relative order of the ones that remain,
+    // so the surviving puffs still composite in exactly the sequence they did.
     //
     // The key is the instance origin's distance along the camera's forward
     // axis — its view-space z. Taken from the placement's translation column
@@ -1666,25 +1885,36 @@ public final class SoftwareRenderPort implements I_RenderPort
     // a little rather than teleport, and it allocates nothing. The comparison
     // is strict, so equal depths keep scene order — which is what makes the
     // frame reproducible when two puffs sit at the same distance.
-    private void sortBackToFront(final Scene current, final Camera view, final int[] indices)
+    private int sortBackToFront(final Scene current, final Camera view, final int[] indices)
     {
         final Mat4[] moved = worldOverrides;
         final Vec3 eye = view.eye();
         final Vec3 forward = view.forward();
         final float[] depths = translucentDepth;
         final int[] order = translucentOrder;
+        final Instance[] all = translucentInstances;
+        final float[] scratch = cullTransform;
+        final float near = view.near();
 
+        // MUTABLE local — the write cursor into the visible prefix of `order`.
+        int visible = 0;
         for (int slot = 0; slot < indices.length; slot++)
         {
             final Mat4 placement = placementOf(current, moved, indices[slot]);
+            view.packModelToClip(placement, scratch, 0);
+            if (InstanceCull.isOutsideFrustum(scratch, 0, near, all[slot].bounds, 0))
+            {
+                continue;
+            }
             final float dx = placement.get(0, Mat4.ORDER - 1) - eye.x();
             final float dy = placement.get(1, Mat4.ORDER - 1) - eye.y();
             final float dz = placement.get(2, Mat4.ORDER - 1) - eye.z();
             depths[slot] = dx * forward.x() + dy * forward.y() + dz * forward.z();
-            order[slot] = slot;
+            order[visible] = slot;
+            visible++;
         }
 
-        for (int slot = 1; slot < order.length; slot++)
+        for (int slot = 1; slot < visible; slot++)
         {
             final int moving = order[slot];
             final float depth = depths[moving];
@@ -1697,6 +1927,7 @@ public final class SoftwareRenderPort implements I_RenderPort
             }
             order[gap + 1] = moving;
         }
+        return visible;
     }
 
     // One maximal run of equal coverage, in the order the sort put it.
@@ -2257,6 +2488,48 @@ public final class SoftwareRenderPort implements I_RenderPort
      * coverage in the back-to-front order, which for effects that share one
      * coverage is four however many of them are on screen.</p>
      *
+     * <p><b>Eight is now the ceiling rather than the figure.</b> A pass with
+     * nothing visible in it dispatches nothing, so the count falls as the camera
+     * turns away: the demo scene measures 20 with its smoke in view and 8 with
+     * the smoke culled. Do not read a fixed number out of this.</p>
+     *
+     * <h2>How much a barrier actually costs — MEASURED, and it is not much</h2>
+     *
+     * <p>This number was the headline suspect for the resolution-independent
+     * cost, on the reasonable theory that a publish/join boundary is pure
+     * overhead every worker pays. <b>It was measured, and on a 22-thread desktop
+     * host the boundaries are cheap enough that removing them is not worth
+     * doing.</b> Recorded here so the experiment is not repeated:</p>
+     *
+     * <ul>
+     *   <li>A frame is full of small passes — the viewmodel is one model, a
+     *       smoke run is three lobes — and each pays four boundaries to spread a
+     *       few hundred triangles. Running the three <i>geometry-bound</i>
+     *       dispatches of a small pass on the calling thread instead removes
+     *       three boundaries per small pass and is <b>bit-identical by the
+     *       pooled-equals-serial invariant</b>, so it was safe to try.</li>
+     *   <li>At a 2048-triangle threshold, over three interleaved A/B rounds at
+     *       640x360 on eight workers, the result was <b>inconsistent in sign and
+     *       inside the run-to-run noise</b>: one pose slightly better, the other
+     *       slightly worse, and under load the viewmodel-heavy pose was clearly
+     *       worse at 1280x720 because the serial work cost more than the
+     *       boundaries saved.</li>
+     *   <li>That last point is the useful one, and it is a direct measurement
+     *       rather than an inference: <b>a boundary here costs less than the
+     *       serial execution of the few hundred triangles it was distributing.</b>
+     *       So the remaining barrier count is not where a frame's fixed cost is
+     *       going on this hardware, and the invasive options — folding the
+     *       count-then-scatter pair in {@link Rasterizer#setupAndBin} into one
+     *       pass, which needs the serial prefix sum between them gone — are not
+     *       justified by anything measured.</li>
+     * </ul>
+     *
+     * <p><b>This conclusion is hardware-specific and should be re-measured on a
+     * phone before it is trusted there.</b> The original 5.4x-pixels-for-2.9x-time
+     * observation came from an Android emulator, whose scheduler and core count
+     * are nothing like a desktop's, and no barrier measurement has been taken on
+     * one.</p>
+     *
      * @return the last frame's parallel pass count, or zero before the first
      *     frame
      */
@@ -2326,6 +2599,13 @@ public final class SoftwareRenderPort implements I_RenderPort
         private final MipChain[] textures;
 
         /**
+         * The model-space bounding box the per-instance frustum cull tests,
+         * {@link InstanceCull#BOX_FLOATS} floats. Measured from the vertex
+         * block by {@link #buildBounds}, not read from the file header.
+         */
+        private final float[] bounds;
+
+        /**
          * Where this instance's textures start in the scene-wide table.
          * MUTABLE: assigned once by {@link #buildSceneTextures}, and the guard
          * that stops a shared instance being rebased twice.
@@ -2333,12 +2613,13 @@ public final class SoftwareRenderPort implements I_RenderPort
         private int textureBase = UNASSIGNED;
 
         Instance(final ModelFormat instanceModel, final int[] materials, final int[] colors,
-            final MipChain[] instanceTextures)
+            final MipChain[] instanceTextures, final float[] modelBounds)
         {
             this.model = instanceModel;
             this.triangleMaterial = materials;
             this.triangleColor = colors;
             this.textures = instanceTextures;
+            this.bounds = modelBounds;
         }
     }
 }

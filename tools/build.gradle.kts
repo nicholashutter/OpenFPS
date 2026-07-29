@@ -141,6 +141,13 @@ tasks.register<JavaExec>("demoPreview") {
     val frames = providers.gradleProperty("demoFrames").orElse("0")
     val width = providers.gradleProperty("demoWidth").orElse("1280")
     val height = providers.gradleProperty("demoHeight").orElse("720")
+    // Which shot to render, and therefore which camera pose --frames is timed
+    // from: the measurement loop reuses whatever camera the last shot left in
+    // place. Without this the only poseable benchmark was shot 04, which looks
+    // at a corner and so flatters anything that culls; comparing it against
+    // shot 01, which looks down the whole room, is what separates a real saving
+    // from a lucky pose.
+    val shot = providers.gradleProperty("demoShot").orElse("")
     val rootDirectory = rootProject.layout.projectDirectory
 
     argumentProviders.add(CommandLineArgumentProvider {
@@ -156,7 +163,8 @@ tasks.register<JavaExec>("demoPreview") {
             "--threads=" + threads.get(),
             "--frames=" + frames.get(),
             "--width=" + width.get(),
-            "--height=" + height.get()
+            "--height=" + height.get(),
+            "--shot=" + shot.get()
         )
     })
 }
