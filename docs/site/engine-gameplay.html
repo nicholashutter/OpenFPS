@@ -53,10 +53,12 @@
 <li><a href="engine-resource.html">Resource (W_)</a></li>
 <li><a href="engine-memory.html">Memory (Z_)</a></li>
 </ul></details>
-<details class="grp" data-hue="6"><summary><span class="dot"></span>Reference<span class="count">2</span></summary>
+<details class="grp" data-hue="6"><summary><span class="dot"></span>Reference<span class="count">4</span></summary>
 <ul>
 <li><a href="assets.html">Assets and licensing</a></li>
 <li><a href="demo-assets.html">Demo asset manifest</a></li>
+<li><a href="memory.html">Memory: what OpenFPS reserves, what it churns</a></li>
+<li><a href="wasm.html">WebAssembly</a></li>
 </ul></details>
 </nav>
 <p class="generated">Generated from the repository's Markdown by <code>:tools:buildDocsSite</code>.</p>
@@ -73,6 +75,12 @@
 <li class="lv3"><a href="#invariants">Invariants</a></li>
 <li class="lv3"><a href="#determinism--a-documented-deviation-from-planmd--4">Determinism — a documented deviation from PLAN.md § 4</a></li>
 <li class="lv3"><a href="#the-input-seam">The input seam</a></li>
+<li class="lv2"><a href="#physicsworld--collision-that-slides">PhysicsWorld — collision that slides</a></li>
+<li class="lv3"><a href="#the-body">The body</a></li>
+<li class="lv3"><a href="#the-two-calls-and-why-the-order-is-fixed">The two calls, and why the order is fixed</a></li>
+<li class="lv3"><a href="#what-is-solid-in-the-demo-room">What is solid in the demo room</a></li>
+<li class="lv3"><a href="#cost-and-determinism">Cost and determinism</a></li>
+<li class="lv3"><a href="#driving-it-without-a-keyboard">Driving it without a keyboard</a></li>
 <li class="lv2"><a href="#physics-math--whats-coming">Physics math — what's coming</a></li>
 <li class="lv3"><a href="#collision-detection">Collision detection</a></li>
 <li class="lv3"><a href="#gravity">Gravity</a></li>
@@ -83,7 +91,7 @@
 <li class="lv2"><a href="#todo-phase-4">TODO (Phase 4)</a></li>
 </ul></details></aside>
 <main id="doc">
-<p class="crumb"><span class="tag">Packages</span><span class="sep">/</span><code>engine/src/main/java/com/openfps/engine/gameplay/README.md</code><span class="sep">/</span>9 min read</p>
+<p class="crumb"><span class="tag">Packages</span><span class="sep">/</span><code>engine/src/main/java/com/openfps/engine/gameplay/README.md</code><span class="sep">/</span>15 min read</p>
 <h1 id="gameplay-p_--player-entities-map-logic">Gameplay (P_) — Player, Entities, Map Logic<a class="anchor" href="#gameplay-p_--player-entities-map-logic" aria-label="Permalink">#</a></h1>
 <blockquote>
 <p>P_ is the gameplay / physics layer. Holds everything that <em>changes during play</em>.</p>
@@ -94,9 +102,9 @@
 <tbody>
 <tr><td><strong>State</strong></td><td>SHIPPING</td></tr>
 <tr><td><strong>Phase</strong></td><td>4 — the match layer landed ahead of its phase, as the controller did</td></tr>
-<tr><td><strong>Tests</strong></td><td>192</td></tr>
+<tr><td><strong>Tests</strong></td><td>257 — counted, not remembered: <code>gradlew :engine:test --tests 'com.openfps.engine.gameplay.*'</code></td></tr>
 <tr><td><strong>Registered</strong></td><td>P_ via <code>GameplaySubsystem</code></td></tr>
-<tr><td><strong>Verified</strong></td><td>2026-07-28</td></tr>
+<tr><td><strong>Verified</strong></td><td>2026-07-29</td></tr>
 </tbody>
 </table></div>
 <h3 id="the-match-layer">The match layer<a class="anchor" href="#the-match-layer" aria-label="Permalink">#</a></h3>
@@ -123,22 +131,33 @@ whatever <code>I_GameplayPort</code> its factory hands back in <code>GameplaySub
 only implementation that plays anything is <code>demo/DemoGameplayPort</code>.
 <code>gameplay/adapter/NullGameplayPort</code> is the fallback, so P_ is registered whether
 or not anything is happening.</p>
-<p><strong>Not built.</strong> Everything Phase 4 names, and none of it exists in any form:
-<code>PlayerState</code>, <code>Entity</code>, <code>PhysicsWorld</code> (including <code>moveWithSlide</code>),
-<code>MapSubsector</code> / <code>Sector</code>, <code>MapLoader</code>, <code>LagCompensator</code>. The design sections
-further down this file are specification written ahead of that code.</p>
-<p><strong>Blocked on.</strong> Nothing for movement — <code>PhysicsWorld</code> can be written today
-against <code>PlayerController</code> alone. <code>MapLoader</code> <em>is</em> blocked: <code>render/README.md</code>
-§ 11(b) leaves the WAD subsystem's remaining role open, and map geometry is the
-strongest candidate for it, so do not assume <code>MapLoader</code> reads a WAD until that
-question closes.</p>
-<p><strong>Next step.</strong> <code>PhysicsWorld.moveWithSlide</code> — the player currently walks through
-walls, and every other Phase 4 item is easier once collision exists.</p>
+<p><strong>Built, and new.</strong> <code>PhysicsWorld</code> — the player no longer walks through walls.
+It takes a desired ground move and returns the permitted one, so
+<code>PlayerController</code> stays a pure function of state and arguments; see
+<a href="#physicsworld--collision-that-slides">Collision</a> below for the shape and the
+reasoning. <code>moveWithSlide</code> landed as the pair <code>slideX</code> / <code>slideZ</code>, because a
+single call would have to return two floats and therefore allocate, and this
+runs every tic.</p>
+<p><strong>Not built.</strong> The rest of what Phase 4 names, and none of it exists in any
+form: <code>PlayerState</code>, <code>Entity</code>, <code>MapSubsector</code> / <code>Sector</code>, <code>MapLoader</code>,
+<code>LagCompensator</code>. The design sections further down this file are specification
+written ahead of that code.</p>
+<p><strong>Blocked on.</strong> <code>MapLoader</code> <em>is</em> blocked: <code>render/README.md</code> § 11(b) leaves the
+WAD subsystem's remaining role open, and map geometry is the strongest candidate
+for it, so do not assume <code>MapLoader</code> reads a WAD until that question closes.</p>
+<p><strong>Next step.</strong> A <strong>floor-height query</strong> on <code>PhysicsWorld</code>. Collision is
+horizontal only today, so solids block at every height and the player cannot
+stand on the crates the jump was tuned to clear. That one addition unlocks the
+crates, the staircase and the ramp together — see the list of what is and is not
+solid below.</p>
 <h2 id="what-lives-here">What lives here<a class="anchor" href="#what-lives-here" aria-label="Permalink">#</a></h2>
 <p>Built and tested today:</p>
 <ul>
 <li>
 <p><code>PlayerController</code> — first-person look and movement in <code>float</code>, produces the <code>Camera</code></p>
+</li>
+<li>
+<p><code>PhysicsWorld</code> — the solid geometry a move is clipped against, with sliding</p>
 </li>
 <li>
 <p><code>PlayerInputView</code> — presents the HAL's <code>InputState</code> as an <code>I_PlayerInput</code></p>
@@ -159,9 +178,6 @@ of it:</p>
 <p><code>Entity</code> — abstract base for all game objects: players, monsters, projectiles, pickups, doors</p>
 </li>
 <li>
-<p><code>PhysicsWorld</code> — collision detection, gravity, sliding along walls</p>
-</li>
-<li>
 <p><code>MapSubsector</code> / <code>Sector</code> — sector data with portal adjacency for movement</p>
 </li>
 <li>
@@ -176,6 +192,7 @@ this file used not to, and read as an inventory of code that does not exist.</p>
 <h2 id="subsystem-layout">Subsystem layout<a class="anchor" href="#subsystem-layout" aria-label="Permalink">#</a></h2>
 <div class="code"><pre><code>gameplay/
 ├── PlayerController.java          first-person look + movement, produces the Camera
+├── PhysicsWorld.java              solid boxes; clips a desired move, slides
 ├── PlayerInputView.java           adapts the HAL InputState onto I_PlayerInput
 ├── port/
 │   ├── I_GameplayPort.java        interface — called by core per tic
@@ -185,7 +202,7 @@ this file used not to, and read as an inventory of code that does not exist.</p>
     └── NullGameplayPort.java      stub
 </code></pre></div>
 <h3 id="the-only-live-implementation">The only live implementation<a class="anchor" href="#the-only-live-implementation" aria-label="Permalink">#</a></h3>
-<p><code>NullGameplayPort</code> is a stub and <code>PhysicsWorld</code> does not exist, so the one
+<p><code>NullGameplayPort</code> is a stub, so the one
 <code>I_GameplayPort</code> that actually plays anything is <strong><code>demo/DemoGameplayPort.java</code></strong>
 — it latches input, drives a <code>PlayerController</code> and aims the software renderer's
 camera, once per tic, under a lock. It is also the only place <code>PlayerController</code>
@@ -267,10 +284,104 @@ simulation path. One view is created at startup and re-pointed with <code>wrap</
 has no use for them. Whatever consumes them later should read the <code>InputState</code>
 directly rather than widening this seam.
 <strong>Do not grow a second copy of <code>InputState</code> here.</strong></p>
+<h2 id="physicsworld--collision-that-slides"><code>PhysicsWorld</code> — collision that slides<a class="anchor" href="#physicsworld--collision-that-slides" aria-label="Permalink">#</a></h2>
+<p>The class <code>PlayerController</code>'s Javadoc has promised since it was written: it
+"wraps this later and rejects the parts of a move that hit a wall". It holds
+axis-aligned boxes and nothing else — no player, no clock, no state once built —
+so it stays a pure function and the controller in front of it stays
+deterministic.</p>
+<h3 id="the-body">The body<a class="anchor" href="#the-body" aria-label="Permalink">#</a></h3>
+<p>An <strong>upright axis-aligned box, half-width 16 world units</strong> (<code>32</code> across, <code>56</code>
+tall). That is <code>Constants.PLAYER_RADIUS / MAP_SCALE</code>, not a new number: the room
+was already dimensioned against it. <code>DemoScene.KIT_WORLD_SCALE</code> justifies the
+64-unit grid partly by "a 32-unit-diameter player in a 64-unit doorway has a
+radius of clearance either side", and <code>BOT_ROUTE_CENTRES</code> keeps every patrol
+inside the wall by the same 16.</p>
+<p>A box rather than a cylinder because every solid in the room is itself
+axis-aligned, which makes the test four comparisons with no square root — DOOM's
+32×32×56 player box, which also called its half-width a radius. The two differ
+only within 4.7 units of a corner. The footprint does not rotate: movement is
+yaw-only, and a square hull that spun with the view would make clearance depend
+on which way the player was looking.</p>
+<h3 id="the-two-calls-and-why-the-order-is-fixed">The two calls, and why the order is fixed<a class="anchor" href="#the-two-calls-and-why-the-order-is-fixed" aria-label="Permalink">#</a></h3>
+<div class="code" data-lang="java"><pre><code>newX = world.slideX(x, z, deltaX);
+newZ = world.slideZ(newX, z, deltaZ);   // note: the CLIPPED x
+</code></pre></div>
+<p>Two calls rather than one because a single <code>moveWithSlide</code> would have to return
+two floats, and this runs up to 120 times a second.</p>
+<ul>
+<li>
+<p><strong>Per-axis clipping is the sliding.</strong> The blocked component is lost, the free
+one survives, so a diagonal into a wall keeps travelling <em>along</em> it. A solver
+that zeroes the whole move turns every wall into glue, and is the single
+biggest difference between "has collision" and "feels right".</p>
+</li>
+<li>
+<p><strong><code>slideZ</code> gets the clipped <code>x</code>.</strong> That is what makes an inside corner hold.
+Measured from the x the player <em>asked</em> for rather than the one they reached,
+a corner leaks diagonally.</p>
+</li>
+<li>
+<p><strong>x-then-z, always.</strong> Not "the larger component first", not "whichever is
+blocked less". Two peers whose floats differ by one ulp would take different
+branches and then disagree about where a player is standing.</p>
+</li>
+</ul>
+<p>Blocked moves are clipped <strong>to the exact contact plane</strong>, not discarded:
+rejecting the step outright leaves the player up to one step short of the wall —
+8.5 units at 30 Hz — which is invisible, tic-rate dependent and jittery.</p>
+<p>A body <strong>already inside</strong> a solid is never resolved, only the crossing of a face
+from outside is. An embedded body walks out rather than being teleported to a
+face or pinned forever.</p>
+<h3 id="what-is-solid-in-the-demo-room">What is solid in the demo room<a class="anchor" href="#what-is-solid-in-the-demo-room" aria-label="Permalink">#</a></h3>
+<p><code>DemoScene.kitRoomPhysics()</code> owns the answer, because <code>DemoScene</code> is the only
+thing that knows where the room is.</p>
+<div class="tablewrap"><table>
+<thead><tr><th></th><th></th></tr></thead>
+<tbody>
+<tr><td><strong>Solid</strong></td><td>the four perimeter walls, the two doorway jambs, four columns, seven floor-standing crates — 16 boxes</td></tr>
+<tr><td><strong>Open</strong></td><td>the doorway: a 64-unit gap between two south-wall slabs, which a 32-unit body clears with 16 units either side</td></tr>
+<tr><td><strong>Not solid</strong></td><td>the staircase and the ramp</td></tr>
+</tbody>
+</table></div>
+<p>Each wall is <strong>one slab spanning its whole side</strong>, not the ten tile boxes the
+renderer draws. A row of abutting boxes has nine internal edges, and a body
+sliding along it that drifts an ulp inside the surface catches on every one.</p>
+<p>The hull stops at the wall's <strong>visible face at 313.6</strong>, not the centre line at
+320 where <code>addWalls</code> places the instance, so the furthest a player may stand is
+<strong>±297.6</strong> with their shoulder against the plaster.</p>
+<p>The staircase and ramp are left permeable deliberately: collision is horizontal
+only, so both would need full-height boxes, and an invisible wall in front of a
+ramp you can plainly see reads as a bug where walking through it merely reads as
+unfinished. The staircase also sits at <code>z = 224</code> on the way to the door.</p>
+<h3 id="cost-and-determinism">Cost and determinism<a class="anchor" href="#cost-and-determinism" aria-label="Permalink">#</a></h3>
+<p>Two calls per tic over a flat <code>float[]</code> of 16 boxes. <strong>No allocation, no
+<code>java.lang.Math</code>, no <code>sqrt</code>, no clock, no randomness</strong> — only comparisons and
+sums, which JEP 306 makes bit-reproducible, as <code>net/README.md</code>'s lockstep model
+requires. <code>PhysicsWorldTest</code> reads the constant pool to enforce it, the same
+guard <code>PlayerController</code> carries.</p>
+<h3 id="driving-it-without-a-keyboard">Driving it without a keyboard<a class="anchor" href="#driving-it-without-a-keyboard" aria-label="Permalink">#</a></h3>
+<p>Collision is the one feature nothing automated could reach: everything else the
+screenshot harness photographs is true of a stationary player. <code>GdxInputPort</code>
+holds a movement axis for the first N tics when asked, which is what makes the
+proof takeable:</p>
+<div class="code"><pre><code>gradlew :desktop:run "--args=--start-in-game" -Dopenfps.autoWalkTics=300
+        -Dopenfps.autoWalkStrafe=-0.0654
+        -Dopenfps.screenshot=C:\tmp\wall.png -Dopenfps.screenshotExit=true
+</code></pre></div>
+<p>The position on the <code>Demo gameplay stopped after N tics at …</code> line is the
+measurement. Walking forward from the spawn: <strong><code>z = 1087.998</code></strong> before this
+landed — 774 units outside the room — and <strong><code>z = 297.6</code></strong> after, on the contact
+plane to the last digit.</p>
 <h2 id="physics-math--whats-coming">Physics math — what's coming<a class="anchor" href="#physics-math--whats-coming" aria-label="Permalink">#</a></h2>
 <p>These are documented in advance so you can verify the formulas before they're coded.
 Implementation will reference this README for the source of each formula.</p>
 <h3 id="collision-detection">Collision detection<a class="anchor" href="#collision-detection" aria-label="Permalink">#</a></h3>
+<p><strong>What shipped is the second layer only, against boxes rather than linedefs</strong> —
+see <a href="#physicsworld--collision-that-slides"><code>PhysicsWorld</code></a> above. The BSP
+quick-reject below is still specification: a 16-box room is a linear scan of 64
+floats, so a tree to avoid it would cost more than it saved. It becomes worth
+building when a real map's linedef count does.</p>
 <p>Two layers, both used together:</p>
 <ol>
 <li>
@@ -366,6 +477,9 @@ http://doom.wikia.com/wiki/WAD</p>
 <p><code>PlayerController.java</code> — first-person look and movement (72 tests)</p>
 </li>
 <li>
+<p><code>PhysicsWorld.java</code> — solid boxes, clipping and sliding (28 tests)</p>
+</li>
+<li>
 <p><code>PlayerInputView.java</code> — the HAL <code>InputState</code> adapter (5 tests)</p>
 </li>
 <li>
@@ -381,13 +495,21 @@ http://doom.wikia.com/wiki/WAD</p>
 <p><code>adapter/NullGameplayPort.java</code> — null impl</p>
 </li>
 </ul>
-<p><strong>77 tests in this package.</strong> Run with <code>.\gradlew.bat test</code>.</p>
+<p><strong>105 tests across those four files</strong>, of 257 in the package once the match
+layer is counted. Run with <code>.\gradlew.bat test</code>.</p>
 <h2 id="todo-phase-4">TODO (Phase 4)<a class="anchor" href="#todo-phase-4" aria-label="Permalink">#</a></h2>
 <ul>
-<li><code>PhysicsWorld</code> wraps <code>PlayerController</code> and rejects the blocked part of a move</li>
+<li><del><code>PhysicsWorld</code> wraps <code>PlayerController</code> and rejects the blocked part of a
+move</del> — <strong>done</strong>, as <code>slideX</code> / <code>slideZ</code></li>
+<li><code>PhysicsWorld.floorHeightAt(x, z)</code> — the missing half. Collision is
+horizontal only, so nothing can be stood on: the crates, the staircase and the
+ramp are all waiting on this one method, and the jump was tuned to clear a
+crate it currently cannot land on</li>
+<li>Clip the <strong>bots</strong> against the same world. They walk fixed routes that happen
+to stay inside the wall, which is an arithmetic coincidence maintained by a
+test rather than a physical fact</li>
 <li><code>PlayerState</code> data class</li>
 <li><code>Entity</code> base + concrete types (monster, projectile, pickup, door)</li>
-<li><code>PhysicsWorld.moveWithSlide(player, dx, dy)</code> — collision + slide</li>
 <li><code>MapLoader</code> — read THINGS / LINEDEFS / SECTORS, once <code>render/README.md</code>
 § 11(b) settles what the map container is</li>
 <li><code>BspTraverser</code> — leaf lookup, reused in both gameplay and render</li>

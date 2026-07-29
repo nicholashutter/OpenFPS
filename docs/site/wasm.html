@@ -1,0 +1,745 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WebAssembly — can OpenFPS run in a browser? — OpenFPS documentation</title>
+<meta name="description" content="Feasibility assessment. What a browser target would cost, which of the existing ports survive it, which two things in the architecture it breaks, and whether it is worth doing yet.  Nothing…">
+<link rel="stylesheet" href="site.css">
+<script>try{var t=localStorage.getItem('openfps-theme');if(t){document.documentElement.setAttribute('data-theme',t);}}catch(e){}</script>
+</head>
+<body>
+<a class="skip" href="#doc">Skip to content</a>
+<header class="topbar"><button class="burger" id="burger" aria-controls="sidebar" aria-expanded="false" aria-label="Show navigation"><span></span><span></span><span></span></button><span class="topbar-name">OpenFPS docs</span></header>
+<div class="scrim" id="scrim" hidden></div>
+<div class="layout">
+<aside class="sidebar" id="sidebar">
+<a class="brand" href="index.html"><span class="brand-mark"></span><span class="brand-name">OpenFPS</span><span class="brand-kind">docs</span></a>
+<button class="themer" id="themer" type="button" aria-live="polite" aria-label="Switch to dark theme" title="Switch theme"><svg class="to-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5Z"/></svg><svg class="to-light" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.2 5.2l1.4 1.4M17.4 17.4l1.4 1.4M18.8 5.2l-1.4 1.4M6.6 17.4l-1.4 1.4"/></svg></button>
+<input class="filter" id="filter" type="search" placeholder="Filter pages" aria-label="Filter pages" autocomplete="off">
+<nav class="nav" id="nav" aria-label="Documentation">
+<details class="grp" data-hue="1" open><summary><span class="dot"></span>Overview<span class="count">2</span></summary>
+<ul>
+<li><a href="index.html">Overview</a></li>
+<li><a href="agents.html">Agent instructions</a></li>
+</ul></details>
+<details class="grp" data-hue="2" open><summary><span class="dot"></span>Building<span class="count">1</span></summary>
+<ul>
+<li><a href="build.html">Build reference</a></li>
+</ul></details>
+<details class="grp" data-hue="3" open><summary><span class="dot"></span>Architecture<span class="count">2</span></summary>
+<ul>
+<li><a href="style.html">Code style</a></li>
+<li><a href="plan.html">Project plan</a></li>
+</ul></details>
+<details class="grp" data-hue="4" open><summary><span class="dot"></span>Modules<span class="count">5</span></summary>
+<ul>
+<li><a href="engine.html">:engine</a></li>
+<li><a href="desktop.html">:desktop</a></li>
+<li><a href="android.html">:android</a></li>
+<li><a href="tools.html">:tools</a></li>
+<li><a href="gdxshared.html">:gdxshared</a></li>
+</ul></details>
+<details class="grp" data-hue="5"><summary><span class="dot"></span>Packages<span class="count">10</span></summary>
+<ul>
+<li><a href="engine-core.html">Core</a></li>
+<li><a href="engine-common.html">Common</a></li>
+<li><a href="engine-hal.html">HAL (I_)</a></li>
+<li><a href="engine-gameplay.html">Gameplay (P_)</a></li>
+<li><a href="engine-render.html">Render (R_)</a></li>
+<li><a href="engine-demo.html">Demo</a></li>
+<li><a href="engine-audio.html">Audio (S_)</a></li>
+<li><a href="engine-net.html">Net (G_)</a></li>
+<li><a href="engine-resource.html">Resource (W_)</a></li>
+<li><a href="engine-memory.html">Memory (Z_)</a></li>
+</ul></details>
+<details class="grp" data-hue="6" open><summary><span class="dot"></span>Reference<span class="count">4</span></summary>
+<ul>
+<li><a href="assets.html">Assets and licensing</a></li>
+<li><a href="demo-assets.html">Demo asset manifest</a></li>
+<li><a href="memory.html">Memory: what OpenFPS reserves, what it churns</a></li>
+<li><a href="wasm.html" class="cur" aria-current="page">WebAssembly</a></li>
+</ul></details>
+</nav>
+<p class="generated">Generated from the repository's Markdown by <code>:tools:buildDocsSite</code>.</p>
+</aside>
+<aside class="rail"><details class="toc" id="toc" open><summary>On this page</summary>
+<ul>
+<li class="lv2"><a href="#1-what-a-browser-target-actually-has-to-satisfy">1. What a browser target actually has to satisfy</a></li>
+<li class="lv2"><a href="#2-the-routes-and-what-each-one-is-not">2. The routes, and what each one is not</a></li>
+<li class="lv3"><a href="#21-teavm--the-only-realistic-candidate">2.1 TeaVM — the only realistic candidate</a></li>
+<li class="lv3"><a href="#22-cheerpj--the-interesting-wrong-shape">2.2 CheerpJ — the interesting wrong shape</a></li>
+<li class="lv3"><a href="#23-gwt--libgdxs-html-backend--rejected-on-threads-and-javanio">2.3 GWT / libGDX's HTML backend — rejected on threads and java.nio</a></li>
+<li class="lv3"><a href="#24-jwebassembly--not-a-candidate">2.4 JWebAssembly — not a candidate</a></li>
+<li class="lv3"><a href="#25-compiling-to-wasmgc-directly">2.5 Compiling to WasmGC "directly"</a></li>
+<li class="lv3"><a href="#26-summary">2.6 Summary</a></li>
+<li class="lv2"><a href="#3-threads--and-why-the-determinism-invariant-is-the-good-news">3. Threads — and why the determinism invariant is the good news</a></li>
+<li class="lv3"><a href="#31-there-is-no-parallelism-on-any-route">3.1 There is no parallelism, on any route</a></li>
+<li class="lv3"><a href="#32-what-that-does-to-the-rasterizer--much-less-than-it-should">3.2 What that does to the rasterizer — much less than it should</a></li>
+<li class="lv3"><a href="#33-what-it-does-to-the-frame-budget--this-is-the-actual-problem">3.3 What it does to the frame budget — this is the actual problem</a></li>
+<li class="lv3"><a href="#34-the-loop-which-is-the-part-that-needs-a-design-decision">3.4 The loop, which is the part that needs a design decision</a></li>
+<li class="lv2"><a href="#4-the-hal-is-the-asset">4. The HAL is the asset</a></li>
+<li class="lv2"><a href="#5-determinism--the-finding-that-decides-the-multiplayer-question">5. Determinism — the finding that decides the multiplayer question</a></li>
+<li class="lv3"><a href="#the-fix-and-it-is-not-a-workaround">The fix, and it is not a workaround</a></li>
+<li class="lv3"><a href="#can-a-browser-peer-stay-in-lockstep-with-a-desktop-peer">Can a browser peer stay in lockstep with a desktop peer?</a></li>
+<li class="lv2"><a href="#6-the-two-hard-ports">6. The two hard ports</a></li>
+<li class="lv3"><a href="#61-networking">6.1 Networking</a></li>
+<li class="lv3"><a href="#62-persistence">6.2 Persistence</a></li>
+<li class="lv2"><a href="#7-assets-and-size">7. Assets and size</a></li>
+<li class="lv3"><a href="#size-which-is-the-real-constraint">Size, which is the real constraint</a></li>
+<li class="lv2"><a href="#8-effort-and-the-recommendation">8. Effort, and the recommendation</a></li>
+<li class="lv3"><a href="#per-port-estimate">Per-port estimate</a></li>
+<li class="lv3"><a href="#verdict">Verdict</a></li>
+<li class="lv3"><a href="#the-smallest-meaningful-proof-of-concept">The smallest meaningful proof of concept</a></li>
+<li class="lv2"><a href="#9-what-this-document-could-not-verify">9. What this document could not verify</a></li>
+<li class="lv2"><a href="#10-revisit-triggers">10. Revisit triggers</a></li>
+</ul></details></aside>
+<main id="doc">
+<p class="crumb"><span class="tag">Reference</span><span class="sep">/</span><code>docs/WASM.md</code><span class="sep">/</span>29 min read</p>
+<h1 id="webassembly--can-openfps-run-in-a-browser">WebAssembly — can OpenFPS run in a browser?<a class="anchor" href="#webassembly--can-openfps-run-in-a-browser" aria-label="Permalink">#</a></h1>
+<blockquote>
+<p>Feasibility assessment. What a browser target would cost, which of the
+existing ports survive it, which two things in the architecture it breaks,
+and whether it is worth doing yet.</p>
+<p><strong>Nothing here has been built.</strong> There is no <code>wasm</code>, <code>TeaVM</code> or <code>GWT</code> string
+anywhere in this repository, and no work has started. This document exists so
+the question is answered once, with numbers, rather than re-litigated.</p>
+<p><strong>Verdict, up front: viable, but not yet, and not as a peer.</strong> A browser build
+of the <em>single-player</em> demo is a genuine two-to-three week job on top of one
+unbuilt renderer feature. A browser peer that stays in lockstep with a desktop
+peer is blocked on two separate things — floating-point transcendentals and
+the absence of UDP — and neither is adapter work. § 8 is the recommendation.</p>
+</blockquote>
+<hr>
+<h2 id="1-what-a-browser-target-actually-has-to-satisfy">1. What a browser target actually has to satisfy<a class="anchor" href="#1-what-a-browser-target-actually-has-to-satisfy" aria-label="Permalink">#</a></h2>
+<p>The three-layer split is the reason this question is answerable at all.
+<code>:engine</code> is pure JDK 17 with no platform dependency; <code>:gdxshared</code> depends on
+libGDX <strong>core</strong> and no backend; <code>:desktop</code> and <code>:android</code> each own exactly one
+backend (<a href="gdxshared.html"><code>gdxshared/README.md</code></a>, "Why this module
+exists"). A browser target is a fourth backend, and on paper it is the same
+shape as the third.</p>
+<p>Two things the architecture already did for a browser, before anyone asked:</p>
+<p><strong>The platform owns the loop.</strong> <code>I_WindowPort.runFrameLoop(I_FrameCallback)</code>
+hands the calling thread to the platform and the engine supplies the callback.
+<a href="engine-hal.html"><code>hal/README.md</code></a>
+argues that inversion from Android — "there the framework owns the loop and
+calls the app when a frame is due — there is nothing to pump" — and the argument
+transfers to <code>requestAnimationFrame</code> verbatim, without a word changed.</p>
+<p><strong><code>start()</code> already returns.</strong> <code>EngineSession.start()</code> brings the engine up and
+hands back a session without blocking; blocking is isolated in
+<code>awaitPlatformLoop()</code>, and <code>frameCallback()</code> exposes the callback directly so
+Android can register it and return from <code>onCreate</code>
+(<code>engine/src/main/java/com/openfps/engine/core/EngineSession.java</code>, and
+<a href="android.html"><code>android/README.md</code></a> § "<code>onCreate</code> starts the session and
+returns"). A browser build takes the Android path and never calls
+<code>awaitPlatformLoop()</code>. That split was written to avoid an ANR; it happens to be
+the only shape a browser can host.</p>
+<p><strong>And one thing it did not.</strong> The engine's tic clock is a dedicated thread —
+<code>new Thread(loop, "openfps-gameloop")</code> in
+<code>engine/src/main/java/com/openfps/engine/core/EngineMain.java</code> — feeding a
+<code>LinkedBlockingQueue</code> whose <code>take()</code> blocks
+(<code>core/eventbus/SharedEventBus.java</code>), and <code>GameLoop</code> burns the tail of each
+frame's wait in a <code>Thread.onSpinWait()</code> loop to hit its deadline exactly
+(<code>core/GameLoop.java</code>). A browser gives you one thread of control and two ways
+to be called back into it, and <strong>nothing in either may block or spin</strong>. § 3
+deals with this; it is the first of the two real architectural costs.</p>
+<hr>
+<h2 id="2-the-routes-and-what-each-one-is-not">2. The routes, and what each one is not<a class="anchor" href="#2-the-routes-and-what-each-one-is-not" aria-label="Permalink">#</a></h2>
+<p>There are four live options and one that is not. None of them is "run the JAR".</p>
+<h3 id="21-teavm--the-only-realistic-candidate">2.1 TeaVM — the only realistic candidate<a class="anchor" href="#21-teavm--the-only-realistic-candidate" aria-label="Permalink">#</a></h3>
+<p>TeaVM is an ahead-of-time compiler from Java bytecode to JavaScript or
+WebAssembly. Since 0.11 it emits <strong>WasmGC</strong> — the WebAssembly variant with
+first-class garbage-collected reference types — so it delegates object lifetime
+to the browser's own collector rather than shipping a GC inside the module.
+WasmGC reached baseline browser support (Chrome 119+, Firefox 120+, Safari
+18.2+) at the end of 2024, so the target is no longer speculative.</p>
+<p>TeaVM requires Java 17+ to <em>run</em>, and consumes Java 17 bytecode, which matches
+<code>sourceCompatibility = JavaVersion.VERSION_17</code> in every module's
+<code>build.gradle.kts</code>. There is no <code>java { toolchain { … } }</code> block anywhere in the
+build, so nothing pins a JDK the compiler would have to match.</p>
+<p><strong>What TeaVM is not</strong>: a JVM. It ships *its own partial reimplementation of the
+Java class library*, not the JDK's. Anything the engine calls that TeaVM has not
+reimplemented simply fails to link. Three consequences land directly on this
+codebase:</p>
+<ul>
+<li>
+<p><strong><code>java.nio.channels.DatagramChannel</code> does not exist and cannot.</strong> There is no
+UDP in a browser at any layer. <code>DesktopDatagramPort</code> is unportable — not
+"hard", <em>absent</em>. § 6.</p>
+</li>
+<li>
+<p><strong><code>StrictMath</code> is not fdlibm.</strong> TeaVM's <code>StrictMath</code> delegates every method to
+its <code>Math</code>, whose <code>sin</code>, <code>cos</code>, <code>tan</code>, <code>sqrt</code> and <code>pow</code> are <code>@Import(module =
+"teavmMath", …)</code> native declarations bound to the host's <code>Math</code>. This quietly
+destroys the property the whole determinism guard exists to protect. § 5, and
+it is the most important paragraph in this document.</p>
+</li>
+<li>
+<p><strong>Logback and sqlite-jdbc are both out.</strong> <code>engine/build.gradle.kts</code> declares
+<code>ch.qos.logback:logback-classic:1.5.12</code> and
+<code>org.xerial:sqlite-jdbc:3.46.1.0</code>. The second is not pure Java —
+<a href="plan.html"><code>PLAN.md</code></a> § 6 records that it bundles natives for ~20 platform
+triplets and is most of the ~15 MB desktop distribution. <strong><code>:android</code> already
+excludes both and substitutes <code>slf4j-android</code> and Room</strong>
+(<a href="android.html"><code>android/README.md</code></a> § "Two dependency decisions that
+are not preferences"). A browser target repeats that substitution exactly, and
+the fact that the exclusion machinery already exists in a shipping module is
+the strongest single evidence that the dependency surface is portable.</p>
+</li>
+</ul>
+<p><strong>libGDX on TeaVM already exists.</strong> <code>gdx-teavm</code> (Apache-2.0) is an actively
+maintained backend set whose current releases track libGDX 1.14.2 — the same
+version this repo pins in <code>PLAN.md</code> § 6 — on TeaVM 0.15.0, and it emits both
+JavaScript and Wasm. Since <code>:gdxshared</code> is libGDX core and no backend, the
+presenter, the block welcome screen, the UI state machine and <code>GdxAudioPort</code>
+are, on paper, already compatible. This is the reason the route is TeaVM and not
+anything else.</p>
+<h3 id="22-cheerpj--the-interesting-wrong-shape">2.2 CheerpJ — the interesting wrong shape<a class="anchor" href="#22-cheerpj--the-interesting-wrong-shape" aria-label="Permalink">#</a></h3>
+<p>CheerpJ is a real OpenJDK compiled to WebAssembly: the JVM core (class loading,
+reflection, interpreter) is C++ built to Wasm, and its JIT emits JavaScript that
+the browser's own JIT then compiles. It runs <strong>unmodified</strong> Java bytecode, and
+4.1 onward supports Java 17 (4.3 supports 8, 11 and 17). On the compatibility
+axis it is far ahead of TeaVM — a real <code>java.lang</code>, a real <code>StrictMath</code>, real
+reflection.</p>
+<p>It is still the wrong tool here, for three compounding reasons:</p>
+<ol>
+<li>
+<p><strong>Networking is the same wall.</strong> CheerpJ's own documentation is explicit that
+browser security prevents UDP and TCP outright and that anything beyond
+same-origin HTTP needs a hosted proxy; its supported answer for <code>Socket</code> is a
+Tailscale-based WireGuard tunnel. That is § 6's problem with a VPN bolted on,
+and it contradicts <a href="engine-net.html"><code>net/README.md</code></a>
+§ 9's "v1 is LAN-only, stated plainly" in a way no adapter can paper over.</p>
+</li>
+<li>
+<p><strong>It is a JVM, so it pays JVM startup.</strong> CheerpJ's own release notes discuss
+getting large-application boot times down from thirty seconds to twenty. A
+game that takes ten seconds to reach a menu has lost the only argument for
+being in a browser at all.</p>
+</li>
+<li>
+<p><strong>Licence.</strong> CheerpJ is commercial software, free for open-source and
+personal use only. This repository is MIT and
+<a href="assets.html"><code>docs/ASSETS.md</code></a> § 3 sets a deliberately conservative bar for
+anything redistributed alongside the binary. A runtime whose terms depend on
+who is shipping it is a policy question, not a technical one, and it has not
+been asked.</p>
+</li>
+</ol>
+<p>CheerpJ is the right answer for putting an existing unmodifiable Swing
+application on the web. It is the wrong answer for a game engine whose whole
+performance model is a hot inner loop.</p>
+<h3 id="23-gwt--libgdxs-html-backend--rejected-on-threads-and-javanio">2.3 GWT / libGDX's HTML backend — rejected on threads and <code>java.nio</code><a class="anchor" href="#23-gwt--libgdxs-html-backend--rejected-on-threads-and-javanio" aria-label="Permalink">#</a></h3>
+<p>libGDX's traditional HTML5 backend compiles Java to JavaScript through GWT. Its
+documented limitations are decisive here and were decisive before WasmGC
+existed:</p>
+<ul>
+<li>
+<p><strong>No threads at all.</strong> libGDX's own wiki: "JavaScript is inherently
+single-threaded, and as such, one of the limitations of the HTML 5 backend is
+that threading is not possible."</p>
+</li>
+<li>
+<p><strong>No reflection</strong>, beyond a hand-declared allow-list — which <code>:gdxshared</code>'s
+Scene2D menu would have to be audited against.</p>
+</li>
+<li>
+<p><strong>No <code>java.net</code></strong>, so sockets do not work at all.</p>
+</li>
+<li>
+<p>GWT is Java 8-era in its language support. <code>:engine</code> is Java 17 throughout.</p>
+</li>
+</ul>
+<p>That last point alone ends it. This route is listed for completeness, not as an
+option.</p>
+<h3 id="24-jwebassembly--not-a-candidate">2.4 JWebAssembly — not a candidate<a class="anchor" href="#24-jwebassembly--not-a-candidate" aria-label="Permalink">#</a></h3>
+<p>JWebAssembly compiles Java bytecode to WebAssembly directly. Its own roadmap
+still lists exception handling, threads, garbage collection and reflection as
+<em>desired future features</em>. A codebase built on <code>LinkedBlockingQueue</code>,
+<code>ReentrantLock</code>, <code>AtomicLong</code> and a 723-line worker pool is not a plausible
+first customer. Recorded so the evaluation is not repeated.</p>
+<h3 id="25-compiling-to-wasmgc-directly">2.5 Compiling to WasmGC "directly"<a class="anchor" href="#25-compiling-to-wasmgc-directly" aria-label="Permalink">#</a></h3>
+<p>There is no route that skips a Java-to-Wasm compiler. WasmGC gives a compiler a
+place to put objects; it does not read class files. In practice "the WasmGC
+approach for Java" <em>is</em> TeaVM (§ 2.1) — or Kotlin/Wasm, which would mean
+rewriting the engine in a different language, which is not a port.</p>
+<h3 id="26-summary">2.6 Summary<a class="anchor" href="#26-summary" aria-label="Permalink">#</a></h3>
+<div class="tablewrap"><table>
+<thead><tr><th>Route</th><th>JDK 17 language + libs</th><th>Threads</th><th>Sockets</th><th><code>StrictMath</code> reproducible</th><th>Verdict</th></tr></thead>
+<tbody>
+<tr><td><strong>TeaVM (WasmGC)</strong></td><td>17 bytecode in; <strong>partial</strong> class library</td><td>Coroutines only — no parallelism</td><td>None; WebRTC/WebSocket via JS interop</td><td><strong>No</strong> — delegates to host <code>Math</code></td><td><strong>The route</strong></td></tr>
+<tr><td>CheerpJ</td><td>Real OpenJDK 17</td><td>Real JVM threads over a Wasm JVM</td><td>Only via proxy/Tailscale</td><td>Yes (real <code>StrictMath</code>)</td><td>Wrong shape; licence unresolved</td></tr>
+<tr><td>GWT / libGDX HTML</td><td>Java 8 era</td><td>None</td><td>None (<code>java.net</code> absent)</td><td>n/a</td><td>Dead on Java 17</td></tr>
+<tr><td>JWebAssembly</td><td>Incomplete</td><td>Roadmap item</td><td>Roadmap item</td><td>n/a</td><td>Not a candidate</td></tr>
+</tbody>
+</table></div>
+<hr>
+<h2 id="3-threads--and-why-the-determinism-invariant-is-the-good-news">3. Threads — and why the determinism invariant is the good news<a class="anchor" href="#3-threads--and-why-the-determinism-invariant-is-the-good-news" aria-label="Permalink">#</a></h2>
+<h3 id="31-there-is-no-parallelism-on-any-route">3.1 There is no parallelism, on any route<a class="anchor" href="#31-there-is-no-parallelism-on-any-route" aria-label="Permalink">#</a></h3>
+<p>Browser Wasm threading means <code>SharedArrayBuffer</code> plus Web Workers, which
+requires the page to be cross-origin isolated with COOP and COEP headers — the
+<code>SharedArrayBuffer</code> constructor is hidden on the global object otherwise. That
+is a deployment constraint, not a code constraint, and it is survivable.</p>
+<p>The constraint that is not survivable is upstream of it: <strong>WasmGC has no
+threads</strong>. The <code>shared-everything-threads</code> proposal exists precisely because
+there is no way to share reference values across threads in WasmGC today, and it
+is still a proposal. TeaVM's release notes say so directly — at 0.12, "only one
+feature of the JavaScript backend is not supported in Wasm GC: threading", and
+what 0.13 subsequently added was <em>coroutines</em>: <code>Thread.start</code>, <code>Thread.sleep</code>,
+<code>synchronized</code>, <code>wait</code>/<code>notify</code> implemented as suspendable green threads on one
+OS thread. TeaVM's own documentation states it plainly: TeaVM does not support
+true parallelism.</p>
+<p>So the browser build is <strong>single-threaded</strong>, and no amount of header
+configuration changes that.</p>
+<h3 id="32-what-that-does-to-the-rasterizer--much-less-than-it-should">3.2 What that does to the rasterizer — much less than it should<a class="anchor" href="#32-what-that-does-to-the-rasterizer--much-less-than-it-should" aria-label="Permalink">#</a></h3>
+<p><a href="engine-render.html"><code>render/README.md</code></a>
+§ 7 makes exclusive per-tile ownership the invariant the whole parallel design
+rests on, and the repository asserts bit-identity between the pooled and serial
+results. That assertion turns out to be the single most valuable property this
+codebase has for a browser port, for a reason that is easy to miss:</p>
+<p><strong>The serial path is not a degraded mode. It is the reference implementation,
+and it is already the one under test.</strong> <code>SoftwareRenderPort</code>'s constructor
+accepts a <code>null</code> <code>I_ThreadPoolPort</code> — its Javadoc calls that "the serial
+reference path, used by the build-time preview tool and by tests" — and its
+<code>dispatch</code> runs the identical index sequence inline when the pool is null
+(<code>engine/src/main/java/com/openfps/engine/render/adapter/SoftwareRenderPort.java</code>;
+the same fork exists in <code>Rasterizer.dispatch</code>). Three test classes pin the
+equality: <code>RasterizerTest</code> ("multi-threaded output is byte-identical to
+single-threaded", parameterized over worker counts 1, 2, 3, 4, 8, plus a
+non-tile-multiple resolution case), <code>SoftwareRenderPortTest</code> ("a pooled tagged
+frame is bit-identical to a serial one, at every worker count"), and
+<code>OutlinePassTest</code> (colour <em>and</em> entity-id buffers).</p>
+<p>A browser backend therefore passes <code>null</code> and gets a renderer that is not merely
+correct but <strong>provably identical to the one the desktop ships</strong>, with no new
+code path and no new risk. Nothing about tiling, binning, the fill rule or the
+stride padding has to be reconsidered. The 64-pixel tile size and the 16-pixel
+stride alignment (<code>Framebuffer.STRIDE_ALIGNMENT</code>) become pointless rather than
+wrong — they exist to prevent false sharing between workers, and there are no
+workers — and <code>Framebuffer.copyColorTo</code>'s de-padding is still needed regardless,
+because it de-pads for <em>presentation</em>, not for threading.</p>
+<p>This is worth stating as a general lesson, because it was not the reason the
+invariant was adopted: an architecture that can prove its parallel result equals
+its serial result can be moved to a platform with no parallelism for free.</p>
+<h3 id="33-what-it-does-to-the-frame-budget--this-is-the-actual-problem">3.3 What it does to the frame budget — this is the actual problem<a class="anchor" href="#33-what-it-does-to-the-frame-budget--this-is-the-actual-problem" aria-label="Permalink">#</a></h3>
+<p><a href="assets.html"><code>docs/ASSETS.md</code></a> § 2's worker sweep, measured on an Intel Core Ultra
+7 155H at 1280×720 on the 295-instance demo room:</p>
+<div class="tablewrap"><table>
+<thead><tr><th>workers</th><th>0 (serial)</th><th>1</th><th>2</th><th>4</th><th>8</th><th>16</th></tr></thead>
+<tbody>
+<tr><td>p50 frame</td><td><strong>26.1 ms</strong></td><td>25.1</td><td>16.3</td><td>8.5</td><td>5.2</td><td>4.0</td></tr>
+</tbody>
+</table></div>
+<p><strong>26.1 ms is the number a browser starts from, before any Wasm penalty.</strong> That
+is 38 fps on a fast laptop CPU under HotSpot with a warm JIT. It misses 60 Hz
+outright and it is the <em>optimistic</em> end, because § 2 also observes that a
+low-core machine at 2 workers (16.3 ms) already misses 60 Hz and calls that "the
+portability risk". The browser is worse than the 2-worker column, not better.</p>
+<p>Three levers exist, and the arithmetic is worth doing rather than asserting:</p>
+<ol>
+<li>
+<p><strong>Resolution.</strong> § 2 measures per-pixel cost <em>rising</em> 23% from 720p to 1440p
+as the working set leaves L3 — colour plus depth plus entity ids is 12 bytes
+per pixel here, so the effect runs the other way too. 640×360 is a quarter of
+720p's pixels and comfortably cache-resident, so ~6–7 ms serial native is a
+defensible estimate rather than a scaled guess.</p>
+</li>
+<li>
+<p><strong>Bilinear filtering.</strong> § 2's one big lever: nearest-neighbour instead of
+bilinear is <strong>2.9× faster</strong>, because bilinear costs 2.9× the entire rest of
+the inner loop. It is currently unconditional — <code>render/README.md</code>'s Status
+block lists the quality toggle as <strong>not built</strong>, with no configuration field
+for it anywhere.</p>
+</li>
+<li>
+<p><strong>Tic rate.</strong> <code>FrameRate</code> is a closed enum with <code>FPS_30</code> in it
+(<a href="plan.html"><code>PLAN.md</code></a> § 5), so 30 Hz costs nothing to select.</p>
+</li>
+</ol>
+<p>Combining them: 640×360, nearest-neighbour, 30 Hz gives roughly 2–3 ms of
+serial native fill against a 33 ms budget — enough headroom to absorb a
+substantial Wasm penalty and still hold. <strong>The browser target is what makes the
+bilinear toggle load-bearing rather than polish</strong>, and it should be built first
+regardless of whether the port ever happens, because it is also the cheapest
+path to 1080p60 on the desktop (<code>render/README.md</code> § "Next step").</p>
+<p>The size of the Wasm penalty is <strong>unmeasured and I will not guess it</strong>. TeaVM's
+own maintainer characterises WasmGC as better than the JS backend but not
+significantly, at roughly 5× the binary size. What that means for a bounds-check
+and array-store-heavy inner loop over three primitive arrays is exactly the sort
+of thing this repository has twice discovered by measuring rather than reasoning
+(<code>docs/ASSETS.md</code> § 2's benchmark correction; <code>render/README.md</code> § 7's 15×
+timer-period defect). Measure it; do not model it.</p>
+<h3 id="34-the-loop-which-is-the-part-that-needs-a-design-decision">3.4 The loop, which is the part that needs a design decision<a class="anchor" href="#34-the-loop-which-is-the-part-that-needs-a-design-decision" aria-label="Permalink">#</a></h3>
+<p>The engine's clock cannot survive contact with a browser unchanged. <code>GameLoop</code>
+spins on <code>Thread.onSpinWait()</code> to hit its deadline and sleeps for the coarse
+part; the bus blocks in <code>take()</code> when empty; the pool's join spins, yields and
+then parks. Under TeaVM's coroutines every one of those is either a suspend
+point that round-robins or — in the spin case — an unyielding loop that hangs
+the tab.</p>
+<p>The fix is not to make waiting cheaper. It is to stop waiting:</p>
+<blockquote>
+<p>The drift-correction math survives unchanged. What has to go is the <em>waiting</em>,
+not the <em>timing</em>.</p>
+</blockquote>
+<p><code>PLAN.md</code> § 5 computes each deadline absolutely from a fixed origin
+(<code>startNanos + tic * nanosPerTic</code>) rather than by accumulation, precisely so two
+machines agree. That formula works identically as an accumulator: a host
+callback asks "how many tics are now due?", publishes exactly that many, and
+returns. No thread, no queue, no park.</p>
+<p>But it collides head-on with a rule <code>hal/README.md</code> states in bold: "<strong><code>onFrame</code>
+draws; it never advances.</strong> … Platform frame rate is whatever the display
+decides, and it must never drive a tic." The rule is right, and lockstep depends
+on it. The browser-compatible reading is that the <em>simulation pump</em> and the
+<em>draw</em> are two host callbacks — a timer for tics, <code>requestAnimationFrame</code> for
+frames — which preserves the separation the rule protects while removing the
+thread it currently relies on. That is a change to <code>core</code>, not to an adapter,
+and it is the honest cost of this port.</p>
+<hr>
+<h2 id="4-the-hal-is-the-asset">4. The HAL is the asset<a class="anchor" href="#4-the-hal-is-the-asset" aria-label="Permalink">#</a></h2>
+<p>Every port and its browser equivalent. Difficulty is relative effort for a
+working implementation, not for a good one.</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Port</th><th>Browser equivalent</th><th>Difficulty</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td><code>I_SystemInfoPort</code></td><td><code>navigator.hardwareConcurrency</code>, constants</td><td><strong>Trivial</strong></td><td>Report 1 logical processor and the pool sizes itself to <code>MINIMUM_WORKERS</code>; only <code>EngineMain</code> reads it</td></tr>
+<tr><td><code>I_TimePort</code></td><td><code>performance.now()</code></td><td><strong>Trivial</strong></td><td>Monotonic sub-millisecond. <code>epochMillis()</code> is <code>Date.now()</code>. Note browsers coarsen timer resolution when not cross-origin isolated</td></tr>
+<tr><td><code>I_AudioPort</code></td><td>Web Audio, via libGDX core</td><td><strong>Trivial</strong></td><td><code>GdxAudioPort</code> already lives in <code>:gdxshared</code> and the sounds are synthesised in code (<code>audio/synth/BlasterSound.java</code>, <code>WavAudio.java</code>), so there is no audio file to load and no decoder to port</td></tr>
+<tr><td><code>I_FrameCallback</code></td><td>—</td><td><strong>None</strong></td><td>Engine-side. Already exactly right</td></tr>
+<tr><td><code>I_WindowPort</code></td><td>Canvas + <code>requestAnimationFrame</code></td><td><strong>Easy</strong></td><td><code>runFrameLoop</code> registers and returns, exactly as <code>AndroidWindowPort</code> does. <code>isRealWindow()</code> is true</td></tr>
+<tr><td><code>I_InputPort</code></td><td>Pointer Lock, <code>KeyboardEvent</code>, Touch</td><td><strong>Easy</strong></td><td><code>InputAccumulator</code> in <code>:gdxshared</code> imports nothing and already solves accumulate-and-latch between two unrelated rates. <code>WebBindings</code> joins <code>DesktopBindings</code> and <code>AndroidBindings</code></td></tr>
+<tr><td><code>ModelSource</code> (not a HAL port)</td><td><code>fetch</code> into an in-memory map</td><td><strong>Easy</strong></td><td>§ 7. The abstraction survives; only the ordering changes</td></tr>
+<tr><td><code>I_FilePort</code></td><td>Not implemented</td><td><strong>Easy</strong></td><td>Nothing in the running engine uses it — <code>hal/README.md</code> records <code>NullFilePort</code> as the only backend and notes desktop needed nothing more. Ship the null one</td></tr>
+<tr><td><code>I_UserProfilePort</code></td><td><code>localStorage</code>, or IndexedDB behind a prefetch</td><td><strong>Moderate</strong></td><td>§ 6.2</td></tr>
+<tr><td><code>I_DatagramPort</code></td><td><strong>Nothing.</strong> WebRTC data channel, and only with a signalling server</td><td><strong>Hard — architectural</strong></td><td>§ 6.1</td></tr>
+<tr><td><em>(not a port)</em> Determinism</td><td>Requires a pure-Java fdlibm in <code>common/</code></td><td><strong>Hard — and load-bearing</strong></td><td>§ 5</td></tr>
+</tbody>
+</table></div>
+<p>Read down that column: <strong>nine of eleven rows are trivial or easy, and every hard
+row is hard for a reason that has nothing to do with the HAL.</strong> The port set
+does what
+<a href="engine-hal.html"><code>hal/README.md</code></a>
+claims for it — "a port interface lives here, an implementation that needs a
+device does not" — and the two rows that resist are the two places where the
+browser removes a <em>capability</em> rather than changing an <em>API</em>. That is the
+correct outcome for a hexagonal architecture meeting a genuinely poorer
+platform, and it is a real vindication of the port set rather than a polite one.</p>
+<hr>
+<h2 id="5-determinism--the-finding-that-decides-the-multiplayer-question">5. Determinism — the finding that decides the multiplayer question<a class="anchor" href="#5-determinism--the-finding-that-decides-the-multiplayer-question" aria-label="Permalink">#</a></h2>
+<p>This is the part that would be easiest to get confidently wrong, so it is stated
+with its evidence.</p>
+<p><a href="plan.html"><code>PLAN.md</code></a> § 4 records the deviation: <code>PlayerController</code> holds
+simulation state in <code>float</code>, which is safe because JEP 306 makes all Java 17
+floating-point arithmetic FP-strict IEEE 754, so <code>+ − × ÷</code> and <code>sqrt</code> are
+bit-reproducible on every conforming JVM. The real hazard is the
+transcendentals, which <code>Math</code> is permitted 1–2 ulp of error on and is explicitly
+not required to reproduce between implementations. <code>StrictMath</code> is fdlibm-defined
+and is. So every trig call in the simulation path is <code>StrictMath</code>, and
+<code>PlayerControllerTest</code>'s nested <code>Determinism</code> class enforces it by reading the
+compiled class's constant pool as ISO-8859-1 and asserting <code>java/lang/Math</code>
+never appears, with a matching positive pin on <code>java/lang/StrictMath</code>, <code>sin</code> and
+<code>cos</code>. <code>HitscanTest</code> carries the same guard.</p>
+<p><strong>TeaVM breaks this, and the guard cannot see it break.</strong></p>
+<p>TeaVM's class library reimplements <code>StrictMath</code> as a pure delegation layer:
+every method body is <code>return TMath.&lt;same method&gt;(a)</code>. <code>TMath.sin</code>, <code>cos</code>, <code>tan</code>,
+<code>sqrt</code> and <code>pow</code> are in turn <code>@Import(module = "teavmMath", name = …)</code> native
+declarations — bound to the host environment's <code>Math</code>. So under TeaVM,
+<code>StrictMath.sin</code> <strong>is</strong> JavaScript <code>Math.sin</code>. ECMA-262 § 21.3.2 only
+<em>recommends</em> fdlibm for the transcendentals and does not require it; V8 uses
+fdlibm, and other engines have historically not.</p>
+<p>Three consequences, in increasing order of how expensive they are to discover:</p>
+<ol>
+<li>
+<p><code>StrictMath.sqrt</code> is still safe. IEEE-754 requires square root to be
+correctly rounded and both Java and Wasm honour that, so the <code>sqrt</code> calls in
+<code>PlayerController</code>, <code>Bot</code>, <code>BotPattern</code> and <code>Match</code> are fine.</p>
+</li>
+<li>
+<p><code>StrictMath.sin</code>, <code>cos</code> and <code>pow</code> are not. <code>PlayerController</code> calls <code>sin</code> and
+<code>cos</code> on the yaw/pitch path, and <code>TicCmdEncoder</code> uses <code>StrictMath</code> on the
+float-to-wire quantisation — which means the <em>wire format itself</em> could
+disagree between a browser peer and a desktop peer.</p>
+</li>
+<li>
+<p><strong>The constant-pool test still passes.</strong> It proves the <em>source</em> names
+<code>StrictMath</code>; it cannot prove the <em>runtime</em> is fdlibm, because it reads a
+class file compiled by <code>javac</code> and never sees what TeaVM substitutes
+downstream. This is precisely the failure mode <code>PlayerControllerTest</code>'s own
+comment warns about — "sub-micron per step, invisible for minutes, and
+impossible to reproduce in a single-process test" — arriving through a door
+the guard was not built to watch. It is a green test that has stopped
+testing anything.</p>
+</li>
+</ol>
+<h3 id="the-fix-and-it-is-not-a-workaround">The fix, and it is not a workaround<a class="anchor" href="#the-fix-and-it-is-not-a-workaround" aria-label="Permalink">#</a></h3>
+<p>Port fdlibm's <code>sin</code>, <code>cos</code> and <code>pow</code> into <code>common/</code> as pure Java over <code>+ − × ÷</code>
+only, and have simulation code call <em>that</em> rather than <code>StrictMath</code>. Those four
+operators are exactly the ones JEP 306 guarantees on the JVM and that Wasm's
+<code>f64</code> instructions guarantee in a browser, so a hand-rolled fdlibm is
+bit-identical on all three platforms by construction. It is a few hundred lines
+of well-specified, heavily-tested numerical code, and it is testable the
+ordinary way: the desktop JVM's own <code>StrictMath</code> is the oracle.</p>
+<p>It also <strong>improves the desktop and Android builds</strong>, which is what makes it
+worth doing on its own merits rather than as a browser tax: today the fdlibm
+guarantee is inherited from the JDK, and <code>PLAN.md</code> § 4's argument silently
+assumes every peer runs a conforming JVM. Owning the implementation removes that
+assumption.</p>
+<p>One legal note, because <a href="assets.html"><code>docs/ASSETS.md</code></a> § 8 makes this exact class
+of mistake a named trap: <strong>do not copy OpenJDK's <code>java.lang.FdLibm</code>.</strong> OpenJDK is
+GPL-with-classpath-exception and this repository is MIT. The original Sun fdlibm
+C sources carry a permissive notice, and § 8's own distinction applies — reading
+a published specification or a permissively-licensed reference is fine; vendoring
+GPL source is not. <strong>Verify the fdlibm notice before writing a line of it</strong>;
+this document asserts the distinction, not the conclusion.</p>
+<h3 id="can-a-browser-peer-stay-in-lockstep-with-a-desktop-peer">Can a browser peer stay in lockstep with a desktop peer?<a class="anchor" href="#can-a-browser-peer-stay-in-lockstep-with-a-desktop-peer" aria-label="Permalink">#</a></h3>
+<p><strong>No, twice over.</strong> The arithmetic fails until the paragraph above is done, and
+even then the transport fails independently (§ 6.1): a browser cannot send a UDP
+datagram to a desktop peer under any circumstances, so the two cannot share a
+wire without a relay that
+<a href="engine-net.html"><code>net/README.md</code></a> § 9
+classifies as tier T2 — "<strong>Servers, ops, money</strong>" — and that contradicts the
+opening line of that file. A browser build's honest scope is <strong>single-player, or
+browser-to-browser over WebRTC</strong>, and browser-to-browser still needs signalling.</p>
+<hr>
+<h2 id="6-the-two-hard-ports">6. The two hard ports<a class="anchor" href="#6-the-two-hard-ports" aria-label="Permalink">#</a></h2>
+<h3 id="61-networking">6.1 Networking<a class="anchor" href="#61-networking" aria-label="Permalink">#</a></h3>
+<p><code>I_DatagramPort</code> is <code>send(byte[], String address)</code> / <code>byte[] receive()</code> /
+<code>bind(int)</code> / <code>close()</code> / <code>processTic(int)</code>, and the only real implementation is
+<code>DesktopDatagramPort</code> — a non-blocking <code>DatagramChannel</code> with one preallocated
+direct <code>ByteBuffer</code> per direction. <code>NetSession</code> opens it, and
+<code>DesktopLauncher</code> constructs both. <strong>None of this exists in a browser.</strong></p>
+<p>The available substitutes, against the constraints
+<a href="engine-net.html"><code>net/README.md</code></a> § 2
+already records:</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Substitute</th><th>Delivery model</th><th>Cost</th></tr></thead>
+<tbody>
+<tr><td>WebSocket</td><td>Reliable, ordered — TCP</td><td>Reintroduces the head-of-line blocking § 3 of that document rules out. <strong>Wrong</strong></td></tr>
+<tr><td><code>RTCDataChannel</code>, <code>{ordered: false, maxRetransmits: 0}</code></td><td><strong>Unordered, unreliable messages</strong> — genuinely UDP-shaped, DTLS-encrypted by default</td><td>Needs a signalling server and usually STUN</td></tr>
+</tbody>
+</table></div>
+<p>The data channel is the right delivery model, and two details make it fit better
+than expected. The redundant-redelivery design needs no ordering and no
+retransmission (§ 4 of that document: "redundancy, not retransmission"), which
+is exactly what <code>maxRetransmits: 0</code> provides. And <code>I_DatagramPort.receive()</code>
+already drops the source address — the packet's own 20-byte header carries
+<code>playerId</code> as field 0 — so the fact that a data channel is <em>per peer</em> rather
+than one demultiplexed socket costs nothing. <code>bind(int port)</code> becomes
+meaningless and returns silently; everything above the port is unchanged.</p>
+<p>What it costs is the premise. <code>net/README.md</code> § 9 grades NAT traversal T0 (LAN
+broadcast, zero deps, ships in Phase 3), T1 (STUN, ~30 LOC, fails on symmetric
+NAT), T2 (relay — servers and money). <strong>A browser peer cannot do T0 at all</strong>:
+there is no UDP broadcast, no LAN discovery, and no way to learn a peer exists
+without a server that already knows about both. So a browser target starts at
+T1-plus-signalling and cannot fall back. That is a product decision with an
+operational budget, exactly as § 9 says of T2, and it should be recorded as such
+rather than discovered during implementation.</p>
+<h3 id="62-persistence">6.2 Persistence<a class="anchor" href="#62-persistence" aria-label="Permalink">#</a></h3>
+<p><code>I_UserProfilePort</code> is nine synchronous methods — <code>Optional&lt;UserProfile&gt;
+findById</code>, <code>List&lt;UserProfile&gt; findAll</code>, <code>void save</code>, <code>delete</code>, <code>count</code>,
+<code>generateNewId</code>, plus <code>init</code>/<code>shutdown</code>/<code>state()</code>. There is no SQLite in a
+browser and no Room, so both existing backends are gone.</p>
+<p>The port's synchrony is the whole difficulty, because IndexedDB is
+asynchronous and cannot be made otherwise. Two honest answers:</p>
+<ul>
+<li>
+<p><strong><code>localStorage</code>.</strong> Synchronous by specification, so the port signature is
+satisfied with no changes at all. It is origin-scoped and capped near 5 MB —
+a <code>UserProfile</code> is a handful of fields, so the cap is irrelevant here.
+<strong>This is the right first answer</strong>, and it is unusual for the boring option to
+also be the correct one.</p>
+</li>
+<li>
+<p><strong>IndexedDB behind the state machine.</strong> The port already has an <code>init()</code> that
+the engine calls before the session begins, and <code>EngineMain</code> loads or creates
+the profile at boot and saves at shutdown
+(<a href="engine-hal.html"><code>hal/README.md</code></a>,
+"the two ports the engine queries outside the tic"). So an implementation can
+read every profile into memory during an async pre-boot step and write back
+fire-and-forget — which is <code>MemoryUserProfilePort</code> plus two hooks, and
+<code>MemoryUserProfilePort</code> already exists and is tested.</p>
+</li>
+</ul>
+<p>Both preserve the port. Neither requires a signature change. This row is marked
+"Moderate" only because the second option's shutdown path — a page being closed
+mid-write — has no clean answer, and the desktop build has never had to have one.</p>
+<hr>
+<h2 id="7-assets-and-size">7. Assets and size<a class="anchor" href="#7-assets-and-size" aria-label="Permalink">#</a></h2>
+<p><code>ModelSource</code> is already the right abstraction and it exists for exactly this
+reason. Its Javadoc says so: "It was a <code>Path</code> until the game had to run on a
+phone, and on a phone there is no such file … The demo's model set is the one
+thing the engine loads from outside itself, so it is the one place that had to
+stop assuming a directory." Four methods — <code>has</code>, <code>read</code>, <code>describe</code>,
+<code>describeRoot</code> — with two implementations, <code>DirectoryModelSource</code> and
+<code>ApkModelSource</code>.</p>
+<p><strong>The interface survives; only the ordering changes.</strong> <code>read</code> returns <code>byte[]</code>
+synchronously, which a browser cannot do — but the same Javadoc pins the
+constraint that makes this a non-issue: "Called once at startup, from one
+thread, never per frame." So a browser implementation fetches every <code>.ofm</code> into
+an in-memory map <em>before</em> the engine boots, and <code>read</code> becomes a map lookup.
+That is precisely what libGDX's GWT preloader does, and it needs no change to
+<code>DemoModels</code>, which already takes a <code>ModelSource</code> rather than a <code>Path</code>.</p>
+<h3 id="size-which-is-the-real-constraint">Size, which is the real constraint<a class="anchor" href="#size-which-is-the-real-constraint" aria-label="Permalink">#</a></h3>
+<p>Measured from the staged tree, and it confirms
+<a href="demo-assets.html"><code>docs/DEMO_ASSETS.md</code></a> § 4 exactly:</p>
+<div class="tablewrap"><table>
+<thead><tr><th></th><th>Bytes</th></tr></thead>
+<tbody>
+<tr><td>The nine demo models</td><td><strong>12,626,532</strong></td></tr>
+<tr><td>…of which duplicated 512² atlas + mip pyramid</td><td>~12.6 MB, ~1.4 MB per model</td></tr>
+<tr><td><code>generated-room.ofm</code> (the no-art fallback)</td><td>47,448</td></tr>
+<tr><td>The whole <code>assets/models</code> tree, 28 files</td><td><strong>56,944,803</strong></td></tr>
+</tbody>
+</table></div>
+<p><code>docs/DEMO_ASSETS.md</code> § 4 records why: "<code>ModelFormat</code> has no notion of a texture
+shared between models, so a pack built around one atlas per kit — the exact
+property <code>docs/ASSETS.md</code> § 3 praises Kenney for — pays for that atlas once per
+model."</p>
+<p>On Android this is survivable because an APK is one compressed archive: ~36 MB
+staged becomes ~4 MB added to the APK, because <code>.ofm</code> texture data deflates
+extremely well (<a href="android.html"><code>android/README.md</code></a>). <strong>A browser has no
+APK.</strong> Each <code>.ofm</code> is a separate URL; HTTP compression applies per response and
+never dedupes across responses, and the browser cache keys on URL. So nine
+identical atlases are fetched, decompressed and held in memory nine times.</p>
+<p>This promotes <code>docs/ASSETS.md</code> § 9's open item — "<strong>One atlas per model, not per
+pack</strong>" — from a recorded inefficiency to <strong>the single largest lever on browser
+download size</strong>, worth more than the choice of compiler. With a shared-texture
+section in <code>ModelFormat</code>, the nine demo models collapse to roughly one atlas
+(~1.4 MB) plus nine sets of geometry measured in kilobytes: call it under 2 MB
+before compression, against 12.6 MB today. That is a 6× reduction from a change
+that <code>docs/ASSETS.md</code> already wants for its own reasons.</p>
+<p>The staging pipeline itself needs little: <code>:tools:regenerateDemoAssets</code> already
+emits a flat directory of <code>/</code>-separated relative paths, which is exactly what a
+web server serves. What it would have to gain is a <strong>manifest</strong> — the list of
+paths plus their byte lengths, so the preloader knows what to fetch and can show
+progress — and that is a few lines in <code>DemoAssetsMain</code>, not a redesign. Android's
+<code>stageModelAssets</code> is the precedent for a per-platform staging step.</p>
+<p>Runtime download size is <strong>unmeasured</strong>. TeaVM's WasmGC output is reported at
+roughly 5× its JavaScript output for the same source, and <code>:engine</code> plus
+<code>:gdxshared</code> plus libGDX core is a substantial input. Anyone quoting a number
+for this before building it is guessing.</p>
+<hr>
+<h2 id="8-effort-and-the-recommendation">8. Effort, and the recommendation<a class="anchor" href="#8-effort-and-the-recommendation" aria-label="Permalink">#</a></h2>
+<h3 id="per-port-estimate">Per-port estimate<a class="anchor" href="#per-port-estimate" aria-label="Permalink">#</a></h3>
+<p>Ranges, not commitments. They assume one person already fluent in this codebase,
+and they exclude the learning curve on TeaVM itself.</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Item</th><th>Estimate</th><th>Confidence</th></tr></thead>
+<tbody>
+<tr><td>Gradle wiring, <code>gdx-teavm</code>, dependency exclusions for logback + sqlite-jdbc</td><td>2–3 days</td><td>High — <code>:android</code> is the template</td></tr>
+<tr><td><code>WebWindowPort</code> (canvas + <code>requestAnimationFrame</code>)</td><td>2 days</td><td>High</td></tr>
+<tr><td><code>WebInputPort</code> + <code>WebBindings</code> (Pointer Lock, keyboard)</td><td>2 days</td><td>High — <code>InputAccumulator</code> is done and headlessly tested</td></tr>
+<tr><td><code>WebTimePort</code>, <code>WebSystemInfoPort</code></td><td>0.5 days</td><td>High</td></tr>
+<tr><td><code>FetchModelSource</code> + a staging manifest</td><td>2 days</td><td>High</td></tr>
+<tr><td><code>WebUserProfilePort</code> over <code>localStorage</code></td><td>1 day</td><td>High</td></tr>
+<tr><td>Collapsing <code>GameLoop</code> onto a host callback without breaking drift correction or the "onFrame never advances" rule</td><td><strong>4–8 days</strong></td><td><strong>Low</strong> — this is a <code>core</code> change with a test suite to keep green</td></tr>
+<tr><td>Chasing whatever TeaVM's partial class library does not have</td><td><strong>3–10 days</strong></td><td><strong>Very low</strong> — unknowable without trying</td></tr>
+<tr><td>Bilinear/nearest quality toggle (already a planned Phase 5 item)</td><td>2 days</td><td>High</td></tr>
+<tr><td><strong>Subtotal — playable single-player demo</strong></td><td><strong>~3–5 weeks</strong></td><td></td></tr>
+<tr><td>Pure-Java fdlibm <code>sin</code>/<code>cos</code>/<code>pow</code> in <code>common/</code> + oracle tests</td><td>1–2 weeks</td><td>Moderate</td></tr>
+<tr><td><code>WebRtcDatagramPort</code> behind <code>I_DatagramPort</code></td><td>1 week</td><td>Moderate</td></tr>
+<tr><td>Signalling server, STUN, and the lobby that implies</td><td><strong>Unbounded</strong></td><td>It is a service, not a task</td></tr>
+<tr><td><strong>Multiplayer, browser-to-browser</strong></td><td><strong>+3 weeks and an operational commitment</strong></td><td></td></tr>
+</tbody>
+</table></div>
+<h3 id="verdict">Verdict<a class="anchor" href="#verdict" aria-label="Permalink">#</a></h3>
+<p><strong>Viable with specific caveats — and the caveats are load-bearing, not
+footnotes.</strong></p>
+<p>The architecture is genuinely ready for this in the ways that are usually hard.
+The HAL port set holds: nine of eleven rows are easy, and the two that are not
+are hard because the browser lacks a <em>capability</em>, which no interface design
+could have prevented. The renderer is ready in a way that is close to
+remarkable — the serial path is the tested reference, not a fallback, so the
+single-threaded platform inherits a provably-identical rasterizer for free.
+<code>ModelSource</code>, <code>EngineSession.start()</code>/<code>frameCallback()</code>, and
+<code>I_WindowPort.runFrameLoop</code> were all shaped by Android and all fit a browser
+without modification.</p>
+<p>What is not ready is smaller in code and larger in consequence. The tic clock is
+a blocking thread and has to stop being one, which is a <code>core</code> change against a
+1524-test suite. <code>StrictMath</code> stops meaning what it means, silently, past a
+guard that keeps passing. And UDP is simply gone, which ends browser-to-desktop
+multiplayer regardless of anything else.</p>
+<p><strong>Not worth starting today</strong>, for one reason that has nothing to do with any of
+the above: the project's own next steps are more valuable per unit of effort.
+<code>net/README.md</code> states that remote players are not yet simulated into visible
+bodies, and <code>README.md</code> says the same. Shipping a browser build of a game whose
+multiplayer does not draw the other player is optimising the wrong axis. The
+right sequence is: finish the remote-player simulation, build the bilinear
+toggle (wanted anyway), and <em>then</em> reconsider — at which point most of § 8's
+"playable demo" subtotal is unchanged and the rest is better understood.</p>
+<h3 id="the-smallest-meaningful-proof-of-concept">The smallest meaningful proof of concept<a class="anchor" href="#the-smallest-meaningful-proof-of-concept" aria-label="Permalink">#</a></h3>
+<p>Not a port. <strong>A measurement</strong>, and it should take about three days:</p>
+<blockquote>
+<p>Compile <code>:engine</code>'s <code>SoftwareRenderPort</code> with a <code>null</code> pool and
+<code>ProceduralRoom</code>'s 60-triangle generated room through TeaVM to WasmGC. Render
+300 frames at 640×360 into a canvas via <code>Framebuffer.copyColorTo</code> and a
+<code>putImageData</code>. Report the p50.</p>
+</blockquote>
+<p>It is the smallest thing that answers the only question this document cannot:
+<strong>how much slower is the inner loop in a browser?</strong> Every other risk here is
+known and bounded — the clock rewrite is understood, fdlibm is understood, the
+absence of UDP is understood. The Wasm penalty on a bounds-checked loop over
+three primitive arrays is not, and it decides everything downstream: if it is
+1.5×, a 720p30 browser build is real; if it is 5×, the target is 480×270 and the
+conversation changes.</p>
+<p>It also needs almost nothing from the rest of the port. No window port, no
+input, no persistence, no networking, no <code>GameLoop</code> — the generated fallback
+room is 47 KB and needs no asset pipeline at all. It deliberately measures the
+one thing that cannot be reasoned about, which is the same discipline
+<code>docs/ASSETS.md</code> § 2 applied when its estimates turned out to be optimistic by
+2–3× and <code>render/README.md</code> § 7 applied when a timed park cost 15×.</p>
+<hr>
+<h2 id="9-what-this-document-could-not-verify">9. What this document could not verify<a class="anchor" href="#9-what-this-document-could-not-verify" aria-label="Permalink">#</a></h2>
+<p>Stated so nobody treats an inference as a measurement.</p>
+<ul>
+<li>
+<p><strong>The Wasm performance penalty on this rasterizer.</strong> Unmeasured, and no
+published benchmark is close enough to this workload to substitute. § 8's PoC
+exists to fix this.</p>
+</li>
+<li>
+<p><strong>Whether <code>gdx-teavm</code> actually carries <code>:gdxshared</code>.</strong> The module depends on
+libGDX core only, which is the precondition, but Scene2D, <code>Pixmap</code>,
+<code>SpriteBatch</code> and <code>Texture</code> have not been tried under it.</p>
+</li>
+<li>
+<p><strong>TeaVM version and date specifics.</strong> The threading statements here come from
+TeaVM's own 0.12/0.13 release notes and documentation; the current version and
+its release date were not independently confirmed and should be re-checked
+before any work starts.</p>
+</li>
+<li>
+<p><strong>TeaVM's exact <code>StrictMath</code> behaviour at whichever version is current.</strong> The
+delegation chain (<code>TStrictMath</code> → <code>TMath</code> → <code>@Import("teavmMath")</code>) was read
+from the class library sources. It is a design decision rather than an
+oversight and is unlikely to change, but § 5's conclusion is important enough
+to be re-read against the version actually used.</p>
+</li>
+<li>
+<p><strong>The fdlibm licence.</strong> § 5 asserts that the original Sun sources are
+permissive and that OpenJDK's Java port is not usable here. The first half was
+not verified against the notice text.</p>
+</li>
+<li>
+<p><strong><code>localStorage</code> behaviour under private browsing and storage pressure.</strong>
+Browsers evict, and the desktop build has never had a profile disappear.</p>
+</li>
+</ul>
+<h2 id="10-revisit-triggers">10. Revisit triggers<a class="anchor" href="#10-revisit-triggers" aria-label="Permalink">#</a></h2>
+<ul>
+<li><strong><code>shared-everything-threads</code> ships in two browser engines.</strong> That would
+restore the tile-parallel model and change § 3.3's conclusion outright — the
+renderer needs no changes to take advantage, because the pooled path is the
+one that already exists.</li>
+<li><strong><code>ModelFormat</code> gains a shared-texture section</strong> (<code>docs/ASSETS.md</code> § 9). The
+download budget improves ~6× and § 7 stops being a constraint.</li>
+<li><strong>Remote players are simulated into visible bodies</strong> (<code>net/README.md</code>). The
+sequencing argument in § 8 expires the moment this is true.</li>
+<li><strong>A browser build is wanted for reach rather than for play</strong> — a demo link in
+a README, not a platform. Single-player at 640×360 satisfies that today and is
+a three-to-five week job, with none of § 5 or § 6.1 on the critical path.</li>
+</ul>
+<footer class="pagefoot"><p>Source: <a class="ext" rel="noopener noreferrer" target="_blank" href="https://github.com/nicholashutter/OpenFPS/blob/main/docs/WASM.md">docs/WASM.md</a>. This page is generated — edit the Markdown, not the HTML.</p></footer>
+</main>
+</div>
+<script src="site.js"></script>
+</body>
+</html>

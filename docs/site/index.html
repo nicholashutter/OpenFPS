@@ -53,10 +53,12 @@
 <li><a href="engine-resource.html">Resource (W_)</a></li>
 <li><a href="engine-memory.html">Memory (Z_)</a></li>
 </ul></details>
-<details class="grp" data-hue="6"><summary><span class="dot"></span>Reference<span class="count">2</span></summary>
+<details class="grp" data-hue="6"><summary><span class="dot"></span>Reference<span class="count">4</span></summary>
 <ul>
 <li><a href="assets.html">Assets and licensing</a></li>
 <li><a href="demo-assets.html">Demo asset manifest</a></li>
+<li><a href="memory.html">Memory: what OpenFPS reserves, what it churns</a></li>
+<li><a href="wasm.html">WebAssembly</a></li>
 </ul></details>
 </nav>
 <p class="generated">Generated from the repository's Markdown by <code>:tools:buildDocsSite</code>.</p>
@@ -434,7 +436,7 @@ licence terms are recorded in <a href="demo-assets.html">docs/DEMO_ASSETS.md</a>
 <h3 class="mapgroup"><span class="dot"></span>Overview</h3>
 <div class="cards">
 <a class="card" href="index.html"><span class="card-title">Overview</span><span class="card-sub">OpenFPS</span><span class="card-text">Open-source peer-to-peer FPS game engine targeting the JVM. Event-driven, multi-threaded, hexagonal architecture, and a software triangle rasterizer with no GPU shading path.</span><span class="card-meta">11 min</span></a>
-<a class="card" href="agents.html"><span class="card-title">Agent instructions</span><span class="card-sub">AGENTS.md — OpenFPS Engine Agent Instructions</span><span class="card-text">This file provides project-specific context and conventions for AI coding agents working in this repository. It supplements, not replaces, the agent's built-in persona (Mavis) and the global…</span><span class="card-meta">11 min</span></a>
+<a class="card" href="agents.html"><span class="card-title">Agent instructions</span><span class="card-sub">AGENTS.md — OpenFPS Engine Agent Instructions</span><span class="card-text">This file provides project-specific context and conventions for AI coding agents working in this repository. It supplements, not replaces, the agent's built-in persona (Mavis) and the global…</span><span class="card-meta">12 min</span></a>
 </div>
 </section>
 <section class="mapsec" data-hue="2">
@@ -455,9 +457,9 @@ licence terms are recorded in <a href="demo-assets.html">docs/DEMO_ASSETS.md</a>
 <div class="cards">
 <a class="card" href="engine.html"><span class="card-title">:engine</span><span class="card-sub">OpenFPS — Engine Subsystem Map</span><span class="card-text">For new contributors: read this first. Every Java package below has a README.md with the full subsystem spec. This page is the 2-line elevator pitch for each.</span><span class="card-meta">3 min</span></a>
 <a class="card" href="desktop.html"><span class="card-title">:desktop</span><span class="card-sub">:desktop — the windowed launcher</span><span class="card-text">The only module allowed to touch LWJGL3 and GLFW. It gives the engine a real window, a real mouse, and somewhere to put the pixels the software rasterizer produced.</span><span class="card-meta">5 min</span></a>
-<a class="card" href="android.html"><span class="card-title">:android</span><span class="card-sub">:android — the Android launcher</span><span class="card-text">libGDX's Android backend, the software rasterizer on a GLSurfaceView, a thumbstick, and the Room half of I_UserProfilePort. It is playable.</span><span class="card-meta">10 min</span></a>
+<a class="card" href="android.html"><span class="card-title">:android</span><span class="card-sub">:android — the Android launcher</span><span class="card-text">libGDX's Android backend, the software rasterizer on a GLSurfaceView, a thumbstick, and the Room half of I_UserProfilePort. It is playable.</span><span class="card-meta">11 min</span></a>
 <a class="card" href="tools.html"><span class="card-title">:tools</span><span class="card-sub">:tools — build-time asset tooling</span><span class="card-text">Nothing in this module is ever shipped. It converts art offline, verifies it against the budget, and renders preview frames without a display. No class here reaches a runtime classpath, and…</span><span class="card-meta">5 min</span></a>
-<a class="card" href="gdxshared.html"><span class="card-title">:gdxshared</span><span class="card-sub">:gdxshared — the libGDX code that is not platform-specific</span><span class="card-text">Both launchers use libGDX. Neither of them should have to write the framebuffer presenter twice.</span><span class="card-meta">4 min</span></a>
+<a class="card" href="gdxshared.html"><span class="card-title">:gdxshared</span><span class="card-sub">:gdxshared — the libGDX code that is not platform-specific</span><span class="card-text">Both launchers use libGDX. Neither of them should have to write the framebuffer presenter twice.</span><span class="card-meta">5 min</span></a>
 </div>
 </section>
 <section class="mapsec" data-hue="5">
@@ -465,11 +467,11 @@ licence terms are recorded in <a href="demo-assets.html">docs/DEMO_ASSETS.md</a>
 <div class="cards">
 <a class="card" href="engine-core.html"><span class="card-title">Core</span><span class="card-sub">Core — Engine Entry, Event Bus, and Worker Pool</span><span class="card-text">The engine is an event queue processor. All subsystem interactions go through events. A pool of dedicated worker threads consumes from the queue and dispatches to subsystems.</span><span class="card-meta">9 min</span></a>
 <a class="card" href="engine-common.html"><span class="card-title">Common</span><span class="card-sub">Common — Shared Types and Math</span><span class="card-text">Utilities used by every other subsystem. Nothing platform-specific lives here.</span><span class="card-meta">7 min</span></a>
-<a class="card" href="engine-hal.html"><span class="card-title">HAL (I_)</span><span class="card-sub">HAL (I_) — Hardware Abstraction Layer</span><span class="card-text">Every platform dependency the engine has, named as an interface here and satisfied somewhere else. Nothing in :engine outside hal/adapter/ may import a platform API — and hal/adapter/ itself…</span><span class="card-meta">8 min</span></a>
-<a class="card" href="engine-gameplay.html"><span class="card-title">Gameplay (P_)</span><span class="card-sub">Gameplay (P_) — Player, Entities, Map Logic</span><span class="card-text">P_ is the gameplay / physics layer. Holds everything that changes during play.</span><span class="card-meta">9 min</span></a>
+<a class="card" href="engine-hal.html"><span class="card-title">HAL (I_)</span><span class="card-sub">HAL (I_) — Hardware Abstraction Layer</span><span class="card-text">Every platform dependency the engine has, named as an interface here and satisfied somewhere else. Nothing in :engine outside hal/adapter/ may import a platform API — and hal/adapter/ itself…</span><span class="card-meta">9 min</span></a>
+<a class="card" href="engine-gameplay.html"><span class="card-title">Gameplay (P_)</span><span class="card-sub">Gameplay (P_) — Player, Entities, Map Logic</span><span class="card-text">P_ is the gameplay / physics layer. Holds everything that changes during play.</span><span class="card-meta">15 min</span></a>
 <a class="card" href="engine-render.html"><span class="card-title">Render (R_)</span><span class="card-sub">Render (R_) — Multi-threaded Software Triangle Rasterizer</span><span class="card-text">R_ takes the current game state and produces a finished framebuffer. It is pure math over primitive arrays — no window, no graphics API, no GPU. The platform adapter uploads the finished…</span><span class="card-meta">51 min</span></a>
 <a class="card" href="engine-demo.html"><span class="card-title">Demo</span><span class="card-sub">Demo — the playable first-person scene</span><span class="card-text">A room to stand in and a blaster to hold. This package is what turns the engine's working parts into something you can walk around in.</span><span class="card-meta">4 min</span></a>
-<a class="card" href="engine-audio.html"><span class="card-title">Audio (S_)</span><span class="card-sub">Audio (S_) — Sound and Music</span><span class="card-text">S_ is the sound engine. Plays 3D-positioned SFX and background music.</span><span class="card-meta">6 min</span></a>
+<a class="card" href="engine-audio.html"><span class="card-title">Audio (S_)</span><span class="card-sub">Audio (S_) — Sound</span><span class="card-text">The engine says "make this noise". Everything else — device, format, file, mixer — is behind the port.</span><span class="card-meta">10 min</span></a>
 <a class="card" href="engine-net.html"><span class="card-title">Net (G_)</span><span class="card-sub">Net (G_) — Peer-to-Peer Networking</span><span class="card-text">G_ is the network layer. The engine is P2P-first — no dedicated server required for small matches. Authority is distributed: every player is a peer.</span><span class="card-meta">28 min</span></a>
 <a class="card" href="engine-resource.html"><span class="card-title">Resource (W_)</span><span class="card-sub">Resource (W_) — WAD File Loading</span><span class="card-text">W_ reads resource files and caches them so the same lump isn't read twice.</span><span class="card-meta">10 min</span></a>
 <a class="card" href="engine-memory.html"><span class="card-title">Memory (Z_)</span><span class="card-sub">Memory (Z_) — Zone / Heap Allocator</span><span class="card-text">Z_ is the engine's unified memory port. The entire engine allocates memory through I_MemoryPort — the rest of the code does not know whether the backing store is the JVM heap, a custom zone,…</span><span class="card-meta">7 min</span></a>
@@ -478,8 +480,10 @@ licence terms are recorded in <a href="demo-assets.html">docs/DEMO_ASSETS.md</a>
 <section class="mapsec" data-hue="6">
 <h3 class="mapgroup"><span class="dot"></span>Reference</h3>
 <div class="cards">
-<a class="card" href="assets.html"><span class="card-title">Assets and licensing</span><span class="card-sub">Game Data and Asset Licensing</span><span class="card-text">Policy document. What game data OpenFPS may legally ship, what technical shape it must be in, and how it reaches a developer's machine.  Every asset entering this repository must satisfy §3…</span><span class="card-meta">20 min</span></a>
+<a class="card" href="assets.html"><span class="card-title">Assets and licensing</span><span class="card-sub">Game Data and Asset Licensing</span><span class="card-text">Policy document. What game data OpenFPS may legally ship, what technical shape it must be in, and how it reaches a developer's machine.  Every asset entering this repository must satisfy §3…</span><span class="card-meta">22 min</span></a>
 <a class="card" href="demo-assets.html"><span class="card-title">Demo asset manifest</span><span class="card-sub">Demo Asset Manifest</span><span class="card-text">Provenance record for the first-person demo's model set: one weapon and eight level pieces, plus a generated fallback room.  The binaries are not in git — docs/ASSETS.md § 6, enforced by…</span><span class="card-meta">9 min</span></a>
+<a class="card" href="memory.html"><span class="card-title">Memory: what OpenFPS reserves, what it churns</span><span class="card-sub">Memory: what OpenFPS reserves, what it churns</span><span class="card-text">Measurement document. How many bytes the engine pre-allocates, how many it allocates per frame and per tic, which of the Javadoc's allocation-freedom claims survive contact with a running…</span><span class="card-meta">33 min</span></a>
+<a class="card" href="wasm.html"><span class="card-title">WebAssembly</span><span class="card-sub">WebAssembly — can OpenFPS run in a browser?</span><span class="card-text">Feasibility assessment. What a browser target would cost, which of the existing ports survive it, which two things in the architecture it breaks, and whether it is worth doing yet.  Nothing…</span><span class="card-meta">29 min</span></a>
 </div>
 </section>
 <footer class="pagefoot"><p>Source: <a class="ext" rel="noopener noreferrer" target="_blank" href="https://github.com/nicholashutter/OpenFPS/blob/main/README.md">README.md</a>. This page is generated — edit the Markdown, not the HTML.</p></footer>

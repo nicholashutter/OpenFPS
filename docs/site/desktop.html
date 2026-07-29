@@ -53,10 +53,12 @@
 <li><a href="engine-resource.html">Resource (W_)</a></li>
 <li><a href="engine-memory.html">Memory (Z_)</a></li>
 </ul></details>
-<details class="grp" data-hue="6"><summary><span class="dot"></span>Reference<span class="count">2</span></summary>
+<details class="grp" data-hue="6"><summary><span class="dot"></span>Reference<span class="count">4</span></summary>
 <ul>
 <li><a href="assets.html">Assets and licensing</a></li>
 <li><a href="demo-assets.html">Demo asset manifest</a></li>
+<li><a href="memory.html">Memory: what OpenFPS reserves, what it churns</a></li>
+<li><a href="wasm.html">WebAssembly</a></li>
 </ul></details>
 </nav>
 <p class="generated">Generated from the repository's Markdown by <code>:tools:buildDocsSite</code>.</p>
@@ -175,7 +177,9 @@ to make.</p>
 line lands on the daemon and never reaches the forked JVM:
 <code>-Dopenfps.fpsLog=2</code> logs platform, presented and rendered frame rates every two
 seconds — the only way to measure the <em>windowed</em> rate — and
-<code>-Dopenfps.screenshot=&lt;path&gt;</code> writes a frame to PNG.</p>
+<code>-Dopenfps.screenshot=&lt;path&gt;</code> writes a frame to PNG.
+<code>-Dopenfps.workers=N</code> pins the worker pool, which <code>ThreadPoolFactory</code> otherwise
+sizes from the processor count; the boot log says which of the two happened.</p>
 <h2 id="files">Files<a class="anchor" href="#files" aria-label="Permalink">#</a></h2>
 <ul>
 <li>
