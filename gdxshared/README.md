@@ -77,6 +77,32 @@ Every one of those is identical on a phone. A second copy would be a second
 place for them to drift, and drift in any of the three produces an image that is
 wrong in a way that looks like a renderer bug rather than an upload bug.
 
+## The render resolution is not the surface resolution
+
+The quad above is a **fullscreen** quad — it covers the viewport whatever the
+texture measures — so a smaller framebuffer is upscaled by the GPU for free.
+`RenderMode` is the seam that uses that: the surface reports its own size, and
+`SoftwareRenderPort.resize` is given a scaled one.
+
+It matters because a software rasterizer's cost is per pixel and a display panel
+is not a budget. A phone handed the panel's native 2400x1080 rasterized 2.59
+megapixels per frame; `480P` renders 1067x480 instead, and on the
+`OpenFPS_API36` emulator that took the same scene from **262 ms to 91 ms** and
+the platform frame rate from 22 to 41 fps. The remaining floor is
+resolution-independent — 7,844 triangles transformed and clipped per pass, and
+eight publish/join boundaries — which is why 5.4x fewer pixels buys 2.9x rather
+than 5.4x.
+
+Three modes, cycled from the settings screen and changeable mid-session:
+`480P` (the default on **both** platforms), `720P`, and `NATIVE`. A mode names
+the **short** edge and is a **ceiling**: a window already smaller than the mode
+is left alone, because rasterizing 480 rows into a 320-row window would be
+slower and blurrier at once.
+
+The UI, the touch pad and the debug counter are drawn separately at the surface
+size and stay sharp — that is the payoff of scaling the world alone rather than
+the whole framebuffer.
+
 ## `InputAccumulator` imports nothing
 
 It is in this module because both input ports use it, not because it needs
@@ -95,6 +121,8 @@ tell which produced a given `InputState`.
 | File | What it does |
 |---|---|
 | `FramebufferPresenter.java` | Uploads R_'s finished frame and draws it fullscreen |
+| `RenderMode.java` | 480p / 720p / native, and the surface-to-framebuffer arithmetic |
+| `RenderSettings.java` | The switch the settings screen cycles; the presenter listens |
 | `InputAccumulator.java` | Accumulate-and-latch between platform and tic rates |
 | `UiState.java` / `UiStateMachine.java` | Menu or game, and what each permits |
 | `MenuActions.java` | What the menu can ask the application to do |

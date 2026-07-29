@@ -22,6 +22,7 @@ import com.openfps.gdx.DebugSettings;
 import com.openfps.gdx.FramebufferPresenter;
 import com.openfps.gdx.GameOverScreen;
 import com.openfps.gdx.MenuActions;
+import com.openfps.gdx.RenderSettings;
 import com.openfps.gdx.SettingsScreen;
 import com.openfps.gdx.UiState;
 import com.openfps.gdx.UiStateMachine;
@@ -295,7 +296,7 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
         // size on a 160 dpi tablet and a 560 dpi handset — the same rule
         // MainMenuFrameCallback applies, and the reason these screens take a
         // scale at all.
-        settings = new SettingsScreen(debug, uiState::returnToMenu, density());
+        settings = new SettingsScreen(debug, renderSettings(), uiState::returnToMenu, density());
         settings.resize(width, height);
         resizeWorld(width, height);
         appliedState = uiState.state();
@@ -453,9 +454,45 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
         if (debug.isOverlayVisible())
         {
             // Last, so it sits over the world and the touch controls rather
-            // than under them.
-            fpsCounter.render(surfaceWidth, surfaceHeight);
+            // than under them. Drawn at the SURFACE size while the world behind
+            // it was rasterized at the render size — which is the visible payoff
+            // of scaling the world alone, and is why the counter reports both.
+            fpsCounter.render(surfaceWidth, surfaceHeight, renderWidth(), renderHeight());
         }
+    }
+
+    // The framebuffer the rasterizer is filling, or 0 when there is no presenter
+    // to have scaled anything — which the overlay reads as "the same as the
+    // surface", the only honest answer with no renderer in the run.
+    private int renderWidth()
+    {
+        if (presenter == null)
+        {
+            return 0;
+        }
+        return presenter.renderWidth();
+    }
+
+    // The same, for the other edge.
+    private int renderHeight()
+    {
+        if (presenter == null)
+        {
+            return 0;
+        }
+        return presenter.renderHeight();
+    }
+
+    // The presenter's render switch, or a detached one when this run has no
+    // presenter. Never null, because the settings screen must be able to show a
+    // mode whether or not anything can act on it.
+    private RenderSettings renderSettings()
+    {
+        if (presenter == null)
+        {
+            return new RenderSettings();
+        }
+        return presenter.renderSettings();
     }
 
     // Feeds the counter whether or not it is drawn, so switching it on shows a

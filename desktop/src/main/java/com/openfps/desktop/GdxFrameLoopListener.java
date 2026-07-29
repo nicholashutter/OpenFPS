@@ -21,6 +21,7 @@ import com.openfps.gdx.FramebufferPresenter;
 import com.openfps.gdx.GameOverScreen;
 import com.openfps.gdx.MainMenuScreen;
 import com.openfps.gdx.MenuActions;
+import com.openfps.gdx.RenderSettings;
 import com.openfps.gdx.SettingsScreen;
 import com.openfps.gdx.UiState;
 import com.openfps.gdx.UiStateMachine;
@@ -419,7 +420,7 @@ public final class GdxFrameLoopListener implements ApplicationListener
         WindowIcon.apply();
         menu = new MainMenuScreen(actions);
         menu.layoutFor(width, height);
-        settings = new SettingsScreen(debug, uiState::returnToMenu);
+        settings = new SettingsScreen(debug, renderSettings(), uiState::returnToMenu);
         settings.layoutFor(width, height);
         appliedState = uiState.state();
         applyMenuInput(appliedState);
@@ -513,9 +514,48 @@ public final class GdxFrameLoopListener implements ApplicationListener
         sampleDebugOverlay(deltaSeconds);
         if (debug.isOverlayVisible())
         {
-            // Last, so it is over the world rather than under it.
-            overlay.render(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
+            // Last, so it is over the world rather than under it. Drawn at the
+            // WINDOW size while the world behind it was rasterized at the render
+            // size — which is the visible payoff of scaling the world alone, and
+            // is why the counter reports both.
+            overlay.render(Gdx.graphics.getWidth(), Gdx.graphics.getHeight(),
+                renderWidth(), renderHeight());
         }
+    }
+
+    // The framebuffer the rasterizer is filling, or 0 when there is no
+    // presenter to have scaled anything — which the overlay reads as "the same
+    // as the surface", the only honest answer with no renderer in the run.
+    private int renderWidth()
+    {
+        if (presenter == null)
+        {
+            return 0;
+        }
+        return presenter.renderWidth();
+    }
+
+    // The same, for the other edge.
+    private int renderHeight()
+    {
+        if (presenter == null)
+        {
+            return 0;
+        }
+        return presenter.renderHeight();
+    }
+
+    // The presenter's render switch, or a detached one when this run has no
+    // presenter. Never null, because the settings screen must be able to show a
+    // mode whether or not anything can act on it — a headless desktop test
+    // builds this listener with no renderer at all.
+    private RenderSettings renderSettings()
+    {
+        if (presenter == null)
+        {
+            return new RenderSettings();
+        }
+        return presenter.renderSettings();
     }
 
     // Feeds the counter whether or not it is being drawn, so switching it on

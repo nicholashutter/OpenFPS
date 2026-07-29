@@ -91,9 +91,15 @@ tasks.named<JavaExec>("run") {
     // processor count otherwise). It is forwarded for the same reason as the
     // rest: a -D that lands on the daemon would leave the pool auto-sized while
     // looking as though it had been pinned, which is the worst of both.
+    // openfps.renderMode and openfps.renderFilter pick the internal render
+    // resolution and how the finished frame is blitted up to the window. Both
+    // are otherwise reachable only through the settings screen, which needs a
+    // mouse — so without forwarding them, the two modes most in need of a "does
+    // it flip? does it stretch?" capture would be the two nothing can capture.
     for (name in listOf("openfps.screenshot", "openfps.screenshotFrame",
                         "openfps.screenshotExit", "openfps.fpsLog",
-                        "openfps.workers", "openfps.debugOverlay")) {
+                        "openfps.workers", "openfps.debugOverlay",
+                        "openfps.renderMode", "openfps.renderFilter")) {
         val value = providers.systemProperty(name).orNull
         if (value != null) {
             systemProperty(name, value)

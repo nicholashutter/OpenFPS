@@ -32,6 +32,15 @@ import com.badlogic.gdx.graphics.g2d.TextureRegion;
  * combined figure could not tell those apart, and the difference is the whole
  * reason anyone turns a counter on.</p>
  *
+ * <h2>And a third: what RENDER is the cost OF</h2>
+ *
+ * <p><b>RES</b> is the framebuffer the rasterizer is filling, which since
+ * {@link RenderMode} exists is no longer the surface. Without it the RENDER
+ * figure is uninterpretable — 12 ms is excellent at 1067x480 and remarkable at
+ * 2400x1080 — and worse, there would be no way to confirm from the screen that
+ * a mode change took effect at all. It is the line that makes the setting
+ * verifiable rather than merely present.</p>
+ *
  * <h2>Drawn from the same white pixel as everything else</h2>
  *
  * <p>{@link BlockFont} cells, exactly like {@link BlockTitle} — no font file, no
@@ -73,7 +82,7 @@ public final class DebugOverlay
     public static final float PADDING_PIXELS = 10.0f;
 
     /** How many lines the panel shows. */
-    private static final int LINE_COUNT = 3;
+    private static final int LINE_COUNT = 4;
 
     /** The backdrop the text sits on, so it reads over any part of the world. */
     private static final Color PANEL = new Color(0.03f, 0.04f, 0.08f, 0.72f);
@@ -116,6 +125,18 @@ public final class DebugOverlay
 
     /** Last renderer frame time in tenths of a millisecond. MUTABLE. */
     private int shownRenderTenths = NO_READING;
+
+    /** The framebuffer width most recently reported. MUTABLE: set per render. */
+    private int renderWidth;
+
+    /** The framebuffer height most recently reported. MUTABLE: set per render. */
+    private int renderHeight;
+
+    /** The width {@link #lines} was last built for. MUTABLE. */
+    private int shownRenderWidth = NO_READING;
+
+    /** The height {@link #lines} was last built for. MUTABLE. */
+    private int shownRenderHeight = NO_READING;
 
     /** Creates an overlay. Builds no GL resource until it is first drawn. */
     public DebugOverlay()
@@ -167,13 +188,21 @@ public final class DebugOverlay
      * @param surfaceWidth the surface width in pixels; must be positive to draw
      * @param surfaceHeight the surface height in pixels; must be positive to
      *     draw. The panel is anchored to the top, so this is what places it
+     * @param frameWidth the framebuffer width the rasterizer is filling —
+     *     {@code FramebufferPresenter.renderWidth()}. Zero or less falls back to
+     *     the surface width, which is the truth when there is no presenter to
+     *     have scaled anything
+     * @param frameHeight the framebuffer height, on the same terms
      */
-    public void render(final int surfaceWidth, final int surfaceHeight)
+    public void render(final int surfaceWidth, final int surfaceHeight,
+        final int frameWidth, final int frameHeight)
     {
         if (surfaceWidth <= 0 || surfaceHeight <= 0 || !platform.hasReading())
         {
             return;
         }
+        this.renderWidth = positiveOr(frameWidth, surfaceWidth);
+        this.renderHeight = positiveOr(frameHeight, surfaceHeight);
         ensureResources();
         refreshLines();
 
@@ -200,7 +229,17 @@ public final class DebugOverlay
         batch.end();
     }
 
-    // The headline figure is picked out; the two timings are quieter.
+    // A reported figure, or the fallback when nothing usable was reported.
+    private static int positiveOr(final int reported, final int fallback)
+    {
+        if (reported > 0)
+        {
+            return reported;
+        }
+        return fallback;
+    }
+
+    // The headline figure is picked out; the rest are quieter.
     private static Color colourFor(final int lineIndex)
     {
         if (lineIndex == 0)
@@ -260,6 +299,15 @@ public final class DebugOverlay
         {
             shownRenderTenths = renderTenths;
             lines[2] = "RENDER " + oneDecimal(renderer.frameMillis()) + " MS";
+        }
+        if (renderWidth != shownRenderWidth || renderHeight != shownRenderHeight)
+        {
+            shownRenderWidth = renderWidth;
+            shownRenderHeight = renderHeight;
+            // Changes only when the mode does, so this allocates once a run in
+            // practice — the same caching rule as the three lines above, applied
+            // to a figure that happens to be even more stable than they are.
+            lines[3] = "RES " + renderWidth + "X" + renderHeight;
         }
     }
 

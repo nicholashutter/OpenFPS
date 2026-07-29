@@ -61,7 +61,70 @@ import org.slf4j.LoggerFactory;
  * {@code t = 0}, and {@code SpriteBatch.draw(Texture, x, y, w, h)} maps
  * {@code t = 0} to the <b>top</b> of the drawn rectangle — its bottom-left
  * vertex carries {@code v = 1}. Two conventions, one flip each, and they
- * cancel: no explicit flip belongs here. Adding one is the bug, not the fix.</p>
+ * cancel: no explicit flip belongs here. Adding one is the bug, not the fix.
+ * <b>None of the three depends on the texture's size</b>, which is what let the
+ * render resolution be decoupled from the surface without disturbing any of
+ * them — see below.</p>
+ *
+ * <h2>The render size is NOT the surface size</h2>
+ *
+ * <p>The quad above is a <b>fullscreen</b> quad: it covers the viewport
+ * whatever the texture's dimensions are, so a smaller framebuffer is upscaled
+ * by the GPU for free. {@link RenderMode} decides how much smaller, the render
+ * port is sized to <i>that</i> rather than to the surface, and the phone stops
+ * rasterizing 2.59 megapixels per frame in software. Three numbers therefore
+ * live here rather than two:</p>
+ *
+ * <ul>
+ *   <li>{@link #width()} and {@link #height()} — the surface. The quad, the
+ *       ortho projection and every other thing drawn over the world use
+ *       these, which is why the UI, the touch pad and the debug counter stay
+ *       crisp at native resolution while the world does not.</li>
+ *   <li>{@link #renderWidth()} and {@link #renderHeight()} — the framebuffer.
+ *       The render port, the scratch array, the Pixmap and the Texture are all
+ *       this size, and so is the camera's aspect ratio, because
+ *       {@code DemoGameplayPort.aimCamera} derives it from
+ *       {@code SoftwareRenderPort.surfaceWidth()/surfaceHeight()} — the
+ *       framebuffer's own numbers, which is exactly the property that keeps
+ *       the projection honest without a second place to keep in step.</li>
+ * </ul>
+ *
+ * <p><b>Filtering.</b> A 1:1 blit uses {@code Nearest}: filtering an image that
+ * lands on whole texels can only blur it. Anything else uses
+ * {@link #UPSCALE_FILTER_PROPERTY}'s filter, which defaults to {@code Linear}
+ * because the ratio between 1067 and 2400 is not a whole number — with
+ * {@code Nearest} some source pixels are duplicated twice and their neighbours
+ * three times, and the seam between the two crawls across the screen as the
+ * camera turns. <b>This is GPU filtering of the finished blit and has nothing
+ * to do with the bilinear TEXTURE sampling {@code docs/ASSETS.md} measures at
+ * 2.9x inside the rasterizer.</b> That one is per rasterized pixel on the CPU
+ * and is a real cost; this one is a sampler state on a single quad and is
+ * free. Confusing the two would be an expensive mistake in either
+ * direction.</p>
+ *
+ * <h2>Changing mode mid-session</h2>
+ *
+ * <p>{@link RenderSettings} is held here and the presenter listens to itself,
+ * so the settings screen's button re-sizes a live framebuffer between frames.
+ * That is safe on both sides:</p>
+ *
+ * <ul>
+ *   <li><b>Against the renderer</b> — {@code SoftwareRenderPort.resize} takes
+ *       the same {@code frameLock} that serialises {@code renderFrame} and
+ *       {@code setScene}, so it cannot land in the middle of a frame, and it
+ *       clears the published-frame flag so no frame captured at the old size is
+ *       ever handed to a texture sized for the new one.</li>
+ *   <li><b>Against this class</b> — the button callback and {@link #present}
+ *       both run on the platform's render thread. Scene2D input is pumped
+ *       before {@code render()}, so a mode change is complete before the next
+ *       upload begins, and the scratch array can never be smaller than the
+ *       frame being copied into it.</li>
+ * </ul>
+ *
+ * <p>The one visible effect is that the first frame or two after a change
+ * present nothing — {@code copyColorInto} returns false until the renderer
+ * publishes at the new size — and the caller clears instead. That is the same
+ * behaviour a window resize has always had.</p>
  *
  * <h2>Lifecycle and threading</h2>
  *
@@ -100,6 +163,24 @@ public final class FramebufferPresenter
      */
     public static final String FPS_LOG_PROPERTY = "openfps.fpsLog";
 
+    /**
+     * System property choosing the GPU filter for a scaled blit.
+     *
+     * <pre>
+     *   -Dopenfps.renderFilter=nearest   crisp and blocky
+     *   -Dopenfps.renderFilter=linear    smooth and slightly soft (the default)
+     * </pre>
+     *
+     * <p>Ignored when the render size equals the surface size, where
+     * {@code Nearest} is the only right answer — see the class Javadoc, which
+     * also explains why this is not the bilinear sampling {@code docs/ASSETS.md}
+     * costs at 2.9x.</p>
+     */
+    public static final String UPSCALE_FILTER_PROPERTY = "openfps.renderFilter";
+
+    /** The {@link #UPSCALE_FILTER_PROPERTY} value asking for a crisp blit. */
+    public static final String FILTER_NEAREST = "nearest";
+
     private static final Logger LOG = LoggerFactory.getLogger(FramebufferPresenter.class);
 
     /** Nanoseconds in a second. */
@@ -123,14 +204,32 @@ public final class FramebufferPresenter
     /** The GPU texture. MUTABLE: rebuilt on resize. */
     private Texture texture;
 
-    /** De-padded frame, exactly {@code width * height}. MUTABLE: rebuilt on resize. */
+    /** De-padded frame, exactly {@code renderWidth * renderHeight}. MUTABLE: rebuilt on resize. */
     private int[] scratch;
 
-    /** Surface width in pixels. MUTABLE: set on resize. */
+    /** Surface width in pixels — what the quad covers. MUTABLE: set on resize. */
     private int width;
 
-    /** Surface height in pixels. MUTABLE: set on resize. */
+    /** Surface height in pixels — what the quad covers. MUTABLE: set on resize. */
     private int height;
+
+    /** Framebuffer width in pixels — what R_ fills. MUTABLE: set on resize. */
+    private int renderWidth;
+
+    /** Framebuffer height in pixels — what R_ fills. MUTABLE: set on resize. */
+    private int renderHeight;
+
+    /**
+     * The render mode in force, and the thing the settings screen cycles.
+     *
+     * <p>Held here rather than by the launcher because this is the only object
+     * that can act on it — see {@link RenderSettings}. This class attaches its
+     * own observer in the constructor.</p>
+     */
+    private final RenderSettings renderSettings;
+
+    /** The filter a scaled blit uses. {@code Nearest} at 1:1 regardless. */
+    private final Texture.TextureFilter upscaleFilter;
 
     /** Log interval in nanoseconds, or zero when the frame-rate log is off. */
     private final long fpsIntervalNanos;
@@ -155,7 +254,24 @@ public final class FramebufferPresenter
      */
     public FramebufferPresenter(final SoftwareRenderPort port)
     {
-        this(port, logIntervalSeconds());
+        this(port, RenderMode.configured());
+    }
+
+    /**
+     * Creates a presenter starting in a given render mode.
+     *
+     * <p>Both launchers use the one-argument form, which takes
+     * {@link RenderMode#configured()}. This one exists so a platform that knows
+     * better about its own surface can say so at the composition root rather
+     * than by reaching in later, and so a test can pin a mode without touching a
+     * system property.</p>
+     *
+     * @param port the software renderer to present; must not be null
+     * @param initialMode the render mode to start in; must not be null
+     */
+    public FramebufferPresenter(final SoftwareRenderPort port, final RenderMode initialMode)
+    {
+        this(port, logIntervalSeconds(), initialMode);
     }
 
     /**
@@ -167,12 +283,47 @@ public final class FramebufferPresenter
      */
     public FramebufferPresenter(final SoftwareRenderPort port, final int logIntervalSeconds)
     {
+        this(port, logIntervalSeconds, RenderMode.configured());
+    }
+
+    /**
+     * Creates a presenter with everything spelled out.
+     *
+     * @param port the software renderer to present; must not be null
+     * @param logIntervalSeconds seconds between frame-rate log lines; zero or
+     *     less disables the log entirely
+     * @param initialMode the render mode to start in; must not be null
+     * @throws IllegalArgumentException if the port or the mode is null
+     */
+    public FramebufferPresenter(final SoftwareRenderPort port, final int logIntervalSeconds,
+        final RenderMode initialMode)
+    {
         if (port == null)
         {
             throw new IllegalArgumentException("port must not be null");
         }
         this.renderPort = port;
         this.fpsIntervalNanos = Math.max(0L, (long) logIntervalSeconds * NANOS_PER_SECOND);
+        this.upscaleFilter = configuredFilter();
+        this.renderSettings = new RenderSettings(initialMode);
+        // Listening to our own switch rather than exposing a setter is what
+        // keeps the settings screen from needing a presenter: it cycles a small
+        // object, and the object tells whoever can act on it. Attaching does not
+        // fire, so the mode above is applied by the first resize and not twice.
+        this.renderSettings.onChange(this::applyMode);
+    }
+
+    // The configured filter for a scaled blit, defaulting to Linear. Anything
+    // unrecognised is Linear too: a misspelled diagnostic flag must not decide
+    // how the game looks, and Linear is the safe end of that mistake.
+    private static Texture.TextureFilter configuredFilter()
+    {
+        final String configured = System.getProperty(UPSCALE_FILTER_PROPERTY);
+        if (configured != null && FILTER_NEAREST.equalsIgnoreCase(configured.trim()))
+        {
+            return Texture.TextureFilter.Nearest;
+        }
+        return Texture.TextureFilter.Linear;
     }
 
     // The configured interval, or zero for anything absent or unusable. A bad
@@ -197,12 +348,14 @@ public final class FramebufferPresenter
     }
 
     /**
-     * Sizes the renderer's framebuffer and this presenter's GPU resources to
-     * the surface.
+     * Sizes the renderer's framebuffer and this presenter's GPU resources for
+     * a surface.
      *
      * Call from {@code onSurfaceReady} and {@code onResize}. The renderer is
      * resized here rather than from the engine's own frame callback so the two
      * can never disagree about the frame's dimensions: one call site, one size.
+     * <b>That size is the render size, not the surface size</b> — see the class
+     * Javadoc.
      *
      * @param newWidth surface width in pixels
      * @param newHeight surface height in pixels
@@ -213,7 +366,39 @@ public final class FramebufferPresenter
         {
             return;
         }
-        renderPort.resize(newWidth, newHeight);
+        width = newWidth;
+        height = newHeight;
+        sizeForSurface();
+    }
+
+    // Applies a mode change to the surface already in force. The observer
+    // RenderSettings fires, and a no-op before the first resize: a mode is
+    // meaningless without a surface to apply it to, and the constructor's mode
+    // is picked up by that first resize anyway.
+    private void applyMode(final RenderMode changed)
+    {
+        if (width <= 0 || height <= 0)
+        {
+            return;
+        }
+        LOG.info("Render mode: {}", changed.label());
+        sizeForSurface();
+    }
+
+    // Sizes everything from the current surface and the current mode. The only
+    // place either number turns into an allocation.
+    //
+    // The render port is resized BEFORE the scratch array is replaced, and the
+    // order is not arbitrary: resize() drops the published frame and republishes
+    // presentPixels at the new size, and copyColorInto rejects a destination
+    // smaller than that. Both happen on this thread with no present() in
+    // between, so the pair is atomic as far as anything can observe.
+    private void sizeForSurface()
+    {
+        final RenderMode mode = renderSettings.mode();
+        final int wantWidth = mode.widthFor(width, height);
+        final int wantHeight = mode.heightFor(width, height);
+        renderPort.resize(wantWidth, wantHeight);
         if (batch == null)
         {
             batch = new SpriteBatch();
@@ -222,20 +407,50 @@ public final class FramebufferPresenter
             // whatever R_ wrote, and a frame is not a sprite.
             batch.disableBlending();
         }
-        if (newWidth != width || newHeight != height)
+        if (wantWidth != renderWidth || wantHeight != renderHeight)
         {
             releaseSurface();
-            width = newWidth;
-            height = newHeight;
-            scratch = new int[width * height];
-            pixmap = new Pixmap(width, height, Pixmap.Format.RGBA8888);
+            renderWidth = wantWidth;
+            renderHeight = wantHeight;
+            scratch = new int[renderWidth * renderHeight];
+            pixmap = new Pixmap(renderWidth, renderHeight, Pixmap.Format.RGBA8888);
             texture = new Texture(pixmap);
-            // Nearest, because the quad is drawn at exactly 1:1. Any filtering
-            // here would blur a software-rendered image for nothing.
-            texture.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
-            LOG.info("Presenter surface: {}x{}", width, height);
+            final Texture.TextureFilter filter = filterFor(mode);
+            texture.setFilter(filter, filter);
+            LOG.info("Presenter surface {}x{}, render {}x{} ({}), blit filter {}",
+                Integer.valueOf(width), Integer.valueOf(height),
+                Integer.valueOf(renderWidth), Integer.valueOf(renderHeight),
+                mode.label(), filter);
         }
-        batch.getProjectionMatrix().setToOrtho2D(0.0f, 0.0f, newWidth, newHeight);
+        // The projection is the SURFACE, always. It is what makes the quad
+        // fullscreen whatever the texture measures, and it is why nothing else
+        // drawn over the world had to change.
+        batch.getProjectionMatrix().setToOrtho2D(0.0f, 0.0f, width, height);
+    }
+
+    // Nearest for a 1:1 blit, the configured filter otherwise. See the class
+    // Javadoc: at 1:1 any filtering can only blur an image that already lands on
+    // whole texels, and at a fractional ratio Nearest crawls.
+    private Texture.TextureFilter filterFor(final RenderMode mode)
+    {
+        if (mode.isNativeFor(width, height))
+        {
+            return Texture.TextureFilter.Nearest;
+        }
+        return upscaleFilter;
+    }
+
+    /**
+     * Returns the switch the settings screen cycles to change render mode.
+     *
+     * <p>Never null, and live from construction — see {@link RenderSettings} for
+     * why this class owns it rather than the launcher.</p>
+     *
+     * @return this presenter's render settings
+     */
+    public RenderSettings renderSettings()
+    {
+        return renderSettings;
     }
 
     /**
@@ -264,10 +479,14 @@ public final class FramebufferPresenter
         pixels.clear();
         // One bulk copy of RGBA8888 ints into a big-endian byte buffer — the
         // path PixmapByteOrderTest asserts byte for byte.
-        pixels.asIntBuffer().put(scratch, 0, width * height);
+        pixels.asIntBuffer().put(scratch, 0, renderWidth * renderHeight);
         texture.draw(pixmap, 0, 0);
 
         batch.begin();
+        // A renderWidth x renderHeight texture drawn over the whole SURFACE.
+        // The GPU does the upscale, and the orientation argument in the class
+        // Javadoc is untouched by it: draw() maps t = 0 to the top of the
+        // rectangle whatever the two sizes are.
         batch.draw(texture, 0.0f, 0.0f, width, height);
         batch.end();
         sampleFrameRate(true);
@@ -299,9 +518,13 @@ public final class FramebufferPresenter
             return;
         }
         final double seconds = (double) elapsed / (double) NANOS_PER_SECOND;
-        LOG.info("windowed {}x{}: {} platform fps, {} presented fps, {} rendered fps,"
-            + " last frame {} ms, {} parallel passes",
-            width, height, rate(windowPlatformFrames, seconds),
+        // Both sizes, because the last-frame figure is the cost of the RENDER
+        // size while the frame rate is a property of the surface being
+        // presented — reading one against the other is the whole point.
+        LOG.info("windowed {}x{} (render {}x{}): {} platform fps, {} presented fps,"
+            + " {} rendered fps, last frame {} ms, {} parallel passes",
+            width, height, renderWidth, renderHeight,
+            rate(windowPlatformFrames, seconds),
             rate(windowPresentedFrames, seconds),
             rate(renderPort.framesRendered() - windowRenderedAtStart, seconds),
             String.format(Locale.ROOT, "%.2f", renderPort.lastFrameNanos() / NANOS_PER_MILLI),
@@ -327,6 +550,13 @@ public final class FramebufferPresenter
     public void dispose()
     {
         releaseSurface();
+        // Forget the size along with the resources. Android disposes on
+        // onSurfaceLost and can hand the SAME dimensions back on the next
+        // onSurfaceReady, and a remembered size would make that resize a no-op
+        // that never rebuilds the texture it just freed — leaving present() to
+        // return false for the rest of the run.
+        renderWidth = 0;
+        renderHeight = 0;
         if (batch != null)
         {
             batch.dispose();
@@ -352,16 +582,40 @@ public final class FramebufferPresenter
         return renderPort.lastFrameNanos();
     }
 
-    /** Returns the surface width this presenter is sized for. */
+    /** Returns the surface width this presenter is sized for — what the quad covers. */
     public int width()
     {
         return width;
     }
 
-    /** Returns the surface height this presenter is sized for. */
+    /** Returns the surface height this presenter is sized for — what the quad covers. */
     public int height()
     {
         return height;
+    }
+
+    /**
+     * Returns the framebuffer width the rasterizer is filling.
+     *
+     * <p>Equal to {@link #width()} in {@link RenderMode#NATIVE}, and smaller in
+     * every other mode. This is the number the RENDER milliseconds are the cost
+     * of, which is why {@link DebugOverlay} shows the two together.</p>
+     *
+     * @return the render width, or zero before the first {@link #resize}
+     */
+    public int renderWidth()
+    {
+        return renderWidth;
+    }
+
+    /**
+     * Returns the framebuffer height the rasterizer is filling.
+     *
+     * @return the render height, or zero before the first {@link #resize}
+     */
+    public int renderHeight()
+    {
+        return renderHeight;
     }
 
     // Drops the texture and pixmap. Both are native allocations; letting a
