@@ -36,8 +36,17 @@
   --ok: #23985a;
 }
 
+/* The dark palette, declared twice on purpose.
+ *
+ * The first copy follows the reader's OS setting; the second follows an
+ * explicit choice they made with the theme button, which has to win in BOTH
+ * directions — a reader on a dark desktop who picks light must get light. CSS
+ * has no way to share one declaration list between a media query and a plain
+ * selector, so the alternative to this duplication is `light-dark()`, which is
+ * newer than the oldest browser that might open a file:// docs page. The
+ * `:not([data-theme])` is what keeps the two from fighting. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme]) {
     --bg: #0f1218;
     --bg-alt: #141922;
     --bg-code: #161b24;
@@ -58,6 +67,34 @@
     --ok: #35b878;
   }
 }
+
+:root[data-theme="dark"] {
+  --bg: #0f1218;
+  --bg-alt: #141922;
+  --bg-code: #161b24;
+  --bg-inline: #1e2531;
+  --fg: #dee4ed;
+  --fg-dim: #929fb1;
+  --line: #232a36;
+  --line-2: #333d4c;
+  --link: #7db0ff;
+  --link-hover: #a5c8ff;
+
+  --h1c: #4d95f0;
+  --h2c: #35b878;
+  --h3c: #e6a93b;
+  --h4c: #e8735c;
+  --h5c: #a17df0;
+  --h6c: #2bb3bd;
+  --ok: #35b878;
+}
+
+/* Tells the browser which way to paint scrollbars, form controls and the
+   canvas behind the page. Without it an explicitly dark page keeps light
+   scrollbars, which is the detail that gives away a theme applied only to the
+   author's own elements. */
+:root[data-theme="dark"] { color-scheme: dark; }
+:root[data-theme="light"] { color-scheme: light; }
 
 [data-hue="1"] { --hue: var(--h1c); }
 [data-hue="2"] { --hue: var(--h2c); }
@@ -177,6 +214,44 @@ body.nav-open .sidebar { transform: none; }
   color: inherit;
 }
 .brand:hover { text-decoration: none; }
+
+/* --------------------------------------------------------- theme control */
+
+/* In the sidebar rather than the top bar, because the top bar is hidden at the
+   width where the sidebar becomes permanent — a button there would exist only
+   on a phone. Absolute rather than another flex child so the brand's three
+   squares keep their measured spacing. */
+.themer {
+  position: absolute;
+  top: .95rem;
+  right: .75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  padding: 0;
+  color: var(--fg-dim);
+  background: none;
+  border: 1px solid var(--line-2);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.themer:hover { color: var(--fg); border-color: var(--fg-dim); }
+.themer svg { width: 1rem; height: 1rem; display: block; }
+
+/* One button, two glyphs: show the theme it would switch TO, which is the
+   convention every reader already knows. */
+.themer .to-dark { display: block; }
+.themer .to-light { display: none; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .themer .to-dark { display: none; }
+  :root:not([data-theme]) .themer .to-light { display: block; }
+}
+:root[data-theme="dark"] .themer .to-dark { display: none; }
+:root[data-theme="dark"] .themer .to-light { display: block; }
+:root[data-theme="light"] .themer .to-dark { display: block; }
+:root[data-theme="light"] .themer .to-light { display: none; }
 
 /* Three flat squares. The only place the identity shows up at full strength. */
 .brand-mark {

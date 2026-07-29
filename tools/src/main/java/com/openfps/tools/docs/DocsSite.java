@@ -49,6 +49,29 @@ public final class DocsSite
     /** Package root of the engine module; its child directories are the package pages. */
     private static final String ENGINE_PACKAGES = "engine/src/main/java/com/openfps/engine";
 
+    /**
+     * The light/dark switch, inlined into every page's sidebar.
+     *
+     * <p>Two glyphs in one button, drawn as SVG rather than pulled from an icon
+     * font or a text emoji: the CSP-free, network-free constraint the whole
+     * site is built under means a font would have to be embedded and an emoji
+     * would render as whatever the reader's platform decided a sun looks like.
+     * CSS shows whichever glyph names the theme the button would switch
+     * <i>to</i>, so the markup carries both and neither is conditional here.</p>
+     */
+    private static final String THEME_BUTTON =
+        "<button class=\"themer\" id=\"themer\" type=\"button\" aria-live=\"polite\""
+        + " aria-label=\"Switch to dark theme\" title=\"Switch theme\">"
+        + "<svg class=\"to-dark\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\""
+        + " stroke-width=\"2\" stroke-linecap=\"round\" aria-hidden=\"true\">"
+        + "<path d=\"M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5Z\"/></svg>"
+        + "<svg class=\"to-light\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\""
+        + " stroke-width=\"2\" stroke-linecap=\"round\" aria-hidden=\"true\">"
+        + "<circle cx=\"12\" cy=\"12\" r=\"4.2\"/>"
+        + "<path d=\"M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2"
+        + "M5.2 5.2l1.4 1.4M17.4 17.4l1.4 1.4M18.8 5.2l-1.4 1.4M6.6 17.4l-1.4 1.4\"/>"
+        + "</svg></button>\n";
+
     /** Sidebar groups, in the order they appear. */
     private static final List<String> SECTIONS =
         List.of("Overview", "Building", "Architecture", "Modules", "Packages", "Reference");
@@ -527,7 +550,15 @@ public final class DocsSite
             html.append("<meta name=\"description\" content=\"")
                 .append(Markdown.attribute(Markdown.escape(page.summary()))).append("\">\n");
         }
-        html.append("<link rel=\"stylesheet\" href=\"site.css\">\n</head>\n<body>\n")
+        // Applies the reader's stored theme before the first paint. Inline and
+        // in <head> for exactly that reason: loaded with the deferred site.js
+        // it would run after the body renders, and a reader who chose dark
+        // would get a white flash on every page they open.
+        html.append("<link rel=\"stylesheet\" href=\"site.css\">\n")
+            .append("<script>try{var t=localStorage.getItem('openfps-theme');")
+            .append("if(t){document.documentElement.setAttribute('data-theme',t);}}")
+            .append("catch(e){}</script>\n")
+            .append("</head>\n<body>\n")
             .append("<a class=\"skip\" href=\"#doc\">Skip to content</a>\n")
             .append("<header class=\"topbar\">")
             .append("<button class=\"burger\" id=\"burger\" aria-controls=\"sidebar\"")
@@ -552,6 +583,7 @@ public final class DocsSite
             .append("<span class=\"brand-mark\"></span>")
             .append("<span class=\"brand-name\">OpenFPS</span>")
             .append("<span class=\"brand-kind\">docs</span></a>\n")
+            .append(THEME_BUTTON)
             .append("<input class=\"filter\" id=\"filter\" type=\"search\" ")
             .append("placeholder=\"Filter pages\" aria-label=\"Filter pages\" autocomplete=\"off\">")
             .append("\n<nav class=\"nav\" id=\"nav\" aria-label=\"Documentation\">\n");
