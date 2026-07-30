@@ -698,7 +698,7 @@ public final class DemoGameplayPort implements I_GameplayPort
         // Non-blocking by contract (I_AudioPort#play), which matters here: this
         // runs on the game loop thread inside tickLock. A port that waited for
         // the sound to finish would cost eleven tics per shot at 60 Hz.
-        audio.play(SoundId.WEAPON_FIRE);
+        audio.play(fireSound());
 
         // Two Vec3 allocations per SHOT, not per tic. The alternative is to
         // recompute the view basis here from yaw and pitch, duplicating the
@@ -720,6 +720,18 @@ public final class DemoGameplayPort implements I_GameplayPort
         }
         final int struck = match.firePlayerShot(eye.x(), eye.y(), eye.z(),
             aim.x(), aim.y(), aim.z());
+        // IMMEDIATELY after the shot resolves, because the award is a consequence
+        // of it: the streak is completed inside firePlayerShot and the flag is
+        // cleared by the next tick, so this is the only window there is. Before the
+        // miss branch below, since a shot that killed somebody is not a miss and a
+        // reward announced after a `return` is a reward nobody hears.
+        if (match.consumeSuperBlasterAwarded())
+        {
+            audio.play(SoundId.SUPER_BLASTER_READY);
+            LOG.info("SUPER BLASTER (tic {}) — {} kills without dying, x{} damage for {} tics",
+                ticIndex, Match.SUPER_BLASTER_KILL_STREAK,
+                Match.SUPER_BLASTER_DAMAGE_MULTIPLIER, match.superBlasterTicsRemaining());
+        }
         if (struck == Match.NO_HIT)
         {
             LOG.debug("miss (tic {})", ticIndex);
@@ -733,6 +745,25 @@ public final class DemoGameplayPort implements I_GameplayPort
             return;
         }
         LOG.info("HIT entity {} (tic {})", struck, ticIndex);
+    }
+
+    // Which of the player's two weapon noises this shot makes.
+    //
+    // The reward would be inaudible without this, during exactly the activity it
+    // modifies: the player hears their own trigger five times a second, so a buff
+    // that changed the damage and not the sound could only be SEEN. It is also
+    // what makes the expiry audible without looking away from the fight — the
+    // weapon simply sounds like itself again.
+    //
+    // Read from the match rather than from a field here, so there is one answer to
+    // "is the reward live" and it is the simulation's.
+    private SoundId fireSound()
+    {
+        if (match.isSuperBlaster())
+        {
+            return SoundId.SUPER_WEAPON_FIRE;
+        }
+        return SoundId.WEAPON_FIRE;
     }
 
     // Puts this tic's input on the wire and takes off whatever has arrived.
@@ -780,6 +811,16 @@ public final class DemoGameplayPort implements I_GameplayPort
         else if (damage > 0)
         {
             LOG.info("took {} damage — {} hp left", damage, match.playerHealth());
+        }
+        // AFTER the tick, because the tick is what ages the reward, and a consuming
+        // read so exactly one thing announces each expiry. Covers both ways it can
+        // end — the timer running out and a death cancelling it — because from the
+        // player's side those are the same event: the gun stopped being special.
+        if (match.consumeSuperBlasterExpired())
+        {
+            audio.play(SoundId.SUPER_BLASTER_SPENT);
+            LOG.info("super blaster spent (tic {}) — back to {} damage a shot", ticIndex,
+                Match.PLAYER_SHOT_DAMAGE);
         }
         // AFTER the tick, because the tick is what decides it, and consuming the
         // flag here means exactly one thing acts on each respawn. Match owns WHEN

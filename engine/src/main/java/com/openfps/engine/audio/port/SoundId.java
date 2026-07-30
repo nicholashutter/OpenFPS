@@ -81,5 +81,49 @@ public enum SoundId
      * {@code BotFireVoices} owns that gate, on the tic index, above the port. The
      * port stays a port.</p>
      */
-    BOT_WEAPON_FIRE
+    BOT_WEAPON_FIRE,
+
+    /**
+     * The super blaster firing — the player's own weapon while a kill streak is
+     * being spent.
+     *
+     * <p>A separate id rather than {@link #WEAPON_FIRE} at a different volume,
+     * because the reward would otherwise be <b>inaudible during exactly the
+     * activity it modifies</b>: the player hears their own trigger five times a
+     * second, so a buff that changed the damage and not the noise could only be
+     * seen. It is also what makes the expiry audible without looking — the weapon
+     * simply sounds like itself again.</p>
+     *
+     * <p>Deliberately the <i>same weapon</i> and not a different one, which is the
+     * opposite of the requirement {@link #BOT_WEAPON_FIRE} carries. See
+     * {@code SuperBlasterSound}: it is built out of the ordinary blaster's own
+     * sweep with an octave of weight under it, so the ear places it as an upgrade
+     * rather than as a swap.</p>
+     *
+     * <p>Needs no voice gate. Its rate of fire is its gate — the weapon's cooldown
+     * is 200 ms at 60 Hz and the sound is 260 ms, so at most two can overlap and
+     * only briefly.</p>
+     */
+    SUPER_WEAPON_FIRE,
+
+    /**
+     * The super blaster being earned — the third kill of a streak.
+     *
+     * <p>Plays once per award, over the shot that earned it. A rising two-note
+     * chime, which is a different <i>class</i> of sound from everything above:
+     * nothing glides and the pitch steps exactly once, so it does not compete for
+     * attention with the weapon noise it lands on top of.</p>
+     */
+    SUPER_BLASTER_READY,
+
+    /**
+     * The super blaster running out, or being cancelled by a death.
+     *
+     * <p>{@link #SUPER_BLASTER_READY} backwards, and quieter — see
+     * {@code PowerChimeSound} on why the two are one sound in two directions and
+     * why the falling one is the quiet one. A reward that ended silently would
+     * leave the player firing an ordinary weapon at a target they had picked
+     * because they thought they had a better one.</p>
+     */
+    SUPER_BLASTER_SPENT
 }

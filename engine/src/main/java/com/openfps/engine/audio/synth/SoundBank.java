@@ -96,6 +96,21 @@ public final class SoundBank
         {
             return WavAudio.wav(CarbineSound.samples(), CarbineSound.sampleRate());
         }
+        if (sound == SoundId.SUPER_WEAPON_FIRE)
+        {
+            return WavAudio.wav(SuperBlasterSound.samples(), SuperBlasterSound.sampleRate());
+        }
+        if (sound == SoundId.SUPER_BLASTER_READY)
+        {
+            return WavAudio.wav(PowerChimeSound.readySamples(), PowerChimeSound.sampleRate());
+        }
+        if (sound == SoundId.SUPER_BLASTER_SPENT)
+        {
+            // The same chime backwards, which is why one class serves both ids —
+            // and why the two buffers are genuinely different bytes rather than one
+            // sound reached by two names. SoundBankTest asserts exactly that.
+            return WavAudio.wav(PowerChimeSound.spentSamples(), PowerChimeSound.sampleRate());
+        }
         return WavAudio.wav(BlasterSound.samples(), BlasterSound.sampleRate());
     }
 
@@ -110,6 +125,14 @@ public final class SoundBank
         if (sound == SoundId.BOT_WEAPON_FIRE)
         {
             return CarbineSound.sampleRate();
+        }
+        if (sound == SoundId.SUPER_WEAPON_FIRE)
+        {
+            return SuperBlasterSound.sampleRate();
+        }
+        if (sound == SoundId.SUPER_BLASTER_READY || sound == SoundId.SUPER_BLASTER_SPENT)
+        {
+            return PowerChimeSound.sampleRate();
         }
         return BlasterSound.sampleRate();
     }
@@ -130,6 +153,17 @@ public final class SoundBank
         if (sound == SoundId.BOT_WEAPON_FIRE)
         {
             return CarbineSound.sampleCount();
+        }
+        if (sound == SoundId.SUPER_WEAPON_FIRE)
+        {
+            return SuperBlasterSound.sampleCount();
+        }
+        if (sound == SoundId.SUPER_BLASTER_READY || sound == SoundId.SUPER_BLASTER_SPENT)
+        {
+            // One number for both, because the chime is two notes of equal length
+            // whichever order they are in. That is a property PowerChimeSound goes
+            // out of its way to have — see its sampleCount().
+            return PowerChimeSound.sampleCount();
         }
         return BlasterSound.sampleCount();
     }
