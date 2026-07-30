@@ -703,10 +703,14 @@ public final class DemoScene
         return roster;
     }
 
-    // One bot's blaster, or nothing at all when none was staged. A null model is
-    // not an error here — DemoModels has already said so at WARN — and the
-    // sentinel is what lets publishBotPlacements skip the weapon without a
-    // second flag that could disagree with this one.
+    // One bot's carbine. DemoModels.botWeapon() is never null — a payload with no
+    // blaster-p.ofm gets BlockCarbine instead, for the reason that class records
+    // at length: a bot with nothing in its hands measured as zero pixels of
+    // weapon, and incoming fire is specified to come out of a muzzle.
+    //
+    // The null guard stays because it is the cheap half of a contract: the
+    // sentinel is still what publishBotPlacements skips on, and one dead branch
+    // costs a comparison against a scene silently missing seven instances.
     private static int addBotWeapon(final Scene.Builder builder, final ModelFormat blaster,
         final Bot bot)
     {
@@ -1285,12 +1289,14 @@ public final class DemoScene
     /**
      * Returns whether the bots in this scene are holding anything.
      *
-     * <p>False on a checkout with no weapon art staged, which is a degraded demo
-     * and not a broken one — the opponents still shoot. Exposed so a test can
-     * say which of the two it is looking at rather than inferring it from an
-     * instance index it would then have to interpret.</p>
+     * <p>True whenever any bot was placed at all, because
+     * {@link DemoModels#botWeapon()} no longer has an absent case — see
+     * {@link BlockCarbine}. False only for a scene with no character art, which
+     * has no hands to put a weapon in. Exposed so a test can say which of the two
+     * it is looking at rather than inferring it from an instance index it would
+     * then have to interpret.</p>
      *
-     * @return true when a bot weapon model was staged and placed
+     * @return true when a carbine was placed in every bot's hands
      */
     public boolean hasBotWeapons()
     {

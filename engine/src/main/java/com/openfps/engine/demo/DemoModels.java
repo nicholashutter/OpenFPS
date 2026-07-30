@@ -163,18 +163,21 @@ public final class DemoModels
     private final ModelFormat room;
     private final ModelFormat weapon;
     private final ModelFormat botWeapon;
+    private final boolean realBotWeapon;
     private final ModelFormat[] characters;
 
     // Takes ownership of an already-validated set. One of `floor` (kit) and
     // `room` (fallback) is non-null and the other is null; `source` says which.
     private DemoModels(final Source modelSource, final ModelFormat[] kit,
         final ModelFormat fallbackRoom, final ModelFormat viewmodel,
-        final ModelFormat opponentWeapon, final ModelFormat[] people)
+        final ModelFormat opponentWeapon, final boolean opponentWeaponIsReal,
+        final ModelFormat[] people)
     {
         this.source = modelSource;
         this.room = fallbackRoom;
         this.weapon = viewmodel;
         this.botWeapon = opponentWeapon;
+        this.realBotWeapon = opponentWeaponIsReal;
         this.characters = people;
         if (kit == null)
         {
@@ -241,6 +244,7 @@ public final class DemoModels
         }
 
         final ModelFormat viewmodel = loadWeapon(source);
+        final boolean realCarbine = source.has(botWeaponPath());
         final ModelFormat opponentWeapon = loadBotWeapon(source);
         final ModelFormat[] people = loadCharacters(source);
         final List<String> missing = missingKitFiles(source);
@@ -249,7 +253,7 @@ public final class DemoModels
             LOG.info("Demo level: REAL Kenney Prototype Kit, {} pieces from {}",
                 KIT_FILES.length, source.describe(LEVEL_DIRECTORY));
             return new DemoModels(Source.KENNEY_KIT, loadKit(source), null, viewmodel,
-                opponentWeapon, people);
+                opponentWeapon, realCarbine, people);
         }
 
         if (!source.has(FALLBACK_MODEL))
@@ -266,21 +270,41 @@ public final class DemoModels
             + " intended demo run: {}", source.describe(FALLBACK_MODEL), missing.size(),
             String.join(", ", missing), REGENERATE_COMMAND);
         return new DemoModels(Source.GENERATED_ROOM, null, read(source, FALLBACK_MODEL),
-            viewmodel, opponentWeapon, people);
+            viewmodel, opponentWeapon, realCarbine, people);
     }
 
-    // The weapon the bots hold, or null with a WARN. Same rule as the
-    // viewmodel: absent art degrades the demo rather than ending it, and the
-    // bots stand there empty-handed as they did before this model existed.
+    // Where the bots' carbine lives under a source. One definition, because
+    // `load` asks whether it is there and `loadBotWeapon` asks for it, and two
+    // copies of a path is how those two come to disagree.
+    private static String botWeaponPath()
+    {
+        return WEAPON_DIRECTORY + "/" + BOT_WEAPON_MODEL;
+    }
+
+    // The weapon the bots hold: the real carbine, or a generated stand-in.
+    //
+    // NEVER null, and that is a change from every other model in this class. The
+    // rule everywhere else is "absent art degrades the demo rather than ending
+    // it", and it holds here too — what changed is what "degraded" costs. It used
+    // to cost the whole feature: no model meant no scene instance, which measured
+    // as ZERO pixels of weapon and was reported twice as "the carbines are not
+    // visible". Both reports were correct. See BlockCarbine for the measurement.
+    //
+    // Incoming fire is specified to come out of a weapon, so a bot with nothing
+    // in its hands has nowhere to put a muzzle. The substitute occupies the real
+    // model's box exactly, so BOT_WEAPON_WORLD_SCALE, the muzzle flip and
+    // BOT_WEAPON_MUZZLE_UNITS all keep working against either one.
     private static ModelFormat loadBotWeapon(final ModelSource source)
     {
-        final String path = WEAPON_DIRECTORY + "/" + BOT_WEAPON_MODEL;
+        final String path = botWeaponPath();
         if (!source.has(path))
         {
-            LOG.warn("Demo bot weapon: NONE. {} is missing, so the opponents will be"
-                + " unarmed to look at — they still shoot. Produce it with: {}",
-                source.describe(path), REGENERATE_COMMAND);
-            return null;
+            LOG.warn("Demo bot weapon: GENERATED BLOCK CARBINE, not Kenney art. {} is missing,"
+                + " so the opponents carry {} boxes of arithmetic instead — visibly armed,"
+                + " visibly not the real model. Do NOT record this against an upstream"
+                + " source. For the intended demo run: {}", source.describe(path),
+                BlockCarbine.partCount(), REGENERATE_COMMAND);
+            return BlockCarbine.model();
         }
         LOG.info("Demo bot weapon: REAL Kenney Blaster Kit model from {} — deliberately a"
             + " different blaster from the player's {}", source.describe(path), WEAPON_MODEL);
@@ -512,18 +536,36 @@ public final class DemoModels
     }
 
     /**
-     * Returns the weapon the bots carry, or null when it was not staged.
+     * Returns the weapon the bots carry. <b>Never null.</b>
      *
      * <p>Never the same model as {@link #weapon()} — see
-     * {@link #BOT_WEAPON_MODEL}. Null here is reported and survivable exactly as
-     * a missing viewmodel is: the opponents stand there unarmed and still shoot,
-     * which is odd to look at and is not a broken demo.</p>
+     * {@link #BOT_WEAPON_MODEL}. The one model in this class that cannot be
+     * absent: when {@code blaster-p.ofm} was not staged this is
+     * {@link BlockCarbine#model()}, generated in code, logged loudly as generated.
+     * {@link #hasRealBotWeapon()} is how a caller tells the two apart; nothing
+     * needs to, because both occupy the same model-space box.</p>
      *
-     * @return the bots' blaster, or null
+     * @return the bots' carbine, real or generated, never null
      */
     public ModelFormat botWeapon()
     {
         return botWeapon;
+    }
+
+    /**
+     * Returns whether the bots' carbine is the real Kenney model rather than the
+     * generated stand-in.
+     *
+     * <p>Exposed for the reason {@link #isRealArt()} is: a test, a log line or a
+     * screenshot caption should be able to say <i>which</i> payload it is looking
+     * at rather than inferring it. Nothing in the demo behaves differently either
+     * way — that is the point of authoring the substitute to the same box.</p>
+     *
+     * @return true when {@code blaster-p.ofm} was staged and loaded
+     */
+    public boolean hasRealBotWeapon()
+    {
+        return realBotWeapon;
     }
 
     /** Returns a debug rendering of which models were loaded. */
@@ -531,6 +573,6 @@ public final class DemoModels
     public String toString()
     {
         return "DemoModels{source=" + source + ", weapon=" + (weapon != null)
-            + ", botWeapon=" + (botWeapon != null) + "}";
+            + ", botWeapon=" + realBotWeapon + "}";
     }
 }

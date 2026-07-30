@@ -283,7 +283,7 @@ final class DemoSceneTest
         }
 
         @Test
-        @DisplayName("every placed bot is tagged, and the room around it is not")
+        @DisplayName("every placed bot is tagged, body and carbine, and the room around it is not")
         void shouldTagOnlyTheCharacters(@TempDir final Path root) throws IOException
         {
             final DemoScene demo = DemoScene.build(kitWithCharacters(root));
@@ -297,9 +297,15 @@ final class DemoSceneTest
                     tagged++;
                 }
             }
+            // TWO per bot, and the second one is deliberate: a bot's carbine
+            // carries its HOLDER's id rather than being left untagged, so the
+            // outline pass draws one silhouette round the body and what it is
+            // holding, and the crosshair does not go dead when it crosses the gun.
+            // See addBots. This used to be one per bot only because the carbine
+            // was never staged and no weapon instance was placed at all.
             assertThat(tagged)
-                .as("one tagged instance per bot — the outline and the shot agree on count")
-                .isEqualTo(demo.botCount());
+                .as("a body and a carbine per bot — the outline and the shot agree on count")
+                .isEqualTo(demo.botCount() * 2);
         }
 
         @Test
@@ -1015,18 +1021,23 @@ final class DemoSceneTest
         }
 
         @Test
-        @DisplayName("an unstaged weapon leaves the bots unarmed rather than failing the build")
-        void shouldTolerateMissingWeaponArt(@TempDir final Path root) throws IOException
+        @DisplayName("an unstaged carbine still puts a weapon in every bot's hands")
+        void shouldArmTheBotsWithoutTheRealCarbine(@TempDir final Path root) throws IOException
         {
-            // The demo's art is gitignored, so a fresh clone has none of it. Bots
-            // standing there empty-handed is a degraded demo; they still shoot.
+            // THIS IS THE REGRESSION for "the carbines are not visible". The demo's
+            // art is gitignored, so a fresh clone — and any clone whose payload
+            // predates blaster-p joining the curated list — has no bot carbine. It
+            // used to place no instance at all, which measured as zero pixels of
+            // weapon. A bot with nothing in its hands has nowhere for incoming fire
+            // to come from, so absent art now costs the ART and not the feature.
             final DemoScene demo = DemoScene.build(kitWithCharacters(root));
 
-            assertThat(demo.hasBotWeapons()).isFalse();
+            assertThat(demo.hasBotWeapons()).isTrue();
             for (int index = 0; index < demo.botCount(); index++)
             {
                 assertThat(demo.botWeaponInstanceIndex(index))
-                    .isEqualTo(DemoScene.NO_INSTANCE);
+                    .as("bot %d was placed empty-handed", index)
+                    .isNotEqualTo(DemoScene.NO_INSTANCE);
             }
         }
     }
