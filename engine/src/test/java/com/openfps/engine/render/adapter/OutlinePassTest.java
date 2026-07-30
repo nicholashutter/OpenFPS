@@ -74,6 +74,21 @@ final class OutlinePassTest
     /** The background the frame is cleared to before the pass runs. */
     private static final int CLEAR = Framebuffer.CLEAR_COLOR_OPAQUE_BLACK;
 
+    /**
+     * The demo room's pale side wall, {@code #A6ADD0}, sampled from a rendered
+     * 1280x720 frame — Rec.709 luminance 174.
+     *
+     * <p><b>Every fixture that says anything about the keyline has to paint over
+     * this rather than over the cleared frame</b>, because
+     * {@link Framebuffer#CLEAR_COLOR_OPAQUE_BLACK} is bit-for-bit
+     * {@link OutlinePass#KEYLINE_COLOR}: on a cleared frame "keyed" and "never
+     * touched" are the same pixel value, so an assertion about where the keyline
+     * lands would pass identically if the keyline did not exist. A real surface
+     * from the real room is also the honest background to be asserting
+     * legibility against.</p>
+     */
+    private static final int ROOM_GREY = Framebuffer.packRgba(166, 173, 208, 255);
+
     /** Left edge of the single-entity fixture. */
     private static final int BOX_MIN_X = 32;
 
@@ -97,6 +112,13 @@ final class OutlinePassTest
 
     /** Right edge of the right entity, inclusive. */
     private static final int PAIR_MAX_X = 75;
+
+    /**
+     * Where the depth step falls in the crease fixtures, inclusive on the near
+     * side. Shared by the crease tests and the keyline's crease test, which have
+     * to name the same column to be talking about the same fold.
+     */
+    private static final int CREASE_COLUMN = 47;
 
     private I_EventBusPort bus;
     private I_ThreadPoolPort pool;
@@ -368,35 +390,46 @@ final class OutlinePassTest
         }
 
         @Test
-        @DisplayName("the outline is solid: no blending, no falloff")
+        @DisplayName("the mark is solid: two flat tones, no blending, no falloff")
         void shouldPaintOneSolidColour()
         {
-            // Solid means solid. Every painted pixel is the identical value,
-            // so there is no gradient to be swallowed by a light grey wall.
+            // Solid means solid. Every painted pixel is one of exactly two
+            // values, so there is no gradient to be swallowed by a light grey
+            // wall — and no THIRD value, which is what a blend would leave.
+            //
+            // Over a mid-grey background rather than the cleared black every
+            // other fixture uses, because the keyline IS that black
+            // (Framebuffer.CLEAR_COLOR_OPAQUE_BLACK), so a cleared frame cannot
+            // tell "keyed" from "untouched" and this assertion would be
+            // vacuously true.
             final Framebuffer fb = frame();
+            fb.clearColor(ROOM_GREY);
             box(fb, BOX_MIN_X, BOX_MIN_Y, BOX_MAX_X, BOX_MAX_Y, ID_A);
             defaultPass().draw(fb, null);
 
-            assertThat(fb.colorBuffer()).containsOnly(CLEAR, OutlinePass.OUTLINE_COLOR);
+            assertThat(fb.colorBuffer()).containsOnly(ROOM_GREY, OutlinePass.OUTLINE_COLOR,
+                OutlinePass.KEYLINE_COLOR);
             assertThat(Framebuffer.alpha(OutlinePass.OUTLINE_COLOR)).isEqualTo(0xFF);
+            assertThat(Framebuffer.alpha(OutlinePass.KEYLINE_COLOR)).isEqualTo(0xFF);
         }
 
         @Test
-        @DisplayName("the outline colour is a saturated corner of the colour cube")
+        @DisplayName("the outline colour is red — a saturated corner of the colour cube")
         void shouldUseAColourNoTextureProduces()
         {
-            // The requirement is a colour the art cannot accidentally contain.
-            // A corner of the RGB cube — channels only ever 0 or 255 — is the
-            // strongest form of that claim available without scanning every
-            // atlas, and it rules out the desaturated flats the Kenney kits
-            // are made of.
+            // Still a corner of the RGB cube — channels only ever 0 or 255 —
+            // which is what rules out the desaturated warm flats the Kenney kits
+            // are made of. The corner CHANGED, from cyan to red, and the reason
+            // is not contrast: see OUTLINE_COLOR. The old assertion is kept in
+            // form and inverted in value rather than deleted, because "which
+            // corner" is exactly the thing that moved.
             final int red = Framebuffer.red(OutlinePass.OUTLINE_COLOR);
             final int green = Framebuffer.green(OutlinePass.OUTLINE_COLOR);
             final int blue = Framebuffer.blue(OutlinePass.OUTLINE_COLOR);
 
-            assertThat(red).isZero();
-            assertThat(green).isEqualTo(0xFF);
-            assertThat(blue).isEqualTo(0xFF);
+            assertThat(red).isEqualTo(0xFF);
+            assertThat(green).isZero();
+            assertThat(blue).isZero();
         }
     }
 
@@ -417,7 +450,7 @@ final class OutlinePassTest
         private static final float GRAZING_INV_W = 0.499f;
 
         /** Where the depth step falls inside the fixture, inclusive on the near side. */
-        private static final int CREASE_X = 47;
+        private static final int CREASE_X = CREASE_COLUMN;
 
         @Test
         @DisplayName("one entity folded over itself is drawn on the fold")
@@ -539,6 +572,242 @@ final class OutlinePassTest
     }
 
     @Nested
+    @DisplayName("the keyline — what makes a dark red line legible on a red body")
+    class Keyline
+    {
+        /**
+         * The demo's amber crate decal, {@code #FFB54A}, sampled from a rendered
+         * frame — luminance 189, the brightest surface in the room and the one
+         * whose hue (33 degrees) is closest to the line's.
+         */
+        private static final int CRATE_AMBER = Framebuffer.packRgba(255, 181, 74, 255);
+
+        /**
+         * One bot's jacket, {@code #CF534F}, sampled from a rendered frame —
+         * luminance 109, hue 2 degrees. The worst body in the demo to draw a red
+         * line on, and the reason the keyline is not optional.
+         */
+        private static final int JACKET_RED = Framebuffer.packRgba(207, 83, 79, 255);
+
+        @Test
+        @DisplayName("one pixel of black immediately inside the line, and no more")
+        void shouldBackTheLineOnePixelInside()
+        {
+            final Framebuffer fb = wallFrame();
+            box(fb, BOX_MIN_X, BOX_MIN_Y, BOX_MAX_X, BOX_MAX_Y, ID_A);
+            defaultPass().draw(fb, null, ID_A);
+
+            // Walking in from each edge: line, keyline, then the body as the
+            // world pass left it. The third pixel is the one that says this is a
+            // border and not a band.
+            assertThat(fb.pixel(BOX_MIN_X, MID_Y)).as("the line").
+                isEqualTo(OutlinePass.OUTLINE_COLOR);
+            assertThat(fb.pixel(BOX_MIN_X + 1, MID_Y)).as("keyed, one pixel in").
+                isEqualTo(OutlinePass.KEYLINE_COLOR);
+            assertThat(fb.pixel(BOX_MIN_X + 2, MID_Y)).as("two pixels in: untouched").
+                isEqualTo(ROOM_GREY);
+
+            assertThat(fb.pixel(BOX_MAX_X - 1, MID_Y)).isEqualTo(OutlinePass.KEYLINE_COLOR);
+            assertThat(fb.pixel(BOX_MAX_X - 2, MID_Y)).isEqualTo(ROOM_GREY);
+            assertThat(fb.pixel(MID_Y, BOX_MIN_Y + 1)).isEqualTo(OutlinePass.KEYLINE_COLOR);
+            assertThat(fb.pixel(MID_Y, BOX_MAX_Y - 1)).isEqualTo(OutlinePass.KEYLINE_COLOR);
+        }
+
+        @Test
+        @DisplayName("the coloured part of the mark is still exactly one pixel deep")
+        void shouldKeepTheColouredLineOnePixelDeep()
+        {
+            // The regression guard on the whole reason the line is a hairline: a
+            // second pixel of SATURATED colour is what read as fill, and fill on
+            // an enemy reads as damage. Counting rather than spot-checking,
+            // because "one more than intended" is exactly the failure that a
+            // spot check one pixel further in would miss.
+            final Framebuffer fb = wallFrame();
+            box(fb, BOX_MIN_X, BOX_MIN_Y, BOX_MAX_X, BOX_MAX_Y, ID_A);
+            defaultPass().draw(fb, null, ID_A);
+
+            // MUTABLE local — how many consecutive line pixels there are.
+            int deep = 0;
+            while (fb.pixel(BOX_MIN_X + deep, MID_Y) == OutlinePass.OUTLINE_COLOR)
+            {
+                deep++;
+            }
+            assertThat(deep).isEqualTo(OutlinePass.OUTLINE_THICKNESS_PIXELS).isOne();
+        }
+
+        @Test
+        @DisplayName("nothing outside the subject is keyed — the body does not grow a pixel")
+        void shouldNotPaintTheKeylineOutsideTheSubject()
+        {
+            // The mark must not change the shape it describes. A keyline painted
+            // outward would make an aimed opponent one pixel wider than an
+            // unaimed one, and would have a tile worker writing pixels it does
+            // not own.
+            final Framebuffer fb = wallFrame();
+            box(fb, PAIR_MIN_X, BOX_MIN_Y, PAIR_SPLIT_X, BOX_MAX_Y, ID_A);
+            box(fb, PAIR_SPLIT_X + 1, BOX_MIN_Y, PAIR_MAX_X, BOX_MAX_Y, ID_B);
+            defaultPass().draw(fb, null, ID_A);
+
+            assertThat(fb.pixel(PAIR_MIN_X - 1, MID_Y)).as("background, just outside").
+                isEqualTo(ROOM_GREY);
+            assertThat(fb.pixel(0, 0)).as("a far corner").isEqualTo(ROOM_GREY);
+            for (int y = BOX_MIN_Y; y <= BOX_MAX_Y; y++)
+            {
+                for (int x = PAIR_SPLIT_X + 1; x <= PAIR_MAX_X; x++)
+                {
+                    assertThat(fb.pixel(x, y))
+                        .as("pixel (%d,%d) of the entity that is not the subject", x, y)
+                        .isEqualTo(ROOM_GREY);
+                }
+            }
+        }
+
+        @Test
+        @DisplayName("an interior crease is keyed as well as the silhouette")
+        void shouldBackTheCreaseToo()
+        {
+            // The crease is the half of the mark that lies ENTIRELY on the body,
+            // so it is the half most exposed to a body the colour of the line.
+            // One rule covers both kinds of edge, which is why there is no
+            // special case for it in the pass.
+            final Framebuffer fb = wallFrame();
+            box(fb, BOX_MIN_X, BOX_MIN_Y, BOX_MAX_X, BOX_MAX_Y, ID_A);
+            depthBox(fb, BOX_MIN_X, BOX_MIN_Y, CREASE_COLUMN, BOX_MAX_Y, 0.50f);
+            depthBox(fb, CREASE_COLUMN + 1, BOX_MIN_Y, BOX_MAX_X, BOX_MAX_Y, 0.30f);
+            defaultPass().draw(fb, null, ID_A);
+
+            assertThat(fb.pixel(CREASE_COLUMN, MID_Y)).as("the near side of the fold").
+                isEqualTo(OutlinePass.OUTLINE_COLOR);
+            assertThat(fb.pixel(CREASE_COLUMN - 1, MID_Y)).as("keyed on the near side").
+                isEqualTo(OutlinePass.KEYLINE_COLOR);
+            assertThat(fb.pixel(CREASE_COLUMN + 2, MID_Y)).as("keyed on the far side").
+                isEqualTo(OutlinePass.KEYLINE_COLOR);
+            assertThat(fb.pixel(CREASE_COLUMN - 2, MID_Y)).as("and no further").
+                isEqualTo(ROOM_GREY);
+        }
+
+        @Test
+        @DisplayName("the mark survives the red-jacket bot, which the line alone does not")
+        void shouldStayVisibleOnARedBody()
+        {
+            // THE case the keyline exists for, stated with the numbers rather
+            // than with an adjective. 29% of the pixels immediately inside this
+            // pass's own line are red-dominant in a real aimed frame, and the
+            // worst body in the demo is a jacket at #CF534F: two degrees of hue
+            // from the line, 55 luminance levels from it. At one pixel that is
+            // not a line, it is a shading step in the jacket.
+            final Framebuffer fb = frame();
+            fb.clearColor(JACKET_RED);
+            box(fb, BOX_MIN_X, BOX_MIN_Y, BOX_MAX_X, BOX_MAX_Y, ID_A);
+            defaultPass().draw(fb, null, ID_A);
+
+            assertThat(fb.pixel(BOX_MIN_X + 1, MID_Y))
+                .as("the keyline is what the player actually reads the mark from")
+                .isEqualTo(OutlinePass.KEYLINE_COLOR);
+            assertThat(luminance(JACKET_RED) - luminance(OutlinePass.OUTLINE_COLOR))
+                .as("the line against this jacket: barely a shading step")
+                .isLessThan(60);
+            assertThat(luminance(JACKET_RED) - luminance(OutlinePass.KEYLINE_COLOR))
+                .as("the keyline against the same jacket: twice as far")
+                .isGreaterThan(100);
+        }
+
+        @Test
+        @DisplayName("on a body of the line's exact colour the line vanishes and the mark does not")
+        void shouldStayVisibleOnABodyOfItsOwnColour()
+        {
+            // The limit of the case above, and the assertion is deliberately an
+            // admission: the line is not merely hard to see here, it is bit-for-
+            // bit the surface it is drawn on. Everything the player perceives at
+            // that point is the keyline.
+            final Framebuffer fb = frame();
+            fb.clearColor(OutlinePass.OUTLINE_COLOR);
+            box(fb, BOX_MIN_X, BOX_MIN_Y, BOX_MAX_X, BOX_MAX_Y, ID_A);
+            defaultPass().draw(fb, null, ID_A);
+
+            assertThat(fb.pixel(BOX_MIN_X, MID_Y))
+                .as("the line is genuinely indistinguishable from this body")
+                .isEqualTo(fb.pixel(BOX_MIN_X - 1, MID_Y));
+            assertThat(fb.pixel(BOX_MIN_X + 1, MID_Y))
+                .as("and the keyline is the whole of the visible mark")
+                .isEqualTo(OutlinePass.KEYLINE_COLOR);
+        }
+
+        @Test
+        @DisplayName("the mark carries its own contrast, so no background can defeat it")
+        void shouldContrastWithItself()
+        {
+            // The measurement that justifies the colour, and the one thing red
+            // alone could not claim. Red is luminance 54 and the room runs 28 to
+            // 201, so red is NOT far from every surface — the amber crate is
+            // red-dominant and the doorway is nearly as dark. What cannot be
+            // defeated is the step between the two tones of the mark, because a
+            // background does not sit between them: both are painted, adjacent,
+            // every frame.
+            final int line = OutlinePass.OUTLINE_COLOR;
+            final int key = OutlinePass.KEYLINE_COLOR;
+
+            assertThat(luminance(line) - luminance(key))
+                .as("luminance step inside the mark")
+                .isGreaterThanOrEqualTo(50);
+            assertThat(Framebuffer.red(key)).isEqualTo(Framebuffer.green(key));
+            assertThat(Framebuffer.green(key))
+                .as("the keyline is achromatic, so the step is in chroma too")
+                .isEqualTo(Framebuffer.blue(key));
+            assertThat(Framebuffer.red(line) - Framebuffer.blue(line))
+                .as("and the line is fully saturated")
+                .isEqualTo(0xFF);
+            // The amber crate decal is the room surface whose hue is nearest the
+            // line's, and it is 135 luminance levels above the line and 189 above
+            // the keyline — so the pair is legible over it even though red alone
+            // shares its hue family.
+            assertThat(luminance(CRATE_AMBER) - luminance(line)).isGreaterThan(130);
+        }
+
+        @Test
+        @DisplayName("a body too thin to have an inside gets the line and no keyline")
+        void shouldDegradeOnAOnePixelBody()
+        {
+            // A limb two pixels across at distance. Every pixel is on the
+            // silhouette, so there is nowhere inward to key — and inventing
+            // somewhere would mean painting over the room.
+            final Framebuffer fb = wallFrame();
+            box(fb, BOX_MIN_X, BOX_MIN_Y, BOX_MIN_X, BOX_MAX_Y, ID_A);
+            defaultPass().draw(fb, null, ID_A);
+
+            assertThat(fb.pixel(BOX_MIN_X, MID_Y)).isEqualTo(OutlinePass.OUTLINE_COLOR);
+            assertThat(fb.colorBuffer())
+                .as("no keyline anywhere in the frame")
+                .doesNotContain(OutlinePass.KEYLINE_COLOR);
+        }
+
+        @Test
+        @DisplayName("the line and the keyline are the reticle's own two colours")
+        void shouldShareTheReticlesColours()
+        {
+            // Not "the same value" but the same constants, which is the point:
+            // the reticle turns red over the body this pass outlines, off the
+            // same aimedEntityId sample on the same frame. One fact, one colour,
+            // in two places. Two independently chosen reds would drift the first
+            // time either was tuned, and the player would be left learning that
+            // hue means nothing in particular.
+            assertThat(OutlinePass.OUTLINE_COLOR).isEqualTo(Crosshair.coreColor(true));
+            assertThat(OutlinePass.KEYLINE_COLOR).isEqualTo(Crosshair.OUTLINE_COLOR);
+            assertThat(OutlinePass.OUTLINE_COLOR).isNotEqualTo(Crosshair.coreColor(false));
+        }
+
+        @Test
+        @DisplayName("a caller-supplied keyline colour is honoured and reported")
+        void shouldHonourAnExplicitKeylineColour()
+        {
+            final OutlinePass pass = new OutlinePass(1, CRATE_AMBER, ROOM_GREY);
+            assertThat(pass.outlineColor()).isEqualTo(CRATE_AMBER);
+            assertThat(pass.keylineColor()).isEqualTo(ROOM_GREY);
+            assertThat(pass.toString()).contains("keyline");
+        }
+    }
+
+    @Nested
     @DisplayName("thickness")
     class Thickness
     {
@@ -549,6 +818,10 @@ final class OutlinePassTest
             assertThat(new OutlinePass().thickness())
                 .isEqualTo(OutlinePass.OUTLINE_THICKNESS_PIXELS);
             assertThat(new OutlinePass().outlineColor()).isEqualTo(OutlinePass.OUTLINE_COLOR);
+            assertThat(new OutlinePass().keylineColor()).isEqualTo(OutlinePass.KEYLINE_COLOR);
+            assertThat(new OutlinePass(2, OutlinePass.OUTLINE_COLOR).keylineColor())
+                .as("the two-argument constructor keys with the default")
+                .isEqualTo(OutlinePass.KEYLINE_COLOR);
         }
 
         @ParameterizedTest
@@ -667,6 +940,30 @@ final class OutlinePassTest
         return new OutlinePass();
     }
 
+    // A cleared frame whose colour buffer holds a real surface from the demo
+    // room, so a keyed pixel can be told from an untouched one. See ROOM_GREY for
+    // why the cleared black every other fixture uses cannot.
+    private static Framebuffer wallFrame()
+    {
+        final Framebuffer fb = frame();
+        fb.clearColor(ROOM_GREY);
+        return fb;
+    }
+
+    // Rec.709 relative luminance of a packed colour, weighted over the sRGB
+    // values as stored rather than over linearised ones.
+    //
+    // That is the convention every measurement in Crosshair's Javadoc uses — it
+    // is what makes #FFC457 "201" there — so keeping it here is what lets the
+    // numbers in the two classes be compared at all. It is not a colour-science
+    // claim; it is a shared ruler.
+    private static int luminance(final int rgba)
+    {
+        return Math.round(0.2126f * Framebuffer.red(rgba)
+            + 0.7152f * Framebuffer.green(rgba)
+            + 0.0722f * Framebuffer.blue(rgba));
+    }
+
     // Fills an inclusive rectangle of the depth buffer with one 1/w value.
     private static void depthBox(final Framebuffer fb, final int minX, final int minY,
         final int maxX, final int maxY, final float invW)
@@ -694,7 +991,12 @@ final class OutlinePassTest
     // mean something.
     private static Framebuffer crowdedFrame()
     {
-        final Framebuffer fb = frame();
+        // Over a room surface rather than the cleared black, so the worker-count
+        // comparison covers the KEYLINE writes too. On a cleared frame a keyline
+        // pixel and an untouched pixel hold the same value, so a keyline that
+        // landed in a different place at eight workers than at one would have
+        // compared equal.
+        final Framebuffer fb = wallFrame();
         box(fb, PAIR_MIN_X, BOX_MIN_Y, PAIR_SPLIT_X, BOX_MAX_Y, ID_A);
         box(fb, PAIR_SPLIT_X + 1, BOX_MIN_Y, PAIR_MAX_X, BOX_MAX_Y, ID_B);
         box(fb, 1, 1, TILE + 3, TILE * 3 + 5, ID_C);

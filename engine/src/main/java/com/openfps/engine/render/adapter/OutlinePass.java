@@ -63,6 +63,23 @@ import com.openfps.engine.core.pool.I_ThreadPoolPort;
  * overlay, which is a statement about geometry. A filled band round a body
  * reads as a status effect. Same colour, same cost, opposite meaning.</p>
  *
+ * <h2>Two tones, one line — {@link #OUTLINE_COLOR} keyed with
+ * {@link #KEYLINE_COLOR}</h2>
+ *
+ * <p>The line is <b>red</b>, the same {@code #FF0000} the reticle turns over the
+ * same body on the same frame, so hue means one thing across the whole HUD:
+ * <i>this is what you are aiming at</i>. Red is a dark colour — luminance 54,
+ * and no saturated red is brighter — and it is drawn on bodies that are up to
+ * half red-dominant, so a single red pixel is not reliably legible on its own.
+ * It is therefore backed by <b>one pixel of black on the inward side only</b>,
+ * which is the identical device {@code Crosshair} uses to make the identical red
+ * readable over the identical bodies.</p>
+ *
+ * <p><b>The coloured line is still one pixel deep</b>, which is what keeps the
+ * "3 px reads as fill" fix intact; the second pixel is achromatic and reads as
+ * the line's edge rather than as more line. Both constants carry the
+ * measurements.</p>
+ *
  * <h2>The two edge tests</h2>
  *
  * <p><b>Silhouette</b>, from the id buffer: a pixel is on one when some pixel
@@ -108,12 +125,16 @@ import com.openfps.engine.core.pool.I_ThreadPoolPort;
  *
  * <h2>Solid colour, no depth <i>test</i>, no blending</h2>
  *
- * <p>Edge pixels are overwritten outright. There is no falloff and no alpha:
- * the line is one pixel wide, and a one-pixel line that is also half
- * transparent is a line nobody can see over a light grey wall. The depth
- * buffer is <b>read</b> to find creases but is never <b>tested</b> against —
- * the mark is a UI affordance drawn on top of the frame, not geometry in
- * it.</p>
+ * <p>Edge pixels and keyline pixels are overwritten outright. There is no
+ * falloff and no alpha: the line is one pixel wide, and a one-pixel line that is
+ * also half transparent is a line nobody can see over a light grey wall. The
+ * depth buffer is <b>read</b> to find creases but is never <b>tested</b>
+ * against — the mark is a UI affordance drawn on top of the frame, not geometry
+ * in it.</p>
+ *
+ * <p>Each pixel is decided once and written once. A pixel is on an edge or it
+ * backs one, never both, so the two tones never compete for a pixel and the
+ * order the tiles run in cannot show.</p>
  *
  * <h2>Threading — parallel over tiles, and safe by construction</h2>
  *
@@ -152,6 +173,16 @@ import com.openfps.engine.core.pool.I_ThreadPoolPort;
  * no players in it never pays the scan, the dispatch barrier, or the id clear
  * that feeds it. Only the pixels that <i>are</i> tagged pay for the
  * neighbourhood test, four reads per pixel of thickness.</p>
+ *
+ * <p><b>The keyline is not free, and it is worth saying where the cost lands.</b>
+ * A pixel that fails the edge test asks the same question of its four immediate
+ * neighbours, so an <i>interior</i> pixel of the subject costs about five
+ * neighbourhood tests instead of one. That is deliberately the cheapest place to
+ * put it: the subject is one body, and every pixel of the frame that is untagged
+ * or belongs to somebody else still costs the single integer compare it did
+ * before. The alternative — deriving the keyline from the background side —
+ * would have paid four extra reads on <i>every</i> pixel of the frame, and would
+ * have had workers writing outside their own tiles.</p>
  *
  * <h2>Allocation</h2>
  *
@@ -197,22 +228,122 @@ public final class OutlinePass
     public static final float CREASE_DEPTH_RATIO = 0.03f;
 
     /**
-     * The outline colour, packed RGBA8888: fully saturated cyan.
+     * The outline colour, packed RGBA8888: pure red — literally
+     * {@link Crosshair#ENEMY_CORE_COLOR}, {@code #FF0000}, Rec.709 luminance
+     * <b>54</b>.
      *
-     * <p>Chosen against the demo's actual palette rather than in the abstract.
-     * The room is light grey, the doorways are dark, and the weapon is orange;
-     * cyan is orange's complement, so it separates from the one thing on
-     * screen that is most likely to sit behind it, and it has the contrast
-     * against both light and dark that a mid-tone would not. Two channels at
-     * full and one at zero is a corner of the colour cube, which the Kenney
-     * atlases — desaturated, warm, low-poly flats — do not reach.</p>
+     * <p><b>The same constant rather than the same value, because the point is
+     * that these are one signal and not two.</b> The reticle turns red off the
+     * same {@code aimedEntityId} sample that chooses this pass's subject, on the
+     * same frame, so what a player is shown is one colour arriving in two places
+     * at once and one thing to learn: <i>red is what you are aiming at</i>. Two
+     * independently chosen reds would be two things to learn, and would drift
+     * the first time either was tuned.</p>
      *
-     * <p>Magenta was the other candidate and was rejected: it is the
-     * established "missing texture" colour, and a renderer that paints a
-     * player the same colour it paints a broken asset has made its own bug
-     * reports harder to read.</p>
+     * <h3>What this replaced, and why cyan's argument stopped holding</h3>
+     *
+     * <p>It was fully saturated cyan, and the reasoning was sound on its own
+     * terms: cyan is the complement of the orange weapon, no Kenney atlas
+     * reaches a corner of the colour cube, and {@code Crosshair}'s Javadoc even
+     * leaned on it — the reticle went red while the body went cyan, 180 degrees
+     * apart, so the two marks could not be confused. That was the flaw. The two
+     * marks are not meant to be told apart; they are the same fact about the
+     * same body, sampled once. Hue was already carrying "aimed at" in the
+     * reticle, and spending a second, opposite hue on the identical fact taught
+     * a player that colour means nothing in particular.</p>
+     *
+     * <h3>Measured against the pixels this line actually touches</h3>
+     *
+     * <p>Not against the palette in the abstract, and not against the frame as a
+     * whole. A frame was rendered at 1280x720 with a bot under the crosshair, the
+     * pass was run with a stand-in colour no asset contains, and the <b>four
+     * neighbours of every one of the 377 pixels it painted</b> were sampled and
+     * counted. What is next to the line, per pixel, in a real frame:</p>
+     *
+     * <pre>
+     *   outward — the room       766 px, luminance 0..210, 1.8% red-dominant
+     *     ceiling checker      #8D93B1  lum 148    94 above red   (commonest)
+     *     near checker floor   #7E839B  lum 132    78 above red
+     *     pale side wall       #A6ADD0  lum 174   120 above red
+     *     floor in shadow      #464855  lum  73    19 above red
+     *     crate decal, amber   #FFB54A  lum 189   135 above red, hue 33 deg
+     *
+     *   inward — the body       754 px, luminance 0..214, 29% red-dominant
+     *     bot skin             #CD8961  lum 149    95 above red, hue 22 deg
+     *     bot skin, lit        #F6D1A5  lum 214   160 above red, hue 30 deg
+     *     red-jacket bot       #CF534F  lum 109    55 above red, hue  2 deg
+     * </pre>
+     *
+     * <p><b>Outward, red is comfortable and needs no help.</b> The room the line
+     * is seen against is desaturated grey-violet at luminance 130 to 190 —
+     * 78 to 135 levels above red — and under 2% of those neighbouring pixels are
+     * even red-dominant. This is where cyan was supposed to be earning its keep,
+     * and it was not: red separates from this room perfectly well.</p>
+     *
+     * <p><b>Inward, red is in trouble, and that is a hue collision rather than a
+     * luminance one.</b> The pixel on the other side of the line is the body, and
+     * <b>29% of those pixels are red-dominant</b> in the frame measured — which
+     * agrees with the 20% to 50% {@code Crosshair} records for the same bodies
+     * under the same red. The worst case is not hypothetical: one bot wears a
+     * jacket of {@code #CF534F}, hue <b>2 degrees</b> from the line and 55
+     * luminance levels from it. One pixel of {@code #FF0000} against that is not
+     * read as a line at all; it is read as a shading step in the jacket.</p>
+     *
+     * <p>Thickening it is not the answer — three pixels of saturated colour was
+     * tried, and area reads as fill, which reads as damage. So the line stays one
+     * pixel deep and {@link #KEYLINE_COLOR} pays for the collision on the side
+     * the collision is on, exactly as {@code Crosshair}'s black border pays for
+     * the same collision under the same red.</p>
+     *
+     * <p>Magenta remains rejected for the reason it always was: it is the
+     * established "missing texture" colour, and a renderer that paints a player
+     * the same colour it paints a broken asset has made its own bug reports
+     * harder to read.</p>
      */
-    public static final int OUTLINE_COLOR = Rgba.pack(0, 255, 255, 255);
+    public static final int OUTLINE_COLOR = Crosshair.ENEMY_CORE_COLOR;
+
+    /**
+     * The colour of the hairline drawn immediately inside the red one: pure
+     * black — literally {@link Crosshair#OUTLINE_COLOR}, luminance <b>0</b>.
+     *
+     * <p><b>This is what makes a dark, saturated red legible, and it is the same
+     * device the reticle already uses.</b> {@code Crosshair} bands its 7-pixel
+     * red core with 2 pixels of black on each side and says why in as many
+     * words: red is intrinsically dark — no saturated red is brighter than
+     * luminance 54 — and the bodies it is shown against are up to half
+     * red-dominant, so the figure has to be read from its <i>banded
+     * silhouette</i> rather than from its fill. A red line on an enemy has
+     * precisely that problem, on precisely those bodies.</p>
+     *
+     * <p><b>It goes inward, onto the subject's own pixels, and that is a
+     * decision with three parts.</b> Inward keeps the mark inside the
+     * silhouette, so an outlined opponent is not drawn a pixel fatter than an
+     * unoutlined one — the mark must not change the shape it describes. Inward
+     * keeps every write inside the writing worker's own tile, which is the
+     * invariant the whole pass rests on (see the class Javadoc on threading); a
+     * keyline on background pixels would have workers painting outside their
+     * tiles and would make the frame depend on the worker count. And inward is
+     * where the collision actually is: measured over a real aimed frame, the
+     * line's outward neighbours are the room, which it beats by 78 to 135
+     * luminance levels and only 1.8% of which are even red-dominant, while 29% of
+     * its inward neighbours — the body — are. Black at luminance 0 is 109 levels
+     * and a full step in chroma from the worst of them, the {@code #CF534F}
+     * jacket the line itself all but disappears into.</p>
+     *
+     * <p><b>The coloured line is still one pixel deep.</b> That is the whole of
+     * the "3 px reads as fill" fix and it is not being undone here: what is
+     * added is achromatic, and an achromatic pixel against a chromatic one reads
+     * as the edge of the chromatic one rather than as more of it. Total mark:
+     * one pixel of red backed by one pixel of black, 54 luminance levels and a
+     * full step in chroma apart, whatever colour the body behind them is.</p>
+     *
+     * <p>A body too thin to have an inside — a limb two pixels across at
+     * distance — gets no keyline, because every one of its pixels is on an edge.
+     * That degrades to exactly the previous behaviour, which is the right
+     * failure: there is no room for a backing line, and inventing one would mean
+     * painting over the room.</p>
+     */
+    public static final int KEYLINE_COLOR = Crosshair.OUTLINE_COLOR;
 
     /**
      * Subject meaning "every tagged entity", the behaviour this pass used to
@@ -232,6 +363,7 @@ public final class OutlinePass
 
     private final int thickness;
     private final int outlineColor;
+    private final int keylineColor;
 
     /** The frame's target. MUTABLE: rebound by {@link #draw}. */
     private volatile Framebuffer framebuffer;
@@ -270,7 +402,8 @@ public final class OutlinePass
     }
 
     /**
-     * Creates an outline pass with an explicit thickness and colour.
+     * Creates an outline pass with an explicit thickness and colour, keyed with
+     * the default {@link #KEYLINE_COLOR}.
      *
      * <p>Exists so a test can assert that the thickness is honoured and
      * symmetric without depending on the shipped default, and so a higher
@@ -283,6 +416,29 @@ public final class OutlinePass
      */
     public OutlinePass(final int outlineThickness, final int rgba)
     {
+        this(outlineThickness, rgba, KEYLINE_COLOR);
+    }
+
+    /**
+     * Creates an outline pass with an explicit thickness, colour and keyline
+     * colour.
+     *
+     * <p><b>The keyline colour is a parameter for one concrete reason:</b> the
+     * shipped one is pure black and every test fixture starts from a frame
+     * cleared to {@link Framebuffer#CLEAR_COLOR_OPAQUE_BLACK}, which is the same
+     * value. A test asserting where the keyline lands cannot do it in a colour
+     * indistinguishable from "nothing was painted here", so it names its
+     * own.</p>
+     *
+     * @param outlineThickness how far the outline reaches inward from an edge,
+     *     in pixels; must be positive
+     * @param rgba packed {@code 0xRRGGBBAA} outline colour
+     * @param keylineRgba packed {@code 0xRRGGBBAA} colour for the hairline drawn
+     *     immediately inside the outline
+     * @throws IllegalArgumentException if the thickness is not positive
+     */
+    public OutlinePass(final int outlineThickness, final int rgba, final int keylineRgba)
+    {
         if (outlineThickness <= 0)
         {
             throw new IllegalArgumentException("outline thickness must be > 0, got "
@@ -290,6 +446,7 @@ public final class OutlinePass
         }
         this.thickness = outlineThickness;
         this.outlineColor = rgba;
+        this.keylineColor = keylineRgba;
     }
 
     /**
@@ -373,10 +530,22 @@ public final class OutlinePass
         return thickness;
     }
 
-    /** Returns the packed RGBA8888 colour this pass paints. */
+    /** Returns the packed RGBA8888 colour this pass paints the edge itself. */
     public int outlineColor()
     {
         return outlineColor;
+    }
+
+    /**
+     * Returns the packed RGBA8888 colour of the hairline drawn immediately
+     * inside the edge.
+     *
+     * @return the keyline colour — see {@link #KEYLINE_COLOR} for why there is
+     *     one at all
+     */
+    public int keylineColor()
+    {
+        return keylineColor;
     }
 
     /**
@@ -395,7 +564,8 @@ public final class OutlinePass
     public String toString()
     {
         return "OutlinePass{thickness=" + thickness + ", color=0x"
-            + Integer.toHexString(outlineColor) + "}";
+            + Integer.toHexString(outlineColor) + ", keyline=0x"
+            + Integer.toHexString(keylineColor) + "}";
     }
 
     // ---- the tile pass ----
@@ -415,6 +585,7 @@ public final class OutlinePass
         final int maxX = target.tileMaxX(tile);
         final int maxY = target.tileMaxY(tile);
         final int paint = outlineColor;
+        final int key = keylineColor;
         final int marked = subject;
         // Hoisted, so the per-pixel test is one integer compare in both modes
         // rather than a compare against a sentinel plus a compare against an id.
@@ -442,8 +613,57 @@ public final class OutlinePass
                 {
                     colorBuffer[rowBase + px] = paint;
                 }
+                else if (backsAnEdge(idBuffer, depthBuffer, px, py, id))
+                {
+                    // One pixel further in than the line, and only where there
+                    // IS a further in — see KEYLINE_COLOR. Reached only by the
+                    // subject's interior pixels, so the untagged majority of the
+                    // frame still costs the single compare above and nothing
+                    // more.
+                    colorBuffer[rowBase + px] = key;
+                }
             }
         }
+    }
+
+    // Whether this interior pixel of the subject is immediately behind a pixel
+    // the line is drawn on, and so is where the keyline goes.
+    //
+    // Four immediate neighbours, never `thickness` of them: the keyline backs
+    // the line, and a keyline as deep as a thick line would be a second band
+    // rather than a border. Asked only of pixels that already failed onEdge, so
+    // the two marks cannot overlap and the paint order cannot matter.
+    private boolean backsAnEdge(final int[] idBuffer, final float[] depthBuffer, final int px,
+        final int py, final int id)
+    {
+        return isEdgeOf(idBuffer, depthBuffer, px - 1, py, id)
+            || isEdgeOf(idBuffer, depthBuffer, px + 1, py, id)
+            || isEdgeOf(idBuffer, depthBuffer, px, py + 1, id)
+            || isEdgeOf(idBuffer, depthBuffer, px, py - 1, id);
+    }
+
+    // Whether one neighbour is a pixel of the SAME entity that is itself on an
+    // edge — that is, a pixel this pass has painted or is about to paint.
+    //
+    // Recomputed rather than read back out of the colour buffer, and that is not
+    // an efficiency question: reading colour would make the result depend on
+    // whether the neighbour's tile had been visited yet, which is exactly the
+    // worker-count dependence the class Javadoc forbids. Both inputs are frozen
+    // for the frame, so this is a pure function and the frame stays
+    // bit-identical at any worker count.
+    private boolean isEdgeOf(final int[] idBuffer, final float[] depthBuffer, final int x,
+        final int y, final int id)
+    {
+        if (x < 0 || x >= width || y < 0 || y >= height)
+        {
+            return false;
+        }
+        final int at = y * strideInPixels + x;
+        if (idBuffer[at] != id)
+        {
+            return false;
+        }
+        return onEdge(idBuffer, depthBuffer, x, y, id, depthBuffer[at]);
     }
 
     // Whether this tagged pixel is on either kind of edge. Only tagged pixels

@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.openfps.engine.gameplay.MatchMode;
+import com.openfps.gdx.DebugSettings;
 import com.openfps.gdx.DefaultMenuActions;
 import com.openfps.gdx.MenuActions;
 import com.openfps.gdx.UiState;
@@ -29,6 +30,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * a button press causes, the match gate that freezes the bots while the menu is
  * up, and the leave path. All three are logic, all three have been wrong on
  * desktop at some point, and none of them needs a screen.</p>
+ *
+ * <p>The debug switch is here for a different reason. It is the one piece of the
+ * aiming-feedback set that this class can get wrong <i>silently</i>: the outline
+ * pass, the reticle and the render mode all live in code both platforms share, so
+ * they cannot be present on desktop and absent here, but the switch that drives
+ * the outline is handed in by the launcher and could be replaced by a private one
+ * without a single symptom on this side of the seam.</p>
  */
 @DisplayName("AndroidUiFrameCallback")
 class AndroidUiFrameCallbackTest
@@ -104,6 +112,63 @@ class AndroidUiFrameCallbackTest
                 new RecordingActions(), null, input);
 
             assertThat(input.uiState()).isSameAs(ui.uiState());
+        }
+    }
+
+    @Nested
+    @DisplayName("the debug switch — the one link that silently disconnects")
+    class DebugSwitch
+    {
+        @Test
+        @DisplayName("the switch the launcher supplies is the switch this UI reads")
+        void shouldReadTheSuppliedSwitch()
+        {
+            // AndroidLauncher builds one DebugSettings, hands it here for the
+            // settings screen and the frame counter, and separately hangs
+            // SoftwareRenderPort.setOutlineEnabled off its onChange - exactly as
+            // DesktopLauncher does. If this UI kept a switch of its own instead,
+            // nothing would fail and nothing would throw: the button would still
+            // relabel itself, the counter would still appear, and the enemy
+            // outline would simply stop answering the toggle. Identity is the
+            // only assertion that catches that.
+            final DebugSettings shared = new DebugSettings();
+            final AndroidUiFrameCallback ui = new AndroidUiFrameCallback(
+                new RecordingActions(), null, null, shared);
+
+            assertThat(ui.debugSettings()).isSameAs(shared);
+        }
+
+        @Test
+        @DisplayName("the switch is live: a change made outside is seen inside")
+        void shouldSeeChangesMadeThroughTheSharedSwitch()
+        {
+            final DebugSettings shared = new DebugSettings();
+            final AndroidUiFrameCallback ui = new AndroidUiFrameCallback(
+                new RecordingActions(), null, null, shared);
+
+            assertThat(ui.debugSettings().isOverlayVisible()).isFalse();
+            shared.setOverlayVisible(true);
+            assertThat(ui.debugSettings().isOverlayVisible()).isTrue();
+        }
+
+        @Test
+        @DisplayName("a UI given no switch gets a private one rather than a null")
+        void shouldDefaultToItsOwnSwitch()
+        {
+            // Every plain-JVM test takes this path, and it must not be a
+            // special case: the counter and the settings screen are built the
+            // same way whether or not a launcher was interested in the switch.
+            assertThat(menuOnly().debugSettings()).isNotNull();
+        }
+
+        @Test
+        @DisplayName("a null switch is refused rather than quietly replaced")
+        void shouldRejectANullSwitch()
+        {
+            assertThatThrownBy(() -> new AndroidUiFrameCallback(
+                new RecordingActions(), null, null, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("debugSettings");
         }
     }
 
