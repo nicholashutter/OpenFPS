@@ -225,19 +225,26 @@ they are looking at without having to go and find out.
 --------------------------------------------------------------------------------
 AUDIO: no third-party sound, in any build.
 
-Every sound OpenFPS makes is generated at runtime by this project's own
-`com.openfps.engine.audio.synth.BlasterSound` — a pitch sweep and an amplitude
-envelope, computed into 16-bit PCM in about forty lines of arithmetic and wrapped
-in a RIFF/WAVE header by `WavAudio`. It is covered by this repository's MIT
-license, like any other source file here.
+Every sound OpenFPS makes is generated at runtime, in this project's own code
+under `com.openfps.engine.audio.synth`, and catalogued by `SoundBank`:
+
+  * `BlasterSound` — the player's weapon. A pitch sweep and an amplitude
+    envelope, computed into 16-bit PCM in about forty lines of arithmetic.
+  * `CarbineSound` — a bot's weapon, so incoming fire is identifiable by ear.
+    Low-passed pseudo-random noise from a fixed-seed LCG written out in full,
+    over a low sine, with the same envelope discipline.
+
+Both are wrapped in a RIFF/WAVE header by `WavAudio`. Both are covered by this
+repository's MIT license, like any other source file here. The noise generator
+is arithmetic, not a recording: there is no sampled material in it.
 
 There is no sound file in this repository, none in the APK, none downloaded by
 `fetchAssets`, and no audio decoder beyond what libGDX already carries for other
 purposes. That is a deliberate answer to an open question rather than an
 oversight: docs/ASSETS.md section 3's accepted-sources table covers models and
 textures and has no audio row, so shipping a .wav would have forced the source,
-format and container questions all at once — for one blaster noise. Generating it
-settles all three by removing them.
+format and container questions all at once — for a couple of gunshots.
+Generating them settles all three by removing them.
 
 If a real sound bank is ever added, it enters through the section 7 intake
 checklist like anything else and is recorded above, by pack, with author, source,

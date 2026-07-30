@@ -254,6 +254,17 @@ public final class DemoGameplayPort implements I_GameplayPort
      */
     private final float[] muzzleScratch = new float[3];
 
+    /**
+     * How much of the room's fire is allowed to be heard. Never null.
+     *
+     * <p>Seven opponents on seven independent cadences will ask for a noise far
+     * more often than one player can, and identical copies of one generated buffer
+     * started on the same tic sum in phase rather than mixing. See
+     * {@link BotFireVoices}, which owns both numbers and the arithmetic behind
+     * them.</p>
+     */
+    private final BotFireVoices botVoices = new BotFireVoices();
+
     /** MUTABLE: the match state already reported, so the result is logged once. */
     private MatchState reportedState = MatchState.IN_PROGRESS;
 
@@ -611,7 +622,7 @@ public final class DemoGameplayPort implements I_GameplayPort
             // shot log at the top of the NEXT one — the window is a single tic
             // wide, which is the right lifetime for a per-tic event and the reason
             // it needs no queue. See BotShotLog.
-            spawnIncomingFire();
+            spawnIncomingFire(ticIndex);
             exchangeNetwork(ticIndex, inputPort.currentInput());
             fireIfRequested(inputPort.currentInput().fire(), ticIndex);
             // AFTER the trigger and BEFORE the publish, which is not an
@@ -788,20 +799,25 @@ public final class DemoGameplayPort implements I_GameplayPort
         }
     }
 
-    // Turns this tic's return fire into something the player can see.
+    // Turns this tic's return fire into something the player can see and hear.
     //
     // This is the whole of "the enemies do appear to shoot back, but you wouldn't
     // know it". Match had always resolved these shots and taken the health away;
-    // nothing drew them, so a player under fire had no way to tell it was
-    // happening, where it was coming from, or that moving would help.
+    // nothing drew them and nothing played them, so a player under fire had no way
+    // to tell it was happening, where it was coming from, or that moving would
+    // help.
     //
     // Allocation-free per tic: the log is a reused buffer, the muzzle goes into a
     // reused array, and DemoEffects writes into arrays it allocated at startup.
     // On the great majority of tics the loop does not execute at all — seven DUMB
     // bots produce a shot every eighteen tics between them.
-    private void spawnIncomingFire()
+    //
+    // NOT gated on match == null || effects == null the way the visible half is:
+    // the sound is worth playing on a port with no scene behind it, which is what
+    // every one of this class's own tests is.
+    private void spawnIncomingFire(final int ticIndex)
     {
-        if (match == null || effects == null || !matchLive)
+        if (match == null || !matchLive)
         {
             return;
         }
@@ -810,6 +826,24 @@ public final class DemoGameplayPort implements I_GameplayPort
         {
             final Bot shooter = match.byId(shots.shooterId(slot));
             if (shooter == null)
+            {
+                continue;
+            }
+            // The noise, BEFORE the bolt and unconditionally on the outcome — the
+            // same rule the player's own weapon follows, and for the same reason: a
+            // sound that only played when a shot connected would tell the player
+            // they had been hit before the health did.
+            //
+            // Through the VOICE GATE, which is the difference between this and the
+            // player's trigger. That one is bounded by its own cooldown; seven
+            // independent shooters are bounded by nothing, and copies of one
+            // generated buffer started on the same tic sum in phase rather than
+            // mixing. BotFireVoices owns the numbers.
+            if (botVoices.allow(ticIndex))
+            {
+                audio.play(SoundId.BOT_WEAPON_FIRE);
+            }
+            if (effects == null)
             {
                 continue;
             }
@@ -824,6 +858,20 @@ public final class DemoGameplayPort implements I_GameplayPort
                 shots.directionX(slot), shots.directionY(slot), shots.directionZ(slot),
                 shots.rangeUnits(slot));
         }
+    }
+
+    /**
+     * Returns the gate deciding how much of the room's fire is heard. Never null.
+     *
+     * <p>Exposed so a test can assert the cap without a sound card, which is the
+     * only way it can be asserted at all: {@code NullAudioPort} counts plays but
+     * cannot say what a stack of them would sound like.</p>
+     *
+     * @return the bot-fire voice gate
+     */
+    public BotFireVoices botFireVoices()
+    {
+        return botVoices;
     }
 
     // Ages every tracer and puff of smoke by one tic.
@@ -962,6 +1010,11 @@ public final class DemoGameplayPort implements I_GameplayPort
             }
             this.reportedState = MatchState.IN_PROGRESS;
             this.lastFireTic = -FIRE_INTERVAL_TICS;
+            // Beside the effects and for the same reason: a rematch that inherited
+            // the last round's final shot would refuse the first few tics of the
+            // new one, and "the first bot to shoot at me was silent" is not a bug
+            // anybody would trace back to a rematch.
+            botVoices.clear();
             // The un-hide. See the Javadoc above: this is what makes the corpses
             // visible again, and nothing in Match can do it.
             publishBotPlacements();

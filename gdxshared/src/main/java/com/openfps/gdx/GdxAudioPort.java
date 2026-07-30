@@ -10,7 +10,6 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.EnumMap;
-import java.util.Locale;
 import java.util.Map;
 
 import com.badlogic.gdx.Gdx;
@@ -19,8 +18,7 @@ import com.badlogic.gdx.audio.Sound;
 import com.openfps.engine.audio.AudioVolume;
 import com.openfps.engine.audio.port.I_AudioPort;
 import com.openfps.engine.audio.port.SoundId;
-import com.openfps.engine.audio.synth.BlasterSound;
-import com.openfps.engine.audio.synth.WavAudio;
+import com.openfps.engine.audio.synth.SoundBank;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -91,9 +89,6 @@ import org.slf4j.LoggerFactory;
 public final class GdxAudioPort implements I_AudioPort
 {
     private static final Logger LOG = LoggerFactory.getLogger(GdxAudioPort.class);
-
-    /** Name of the staged sound file. Stable, so repeat runs reuse one file. */
-    private static final String WEAPON_FILE = "openfps-weapon-fire.wav";
 
     /** Where a temporary WAV may be written — the one per-platform decision. */
     private final File cacheDirectory;
@@ -294,8 +289,8 @@ public final class GdxAudioPort implements I_AudioPort
                     Gdx.files.absolute(staged.getAbsolutePath()));
                 loaded.put(sound, baked);
                 LOG.info("Loaded {} — {} samples of generated PCM at {} Hz, staged at {}",
-                    sound, Integer.valueOf(BlasterSound.sampleCount()),
-                    Integer.valueOf(BlasterSound.sampleRate()), staged);
+                    sound, Integer.valueOf(SoundBank.sampleCount(sound)),
+                    Integer.valueOf(SoundBank.sampleRate(sound)), staged);
                 return baked;
             }
             catch (final RuntimeException e)
@@ -324,8 +319,8 @@ public final class GdxAudioPort implements I_AudioPort
             warnOnce("No cache directory — {} cannot be staged, running silent", sound);
             return null;
         }
-        final File file = new File(cacheDirectory, fileNameFor(sound));
-        // Rewritten every run rather than reused if present. It is 8 KB, it is
+        final File file = new File(cacheDirectory, SoundBank.fileName(sound));
+        // Rewritten every run rather than reused if present. It is a few KB, it is
         // deterministic, and a truncated file left by a killed process would
         // otherwise be a permanently broken sound that reinstalling does not fix.
         try
@@ -336,7 +331,15 @@ public final class GdxAudioPort implements I_AudioPort
             cacheDirectory.mkdirs();
             try (OutputStream out = new FileOutputStream(file))
             {
-                out.write(WavAudio.wav(BlasterSound.samples(), BlasterSound.sampleRate()));
+                // SoundBank, not a synthesis class. THIS LINE WAS THE BUG the
+                // second sound found: it used to name BlasterSound outright, so
+                // every SoundId this adapter was handed staged the player's own
+                // weapon. It loaded, warmed and played on cue, and the only symptom
+                // would have been that incoming fire sounded like your own gun.
+                //
+                // An adapter has no business knowing what a sound IS. It knows
+                // where a file may be written and how this platform plays one.
+                out.write(SoundBank.wav(sound));
             }
         }
         catch (final IOException | RuntimeException e)
@@ -345,19 +348,6 @@ public final class GdxAudioPort implements I_AudioPort
             return null;
         }
         return file;
-    }
-
-    // The file name for one sound. A switch rather than one constant so that
-    // adding a second SoundId is a visible decision here.
-    private static String fileNameFor(final SoundId sound)
-    {
-        switch (sound)
-        {
-            case WEAPON_FIRE:
-                return WEAPON_FILE;
-            default:
-                return "openfps-" + sound.name().toLowerCase(Locale.ROOT) + ".wav";
-        }
     }
 
     // Logs a warning the first time only. Audio failures are per-shot, and a

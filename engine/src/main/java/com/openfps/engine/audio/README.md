@@ -7,29 +7,45 @@
 
 | Field | Value |
 |---|---|
-| **State** | SHIPPING (one sound) |
+| **State** | SHIPPING (two sounds) |
 | **Phase** | `PLAN.md` Phase 6 — started, deliberately narrow |
-| **Tests** | 42 (`:engine` 39, `:gdxshared` 3 groups over 8) |
 | **Registered** | S_ via `AudioSubsystem`, port supplied by `I_AdapterFactory.getAudioPort()` |
-| **Verified** | 2026-07-29 |
+| **Verified** | 2026-07-30 |
 
 **Built.** `I_AudioPort` and `SoundId`; `AudioVolume` (the clamp); `BlasterSound`
-and `WavAudio` (synthesis and container); `NullAudioPort` (silent, recording);
-`GdxAudioPort` in `:gdxshared` (real, lazy, degrades). The weapon fires audibly
-in the demo on desktop and Android, from `DemoGameplayPort.fireIfRequested`.
+(the player's weapon), `CarbineSound` (a bot's), `SoundBank` (which id is which)
+and `WavAudio` (the container); `NullAudioPort` (silent, recording);
+`GdxAudioPort` in `:gdxshared` (real, lazy, degrades). The player's weapon fires
+audibly from `DemoGameplayPort.fireIfRequested` and return fire from
+`spawnIncomingFire`, on desktop and Android.
 
-**Not built.** Positional audio, music, a mixer, a voice limit, `SoundEngine`,
-`SoundEmitter`, `MusicPlayer`, `PcmLoader`. None of it exists and none of it is
-half-started. See "What this is not".
+**Voice limiting** exists for return fire only, in `demo/BotFireVoices`: one
+voice per tic and a six-tic minimum interval. It is not in this package and not
+behind the port, deliberately — see § "Why the voice limit is not in here".
+
+**Not built.** Positional audio, music, a mixer, `SoundEngine`, `SoundEmitter`,
+`MusicPlayer`, `PcmLoader`. None of it exists and none of it is half-started.
+See "What this is not".
 
 **Blocked on.** Nothing. The source-format question that used to block this
-package is settled *for the demo* by generating the sound (§ "Where the sound
+package is settled *for the demo* by generating the sounds (§ "Where the sound
 comes from"); it remains genuinely open for a real sound bank, and that is
 recorded rather than pretended away.
 
-**Next step.** Nothing is queued. The next honest piece of work is a second
-sound — a hit confirmation or a bot's shot — because one sound cannot tell you
-whether the port's shape is right.
+**What the second sound found.** The next step used to read: "one sound cannot
+tell you whether the port's shape is right." It was worth doing, and the answer
+is that `I_AudioPort` and `SoundId` were both fine and **the seam between the
+synthesis and the adapter did not exist**. `GdxAudioPort.stage` named
+`BlasterSound` outright, so a second id staged, loaded, warmed and played — as
+the player's own weapon. Green build, working audio, and the only symptom
+audible rather than assertable. `SoundBank` is that missing seam: the engine
+answers *what a sound is*, an adapter answers *how this platform plays bytes*,
+and adding a third sound now touches no adapter at all. `SoundBankTest` asserts
+over `SoundId.values()` that no two ids share a buffer or a file name, which is
+the property whose absence made the bug invisible.
+
+**Next step.** Nothing is queued. A hit confirmation is the obvious third sound,
+and it would now cost one enum value, one synth class and one branch.
 
 ## What lives here
 
@@ -38,14 +54,52 @@ audio/
 ├── port/
 │   ├── I_AudioPort.java    the contract: init, shutdown, play, stopAll,
 │   │                       setMasterVolume, masterVolume, isAudible
-│   └── SoundId.java        the closed set of sounds — one, today
+│   └── SoundId.java        the closed set of sounds — two, today
 ├── synth/
-│   ├── BlasterSound.java   generates the weapon sound as 16-bit PCM
+│   ├── BlasterSound.java   the player's weapon: a pitch sweep
+│   ├── CarbineSound.java   a bot's weapon: a noise crack, and NOT a sweep
+│   ├── SoundBank.java      which SoundId is which sound, as playable bytes
 │   └── WavAudio.java       wraps PCM in a RIFF/WAVE container
 ├── AudioVolume.java        the one definition of a legal volume
 └── adapter/
     └── NullAudioPort.java  silent, and counts what it was asked to play
 ```
+
+`SoundBank` is the seam an adapter goes through, and the only one. An adapter
+must name no synthesis class: see § "What the second sound found" above for the
+bug that rule was written from.
+
+## Why the voice limit is not in here
+
+Because it is a rule about **this game's opponents**, not about sound. The port's
+contract is explicit that overlapping plays overlap in the mix — "firing again
+before the last shot has decayed must not cut it off. That is what a weapon
+sounds like" — and both shipped backends do exactly that. A port that silently
+dropped plays would be one nobody could reason about.
+
+But seven bots roll for the trigger independently every tic their weapon is
+ready, and two things follow that a single shooter cannot do. Several can fire on
+one tic, and **copies of one generated buffer started on the same tic are the
+same waveform added to itself** — identical samples, perfectly in phase — so
+seven of them is one shot at seven times the amplitude, which clips. And the
+long-run rate is bounded by nothing audible, so a burst becomes texture rather
+than a warning.
+
+`demo/BotFireVoices` owns both numbers, and both are derived:
+
+- **One voice per tic.** The second copy is not a smaller contribution, it is a
+  doubling; there is no second shot in there to hear.
+- **Six tics minimum**, so ten a second. `CarbineSound.DURATION_MS` is 120 ms,
+  which at 60 Hz is 7.2 tics, so six admits at most `ceil(7.2 / 6) = 2`
+  overlapping voices — enough that "more than one of them is shooting" is
+  audible, and two at `PEAK` 0.45 reach 0.90, inside full scale. The measured
+  room fires once every 18 tics between the seven of them, so the gate only ever
+  closes on a burst; a limiter that shaped the *average* would be changing the
+  demo's balance from the audio layer.
+
+The gate is a pure function of the tic index. No wall clock, for the reason
+`BotRng` gives — a gate that opened on different tics on two peers would be a
+divergence in the one layer nobody would look in.
 
 The real backend is **not here**, and cannot be: it needs `Gdx.audio`, and
 `:engine` imports no libGDX. `GdxAudioPort` lives in `:gdxshared` and is wired in
@@ -195,10 +249,15 @@ Three properties of where that `play` call sits, all of them tested:
 
 ## What this is not
 
-**There is no mixer, no voice limit, no positional audio and no music.** Not
-"not yet, see the formulae below" — not at all. The port cannot express a
-position, `SoundId` carries no volume or pitch, and nothing here allocates a
-mixing buffer.
+**There is no mixer, no positional audio and no music.** Not "not yet, see the
+formulae below" — not at all. The port cannot express a position, `SoundId`
+carries no volume or pitch, and nothing here allocates a mixing buffer.
+
+**There is no voice limit *in this package*** either, and that is a different
+statement from there being none: return fire is capped by `demo/BotFireVoices`
+above the port, for the reason § "Why the voice limit is not in here" gives. What
+does not exist is any notion of voices *inside* the audio layer — no count of what
+is playing, no priority, no culling.
 
 That is a narrowing, and it was chosen. A 32-voice mixer with distance
 attenuation is a real piece of work, and building the *interface* for one before
@@ -244,10 +303,13 @@ no interface pretends otherwise.
 | File | Tests |
 |---|---|
 | `port/I_AudioPort.java` | contract exercised via `NullAudioPortTest` |
-| `port/SoundId.java` | — |
+| `port/SoundId.java` | covered by `SoundBankTest`, which iterates `values()` |
 | `AudioVolume.java` | `AudioVolumeTest` — 8, including the NaN one-liner trap |
 | `synth/BlasterSound.java` | `BlasterSoundTest` — 12 |
+| `synth/CarbineSound.java` | `CarbineSoundTest` — well formed, reproducible, and measurably not a pitch sweep |
+| `synth/SoundBank.java` | `SoundBankTest` — no two ids share a buffer or a file name |
 | `synth/WavAudio.java` | `WavAudioTest` — 12, header read back independently |
+| `demo/BotFireVoices.java` | `BotFireVoicesTest` — the cap, the headroom, and the first shot |
 | `adapter/NullAudioPort.java` | `NullAudioPortTest` — 10, incl. concurrent play |
 | `:gdxshared` `GdxAudioPort.java` | `GdxAudioPortTest` — 8, all of them the no-device path |
 | `demo/DemoGameplayPort` | `DemoGameplayPortAudioTest` — 9, cadence and silence |
