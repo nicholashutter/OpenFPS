@@ -111,6 +111,15 @@ public final class RemotePlayers
     /** One controller per body, all bound to the room's own solid geometry. */
     private final PlayerController[] controller;
 
+    /** The canonical spawn each peer's own spawn is offset from, world x. */
+    private final float baseSpawnX;
+
+    /** The canonical spawn, world y — the floor. */
+    private final float baseSpawnY;
+
+    /** The canonical spawn, world z. */
+    private final float baseSpawnZ;
+
     /**
      * The next tic each body wants. MUTABLE: advanced as inputs are applied.
      *
@@ -149,11 +158,15 @@ public final class RemotePlayers
     // Built only by addTo, which is the only thing that can know the scene
     // indices — they have to be captured as the instances are appended.
     private RemotePlayers(final int[] bodyIndices, final int[] weaponIndices,
-        final PlayerController[] controllers)
+        final PlayerController[] controllers, final float feetX, final float feetY,
+        final float feetZ)
     {
         this.bodyInstance = bodyIndices;
         this.weaponInstance = weaponIndices;
         this.controller = controllers;
+        this.baseSpawnX = feetX;
+        this.baseSpawnY = feetY;
+        this.baseSpawnZ = feetZ;
         this.nextTic = new int[controllers.length];
         this.ticsApplied = new long[controllers.length];
         for (int body = 0; body < nextTic.length; body++)
@@ -214,7 +227,8 @@ public final class RemotePlayers
             // nobody, which is at least the same answer the single-player demo
             // gives.
             LOG.info("Remote player bodies: none placed — no character art is staged");
-            return new RemotePlayers(new int[0], new int[0], new PlayerController[0]);
+            return new RemotePlayers(new int[0], new int[0], new PlayerController[0],
+                spawnFeetX, spawnFeetY, spawnFeetZ);
         }
 
         final ModelFormat[] people = models.characters();
@@ -241,7 +255,8 @@ public final class RemotePlayers
         LOG.info("Remote player bodies: {} placed from {} model(s), ids {}..{}, armed: {}",
             MAX_BODIES, people.length, Match.FIRST_REMOTE_ENTITY_ID,
             Match.FIRST_REMOTE_ENTITY_ID + MAX_BODIES - 1, blaster != null);
-        return new RemotePlayers(bodies, weapons, controllers);
+        return new RemotePlayers(bodies, weapons, controllers, spawnFeetX, spawnFeetY,
+            spawnFeetZ);
     }
 
     // One body's carbine, tagged with the BODY's entity id rather than its own,
@@ -302,14 +317,15 @@ public final class RemotePlayers
             // the slots above it, in the order they were added. Body index and
             // peer index are the same number; neither is the player id, which
             // is a network identity and may be any value at all.
-            applied = applied + advanceBody(peer, ring, peer + 1, deltaSeconds);
+            applied = applied + advanceBody(peer, ring, peer + 1,
+                session.peer(peer).peerId(), deltaSeconds);
         }
         return applied;
     }
 
     // One body, caught up as far as the ring allows.
     private int advanceBody(final int body, final TicCmdBuffer ring, final int slot,
-        final float deltaSeconds)
+        final int peerId, final float deltaSeconds)
     {
         int cursor = nextTic[body];
         if (cursor == NO_TIC)
@@ -325,8 +341,21 @@ public final class RemotePlayers
                 return 0;
             }
             cursor = oldestHeldTic(ring, slot, latest);
+            // Onto the spawn belonging to THIS PEER'S player id, before its first
+            // input is applied. The pool was placed on the canonical spawn because
+            // that is all a Scene.Builder could know; the peer's own spawn depends
+            // on its id, which is not known until it connects.
+            //
+            // This is what makes two peers able to see each other at all. Standing
+            // both on one spawn puts each body exactly at the other's eye, where
+            // the near plane clips it away — so a freshly launched match with
+            // nobody moving showed two empty rooms, which is indistinguishable
+            // from a session that never connected.
+            placeOnSpawn(body, peerId);
             this.liveCount = liveCount + 1;
-            LOG.info("Remote body {} is live — first input at tic {}", body, cursor);
+            LOG.info("Remote body {} is live — player {} first input at tic {}, spawned at"
+                + " ({}, {})", body, peerId, cursor, controller[body].positionX(),
+                controller[body].positionZ());
         }
         int applied = 0;
         while (ring.has(slot, cursor))
@@ -338,6 +367,26 @@ public final class RemotePlayers
         nextTic[body] = cursor;
         ticsApplied[body] = ticsApplied[body] + applied;
         return applied;
+    }
+
+    // Puts one body on the spawn its player id owns. The offsets come from
+    // DemoScene so there is one table, and both peers therefore agree about where
+    // a given id starts — a peer placed on a different spawn from the one it is
+    // actually standing on would be visibly beside itself for the whole match.
+    private void placeOnSpawn(final int body, final int peerId)
+    {
+        final float radius = spawnRadius();
+        controller[body].respawnAt(DemoScene.spawnXFor(peerId, radius), baseSpawnY,
+            DemoScene.spawnZFor(peerId, radius), DemoScene.spawnYawFor(peerId), 0.0f);
+    }
+
+    // The spawn ring's radius, taken from the canonical spawn this pool was built
+    // around. Derived rather than passed as a ninth parameter, and derived the
+    // same way DemoScene.spawnRadius does it, so the ring a peer is placed on is
+    // provably the ring the local player is standing on.
+    private float spawnRadius()
+    {
+        return (float) StrictMath.hypot(baseSpawnX, baseSpawnZ);
     }
 
     // The oldest tic still held for a slot, scanned across the whole ring window.

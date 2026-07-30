@@ -338,6 +338,93 @@ final class DemoSceneTest
     }
 
     @Nested
+    @DisplayName("spawn points")
+    final class Spawns
+    {
+        @Test
+        @DisplayName("id 0 is exactly the canonical spawn, so single player does not move")
+        void shouldLeaveTheCanonicalSpawnAlone(@TempDir final Path root) throws IOException
+        {
+            final DemoScene demo = DemoScene.build(kitWithCharacters(root));
+
+            // The whole reason index 0 is (0, -1) in the direction table. Every
+            // existing test, screenshot and muscle memory is anchored on this
+            // placement, and a spawn ring that quietly moved it would be a
+            // gratuitous change to the single-player game.
+            assertThat(demo.spawnXFor(0)).isEqualTo(demo.spawnX());
+            assertThat(demo.spawnZFor(0)).isEqualTo(demo.spawnZ());
+            assertThat(DemoScene.spawnYawFor(0)).isEqualTo(0.0f);
+        }
+
+        @Test
+        @DisplayName("ids 1 and 2 stand opposite each other and look at each other")
+        void shouldFaceTheTwoPeerCaseTogether(@TempDir final Path root) throws IOException
+        {
+            final DemoScene demo = DemoScene.build(kitWithCharacters(root));
+            final float radius = demo.spawnRadius();
+
+            // These are the two ids a two-peer match uses, so this is the
+            // arrangement anyone testing the networking sees first. Opposite ends
+            // of one axis, each facing the other: without it both players spawn
+            // outside each other's 60-degree view and a working session looks
+            // exactly like a broken one.
+            assertThat(demo.spawnXFor(1)).isEqualTo(-radius);
+            assertThat(demo.spawnXFor(2)).isEqualTo(radius);
+            assertThat(demo.spawnZFor(1)).isEqualTo(0.0f);
+            assertThat(demo.spawnZFor(2)).isEqualTo(0.0f);
+
+            // Yaw sweeps from +z toward +x, so +pi/2 faces +x and -pi/2 faces -x.
+            final float quarter = (float) (StrictMath.PI / 2.0);
+            assertThat(DemoScene.spawnYawFor(1)).isCloseTo(quarter, within(1.0e-6f));
+            assertThat(DemoScene.spawnYawFor(2)).isCloseTo(-quarter, within(1.0e-6f));
+        }
+
+        @Test
+        @DisplayName("every spawn faces the room's centre and stands clear of the walls")
+        void shouldPlaceEveryoneInsideLookingIn(@TempDir final Path root) throws IOException
+        {
+            final DemoScene demo = DemoScene.build(kitWithCharacters(root));
+            final float radius = demo.spawnRadius();
+
+            for (int id = 0; id < DemoScene.spawnPointCount(); id++)
+            {
+                final float x = demo.spawnXFor(id);
+                final float z = demo.spawnZFor(id);
+                // On the ring, so nobody is closer to a wall than the canonical
+                // spawn already is.
+                assertThat((float) StrictMath.hypot(x, z))
+                    .as("spawn %d sits on the spawn ring", id)
+                    .isCloseTo(radius, within(0.01f));
+
+                // Facing the centre: the forward vector built from the spawn yaw
+                // must point back at the origin. A spawn looking outward would put
+                // a player's first frame into a wall.
+                final float yaw = DemoScene.spawnYawFor(id);
+                final float forwardX = (float) StrictMath.sin(yaw);
+                final float forwardZ = (float) StrictMath.cos(yaw);
+                assertThat(forwardX * x + forwardZ * z)
+                    .as("spawn %d looks toward the centre, not away from it", id)
+                    .isLessThan(0.0f);
+            }
+        }
+
+        @Test
+        @DisplayName("an id outside the table shares a spawn rather than throwing")
+        void shouldFoldStrayIds(@TempDir final Path root) throws IOException
+        {
+            final DemoScene demo = DemoScene.build(kitWithCharacters(root));
+            final int count = DemoScene.spawnPointCount();
+
+            // A player id arrives from outside the process, so an id past the
+            // table is a thing that can happen rather than a thing to assert
+            // against. Sharing a spawn is a survivable answer; an exception on the
+            // bootstrap path is not.
+            assertThat(demo.spawnXFor(count)).isEqualTo(demo.spawnXFor(0));
+            assertThat(demo.spawnXFor(-1)).isEqualTo(demo.spawnXFor(count - 1));
+        }
+    }
+
+    @Nested
     @DisplayName("the bot roster")
     final class Bots
     {

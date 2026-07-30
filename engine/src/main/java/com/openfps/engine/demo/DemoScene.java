@@ -222,6 +222,57 @@ public final class DemoScene
      */
     private static final float SPAWN_DEPTH_FRACTION = 0.6f;
 
+    /** One over root two, for the diagonal spawn bearings. */
+    private static final float DIAGONAL = (float) (1.0 / StrictMath.sqrt(2.0));
+
+    /**
+     * Which way round the room each player id spawns, as unit {@code (ux, uz)}
+     * bearings from the room's centre. Each player stands at that bearing times
+     * the spawn radius and <b>faces the centre</b>.
+     *
+     * <p><b>This exists because two players who cannot see each other make the
+     * networking look broken.</b> A remote body is drawn where its inputs put it,
+     * so two players sharing one spawn are each at the other's eye, where the near
+     * plane clips the body away entirely — and two players merely standing side by
+     * side both face the same way, leaving each outside the other's 60° field of
+     * view. Either way a freshly launched match showed both players an empty room,
+     * which is precisely the symptom a session that never connected produces.</p>
+     *
+     * <p><b>Ids 1 and 2 are deliberately opposite each other</b>, at
+     * {@code (-r, 0)} and {@code (+r, 0)} facing along x. Those are the two ids a
+     * two-peer match uses, so the common case opens with each player looking
+     * straight at the other across the room. That is an arrangement chosen for
+     * what it demonstrates, and it is the one thing here that is tuned rather than
+     * derived.</p>
+     *
+     * <p>Index 0 is {@code (0, -1)}, which is the canonical spawn facing {@code +z}
+     * — so {@link #spawnController()} and every existing single-player run are
+     * placed exactly where they always were and no test moves.</p>
+     *
+     * <p>Every point is one spawn radius from the centre, which is
+     * {@link #SPAWN_DEPTH_FRACTION} of the room half-span, so all eight sit well
+     * inside the walls with room to turn round.</p>
+     *
+     * <p><b>Both peers must compute the same point for the same id</b>, which is
+     * why this is a compile-time constant and the heading is derived from it with
+     * {@link StrictMath} rather than read from anything a process could see
+     * differently.</p>
+     */
+    private static final float[] SPAWN_DIRECTIONS =
+    {
+        0.0f, -1.0f,
+        -1.0f, 0.0f,
+        1.0f, 0.0f,
+        0.0f, 1.0f,
+        -DIAGONAL, -DIAGONAL,
+        DIAGONAL, -DIAGONAL,
+        -DIAGONAL, DIAGONAL,
+        DIAGONAL, DIAGONAL,
+    };
+
+    /** Stride of {@link #SPAWN_DIRECTIONS}: ux and uz. */
+    private static final int SPAWN_STRIDE = 2;
+
     /** Interior half-extent of the generated fallback room, in its own units. */
     private static final float FALLBACK_INTERIOR_HALF_EXTENT = 8.0f;
 
@@ -1491,7 +1542,141 @@ public final class DemoScene
      */
     public PlayerController spawnController()
     {
-        return new PlayerController(spawnX, spawnY, spawnZ, spawnYawRadians, 0.0f, physics);
+        return spawnControllerFor(0);
+    }
+
+    /**
+     * Returns a controller standing at the spawn belonging to one player id.
+     *
+     * <p>Each player id gets its own point, because two players standing on one
+     * spawn cannot see each other at all — a body at the observer's own eye is at
+     * zero distance and the near plane clips it away. See
+     * {@link #SPAWN_OFFSETS}.</p>
+     *
+     * <p>Id 0 is the canonical spawn, so a single-player run is placed exactly
+     * where it always was.</p>
+     *
+     * @param playerId the player's network id; taken modulo the number of spawn
+     *     points, so an id outside the table shares a point rather than throwing
+     * @return a fresh controller on that spawn, colliding with the room
+     */
+    public PlayerController spawnControllerFor(final int playerId)
+    {
+        return new PlayerController(spawnXFor(playerId), spawnY, spawnZFor(playerId),
+            spawnYawFor(playerId), 0.0f, physics);
+    }
+
+    /**
+     * Returns how far every spawn point sits from the room's centre.
+     *
+     * <p>The canonical spawn's own distance, so the ring of spawn points passes
+     * through it and index 0 is exactly where the player has always started.</p>
+     *
+     * @return the spawn radius in world units
+     */
+    public float spawnRadius()
+    {
+        return StrictMath.abs(spawnZ);
+    }
+
+    /**
+     * Returns the world x of the spawn belonging to one player id.
+     *
+     * @param playerId the player's network id
+     * @return that player's spawn x
+     */
+    public float spawnXFor(final int playerId)
+    {
+        return spawnXFor(playerId, spawnRadius());
+    }
+
+    /**
+     * Returns the world z of the spawn belonging to one player id.
+     *
+     * @param playerId the player's network id
+     * @return that player's spawn z
+     */
+    public float spawnZFor(final int playerId)
+    {
+        return spawnZFor(playerId, spawnRadius());
+    }
+
+    /**
+     * Returns the world x of a player id's spawn on a ring of a given radius.
+     *
+     * <p>Static because {@link RemotePlayers} has to place a peer's body on that
+     * peer's own spawn the moment its first input arrives, and it holds the spawn
+     * geometry rather than the scene. Keeping one table is what stops the two from
+     * disagreeing — a peer placed on a different spawn from the one it is actually
+     * standing on would be visibly beside itself for the whole match.</p>
+     *
+     * @param playerId the player's network id
+     * @param radius how far the spawn ring sits from the room's centre
+     * @return that player's spawn x
+     */
+    public static float spawnXFor(final int playerId, final float radius)
+    {
+        return SPAWN_DIRECTIONS[spawnSlot(playerId) * SPAWN_STRIDE] * radius;
+    }
+
+    /**
+     * Returns the world z of a player id's spawn on a ring of a given radius.
+     *
+     * @param playerId the player's network id
+     * @param radius how far the spawn ring sits from the room's centre
+     * @return that player's spawn z
+     */
+    public static float spawnZFor(final int playerId, final float radius)
+    {
+        return SPAWN_DIRECTIONS[spawnSlot(playerId) * SPAWN_STRIDE + 1] * radius;
+    }
+
+    /**
+     * Returns the heading a player id's spawn faces — always the room's centre.
+     *
+     * <p>Derived from the bearing rather than tabulated beside it, so the two
+     * cannot drift into disagreeing and leave a player standing at the edge of the
+     * room looking at a wall. {@link StrictMath#atan2} because both peers must
+     * compute the same float: a spawn heading feeds straight into the movement
+     * basis, so a last-bit difference here is a divergence from the first tic.</p>
+     *
+     * <p>The arguments are negated because the bearing points <i>outward</i> from
+     * the centre and the player looks back along it, and they are in
+     * {@code (x, z)} order because this engine's yaw sweeps from world {@code +z}
+     * toward world {@code +x} — see {@code PlayerController}.</p>
+     *
+     * @param playerId the player's network id
+     * @return that player's spawn yaw in radians
+     */
+    public static float spawnYawFor(final int playerId)
+    {
+        final int slot = spawnSlot(playerId);
+        return (float) StrictMath.atan2(-SPAWN_DIRECTIONS[slot * SPAWN_STRIDE],
+            -SPAWN_DIRECTIONS[slot * SPAWN_STRIDE + 1]);
+    }
+
+    /**
+     * How many distinct spawn points the room offers.
+     *
+     * @return the spawn point count, which is {@code Constants.MAX_PLAYERS}
+     */
+    public static int spawnPointCount()
+    {
+        return SPAWN_DIRECTIONS.length / SPAWN_STRIDE;
+    }
+
+    // Folds any player id onto a spawn point. Negative ids are folded too rather
+    // than throwing: an id is a network identity that arrives from outside, and a
+    // hostile one should share a spawn, not crash the room.
+    private static int spawnSlot(final int playerId)
+    {
+        final int count = spawnPointCount();
+        final int slot = playerId % count;
+        if (slot < 0)
+        {
+            return slot + count;
+        }
+        return slot;
     }
 
     /**

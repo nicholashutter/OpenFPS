@@ -108,6 +108,46 @@
             "problemMatcher": ["$gradle"]
         },
         {
+            // TWO windows, already talking to each other on localhost. Walk in
+            // one and the other player's body moves in the other -- which is the
+            // only way to see the networking work at all.
+            //
+            // Player 1 binds UDP 5021 and player 2 binds 5022; each gets its own
+            // profile database under desktop/build/net-peers. It launches two
+            // plain JVMs from an installDist image rather than two
+            // `gradlew :desktop:run` invocations, because two concurrent Gradle
+            // builds in one directory block on each other -- see run-desktop.ps1.
+            //
+            // Keyboard and mouse follow window focus, so click between the two.
+            "label": "run: desktop (two peers, multiplayer)",
+            "type": "shell",
+            "command": "powershell",
+            "args": [
+                "-NoProfile", "-ExecutionPolicy", "Bypass",
+                "-File", "${workspaceFolder}\\run-desktop.ps1",
+                "-TwoPeers", "-StartInGame"
+            ],
+            "options": { "cwd": "${workspaceFolder}" },
+            "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+            "problemMatcher": ["$gradle"]
+        },
+        {
+            // The same, with the overlay on both windows. Useful because the two
+            // peers must agree on the tic rate for lockstep to mean anything, and
+            // the FRAME line is where a disagreement would show.
+            "label": "run: desktop (two peers, debug overlay)",
+            "type": "shell",
+            "command": "powershell",
+            "args": [
+                "-NoProfile", "-ExecutionPolicy", "Bypass",
+                "-File", "${workspaceFolder}\\run-desktop.ps1",
+                "-TwoPeers", "-StartInGame", "-DebugOverlay"
+            ],
+            "options": { "cwd": "${workspaceFolder}" },
+            "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+            "problemMatcher": ["$gradle"]
+        },
+        {
             // Rebuild and verify without opening a window. What to run when the
             // question is "did that compile?" rather than "how does it look?".
             "label": "run: desktop (build only)",

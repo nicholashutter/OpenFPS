@@ -158,6 +158,27 @@ public final class NetArgs
         return playerId;
     }
 
+    /**
+     * Returns which spawn point the local player should stand on.
+     *
+     * <p>The player id when networking was requested, and <b>0 when it was
+     * not</b> — which is the canonical spawn, so a single-player run is placed
+     * exactly where it always was. This exists rather than callers using
+     * {@link #playerId()} directly because that returns -1 for a local run, and
+     * -1 is not a spawn: it would have to be special-cased at every call site,
+     * and the one that forgot would place the player outside the room.</p>
+     *
+     * @return a non-negative spawn id, never -1
+     */
+    public int localSpawnId()
+    {
+        if (!isRequested())
+        {
+            return 0;
+        }
+        return playerId;
+    }
+
     /** Returns the local UDP port, or -1 when networking was not requested. */
     public int port()
     {

@@ -224,7 +224,8 @@ public final class DesktopLauncher
         final EngineSession session = new EngineMain()
             .start(config, hal, holder, input ->
             {
-                final I_GameplayPort port = gameplayPort(input, holder, demo, config);
+                final I_GameplayPort port = gameplayPort(input, holder, demo, config,
+                    netArgs.localSpawnId());
                 if (port instanceof DemoGameplayPort)
                 {
                     gameplay[0] = (DemoGameplayPort) port;
@@ -300,7 +301,8 @@ public final class DesktopLauncher
     // bootstrap builds the render port before it calls this, which is the
     // ordering contract I_GameplayPortFactory documents.
     private static I_GameplayPort gameplayPort(final I_InputPort input,
-        final RendererHolder holder, final DemoScene demo, final GameConfig config)
+        final RendererHolder holder, final DemoScene demo, final GameConfig config,
+        final int localSpawnId)
     {
         if (demo == null)
         {
@@ -310,7 +312,13 @@ public final class DesktopLauncher
         // absent from it: Hitscan treats a ray origin inside a box as a hit at
         // distance zero, so a shooter listed among its own targets would shoot
         // itself on every trigger pull.
-        return new DemoGameplayPort(input, holder.renderer(), demo.spawnController(), config,
+        // Standing on the spawn this player's id owns, not on the canonical one.
+        // Two peers on one spawn are each at the other's eye, where the near plane
+        // clips the body away — so a two-peer match would open with both players
+        // apparently alone. A single-player run passes 0 and is placed exactly
+        // where it always was.
+        return new DemoGameplayPort(input, holder.renderer(),
+            demo.spawnControllerFor(localSpawnId), config,
             demo.newMatch(), botInstanceIndices(demo), demo.effects(),
             botWeaponInstanceIndices(demo));
     }

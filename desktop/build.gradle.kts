@@ -112,12 +112,21 @@ tasks.named<JavaExec>("run") {
     // lives 8 tics and a puff of smoke 36, and launching the game once per frame
     // does not produce adjacent frames — each launch is its own process, so
     // "frame 300" of one run and "frame 301" of the next are not neighbours.
+    // openfps.profile.db moves the SQLite profile somewhere other than
+    // ~/.openfps/profile.db. It is forwarded for one specific reason: two peers
+    // of a networked match on one machine are two processes, and SqliteUserProfilePort
+    // resolves its path from user.home, so by default both would open the SAME
+    // file. Two writers on one profile database is a corruption risk that would
+    // surface as a mystery on the next launch rather than at the moment it
+    // happened, and there is no other channel for the override -- an unforwarded
+    // -D would land on the Gradle daemon and leave both peers quietly sharing.
     for (name in listOf("openfps.screenshot", "openfps.screenshotFrame",
                         "openfps.screenshotCount",
                         "openfps.screenshotExit", "openfps.fpsLog",
                         "openfps.workers", "openfps.debugOverlay",
                         "openfps.targetOutline",
                         "openfps.renderMode", "openfps.renderFilter",
+                        "openfps.profile.db",
                         "openfps.autoWalkTics", "openfps.autoWalkForward",
                         "openfps.autoWalkStrafe")) {
         val value = providers.systemProperty(name).orNull

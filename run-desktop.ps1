@@ -61,6 +61,27 @@
 .PARAMETER Peer
     A peer to connect to, as <playerId>@<host>:<port>. May be repeated.
 
+.PARAMETER TwoPeers
+    Launches TWO instances wired to each other on localhost, which is the whole
+    of setting up a multiplayer test. Player 1 binds -BasePort and player 2 binds
+    the port above it; each gets its own profile database, and each gets its own
+    screenshot path when -Screenshot is given.
+
+    It does NOT use `gradlew :desktop:run` twice. Two concurrent Gradle
+    invocations in one project directory contend on Gradle's own locks, so the
+    second peer would block until the first exited -- which is exactly never for
+    a game you are playing. Instead this builds an installDist image once and
+    starts two plain JVMs from it. That also side-steps the -D problem the rest
+    of this script has to work around, because a property on a `java` command
+    line reaches the application by definition.
+
+    Keyboard and mouse go to whichever window has focus -- that is the OS, not
+    the game. Click between them to drive each peer in turn.
+
+.PARAMETER BasePort
+    The UDP port player 1 binds under -TwoPeers; player 2 takes the next one up.
+    Default 5021, which is Constants.DEFAULT_NET_PORT.
+
 .PARAMETER Screenshot
     Captures the window to this PNG and exits, instead of waiting for you to
     close it. Pair with -DebugOverlay to photograph the RES and RENDER figures --
@@ -102,6 +123,11 @@
 .EXAMPLE
     .\run-desktop.ps1 -Clean -FpsLog 2
     Full recompile, then log the three frame rates every two seconds.
+
+.EXAMPLE
+    .\run-desktop.ps1 -TwoPeers -StartInGame
+    Two windows, already talking to each other, both in the world. Walk in one
+    and watch the body move in the other.
 #>
 [CmdletBinding(PositionalBinding = $false)]
 param(
@@ -133,6 +159,10 @@ param(
     [string] $Net,
 
     [string[]] $Peer,
+
+    [switch] $TwoPeers,
+
+    [int] $BasePort = 5021,
 
     [string] $Screenshot,
 
@@ -173,6 +203,26 @@ if ($Rest)
 {
     Write-Host "Unrecognised argument: $($Rest -join ' ')" -ForegroundColor Red
     Write-Host "Run  .\run-desktop.ps1 --help  for the option list." -ForegroundColor Yellow
+    exit 2
+}
+
+# -TwoPeers assigns both identities and both ports itself, which is the entire
+# point of it. Honouring a -Net or -Peer alongside would mean two sources
+# deciding who player 1 is, and the losing one would fail as a bind conflict or
+# as a peer that never answers -- neither of which names its own cause.
+if ($TwoPeers -and ($Net -or $Peer))
+{
+    Write-Host '-TwoPeers sets --net and --peer for both instances itself.' -ForegroundColor Red
+    Write-Host 'Drop -Net/-Peer, or drop -TwoPeers and launch each peer yourself.' -ForegroundColor Yellow
+    exit 2
+}
+if ($TwoPeers -and $Model)
+{
+    # --model replaces the demo world with a single model on an orbit camera, and
+    # DesktopLauncher attaches no gameplay port for it -- so there is no match to
+    # network and openNetwork returns null. Two of those would be two unconnected
+    # model viewers, reported here rather than discovered from a silent log.
+    Write-Host '-TwoPeers needs the demo world; -Model has no match to network.' -ForegroundColor Red
     exit 2
 }
 
@@ -284,10 +334,22 @@ if ($Clean)
     }
 }
 
+# -TwoPeers launches plain JVMs rather than `gradlew :desktop:run`, so it needs a
+# runnable image with every dependency jar beside it. installDist produces exactly
+# that and depends on classes, so the freshness evidence below is unaffected.
+if ($TwoPeers)
+{
+    $compileTask = ':desktop:installDist'
+}
+else
+{
+    $compileTask = ':desktop:classes'
+}
+
 Write-Host ''
-Write-Host 'Compiling :engine, :gdxshared, :desktop ...' -ForegroundColor Cyan
+Write-Host "Compiling :engine, :gdxshared, :desktop ($compileTask) ..." -ForegroundColor Cyan
 $buildStart = Get-Date
-& .\gradlew.bat ':desktop:classes' --console=plain
+& .\gradlew.bat $compileTask --console=plain
 $buildExit = $LASTEXITCODE
 $buildSeconds = [math]::Round(((Get-Date) - $buildStart).TotalSeconds, 1)
 
@@ -368,6 +430,134 @@ if ($NoLaunch)
     exit 0
 }
 
+# A -Screenshot path is relative to where the CALLER was standing, not to the
+# repository root this script moved to. Resolved once here because both launch
+# paths below need it, and resolving it twice is how they would come to disagree.
+$shotBase = $null
+if ($Screenshot)
+{
+    $shotBase = $Screenshot
+    if (-not [System.IO.Path]::IsPathRooted($shotBase))
+    {
+        $shotBase = Join-Path $callerDir $shotBase
+    }
+}
+
+# --------------------------------------------------------------------------
+# 5a. Two peers, wired to each other
+# --------------------------------------------------------------------------
+# Deliberately NOT two `gradlew :desktop:run` invocations. Two concurrent Gradle
+# builds in one project directory serialise on Gradle's locks, so the second peer
+# would sit waiting for the first to exit -- which for a game you are playing is
+# never. Running the installDist image directly also means a -D reaches the
+# application rather than the daemon, so the forwarding list in
+# desktop/build.gradle.kts is not involved at all on this path.
+if ($TwoPeers)
+{
+    $libDir = Join-Path $repo 'desktop\build\install\desktop\lib'
+    if (-not (Test-Path $libDir))
+    {
+        Write-Banner 'NO RUNNABLE IMAGE -- installDist produced no lib directory' 'Red'
+        Write-Host ('  Expected jars under {0}.' -f $libDir)
+        exit 5
+    }
+    # Per-peer scratch. Each peer needs its OWN profile database: both processes
+    # resolve ~/.openfps/profile.db by default, and two SQLite writers on one file
+    # is a corruption risk that surfaces on some later launch rather than now.
+    $peerDir = Join-Path $repo 'desktop\build\net-peers'
+    New-Item -ItemType Directory -Force $peerDir | Out-Null
+
+    if ($env:JAVA_HOME -and (Test-Path (Join-Path $env:JAVA_HOME 'bin\java.exe')))
+    {
+        $javaExe = Join-Path $env:JAVA_HOME 'bin\java.exe'
+    }
+    else
+    {
+        $javaExe = 'java'
+    }
+
+    $peerTwoPort = $BasePort + 1
+    Write-Host ''
+    Write-Host ('  two peers   : player 1 on UDP {0}, player 2 on UDP {1}' -f `
+        $BasePort, $peerTwoPort) -ForegroundColor Cyan
+    Write-Host ('  java        : {0}' -f $javaExe)
+    Write-Host ('  profiles    : {0}' -f $peerDir)
+    Write-Host '  input       : goes to whichever window has focus -- click between them.'
+    Write-Host ''
+
+    $started = @()
+    foreach ($id in 1, 2)
+    {
+        if ($id -eq 1)
+        {
+            $myPort = $BasePort
+            $otherId = 2
+            $otherPort = $peerTwoPort
+        }
+        else
+        {
+            $myPort = $peerTwoPort
+            $otherId = 1
+            $otherPort = $BasePort
+        }
+
+        $jvmArgs = @('-cp', (Join-Path $libDir '*'))
+        # Its own database, named after the peer so a stale one is obvious.
+        $jvmArgs += ('-Dopenfps.profile.db=' + (Join-Path $peerDir "peer$id-profile.db"))
+        if ($RenderMode) { $jvmArgs += "-Dopenfps.renderMode=$RenderMode" }
+        if ($RenderFilter) { $jvmArgs += "-Dopenfps.renderFilter=$RenderFilter" }
+        if ($DebugOverlay) { $jvmArgs += '-Dopenfps.debugOverlay=true' }
+        if ($PSBoundParameters.ContainsKey('FpsLog')) { $jvmArgs += "-Dopenfps.fpsLog=$FpsLog" }
+        if ($PSBoundParameters.ContainsKey('Workers')) { $jvmArgs += "-Dopenfps.workers=$Workers" }
+        if ($Screenshot)
+        {
+            # One path per peer, for the same reason as the database: a shared path
+            # means whichever process wrote second is the only capture that
+            # survives, and the two would look like one run.
+            $stem = [IO.Path]::GetFileNameWithoutExtension($shotBase)
+            $ext = [IO.Path]::GetExtension($shotBase)
+            $peerShot = Join-Path (Split-Path $shotBase -Parent) ("{0}-peer{1}{2}" -f $stem, $id, $ext)
+            $jvmArgs += "-Dopenfps.screenshot=$peerShot"
+            $jvmArgs += "-Dopenfps.screenshotFrame=$ScreenshotFrame"
+            $jvmArgs += "-Dopenfps.screenshotCount=$ScreenshotCount"
+            $jvmArgs += '-Dopenfps.screenshotExit=true'
+        }
+        $jvmArgs += 'com.openfps.desktop.DesktopLauncher'
+        if ($Fps) { $jvmArgs += "--fps=$Fps" }
+        if ($StartInGame) { $jvmArgs += '--start-in-game' }
+        if ($Assets) { $jvmArgs += "--assets=$Assets" }
+        $jvmArgs += "--net=$($id):$myPort"
+        $jvmArgs += "--peer=$otherId@127.0.0.1:$otherPort"
+
+        Write-Host ('  peer {0}      : --net={0}:{1} --peer={2}@127.0.0.1:{3}' -f `
+            $id, $myPort, $otherId, $otherPort)
+        # WorkingDirectory is the repository root, because assets/models is
+        # resolved relative to it exactly as :desktop:run's workingDir arranges.
+        $started += Start-Process -FilePath $javaExe -ArgumentList $jvmArgs `
+            -WorkingDirectory $repo -PassThru
+    }
+
+    Write-Host ''
+    Write-Host ('Both peers started (pids {0}).' -f (($started | ForEach-Object { $_.Id }) -join ', ')) `
+        -ForegroundColor Green
+    Write-Host 'Waiting for both windows to close.'
+    $started | Wait-Process
+    $peerExits = ($started | ForEach-Object { $_.ExitCode }) -join ', '
+    Write-Host ''
+    Write-Host ('Both peers exited (codes {0}). That was commit {1} ({2}).' -f `
+        $peerExits, $commit, $treeState) -ForegroundColor Green
+    foreach ($proc in $started)
+    {
+        if ($proc.ExitCode -ne 0)
+        {
+            Write-Banner "A peer exited non-zero ($($proc.ExitCode))" 'Yellow'
+            Write-Host 'DesktopLauncher exit codes: 3 = no demo art, 4 = bad --net/--peer.'
+            exit $proc.ExitCode
+        }
+    }
+    exit 0
+}
+
 # Application arguments. DesktopLauncher parses these; --args is passed to the
 # forked JVM verbatim, which is why --start-in-game is a flag and not a -D.
 $appArgs = @()
@@ -389,13 +579,9 @@ if ($PSBoundParameters.ContainsKey('FpsLog')) { $props += "-Dopenfps.fpsLog=$Fps
 if ($PSBoundParameters.ContainsKey('Workers')) { $props += "-Dopenfps.workers=$Workers" }
 if ($Screenshot)
 {
-    # Absolute, because :desktop:run's working directory is the repository root
-    # rather than wherever the caller happened to be standing.
-    $shotPath = $Screenshot
-    if (-not [System.IO.Path]::IsPathRooted($shotPath))
-    {
-        $shotPath = Join-Path $callerDir $shotPath
-    }
+    # Already made absolute above, because :desktop:run's working directory is the
+    # repository root rather than wherever the caller happened to be standing.
+    $shotPath = $shotBase
     $props += "-Dopenfps.screenshot=$shotPath"
     $props += "-Dopenfps.screenshotFrame=$ScreenshotFrame"
     $props += "-Dopenfps.screenshotCount=$ScreenshotCount"
