@@ -102,9 +102,15 @@ tasks.named<JavaExec>("run") {
     // cursor is caught and the window focused, neither of which a capture run
     // can promise. Without it, collision is the one feature in the game that
     // nothing but a human at a keyboard could ever demonstrate.
+    // openfps.targetOutline turns the accessibility outline OFF, which is the
+    // only direction that needs a property: it is on by default, so a capture of
+    // the game WITHOUT it is the one nothing else can take. It is also the pair
+    // to openfps.debugOverlay rather than a variant of it — the two switches are
+    // deliberately separate and separately defaulted.
     for (name in listOf("openfps.screenshot", "openfps.screenshotFrame",
                         "openfps.screenshotExit", "openfps.fpsLog",
                         "openfps.workers", "openfps.debugOverlay",
+                        "openfps.targetOutline",
                         "openfps.renderMode", "openfps.renderFilter",
                         "openfps.autoWalkTics", "openfps.autoWalkForward",
                         "openfps.autoWalkStrafe")) {

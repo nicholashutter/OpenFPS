@@ -417,6 +417,16 @@ public final class SoftwareRenderPort implements I_RenderPort
      * round the outside, which reads as geometry rather than as a status
      * effect. That is the change that let this go back to true.</p>
      *
+     * <p><b>The platform side of it is an accessibility option and not a
+     * diagnostic</b> — {@code com.openfps.gdx.AccessibilitySettings}, presented
+     * under its own heading on the settings screen and defaulted on. It used to
+     * hang off the debug switch beside the frame counter, which meant this
+     * default and that switch's default disagreed and the toggle's label was
+     * wrong from the first frame. This class was never party to that: it takes a
+     * boolean from whoever composed it, and the fix was for the composition root
+     * to push its initial value in rather than assume the two constants
+     * matched.</p>
+     *
      * <p><b>It is a master switch and not a scope.</b> What it turns on is a
      * wireframe around the <i>one</i> entity under the point of aim
      * ({@link #aimedEntityId}), because a mark on all seven opponents at once
@@ -1812,10 +1822,13 @@ public final class SoftwareRenderPort implements I_RenderPort
      * so concatenating the runs reproduces it. Grouping would have been fewer
      * passes and the wrong picture.</p>
      *
-     * <p>A scene whose translucent instances all share one coverage — the
-     * ordinary case, and what the demo's smoke does — is therefore exactly one
-     * extra batched pass, four parallel dispatches, however many puffs are in
-     * the air.</p>
+     * <p>A scene whose translucent instances all share one coverage is therefore
+     * exactly one extra batched pass, four parallel dispatches, however many
+     * instances are in it. The demo's smoke costs one pass per <i>puff</i>
+     * rather than per instance: all five lobes of a puff sit on the same rung of
+     * {@code DemoEffects.PUFF_COVERAGE}, so they are one run, and a held trigger
+     * keeps three puffs of three different ages in the air — three rungs, three
+     * runs, three passes.</p>
      *
      * <p><b>No texture table is bound</b>, so every triangle falls to the flat
      * path and takes the baked colour of its first vertex. See

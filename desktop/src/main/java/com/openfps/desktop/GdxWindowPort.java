@@ -15,6 +15,7 @@ import com.openfps.engine.gameplay.MatchSummary;
 import com.openfps.engine.hal.port.I_FrameCallback;
 import com.openfps.engine.hal.port.I_WindowPort;
 import com.openfps.engine.render.adapter.SoftwareRenderPort;
+import com.openfps.gdx.AccessibilitySettings;
 import com.openfps.gdx.DebugSettings;
 import com.openfps.gdx.DefaultMenuActions;
 import com.openfps.gdx.FramebufferPresenter;
@@ -157,6 +158,13 @@ public final class GdxWindowPort implements I_WindowPort
      */
     private volatile DebugSettings debugSettings;
 
+    /**
+     * The visual aids the settings screen flips, or null to let the listener keep
+     * a private set. MUTABLE: set by {@link #attachAccessibilitySettings} before
+     * {@link #runFrameLoop}.
+     */
+    private volatile AccessibilitySettings accessibilitySettings;
+
     @Override
     public void init()
     {
@@ -220,7 +228,7 @@ public final class GdxWindowPort implements I_WindowPort
         {
             final GdxFrameLoopListener listener = new GdxFrameLoopListener(
                 callback, new DefaultMenuActions(this), presenter(), inputPort,
-                settings());
+                settings(), accessibility());
             listener.attachMatchGate(matchGate);
             listener.attachMatchResult(matchResult);
             listener.attachMatchRestart(matchRestart);
@@ -434,12 +442,10 @@ public final class GdxWindowPort implements I_WindowPort
     /**
      * Names the debug switch this window's settings screen should flip.
      *
-     * <p>Supplied by the launcher when it wants to observe the switch — which it
-     * does, to put the renderer's outline pass behind the same toggle without
-     * either of them knowing about the other. Passing null, or not calling this,
-     * leaves the frame loop with a private switch: the settings screen still
-     * works and still shows the counter, and nothing outside the window is
-     * told.</p>
+     * <p>Supplied by the launcher when it wants to observe the switch. Passing
+     * null, or not calling this, leaves the frame loop with a private switch: the
+     * settings screen still works and still shows the counter, and nothing
+     * outside the window is told.</p>
      *
      * @param settings the switch to share, or null for a private one
      */
@@ -458,6 +464,34 @@ public final class GdxWindowPort implements I_WindowPort
         return debugSettings;
     }
 
+    /**
+     * Names the accessibility switches this window's settings screen should flip.
+     *
+     * <p>Supplied by the launcher, which observes them to put the renderer's
+     * outline pass behind the target outline toggle without either of them
+     * knowing about the other. <b>Passing null gives the frame loop a private
+     * set, and a private set is how the toggle stops working silently</b> — the
+     * button relabels itself and the outline no longer answers. That is why the
+     * launcher always calls this and why there is a test on the identity.</p>
+     *
+     * @param settings the switches to share, or null for a private set
+     */
+    public void attachAccessibilitySettings(final AccessibilitySettings settings)
+    {
+        if (state == State.RUNNING)
+        {
+            throw new IllegalStateException(
+                "attachAccessibilitySettings() while the loop is running");
+        }
+        this.accessibilitySettings = settings;
+    }
+
+    /** Returns the switches named by {@link #attachAccessibilitySettings}, or null. */
+    public AccessibilitySettings accessibilitySettings()
+    {
+        return accessibilitySettings;
+    }
+
     // The attached switch, or a fresh private one. Resolved here so the
     // listener's five-argument constructor never sees a null.
     private DebugSettings settings()
@@ -466,6 +500,18 @@ public final class GdxWindowPort implements I_WindowPort
         if (attached == null)
         {
             return new DebugSettings();
+        }
+        return attached;
+    }
+
+    // The attached accessibility switches, or a fresh private set, for the same
+    // reason settings() exists.
+    private AccessibilitySettings accessibility()
+    {
+        final AccessibilitySettings attached = accessibilitySettings;
+        if (attached == null)
+        {
+            return new AccessibilitySettings();
         }
         return attached;
     }

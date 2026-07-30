@@ -30,8 +30,12 @@ them and none of them names a backend. Nothing changed about what they do; the
 test count here dropped from 195 to 118 because 77 tests went with them. See
 `gdxshared/README.md`.
 
-**Not built.** Nothing outstanding for Phases 1.5 and 5. Start Game and Settings
-record intent only — there is no map loader and no settings screen to open yet.
+**Not built.** Nothing outstanding for Phases 1.5 and 5. Start Game records intent
+only — there is no map loader. Settings opens a real screen: an **Accessibility**
+group holding the target outline (on by default, and the launcher pushes that
+value into `SoftwareRenderPort` at composition time so the label cannot disagree
+with the game), and a **Display &amp; Diagnostics** group holding the render mode
+and the frame counter.
 
 **Blocked on.** Nothing.
 

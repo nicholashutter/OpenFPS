@@ -9,6 +9,7 @@ import com.openfps.engine.gameplay.MatchMode;
 import com.openfps.engine.gameplay.MatchState;
 import com.openfps.engine.gameplay.MatchSummary;
 import com.openfps.engine.hal.adapter.nulladapter.NullWindowPort;
+import com.openfps.gdx.AccessibilitySettings;
 import com.openfps.gdx.DebugSettings;
 import com.openfps.gdx.DefaultMenuActions;
 import com.openfps.gdx.MenuActions;
@@ -247,6 +248,54 @@ class GdxFrameLoopListenerTest
                 new RecordingFrameCallback(), new DefaultMenuActions(window), null, null,
                 shared);
             assertThat(wired.debugSettings()).isSameAs(shared);
+        }
+
+        @Test
+        @DisplayName("every window gets accessibility switches, and they answer the launcher's")
+        void shouldAlwaysHaveAccessibilitySettings()
+        {
+            // The same guard the debug switch has, on the object that now carries
+            // the outline. DesktopLauncher builds one AccessibilitySettings, hands
+            // it to the window for the settings screen, and hangs
+            // SoftwareRenderPort.setOutlineEnabled off its onChange. A private copy
+            // on this side would relabel the TARGET OUTLINE button perfectly while
+            // the outline stopped answering — nothing thrown, nothing logged, and
+            // no test failing unless it is an identity test.
+            final NullWindowPort window = new NullWindowPort();
+            window.init();
+            final GdxFrameLoopListener listener = new GdxFrameLoopListener(
+                new RecordingFrameCallback(), new DefaultMenuActions(window));
+
+            assertThat(listener.accessibilitySettings()).isNotNull();
+            assertThat(listener.accessibilitySettings().isTargetOutlineVisible())
+                .as("on by default, as it is for a player")
+                .isTrue();
+            assertThat((Object) listener.accessibilitySettings())
+                .as("and a different object from the debug switch — that is the point")
+                .isNotSameAs((Object) listener.debugSettings());
+
+            final AccessibilitySettings shared = new AccessibilitySettings();
+            final GdxFrameLoopListener wired = new GdxFrameLoopListener(
+                new RecordingFrameCallback(), new DefaultMenuActions(window), null, null,
+                new DebugSettings(), shared);
+            assertThat(wired.accessibilitySettings()).isSameAs(shared);
+        }
+
+        @Test
+        @DisplayName("the window hands on the switches the launcher attached to it")
+        void shouldPassAttachedSwitchesThroughTheWindow()
+        {
+            // The seam between the two halves of the desktop wiring: the launcher
+            // calls attachAccessibilitySettings on the WINDOW, and the window is
+            // what builds the listener that builds the settings screen. If that
+            // pass-through were dropped, everything above would still be non-null
+            // and the toggle would still be dead.
+            final GdxWindowPort port = new GdxWindowPort();
+            port.init();
+            final AccessibilitySettings shared = new AccessibilitySettings();
+            port.attachAccessibilitySettings(shared);
+
+            assertThat(port.accessibilitySettings()).isSameAs(shared);
         }
 
         @Test

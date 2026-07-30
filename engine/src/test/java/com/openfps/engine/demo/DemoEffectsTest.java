@@ -555,15 +555,20 @@ final class DemoEffectsTest
             + "densities")
         void theCloudHasAGradient()
         {
-            // THE reason the puff is three lobes rather than one. A single
+            // THE reason the puff is five lobes rather than one. A single
             // instance at a single coverage is flat, and flat is what made the
             // old puff read as a block. Overlapping instances composite over
             // each other, so one coverage becomes a falloff — and this asserts
             // the falloff is real and each step of it is worth having, rather
-            // than three lobes producing one indistinguishable smear.
+            // than five lobes producing one indistinguishable smear.
+            //
+            // It is also what lets the cloud be as big as it now is without
+            // reading as a pane of tinted glass: an edge that composites once
+            // dissolves rather than ending. See puffStaysSmallEnoughToReadAsSmoke,
+            // whose size ceiling used to be doing this test's job badly.
             final int rim = compositeLobes(0, 1);
-            final int shoulder = compositeLobes(0, 2);
-            final int core = compositeLobes(0, 3);
+            final int shoulder = compositeLobes(0, DemoEffects.PUFF_LOBES / 2);
+            final int core = compositeLobes(0, DemoEffects.PUFF_LOBES);
 
             assertThat(Rgba.red(core)).isLessThan(Rgba.red(shoulder));
             assertThat(Rgba.red(shoulder)).isLessThan(Rgba.red(rim));
@@ -581,7 +586,7 @@ final class DemoEffectsTest
         @DisplayName("a single lobe is a wisp, not a wall — the rim must not be the core")
         void theRimIsMuchLighterThanTheCore()
         {
-            // If one lobe already looked like the finished cloud, the other two
+            // If one lobe already looked like the finished cloud, the other four
             // would only be making it denser, and the edge would be as hard as
             // the old cube's.
             final int rim = compositeLobes(0, 1);
@@ -682,27 +687,45 @@ final class DemoEffectsTest
         }
 
         @Test
-        @DisplayName("a puff is a puff, not a pane across the view")
+        @DisplayName("a puff is a puff, not a fog bank — and it never reaches the point of aim")
         void puffStaysSmallEnoughToReadAsSmoke()
         {
             // At 2.4 units from the eye and a 60-degree vertical field of view,
-            // a half-extent of r subtends roughly 2*atan(r / 2.4). The end
-            // radius used to be 0.34, which is about a quarter of a 720p window
-            // across — big enough that it read as a translucent sheet rather
-            // than as smoke at a muzzle. Expressed as a fraction of the frame
-            // rather than in units so it survives a resolution change.
+            // a half-extent of r subtends roughly 2*atan(r / 2.4). Expressed as
+            // a fraction of the frame rather than in units so it survives a
+            // resolution change.
             //
             // Measured on the WHOLE cloud, not on the main lobe: the outriders
             // stick out past it, so sizing against one sphere would let the
             // thing the player actually sees grow by half without this noticing.
+            //
+            // THE CEILING HERE USED TO BE 0.20 AND IT WAS THE WRONG QUANTITY.
+            // It was written after a 0.34-radius single cube read as a
+            // translucent sheet across the view, and it recorded the size of
+            // that failure rather than its cause. The cause was flatness: one
+            // instance at one coverage has a hard silhouette and a uniform
+            // interior at any size. A five-lobe cloud at a bigger radius does
+            // not read as a pane, because its outer third composites once and
+            // dissolves — which is what theCloudHasAGradient and
+            // theRimIsMuchLighterThanTheCore actually assert, and they are the
+            // real guard against that failure coming back.
+            //
+            // So this keeps a ceiling, because "puff" and "fog bank" are
+            // different things, and adds the property that a size bound was
+            // standing in for all along: the cloud must not creep across the
+            // player's point of aim. A muzzle effect that veils the crosshair
+            // stops being decoration and starts being a handicap.
             final float extent = DemoEffects.PUFF_RADIUS_END * DemoEffects.cloudExtentRadii();
             final double halfAngle =
                 StrictMath.atan(extent / DemoEffects.MUZZLE_FORWARD_UNITS);
             final double fractionOfHeight = 2.0 * halfAngle / (Math.PI / 3.0);
 
             assertThat(fractionOfHeight)
-                .as("a muzzle puff should not fill a fifth of the window")
-                .isLessThan(0.20);
+                .as("a muzzle puff should not fill a third of the window")
+                .isLessThan(0.35);
+            assertThat(extent)
+                .as("and never reaches back to where the player is aiming")
+                .isLessThan(DemoEffects.MUZZLE_RIGHT_UNITS);
             assertThat(DemoEffects.PUFF_RADIUS_END)
                 .as("but it still expands over its life")
                 .isGreaterThan(DemoEffects.PUFF_RADIUS_START);

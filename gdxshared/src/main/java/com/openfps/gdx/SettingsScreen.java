@@ -17,29 +17,47 @@ import com.badlogic.gdx.utils.ScreenUtils;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
 
 /**
- * The settings screen: two switches, and the way back.
+ * The settings screen: three controls in two named groups, and the way back.
  *
- * <p>The first is the debug frame counter. Pressing it flips
- * {@link DebugSettings}, which is read by the {@link DebugOverlay} that appears
- * in the world and — through {@code DebugSettings.onChange} — by the software
- * renderer's outline pass. The second is the render mode: pressing it cycles
- * {@link RenderSettings}, which the {@link FramebufferPresenter} answers by
- * re-sizing a live framebuffer. This screen knows about neither mechanism; it
- * moves one value and relabels one button, twice over.</p>
+ * <h2>The groups are the feature, not decoration</h2>
+ *
+ * <p>Under <b>ACCESSIBILITY</b> sits the target outline: pressing it flips
+ * {@link AccessibilitySettings}, which — through
+ * {@code AccessibilitySettings.onChange} — is what the software renderer's
+ * outline pass answers to. Under <b>DISPLAY &amp; DIAGNOSTICS</b> sit the render
+ * mode, which cycles {@link RenderSettings} and which the
+ * {@link FramebufferPresenter} answers by re-sizing a live framebuffer, and the
+ * debug frame counter, which flips {@link DebugSettings} and is read by the
+ * {@link DebugOverlay}. This screen knows about none of those mechanisms; it
+ * moves one value and relabels one button, three times over.</p>
+ *
+ * <p><b>The outline used to be in the second group and that was wrong.</b> It
+ * was one boolean with the frame counter, so a player who needed a visual aid
+ * had to switch on a developer tool to get it. A heading is the cheapest possible
+ * way of saying which controls are for playing the game and which are for looking
+ * at it — cheaper than a second screen, and it fits the blocky no-asset style
+ * this screen is built in. {@link AccessibilitySettings} has the rest of that
+ * argument.</p>
  *
  * <h2>A button says what the setting is, not what pressing it does</h2>
  *
- * <p>"DEBUG OVERLAY  ON" rather than "TURN DEBUG OVERLAY OFF", and
+ * <p>"TARGET OUTLINE  ON" rather than "TURN THE OUTLINE OFF", and
  * "RENDER  480P" rather than "LOWER THE RESOLUTION". A control labelled with
  * its action makes the reader work out the current state by inverting the
  * label, and gets it wrong about half the time. Labelling it with the state
- * means the screen can be read rather than decoded, which is why both labels
- * are rebuilt from the settings object on every press.</p>
+ * means the screen can be read rather than decoded, which is why every label
+ * is rebuilt from the settings object on every press.</p>
  *
- * <p><b>Neither setting survives the run</b> — see {@link DebugSettings} and
+ * <p>That rule is only worth anything if the state it reports is the state in
+ * force, and for the outline it once was not — see
+ * {@link AccessibilitySettings} on the startup disagreement and on whose job it
+ * is to push the initial value across.</p>
+ *
+ * <p><b>No setting here survives the run</b> — see {@link DebugSettings} and
  * {@link RenderMode} for exactly what persisting them would cost and why that
  * bill is not worth paying for a diagnostic overlay or a mode a player can
- * restore in one press.</p>
+ * restore in one press. {@link AccessibilitySettings} is the one with a genuine
+ * claim on the profile store, and says so.</p>
  *
  * <p><b>No logic lives here.</b> Every button forwards and does nothing else,
  * which is what leaves this class as pure layout — the part that needs a window
@@ -55,12 +73,38 @@ public final class SettingsScreen
     /** The word the heading spells. */
     public static final String TITLE_TEXT = "SETTINGS";
 
+    /** Heading over the controls that help a player see what is happening. */
+    public static final String ACCESSIBILITY_GROUP = "ACCESSIBILITY";
+
+    /** Heading over the controls that are about the picture and the diagnostics. */
+    public static final String DISPLAY_GROUP = "DISPLAY & DIAGNOSTICS";
+
+    /**
+     * The stem of the target outline's label; the state is appended.
+     *
+     * <p><b>Named for what the player sees, not for how it is drawn.</b> It was
+     * "DEBUG OUTLINE" while it lived on the debug switch, which told a player who
+     * needed it that it was not for them, and told a player who did not need it
+     * nothing at all. "TARGET" is the word for the thing it marks.</p>
+     */
+    public static final String OUTLINE_LABEL = "TARGET OUTLINE";
+
+    /** What the target outline actually does, spelled out under it. */
+    public static final String OUTLINE_HINT =
+        "Draws a bright keyline around the opponent you are aiming at";
+
     /** The stem of the debug toggle's label; the state is appended. */
     public static final String DEBUG_LABEL = "DEBUG OVERLAY";
 
-    /** What the debug toggle actually does, spelled out under it. */
+    /**
+     * What the debug toggle actually does, spelled out under it.
+     *
+     * <p>It used to end "and outlines around targets", because it did. It no
+     * longer does either thing, and the hint had to move with the behaviour or it
+     * would be the second place this screen lied about the outline.</p>
+     */
     public static final String DEBUG_HINT =
-        "FPS and frame time in the corner, and outlines around targets";
+        "FPS, frame time and resolution in the corner";
 
     /** The stem of the render-mode control's label; the mode is appended. */
     public static final String RENDER_LABEL = "RENDER";
@@ -84,14 +128,21 @@ public final class SettingsScreen
     /** Gap under a control before its explanatory line, in pixels. */
     private static final float HINT_GAP = 14.0f;
 
+    /** Gap under a group heading before the first control in it, in pixels. */
+    private static final float GROUP_GAP = 10.0f;
+
     /** Clear space left under the Back key, in pixels. */
     private static final float BOTTOM_MARGIN = 24.0f;
 
     /**
-     * How many gaps the free space is shared between: heading to the first
-     * control, control to control, and the last hint to Back.
+     * How many gaps the free space is shared between: the title to the first
+     * group, each group heading to the one above it, the two controls inside the
+     * second group, and the last hint to Back.
      */
-    private static final float SEPARATION_COUNT = 3.0f;
+    private static final float SEPARATION_COUNT = 4.0f;
+
+    /** Group heading font magnification. */
+    private static final float GROUP_FONT_SCALE = 1.15f;
 
     /** Button width in pixels. */
     private static final float BUTTON_WIDTH = 420.0f;
@@ -107,6 +158,9 @@ public final class SettingsScreen
 
     /** The switch this screen flips. Never null. */
     private final DebugSettings settings;
+
+    /** The visual aids this screen flips. Never null. */
+    private final AccessibilitySettings accessibility;
 
     /** The render mode this screen cycles. Never null. */
     private final RenderSettings render;
@@ -125,6 +179,18 @@ public final class SettingsScreen
 
     /** The block heading. */
     private final BlockTitle heading;
+
+    /** The word over the accessibility group. */
+    private final Label accessibilityGroup;
+
+    /** The target outline switch, relabelled on every press. */
+    private final BlockButton outlineButton;
+
+    /** What the target outline does, in words. */
+    private final Label outlineHint;
+
+    /** The words over the display and diagnostics group. */
+    private final Label displayGroup;
 
     /** The debug switch, relabelled on every press. */
     private final BlockButton debugButton;
@@ -147,20 +213,25 @@ public final class SettingsScreen
     /**
      * Builds the screen at desktop metrics. Requires a live GL context.
      *
+     * @param accessibilitySettings the visual aids to flip; must not be null
      * @param debugSettings the switch to flip; must not be null
      * @param renderSettings the render mode to cycle; must not be null
      * @param onBack run when the player leaves; must not be null
      */
-    public SettingsScreen(final DebugSettings debugSettings,
-        final RenderSettings renderSettings, final Runnable onBack)
+    public SettingsScreen(final AccessibilitySettings accessibilitySettings,
+        final DebugSettings debugSettings, final RenderSettings renderSettings,
+        final Runnable onBack)
     {
-        this(debugSettings, renderSettings, onBack, 1.0f);
+        this(accessibilitySettings, debugSettings, renderSettings, onBack, 1.0f);
     }
 
     /**
      * Builds the screen. Requires a live GL context — construct from
      * {@code ApplicationListener.create()} or later, never earlier.
      *
+     * @param accessibilitySettings the visual aids to flip; must not be null.
+     *     Held by the launcher, which is the only object that can see both this
+     *     screen and the renderer the outline lives in
      * @param debugSettings the switch to flip; must not be null
      * @param renderSettings the render mode to cycle; must not be null. It comes
      *     from {@code FramebufferPresenter.renderSettings()}, because the
@@ -172,9 +243,14 @@ public final class SettingsScreen
      * @throws IllegalArgumentException if anything is null or {@code scale} is
      *     not positive
      */
-    public SettingsScreen(final DebugSettings debugSettings,
-        final RenderSettings renderSettings, final Runnable onBack, final float scale)
+    public SettingsScreen(final AccessibilitySettings accessibilitySettings,
+        final DebugSettings debugSettings, final RenderSettings renderSettings,
+        final Runnable onBack, final float scale)
     {
+        if (accessibilitySettings == null)
+        {
+            throw new IllegalArgumentException("accessibilitySettings must not be null");
+        }
         if (debugSettings == null)
         {
             throw new IllegalArgumentException("debugSettings must not be null");
@@ -191,6 +267,7 @@ public final class SettingsScreen
         {
             throw new IllegalArgumentException("scale must be positive, got " + scale);
         }
+        this.accessibility = accessibilitySettings;
         this.settings = debugSettings;
         this.render = renderSettings;
         this.uiScale = scale;
@@ -202,27 +279,71 @@ public final class SettingsScreen
         this.background = new MenuBackground(pixel);
         this.heading = new BlockTitle(TITLE_TEXT, pixel, MenuPalette.NEUTRAL_FACE);
 
-        this.debugButton = new BlockButton(debugButtonLabel(debugSettings),
-            MenuPalette.NET_FACE, MenuPalette.NET_SHADE, pixel, font,
-            BUTTON_FONT_SCALE * scale, this::toggleDebug);
-        this.debugHint = label(DEBUG_HINT, MenuPalette.HINT, HINT_FONT_SCALE * scale);
+        // The accessibility group first, and that ordering is a statement rather
+        // than a habit: the aid a player might need to play at all should not be
+        // below the developer tooling in the reading order.
+        this.accessibilityGroup =
+            label(ACCESSIBILITY_GROUP, MenuPalette.BUTTON_LABEL, GROUP_FONT_SCALE * scale);
+        this.outlineButton = new BlockButton(outlineButtonLabel(accessibilitySettings),
+            MenuPalette.PLAY_FACE, MenuPalette.PLAY_SHADE, pixel, font,
+            BUTTON_FONT_SCALE * scale, this::toggleOutline);
+        this.outlineHint = label(OUTLINE_HINT, MenuPalette.HINT, HINT_FONT_SCALE * scale);
+
+        // Green for the aid, blue for the instruments — the same colour language
+        // the main menu already uses, so the grouping survives being seen out of
+        // the corner of an eye as well as being read.
+        this.displayGroup =
+            label(DISPLAY_GROUP, MenuPalette.BUTTON_LABEL, GROUP_FONT_SCALE * scale);
         this.renderButton = new BlockButton(renderButtonLabel(renderSettings),
             MenuPalette.NET_FACE, MenuPalette.NET_SHADE, pixel, font,
             BUTTON_FONT_SCALE * scale, this::cycleRender);
         this.renderHint = label(RENDER_HINT, MenuPalette.HINT, HINT_FONT_SCALE * scale);
+        this.debugButton = new BlockButton(debugButtonLabel(debugSettings),
+            MenuPalette.NET_FACE, MenuPalette.NET_SHADE, pixel, font,
+            BUTTON_FONT_SCALE * scale, this::toggleDebug);
+        this.debugHint = label(DEBUG_HINT, MenuPalette.HINT, HINT_FONT_SCALE * scale);
+
         this.backButton = new BlockButton("BACK", MenuPalette.NEUTRAL_FACE,
             MenuPalette.NEUTRAL_SHADE, pixel, font, BUTTON_FONT_SCALE * scale, onBack);
 
         stage.addActor(background);
         stage.addActor(heading);
-        debugButton.setSize(BUTTON_WIDTH * scale, BUTTON_HEIGHT * scale);
-        stage.addActor(debugButton);
-        stage.addActor(debugHint);
+        stage.addActor(accessibilityGroup);
+        outlineButton.setSize(BUTTON_WIDTH * scale, BUTTON_HEIGHT * scale);
+        stage.addActor(outlineButton);
+        stage.addActor(outlineHint);
+        stage.addActor(displayGroup);
         renderButton.setSize(BUTTON_WIDTH * scale, BUTTON_HEIGHT * scale);
         stage.addActor(renderButton);
         stage.addActor(renderHint);
+        debugButton.setSize(BUTTON_WIDTH * scale, BUTTON_HEIGHT * scale);
+        stage.addActor(debugButton);
+        stage.addActor(debugHint);
         backButton.setSize(BUTTON_WIDTH * scale, BUTTON_HEIGHT * scale);
         stage.addActor(backButton);
+    }
+
+    /**
+     * Returns the label the target outline control should carry for a given
+     * setting.
+     *
+     * <p>Static and public for the reason {@link #debugButtonLabel} is, and with
+     * one more: this is the label that <b>disagreed with the game</b> when the
+     * outline was gated by the debug switch, so "the button says ON when the
+     * outline is on" is a property worth a headless assertion rather than a
+     * reading of the source.</p>
+     *
+     * @param accessibilitySettings the switch to describe; must not be null
+     * @return the full button label, state included
+     * @throws IllegalArgumentException if the setting is null
+     */
+    public static String outlineButtonLabel(final AccessibilitySettings accessibilitySettings)
+    {
+        if (accessibilitySettings == null)
+        {
+            throw new IllegalArgumentException("accessibilitySettings must not be null");
+        }
+        return OUTLINE_LABEL + "   " + accessibilitySettings.targetOutlineLabel();
     }
 
     /**
@@ -271,10 +392,22 @@ public final class SettingsScreen
         return settings;
     }
 
+    /** Returns the visual aids this screen flips. Never null. */
+    public AccessibilitySettings accessibilitySettings()
+    {
+        return accessibility;
+    }
+
     /** Returns the render mode this screen cycles. Never null. */
     public RenderSettings renderSettings()
     {
         return render;
+    }
+
+    /** Returns the target outline toggle. */
+    public BlockButton outlineButton()
+    {
+        return outlineButton;
     }
 
     /** Returns the debug toggle. */
@@ -293,6 +426,19 @@ public final class SettingsScreen
     public BlockButton backButton()
     {
         return backButton;
+    }
+
+    // Flips the visual aid and makes the button say so.
+    //
+    // Nothing here touches the renderer. The launcher hung
+    // SoftwareRenderPort.setOutlineEnabled off AccessibilitySettings.onChange,
+    // so moving the value is the whole of the work — which is exactly what this
+    // screen did when the outline was on the debug switch, and is why the switch
+    // being the wrong one was invisible from here.
+    private void toggleOutline()
+    {
+        accessibility.toggleTargetOutline();
+        outlineButton.setLabel(outlineButtonLabel(accessibility));
     }
 
     // Flips the switch and makes the button say so. One method rather than a
@@ -324,11 +470,17 @@ public final class SettingsScreen
      * every metric here is multiplied by the panel's density, so on a 560 dpi
      * handset three buttons and two hints came to more than the screen was
      * tall and the Back key walked off the bottom. Sharing whatever space is
-     * left between the three separations fixes that for any density and for the
-     * third control this screen will eventually grow, and it costs one
-     * subtraction. {@link #CONTROL_GAP} survives as the <i>most</i> it will
-     * spend, so a roomy desktop window still looks deliberately spaced rather
-     * than stretched to fill.</p>
+     * left between the separations fixes that for any density and for however
+     * many controls this screen grows, and it costs one subtraction.
+     * {@link #CONTROL_GAP} survives as the <i>most</i> it will spend, so a roomy
+     * desktop window still looks deliberately spaced rather than stretched to
+     * fill.</p>
+     *
+     * <p>The group headings are placed inside the same walk rather than as a
+     * special case, which is what keeps this method one cursor moving down the
+     * screen. Each one takes only its own height plus {@link #GROUP_GAP}; the
+     * <i>separation</i> above a heading is the same shared gap every other
+     * boundary gets, so a group reads as one block with a name on it.</p>
      *
      * @param width window width in pixels
      * @param height window height in pixels
@@ -346,36 +498,63 @@ public final class SettingsScreen
 
         final float buttonWidth = BUTTON_WIDTH * uiScale;
         final float buttonHeight = BUTTON_HEIGHT * uiScale;
+        outlineButton.setSize(buttonWidth, buttonHeight);
         debugButton.setSize(buttonWidth, buttonHeight);
         renderButton.setSize(buttonWidth, buttonHeight);
         backButton.setSize(buttonWidth, buttonHeight);
         // Packed before they are measured: a Label's height is whatever its
         // wrapped text came to, and the gap below depends on that answer.
-        debugHint.pack();
+        accessibilityGroup.pack();
+        outlineHint.pack();
+        displayGroup.pack();
         renderHint.pack();
+        debugHint.pack();
 
         final float controlsTop = headingTop - headingHeight;
         final float gap = separationFor(controlsTop, buttonHeight);
 
         // MUTABLE local — the y of the next thing to place, walking downwards.
         float cursor = controlsTop - gap;
-        cursor = placeControl(debugButton, debugHint, cursor, width) - gap;
+        cursor = placeGroup(accessibilityGroup, cursor, width);
+        cursor = placeControl(outlineButton, outlineHint, cursor, width) - gap;
+        cursor = placeGroup(displayGroup, cursor, width);
         cursor = placeControl(renderButton, renderHint, cursor, width) - gap;
+        cursor = placeControl(debugButton, debugHint, cursor, width) - gap;
         backButton.setPosition((width - buttonWidth) * 0.5f, cursor - buttonHeight);
     }
 
-    // The gap the three separations each get: the free space shared equally,
-    // never more than CONTROL_GAP and never less than MIN_CONTROL_GAP. The
-    // floor matters more than the ceiling — a panel dense enough to make the
-    // free space negative still gets a readable screen rather than overlapping
-    // buttons.
+    // The gap each separation gets: the free space shared equally, never more
+    // than CONTROL_GAP.
+    //
+    // The floor is ZERO and used to be MIN_CONTROL_GAP, which is a change worth
+    // explaining because it looks like a loosening. It is the opposite. A floor
+    // does not make a panel fit — when the free space is already negative, a
+    // floor is a guarantee that the Back key goes off the bottom, and it costs
+    // SEPARATION_COUNT floors' worth of the room that was needed to avoid that.
+    // Buttons that touch are still legible, because each one draws its own
+    // six-pixel base; a Back key nobody can reach is not. So MIN_CONTROL_GAP
+    // survives as the number a comfortable panel relaxes to and no longer as a
+    // promise the geometry cannot keep.
     private float separationFor(final float controlsTop, final float buttonHeight)
     {
-        final float content = buttonHeight * 3.0f + HINT_GAP * uiScale * 2.0f
-            + debugHint.getHeight() + renderHint.getHeight();
+        final float content = buttonHeight * 4.0f + HINT_GAP * uiScale * 3.0f
+            + GROUP_GAP * uiScale * 2.0f
+            + outlineHint.getHeight() + renderHint.getHeight() + debugHint.getHeight()
+            + accessibilityGroup.getHeight() + displayGroup.getHeight();
         final float free = controlsTop - BOTTOM_MARGIN * uiScale - content;
-        return Math.max(MIN_CONTROL_GAP * uiScale,
-            Math.min(CONTROL_GAP * uiScale, free / SEPARATION_COUNT));
+        final float shared = Math.min(CONTROL_GAP * uiScale, free / SEPARATION_COUNT);
+        if (shared < MIN_CONTROL_GAP * uiScale)
+        {
+            return Math.max(0.0f, shared);
+        }
+        return shared;
+    }
+
+    // Centres a group heading and returns the y its first control starts from.
+    private float placeGroup(final Label group, final float top, final float width)
+    {
+        group.setPosition((width - group.getWidth()) * 0.5f, top - group.getHeight());
+        return top - group.getHeight() - GROUP_GAP * uiScale;
     }
 
     // Centres one button with its already-packed hint under it, and returns the

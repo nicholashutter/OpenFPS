@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.openfps.engine.gameplay.MatchMode;
+import com.openfps.gdx.AccessibilitySettings;
 import com.openfps.gdx.DebugSettings;
 import com.openfps.gdx.DefaultMenuActions;
 import com.openfps.gdx.MenuActions;
@@ -123,14 +124,12 @@ class AndroidUiFrameCallbackTest
         @DisplayName("the switch the launcher supplies is the switch this UI reads")
         void shouldReadTheSuppliedSwitch()
         {
-            // AndroidLauncher builds one DebugSettings, hands it here for the
-            // settings screen and the frame counter, and separately hangs
-            // SoftwareRenderPort.setOutlineEnabled off its onChange - exactly as
-            // DesktopLauncher does. If this UI kept a switch of its own instead,
-            // nothing would fail and nothing would throw: the button would still
-            // relabel itself, the counter would still appear, and the enemy
-            // outline would simply stop answering the toggle. Identity is the
-            // only assertion that catches that.
+            // AndroidLauncher builds one DebugSettings and hands it here for the
+            // settings screen and the frame counter, exactly as DesktopLauncher
+            // does. If this UI kept a switch of its own instead, nothing would
+            // fail and nothing would throw: the button would still relabel itself
+            // and the counter would still appear on the frames nobody was
+            // watching for it. Identity is the only assertion that catches that.
             final DebugSettings shared = new DebugSettings();
             final AndroidUiFrameCallback ui = new AndroidUiFrameCallback(
                 new RecordingActions(), null, null, shared);
@@ -169,6 +168,78 @@ class AndroidUiFrameCallbackTest
                 new RecordingActions(), null, null, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("debugSettings");
+        }
+    }
+
+    @Nested
+    @DisplayName("the accessibility switches — the link that now carries the outline")
+    class AccessibilitySwitches
+    {
+        @Test
+        @DisplayName("the switches the launcher supplies are the switches this UI flips")
+        void shouldReadTheSuppliedSwitches()
+        {
+            // This is the assertion the debug switch already had, moved to where
+            // the outline actually lives now. AndroidLauncher builds one
+            // AccessibilitySettings, hands it here for the settings screen, and
+            // separately hangs SoftwareRenderPort.setOutlineEnabled off its
+            // onChange. A private copy here would be the worst kind of bug: the
+            // TARGET OUTLINE button would relabel itself perfectly and the outline
+            // would stop responding, with nothing thrown and nothing logged.
+            final AccessibilitySettings shared = new AccessibilitySettings();
+            final AndroidUiFrameCallback ui = new AndroidUiFrameCallback(
+                new RecordingActions(), null, null, new DebugSettings(), shared);
+
+            assertThat(ui.accessibilitySettings()).isSameAs(shared);
+        }
+
+        @Test
+        @DisplayName("the switches are live: a change made outside is seen inside")
+        void shouldSeeChangesMadeThroughTheSharedSwitches()
+        {
+            final AccessibilitySettings shared = new AccessibilitySettings();
+            final AndroidUiFrameCallback ui = new AndroidUiFrameCallback(
+                new RecordingActions(), null, null, new DebugSettings(), shared);
+
+            assertThat(ui.accessibilitySettings().isTargetOutlineVisible()).isTrue();
+            shared.setTargetOutlineVisible(false);
+            assertThat(ui.accessibilitySettings().isTargetOutlineVisible()).isFalse();
+        }
+
+        @Test
+        @DisplayName("they are a separate object from the debug switch, not the same one twice")
+        void shouldNotBeTheDebugSwitch()
+        {
+            // The whole point of the split. If these two ever became one object
+            // again, the outline and the frame counter would share a default and
+            // the toggle's label would go back to disagreeing with the game.
+            final AndroidUiFrameCallback ui = menuOnly();
+
+            assertThat((Object) ui.accessibilitySettings())
+                .isNotSameAs((Object) ui.debugSettings());
+        }
+
+        @Test
+        @DisplayName("a UI given none gets private ones rather than a null")
+        void shouldDefaultToItsOwnSwitches()
+        {
+            // Every plain-JVM test takes this path, and the default has to be the
+            // shipped default: a test that saw the outline off would be testing a
+            // configuration no player has.
+            assertThat(menuOnly().accessibilitySettings()).isNotNull();
+            assertThat(menuOnly().accessibilitySettings().isTargetOutlineVisible())
+                .as("and it is on, as it is for a player")
+                .isTrue();
+        }
+
+        @Test
+        @DisplayName("a null set is refused rather than quietly replaced")
+        void shouldRejectNullSwitches()
+        {
+            assertThatThrownBy(() -> new AndroidUiFrameCallback(
+                new RecordingActions(), null, null, new DebugSettings(), null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("accessibilitySettings");
         }
     }
 

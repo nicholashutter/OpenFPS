@@ -32,6 +32,7 @@ import com.openfps.engine.hal.port.I_TimePort;
 import com.openfps.engine.render.adapter.SoftwareRenderPort;
 import com.openfps.engine.render.port.I_RenderPort;
 import com.openfps.engine.render.port.I_RenderPortFactory;
+import com.openfps.gdx.AccessibilitySettings;
 import com.openfps.gdx.DebugSettings;
 import com.openfps.gdx.DefaultMenuActions;
 import com.openfps.gdx.FramebufferPresenter;
@@ -231,18 +232,33 @@ public final class AndroidLauncher extends AndroidApplication
         // only object that can see both the settings screen's switch and the
         // renderer it also drives. That is the composition root's job.
         final DebugSettings debug = new DebugSettings();
+        // Separate from the debug switch, and separately defaulted — the target
+        // outline is a standard feature for players who need it and starts on,
+        // while the frame counter is a diagnostic and starts off. One boolean
+        // could not be both, which is how the toggle came to disagree with the
+        // game. See AccessibilitySettings.
+        final AccessibilitySettings access = new AccessibilitySettings();
         final AndroidUiFrameCallback ui = new AndroidUiFrameCallback(
             new DefaultMenuActions(windowPort), new FramebufferPresenter(renderer), input,
-            debug);
+            debug, access);
         attachMatchGate(ui, gameplay[0], hal.getAudioPort());
         attachMatchResult(ui, gameplay[0]);
         attachMatchRestart(ui, gameplay[0]);
         attachMatchStatus(ui, gameplay[0], config);
-        // Loosely, on purpose: DebugSettings does not import the renderer and
-        // the renderer has never heard of a settings screen. Attaching does not
-        // fire, so whatever outline default the renderer was built with survives
-        // startup and only a player pressing the toggle moves it.
-        debug.onChange(on -> renderer.setOutlineEnabled(on.booleanValue()));
+        // Loosely, on purpose: AccessibilitySettings does not import the renderer
+        // and the renderer has never heard of a settings screen.
+        //
+        // The initial push is not redundant. onChange deliberately does not fire
+        // on attach, so without this line the renderer keeps whatever default it
+        // was compiled with while the settings screen reports whatever default
+        // the switch was compiled with — two constants agreeing by luck, and for
+        // a while they did not: the outline defaulted on, its toggle defaulted
+        // off, and the screen said OFF over a game drawing outlines. Asserting
+        // the value once makes the label true because it was made true. It is
+        // the same pair of lines DesktopLauncher.attachAccessibilitySettings has,
+        // and they have to stay the same pair.
+        renderer.setOutlineEnabled(access.isTargetOutlineVisible());
+        access.onChange(on -> renderer.setOutlineEnabled(on.booleanValue()));
         // The weapon's noise. Nothing is opened yet — there is no Gdx.audio
         // until initialize() has run, which runFrameLoop below is what does, so
         // the port bakes its sound on the first shot instead.

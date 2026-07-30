@@ -39,13 +39,20 @@ import com.openfps.engine.render.adapter.SoftwareRenderPort;
  * <p>{@link #MAX_TRACERS} and {@link #MAX_PUFFS} are hard maxima, chosen
  * against the weapon's rate of fire rather than picked round:
  * {@code DemoGameplayPort.FIRE_INTERVAL_TICS} is 12, so a shot lands every 12
- * tics and {@link #PUFF_LIFE_TICS} of 18 means at most two puffs overlap. The
+ * tics and {@link #PUFF_LIFE_TICS} of 36 means at most three puffs overlap. The
  * pools are one larger than that arithmetic needs, and a spawn that finds every
  * slot busy <b>overwrites the oldest</b> rather than being dropped. Round-robin
  * makes that O(1) and total: there is no failure path to test, and the worst
  * case is that a tracer nobody was looking at disappears a few tics early.</p>
  *
- * <h2>Why the smoke is twelve instances per puff</h2>
+ * <p><b>That overlap is the point and not a cost.</b> A tracer lives 8 tics
+ * against a 12-tic cadence, so roughly one frame in three legitimately has
+ * nothing in the air — which is correct for a bolt, since a bolt has left. Smoke
+ * has not left. Sized under the gap it would strobe at five hertz; at 36 tics it
+ * always has two older puffs behind it, and a held trigger reads as one cloud
+ * being fed rather than as a row of separate ones.</p>
+ *
+ * <h2>Why the smoke is thirty instances per puff</h2>
  *
  * <p>Two independent multipliers, and each of them is forced by something the
  * renderer will not let a single instance do.</p>
@@ -56,21 +63,30 @@ import com.openfps.engine.render.adapter.SoftwareRenderPort;
  * set of instances per rung of a descending coverage ladder, and exactly one
  * rung is visible at a time: the puff ages, the stage advances, the previous
  * stage is hidden and the next is shown. The fade is a staircase rather than a
- * ramp, which at 60 Hz over 18 tics nobody can see, and it costs the render port
- * nothing per frame — the hidden stages are culled before the rasterizer.</p>
+ * ramp, which at 60 Hz over a step every six tics nobody can see, and it costs
+ * the render port nothing per frame — the hidden stages are culled before the
+ * rasterizer.</p>
  *
  * <p><b>{@link #PUFF_LOBES}, because a puff has to be soft</b>, and a single
  * instance at a single coverage has a hard edge and a flat middle by
- * construction. Three overlapping spheres composite over each other, so one
- * coverage becomes three densities on screen. That constant's Javadoc has the
+ * construction. Five overlapping spheres composite over each other, so one
+ * coverage becomes five densities on screen. That constant's Javadoc has the
  * argument; {@link #PUFF_COVERAGE} has the arithmetic.</p>
  *
- * <p>Twelve instances a puff and thirty-six in the pool sounds like a lot and
- * costs almost nothing: at most one puff's worth is ever visible per rung, all
- * three lobes of a rung share a coverage so they are one run in the
+ * <p>Thirty instances a puff and a hundred and twenty in the pool sounds like a
+ * lot and costs almost nothing: at most one puff's worth is ever visible per
+ * rung, all five lobes of a rung share a coverage so they are one run in the
  * back-to-front sort and one batched pass between them, and everything else in
- * the pool is a degenerate transform the rasterizer throws away before it
- * reaches a pixel.</p>
+ * the pool is a degenerate transform {@code sortBackToFront} drops on a frustum
+ * test before the rasterizer is ever asked. What the pool size does buy is a
+ * per-frame cull over 120 entries instead of 36 — an insertion sort's worth of
+ * comparisons over the handful that survive, which is not a number worth
+ * optimising against a room that submits thousands of triangles.</p>
+ *
+ * <p>Three puffs alive at three different ages is three different coverages,
+ * hence three runs and three batched passes rather than the one a single puff
+ * costs. That is the price of the overlap that makes the effect continuous, and
+ * it is paid only while the trigger is held.</p>
  *
  * <p>The <b>expansion</b> is continuous, because scale lives in the transform
  * and the transform is the thing that is allowed to change.</p>
@@ -92,17 +108,52 @@ public final class DemoEffects
     /** Tics a tracer flies before it is hidden. */
     public static final int TRACER_LIFE_TICS = 8;
 
-    /** Smoke puffs that can be visible at once. */
-    public static final int MAX_PUFFS = 3;
-
-    /** Tics a puff lives. Longer than the fire interval, so two can overlap. */
-    public static final int PUFF_LIFE_TICS = 18;
-
-    /** Coverage rungs a puff fades down. */
-    public static final int PUFF_STAGES = 4;
+    /**
+     * Smoke puffs that can be visible at once — <b>4</b>.
+     *
+     * <p>Derived from the other two numbers rather than chosen:
+     * {@code DemoGameplayPort.FIRE_INTERVAL_TICS} is 12 and
+     * {@link #PUFF_LIFE_TICS} is 36, so a held trigger keeps three puffs in the
+     * air at all times, and the pool is one larger than that arithmetic needs
+     * for the reason the class Javadoc gives.</p>
+     */
+    public static final int MAX_PUFFS = 4;
 
     /**
-     * Overlapping spheres one puff is built from — <b>3</b>.
+     * Tics a puff lives — <b>36</b>, which is six tenths of a second.
+     *
+     * <p><b>Doubled from 18, and this is the single change that mattered
+     * most.</b> A shot lands every 12 tics, so at 18 the smoke was only ever
+     * one-and-a-half puffs deep and each individual puff was gone in three
+     * tenths of a second. Measured on a plain wall, the densest rung of a puff
+     * covered about 2,500 pixels for five tics and then thinned out — an 83 ms
+     * flash of 0.3% of the frame, in the far right periphery, over the part of
+     * the demo room that is already full of grey crates. It was drawn exactly as
+     * designed and it was still perfectly possible to fire a magazine without
+     * noticing it, which is what two rounds of "the smoke is not working" were
+     * actually reporting.</p>
+     *
+     * <p>At 36 the cloud outlives the gap between shots three times over, so
+     * while the trigger is held there is always a fresh puff arriving into two
+     * older ones — a churn rather than a blink. That is the difference between
+     * an effect that is <i>present in a screenshot</i> and one that is
+     * <i>visible in motion</i>, and only the second one is the feature.</p>
+     */
+    public static final int PUFF_LIFE_TICS = 36;
+
+    /**
+     * Coverage rungs a puff fades down — <b>6</b>.
+     *
+     * <p>Raised from 4 with {@link #PUFF_LIFE_TICS}, to hold the step interval
+     * where it was: 36 tics over six rungs is a step every six tics, near enough
+     * the 4-5 of the old ladder. Keeping four rungs over a doubled life would
+     * have made each step nine tics apart, which is long enough to see the fade
+     * <i>tick</i> — and a staircase you can count is worse than no fade.</p>
+     */
+    public static final int PUFF_STAGES = 6;
+
+    /**
+     * Overlapping spheres one puff is built from — <b>5</b>.
      *
      * <p><b>This is what stopped the smoke reading as a block.</b> A puff used
      * to be one cube, and a cube composited at a uniform coverage has a hard
@@ -110,22 +161,31 @@ public final class DemoEffects
      * the eye reads objects. Smoke has no edge; it has a dense middle that
      * thins out.</p>
      *
-     * <p>Three lobes produce that for free, because {@code Rgba.srcOver} is
-     * applied per instance and therefore <b>compounds where they overlap</b>.
-     * A pixel covered by one lobe composites once, by two lobes twice, by all
-     * three three times, so a single coverage per stage becomes a three-step
-     * radial falloff on screen without the per-instance coverage ever changing —
-     * which it cannot, because {@link Scene} fixes it at build time. The
-     * compounding is the feature rather than a hazard to be avoided; the whole
-     * of {@link #PUFF_COVERAGE} is chosen against it.</p>
+     * <p>Overlapping lobes produce that for free, because {@code Rgba.srcOver}
+     * is applied per instance and therefore <b>compounds where they
+     * overlap</b>. A pixel covered by one lobe composites once, by two lobes
+     * twice, by all five five times, so a single coverage per stage becomes a
+     * five-step radial falloff on screen without the per-instance coverage ever
+     * changing — which it cannot, because {@link Scene} fixes it at build time.
+     * The compounding is the feature rather than a hazard to be avoided; the
+     * whole of {@link #PUFF_COVERAGE} is chosen against it.</p>
      *
-     * <p>Three and not more: every lobe is another 36 instances in the pool
+     * <p><b>Raised from three, because the cloud got bigger and three lumps do
+     * not fill a 230-pixel silhouette.</b> At the old size three spheres read as
+     * a cloud; at {@link #PUFF_RADIUS_END} they read as three balls in a bag,
+     * with visible straight gaps between them where the falloff should have
+     * been. Five is also what buys the density back: a five-deep compound
+     * reaches the 0.82 core {@link #PUFF_COVERAGE} is solved for while its
+     * outermost lobe still only composites once, so the cloud gets both a
+     * thicker middle and a softer rim from the same change.</p>
+     *
+     * <p>Five and not more: every lobe is another 24 instances in the pool
      * ({@code MAX_PUFFS x PUFF_STAGES x PUFF_LOBES}), another sphere in the
      * back-to-front sort, and one more {@code Mat4} per tic per visible puff.
-     * Three already gives a lumpy silhouette and three density levels, which is
-     * as much structure as a 130-pixel cloud can carry.</p>
+     * Five already gives a lopsided silhouette and five density levels, which is
+     * as much structure as a grey blob can carry at any size.</p>
      */
-    public static final int PUFF_LOBES = 3;
+    public static final int PUFF_LOBES = 5;
 
     /**
      * World units a tracer covers per tic — 60.
@@ -207,36 +267,49 @@ public final class DemoEffects
     public static final float MUZZLE_DROP_UNITS = 0.22f;
 
     /**
-     * Half-extent of a puff when it is born, in world units — 0.14.
+     * Half-extent of the <b>main lobe</b> when a puff is born, in world units —
+     * 0.16.
      *
      * <p>Sub-unit numbers, which look wrong beside a 41-unit eye height until
      * you notice what they are measured against: the puff sits
      * {@link #MUZZLE_FORWARD_UNITS} from the eye, so its <i>apparent</i> size
-     * is the ratio of the two. 0.14 at 2.4 units subtends about the same angle
-     * as 37 units would at the far wall. Sized in the room's units instead it
-     * would fill the screen.</p>
+     * is the ratio of the two. At 720p and the demo's field of view a world unit
+     * at 2.4 units out is about 262 px, and the cloud reaches
+     * {@link #cloudExtentRadii()} — roughly 1.46 — times this radius. So 0.16
+     * is a cloud about 122 px across at the moment of the shot. Sized in the
+     * room's units instead it would fill the screen.</p>
+     *
+     * <p><b>Doubled from 0.075, and the reason is the one thing about the old
+     * puff that nobody would have guessed: it was smallest exactly when it was
+     * densest.</b> Coverage falls with age while the radius grows, so the rung a
+     * player could actually see was a 57 px smudge that lasted five tics, and
+     * the phases that lasted were the ones you could see through. Measured on a
+     * plain wall the densest rung covered about 2,500 px of a 921,600 px frame.
+     * Starting big inverts that: the loud part of the effect is now the big part
+     * of it.</p>
      */
-    public static final float PUFF_RADIUS_START = 0.075f;
+    public static final float PUFF_RADIUS_START = 0.16f;
 
     /**
-     * Half-extent of the <b>main lobe</b> at the end of a puff's life — 0.19.
+     * Half-extent of the <b>main lobe</b> at the end of a puff's life — 0.30.
      * See {@link #PUFF_RADIUS_START} for why these numbers are so small.
      *
-     * <p><b>Both were reduced once the puff became visible enough to judge.</b>
-     * At 0.14 growing to 0.34 the cloud ended up around 300 px across at 720p —
-     * a quarter of the window — and a translucent rectangle that size does not
-     * read as smoke at a muzzle, it reads as a pane of glass across the view.
-     * Nobody could tell while it was the colour of the wall.</p>
+     * <p>About 230 px of cloud at 720p. <b>The last time this went up it went
+     * too far:</b> 0.34 with a single cube produced something like 300 px of
+     * uniform translucent grey, which does not read as smoke at a muzzle — it
+     * reads as a pane of glass across the view. What makes 0.30 different is not
+     * the number but what is being scaled: five lobes at
+     * {@link #PUFF_COVERAGE}'s ladder have a dense core and a rim that
+     * composites once, so the silhouette dissolves at its edge instead of ending
+     * at one. A big soft thing and a big flat thing are not the same picture at
+     * the same size.</p>
      *
-     * <p><b>Trimmed again, from 0.22, when the puff became three lobes.</b> The
-     * cloud is wider than its main lobe — {@link #cloudExtentRadii()} works out
-     * at about 1.46, against 1.0 for a lone sphere — so keeping the radius would
-     * have made the puff nearly half as big again on screen. It is scaled back
-     * instead, so the cloud spans very nearly what the single 0.22 cube spanned,
-     * which is the size that had already been judged right. Growing the picture
-     * was never the point; softening it was.</p>
+     * <p><b>The growth per tic is slower than it was</b>, not faster: 0.14 of
+     * expansion over 36 tics is 0.0039 a tic, against the old 0.0047. Smoke
+     * that swells visibly reads as inflating rather than as dispersing, and the
+     * longer life would have made the old rate three times as much travel.</p>
      */
-    public static final float PUFF_RADIUS_END = 0.16f;
+    public static final float PUFF_RADIUS_END = 0.30f;
 
     /**
      * Each lobe's offset from the puff centre <b>across</b> the shooter's view,
@@ -250,34 +323,50 @@ public final class DemoEffects
      * offset uses, and {@code up = aim x across} — so the lumps are spread
      * across the screen from every angle.</p>
      *
-     * <p>The first lobe is at the centre and is the largest; the other two sit
-     * off it in opposite directions, so the silhouette is lopsided. A symmetric
-     * arrangement would read as a flower.</p>
+     * <p>The first lobe is at the centre and is the largest; the rest sit off it
+     * in four different directions, no two of them opposite, so the silhouette
+     * is lopsided. A symmetric arrangement would read as a flower.</p>
+     *
+     * <p><b>Every offset was pulled IN when the fourth and fifth lobes arrived,
+     * and the outriders were made bigger.</b> Kept at the three-lobe spacing,
+     * five spheres of decreasing size read as bubbles: each one's circular edge
+     * survived as an edge because there was nothing else covering it. Overlapping
+     * them harder is what fuses the outlines — a lobe boundary that runs through
+     * the middle of a neighbour is a density step and not a silhouette. The
+     * measure of it is {@link #cloudExtentRadii()}, which comes down to about
+     * 1.38 from 1.46: the extra lobes are here to fill the shape in, not to make
+     * it larger. {@link #PUFF_RADIUS_END} owns the size, and it is the only thing
+     * that should.</p>
      */
-    public static final float[] LOBE_ACROSS = {0.00f, 0.62f, -0.50f};
+    public static final float[] LOBE_ACROSS = {0.00f, 0.50f, -0.42f, 0.24f, -0.56f};
 
     /** Each lobe's offset <b>up</b> the shooter's view. See {@link #LOBE_ACROSS}. */
-    public static final float[] LOBE_UP = {0.00f, 0.36f, -0.30f};
+    public static final float[] LOBE_UP = {0.00f, 0.30f, -0.26f, -0.52f, 0.18f};
 
     /**
      * Each lobe's radius as a fraction of the puff's. The centre lobe is full
-     * size and the outriders are smaller, which is what makes the cloud read as
-     * one thing with bulges rather than as three balls.
+     * size and the outriders get progressively smaller, which is what makes the
+     * cloud read as one thing with bulges rather than as five balls.
      */
-    public static final float[] LOBE_SCALE = {1.00f, 0.74f, 0.66f};
+    public static final float[] LOBE_SCALE = {1.00f, 0.80f, 0.74f, 0.66f, 0.60f};
 
     /**
-     * World units a puff drifts upward per tic — 0.010.
+     * World units a puff drifts upward per tic — 0.006.
      *
      * <p>Tiny, and it has to be. The puff sits 2.4 units from the eye, so a
      * rise is magnified by the same ratio that makes
      * {@link #PUFF_RADIUS_START} small: over {@link #PUFF_LIFE_TICS} this is
-     * 0.18 units, which is about 47 screen pixels at 720p. At 0.022, which is
+     * 0.22 units, which is about 56 screen pixels at 720p. At 0.022, which is
      * where it started, the same drift carried the puff a hundred pixels up the
      * screen and left it hanging above the weapon rather than at its
      * muzzle.</p>
+     *
+     * <p><b>Cut from 0.010 when the life doubled</b>, so the total travel is
+     * about what it always was rather than twice it. The drift is there to say
+     * the cloud is not a decal stuck to the screen; a puff that climbed a
+     * hundred pixels while it faded would be a balloon.</p>
      */
-    public static final float PUFF_RISE_UNITS = 0.010f;
+    public static final float PUFF_RISE_UNITS = 0.006f;
 
     /** Sentinel age meaning "this slot holds no effect". */
     public static final int DEAD = -1;
@@ -323,15 +412,17 @@ public final class DemoEffects
      * coverage.</p>
      *
      * <p>{@code (92, 90, 86)} lands the freshest puff's <b>core</b> near
-     * {@code (103, 103, 107)} against that wall: a drop of some forty levels,
-     * plainly visible, with a fifth of the background still showing through it.
-     * Its rim lands near {@code (122, 125, 141)}, twenty levels down — a wisp
-     * rather than a boundary.</p>
+     * {@code (101, 100, 102)} against that wall: a drop of some forty levels,
+     * plainly visible, with nearly a fifth of the background still showing
+     * through it. Its rim lands near {@code (127, 130, 151)}, a wisp rather than
+     * a boundary.</p>
      *
-     * <p>The colour survived the move from one cube to three spheres unchanged,
-     * which is the point of having derived it: {@link #PUFF_COVERAGE} was solved
-     * to put the composited core back where this colour had already been judged
-     * to work, rather than the colour being re-tuned around a new ladder.</p>
+     * <p>The colour has now survived the move from one cube to three spheres and
+     * then to five, and a doubling of both the life and the size, unchanged —
+     * which is the point of having derived it. Every time the shape of the effect
+     * changed, {@link #PUFF_COVERAGE} was solved to put the composited core back
+     * where this colour had already been judged to work, rather than the colour
+     * being re-tuned around a new ladder.</p>
      */
     private static final int SMOKE_COLOUR = Rgba.pack(92, 90, 86, 255);
 
@@ -339,45 +430,46 @@ public final class DemoEffects
      * Coverage of <b>one lobe</b> at each puff stage, faintest last.
      *
      * <p>Every rung is a distinct blended {@code SpanRenderer} in the render
-     * port and a potential extra batched pass, so this is four values rather
-     * than sixteen. Four steps over 18 tics is a step every 4-5 tics, which
-     * reads as a fade. All {@link #PUFF_LOBES} lobes of a puff share the stage's
-     * coverage, so they are one contiguous run in the back-to-front sort and
-     * cost one pass between them.</p>
+     * port and a potential extra batched pass, so this is six values rather
+     * than thirty-six. Six steps over {@link #PUFF_LIFE_TICS} is a step every
+     * six tics, which reads as a fade. All {@link #PUFF_LOBES} lobes of a puff
+     * share the stage's coverage, so they are one contiguous run in the
+     * back-to-front sort and cost one pass between them.</p>
      *
-     * <p><b>These are per-lobe figures and they are much lower than the
-     * single-cube ladder they replace ({190, 142, 96, 64}), because the lobes
-     * compound.</b> Coverage {@code a} applied {@code n} times leaves
-     * {@code 1 - (1 - a)^n} of the smoke, so the numbers were solved backwards
+     * <p><b>These are per-lobe figures and they are far lower than the
+     * coverage anyone would write down for the density they produce, because
+     * the lobes compound.</b> Coverage {@code a} applied {@code n} times leaves
+     * {@code 1 - (1 - a)^n} of the smoke, so the numbers are solved backwards
      * from what the <i>composite</i> should be rather than picked:</p>
      *
      * <pre>
-     *   stage  per lobe   1 lobe   2 lobes   3 lobes
-     *     0      100       0.39     0.63      0.78
-     *     1       70       0.27     0.47      0.62
-     *     2       47       0.18     0.33      0.45
-     *     3       29       0.11     0.21      0.30
+     *   stage  per lobe   1 lobe   2 lobes   3 lobes   4 lobes   5 lobes
+     *     0        74       0.29     0.50      0.64      0.75      0.82
+     *     1        59       0.23     0.41      0.55      0.65      0.73
+     *     2        45       0.18     0.32      0.44      0.54      0.62
+     *     3        32       0.13     0.24      0.33      0.41      0.49
+     *     4        20       0.08     0.15      0.22      0.28      0.34
+     *     5        10       0.04     0.08      0.11      0.15      0.18
      * </pre>
      *
-     * <p><b>The densest point of a fresh puff therefore lands where the old
-     * single cube's densest point already was</b> — 0.78 against the old 190/255
-     * of 0.75 — so nothing about the peak was regressed. What is new is
-     * everything either side of it: the same puff now also has a 0.63 shoulder
-     * and a 0.39 edge, which is the gradient that makes it a cloud instead of a
-     * pane. Composited over the room's lit wall at {@code (141, 147, 177)} that
-     * is about {@code (103, 103, 107)} in the core, some forty levels down and
-     * plainly visible, thinning to {@code (122, 125, 141)} at the rim.</p>
+     * <p>Composited over the demo room's lit wall at {@code (141, 147, 177)},
+     * the core of a fresh puff lands near {@code (101, 100, 102)} — forty levels
+     * down on red, forty-seven on green and seventy-five on blue, which is the
+     * whole reason {@code smokeColour} is warm: it does not just darken the
+     * wall, it takes the blue out of it, and that is a second signal on top of
+     * the first. Its rim lands near {@code (127, 130, 151)}, a wisp rather than
+     * a boundary. The final rung is about {@code (132, 137, 161)} — a faint
+     * haze, so the staircase ends in a fade rather than in a disappearance.</p>
      *
      * <p><b>The top rung deliberately does not go higher.</b> Something you
      * cannot see through is a hole in the room and not a cloud, and that
-     * overshoot has already happened once here — 228 on the old ladder, with a
-     * dark enough colour, produced a black block. At 0.78 composite, a fifth of
-     * the wall still shows through the thickest part.</p>
-     *
-     * <p>The bottom rung is a genuine wisp rather than nothing, which is what
-     * makes the staircase read as a fade instead of as a disappearance.</p>
+     * overshoot has already happened once here — 228 on an older ladder, with a
+     * dark enough colour, produced a black block. At 0.82 composite, nearly a
+     * fifth of the wall still shows through the thickest point of the thickest
+     * rung, and that point is the small five-deep overlap at the middle rather
+     * than the whole cloud.</p>
      */
-    private static final int[] PUFF_COVERAGE = {100, 70, 47, 29};
+    private static final int[] PUFF_COVERAGE = {74, 59, 45, 32, 20, 10};
 
     /** Coordinates per position or direction triple. */
     private static final int AXES = 3;
@@ -397,24 +489,33 @@ public final class DemoEffects
     private static final int BOX_VERTICES = 8;
 
     /**
-     * Meridians round the smoke sphere — <b>8</b>.
+     * Meridians round the smoke sphere — <b>12</b>.
      *
      * <p>Coarse on purpose, and sized against the picture rather than against
-     * taste. A puff subtends about 136 px at 720p, so eight facets put a corner
-     * every 17 px of silhouette — enough that the outline reads as round rather
-     * than as a hexagon, and far below where more would buy anything a
-     * translucent grey blob could show.</p>
+     * taste. <b>Sized against the DENSE rung, which is the small one.</b> The
+     * only lobe edge a player can resolve is one with enough coverage behind it
+     * to be a boundary, and coverage falls as the puff grows: a fresh puff's main
+     * lobe is about 84 px across at 720p, so twelve facets put a corner every
+     * 22 px of its silhouette. The 157 px lobe at the end of a puff's life gets a
+     * corner every 40 px instead, and it composites at 0.29 where a straight edge
+     * has nothing to be straight against.</p>
+     *
+     * <p>Raised from 8 when {@link #PUFF_RADIUS_END} nearly doubled, because the
+     * old count was sized against a cloud half this size and eight facets on the
+     * new one put a visible flat down the side of the outermost wisp.</p>
      */
-    private static final int SPHERE_MERIDIANS = 8;
+    private static final int SPHERE_MERIDIANS = 12;
 
     /**
-     * Stacks from pole to pole — <b>6</b>. With
-     * {@link #SPHERE_MERIDIANS} that is 42 vertices and 80 triangles, against
-     * the cube's 8 and 12. The whole pool is 36 spheres and at most nine are
-     * ever visible, so the pass carries about 720 triangles at its busiest —
-     * beside a room that submits thousands.
+     * Stacks from pole to pole — <b>8</b>. With
+     * {@link #SPHERE_MERIDIANS} that is 86 vertices and 168 triangles, against
+     * the cube's 8 and 12. The whole pool is 120 spheres and at most fifteen are
+     * ever visible, so the pass carries about 2,500 triangles at its busiest —
+     * beside a room that submits thousands. Blended fill is set by the area
+     * covered rather than by the triangle count, so this is the cheap half of
+     * making the cloud bigger.
      */
-    private static final int SPHERE_STACKS = 6;
+    private static final int SPHERE_STACKS = 8;
 
     /** Half-turn in radians, for the sphere's polar sweep. */
     private static final float HALF_TURN_RADIANS = (float) StrictMath.PI;

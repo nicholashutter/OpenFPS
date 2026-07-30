@@ -18,6 +18,7 @@ import com.openfps.engine.gameplay.MatchMode;
 import com.openfps.engine.gameplay.MatchStatus;
 import com.openfps.engine.gameplay.MatchSummary;
 import com.openfps.engine.hal.port.I_FrameCallback;
+import com.openfps.gdx.AccessibilitySettings;
 import com.openfps.gdx.DebugOverlay;
 import com.openfps.gdx.DebugSettings;
 import com.openfps.gdx.FramebufferPresenter;
@@ -102,6 +103,16 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
 
     /** The switch the settings screen flips and the frame counter reads. Never null. */
     private final DebugSettings debug;
+
+    /**
+     * The visual aids the settings screen flips. Never null.
+     *
+     * <p>Nothing in this class reads it — the renderer's outline pass answers to
+     * it, through an observer the launcher hung on it. It is held here so the
+     * settings screen flips <b>the launcher's object</b>, which is the only way
+     * the toggle and the outline can be the same switch.</p>
+     */
+    private final AccessibilitySettings accessibility;
 
     /**
      * The corner frame counter. Never null; it draws only while
@@ -211,11 +222,6 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
     /**
      * Creates the full UI with a caller-supplied debug switch.
      *
-     * <p>The launcher supplies one when it wants to observe the switch — which
-     * it does, to put the renderer's outline pass behind the same toggle. A UI
-     * built without one gets a private switch nothing else can see, which is
-     * what every plain-JVM test wants.</p>
-     *
      * @param menuActions what the buttons do; must not be null
      * @param framePresenter draws the rasterizer's finished frame, or null for
      *     a menu-only build
@@ -228,6 +234,41 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
         final FramebufferPresenter framePresenter, final AndroidInputPort touchInput,
         final DebugSettings debugSettings)
     {
+        this(menuActions, framePresenter, touchInput, debugSettings,
+            new AccessibilitySettings());
+    }
+
+    /**
+     * Creates the full UI with caller-supplied debug and accessibility switches.
+     *
+     * <p>The launcher supplies both when it wants to observe them — which it does
+     * for the accessibility group, to put the renderer's outline pass behind the
+     * target outline toggle. A UI built without them gets private ones nothing
+     * else can see, which is what every plain-JVM test wants.</p>
+     *
+     * <p><b>The accessibility switch in particular has to be the launcher's own
+     * object.</b> A private copy relabels its button exactly as convincingly and
+     * the outline simply stops answering — no exception, no log line, nothing to
+     * notice until a player presses the toggle and the game ignores them. That is
+     * the same failure mode the debug switch had, and it is why
+     * {@code AndroidUiFrameCallbackTest} asserts identity rather than
+     * behaviour.</p>
+     *
+     * @param menuActions what the buttons do; must not be null
+     * @param framePresenter draws the rasterizer's finished frame, or null for
+     *     a menu-only build
+     * @param touchInput reads the on-screen controls, or null for a build with
+     *     no world to control
+     * @param debugSettings the switch the settings screen flips; must not be
+     *     null
+     * @param accessibilitySettings the visual aids the settings screen flips;
+     *     must not be null
+     */
+    public AndroidUiFrameCallback(final MenuActions menuActions,
+        final FramebufferPresenter framePresenter, final AndroidInputPort touchInput,
+        final DebugSettings debugSettings,
+        final AccessibilitySettings accessibilitySettings)
+    {
         if (menuActions == null)
         {
             throw new IllegalArgumentException("menuActions must not be null");
@@ -236,7 +277,12 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
         {
             throw new IllegalArgumentException("debugSettings must not be null");
         }
+        if (accessibilitySettings == null)
+        {
+            throw new IllegalArgumentException("accessibilitySettings must not be null");
+        }
         this.debug = debugSettings;
+        this.accessibility = accessibilitySettings;
         this.menu = new MainMenuFrameCallback(new StartGameTransition(menuActions, uiState));
         this.presenter = framePresenter;
         this.input = touchInput;
@@ -342,6 +388,12 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
         return debug;
     }
 
+    /** Returns the visual aids this UI's settings screen flips. Never null. */
+    public AccessibilitySettings accessibilitySettings()
+    {
+        return accessibility;
+    }
+
     @Override
     public void onSurfaceReady(final int width, final int height)
     {
@@ -351,7 +403,8 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
         // size on a 160 dpi tablet and a 560 dpi handset — the same rule
         // MainMenuFrameCallback applies, and the reason these screens take a
         // scale at all.
-        settings = new SettingsScreen(debug, renderSettings(), uiState::returnToMenu, density());
+        settings = new SettingsScreen(accessibility, debug, renderSettings(),
+            uiState::returnToMenu, density());
         settings.resize(width, height);
         resizeWorld(width, height);
         appliedState = uiState.state();
