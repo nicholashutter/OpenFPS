@@ -111,6 +111,60 @@ class MatchTest
         return match.firePlayerShot(PLAYER_X, PLAYER_EYE_Y, PLAYER_Z, 0.0f, 0.0f, 1.0f);
     }
 
+    /**
+     * Distance to the nearest bot on the streak nest's firing range — <b>600</b>,
+     * which is past {@link Match#BOT_RANGE_UNITS}.
+     *
+     * <p>Deliberately out of reach. The streak questions are about what happens
+     * over hundreds of tics, and a room that could shoot back would let the player
+     * die in the middle of one — which is a different rule of the same feature and
+     * belongs in its own test rather than in the background of every other. The
+     * player's own hitscan has no range limit, so they can still clear the room
+     * from here.</p>
+     */
+    private static final float OUT_OF_REACH_UNITS = 600.0f;
+
+    /** Spacing between bots on the firing range, in world units. */
+    private static final float RANGE_SPACING_UNITS = 60.0f;
+
+    // A line of bots straight down +z, every one of them beyond BOT_RANGE_UNITS,
+    // so the player can work through the queue without being shot at once.
+    private static Match firingRange(final int count)
+    {
+        final Bot[] roster = new Bot[count];
+        for (int index = 0; index < roster.length; index++)
+        {
+            roster[index] = sentryAt(Match.FIRST_BOT_ENTITY_ID + index,
+                OUT_OF_REACH_UNITS + index * RANGE_SPACING_UNITS);
+        }
+        return new Match(roster);
+    }
+
+    // Puts the nearest living bot down, in however many shots that takes, and
+    // returns how many that was. Three at PLAYER_SHOT_DAMAGE and two under the
+    // super blaster, which is the difference several of these tests are about.
+    private static int killNearest(final Match match)
+    {
+        final int killsBefore = match.botsKilled();
+        final int shotsBefore = match.playerShotsFired();
+        while (match.botsKilled() == killsBefore
+            && match.playerShotsFired() - shotsBefore < 4)
+        {
+            shootAhead(match);
+        }
+        return match.playerShotsFired() - shotsBefore;
+    }
+
+    // Earns the super blaster the only way there is: SUPER_BLASTER_KILL_STREAK
+    // kills without dying.
+    private static void earnTheSuperBlaster(final Match match)
+    {
+        for (int kill = 0; kill < Match.SUPER_BLASTER_KILL_STREAK; kill++)
+        {
+            killNearest(match);
+        }
+    }
+
     @Nested
     @DisplayName("the player shooting")
     class PlayerFire
@@ -765,6 +819,11 @@ class MatchTest
             assertThat(used.livingBots()).isEqualTo(fresh.livingBots());
             assertThat(used.isPlayerDown()).isEqualTo(fresh.isPlayerDown());
             assertThat(used.state()).isEqualTo(fresh.state());
+            assertThat(used.killStreak()).isEqualTo(fresh.killStreak());
+            assertThat(used.isSuperBlaster()).isEqualTo(fresh.isSuperBlaster());
+            assertThat(used.superBlasterTicsRemaining())
+                .isEqualTo(fresh.superBlasterTicsRemaining());
+            assertThat(used.playerShotDamage()).isEqualTo(fresh.playerShotDamage());
         }
 
         @Test
@@ -998,6 +1057,311 @@ class MatchTest
                 .as("the room fired once every %d tics against the old cadence's 21",
                     ticsPerShot)
                 .isBetween(10, 40);
+        }
+    }
+
+    @Nested
+    @DisplayName("the kill streak and the super blaster")
+    class KillStreak
+    {
+        @Test
+        @DisplayName("two kills change nothing; the third arms the super blaster")
+        void shouldArmTheSuperBlasterOnTheThirdKill()
+        {
+            final Match match = firingRange(5);
+
+            killNearest(match);
+            killNearest(match);
+
+            assertThat(match.killStreak()).isEqualTo(2);
+            assertThat(match.isSuperBlaster()).as("armed early").isFalse();
+            assertThat(match.playerShotDamage()).isEqualTo(Match.PLAYER_SHOT_DAMAGE);
+
+            killNearest(match);
+
+            assertThat(match.isSuperBlaster()).isTrue();
+            assertThat(match.superBlasterTicsRemaining()).isEqualTo(Match.SUPER_BLASTER_TICS);
+            assertThat(match.killStreak())
+                .as("the award has to spend the streak, or the next single kill re-arms it")
+                .isZero();
+        }
+
+        @Test
+        @DisplayName("a hit that does not kill does not count toward the streak")
+        void shouldCountKillsRatherThanHits()
+        {
+            // Otherwise "three kills" is "three shots", the reward arrives inside
+            // one engagement with one opponent, and it stops being about a streak
+            // at all.
+            final Match match = firingRange(3);
+
+            assertThat(shootAhead(match)).isNotEqualTo(Match.NO_HIT);
+            assertThat(shootAhead(match)).isNotEqualTo(Match.NO_HIT);
+
+            assertThat(match.killStreak()).isZero();
+        }
+
+        @Test
+        @DisplayName("the super shot does EXACTLY twice PLAYER_SHOT_DAMAGE, derived from it")
+        void shouldDoExactlyDoubleDamage()
+        {
+            // Derived rather than written down again: a second literal is one
+            // re-balance away from a reward that has quietly stopped being double
+            // anything, and a wrong number here looks exactly like a right one.
+            assertThat(Match.SUPER_BLASTER_DAMAGE_MULTIPLIER).isEqualTo(2);
+            assertThat(Match.SUPER_BLASTER_SHOT_DAMAGE)
+                .isEqualTo(Match.PLAYER_SHOT_DAMAGE * 2);
+
+            final Match match = firingRange(5);
+            assertThat(match.playerShotDamage()).isEqualTo(Match.PLAYER_SHOT_DAMAGE);
+
+            earnTheSuperBlaster(match);
+
+            assertThat(match.playerShotDamage()).isEqualTo(Match.SUPER_BLASTER_SHOT_DAMAGE);
+        }
+
+        @Test
+        @DisplayName("two hits to kill instead of three — what the player actually feels")
+        void shouldKillInTwoHitsWhileSuper()
+        {
+            // The damage figure restated as the thing a player experiences. 68 does
+            // not read as a reward until it is put beside Bot.MAX_HEALTH; "the next
+            // one goes down a shot sooner" does.
+            final Match match = firingRange(5);
+
+            earnTheSuperBlaster(match);
+
+            assertThat(match.playerShotsFired())
+                .as("three ordinary kills should be nine shots")
+                .isEqualTo(9);
+            assertThat(killNearest(match))
+                .as("the super blaster did not shorten the kill")
+                .isEqualTo(2);
+        }
+
+        @Test
+        @DisplayName("runs out after exactly SUPER_BLASTER_TICS tics, and says so once")
+        void shouldExpireAfterTheFullWindow()
+        {
+            final Match match = firingRange(6);
+            earnTheSuperBlaster(match);
+
+            // One tic short of the window.
+            for (int tic = 0; tic < Match.SUPER_BLASTER_TICS - 1; tic++)
+            {
+                tick(match, tic);
+            }
+            assertThat(match.isSuperBlaster()).as("expired early").isTrue();
+            assertThat(match.superBlasterTicsRemaining()).isEqualTo(1);
+
+            tick(match, Match.SUPER_BLASTER_TICS - 1);
+
+            assertThat(match.isSuperBlaster()).isFalse();
+            assertThat(match.superBlasterTicsRemaining()).isZero();
+            assertThat(match.playerShotDamage()).isEqualTo(Match.PLAYER_SHOT_DAMAGE);
+            assertThat(match.consumeSuperBlasterExpired())
+                .as("the player was never told it had stopped")
+                .isTrue();
+            assertThat(match.consumeSuperBlasterExpired())
+                .as("the same expiry was announced twice")
+                .isFalse();
+        }
+
+        @Test
+        @DisplayName("the countdown counts down, so the badge is not a frozen screen")
+        void shouldCountDownWhileLive()
+        {
+            // The same perceptible property the respawn notice has: a number that
+            // does not move is indistinguishable from a badge somebody forgot to
+            // take away.
+            final Match match = firingRange(6);
+            earnTheSuperBlaster(match);
+            final int atAward = match.superBlasterTicsRemaining();
+
+            for (int tic = 0; tic < 30; tic++)
+            {
+                tick(match, tic);
+            }
+
+            assertThat(match.superBlasterTicsRemaining()).isEqualTo(atAward - 30);
+        }
+
+        @Test
+        @DisplayName("the award is announced exactly once, and an ordinary kill is not")
+        void shouldAnnounceTheAwardOnce()
+        {
+            // A consuming read, so exactly one caller makes the noise. Two would
+            // make it twice, in phase, which is one noise at double the volume.
+            final Match match = firingRange(5);
+
+            killNearest(match);
+            assertThat(match.consumeSuperBlasterAwarded())
+                .as("an ordinary kill announced an award")
+                .isFalse();
+
+            killNearest(match);
+            killNearest(match);
+
+            assertThat(match.consumeSuperBlasterAwarded()).isTrue();
+            assertThat(match.consumeSuperBlasterAwarded())
+                .as("the same award was announced twice")
+                .isFalse();
+        }
+
+        @Test
+        @DisplayName("a kill while it is live neither extends nor refreshes the window")
+        void shouldNotExtendTheWindowOnAKill()
+        {
+            // THE RULE, and the reason for it: extending is a positive feedback
+            // loop — double damage makes the next kill easier, an easier kill buys
+            // more double damage — and in a seven-bot room the loop has nothing to
+            // stop it, so the reward would end the round instead of punctuating it.
+            final Match match = firingRange(Match.DEFAULT_BOT_COUNT);
+            earnTheSuperBlaster(match);
+            for (int tic = 0; tic < 60; tic++)
+            {
+                tick(match, tic);
+            }
+            final int aged = Match.SUPER_BLASTER_TICS - 60;
+            assertThat(match.superBlasterTicsRemaining()).isEqualTo(aged);
+
+            killNearest(match);
+            assertThat(match.superBlasterTicsRemaining())
+                .as("kill four refreshed the timer")
+                .isEqualTo(aged);
+            killNearest(match);
+            assertThat(match.superBlasterTicsRemaining())
+                .as("kill five refreshed the timer")
+                .isEqualTo(aged);
+
+            // Kill six completes a WHOLE fresh streak, which is a new award rather
+            // than an extension of the old one — earned exactly as the first was.
+            killNearest(match);
+
+            assertThat(match.superBlasterTicsRemaining()).isEqualTo(Match.SUPER_BLASTER_TICS);
+            assertThat(match.consumeSuperBlasterAwarded()).isTrue();
+        }
+
+        @Test
+        @DisplayName("dying resets the streak, so three kills spread over two lives earn nothing")
+        void shouldResetTheStreakOnDeath()
+        {
+            // The rule that makes it a STREAK. A running total would tick the
+            // reward over several deaths later, with nothing on screen accounting
+            // for why the gun had changed.
+            final Match match = marksmanMatch(sentryAt(2, 200.0f), sentryAt(3, 260.0f),
+                sentryAt(4, 320.0f), sentryAt(5, 380.0f));
+            killNearest(match);
+            killNearest(match);
+            assertThat(match.killStreak()).isEqualTo(2);
+
+            final int hitsToKill = Match.PLAYER_MAX_HEALTH / Match.BOT_SHOT_DAMAGE;
+            for (int tic = 0; tic < hitsToKill; tic++)
+            {
+                tick(match, tic);
+            }
+            assertThat(match.isPlayerDown()).isTrue();
+            assertThat(match.killStreak()).isZero();
+
+            // Stand up, and take a third kill. Under a running total this would be
+            // the one that armed it.
+            tick(match, hitsToKill + Match.RESPAWN_DELAY_TICS);
+            assertThat(match.isPlayerDown()).isFalse();
+            killNearest(match);
+
+            assertThat(match.killStreak()).isEqualTo(1);
+            assertThat(match.isSuperBlaster()).isFalse();
+        }
+
+        @Test
+        @DisplayName("dying cancels a live super blaster, and the player is told")
+        void shouldCancelALiveBuffOnDeath()
+        {
+            // The reward's one precondition is being alive and three kills ahead.
+            // A buff that outlived the life that earned it would be a reward for
+            // nothing — and the two seconds on the floor would eat most of the
+            // window regardless, so death would cancel it in practice while the
+            // rules said otherwise.
+            final Match match = marksmanMatch(sentryAt(2, 200.0f), sentryAt(3, 260.0f),
+                sentryAt(4, 320.0f), sentryAt(5, 380.0f));
+            earnTheSuperBlaster(match);
+            assertThat(match.isSuperBlaster()).isTrue();
+            match.consumeSuperBlasterAwarded();
+
+            final int hitsToKill = Match.PLAYER_MAX_HEALTH / Match.BOT_SHOT_DAMAGE;
+            for (int tic = 0; tic < hitsToKill; tic++)
+            {
+                tick(match, tic);
+            }
+
+            assertThat(match.isPlayerDown()).isTrue();
+            assertThat(match.isSuperBlaster()).isFalse();
+            assertThat(match.superBlasterTicsRemaining()).isZero();
+            assertThat(match.playerShotDamage()).isEqualTo(Match.PLAYER_SHOT_DAMAGE);
+            assertThat(match.consumeSuperBlasterExpired())
+                .as("the buff vanished silently, which is indistinguishable from a bug")
+                .isTrue();
+        }
+
+        @Test
+        @DisplayName("reset clears the streak AND cancels a live super blaster")
+        void shouldClearBothOnReset()
+        {
+            // A rematch that inherited four seconds of double damage nobody earned
+            // is exactly the class of bug this reset already shipped once, when
+            // reviving the bots left them invisible.
+            final Match match = firingRange(6);
+            earnTheSuperBlaster(match);
+            killNearest(match);
+            for (int tic = 0; tic < 30; tic++)
+            {
+                tick(match, tic);
+            }
+            assertThat(match.isSuperBlaster()).isTrue();
+            assertThat(match.killStreak()).isEqualTo(1);
+
+            match.reset();
+
+            assertThat(match.killStreak()).isZero();
+            assertThat(match.isSuperBlaster()).isFalse();
+            assertThat(match.superBlasterTicsRemaining()).isZero();
+            assertThat(match.playerShotDamage()).isEqualTo(Match.PLAYER_SHOT_DAMAGE);
+            assertThat(match.consumeSuperBlasterAwarded())
+                .as("a rematch opened by announcing last round's award")
+                .isFalse();
+            assertThat(match.consumeSuperBlasterExpired()).isFalse();
+        }
+
+        @Test
+        @DisplayName("the window is measured in tics, which is what makes two peers agree")
+        void shouldMeasureTheWindowInTics()
+        {
+            // Not a tautology: it is the assertion that the same NUMBER OF TICKS
+            // ends the buff regardless of how long those ticks took. A wall-clock
+            // window would expire on different tics on two peers, which is a shot
+            // doing 68 damage on one and 34 on the other — the same class of desync
+            // BotRng exists to prevent, arriving by a different door.
+            final Match slow = firingRange(6);
+            final Match fast = firingRange(6);
+            earnTheSuperBlaster(slow);
+            earnTheSuperBlaster(fast);
+
+            // The same tics, driven at whatever rate two different machines happen
+            // to manage, with one of them skipping indices as the loop is entitled
+            // to do.
+            for (int tic = 0; tic < Match.SUPER_BLASTER_TICS; tic++)
+            {
+                tick(slow, tic);
+            }
+            for (int tic = 0; tic < Match.SUPER_BLASTER_TICS; tic++)
+            {
+                tick(fast, tic * 3);
+            }
+
+            assertThat(slow.isSuperBlaster()).isFalse();
+            assertThat(fast.isSuperBlaster())
+                .as("a caller that skipped tic indices got a different answer")
+                .isFalse();
         }
     }
 }

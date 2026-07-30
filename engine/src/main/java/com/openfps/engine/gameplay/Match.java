@@ -30,6 +30,21 @@ package com.openfps.engine.gameplay;
  * <i>decision</i>, and a decision with no constant behind it is
  * indistinguishable from an oversight the next time someone reads the file.</p>
  *
+ * <h2>Three kills in one life earn a bigger gun</h2>
+ *
+ * <p>{@link #SUPER_BLASTER_KILL_STREAK} kills <b>without dying</b> arm the super
+ * blaster for {@link #SUPER_BLASTER_TICS} tics, during which the player's shot
+ * does {@link #SUPER_BLASTER_SHOT_DAMAGE} — exactly twice
+ * {@link #PLAYER_SHOT_DAMAGE}, so a bot falls in two hits instead of three. A
+ * death takes both the streak and any live buff with it, because "kill streak" is
+ * a claim about one life and a reward that outlived the life that earned it would
+ * be a reward for nothing.</p>
+ *
+ * <p>The duration is in <b>tics</b>, for the reason
+ * {@link #RESPAWN_DELAY_TICS} spells out at length. It is a countdown rather than
+ * an absolute expiry tic, which is the one place this differs from the respawn —
+ * see {@link #SUPER_BLASTER_TICS}.</p>
+ *
  * <h2>Both directions of fire go through the same {@link Hitscan}</h2>
  *
  * <p>A bot's shot is not a dice roll against a distance. It is a ray from the
@@ -219,6 +234,84 @@ public final class Match
     public static final int RESPAWN_DELAY_TICS = 120;
 
     /**
+     * Kills in one life that earn the super blaster — <b>3</b>.
+     *
+     * <p><b>Without dying, and a death resets the count to zero.</b> That is the
+     * decision, and it is the one a player already believes: a "streak" that
+     * survived being killed would be a running total with a misleading name, and
+     * the counter would tick over three deaths later with nothing on screen to
+     * explain why the gun had changed. The rule also has teeth in the other
+     * direction — it makes staying alive worth something in a demo where dying
+     * costs two seconds and nothing else.</p>
+     *
+     * <p>Three rather than two, because two is most of a magazine and would arm
+     * the reward almost every time the player engaged anybody; and rather than
+     * five, because the room only holds {@link #DEFAULT_BOT_COUNT} bots — a
+     * five-kill streak in a seven-bot room is a reward for having very nearly
+     * finished, which is the wrong moment to hand somebody a better gun.</p>
+     */
+    public static final int SUPER_BLASTER_KILL_STREAK = 3;
+
+    /**
+     * How long the super blaster lasts, in <b>tics</b> — <b>240</b>, four seconds
+     * at 60 Hz.
+     *
+     * <p>Tics and <b>never milliseconds</b>, for exactly the reason
+     * {@link #RESPAWN_DELAY_TICS} gives: every peer runs the same
+     * {@code GameConfig}, so a duration counted in tics expires on the same tic on
+     * every machine, while one counted against a wall clock expires on
+     * <i>different</i> tics on two peers. That is not a cosmetic difference here —
+     * it is a shot doing 68 damage on one peer and 34 on the other, which is the
+     * same class of desync {@link BotRng} exists to prevent arriving by a
+     * different door.</p>
+     *
+     * <p>Four seconds is twenty shots at the demo's twelve-tic rate of fire, which
+     * is the figure the number was chosen against: long enough to convert the
+     * reward into two or three more bodies, short enough that the round does not
+     * simply end because the player got ahead once. It is deliberately not derived
+     * from that rate of fire — the cooldown belongs to {@code DemoGameplayPort},
+     * and a rule in this class that depended on a number the port owns would make
+     * the balance of a match a property of whatever is driving it.</p>
+     *
+     * <h2>A countdown, not an expiry tic</h2>
+     *
+     * <p>{@link #RESPAWN_DELAY_TICS} is served by an absolute
+     * {@code respawnAtTic}; this is served by a per-tic countdown, and the
+     * asymmetry is deliberate. A respawn is scheduled inside {@link #tick}, which
+     * is handed the tic index; the buff is awarded inside
+     * {@link #firePlayerShot}, which is <b>not</b> — and deliberately is not, since
+     * whether a trigger may be pulled is the caller's rule and a pure resolution
+     * function has no clock. Giving it one would mean either widening that
+     * signature or keeping a second copy of the tic index in this class, and a
+     * second copy of a fact is the failure mode this codebase has already been
+     * bitten by. A countdown also cannot be stranded by a caller that skips a tic
+     * index, which is the hazard {@code advanceRespawn} has to compare with
+     * {@code >=} to avoid.</p>
+     */
+    public static final int SUPER_BLASTER_TICS = 240;
+
+    /**
+     * What the super blaster multiplies the player's damage by — <b>2</b>.
+     *
+     * <p>Named so that {@link #SUPER_BLASTER_SHOT_DAMAGE} can be
+     * <i>derived</i> rather than written down a second time. A literal 68 beside a
+     * literal 34 is one re-balance away from a reward that quietly stops being
+     * double anything, and nothing about a wrong number here looks wrong.</p>
+     */
+    public static final int SUPER_BLASTER_DAMAGE_MULTIPLIER = 2;
+
+    /**
+     * Damage one super-blaster shot does — twice {@link #PLAYER_SHOT_DAMAGE}.
+     *
+     * <p><b>Two hits to kill instead of three</b>, with {@link Bot#MAX_HEALTH} of
+     * 100. That is the whole of what the reward is worth, and it is worth stating
+     * as a hit count rather than as a damage figure: 68 does not read as "a third
+     * off every kill" until it is put beside a bot's health.</p>
+     */
+    public static final int SUPER_BLASTER_SHOT_DAMAGE =
+        PLAYER_SHOT_DAMAGE * SUPER_BLASTER_DAMAGE_MULTIPLIER;
+
+    /**
      * The value of {@link #deathLimit()} that means the player cannot lose.
      *
      * <p>Zero, and it is the default. Deaths are a <b>score</b> in this demo:
@@ -271,6 +364,44 @@ public final class Match
 
     /** Times the player has been killed. MUTABLE: bumped once per death. */
     private int playerDeaths;
+
+    /**
+     * Kills since the player last died, or since the last award. MUTABLE.
+     *
+     * <p>Zeroed by a death <b>and</b> by the award itself, which is what makes the
+     * reward cost three fresh kills every time rather than one kill once the
+     * player has ever been three ahead.</p>
+     */
+    private int killStreak;
+
+    /**
+     * Tics of super blaster left, zero when the blaster is ordinary. MUTABLE:
+     * set by the award, counted down one per {@link #tick}, cleared by a death.
+     */
+    private int superBlasterTicsLeft;
+
+    /**
+     * Set on the tic the streak is completed, cleared by
+     * {@link #consumeSuperBlasterAwarded()}. MUTABLE.
+     *
+     * <p>The same seam as {@link #respawnedThisTic}, for the same reason: this
+     * class owns <i>that</i> the player earned something and has never heard of a
+     * sound or a banner. A buff the player is not told about is indistinguishable
+     * from no buff, and the telling belongs to whatever owns a speaker.</p>
+     */
+    private boolean superBlasterAwardedThisTic;
+
+    /**
+     * Set on the tic the super blaster runs out or is cancelled, cleared by
+     * {@link #consumeSuperBlasterExpired()}. MUTABLE.
+     *
+     * <p>An <b>edge</b> and not a state, because "it has stopped" is the thing the
+     * player has to be told and it is true for exactly one tic. A reader comparing
+     * {@link #isSuperBlaster()} against its own remembered copy would work and
+     * would put that remembering — and the bug where two readers disagree about
+     * which tic it happened on — in every caller.</p>
+     */
+    private boolean superBlasterExpiredThisTic;
 
     /** Shots the player has fired. MUTABLE: for the end-of-match summary. */
     private int playerShotsFired;
@@ -437,6 +568,15 @@ public final class Match
         this.playerHealth = PLAYER_MAX_HEALTH;
         this.botsKilled = 0;
         this.playerDeaths = 0;
+        // BOTH halves of the reward, and the second one is the one that matters.
+        // A rematch that inherited a live super blaster would open with four
+        // seconds of double damage nobody earned — and it is exactly the class of
+        // bug this reset already shipped once, when reviving the bots in the
+        // simulation left them hidden in the renderer.
+        this.killStreak = 0;
+        this.superBlasterTicsLeft = 0;
+        this.superBlasterAwardedThisTic = false;
+        this.superBlasterExpiredThisTic = false;
         this.playerShotsFired = 0;
         this.playerShotsHit = 0;
         this.botShotsFired = 0;
@@ -481,6 +621,13 @@ public final class Match
         final float playerFeetZ)
     {
         this.respawnedThisTic = false;
+        // The two reward edges, cleared here for the reason the respawn flag is:
+        // they describe something that happened on ONE tic, and a flag left raised
+        // would have the effect layer announce the same award again next tic. The
+        // clear is before ageSuperBlaster below, which is what may re-raise the
+        // expiry one on this very tic.
+        this.superBlasterAwardedThisTic = false;
+        this.superBlasterExpiredThisTic = false;
         // FIRST, and before the early-outs below. Every one of them is a tic on
         // which nobody fires, and a log still holding the previous tic's rays
         // would have the effect layer spawn the same bolts again the moment the
@@ -490,6 +637,12 @@ public final class Match
         {
             return 0;
         }
+        // AFTER the early-out, so a decided round stops the reward's clock along
+        // with everything else — the same rule this method already applies to the
+        // bots, and the alternative is a power-down noise over the win screen.
+        // What that leaves behind is a live buff on a finished round, which
+        // reset() is what clears.
+        ageSuperBlaster();
         for (int index = 0; index < bots.length; index++)
         {
             bots[index].moveTo(ticIndex);
@@ -508,6 +661,26 @@ public final class Match
         }
         faceAll();
         return resolveBotFire(ticIndex, playerFeetX, playerFeetY, playerFeetZ);
+    }
+
+    // One tic off the super blaster, raising the expiry edge on the tic it runs
+    // out. A no-op on the great majority of tics, which is the normal state.
+    //
+    // Counted down BEFORE this tic's shot is resolved, so the buff covers exactly
+    // SUPER_BLASTER_TICS tics of firing: the tic it was awarded on plus the 239
+    // after it. The other order would give it one free tic, which is invisible and
+    // is the sort of off-by-one that only shows up as a test asserting 241.
+    private void ageSuperBlaster()
+    {
+        if (superBlasterTicsLeft == 0)
+        {
+            return;
+        }
+        this.superBlasterTicsLeft = superBlasterTicsLeft - 1;
+        if (superBlasterTicsLeft == 0)
+        {
+            this.superBlasterExpiredThisTic = true;
+        }
     }
 
     // Every living bot turns toward what it last knew. Separate from the
@@ -577,11 +750,47 @@ public final class Match
         this.playerShotsHit = playerShotsHit + 1;
         final int struck = hit.entityId();
         final Bot victim = byId(struck);
-        if (victim != null && victim.damage(PLAYER_SHOT_DAMAGE))
+        // playerShotDamage(), not PLAYER_SHOT_DAMAGE. The one line in this method
+        // the reward touches at all, and the reason the buff needed no second
+        // firing path: a super shot is this shot with a bigger number in it.
+        if (victim != null && victim.damage(playerShotDamage()))
         {
             this.botsKilled = botsKilled + 1;
+            countTowardTheStreak();
         }
         return struck;
+    }
+
+    // One kill on the streak, and the award if that was the third.
+    //
+    // THE RULE FOR A KILL THAT LANDS WHILE THE BUFF IS LIVE: the timer neither
+    // extends nor refreshes. An ordinary kill moves the counter and nothing else,
+    // and it takes another full SUPER_BLASTER_KILL_STREAK to re-arm.
+    //
+    // Extending was the first instinct and it is wrong twice over. It is a
+    // positive feedback loop — double damage makes the next kill easier, an easier
+    // kill buys more double damage — and in a room of DEFAULT_BOT_COUNT bots the
+    // loop has nothing to stop it: the reward for getting three ahead would be the
+    // rest of the round, so the buff would END the match rather than punctuate it.
+    // And a window that moves is a window the player cannot read: "how long have I
+    // got" has to be answerable from the HUD, which means the answer has to be a
+    // countdown from a fixed number rather than a figure that jumps whenever
+    // somebody falls over.
+    //
+    // The counter is zeroed BY the award, so kills four and five do not re-arm on
+    // the next single kill. Kill six does, and that is deliberate — it is a fresh
+    // streak, earned the same way as the first, and re-arming it sets a fresh full
+    // window.
+    private void countTowardTheStreak()
+    {
+        this.killStreak = killStreak + 1;
+        if (killStreak < SUPER_BLASTER_KILL_STREAK)
+        {
+            return;
+        }
+        this.killStreak = 0;
+        this.superBlasterTicsLeft = SUPER_BLASTER_TICS;
+        this.superBlasterAwardedThisTic = true;
     }
 
     /**
@@ -671,6 +880,97 @@ public final class Match
     public int playerDeaths()
     {
         return playerDeaths;
+    }
+
+    /**
+     * Returns kills toward the next super blaster, {@code 0} to
+     * {@link #SUPER_BLASTER_KILL_STREAK}{@code  - 1}.
+     *
+     * <p>Shown on the HUD, and that is not decoration: a gun that changes on the
+     * third kill with nothing counting up to it is a mystery rather than a reward.
+     * Never reaches the threshold as a readable value, because the kill that
+     * reaches it spends it — see {@code countTowardTheStreak}.</p>
+     *
+     * @return the current streak
+     */
+    public int killStreak()
+    {
+        return killStreak;
+    }
+
+    /**
+     * Returns whether the player's next shot is a super-blaster shot.
+     *
+     * @return true while the reward is live
+     */
+    public boolean isSuperBlaster()
+    {
+        return superBlasterTicsLeft > 0;
+    }
+
+    /**
+     * Returns tics of super blaster left, zero when the blaster is ordinary.
+     *
+     * <p>For the on-screen countdown, which counts <b>down</b> for the reason
+     * {@link #respawnTicsRemaining} does: a static badge is indistinguishable from
+     * a badge somebody forgot to take away.</p>
+     *
+     * @return tics remaining
+     */
+    public int superBlasterTicsRemaining()
+    {
+        return superBlasterTicsLeft;
+    }
+
+    /**
+     * Returns what one of the player's shots does <b>right now</b>.
+     *
+     * <p>{@link #SUPER_BLASTER_SHOT_DAMAGE} while the reward is live and
+     * {@link #PLAYER_SHOT_DAMAGE} otherwise. Public because it is the honest
+     * answer to "how much does my gun do", which a HUD or a test would otherwise
+     * have to reassemble from the multiplier and the buff state — two copies of
+     * one rule.</p>
+     *
+     * @return damage per shot, in bot health
+     */
+    public int playerShotDamage()
+    {
+        if (isSuperBlaster())
+        {
+            return SUPER_BLASTER_SHOT_DAMAGE;
+        }
+        return PLAYER_SHOT_DAMAGE;
+    }
+
+    /**
+     * Reports whether the streak was completed on the most recent shot, and clears
+     * the flag.
+     *
+     * <p>A consuming read for the reason {@link #consumePlayerRespawned} is one:
+     * exactly one caller acts on each award, and what that caller does is make a
+     * noise. Two callers would make it twice, in phase, which is one noise at
+     * double the volume.</p>
+     *
+     * @return true once per award
+     */
+    public boolean consumeSuperBlasterAwarded()
+    {
+        final boolean awarded = superBlasterAwardedThisTic;
+        this.superBlasterAwardedThisTic = false;
+        return awarded;
+    }
+
+    /**
+     * Reports whether the super blaster ran out — or was cancelled by a death — on
+     * the most recent tic, and clears the flag.
+     *
+     * @return true once per expiry
+     */
+    public boolean consumeSuperBlasterExpired()
+    {
+        final boolean expired = superBlasterExpiredThisTic;
+        this.superBlasterExpiredThisTic = false;
+        return expired;
     }
 
     /** Returns how many shots the player has fired. */
@@ -827,6 +1127,22 @@ public final class Match
         this.playerDeaths = playerDeaths + 1;
         this.playerDown = true;
         this.respawnAtTic = ticIndex + RESPAWN_DELAY_TICS;
+        // The streak dies with the life that was building it. That is what the
+        // word means, and it is the half of the rule a player can feel: without it
+        // "three kills" is a running total and the gun changes at a moment nothing
+        // on screen accounts for.
+        this.killStreak = 0;
+        if (superBlasterTicsLeft > 0)
+        {
+            // A live buff goes too, and it raises the same edge an expiry does, so
+            // the player hears it stop. Letting it survive would keep the reward
+            // whose one precondition — being alive and three ahead — has just
+            // stopped being true; and the two seconds on the floor would eat most
+            // of the window anyway, which would make death cancel it in practice
+            // while the rules said otherwise.
+            this.superBlasterTicsLeft = 0;
+            this.superBlasterExpiredThisTic = true;
+        }
     }
 
     // One bot's shot at the player: in range of what it remembers, aimed badly,
@@ -981,7 +1297,9 @@ public final class Match
     {
         return "Match{" + state() + ", player=" + playerHealth + "hp, bots="
             + livingBots() + "/" + bots.length + " alive, kills=" + botsKilled
-            + ", deaths=" + playerDeaths + ", accuracy=" + playerShotsHit + "/"
+            + ", deaths=" + playerDeaths + ", streak=" + killStreak + "/"
+            + SUPER_BLASTER_KILL_STREAK + ", super=" + superBlasterTicsLeft
+            + " tics, accuracy=" + playerShotsHit + "/"
             + playerShotsFired + ", return fire=" + botShotsLanded + "/" + botShotsFired + "}";
     }
 }
