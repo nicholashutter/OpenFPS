@@ -70,6 +70,16 @@
     Which frame -Screenshot captures. Default 90, about a second and a half in,
     which is long enough for the first frame's texture upload to settle.
 
+.PARAMETER ScreenshotCount
+    How many CONSECUTIVE frames to capture, starting at -ScreenshotFrame.
+    Default 1. Above 1 the files get a -0001 index before the extension.
+
+    This is the only honest way to photograph anything that moves. A tracer
+    lives 8 tics and a puff of smoke 36, so whether either is perceptible is a
+    question about a sequence -- and launching the game once per frame does not
+    answer it, because each launch is a separate process and "frame 300" of one
+    run is not adjacent to "frame 301" of the next.
+
 .PARAMETER Clean
     Deletes the compiled output first, so the recompile is from scratch. Slower;
     for when you suspect the build itself rather than the code.
@@ -127,6 +137,8 @@ param(
     [string] $Screenshot,
 
     [int] $ScreenshotFrame = 90,
+
+    [int] $ScreenshotCount = 1,
 
     [switch] $Clean,
 
@@ -386,6 +398,7 @@ if ($Screenshot)
     }
     $props += "-Dopenfps.screenshot=$shotPath"
     $props += "-Dopenfps.screenshotFrame=$ScreenshotFrame"
+    $props += "-Dopenfps.screenshotCount=$ScreenshotCount"
     # Exit once the frame is written. A capture run that then sat waiting for a
     # window to be closed would hang any script or task that called this one.
     $props += '-Dopenfps.screenshotExit=true'
@@ -421,10 +434,22 @@ if ($runExit -ne 0)
 
 if ($Screenshot)
 {
-    if (Test-Path $shotPath)
+    # A burst numbers its files, so what to look for depends on the count. The
+    # pattern is built the same way GdxScreenshot.fileFor builds the names:
+    # index before the extension, so the results are still .png files.
+    $shotGlob = $shotPath
+    if ($ScreenshotCount -gt 1)
+    {
+        $shotDir = Split-Path $shotPath -Parent
+        $stem = [IO.Path]::GetFileNameWithoutExtension($shotPath)
+        $ext = [IO.Path]::GetExtension($shotPath)
+        $shotGlob = Join-Path $shotDir ("{0}-*{1}" -f $stem, $ext)
+    }
+    $shotsWritten = @(Get-ChildItem $shotGlob -ErrorAction SilentlyContinue)
+    if ($shotsWritten.Count -gt 0)
     {
         Write-Host ''
-        Write-Host ('  screenshot  : {0}' -f (Resolve-Path $shotPath)) -ForegroundColor Green
+        Write-Host ('  screenshot  : {0} file(s) matching {1}' -f $shotsWritten.Count, $shotGlob) -ForegroundColor Green
     }
     else
     {

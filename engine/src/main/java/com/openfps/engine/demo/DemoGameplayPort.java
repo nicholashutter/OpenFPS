@@ -12,6 +12,7 @@ import com.openfps.engine.audio.port.I_AudioPort;
 import com.openfps.engine.audio.port.SoundId;
 import com.openfps.engine.core.GameConfig;
 import com.openfps.engine.gameplay.Bot;
+import com.openfps.engine.gameplay.BotShotLog;
 import com.openfps.engine.gameplay.Match;
 import com.openfps.engine.gameplay.MatchState;
 import com.openfps.engine.gameplay.MatchStatus;
@@ -240,6 +241,18 @@ public final class DemoGameplayPort implements I_GameplayPort
      * {@code DemoGameplayPortTest.Trigger} is the regression.</p>
      */
     private long lastFireTic = -FIRE_INTERVAL_TICS;
+
+    /**
+     * Where {@link DemoScene#botMuzzle} writes, so spawning a bot's muzzle flash
+     * allocates nothing. MUTABLE, and only ever inside one call.
+     *
+     * <p>A field rather than a local because this is the tic path and three
+     * floats cannot come back from a Java method without something to hold them —
+     * the same trade {@code DemoEffects.acrossScratch} already makes, and safe for
+     * the same reason: everything that touches it runs under {@link #tickLock},
+     * so one tic is atomic and nothing here is re-entrant.</p>
+     */
+    private final float[] muzzleScratch = new float[3];
 
     /** MUTABLE: the match state already reported, so the result is logged once. */
     private MatchState reportedState = MatchState.IN_PROGRESS;
@@ -594,6 +607,11 @@ public final class DemoGameplayPort implements I_GameplayPort
             // registers as "the hit detection is off" without being able to say
             // why.
             advanceMatch(ticIndex);
+            // IMMEDIATELY after the match ticked, because Match.tick clears the
+            // shot log at the top of the NEXT one — the window is a single tic
+            // wide, which is the right lifetime for a per-tic event and the reason
+            // it needs no queue. See BotShotLog.
+            spawnIncomingFire();
             exchangeNetwork(ticIndex, inputPort.currentInput());
             fireIfRequested(inputPort.currentInput().fire(), ticIndex);
             // AFTER the trigger and BEFORE the publish, which is not an
@@ -767,6 +785,44 @@ public final class DemoGameplayPort implements I_GameplayPort
         {
             this.reportedState = now;
             LOG.info("MATCH {} — {}", now, match);
+        }
+    }
+
+    // Turns this tic's return fire into something the player can see.
+    //
+    // This is the whole of "the enemies do appear to shoot back, but you wouldn't
+    // know it". Match had always resolved these shots and taken the health away;
+    // nothing drew them, so a player under fire had no way to tell it was
+    // happening, where it was coming from, or that moving would help.
+    //
+    // Allocation-free per tic: the log is a reused buffer, the muzzle goes into a
+    // reused array, and DemoEffects writes into arrays it allocated at startup.
+    // On the great majority of tics the loop does not execute at all — seven DUMB
+    // bots produce a shot every eighteen tics between them.
+    private void spawnIncomingFire()
+    {
+        if (match == null || effects == null || !matchLive)
+        {
+            return;
+        }
+        final BotShotLog shots = match.shotsThisTic();
+        for (int slot = 0; slot < shots.count(); slot++)
+        {
+            final Bot shooter = match.byId(shots.shooterId(slot));
+            if (shooter == null)
+            {
+                continue;
+            }
+            // The muzzle is where the effect STARTS; the log's origin and
+            // direction are the ray the hitscan actually used, and both are
+            // needed — spawnIncoming reconciles them so the bolt leaves the gun
+            // AND arrives where the shot went. A bolt that did one but not the
+            // other is either floating out of a chest or lying about the damage.
+            DemoScene.botMuzzle(shooter, muzzleScratch);
+            effects.spawnIncoming(muzzleScratch[0], muzzleScratch[1], muzzleScratch[2],
+                shots.originX(slot), shots.originY(slot), shots.originZ(slot),
+                shots.directionX(slot), shots.directionY(slot), shots.directionZ(slot),
+                shots.rangeUnits(slot));
         }
     }
 

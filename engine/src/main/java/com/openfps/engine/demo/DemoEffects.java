@@ -102,8 +102,49 @@ import com.openfps.engine.render.adapter.SoftwareRenderPort;
  */
 public final class DemoEffects
 {
-    /** Tracers that can be in the air at once. */
+    /** Tracers of the PLAYER'S that can be in the air at once. */
     public static final int MAX_TRACERS = 3;
+
+    /**
+     * Tracers of the BOTS' that can be in the air at once — <b>8</b>.
+     *
+     * <p>Derived from the roster and the cooldown rather than picked round, the
+     * same way {@link #MAX_PUFFS} is. {@code Bot.wantsToFire} is asked once per
+     * bot per tic and books a cooldown when it comes up, so a bot cannot fire
+     * twice on one tic and the whole room cannot have more than
+     * {@code Match.DEFAULT_BOT_COUNT} = 7 bolts born on any tic. An incoming bolt
+     * lives {@link #BOT_TRACER_LIFE_TICS} = 20 tics, and 20 is less than
+     * {@code BotSkill.DUMB.cooldownTics()} = 45, so <b>no bot can have two bolts
+     * in the air at once</b> — seven is therefore the hard maximum and not merely
+     * the common case. One larger than that, for the reason the class Javadoc
+     * gives.</p>
+     *
+     * <p>Seven at once is a volley the room only ever produces by coincidence:
+     * measured, seven {@link com.openfps.engine.gameplay.BotSkill#DUMB} opponents
+     * fire once every eighteen tics <i>between them</i>, so the ordinary picture
+     * is under half a bolt in the air. The pool is sized for the coincidence
+     * because the alternative is that the busiest moment in a round — the one
+     * moment the player most needs to read — is the one that silently drops
+     * bolts.</p>
+     */
+    public static final int MAX_BOT_TRACERS = 8;
+
+    /**
+     * Smoke puffs of the BOTS' that can be visible at once — <b>8</b>.
+     *
+     * <p>The same arithmetic as {@link #MAX_BOT_TRACERS} and it lands on the same
+     * number for a sharper reason: {@link #PUFF_LIFE_TICS} is 36 and
+     * {@code BotSkill.DUMB.cooldownTics()} is <b>45</b>, so a bot's puff has
+     * always expired before that same bot may fire again. Seven bodies, at most
+     * one live puff each, one spare.</p>
+     *
+     * <p>That is worth stating rather than assuming, because it is the one place
+     * where a change to the skill profile could quietly overflow this pool: drop
+     * the cooldown below 36 and a bot can have two puffs alive, at which point
+     * this is undersized and the round-robin starts eating the older one.
+     * {@code DemoEffectsTest} asserts the relation rather than the number.</p>
+     */
+    public static final int MAX_BOT_PUFFS = 8;
 
     /** Tics a tracer flies before it is hidden. */
     public static final int TRACER_LIFE_TICS = 8;
@@ -206,6 +247,103 @@ public final class DemoEffects
      */
     public static final float TRACER_SPEED_UNITS = 60.0f;
 
+    /**
+     * Tics an INCOMING tracer flies before it is hidden — <b>20</b>.
+     *
+     * <p>Two and a half times {@link #TRACER_LIFE_TICS}, and it has to be: an
+     * outgoing bolt and an incoming one have opposite problems. The player's
+     * recedes, so it is at its most visible on the tic it is born and the only
+     * question is how long it stays interesting. An incoming bolt is a dot at the
+     * far wall that grows as it arrives, so <b>the whole of its life is
+     * approach</b>, and the flight has to be long enough to watch.</p>
+     *
+     * <p>With {@link #BOT_TRACER_SPEED_UNITS} this is what puts it on screen for a
+     * length of time proportional to how far away the shooter is — which is what a
+     * real projectile does, and is the property that lets a player tell a distant
+     * threat from a close one without counting anything.</p>
+     */
+    public static final int BOT_TRACER_LIFE_TICS = 20;
+
+    /**
+     * How far short of where the shot ended an incoming bolt stops being drawn,
+     * in world units — <b>64</b>, which is one body length.
+     *
+     * <h2>The part of the flight that is a screen flash rather than a tell</h2>
+     *
+     * <p>{@link #BOT_TRACER_LIFE_TICS} is a <b>ceiling</b>, not the life every
+     * incoming bolt gets. The actual life is however many tics it takes to fly to
+     * within this distance of the point the shot was aimed at, because a bolt
+     * drawn all the way in keeps growing after it has stopped meaning anything.
+     * The capture that produced this number is unambiguous: the last two frames
+     * of an unbounded flight covered <b>62,000 and 73,600 pixels</b> — 7% and 8%
+     * of the window — because by then the bolt was a few units from the eye and a
+     * 16-unit box a few units away fills the screen. Two frames of a violet wall
+     * is not a projectile, and the frames before it, where the actual information
+     * is, were 5,700 and 32,600.</p>
+     *
+     * <p>64 units is roughly {@code Bot.HEIGHT_UNITS}, so the bolt is dropped a
+     * body length out. Its last drawn frame is then about 156 pixels across —
+     * large, unmistakably close, and still a bolt rather than a flash. Everything
+     * closer than that happens inside the player's own head, and the shot's
+     * outcome was decided by {@code Hitscan} long before it.</p>
+     *
+     * <p><b>This does not shorten a distant shot at all</b>, which is the point: a
+     * bolt from the far wall still flies for thirteen tics. It removes the last
+     * two tics of a flight that was going to end in the camera regardless of where
+     * it started.</p>
+     */
+    public static final float INCOMING_STANDOFF_UNITS = 64.0f;
+
+    /**
+     * Fewest tics an incoming bolt is drawn for — <b>2</b>.
+     *
+     * <p>A floor under the arithmetic {@link #INCOMING_STANDOFF_UNITS} describes,
+     * for the point-blank case where a bot is already inside the standoff and that
+     * arithmetic gives zero or one. A bolt shown for a single frame is a flicker
+     * a player cannot attribute to anything, and no bolt at all would make the one
+     * shot they most need to notice — the one from two paces away — the only shot
+     * with no tell.</p>
+     */
+    public static final int BOT_TRACER_MIN_LIFE_TICS = 2;
+
+    /**
+     * World units an INCOMING tracer covers per tic — <b>32</b>.
+     *
+     * <h2>It first shipped at 80, and the capture is what caught it</h2>
+     *
+     * <p>The reasoning for 80 was correct and the number was still wrong.
+     * {@code Match.BOT_RANGE_UNITS} is 512, so a bolt does have to average at
+     * least {@code 512 / life} units a tic or it stops short and hangs in the air
+     * — which reads as a shot that gave up rather than one that missed. At the
+     * player's 60 over an 8-tic life it fell 32 units short, so 80 fixed the
+     * stated problem.</p>
+     *
+     * <p>Then a run of <b>ninety consecutive frames</b> was captured and the
+     * violet counted on each one. Bolts appeared on <i>one frame each</i>, and
+     * their coverage on that one frame ran from 441 pixels to <b>87,204</b> — a
+     * ninth of the window. At 80 units a tic a shot from a bot 160 units away is
+     * over in two frames: it exists as a dot, then as a wall of colour, then it is
+     * gone. That is a strobe, not a tell, and no player could read a direction off
+     * it. It would have passed every test in this file, because every one of them
+     * asks where the bolt is and none of them asks how long it is there.</p>
+     *
+     * <p>32 with a 20-tic life reaches 640 units — still past the far end of the
+     * engagement envelope, so the original constraint is met with 25% to spare —
+     * while giving the flight a duration that scales with the range:</p>
+     *
+     * <pre>
+     *   shooter at   time on screen
+     *     100 u       3 tics    50 ms
+     *     250 u       8 tics   130 ms
+     *     400 u      13 tics   210 ms
+     *     500 u      16 tics   260 ms
+     * </pre>
+     *
+     * <p>1,920 units a second is still seven and a half times the player's own
+     * speed, which is what keeps it reading as fired rather than thrown.</p>
+     */
+    public static final float BOT_TRACER_SPEED_UNITS = 32.0f;
+
     /** How long the tracer bolt is, along its direction of travel. */
     public static final float TRACER_LENGTH_UNITS = 46.0f;
 
@@ -220,6 +358,25 @@ public final class DemoEffects
      * that matters.</p>
      */
     public static final float TRACER_WIDTH_UNITS = 11.0f;
+
+    /**
+     * How wide an INCOMING tracer bolt is — <b>16</b> units.
+     *
+     * <p>Sized against the far end of the room rather than against the near end,
+     * because that is where it is born. The same end-on argument
+     * {@link #TRACER_WIDTH_UNITS} makes applies with the sign flipped: an
+     * incoming bolt is also seen almost end-on, so what the player sees is its
+     * cross-section — but it starts at up to {@code Match.BOT_RANGE_UNITS} = 512
+     * units away and <b>grows</b> as it comes, where the player's own shrinks as
+     * it goes.</p>
+     *
+     * <p>At 720p and the demo's 60 degree vertical field of view a world unit at
+     * distance {@code d} is about {@code 624 / d} pixels, so 16 units is 19 px at
+     * 512, 50 px at 200 and 100 px at 100 — a spot at the far wall that swells
+     * into something unmissable as it arrives. At the player's 11 it would be 13
+     * px at the far wall, which is a dust mote on a busy grey room.</p>
+     */
+    public static final float BOT_TRACER_WIDTH_UNITS = 16.0f;
 
     /**
      * How far in front of the eye the muzzle is, in world units — 2.4.
@@ -312,6 +469,79 @@ public final class DemoEffects
     public static final float PUFF_RADIUS_END = 0.30f;
 
     /**
+     * Half-extent of the main lobe when a BOT'S puff is born, in world units —
+     * <b>7</b>, which is forty-four times the player's.
+     *
+     * <h2>This is the number the whole feature would have died on</h2>
+     *
+     * <p>{@link #PUFF_RADIUS_START} is 0.16 <b>because the player's puff is 2.4
+     * units from the eye</b> — its Javadoc says so at length, and reusing it for a
+     * bot would have been the third time this project shipped an effect that was
+     * measurably present and perceptually absent. A bot is not 2.4 units away. It
+     * is somewhere between 60 and 512, and at 720p a world unit at distance
+     * {@code d} subtends about {@code 624 / d} pixels. A 0.16-unit puff on a bot
+     * 250 units off is <b>0.9 pixels across</b>. It would have been drawn, every
+     * frame, exactly as designed, and it would have been one grey pixel.</p>
+     *
+     * <h2>Measured against the body, not against a pixel target</h2>
+     *
+     * <p>A pixel figure was tried first and it is the wrong instrument, because a
+     * bot's distance is not a constant. Sizing for "40 px of cloud at a typical 250
+     * units" gave 4.5, and the capture of that came back at <b>10 to 97 pixels</b>
+     * per puff — the smoke bug again, at a twentieth of the size the very same
+     * measurement had been used to reject once already. A cloud sized against one
+     * nominal distance is badly sized at every other one.</p>
+     *
+     * <p>What does hold at every distance is the cloud's size <b>relative to the
+     * body it comes out of</b> — because the body is what the eye is already
+     * looking at, and it is what the player has to attribute the shot to. The cloud
+     * reaches {@link #cloudExtentRadii()}, about 1.38, times the puff radius, so 7
+     * is a cloud 19 units across against a body 33 wide and 56 tall: three fifths
+     * of the shoulders at birth, growing past them by the end. That is a muzzle
+     * bloom on a person rather than a smokescreen, and it scales itself correctly
+     * with range for free.</p>
+     *
+     * <pre>
+     *   distance   fresh puff   old puff   the bot, for scale
+     *    100 u      120 px       224 px      350 px tall
+     *    250 u       48 px        90 px      140 px tall
+     *    450 u       27 px        50 px       78 px tall
+     * </pre>
+     *
+     * <p><b>The contrast is better than those figures suggest, and by
+     * construction:</b> the muzzle is in front of the chest, so most of the cloud
+     * composites over a brightly coloured character rather than over the pale wall
+     * {@link #smokeColour()} was solved against. Dark warm grey over a yellow shirt
+     * is a far bigger step than dark warm grey over grey plaster.</p>
+     */
+    public static final float BOT_PUFF_RADIUS_START = 7.0f;
+
+    /**
+     * Half-extent of the main lobe at the end of a BOT'S puff, in world units —
+     * <b>13</b>.
+     *
+     * <p>{@code 13 / 7} is 1.86, which is deliberately the same growth ratio the
+     * player's puff has ({@code 0.30 / 0.16}). The expansion is what makes a cloud
+     * read as dispersing rather than as a decal, and how much of it there should be
+     * is a property of smoke rather than of distance — so the ratio is shared and
+     * only the absolute size is re-derived. See {@link #BOT_PUFF_RADIUS_START} for
+     * that derivation and the pixel figures.</p>
+     */
+    public static final float BOT_PUFF_RADIUS_END = 13.0f;
+
+    /**
+     * World units a BOT'S puff drifts upward per tic — <b>0.26</b>.
+     *
+     * <p>Scaled with the cloud rather than with the room: over
+     * {@link #PUFF_LIFE_TICS} the puff climbs about 9 units, which is a sixth of a
+     * bot's height and about half the cloud's own diameter. That is the same
+     * proportion the player's 0.006 has to the player's cloud — enough to say the
+     * smoke is not a decal stuck to the world, not enough to turn it into a balloon
+     * leaving the barrel.</p>
+     */
+    public static final float BOT_PUFF_RISE_UNITS = 0.26f;
+
+    /**
      * Each lobe's offset from the puff centre <b>across</b> the shooter's view,
      * in multiples of the current puff radius.
      *
@@ -387,8 +617,40 @@ public final class DemoEffects
         0.0f, 0.0f, 0.0f, 1.0f,
     });
 
-    /** Hot amber, the colour of a bolt in flight. */
+    /** Hot amber, the colour of the player's own bolt in flight. */
     private static final int TRACER_COLOUR = Rgba.pack(255, 216, 112, 255);
+
+    /**
+     * Electric violet, the colour of a bolt coming the other way.
+     *
+     * <p><b>Chosen by surveying what is already on screen, not from a palette.</b>
+     * "A player must be able to tell at a glance that something is shooting at
+     * them" is the requirement, and a glance is a hue judgement made in
+     * peripheral vision — so the only question that matters is what else this
+     * could be confused with:</p>
+     *
+     * <ul>
+     *   <li><b>Hot amber</b> {@code (255, 216, 112)} is the player's own bolt, and
+     *       the pair has to be unmistakable in <i>both</i> directions. Violet and
+     *       amber differ by 144 levels of green and 143 of blue — the two channels
+     *       the eye resolves best — while sharing a red channel, so they read as
+     *       equally hot and completely different colours.</li>
+     *   <li><b>Pure red</b> {@code (255, 0, 0)} is taken, by {@code OutlinePass}:
+     *       it means "this is the one you are aiming at". Incoming fire is the
+     *       opposite statement and must not borrow its colour, which rules out the
+     *       obvious choice for hostile fire.</li>
+     *   <li><b>Orange</b> is the crate stripes and the player's own pistol,
+     *       <b>green</b> is the carbines the bots are holding, and the room itself
+     *       is a desaturated blue-grey around {@code (141, 147, 177)}.</li>
+     * </ul>
+     *
+     * <p>Violet is the one saturated hue this scene does not otherwise contain,
+     * and it is nearly the complement of the room's own blue-grey, so a bolt is
+     * high chroma against low chroma everywhere it can appear — including against
+     * a wall, which is where a bolt aimed at the player spends most of its
+     * flight.</p>
+     */
+    private static final int INCOMING_COLOUR = Rgba.pack(236, 72, 255, 255);
 
     /**
      * Dark warm grey, the colour of powder smoke — and it is dark on purpose.
@@ -530,6 +792,31 @@ public final class DemoEffects
      */
     private static final float SPHERE_RADIUS = 0.5f;
 
+    /**
+     * Total tracer slots — the player's, then the bots'.
+     *
+     * <h2>Why one pool with a boundary and not two of everything</h2>
+     *
+     * <p>A bolt coming the other way differs from one going out in three
+     * numbers — its colour, its width and its speed — and in nothing else. It
+     * ages the same way, it is hidden the same way, it is placed by the same
+     * matrix. Two parallel pools would have meant two of {@link #advance()}'s
+     * loops, two of {@link #publish}'s, and two of {@link #clear()}'s, so every
+     * future change to how a tracer behaves would have to be made twice and
+     * would be correct once.</p>
+     *
+     * <p>So the pool is one array and the boundary is an index:
+     * {@code slot < MAX_TRACERS} is the player's, everything above is incoming.
+     * The three numbers that differ are functions of the slot
+     * ({@link #tracerSpeedOf}, {@link #tracerWidthOf}) or are baked into the
+     * instance when the scene is built, which is where a colour has to be fixed
+     * anyway — {@link Scene} is immutable.</p>
+     */
+    private static final int TRACER_SLOTS = MAX_TRACERS + MAX_BOT_TRACERS;
+
+    /** Total puff slots — the player's, then the bots'. See {@link #TRACER_SLOTS}. */
+    private static final int PUFF_SLOTS = MAX_PUFFS + MAX_BOT_PUFFS;
+
     /** Scene instance index of each tracer. */
     private final int[] tracerInstance;
 
@@ -584,11 +871,26 @@ public final class DemoEffects
      */
     private final float[] acrossScratch = new float[AXES];
 
-    /** Next tracer slot a spawn will claim. MUTABLE: round-robin cursor. */
+    /** Next tracer slot the PLAYER'S next shot will claim. MUTABLE: round-robin. */
     private int tracerCursor;
 
-    /** Next puff slot a spawn will claim. MUTABLE: round-robin cursor. */
+    /** Next puff slot the PLAYER'S next shot will claim. MUTABLE: round-robin. */
     private int puffCursor;
+
+    /**
+     * Next tracer slot an INCOMING shot will claim. MUTABLE: round-robin over
+     * {@code [MAX_TRACERS, TRACER_SLOTS)}.
+     *
+     * <p>A second cursor rather than one shared, because the two halves of the
+     * pool must not be able to evict each other. One cursor walking the whole
+     * array would let a busy room overwrite the bolt the player fired half a tic
+     * ago — the effect they are looking straight at, from the trigger they just
+     * pulled — which is the one bolt in the room that must never disappear.</p>
+     */
+    private int incomingTracerCursor = MAX_TRACERS;
+
+    /** Next puff slot an INCOMING shot will claim. See {@link #incomingTracerCursor}. */
+    private int incomingPuffCursor = MAX_PUFFS;
 
     /**
      * Whether every instance has been hidden once. MUTABLE: set by the first
@@ -616,20 +918,20 @@ public final class DemoEffects
     {
         this.tracerInstance = tracerIndices;
         this.puffInstance = puffIndices;
-        this.tracerRemaining = new int[MAX_TRACERS];
-        this.tracerPosition = new float[MAX_TRACERS * AXES];
-        this.tracerDirection = new float[MAX_TRACERS * AXES];
-        this.tracerShown = new boolean[MAX_TRACERS];
-        this.puffAge = new int[MAX_PUFFS];
-        this.puffPosition = new float[MAX_PUFFS * AXES];
-        this.puffAcross = new float[MAX_PUFFS * AXES];
-        this.puffUp = new float[MAX_PUFFS * AXES];
-        this.puffShownStage = new int[MAX_PUFFS];
-        for (int slot = 0; slot < MAX_TRACERS; slot++)
+        this.tracerRemaining = new int[TRACER_SLOTS];
+        this.tracerPosition = new float[TRACER_SLOTS * AXES];
+        this.tracerDirection = new float[TRACER_SLOTS * AXES];
+        this.tracerShown = new boolean[TRACER_SLOTS];
+        this.puffAge = new int[PUFF_SLOTS];
+        this.puffPosition = new float[PUFF_SLOTS * AXES];
+        this.puffAcross = new float[PUFF_SLOTS * AXES];
+        this.puffUp = new float[PUFF_SLOTS * AXES];
+        this.puffShownStage = new int[PUFF_SLOTS];
+        for (int slot = 0; slot < TRACER_SLOTS; slot++)
         {
             tracerRemaining[slot] = DEAD;
         }
-        for (int slot = 0; slot < MAX_PUFFS; slot++)
+        for (int slot = 0; slot < PUFF_SLOTS; slot++)
         {
             puffAge[slot] = DEAD;
             puffShownStage[slot] = DEAD;
@@ -655,20 +957,29 @@ public final class DemoEffects
             throw new IllegalArgumentException("builder must not be null");
         }
         final ModelFormat bolt = box(TRACER_COLOUR);
-        // One sphere shared by all 36 lobe instances. SoftwareRenderPort.prepare
-        // keys on reference identity, so the flattened submesh table and the mip
-        // chains are built once for the whole pool rather than once per lobe.
+        // A second model for the same box, because a bolt's colour is BAKED into
+        // its vertices and Scene is immutable — there is nowhere later to change
+        // it. Two ModelFormats is the whole cost of telling outgoing fire from
+        // incoming, and it is twelve triangles.
+        final ModelFormat incoming = box(INCOMING_COLOUR);
+        // One sphere shared by every lobe instance in the pool.
+        // SoftwareRenderPort.prepare keys on reference identity, so the flattened
+        // submesh table and the mip chains are built once for the whole pool
+        // rather than once per lobe — which is what keeps the bots' 240 extra
+        // lobes from costing 240 mip chains. Shared across BOTH halves for the
+        // same reason: smoke is smoke, and the two differ only in how big they
+        // are, which lives in the transform.
         final ModelFormat cloud = sphere(SMOKE_COLOUR);
 
-        final int[] tracers = new int[MAX_TRACERS];
-        for (int slot = 0; slot < MAX_TRACERS; slot++)
+        final int[] tracers = new int[TRACER_SLOTS];
+        for (int slot = 0; slot < TRACER_SLOTS; slot++)
         {
             tracers[slot] = builder.worldInstanceCount();
-            builder.addWorldInstance(bolt, Mat4.identity());
+            builder.addWorldInstance(boltFor(slot, bolt, incoming), Mat4.identity());
         }
 
-        final int[] puffs = new int[MAX_PUFFS * PUFF_STAGES * PUFF_LOBES];
-        for (int puff = 0; puff < MAX_PUFFS; puff++)
+        final int[] puffs = new int[PUFF_SLOTS * PUFF_STAGES * PUFF_LOBES];
+        for (int puff = 0; puff < PUFF_SLOTS; puff++)
         {
             for (int stage = 0; stage < PUFF_STAGES; stage++)
             {
@@ -709,22 +1020,129 @@ public final class DemoEffects
             - MUZZLE_DROP_UNITS;
         final float muzzleZ = eyeZ + aimZ * MUZZLE_FORWARD_UNITS + right[2] * MUZZLE_RIGHT_UNITS;
 
-        spawnTracer(muzzleX, muzzleY, muzzleZ, aimX, aimY, aimZ);
-        spawnPuff(muzzleX, muzzleY, muzzleZ, aimX, aimY, aimZ, right);
+        final int slot = claimPlayerTracer();
+        spawnTracer(slot, muzzleX, muzzleY, muzzleZ, aimX, aimY, aimZ, TRACER_LIFE_TICS);
+        spawnPuff(claimPlayerPuff(), muzzleX, muzzleY, muzzleZ, aimX, aimY, aimZ, right);
+    }
+
+    /**
+     * Starts a violet tracer and a puff of smoke for one shot <b>coming the other
+     * way</b>.
+     *
+     * <h2>The muzzle and the ray are two different things, and both are given</h2>
+     *
+     * <p>{@link Match} fires from a bot's <i>eye</i> — the middle of its body, 41
+     * units up — because that is where a shot has to come from for cover to work
+     * the way a player expects. The bolt has to leave the end of a <i>barrel</i>,
+     * which is some fourteen units away from that: nine to one side, eleven down,
+     * nine along a carbine held across the chest. So the caller supplies both, and
+     * they are used for different things.</p>
+     *
+     * <p><b>Simply firing along {@code dir} from the muzzle would be wrong in a
+     * way the player would feel.</b> It produces a bolt <i>parallel</i> to the
+     * shot, fourteen units to one side of it, all the way — and a player is 16
+     * units in radius, so a shot that struck them would draw a bolt going past
+     * their shoulder and a shot that missed by a foot would draw one going through
+     * their chest. The whole reason for showing incoming fire is that it can be
+     * read and avoided; a bolt that disagrees with the damage is worse than no
+     * bolt.</p>
+     *
+     * <p>So the bolt is aimed from the muzzle at the point the <b>real ray</b>
+     * reaches at {@code rangeUnits} — the distance the shot was actually taken at,
+     * which {@code Match} records because it is the distance to what the shooter
+     * was aiming at. The two lines converge exactly there and are within a few
+     * units of each other for the last third of the flight. Near the bot they
+     * differ by fourteen units and nobody can tell, because near the bot the whole
+     * bolt is fourteen units of a 512-unit journey.</p>
+     *
+     * @param muzzleX where the barrel ends, world x
+     * @param muzzleY where the barrel ends, world y
+     * @param muzzleZ where the barrel ends, world z
+     * @param originX the simulation's ray origin, world x — the shooter's eye
+     * @param originY the simulation's ray origin, world y
+     * @param originZ the simulation's ray origin, world z
+     * @param dirX the SCATTERED ray direction, world x; unit length
+     * @param dirY the scattered ray direction, world y
+     * @param dirZ the scattered ray direction, world z
+     * @param rangeUnits how far along that ray the shot was aimed; a non-positive
+     *     value falls back to firing straight along {@code dir}, which is the only
+     *     honest answer when there is no distance to converge at
+     */
+    public void spawnIncoming(final float muzzleX, final float muzzleY, final float muzzleZ,
+        final float originX, final float originY, final float originZ,
+        final float dirX, final float dirY, final float dirZ, final float rangeUnits)
+    {
+        final float[] flight = acrossScratch;
+        flight[0] = dirX;
+        flight[1] = dirY;
+        flight[2] = dirZ;
+        if (rangeUnits > 0.0f)
+        {
+            flight[0] = originX + dirX * rangeUnits - muzzleX;
+            flight[1] = originY + dirY * rangeUnits - muzzleY;
+            flight[2] = originZ + dirZ * rangeUnits - muzzleZ;
+            normalise(flight);
+        }
+        final float alongX = flight[0];
+        final float alongY = flight[1];
+        final float alongZ = flight[2];
+
+        spawnTracer(claimIncomingTracer(), muzzleX, muzzleY, muzzleZ, alongX, alongY, alongZ,
+            incomingLifeFor(rangeUnits));
+        // The lobe basis is rebuilt from the flight direction, reusing the scratch
+        // the convergence above has now finished with. spawnPuff copies what it
+        // needs, so the two uses cannot tread on each other.
+        final float[] across = acrossScratch;
+        crossWithReference(alongX, alongY, alongZ, across);
+        spawnPuff(claimIncomingPuff(), muzzleX, muzzleY, muzzleZ, alongX, alongY, alongZ,
+            across);
+    }
+
+    // The next slot in the player's half of the tracer pool.
+    private int claimPlayerTracer()
+    {
+        final int slot = tracerCursor;
+        this.tracerCursor = (tracerCursor + 1) % MAX_TRACERS;
+        return slot;
+    }
+
+    // The next slot in the player's half of the puff pool.
+    private int claimPlayerPuff()
+    {
+        final int slot = puffCursor;
+        this.puffCursor = (puffCursor + 1) % MAX_PUFFS;
+        return slot;
+    }
+
+    // The next slot in the bots' half of the tracer pool, which starts where the
+    // player's half ends and wraps within its own range — see
+    // incomingTracerCursor for why the two halves may not evict each other.
+    private int claimIncomingTracer()
+    {
+        final int slot = incomingTracerCursor;
+        this.incomingTracerCursor = MAX_TRACERS + (slot + 1 - MAX_TRACERS) % MAX_BOT_TRACERS;
+        return slot;
+    }
+
+    // The next slot in the bots' half of the puff pool.
+    private int claimIncomingPuff()
+    {
+        final int slot = incomingPuffCursor;
+        this.incomingPuffCursor = MAX_PUFFS + (slot + 1 - MAX_PUFFS) % MAX_BOT_PUFFS;
+        return slot;
     }
 
     // One bolt, at the muzzle and not yet moving.
     //
     // It is never DRAWN there: the caller advances before it publishes, which
-    // matters because the muzzle is 2.4 units from the eye and the bolt is 40
-    // units long — drawn at the muzzle it would enclose the camera, and most of
-    // it would be behind the near plane. See DemoGameplayPort.tick, which owns
-    // that ordering.
-    private void spawnTracer(final float x, final float y, final float z,
-        final float aimX, final float aimY, final float aimZ)
+    // matters because the player's muzzle is 2.4 units from the eye and the bolt
+    // is 46 units long — drawn at the muzzle it would enclose the camera, and most
+    // of it would be behind the near plane. See DemoGameplayPort.tick, which owns
+    // that ordering. An incoming bolt gets the same first step for free, which
+    // also puts it clear of the body that fired it.
+    private void spawnTracer(final int slot, final float x, final float y, final float z,
+        final float aimX, final float aimY, final float aimZ, final int lifeTics)
     {
-        final int slot = tracerCursor;
-        this.tracerCursor = (tracerCursor + 1) % MAX_TRACERS;
         final int at = slot * AXES;
         tracerPosition[at] = x;
         tracerPosition[at + 1] = y;
@@ -732,7 +1150,7 @@ public final class DemoEffects
         tracerDirection[at] = aimX;
         tracerDirection[at + 1] = aimY;
         tracerDirection[at + 2] = aimZ;
-        tracerRemaining[slot] = TRACER_LIFE_TICS;
+        tracerRemaining[slot] = lifeTics;
     }
 
     // One puff, at rest at the muzzle, with the basis its lobes are laid out
@@ -740,11 +1158,9 @@ public final class DemoEffects
     //
     // `across` is the caller's scratch and is copied rather than kept, because
     // the caller reuses it — see acrossScratch.
-    private void spawnPuff(final float x, final float y, final float z,
+    private void spawnPuff(final int slot, final float x, final float y, final float z,
         final float aimX, final float aimY, final float aimZ, final float[] across)
     {
-        final int slot = puffCursor;
-        this.puffCursor = (puffCursor + 1) % MAX_PUFFS;
         final int at = slot * AXES;
         puffPosition[at] = x;
         puffPosition[at + 1] = y;
@@ -786,11 +1202,11 @@ public final class DemoEffects
      */
     public void clear()
     {
-        for (int slot = 0; slot < MAX_TRACERS; slot++)
+        for (int slot = 0; slot < TRACER_SLOTS; slot++)
         {
             tracerRemaining[slot] = DEAD;
         }
-        for (int slot = 0; slot < MAX_PUFFS; slot++)
+        for (int slot = 0; slot < PUFF_SLOTS; slot++)
         {
             puffAge[slot] = DEAD;
         }
@@ -800,6 +1216,8 @@ public final class DemoEffects
         // "indistinguishable apart from two cursors nobody can see".
         this.tracerCursor = 0;
         this.puffCursor = 0;
+        this.incomingTracerCursor = MAX_TRACERS;
+        this.incomingPuffCursor = MAX_PUFFS;
     }
 
     /**
@@ -810,29 +1228,30 @@ public final class DemoEffects
      */
     public void advance()
     {
-        for (int slot = 0; slot < MAX_TRACERS; slot++)
+        for (int slot = 0; slot < TRACER_SLOTS; slot++)
         {
             if (tracerRemaining[slot] == DEAD)
             {
                 continue;
             }
             final int at = slot * AXES;
-            tracerPosition[at] += tracerDirection[at] * TRACER_SPEED_UNITS;
-            tracerPosition[at + 1] += tracerDirection[at + 1] * TRACER_SPEED_UNITS;
-            tracerPosition[at + 2] += tracerDirection[at + 2] * TRACER_SPEED_UNITS;
+            final float speed = tracerSpeedOf(slot);
+            tracerPosition[at] += tracerDirection[at] * speed;
+            tracerPosition[at + 1] += tracerDirection[at + 1] * speed;
+            tracerPosition[at + 2] += tracerDirection[at + 2] * speed;
             tracerRemaining[slot]--;
             if (tracerRemaining[slot] <= 0)
             {
                 tracerRemaining[slot] = DEAD;
             }
         }
-        for (int slot = 0; slot < MAX_PUFFS; slot++)
+        for (int slot = 0; slot < PUFF_SLOTS; slot++)
         {
             if (puffAge[slot] == DEAD)
             {
                 continue;
             }
-            puffPosition[slot * AXES + 1] += PUFF_RISE_UNITS;
+            puffPosition[slot * AXES + 1] += puffRiseOf(slot);
             puffAge[slot]++;
             if (puffAge[slot] >= PUFF_LIFE_TICS)
             {
@@ -859,7 +1278,7 @@ public final class DemoEffects
             hideEverything(renderer);
             this.hidden = true;
         }
-        for (int slot = 0; slot < MAX_TRACERS; slot++)
+        for (int slot = 0; slot < TRACER_SLOTS; slot++)
         {
             if (tracerRemaining[slot] != DEAD)
             {
@@ -872,7 +1291,7 @@ public final class DemoEffects
                 tracerShown[slot] = false;
             }
         }
-        for (int slot = 0; slot < MAX_PUFFS; slot++)
+        for (int slot = 0; slot < PUFF_SLOTS; slot++)
         {
             publishPuff(renderer, slot);
         }
@@ -930,6 +1349,169 @@ public final class DemoEffects
         {
             renderer.setWorldTransform(puffInstanceIndex(slot, stage, lobe), HIDDEN);
         }
+    }
+
+    /**
+     * Returns whether a tracer slot belongs to the bots rather than the player.
+     *
+     * <p>The boundary the whole single-pool arrangement rests on — see
+     * {@link #TRACER_SLOTS}. Public because a test asserting that incoming bolts
+     * are wider, faster and a different colour has to be able to say which slots
+     * it means, and re-deriving {@code slot >= MAX_TRACERS} in the test would let
+     * it agree with a broken implementation.</p>
+     *
+     * @param slot tracer slot in {@code [0, tracerSlotCount())}
+     * @return true for a bot's bolt
+     */
+    public static boolean isIncomingTracer(final int slot)
+    {
+        return slot >= MAX_TRACERS;
+    }
+
+    /**
+     * Returns whether a puff slot belongs to the bots rather than the player.
+     *
+     * @param slot puff slot in {@code [0, puffSlotCount())}
+     * @return true for a bot's smoke
+     */
+    public static boolean isIncomingPuff(final int slot)
+    {
+        return slot >= MAX_PUFFS;
+    }
+
+    /** Returns how many tracer slots the pool holds, both halves together. */
+    public static int tracerSlotCount()
+    {
+        return TRACER_SLOTS;
+    }
+
+    /** Returns how many puff slots the pool holds, both halves together. */
+    public static int puffSlotCount()
+    {
+        return PUFF_SLOTS;
+    }
+
+    /**
+     * Returns how fast the bolt in one slot travels, in world units per tic.
+     *
+     * @param slot tracer slot in {@code [0, tracerSlotCount())}
+     * @return {@link #BOT_TRACER_SPEED_UNITS} for an incoming bolt, else
+     *     {@link #TRACER_SPEED_UNITS}
+     */
+    public static float tracerSpeedOf(final int slot)
+    {
+        if (isIncomingTracer(slot))
+        {
+            return BOT_TRACER_SPEED_UNITS;
+        }
+        return TRACER_SPEED_UNITS;
+    }
+
+    /**
+     * Returns how many tics an incoming bolt fired at a given range is drawn for.
+     *
+     * <p>However long it takes to fly to within {@link #INCOMING_STANDOFF_UNITS}
+     * of where the shot ended — see that constant for the two frames of violet
+     * wall this exists to remove — bounded below by
+     * {@link #BOT_TRACER_MIN_LIFE_TICS} and above by
+     * {@link #BOT_TRACER_LIFE_TICS}.</p>
+     *
+     * <p>Public because it is the one piece of arithmetic here that a screenshot
+     * cannot check: a test can assert that a shot from across the room is drawn
+     * for four times as long as one from the next crate, and no capture would ever
+     * be able to say so.</p>
+     *
+     * @param rangeUnits how far away what the shooter aimed at was; a
+     *     non-positive range gets the full ceiling, since there is no distance to
+     *     shorten against
+     * @return the bolt's life in tics
+     */
+    public static int incomingLifeFor(final float rangeUnits)
+    {
+        if (!(rangeUnits > 0.0f))
+        {
+            return BOT_TRACER_LIFE_TICS;
+        }
+        final int drawn =
+            (int) ((rangeUnits - INCOMING_STANDOFF_UNITS) / BOT_TRACER_SPEED_UNITS);
+        return Math.min(BOT_TRACER_LIFE_TICS, Math.max(BOT_TRACER_MIN_LIFE_TICS, drawn));
+    }
+
+    /**
+     * Returns how wide the bolt in one slot is, across its direction of travel.
+     *
+     * @param slot tracer slot in {@code [0, tracerSlotCount())}
+     * @return {@link #BOT_TRACER_WIDTH_UNITS} for an incoming bolt, else
+     *     {@link #TRACER_WIDTH_UNITS}
+     */
+    public static float tracerWidthOf(final int slot)
+    {
+        if (isIncomingTracer(slot))
+        {
+            return BOT_TRACER_WIDTH_UNITS;
+        }
+        return TRACER_WIDTH_UNITS;
+    }
+
+    /**
+     * Returns the main lobe's radius when the puff in one slot is born.
+     *
+     * @param slot puff slot in {@code [0, puffSlotCount())}
+     * @return {@link #BOT_PUFF_RADIUS_START} for a bot's smoke, else
+     *     {@link #PUFF_RADIUS_START}
+     */
+    public static float puffStartRadiusOf(final int slot)
+    {
+        if (isIncomingPuff(slot))
+        {
+            return BOT_PUFF_RADIUS_START;
+        }
+        return PUFF_RADIUS_START;
+    }
+
+    /**
+     * Returns the main lobe's radius at the end of the puff in one slot.
+     *
+     * @param slot puff slot in {@code [0, puffSlotCount())}
+     * @return {@link #BOT_PUFF_RADIUS_END} for a bot's smoke, else
+     *     {@link #PUFF_RADIUS_END}
+     */
+    public static float puffEndRadiusOf(final int slot)
+    {
+        if (isIncomingPuff(slot))
+        {
+            return BOT_PUFF_RADIUS_END;
+        }
+        return PUFF_RADIUS_END;
+    }
+
+    /**
+     * Returns how far the puff in one slot drifts upward per tic.
+     *
+     * @param slot puff slot in {@code [0, puffSlotCount())}
+     * @return {@link #BOT_PUFF_RISE_UNITS} for a bot's smoke, else
+     *     {@link #PUFF_RISE_UNITS}
+     */
+    public static float puffRiseOf(final int slot)
+    {
+        if (isIncomingPuff(slot))
+        {
+            return BOT_PUFF_RISE_UNITS;
+        }
+        return PUFF_RISE_UNITS;
+    }
+
+    // Which of the two baked bolt models a slot gets. The colour cannot be
+    // changed after the Scene is built, so this is the only moment it can be
+    // decided — which is why the boundary is an index rather than a flag.
+    private static ModelFormat boltFor(final int slot, final ModelFormat outgoing,
+        final ModelFormat incoming)
+    {
+        if (isIncomingTracer(slot))
+        {
+            return incoming;
+        }
+        return outgoing;
     }
 
     /**
@@ -1022,7 +1604,7 @@ public final class DemoEffects
         final float upY = dirZ * across[0] - dirX * across[2];
         final float upZ = dirX * across[1] - dirY * across[0];
 
-        final float wide = TRACER_WIDTH_UNITS;
+        final float wide = tracerWidthOf(slot);
         final float along = TRACER_LENGTH_UNITS;
         return Mat4.ofRowMajor(new float[]
         {
@@ -1044,8 +1626,9 @@ public final class DemoEffects
     private Mat4 puffPlacement(final int slot, final int lobe, final int age)
     {
         final int at = slot * AXES;
-        final float grown = PUFF_RADIUS_START
-            + (PUFF_RADIUS_END - PUFF_RADIUS_START) * age / PUFF_LIFE_TICS;
+        final float start = puffStartRadiusOf(slot);
+        final float end = puffEndRadiusOf(slot);
+        final float grown = start + (end - start) * age / PUFF_LIFE_TICS;
         final float outAcross = LOBE_ACROSS[lobe] * grown;
         final float outUp = LOBE_UP[lobe] * grown;
         final float centreX = puffPosition[at]
@@ -1184,25 +1767,49 @@ public final class DemoEffects
         return puffAge[slot];
     }
 
-    /** Returns how many tracers are in the air. */
+    /** Returns how many tracers are in the air, both directions together. */
     public int liveTracerCount()
     {
-        return liveCount(tracerRemaining);
+        return liveCount(tracerRemaining, 0, TRACER_SLOTS);
     }
 
-    /** Returns how many puffs are visible. */
+    /** Returns how many of the player's own tracers are in the air. */
+    public int liveOutgoingTracerCount()
+    {
+        return liveCount(tracerRemaining, 0, MAX_TRACERS);
+    }
+
+    /** Returns how many bolts fired BY the bots are in the air. */
+    public int liveIncomingTracerCount()
+    {
+        return liveCount(tracerRemaining, MAX_TRACERS, TRACER_SLOTS);
+    }
+
+    /** Returns how many puffs are visible, both directions together. */
     public int livePuffCount()
     {
-        return liveCount(puffAge);
+        return liveCount(puffAge, 0, PUFF_SLOTS);
     }
 
-    private static int liveCount(final int[] slots)
+    /** Returns how many puffs at the player's own muzzle are visible. */
+    public int liveOutgoingPuffCount()
+    {
+        return liveCount(puffAge, 0, MAX_PUFFS);
+    }
+
+    /** Returns how many puffs at the bots' muzzles are visible. */
+    public int liveIncomingPuffCount()
+    {
+        return liveCount(puffAge, MAX_PUFFS, PUFF_SLOTS);
+    }
+
+    private static int liveCount(final int[] slots, final int from, final int to)
     {
         // MUTABLE local — running count.
         int live = 0;
-        for (final int slot : slots)
+        for (int slot = from; slot < to; slot++)
         {
-            if (slot != DEAD)
+            if (slots[slot] != DEAD)
             {
                 live++;
             }
@@ -1366,8 +1973,10 @@ public final class DemoEffects
     @Override
     public String toString()
     {
-        return "DemoEffects{tracers=" + liveTracerCount() + "/" + MAX_TRACERS
-            + ", puffs=" + livePuffCount() + "/" + MAX_PUFFS
+        return "DemoEffects{tracers=" + liveOutgoingTracerCount() + "/" + MAX_TRACERS
+            + " out, " + liveIncomingTracerCount() + "/" + MAX_BOT_TRACERS + " in"
+            + ", puffs=" + liveOutgoingPuffCount() + "/" + MAX_PUFFS
+            + " out, " + liveIncomingPuffCount() + "/" + MAX_BOT_PUFFS + " in"
             + ", instances=" + instanceCount() + "}";
     }
 }

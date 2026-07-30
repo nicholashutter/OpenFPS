@@ -244,6 +244,19 @@ public final class Match
     /** Where every random decision comes from. Never null, immutable. */
     private final BotRng rng;
 
+    /**
+     * This tic's return fire, for whatever draws it. Never null, allocated once.
+     *
+     * <p>The seam that makes incoming fire <b>visible</b>, and it is the same
+     * shape as {@link #respawnedThisTic}: this class owns <i>what happened</i>,
+     * something else owns what it looks like. {@code Match} has never heard of a
+     * tracer and must not; it writes down the rays it fired and
+     * {@code DemoGameplayPort} — which owns the effect pool — turns them into
+     * bolts and smoke. See {@link BotShotLog} for why this is a reused buffer
+     * rather than an immutable snapshot like {@link MatchStatus}.</p>
+     */
+    private final BotShotLog shots;
+
     /** How badly the opponents shoot. Never null, immutable. */
     private final BotSkill skill;
 
@@ -376,6 +389,7 @@ public final class Match
         this.rng = generator;
         this.skill = botSkill;
         this.deathLimit = deathsAllowed;
+        this.shots = new BotShotLog(bots.length);
     }
 
     /**
@@ -430,6 +444,12 @@ public final class Match
         this.respawnAtTic = 0;
         this.playerDown = false;
         this.respawnedThisTic = false;
+        // The next tick would clear this anyway, so nothing observable depends on
+        // it. It is here because the invariant MatchTest asserts is "a reset match
+        // is indistinguishable from a freshly started one", and a field left
+        // holding last round's final volley is a difference — which is exactly the
+        // kind this reset is meant to catch.
+        shots.clear();
     }
 
     /**
@@ -461,6 +481,11 @@ public final class Match
         final float playerFeetZ)
     {
         this.respawnedThisTic = false;
+        // FIRST, and before the early-outs below. Every one of them is a tic on
+        // which nobody fires, and a log still holding the previous tic's rays
+        // would have the effect layer spawn the same bolts again the moment the
+        // player went down or the room emptied.
+        shots.clear();
         if (state().isOver())
         {
             return 0;
@@ -736,6 +761,24 @@ public final class Match
         return rng;
     }
 
+    /**
+     * Returns the rays the bots fired on the most recent {@link #tick}.
+     *
+     * <p>The live buffer, not a copy — see {@link BotShotLog} on why that is the
+     * right call here and the wrong one for {@link MatchStatus}. Read it in the
+     * same tic, on the same thread, before the next {@code tick} clears it.</p>
+     *
+     * <p>Empty on most tics, and empty is the normal answer: seven
+     * {@link BotSkill#DUMB} opponents produce a shot every eighteen tics between
+     * them.</p>
+     *
+     * @return this tic's return fire, never null
+     */
+    public BotShotLog shotsThisTic()
+    {
+        return shots;
+    }
+
     /** Returns the deaths allowed before the round is lost, or {@link #UNLIMITED_DEATHS}. */
     public int deathLimit()
     {
@@ -835,6 +878,22 @@ public final class Match
         final float dirX = cosPitch * (float) StrictMath.sin(aimYaw);
         final float dirY = (float) StrictMath.sin(aimPitch);
         final float dirZ = cosPitch * (float) StrictMath.cos(aimYaw);
+
+        // Written down HERE — after the scatter, before the trace, and whatever
+        // the trace decides. After the scatter because a bolt drawn down the
+        // unscattered heading would arrive dead-on while the damage said the shot
+        // went wide, and the near-miss is the entire point of showing it. Before
+        // and regardless of the outcome for the same reason the player's own
+        // tracer is spawned before their hitscan resolves: a bolt that only
+        // appeared when the shot connected would tell the player they had been hit
+        // before the health did.
+        //
+        // Nothing above this line is recorded, and that is the right cut: the
+        // early-outs are trigger pulls with no ray behind them — a bot that has
+        // never seen the player, or is shooting at a memory beyond its range — and
+        // there is no direction to draw a bolt along. One entry per hitscan.
+        shots.record(id, shooter.positionX(), shooter.eyeY(), shooter.positionZ(),
+            dirX, dirY, dirZ, (float) StrictMath.sqrt(groundDistanceSquared));
 
         final Target[] scene = shotSceneFor(shooter, playerFeetX, playerFeetY, playerFeetZ);
         if (!Hitscan.fire(shooter.positionX(), shooter.eyeY(), shooter.positionZ(),

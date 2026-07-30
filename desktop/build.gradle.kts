@@ -107,7 +107,13 @@ tasks.named<JavaExec>("run") {
     // the game WITHOUT it is the one nothing else can take. It is also the pair
     // to openfps.debugOverlay rather than a variant of it — the two switches are
     // deliberately separate and separately defaulted.
+    // openfps.screenshotCount captures a RUN of consecutive frames from one
+    // process. It is the only way to photograph anything that moves: a tracer
+    // lives 8 tics and a puff of smoke 36, and launching the game once per frame
+    // does not produce adjacent frames — each launch is its own process, so
+    // "frame 300" of one run and "frame 301" of the next are not neighbours.
     for (name in listOf("openfps.screenshot", "openfps.screenshotFrame",
+                        "openfps.screenshotCount",
                         "openfps.screenshotExit", "openfps.fpsLog",
                         "openfps.workers", "openfps.debugOverlay",
                         "openfps.targetOutline",

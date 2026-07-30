@@ -361,8 +361,11 @@ final class DemoEffectsTest
             final Scene.Builder builder = Scene.builder();
             final DemoEffects effects = DemoEffects.addTo(builder);
 
-            assertThat(effects.instanceCount()).isEqualTo(DemoEffects.MAX_TRACERS
-                + DemoEffects.MAX_PUFFS * DemoEffects.PUFF_STAGES * DemoEffects.PUFF_LOBES);
+            // Both halves of the pool: the player's outgoing fire and the bots'
+            // incoming fire share one array with a boundary at MAX_TRACERS.
+            assertThat(effects.instanceCount()).isEqualTo(DemoEffects.tracerSlotCount()
+                + DemoEffects.puffSlotCount() * DemoEffects.PUFF_STAGES
+                    * DemoEffects.PUFF_LOBES);
             assertThat(builder.worldInstanceCount()).isEqualTo(effects.instanceCount());
         }
 
@@ -450,9 +453,9 @@ final class DemoEffectsTest
             final Scene scene = builder.build();
 
             assertThat(scene.translucentInstanceCount())
-                .isEqualTo(DemoEffects.MAX_PUFFS * DemoEffects.PUFF_STAGES
+                .isEqualTo(DemoEffects.puffSlotCount() * DemoEffects.PUFF_STAGES
                     * DemoEffects.PUFF_LOBES);
-            for (int slot = 0; slot < DemoEffects.MAX_TRACERS; slot++)
+            for (int slot = 0; slot < DemoEffects.tracerSlotCount(); slot++)
             {
                 assertThat(scene.isWorldTranslucent(effects.tracerInstanceIndex(slot)))
                     .as("a bolt in flight is solid")
@@ -1039,6 +1042,277 @@ final class DemoEffectsTest
             {
                 assertThat(fixture.puffOverride(0, stage)).isSameAs(DemoEffects.HIDDEN);
             }
+        }
+    }
+
+    @Nested
+    @DisplayName("incoming fire")
+    final class Incoming
+    {
+        /** Float tolerance for a direction that has been through a normalise. */
+        private static final float EPSILON = 1.0e-3f;
+
+        /** A bot standing well down the room, roughly where BOT_ROUTE_CENTRES puts one. */
+        private static final float BOT_X = 0.0f;
+
+        /** See {@link #BOT_X} — a bot's eye is 41 units up. */
+        private static final float BOT_EYE_Y = 41.0f;
+
+        /** See {@link #BOT_X}. */
+        private static final float BOT_Z = 60.0f;
+
+        /** How far the shot was taken at: bot at z=60, player at z=-192. */
+        private static final float RANGE = 252.0f;
+
+        // One incoming shot from a bot at (0, 41, 60) firing back down -z at the
+        // player, with the muzzle offset from the eye the way a held carbine is.
+        private static void fireBack(final DemoEffects effects)
+        {
+            effects.spawnIncoming(BOT_X + 9.0f, 30.0f, BOT_Z - 8.0f,
+                BOT_X, BOT_EYE_Y, BOT_Z, 0.0f, 0.0f, -1.0f, RANGE);
+        }
+
+        @Test
+        @DisplayName("uses the bots' half of the pool and never the player's")
+        void incomingClaimsItsOwnSlots()
+        {
+            // The two halves must not be able to evict each other. A busy room
+            // overwriting the bolt the player fired half a tic ago — the one they
+            // are looking straight at — is the failure this separation prevents.
+            final Fixture fixture = new Fixture();
+
+            for (int shot = 0; shot < DemoEffects.MAX_BOT_TRACERS * 2; shot++)
+            {
+                fireBack(fixture.effects);
+            }
+
+            assertThat(fixture.effects.liveOutgoingTracerCount())
+                .as("incoming fire took a slot from the player")
+                .isZero();
+            assertThat(fixture.effects.liveIncomingTracerCount())
+                .isEqualTo(DemoEffects.MAX_BOT_TRACERS);
+            assertThat(fixture.effects.liveOutgoingPuffCount()).isZero();
+            assertThat(fixture.effects.liveIncomingPuffCount())
+                .isEqualTo(DemoEffects.MAX_BOT_PUFFS);
+        }
+
+        @Test
+        @DisplayName("the player's own fire is untouched by a room full of return fire")
+        void outgoingSurvivesAVolley()
+        {
+            final Fixture fixture = new Fixture();
+            fixture.fire();
+
+            for (int shot = 0; shot < DemoEffects.MAX_BOT_TRACERS * 3; shot++)
+            {
+                fireBack(fixture.effects);
+            }
+            fixture.tic();
+
+            assertThat(fixture.tracerOverride(0))
+                .as("the player's bolt was evicted by return fire")
+                .isNotSameAs(DemoEffects.HIDDEN);
+            assertThat(fixture.effects.liveOutgoingTracerCount()).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("the bolt leaves the MUZZLE, not the eye the simulation fired from")
+        void theBoltComesOutOfTheGun()
+        {
+            // The user's report was that return fire "isn't associated with other
+            // guns". Match fires from the middle of a body; a bolt born there
+            // floats out of a chest.
+            final Fixture fixture = new Fixture();
+            fireBack(fixture.effects);
+            fixture.tic();
+
+            final Mat4 bolt = fixture.tracerOverride(DemoEffects.MAX_TRACERS);
+            // One tic of travel has already happened — the port advances before it
+            // publishes — so back it out to recover where the bolt was born.
+            // Column 2 is the model's +z, the direction of travel, scaled by the
+            // bolt's length.
+            final float bornY = bolt.get(1, 3)
+                - DemoEffects.BOT_TRACER_SPEED_UNITS * bolt.get(1, 2)
+                    / DemoEffects.TRACER_LENGTH_UNITS;
+            assertThat(bornY)
+                .as("the bolt started at the bot's eye rather than at its muzzle")
+                .isCloseTo(30.0f, within(1.0f));
+        }
+
+        @Test
+        @DisplayName("the bolt converges on the ray the hitscan actually used")
+        void theBoltAgreesWithTheDamage()
+        {
+            // THE point of showing incoming fire: a near-miss the player can see
+            // has to be the same near-miss the simulation resolved. Firing along
+            // the scattered direction FROM the muzzle would draw a line parallel to
+            // the shot and fourteen units to one side of it — most of a player
+            // radius — so a hit would look like a miss.
+            final Fixture fixture = new Fixture();
+            fireBack(fixture.effects);
+            fixture.tic();
+
+            final Mat4 bolt = fixture.tracerOverride(DemoEffects.MAX_TRACERS);
+            // Column 2 is the image of the model's +z, which is the bolt's own
+            // direction of travel, scaled by its length.
+            final float dirX = bolt.get(0, 2) / DemoEffects.TRACER_LENGTH_UNITS;
+            final float dirY = bolt.get(1, 2) / DemoEffects.TRACER_LENGTH_UNITS;
+            final float dirZ = bolt.get(2, 2) / DemoEffects.TRACER_LENGTH_UNITS;
+
+            // Where the real ray ends up at the distance the shot was taken at —
+            // the point the simulation aimed at, and the point the bolt has to
+            // reach if the two are to agree about a near-miss.
+            final float aimX = BOT_X;
+            final float aimY = BOT_EYE_Y;
+            final float aimZ = BOT_Z - RANGE;
+            final float muzzleX = BOT_X + 9.0f;
+            final float muzzleY = 30.0f;
+            final float muzzleZ = BOT_Z - 8.0f;
+            final float toX = aimX - muzzleX;
+            final float toY = aimY - muzzleY;
+            final float toZ = aimZ - muzzleZ;
+            final float span = (float) StrictMath.sqrt(toX * toX + toY * toY + toZ * toZ);
+
+            assertThat(dirX).as("across").isCloseTo(toX / span, within(EPSILON));
+            assertThat(dirY).as("vertically").isCloseTo(toY / span, within(EPSILON));
+            assertThat(dirZ).as("in depth").isCloseTo(toZ / span, within(EPSILON));
+            assertThat(dirX * dirX + dirY * dirY + dirZ * dirZ)
+                .as("the flight direction is not unit length")
+                .isCloseTo(1.0f, within(EPSILON));
+            // And it is NOT simply the ray's own direction, which is what a naive
+            // implementation would draw and is the bug this converges away.
+            assertThat(dirX).as("the bolt just copied the ray's direction")
+                .isNotCloseTo(0.0f, within(EPSILON));
+        }
+
+        @Test
+        @DisplayName("incoming effects are sized against the range they are seen at")
+        void incomingIsDistinguishable()
+        {
+            // Every one of these is sized against a DIFFERENT distance: the
+            // player's effects sit 2.4 units from the eye, a bot's are between 60
+            // and 512 units away. Reusing the player's numbers would have drawn a
+            // cloud under a pixel across, which is the smoke bug again.
+            //
+            // Note the SPEED goes the other way. The player's bolt recedes and is
+            // most visible at birth; an incoming one approaches, so its whole life
+            // is the approach and it has to be slow enough and long-lived enough to
+            // watch. See BOT_TRACER_SPEED_UNITS for what a capture caught here.
+            final int mine = 0;
+            final int theirs = DemoEffects.MAX_TRACERS;
+
+            assertThat(DemoEffects.isIncomingTracer(mine)).isFalse();
+            assertThat(DemoEffects.isIncomingTracer(theirs)).isTrue();
+            assertThat(DemoEffects.tracerWidthOf(theirs))
+                .isGreaterThan(DemoEffects.tracerWidthOf(mine));
+            assertThat(DemoEffects.incomingLifeFor(400.0f))
+                .isGreaterThan(DemoEffects.TRACER_LIFE_TICS);
+            assertThat(DemoEffects.tracerSpeedOf(theirs))
+                .as("an approaching bolt must not cross the room faster than the eye reads it")
+                .isLessThan(DemoEffects.tracerSpeedOf(mine));
+            assertThat(DemoEffects.isIncomingPuff(0)).isFalse();
+            assertThat(DemoEffects.isIncomingPuff(DemoEffects.MAX_PUFFS)).isTrue();
+            assertThat(DemoEffects.puffStartRadiusOf(DemoEffects.MAX_PUFFS))
+                .isGreaterThan(DemoEffects.puffStartRadiusOf(0));
+            assertThat(DemoEffects.puffEndRadiusOf(DemoEffects.MAX_PUFFS))
+                .isGreaterThan(DemoEffects.puffEndRadiusOf(0));
+            assertThat(DemoEffects.puffRiseOf(DemoEffects.MAX_PUFFS))
+                .isGreaterThan(DemoEffects.puffRiseOf(0));
+        }
+
+        @Test
+        @DisplayName("an incoming bolt crosses the whole engagement range before it expires")
+        void theBoltReachesThePlayer()
+        {
+            // A bolt from the far edge of a bot's range must arrive or go past. One
+            // that stopped short would hang in mid-air, which does not read as a
+            // shot that missed — it reads as a shot that gave up.
+            final float reach =
+                DemoEffects.BOT_TRACER_SPEED_UNITS * DemoEffects.BOT_TRACER_LIFE_TICS;
+
+            assertThat(reach)
+                .as("an incoming bolt expires before it can cross the room")
+                .isGreaterThan(com.openfps.engine.gameplay.Match.BOT_RANGE_UNITS);
+        }
+
+        @Test
+        @DisplayName("an incoming bolt is on screen long enough to be read, not one frame")
+        void theBoltLastsLongEnoughToSee()
+        {
+            // THE regression for what a ninety-frame capture caught: at 80 units a
+            // tic a bolt from a bot 160 units away existed for two frames, going
+            // from 441 pixels to 87,204 in one step. Every geometry test in this
+            // file passed on it, because they all ask where the bolt is and none
+            // asked how long it is there.
+            //
+            // Asserted as a time at a representative range rather than as the raw
+            // constant, because that is the property a player experiences.
+            final float typicalRange = 250.0f;
+            final float ticsOnScreen = typicalRange / DemoEffects.BOT_TRACER_SPEED_UNITS;
+
+            assertThat(ticsOnScreen)
+                .as("a bolt from mid-room is a strobe rather than a flight")
+                .isGreaterThan(6.0f);
+            assertThat(DemoEffects.incomingLifeFor(250.0f))
+                .as("a bolt from mid-room is drawn for too few frames to read")
+                .isGreaterThanOrEqualTo(5);
+            // And a shot from across the room lasts several times as long as one
+            // from the next crate, which is what makes the flight tell a player how
+            // far away the threat is without them counting anything.
+            assertThat(DemoEffects.incomingLifeFor(500.0f))
+                .isGreaterThan(DemoEffects.incomingLifeFor(150.0f) * 3);
+        }
+
+        @Test
+        @DisplayName("the bolt stops a body length short instead of filling the screen")
+        void theBoltStopsBeforeTheCamera()
+        {
+            // THE second thing the ninety-frame capture caught. Drawn all the way
+            // in, a bolt's last two frames covered 62,000 and 73,600 pixels — 7%
+            // and 8% of the window — because a 16-unit box a few units from the eye
+            // fills it. That is a screen flash, and the shot's outcome was decided
+            // by Hitscan long before the bolt got there.
+            final float speed = DemoEffects.BOT_TRACER_SPEED_UNITS;
+
+            for (final float range : new float[] {120.0f, 250.0f, 400.0f, 512.0f})
+            {
+                final float flown = DemoEffects.incomingLifeFor(range) * speed;
+                assertThat(range - flown)
+                    .as("a bolt fired from %s units ends up inside the player's head", range)
+                    .isGreaterThanOrEqualTo(DemoEffects.INCOMING_STANDOFF_UNITS
+                        - speed);
+            }
+        }
+
+        @Test
+        @DisplayName("a point-blank shot still gets a bolt, however short the flight")
+        void pointBlankStillHasATell()
+        {
+            // The one shot a player most needs to notice must not be the only shot
+            // with no tell. Inside the standoff the arithmetic gives zero.
+            assertThat(DemoEffects.incomingLifeFor(20.0f))
+                .isEqualTo(DemoEffects.BOT_TRACER_MIN_LIFE_TICS);
+            assertThat(DemoEffects.incomingLifeFor(0.0f))
+                .as("no range at all is the one case with nothing to shorten against")
+                .isEqualTo(DemoEffects.BOT_TRACER_LIFE_TICS);
+        }
+
+        @Test
+        @DisplayName("no bot can outlive its own puff, so the pool is sized for the whole room")
+        void thePoolFitsTheWholeRoom()
+        {
+            // MAX_BOT_PUFFS is derived rather than picked, and this is the relation
+            // it is derived from: a bot's cooldown is longer than a puff's life, so
+            // a bot can never have two puffs alive and seven bodies is the hard
+            // maximum. Drop the cooldown under PUFF_LIFE_TICS and this pool is
+            // undersized — which is exactly the change that would do it silently.
+            assertThat(com.openfps.engine.gameplay.BotSkill.DUMB.cooldownTics())
+                .as("a bot can now fire twice inside one puff's life")
+                .isGreaterThanOrEqualTo(DemoEffects.PUFF_LIFE_TICS);
+            assertThat(DemoEffects.MAX_BOT_PUFFS)
+                .isGreaterThan(com.openfps.engine.gameplay.Match.DEFAULT_BOT_COUNT);
+            assertThat(DemoEffects.MAX_BOT_TRACERS)
+                .isGreaterThan(com.openfps.engine.gameplay.Match.DEFAULT_BOT_COUNT);
         }
     }
 }

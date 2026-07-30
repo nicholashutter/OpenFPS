@@ -441,6 +441,51 @@ public final class DemoScene
      */
     public static final float BOT_WEAPON_YAW_DEGREES = 240.0f;
 
+    /**
+     * How far the muzzle is from the weapon's own origin, in world units —
+     * <b>8.94</b>.
+     *
+     * <p>Derived, and from a measurement rather than a guess: the carbine is
+     * centred on its origin and {@link BlockCarbine#HALF_LENGTH} of it —
+     * {@code 0.431} model units, read out of {@code blaster-p.ofm}'s header —
+     * lies ahead of that origin, so at {@link #BOT_WEAPON_WORLD_SCALE} the barrel
+     * tip is {@code 0.431 x 20.74} away along the barrel. The generated
+     * stand-in is authored to the same half-length precisely so this number does
+     * not have to know which model is standing in.</p>
+     *
+     * <p><b>This is where incoming fire comes from</b>, and it is a long way from
+     * where the simulation fires: {@link Bot#eyeY} is 41 units up at the centre of
+     * the body, while the muzzle is at {@link #BOT_WEAPON_HEIGHT_UNITS} and a
+     * further nine units out to one side and nearly nine along a barrel that is
+     * angled across the chest. Fourteen-odd world units of difference, which at
+     * the player's distance is most of a player radius — see
+     * {@code BotShotLog.record} for what is done about that, since a bolt that
+     * left the gun but ran parallel to the shot would make a hit look like a
+     * miss.</p>
+     */
+    public static final float BOT_WEAPON_MUZZLE_UNITS =
+        BlockCarbine.HALF_LENGTH * BOT_WEAPON_WORLD_SCALE;
+
+    /**
+     * Which way a bot's barrel points, relative to the bot's own facing, in
+     * degrees — <b>60</b>.
+     *
+     * <p>Not a second decision: it is {@link #BOT_WEAPON_YAW_DEGREES} with the
+     * muzzle flip taken back out, which is what is left of that constant once its
+     * two halves are separated. The model is placed at {@code yaw + 240} and its
+     * muzzle points along model {@code -z}, so the barrel points along
+     * {@code yaw + 240 + 180} — and adding a half turn is subtracting one, so that
+     * is {@code yaw + 60}. The carry angle alone, which is exactly what it should
+     * be: the barrel is 60 degrees off the body's facing because the weapon is
+     * held across the chest.</p>
+     *
+     * <p>Written out as its own constant because it is what a muzzle effect needs,
+     * and because deriving it at the call site means writing the 180 down a second
+     * time somewhere it can be given the wrong sign.</p>
+     */
+    public static final float BOT_BARREL_YAW_DEGREES =
+        BOT_WEAPON_YAW_DEGREES - DEGREES_PER_HALF_TURN;
+
 
     /**
      * Where the bots patrol: route centre {x, z} in world units, in id order.
@@ -817,6 +862,53 @@ public final class DemoScene
             + BOT_WEAPON_FORWARD_UNITS * cosYaw + BOT_WEAPON_RIGHT_UNITS * sinYaw;
         return placement(x, bot.positionY() + BOT_WEAPON_HEIGHT_UNITS, z,
             yaw + radians(BOT_WEAPON_YAW_DEGREES), BOT_WEAPON_WORLD_SCALE);
+    }
+
+    /**
+     * Writes the world position of the end of a bot's barrel.
+     *
+     * <h2>Why this is not {@code botWeaponPlacement}'s translation</h2>
+     *
+     * <p>That is where the weapon's <b>origin</b> goes, and a carbine's origin is
+     * in the middle of it — the same distinction {@code DemoEffects} had to make
+     * for the player's own muzzle smoke, and got wrong first time by putting the
+     * puff over the middle of the gun. The muzzle is a further
+     * {@link #BOT_WEAPON_MUZZLE_UNITS} along a barrel that runs
+     * {@link #BOT_BARREL_YAW_DEGREES} off the body's facing, and a bolt or a puff
+     * of smoke that appeared at the origin instead would come out of the
+     * receiver.</p>
+     *
+     * <p><b>Fills an array rather than returning three values</b>, because it is
+     * called on the tic path — once per bot that fired — and three floats cannot
+     * be returned from a Java method without allocating something to hold them.
+     * {@code DemoGameplayPort} keeps one scratch array for the purpose, which is
+     * the pattern {@code DemoEffects.acrossScratch} already uses and for the same
+     * reason.</p>
+     *
+     * @param bot the bot whose barrel to locate; must not be null
+     * @param out filled with the muzzle's world x, y and z; must hold at least
+     *     three floats
+     */
+    public static void botMuzzle(final Bot bot, final float[] out)
+    {
+        final float yaw = bot.yawRadians();
+        final float sinYaw = (float) StrictMath.sin(yaw);
+        final float cosYaw = (float) StrictMath.cos(yaw);
+        // PlayerController's basis, the same one botWeaponPlacement uses to put
+        // the weapon's origin in the bot's hand: groundForward = (sin, 0, cos) and
+        // groundRight = groundForward x up = (-cos, 0, sin).
+        final float originX = bot.positionX()
+            + BOT_WEAPON_FORWARD_UNITS * sinYaw - BOT_WEAPON_RIGHT_UNITS * cosYaw;
+        final float originZ = bot.positionZ()
+            + BOT_WEAPON_FORWARD_UNITS * cosYaw + BOT_WEAPON_RIGHT_UNITS * sinYaw;
+
+        final float barrel = yaw + radians(BOT_BARREL_YAW_DEGREES);
+        out[0] = originX + BOT_WEAPON_MUZZLE_UNITS * (float) StrictMath.sin(barrel);
+        // Level, because the weapon is: placement() is a yaw and nothing else, so
+        // the barrel has no elevation to follow and the muzzle sits at exactly the
+        // height the weapon's origin does.
+        out[1] = bot.positionY() + BOT_WEAPON_HEIGHT_UNITS;
+        out[2] = originZ + BOT_WEAPON_MUZZLE_UNITS * (float) StrictMath.cos(barrel);
     }
 
     // The room the demo is actually meant to show: floor, walls, props.
