@@ -133,11 +133,95 @@ final class DemoGameplayPortAudioTest
         };
     }
 
+    /**
+     * Distance to the nearest bot on the reward fixture's firing range — 600, past
+     * {@code Match.BOT_RANGE_UNITS}.
+     *
+     * <p>The reward takes three kills and hundreds of tics to reach, and a room
+     * that could shoot back would let the player die in the middle of that — which
+     * cancels the buff, and would make every assertion below conditional on the
+     * dice. The player's own hitscan has no range limit, so the queue is still
+     * shootable from here.</p>
+     */
+    private static final float OUT_OF_REACH_DISTANCE = 600.0f;
+
+    /** A queue of bots straight down +z, none of which can shoot back. */
+    private static Match firingRange(final int count)
+    {
+        final Bot[] roster = new Bot[count];
+        for (int index = 0; index < count; index++)
+        {
+            roster[index] = new Bot(Match.FIRST_BOT_ENTITY_ID + index, 0.0f, 0.0f,
+                OUT_OF_REACH_DISTANCE + index * 60.0f, BotPattern.SENTRY, 0.0f, 120, 0);
+        }
+        return new Match(roster);
+    }
+
+    /** Scene indices for a roster of any size; nothing here draws. */
+    private static int[] instancesFor(final Match round)
+    {
+        return new int[round.botCount()];
+    }
+
+    /**
+     * An input port that holds the trigger for a while and then lets go.
+     *
+     * <p>Needed because the expiry sound has to be observed <b>on the tic it
+     * happens</b>, and {@code NullAudioPort} remembers only the last sound played.
+     * A trigger still held on that tic fires in the same call, after the match has
+     * ticked, and overwrites the answer.</p>
+     *
+     * @param tics how many tics the trigger is held for
+     * @return a port that goes neutral afterwards
+     */
+    private static I_InputPort inputHeldFor(final int tics)
+    {
+        final InputState down = InputState.of(0.0f, 0.0f, 0.0f, 0.0f, true, false, false);
+        return new I_InputPort()
+        {
+            /** MUTABLE: swapped for neutral once the hold is over. */
+            private InputState current = down;
+
+            @Override
+            public void init()
+            {
+                // nothing to open
+            }
+
+            @Override
+            public void shutdown()
+            {
+                // nothing to close
+            }
+
+            @Override
+            public void sampleInput(final int ticIndex)
+            {
+                if (ticIndex >= tics)
+                {
+                    this.current = InputState.NEUTRAL;
+                }
+            }
+
+            @Override
+            public InputState currentInput()
+            {
+                return current;
+            }
+
+            @Override
+            public boolean isShutdownRequested()
+            {
+                return false;
+            }
+        };
+    }
+
     /** A port over the fixtures above, with the match already live. */
     private static DemoGameplayPort livePort(final boolean triggerDown, final Match round)
     {
         final DemoGameplayPort port = new DemoGameplayPort(input(triggerDown), renderer(),
-            new PlayerController(), config(), round, new int[] {0});
+            new PlayerController(), config(), round, instancesFor(round));
         port.setMatchLive(true);
         return port;
     }
@@ -254,6 +338,110 @@ final class DemoGameplayPortAudioTest
             assertThat(audio.playCount())
                 .as("the shot was silent because it missed")
                 .isEqualTo(1L);
+        }
+    }
+
+    @Nested
+    @DisplayName("the kill streak, by ear")
+    final class SuperBlaster
+    {
+        @Test
+        @DisplayName("an ordinary shot is the ordinary blaster")
+        void shouldFireTheOrdinaryBlasterFirst()
+        {
+            final NullAudioPort audio = new NullAudioPort();
+            final DemoGameplayPort port = livePort(true, firingRange(6));
+            port.attachAudio(audio);
+
+            port.tick(0);
+
+            assertThat(audio.lastSound()).isEqualTo(SoundId.WEAPON_FIRE);
+        }
+
+        @Test
+        @DisplayName("the third kill announces itself, on the tic it happens")
+        void shouldPlayTheAwardChime()
+        {
+            // The killing shot plays the ordinary weapon and THEN the chime, in that
+            // order, because the award is a consequence of the shot rather than a
+            // property of it. So the last sound on the arming tic is the chime — and
+            // if it is the weapon instead, the award was announced after a return.
+            final NullAudioPort audio = new NullAudioPort();
+            final Match round = firingRange(6);
+            final DemoGameplayPort port = livePort(true, round);
+            port.attachAudio(audio);
+
+            final int armedAt = runUntilArmed(port, round);
+
+            assertThat(armedAt).as("the reward was never earned at all").isPositive();
+            assertThat(round.botsKilled()).isEqualTo(Match.SUPER_BLASTER_KILL_STREAK);
+            assertThat(audio.lastSound()).isEqualTo(SoundId.SUPER_BLASTER_READY);
+        }
+
+        @Test
+        @DisplayName("the weapon itself sounds different while the reward is live")
+        void shouldFireTheSuperBlasterWhileLive()
+        {
+            // The reward would otherwise be inaudible during exactly the activity it
+            // modifies: the player hears their own trigger five times a second, so a
+            // buff that changed the damage and not the noise could only be seen.
+            final NullAudioPort audio = new NullAudioPort();
+            final Match round = firingRange(6);
+            final DemoGameplayPort port = livePort(true, round);
+            port.attachAudio(audio);
+            final int armedAt = runUntilArmed(port, round);
+
+            for (int tic = armedAt + 1; tic <= armedAt + DemoGameplayPort.FIRE_INTERVAL_TICS;
+                tic++)
+            {
+                port.tick(tic);
+            }
+
+            assertThat(round.isSuperBlaster()).isTrue();
+            assertThat(audio.lastSound()).isEqualTo(SoundId.SUPER_WEAPON_FIRE);
+        }
+
+        @Test
+        @DisplayName("running out announces itself too, so the gun does not change silently")
+        void shouldPlayTheExpiryChime()
+        {
+            // A reward that ended silently would leave the player firing an ordinary
+            // weapon at a target they picked because they thought they had a better
+            // one. The trigger is released before the window closes so that the
+            // expiry is the last thing played rather than the next shot.
+            final NullAudioPort audio = new NullAudioPort();
+            final Match round = firingRange(6);
+            final DemoGameplayPort port = new DemoGameplayPort(inputHeldFor(150), renderer(),
+                new PlayerController(), config(), round, instancesFor(round));
+            port.setMatchLive(true);
+            port.attachAudio(audio);
+
+            // 150 tics of held trigger is thirteen shots at the twelve-tic cadence,
+            // which is four kills' worth — comfortably past the three the reward
+            // costs. Then the window is run out with nobody firing.
+            for (int tic = 0; tic < 150 + Match.SUPER_BLASTER_TICS + 2; tic++)
+            {
+                port.tick(tic);
+            }
+
+            assertThat(round.isSuperBlaster()).isFalse();
+            assertThat(audio.lastSound()).isEqualTo(SoundId.SUPER_BLASTER_SPENT);
+        }
+
+        // Ticks the port until the reward is armed, and returns the tic it happened
+        // on. Returns -1 if it never did, so the assertion says so rather than
+        // passing on a fixture that never got there.
+        private static int runUntilArmed(final DemoGameplayPort port, final Match round)
+        {
+            for (int tic = 0; tic < 600; tic++)
+            {
+                port.tick(tic);
+                if (round.isSuperBlaster())
+                {
+                    return tic;
+                }
+            }
+            return -1;
         }
     }
 

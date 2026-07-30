@@ -7,17 +7,40 @@
 
 | Field | Value |
 |---|---|
-| **State** | SHIPPING (two sounds) |
+| **State** | SHIPPING (five sounds) |
 | **Phase** | `PLAN.md` Phase 6 — started, deliberately narrow |
 | **Registered** | S_ via `AudioSubsystem`, port supplied by `I_AdapterFactory.getAudioPort()` |
 | **Verified** | 2026-07-30 |
 
 **Built.** `I_AudioPort` and `SoundId`; `AudioVolume` (the clamp); `BlasterSound`
-(the player's weapon), `CarbineSound` (a bot's), `SoundBank` (which id is which)
-and `WavAudio` (the container); `NullAudioPort` (silent, recording);
+(the player's weapon), `CarbineSound` (a bot's), `SuperBlasterSound` (the player's
+weapon while a kill streak is being spent), `PowerChimeSound` (that reward
+arriving, and the same chime backwards when it goes), `SoundBank` (which id is
+which) and `WavAudio` (the container); `NullAudioPort` (silent, recording);
 `GdxAudioPort` in `:gdxshared` (real, lazy, degrades). The player's weapon fires
 audibly from `DemoGameplayPort.fireIfRequested` and return fire from
 `spawnIncomingFire`, on desktop and Android.
+
+**The three reward sounds are the prediction above coming true.** The next step
+used to read "a hit confirmation would now cost one enum value, one synth class
+and one branch". Three sounds landed instead and cost exactly that each — two
+synth classes, three enum values, three branches in `SoundBank`, **no adapter
+change at all**. That is the seam working.
+
+They also set two rules the next sound should read first:
+
+- **A sound may be required to be the SAME as another one.** `CarbineSound` exists
+  to be told apart from the player's weapon and argues at length that the two must
+  therefore sit in different families. `SuperBlasterSound` has the opposite
+  requirement — the player has to hear their own weapon upgraded rather than
+  replaced — so it is built *out of* `BlasterSound`'s sweep, with its endpoints
+  derived from that class's constants rather than written down again.
+- **Two ids may share one synth class when they are one sound in two
+  directions.** `PowerChimeSound` generates the award and the expiry from one
+  generator with its two notes swapped, because rising against falling is the
+  whole message and two classes would have let them drift into being merely
+  different noises. `SoundBankTest` still holds: they are different bytes and
+  different file names.
 
 **Voice limiting** exists for return fire only, in `demo/BotFireVoices`: one
 voice per tic and a six-tic minimum interval. It is not in this package and not
@@ -44,8 +67,9 @@ and adding a third sound now touches no adapter at all. `SoundBankTest` asserts
 over `SoundId.values()` that no two ids share a buffer or a file name, which is
 the property whose absence made the bug invisible.
 
-**Next step.** Nothing is queued. A hit confirmation is the obvious third sound,
-and it would now cost one enum value, one synth class and one branch.
+**Next step.** Nothing is queued. A hit confirmation is the obvious next sound,
+and the reward sounds have just demonstrated the price: one enum value, one synth
+class, one branch in `SoundBank`, and nothing outside `:engine`.
 
 ## What lives here
 
@@ -54,10 +78,14 @@ audio/
 ├── port/
 │   ├── I_AudioPort.java    the contract: init, shutdown, play, stopAll,
 │   │                       setMasterVolume, masterVolume, isAudible
-│   └── SoundId.java        the closed set of sounds — two, today
+│   └── SoundId.java        the closed set of sounds — five, today
 ├── synth/
 │   ├── BlasterSound.java   the player's weapon: a pitch sweep
 │   ├── CarbineSound.java   a bot's weapon: a noise crack, and NOT a sweep
+│   ├── SuperBlasterSound.java  the player's weapon on a kill streak: the SAME
+│   │                       sweep with an octave of weight under it
+│   ├── PowerChimeSound.java    two notes: rising when the reward lands,
+│   │                       falling when it goes. One class, one message
 │   ├── SoundBank.java      which SoundId is which sound, as playable bytes
 │   └── WavAudio.java       wraps PCM in a RIFF/WAVE container
 ├── AudioVolume.java        the one definition of a legal volume

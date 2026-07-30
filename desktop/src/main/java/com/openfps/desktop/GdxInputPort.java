@@ -182,6 +182,36 @@ public final class GdxInputPort implements I_InputPort
      */
     public static final String AUTO_WALK_STRAFE_PROPERTY = "openfps.autoWalkStrafe";
 
+    /**
+     * System property: hold the <b>trigger</b> for this many tics from the start of
+     * the run. Zero, the default, scripts nothing.
+     *
+     * <p><b>This exists because a kill streak is the one feature nothing automated
+     * could reach.</b> The argument is
+     * {@link #AUTO_WALK_TICS_PROPERTY}'s exactly, one feature further on:
+     * everything the screenshot harness could photograph before this was true of a
+     * player who never fires. A reward for three kills without dying cannot be —
+     * it needs nine hits landed over several seconds, and every route into this
+     * port needs a hand on a mouse. So the proof that the super blaster appears,
+     * says so, and goes away again was impossible to take, and "it works, come and
+     * try it" is not evidence.</p>
+     *
+     * <p><b>The scripted walk takes precedence while it lasts</b>, so the two
+     * properties together read as a <i>sequence</i>: walk for the first
+     * {@link #AUTO_WALK_TICS_PROPERTY} tics, then stand still and shoot until this
+     * one runs out. That is deliberate rather than a limitation — it is exactly the
+     * script a streak needs, because a target has to be lined up before it can be
+     * shot at repeatedly, and one immutable snapshot per phase keeps
+     * {@link #sampleInput} allocation-free.</p>
+     *
+     * <pre>
+     *   gradlew :desktop:run "--args=--start-in-game"
+     *           -Dopenfps.autoWalkTics=18 -Dopenfps.autoWalkStrafe=1
+     *           -Dopenfps.autoFireTics=900
+     * </pre>
+     */
+    public static final String AUTO_FIRE_TICS_PROPERTY = "openfps.autoFireTics";
+
     private static final Logger LOG = LoggerFactory.getLogger(GdxInputPort.class);
 
     /** Where the render thread deposits readings and the loop thread collects them. */
@@ -262,6 +292,22 @@ public final class GdxInputPort implements I_InputPort
     private final InputState autoWalk;
 
     /**
+     * How many tics of the run the scripted trigger covers, or zero for none.
+     * Read once at construction, for the reason {@link #autoWalkTics} is.
+     */
+    private final int autoFireTics;
+
+    /**
+     * The snapshot the scripted trigger latches, or null when none is configured.
+     *
+     * <p>Built once and immutable, like {@link #autoWalk}. It holds <b>no movement
+     * and no look</b>: the script's two phases are separate windows rather than one
+     * combined state, which is what keeps this two objects instead of a table of
+     * every combination — see {@link #AUTO_FIRE_TICS_PROPERTY}.</p>
+     */
+    private final InputState autoFire;
+
+    /**
      * The controller, if there is one.
      *
      * MUTABLE: replaced by {@link #bindGamepad}, polled on the render thread.
@@ -312,6 +358,18 @@ public final class GdxInputPort implements I_InputPort
             // two things at once and stop being a measurement of the walls.
             this.autoWalk = InputState.of(axisProperty(AUTO_WALK_FORWARD_PROPERTY, 1.0f),
                 axisProperty(AUTO_WALK_STRAFE_PROPERTY, 0.0f), 0.0f, 0.0f, false, false, false);
+        }
+        this.autoFireTics = Integer.getInteger(AUTO_FIRE_TICS_PROPERTY, 0).intValue();
+        if (autoFireTics <= 0)
+        {
+            this.autoFire = null;
+        }
+        else
+        {
+            // The trigger and nothing else. No axes, so the phase after the walk is
+            // a player standing still and shooting — which is what makes the log's
+            // kill tics reproducible from one run to the next.
+            this.autoFire = InputState.of(0.0f, 0.0f, 0.0f, 0.0f, true, false, false);
         }
     }
 
@@ -448,6 +506,14 @@ public final class GdxInputPort implements I_InputPort
                 Float.valueOf(autoWalk.strafeAxis()), Integer.valueOf(autoWalkTics),
                 AUTO_WALK_TICS_PROPERTY);
         }
+        if (autoFire != null)
+        {
+            // Loud for the same reason, and more so: a run that fires by itself
+            // spends the player's accuracy figure and can clear the room without
+            // anybody touching a mouse.
+            LOG.info("SCRIPTED TRIGGER: held for the first {} tics — set {}=0 to disable",
+                Integer.valueOf(autoFireTics), AUTO_FIRE_TICS_PROPERTY);
+        }
     }
 
     /**
@@ -462,6 +528,20 @@ public final class GdxInputPort implements I_InputPort
     InputState autoWalk()
     {
         return autoWalk;
+    }
+
+    /**
+     * Returns the scripted trigger snapshot, or null when none is configured.
+     *
+     * <p>Exists for the reason {@link #autoWalk()} does, and the leak it guards
+     * against is worse: a run that fires by itself spends the player's accuracy
+     * figure and can clear the room with nobody touching a mouse.</p>
+     *
+     * @return the snapshot the script latches, or null
+     */
+    InputState autoFire()
+    {
+        return autoFire;
     }
 
     /**
@@ -582,6 +662,14 @@ public final class GdxInputPort implements I_InputPort
         if (autoWalk != null && ticIndex < autoWalkTics)
         {
             latched = autoWalk;
+            // The walk wins for as long as it is running, so the two harness
+            // windows are a sequence rather than a blend. Returning here rather
+            // than falling through is the whole of that rule.
+            return;
+        }
+        if (autoFire != null && ticIndex < autoFireTics)
+        {
+            latched = autoFire;
         }
     }
 
