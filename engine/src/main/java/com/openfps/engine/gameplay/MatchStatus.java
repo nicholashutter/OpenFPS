@@ -62,12 +62,20 @@ public final class MatchStatus
     /** Tics until the player stands up, zero when they are on their feet. */
     private final int respawnTicsRemaining;
 
+    /** Kills toward the next super blaster. */
+    private final int killStreak;
+
+    /** Tics of super blaster left, zero when the blaster is ordinary. */
+    private final int superBlasterTicsRemaining;
+
     /**
-     * Creates a status from explicit figures.
+     * Creates a status for a round with no reward in play.
      *
-     * <p>Public so a test can build a state a real match would take thousands of
-     * tics to reach — a player four deaths in with two bots left, say. Normal
-     * callers use {@link #of(Match, int)}.</p>
+     * <p>Kept as it was, delegating with a zero streak and no buff, because it is
+     * the shape every existing caller and test writes and none of them are making
+     * a claim about a super blaster. Adding two parameters to the only public way
+     * of building this type would have made every one of those call sites state a
+     * fact it does not care about.</p>
      *
      * @param kills bots put down; must not be negative
      * @param opponents bots the round started with; must not be negative
@@ -82,7 +90,34 @@ public final class MatchStatus
     public MatchStatus(final int kills, final int opponents, final int alive, final int deaths,
         final int health, final boolean down, final int respawnTics)
     {
-        if (kills < 0 || opponents < 0 || alive < 0 || deaths < 0 || respawnTics < 0)
+        this(kills, opponents, alive, deaths, health, down, respawnTics, 0, 0);
+    }
+
+    /**
+     * Creates a status from explicit figures, reward included.
+     *
+     * <p>Public so a test can build a state a real match would take thousands of
+     * tics to reach — a player four deaths in with two bots left and one second of
+     * super blaster to spend, say. Normal callers use {@link #of(Match, int)}.</p>
+     *
+     * @param kills bots put down; must not be negative
+     * @param opponents bots the round started with; must not be negative
+     * @param alive bots still standing; must not be negative and must not exceed
+     *     {@code opponents}
+     * @param deaths times the player was put down; must not be negative
+     * @param health remaining player health
+     * @param down whether the player is waiting to respawn
+     * @param respawnTics tics until they stand up; must not be negative
+     * @param streak kills toward the next super blaster; must not be negative
+     * @param superTics tics of super blaster left; must not be negative
+     * @throws IllegalArgumentException if any rule above is broken
+     */
+    public MatchStatus(final int kills, final int opponents, final int alive, final int deaths,
+        final int health, final boolean down, final int respawnTics, final int streak,
+        final int superTics)
+    {
+        if (kills < 0 || opponents < 0 || alive < 0 || deaths < 0 || respawnTics < 0
+            || streak < 0 || superTics < 0)
         {
             throw new IllegalArgumentException("match counters must not be negative");
         }
@@ -98,6 +133,8 @@ public final class MatchStatus
         this.playerHealth = health;
         this.playerDown = down;
         this.respawnTicsRemaining = respawnTics;
+        this.killStreak = streak;
+        this.superBlasterTicsRemaining = superTics;
     }
 
     /**
@@ -118,7 +155,8 @@ public final class MatchStatus
         }
         return new MatchStatus(match.botsKilled(), match.botCount(), match.livingBots(),
             match.playerDeaths(), match.playerHealth(), match.isPlayerDown(),
-            match.respawnTicsRemaining(ticIndex));
+            match.respawnTicsRemaining(ticIndex), match.killStreak(),
+            match.superBlasterTicsRemaining());
     }
 
     /** Returns how many bots the player has put down. */
@@ -185,12 +223,76 @@ public final class MatchStatus
         return (respawnTicsRemaining + ticsPerSecond - 1) / ticsPerSecond;
     }
 
+    /**
+     * Returns kills toward the next super blaster.
+     *
+     * <p>On the HUD beside the score, and it earns its place there: a gun that
+     * changes on the third kill with nothing counting up to it is a mystery rather
+     * than a reward. Reads {@code 0} again the instant it is spent, because the
+     * kill that completes the streak is the kill that consumes it.</p>
+     *
+     * @return the current streak
+     */
+    public int killStreak()
+    {
+        return killStreak;
+    }
+
+    /**
+     * Returns how many kills in one life the super blaster costs.
+     *
+     * <p>Relayed from {@link Match#SUPER_BLASTER_KILL_STREAK} rather than copied
+     * into a field, because it is a <b>rule</b> and not a per-frame measurement —
+     * every snapshot would carry the same number. It is here at all so a HUD can
+     * draw "STREAK 2/3" without importing {@code Match}: this snapshot is the whole
+     * of what the platform layer is allowed to know about a round.</p>
+     *
+     * @return the kills one award costs
+     */
+    public int killStreakTarget()
+    {
+        return Match.SUPER_BLASTER_KILL_STREAK;
+    }
+
+    /** Returns whether the player's shot is doing double damage right now. */
+    public boolean isSuperBlaster()
+    {
+        return superBlasterTicsRemaining > 0;
+    }
+
+    /** Returns tics of super blaster left, zero when the blaster is ordinary. */
+    public int superBlasterTicsRemaining()
+    {
+        return superBlasterTicsRemaining;
+    }
+
+    /**
+     * Returns the whole seconds of super blaster left, rounded up.
+     *
+     * <p>Rounded <b>up</b> for the reason {@link #respawnSecondsRemaining} is: a
+     * countdown that truncates shows "0" for a whole second while the reward is
+     * still working, which teaches the player to stop trusting it.</p>
+     *
+     * @param ticsPerSecond the simulation rate; a non-positive value returns 0
+     *     rather than dividing by it
+     * @return seconds remaining, zero when the blaster is ordinary
+     */
+    public int superBlasterSecondsRemaining(final int ticsPerSecond)
+    {
+        if (ticsPerSecond <= 0 || superBlasterTicsRemaining <= 0)
+        {
+            return 0;
+        }
+        return (superBlasterTicsRemaining + ticsPerSecond - 1) / ticsPerSecond;
+    }
+
     /** Returns a debug rendering of the live score. */
     @Override
     public String toString()
     {
         return "MatchStatus{kills=" + botsKilled + "/" + botCount + ", deaths=" + playerDeaths
             + ", hp=" + playerHealth + ", alive=" + botsAlive + ", down=" + playerDown
-            + ", respawnIn=" + respawnTicsRemaining + " tics}";
+            + ", respawnIn=" + respawnTicsRemaining + " tics, streak=" + killStreak + "/"
+            + killStreakTarget() + ", super=" + superBlasterTicsRemaining + " tics}";
     }
 }

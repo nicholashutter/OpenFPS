@@ -160,6 +160,81 @@ class MatchStatusTest
     }
 
     @Nested
+    @DisplayName("the super blaster")
+    class SuperBlaster
+    {
+        @Test
+        @DisplayName("carries the streak and the reward across to the render thread")
+        void shouldSnapshotTheReward()
+        {
+            // The HUD is drawn on another thread and may not touch Match, so
+            // anything the player is to be told about the reward has to be in here.
+            // Before this it was not, and a buff nobody can see is indistinguishable
+            // from no buff at all.
+            final Match match = matchWithOneMarksman();
+            match.firePlayerShot(0.0f, PlayerController.EYE_HEIGHT_UNITS, 0.0f,
+                0.0f, 0.0f, 1.0f);
+            match.firePlayerShot(0.0f, PlayerController.EYE_HEIGHT_UNITS, 0.0f,
+                0.0f, 0.0f, 1.0f);
+            match.firePlayerShot(0.0f, PlayerController.EYE_HEIGHT_UNITS, 0.0f,
+                0.0f, 0.0f, 1.0f);
+
+            final MatchStatus status = MatchStatus.of(match, 0);
+
+            assertThat(status.killStreak()).isEqualTo(1);
+            assertThat(status.isSuperBlaster()).isFalse();
+            assertThat(status.superBlasterTicsRemaining()).isZero();
+        }
+
+        @Test
+        @DisplayName("relays the streak the reward costs, so a HUD can draw 2/3")
+        void shouldRelayTheTarget()
+        {
+            // A rule rather than a measurement, which is why it is relayed rather
+            // than stored — every snapshot would carry the same number. It is here
+            // so :gdxshared can render the progress without importing Match.
+            assertThat(new MatchStatus(0, 7, 7, 0, 100, false, 0).killStreakTarget())
+                .isEqualTo(Match.SUPER_BLASTER_KILL_STREAK);
+        }
+
+        @Test
+        @DisplayName("its countdown rounds UP too, for the reason the respawn's does")
+        void shouldRoundSuperSecondsUp()
+        {
+            assertThat(superStatus(1).superBlasterSecondsRemaining(TICS_PER_SECOND))
+                .isEqualTo(1);
+            assertThat(superStatus(60).superBlasterSecondsRemaining(TICS_PER_SECOND))
+                .isEqualTo(1);
+            assertThat(superStatus(61).superBlasterSecondsRemaining(TICS_PER_SECOND))
+                .isEqualTo(2);
+            assertThat(superStatus(Match.SUPER_BLASTER_TICS)
+                .superBlasterSecondsRemaining(TICS_PER_SECOND)).isEqualTo(4);
+        }
+
+        @Test
+        @DisplayName("an ordinary blaster reports no seconds and no state")
+        void shouldBeQuietWhenOrdinary()
+        {
+            assertThat(superStatus(0).isSuperBlaster()).isFalse();
+            assertThat(superStatus(0).superBlasterSecondsRemaining(TICS_PER_SECOND)).isZero();
+        }
+
+        @Test
+        @DisplayName("a non-positive tic rate answers zero rather than dividing by it")
+        void shouldNotDivideByAZeroRate()
+        {
+            assertThat(superStatus(120).superBlasterSecondsRemaining(0)).isZero();
+            assertThat(superStatus(120).superBlasterSecondsRemaining(-1)).isZero();
+        }
+
+        // A status with a given number of super-blaster tics left.
+        private static MatchStatus superStatus(final int superTics)
+        {
+            return new MatchStatus(3, 7, 4, 0, 100, false, 0, 0, superTics);
+        }
+    }
+
+    @Nested
     @DisplayName("construction")
     class Construction
     {
@@ -173,6 +248,23 @@ class MatchStatusTest
                 .isInstanceOf(IllegalArgumentException.class);
             assertThatThrownBy(() -> new MatchStatus(0, 7, 7, 0, 100, false, -1))
                 .isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> new MatchStatus(0, 7, 7, 0, 100, false, 0, -1, 0))
+                .isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> new MatchStatus(0, 7, 7, 0, 100, false, 0, 0, -1))
+                .isInstanceOf(IllegalArgumentException.class);
+        }
+
+        @Test
+        @DisplayName("the seven-argument shape means 'no reward in play'")
+        void shouldDefaultTheRewardToAbsent()
+        {
+            // Kept so that every existing caller and test states only what it cares
+            // about. A status built the old way must not claim a buff.
+            final MatchStatus plain = new MatchStatus(3, 7, 4, 1, 60, false, 0);
+
+            assertThat(plain.killStreak()).isZero();
+            assertThat(plain.isSuperBlaster()).isFalse();
+            assertThat(plain.superBlasterTicsRemaining()).isZero();
         }
 
         @Test
