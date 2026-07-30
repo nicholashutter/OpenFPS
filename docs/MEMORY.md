@@ -171,7 +171,7 @@ It also roughly doubled something that *is* worth a thought; see § 5.2.
 | `TicCmdBuffer.latestTics` `int[8]` | | 48 |
 | `NetSession.sendBuffer` `byte[1200]` ([`NetSession.java:101`](../engine/src/main/java/com/openfps/engine/net/NetSession.java)) | `RedundantSender.MAX_DATAGRAM_BYTES = 1200` | 1,216 |
 | 7 × `PeerConnection` + `AckWindow` | `MAX_PEERS = MAX_PLAYERS − 1` | 664 |
-| `DemoEffects` tracer + smoke pools, 12 arrays ([`DemoEffects.java:516–526`](../engine/src/main/java/com/openfps/engine/demo/DemoEffects.java)) | `MAX_TRACERS = 3`, `MAX_PUFFS = 3`, `PUFF_STAGES = 4`, `PUFF_LOBES = 3` → 39 scene instances | 624 |
+| `DemoEffects` tracer + smoke pools, 12 arrays ([`DemoEffects.java`](../engine/src/main/java/com/openfps/engine/demo/DemoEffects.java)) | `MAX_TRACERS = 3`, `MAX_PUFFS = 4`, `PUFF_STAGES = 6`, `PUFF_LOBES = 5` → 123 scene instances | 984 |
 | `Match.bots` `Bot[7]` + 7 `Bot` + one reused `HitResult` | `DEFAULT_BOT_COUNT = 7` | 576 |
 | `PhysicsWorld.solids` `float[16 × 4]` | 16 boxes, `SOLID_STRIDE = 4` | 272 |
 | `SoftwareRenderPort.blendedRenderers` `SpanRenderer[256]` (`:1023`) | `Scene.OPAQUE + 1` | 1,040 |
@@ -489,15 +489,17 @@ then per living bot `DemoScene.placement:960` + `Mat4.ofRowMajor:80` +
 `Mat4.ofRowMajor:82`. **22 objects / 1,280 B per tic**, and the profile puts all
 three lines in its top four.
 
-**F3 — `DemoEffects.java:79–85`.** "**A tic allocates one `Mat4` per *visible*
-effect and nothing else.**"
+**F3 — `DemoEffects`, the "Allocation" section.** "**A tic allocates one `Mat4`
+per *visible* effect and nothing else.**"
 
 Wrong twice. One "`Mat4`" is three objects / 176 B, because
 `Mat4.ofRowMajor:80` copies the caller's `float[16]`. And a visible puff
-publishes `PUFF_LOBES = 3` instances (`DemoEffects.java:778–782`), so it is
-three `Mat4` = 9 objects / 528 B. Worst case 36 objects / 2,112 B per tic against
-a claimed 6. The same file states the honest version at `:124` ("one more `Mat4`
-per tic per visible **puff**" — per *lobe*), so the two contradict each other.
+publishes `PUFF_LOBES` instances, so it is five `Mat4` = 15 objects / 880 B.
+Worst case — three tracers and four puffs — is 23 `Mat4` = 69 objects / 4,048 B
+per tic against a claimed 7. The same file states the honest version in
+`PUFF_LOBES`'s own Javadoc ("one more `Mat4` per tic per visible **puff**" — per
+*lobe*), so the two contradict each other. The numbers got worse when the puff
+grew from three lobes to five; the contradiction is the same one.
 
 **F4 — `SoftwareRenderPort.java:237–239`.** "**a scene swap that stays within the
 high-water mark allocates nothing at all.**"

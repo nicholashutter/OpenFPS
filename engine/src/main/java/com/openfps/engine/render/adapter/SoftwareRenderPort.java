@@ -1812,10 +1812,13 @@ public final class SoftwareRenderPort implements I_RenderPort
      * so concatenating the runs reproduces it. Grouping would have been fewer
      * passes and the wrong picture.</p>
      *
-     * <p>A scene whose translucent instances all share one coverage — the
-     * ordinary case, and what the demo's smoke does — is therefore exactly one
-     * extra batched pass, four parallel dispatches, however many puffs are in
-     * the air.</p>
+     * <p>A scene whose translucent instances all share one coverage is therefore
+     * exactly one extra batched pass, four parallel dispatches, however many
+     * instances are in it. The demo's smoke costs one pass per <i>puff</i>
+     * rather than per instance: all five lobes of a puff sit on the same rung of
+     * {@code DemoEffects.PUFF_COVERAGE}, so they are one run, and a held trigger
+     * keeps three puffs of three different ages in the air — three rungs, three
+     * runs, three passes.</p>
      *
      * <p><b>No texture table is bound</b>, so every triangle falls to the flat
      * path and takes the baked colour of its first vertex. See
