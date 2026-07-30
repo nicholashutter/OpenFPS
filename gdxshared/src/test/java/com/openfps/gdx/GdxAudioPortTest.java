@@ -143,10 +143,13 @@ final class GdxAudioPortTest
         @DisplayName("is harmless with no device, and does not latch the port off")
         void shouldSurvivePreloadWithoutADevice(@TempDir final Path cache)
         {
-            // The Android launcher calls this on entering a match, which fires
-            // once at attach time while the menu is still up — before the frame
-            // loop, so before Gdx.audio exists. It has to be as survivable as
-            // play() is, and it must leave the port willing to try again.
+            // The Android launcher calls this as soon as there is a surface —
+            // while the menu is still up, and deliberately NOT on entering a
+            // match, because that edge is also what unfreezes the bots and the
+            // first bot shot then beat the asynchronous SoundPool.load to the
+            // speaker ("not READY"). It is still called on the match edge too, as
+            // an idempotent backstop, so it has to be as survivable as play() is
+            // and must leave the port willing to try again.
             final I_AudioPort port = new GdxAudioPort(cache.toFile());
             port.init();
 

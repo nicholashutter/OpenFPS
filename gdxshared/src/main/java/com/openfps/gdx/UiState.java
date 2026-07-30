@@ -186,6 +186,32 @@ public enum UiState
     }
 
     /**
+     * Returns whether a platform "back" gesture should return to the main menu
+     * rather than leave the application.
+     *
+     * <p>Only Android has such a gesture, but the answer is a property of the UI
+     * state rather than of the platform, so it lives here with the other four
+     * predicates instead of as a switch in the Activity.</p>
+     *
+     * <p><b>{@link #MENU} is the one state that answers false</b>, and that is the
+     * Android convention rather than an oversight: back from the front screen of an
+     * app leaves the app, and this one has a Quit button saying so as well. Every
+     * other state answers true, and for {@link #SETTINGS} and {@link #GAME_OVER}
+     * that is a correction rather than a restatement. Both of them take the input
+     * processor away from everything else, so if back is neither caught nor acted
+     * on, Android finishes the Activity — reading a settings screen and pressing
+     * back quit the game, and doing it on the end screen threw the result away with
+     * it. On desktop the same two screens are left with Escape, which has always
+     * gone to the menu.</p>
+     *
+     * @return true in every state except {@link #MENU}
+     */
+    public boolean backReturnsToMenu()
+    {
+        return this != MENU;
+    }
+
+    /**
      * Returns true while the pointer should be caught, hidden, and driving the
      * view.
      *
