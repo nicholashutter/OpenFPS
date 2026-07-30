@@ -269,6 +269,17 @@ public final class DesktopLauncher
             // the failure that went unnoticed for as long as it did.
             if (gameplay[0] != null && gameplay[0].remoteBodies() != null)
             {
+                // The local player's own final placement, printed beside the peer
+                // bodies so the two can be compared directly. This is the whole
+                // lockstep claim in one line: whatever this peer says its own
+                // position is, the OTHER peer's log must show the same numbers for
+                // this player's body. A divergence here is a desync, and there is
+                // currently nothing else that would report one.
+                LOG.info("Local player {} finished at ({}, {}, {}) yaw {}",
+                    netArgs.playerId(), gameplay[0].controller().positionX(),
+                    gameplay[0].controller().positionY(),
+                    gameplay[0].controller().positionZ(),
+                    gameplay[0].controller().yawRadians());
                 LOG.info("Remote body summary: {}", gameplay[0].remoteBodies());
             }
             netSession.close();
