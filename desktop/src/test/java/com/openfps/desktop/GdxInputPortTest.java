@@ -382,6 +382,23 @@ class GdxInputPortTest
             assertThat(port.currentInput().forwardAxis()).isZero();
             assertThat(port.currentInput().strafeAxis()).isZero();
         }
+
+        @Test
+        @DisplayName("no scripted trigger either, unless the property asks for one")
+        void shouldNotFireByItselfByDefault()
+        {
+            // The same property as above and it matters more. A scripted trigger
+            // that leaked into an ordinary run would spend the player's accuracy
+            // figure and could clear the room with nobody touching a mouse — and it
+            // would look like a stuck button rather than like a debug switch.
+            final GdxInputPort port = new GdxInputPort(new InputAccumulator(1.0f));
+            port.init();
+
+            assertThat(port.autoFire()).isNull();
+
+            port.sampleInput(0);
+            assertThat(port.currentInput().fire()).isFalse();
+        }
     }
 
     @Nested
