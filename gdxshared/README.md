@@ -181,3 +181,4 @@ every tic of an idle player.
 | `BlockButton.java` | A beveled key with a hover lift |
 | `MenuBackground.java` | The checkered field and its diagonal sheen |
 | `MenuPalette.java` | Every colour the menu uses, in one place |
+| `ScoreOverlay.java` | The corner score, the death notice, and the super-blaster plaque. Three things and three sizes of feedback: reference, interruption, reward |

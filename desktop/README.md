@@ -156,12 +156,25 @@ seconds — the only way to measure the *windowed* rate — and
 `-Dopenfps.workers=N` pins the worker pool, which `ThreadPoolFactory` otherwise
 sizes from the processor count; the boot log says which of the two happened.
 
+Two of them **script the player**, and they exist because an unattended capture
+run has no hands: `GdxInputPort.pollDevice` refuses to read the device unless the
+cursor is caught and the window focused, neither of which a screenshot run can
+promise. `-Dopenfps.autoWalkTics=N` (with `autoWalkForward` / `autoWalkStrafe`)
+holds a movement axis, which is what makes collision photographable;
+`-Dopenfps.autoFireTics=N` holds the **trigger**, which is what makes a kill
+streak photographable. The walk takes precedence while it lasts, so the pair
+reads as a sequence — line a target up, then stand still and shoot. Both are off
+by default and both log loudly when on, because a run that moves or fires by
+itself looks like a stuck key rather than like a switch somebody set.
+`engine/gameplay/README.md` has the two recipes and the figures they produced.
+
 ## Files
 
 - `DesktopLauncher.java` — composition root and `main`
 - `GdxAdapterFactory.java` — decorates the headless desktop HAL (7 tests)
 - `GdxWindowPort.java` — LWJGL3 window and frame loop (22 tests)
-- `GdxInputPort.java` — the platform half of input (11 tests)
+- `GdxInputPort.java` — the platform half of input, plus the scripted walk and
+  scripted trigger the capture harness drives it with (12 tests)
 - `GamepadSource.java` — the controller seam, so hot-plug is a unit test
 - `GlfwGamepad.java` — the whole desktop gamepad backend: six GLFW calls, no
   new dependency. See `NOTICE` on why not `gdx-controllers`/SDL
@@ -172,4 +185,4 @@ sizes from the processor count; the boot log says which of the two happened.
 - `MainMenuScreen.java` / `MenuActions.java` / `DefaultMenuActions.java` /
   `MenuButtonListener.java` — the Scene2D menu and its testable seam (9 tests)
 
-**151 tests in this module.** Run with `.\gradlew.bat :desktop:test`.
+**152 tests in this module.** Run with `.\gradlew.bat :desktop:test`.

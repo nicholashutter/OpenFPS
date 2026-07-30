@@ -8,9 +8,9 @@
 |---|---|
 | **State** | SHIPPING |
 | **Phase** | 4 — the match layer landed ahead of its phase, as the controller did |
-| **Tests** | 321 — counted, not remembered: `gradlew :engine:test --tests 'com.openfps.engine.gameplay.*'` |
+| **Tests** | 348 — counted, not remembered: `gradlew :engine:test --tests 'com.openfps.engine.gameplay.*'` |
 | **Registered** | P_ via `GameplaySubsystem` |
-| **Verified** | 2026-07-29 |
+| **Verified** | 2026-07-30 |
 
 ### The match layer
 
@@ -46,6 +46,36 @@ which defaults to `Match.UNLIMITED_DEATHS`; a death respawns the player after
 counted in **tics** and never in milliseconds — a wall-clock delay would elapse
 on different tics on two peers, which is the same class of desync `BotRng` exists
 to prevent arriving by a different door.
+
+**Three kills without dying earn a bigger gun.** `SUPER_BLASTER_KILL_STREAK`
+kills in **one life** arm the super blaster for `SUPER_BLASTER_TICS`, during which
+a shot does `SUPER_BLASTER_SHOT_DAMAGE` — two hits to kill instead of three. The
+four decisions behind it, each argued at its own constant:
+
+| Decision | Answer | Why, in one line |
+|---|---|---|
+| What counts as a streak | kills **without dying**; a death zeroes it | that is what the word means to a player; a running total changes the gun at a moment nothing on screen accounts for |
+| Duration | **240 tics**, never milliseconds | a wall-clock window expires on different tics on two peers, which here is a shot doing 68 damage on one and 34 on the other |
+| Damage | `PLAYER_SHOT_DAMAGE * SUPER_BLASTER_DAMAGE_MULTIPLIER`, derived | a second literal is one re-balance away from a reward that has quietly stopped being double anything |
+| A kill while it is live | neither extends nor refreshes; another full streak re-arms it | extending is a positive feedback loop, and in a seven-bot room nothing stops it — the reward would end the round rather than punctuate it |
+
+Two further rules that are easy to leave out and impossible to see missing.
+**A death cancels a live buff**, because being alive and three ahead is its only
+precondition. And **`reset()` clears both the streak and the buff** — a rematch
+opening with four seconds of double damage nobody earned is the same class of bug
+this reset already shipped once, when reviving the bots left them invisible.
+
+The window is a **countdown** rather than an absolute expiry tic, which is the one
+place it differs from the respawn: a respawn is scheduled inside `tick`, which is
+handed the tic index, while the award happens inside `firePlayerShot`, which
+deliberately has no clock. A countdown also cannot be stranded by a caller that
+skips a tic index.
+
+The player is told three ways, because a buff with no feedback is
+indistinguishable from no buff: a `STREAK n/3` line in the score panel at all
+times, a centred plaque counting down while it is live, and three sounds —
+earning it, firing it, and losing it. See `gdxshared/ScoreOverlay` and
+`audio/README.md`.
 
 **Built.** `PlayerController` — first-person look and movement, `StrictMath`
 throughout so lockstep peers stay bit-identical, pitch clamped to ±89°, eye at
@@ -94,7 +124,8 @@ Built and tested today:
   stateless, addressed by `(tic, entity, channel)`
 - `BotSkill` — every number that makes the opponents dumb, plus a `MARKSMAN`
   profile that exists so the geometry tests stay about geometry rather than dice
-- `Match` / `MatchState` — the rules, the score, the respawn, and `reset()`
+- `Match` / `MatchState` — the rules, the score, the respawn, the kill streak and
+  the super blaster, and `reset()`
 - `MatchStatus` / `MatchSummary` — the two immutable copies that cross to the
   render thread: one per frame while a round runs, one when it ends
 - `I_GameplayPort` / `I_GameplayPortFactory` — what the core calls per tic, and
@@ -322,6 +353,39 @@ The position on the `Demo gameplay stopped after N tics at …` line is the
 measurement. Walking forward from the spawn: **`z = 1087.998`** before this
 landed — 774 units outside the room — and **`z = 297.6`** after, on the contact
 plane to the last digit.
+
+### Photographing a kill streak the same way
+
+`openfps.autoFireTics` is the same hook one feature further on: it holds the
+**trigger**, so a run can earn the super blaster with nobody at the keyboard. The
+walk takes precedence while it lasts, so the two properties read as a sequence —
+line a target up, then stand still and shoot.
+
+```
+gradlew :desktop:run "--args=--start-in-game"
+        -Dopenfps.autoWalkTics=18 -Dopenfps.autoWalkForward=0
+        -Dopenfps.autoWalkStrafe=1 -Dopenfps.autoFireTics=900
+        -Dopenfps.screenshot=C:\tmp\f.png
+        -Dopenfps.screenshotFrame=140 -Dopenfps.screenshotCount=70
+        -Dopenfps.screenshotExit=true
+```
+
+Eighteen tics of pure strafe is **76.8 units** at
+`PlayerController.MOVE_SPEED_UNITS_PER_SECOND`, which puts the player's eye on the
+line through both sentries — `BOT_ROUTE_CENTRES` entries 1 and 2, at
+`x = -78` and `x = -88`, whose boxes are 16 units either side of their feet. They
+are motionless, so the first six shots are six hits and two kills; the pacing bot
+on route 0 crosses the same line for the third. Reproducibly: **kills on tics 42,
+78 and 222, the award on 222 and the expiry on 462** — exactly
+`222 + SUPER_BLASTER_TICS`, on three separate runs.
+
+The measurements taken from that burst are in the commit that added the HUD. The
+short version, all from `ScoreOverlay.SUPER_COLOUR` (255, 184, 46) counted out of
+the PNGs: the plaque's heading is **4800 amber pixels over 461 × 41**, the panel's
+streak line is **972 over 187 × 27**, both appear on the same frame and both are
+**zero** on the frame after the expiry. The countdown's digit measures 350, 375,
+350 then 250 pixels — 14, 15, 14 and 10 `BlockFont` cells, which are the glyphs
+**4, 3, 2, 1**.
 
 ## Physics math — what's coming
 
