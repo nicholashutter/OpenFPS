@@ -1,0 +1,190 @@
+{
+    // Ctrl+Shift+P -> "Tasks: Run Task". The two "run:" entries at the bottom
+    // are the ones that rebuild and launch the game; everything above them is
+    // the plain Gradle set.
+    //
+    // The run tasks invoke powershell.exe explicitly with -ExecutionPolicy
+    // Bypass rather than calling .\run-desktop.ps1 as a shell command. A
+    // default-configured Windows refuses to run an unsigned .ps1 at all, and
+    // the resulting error mentions execution policy and not the task -- which
+    // would make a one-click launch a support question on a fresh machine.
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "gradle: build",
+            "type": "shell",
+            "command": ".\\gradlew",
+            "args": ["build"],
+            "options": { "cwd": "${workspaceFolder}" },
+            "group": { "kind": "build", "isDefault": true },
+            "problemMatcher": ["$gradle"]
+        },
+        {
+            "label": "gradle: test (all modules)",
+            "type": "shell",
+            "command": ".\\gradlew",
+            "args": ["test"],
+            "options": { "cwd": "${workspaceFolder}" },
+            "group": { "kind": "test", "isDefault": true },
+            "problemMatcher": ["$gradle"]
+        },
+        {
+            "label": "gradle: test (:engine)",
+            "type": "shell",
+            "command": ".\\gradlew",
+            "args": [":engine:test"],
+            "options": { "cwd": "${workspaceFolder}" },
+            "group": "test",
+            "problemMatcher": ["$gradle"]
+        },
+        {
+            "label": "gradle: checkstyleMain",
+            "type": "shell",
+            "command": ".\\gradlew",
+            "args": ["checkstyleMain"],
+            "options": { "cwd": "${workspaceFolder}" },
+            "problemMatcher": ["$gradle"]
+        },
+        {
+            "label": "gradle: :desktop:run",
+            "type": "shell",
+            "command": ".\\gradlew",
+            "args": [":desktop:run"],
+            "options": { "cwd": "${workspaceFolder}" },
+            "problemMatcher": []
+        },
+        {
+            "label": "gradle: :android:assembleDebug",
+            "type": "shell",
+            "command": ".\\gradlew",
+            "args": [":android:assembleDebug"],
+            "options": { "cwd": "${workspaceFolder}" },
+            "problemMatcher": []
+        },
+        {
+            // The default way to play. Recompiles first, every time, and says
+            // which commit it is running -- see run-desktop.ps1.
+            "label": "run: desktop",
+            "type": "shell",
+            "command": "powershell",
+            "args": [
+                "-NoProfile", "-ExecutionPolicy", "Bypass",
+                "-File", "${workspaceFolder}\\run-desktop.ps1"
+            ],
+            "options": { "cwd": "${workspaceFolder}" },
+            "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+            "problemMatcher": ["$gradle"]
+        },
+        {
+            // Straight into the world with FRAME / RENDER / RES on screen. The
+            // fastest way to confirm a running build is the one you just built.
+            "label": "run: desktop (in game, debug overlay)",
+            "type": "shell",
+            "command": "powershell",
+            "args": [
+                "-NoProfile", "-ExecutionPolicy", "Bypass",
+                "-File", "${workspaceFolder}\\run-desktop.ps1",
+                "-StartInGame", "-DebugOverlay"
+            ],
+            "options": { "cwd": "${workspaceFolder}" },
+            "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+            "problemMatcher": ["$gradle"]
+        },
+        {
+            // Prompts for the render mode and whether the overlay is on, so the
+            // three-way comparison needs no task edited and no terminal typed
+            // into.
+            "label": "run: desktop (pick render mode)",
+            "type": "shell",
+            "command": "powershell",
+            "args": [
+                "-NoProfile", "-ExecutionPolicy", "Bypass",
+                "-File", "${workspaceFolder}\\run-desktop.ps1",
+                "-StartInGame", "-DebugOverlay",
+                "-RenderMode", "${input:renderMode}"
+            ],
+            "options": { "cwd": "${workspaceFolder}" },
+            "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+            "problemMatcher": ["$gradle"]
+        },
+        {
+            // Rebuild and verify without opening a window. What to run when the
+            // question is "did that compile?" rather than "how does it look?".
+            "label": "run: desktop (build only)",
+            "type": "shell",
+            "command": "powershell",
+            "args": [
+                "-NoProfile", "-ExecutionPolicy", "Bypass",
+                "-File", "${workspaceFolder}\\run-desktop.ps1", "-NoLaunch"
+            ],
+            "options": { "cwd": "${workspaceFolder}" },
+            "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+            "problemMatcher": ["$gradle"]
+        },
+        {
+            // Builds the APK, boots OpenFPS_API36 if it is not already up,
+            // installs, launches, and tails logcat for this app's process.
+            // Does not terminate on its own -- the log tail is the point.
+            "label": "run: android",
+            "type": "shell",
+            "command": "powershell",
+            "args": [
+                "-NoProfile", "-ExecutionPolicy", "Bypass",
+                "-File", "${workspaceFolder}\\run-android.ps1"
+            ],
+            "options": { "cwd": "${workspaceFolder}" },
+            "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+            "problemMatcher": ["$gradle"]
+        },
+        {
+            "label": "run: android (debug overlay)",
+            "type": "shell",
+            "command": "powershell",
+            "args": [
+                "-NoProfile", "-ExecutionPolicy", "Bypass",
+                "-File", "${workspaceFolder}\\run-android.ps1", "-DebugOverlay"
+            ],
+            "options": { "cwd": "${workspaceFolder}" },
+            "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+            "problemMatcher": ["$gradle"]
+        },
+        {
+            "label": "run: android (pick render mode)",
+            "type": "shell",
+            "command": "powershell",
+            "args": [
+                "-NoProfile", "-ExecutionPolicy", "Bypass",
+                "-File", "${workspaceFolder}\\run-android.ps1", "-DebugOverlay",
+                "-RenderMode", "${input:renderMode}"
+            ],
+            "options": { "cwd": "${workspaceFolder}" },
+            "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+            "problemMatcher": ["$gradle"]
+        },
+        {
+            // Show the emulator's own window instead of driving it headless.
+            // Separate task rather than an input, because -gpu swiftshader is
+            // still what makes it boot on this machine and that must not be
+            // something a menu can get wrong.
+            "label": "run: android (emulator window visible)",
+            "type": "shell",
+            "command": "powershell",
+            "args": [
+                "-NoProfile", "-ExecutionPolicy", "Bypass",
+                "-File", "${workspaceFolder}\\run-android.ps1", "-Window", "-DebugOverlay"
+            ],
+            "options": { "cwd": "${workspaceFolder}" },
+            "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+            "problemMatcher": ["$gradle"]
+        }
+    ],
+    "inputs": [
+        {
+            "id": "renderMode",
+            "type": "pickString",
+            "description": "Internal render resolution (the RES line on the debug overlay)",
+            "options": ["480p", "720p", "native"],
+            "default": "480p"
+        }
+    ]
+}

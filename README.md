@@ -71,8 +71,16 @@ records where the assets came from, not the assets themselves. Two steps:
 .\gradlew.bat :tools:regenerateDemoAssets -PkenneyRaw=C:\path\to\unzipped\packs
 
 # 2. Run it
-.\gradlew.bat :desktop:run
+.\run-desktop.ps1                                  # desktop: rebuild, verify, play
+.\run-android.ps1                                  # phone or emulator: build, install, launch
 ```
+
+`run-desktop.ps1` and `run-android.ps1` are the intended way in on either
+platform. Both recompile every time and print the commit they are running before
+anything opens, so a window is never ambiguous about which build it came from.
+`--help` lists the pass-through options — render mode, the debug overlay,
+`-StartInGame` and the rest. `.\gradlew.bat :desktop:run` still works and is
+still what the script calls; see [BUILD.md](BUILD.md).
 
 Without `-PkenneyRaw`, step 1 still succeeds but emits **only a 60-triangle
 greybox room and no weapon** — the deliberate fallback for when no pack has been

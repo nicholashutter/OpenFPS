@@ -5,6 +5,7 @@
 
 package com.openfps.android;
 
+import android.content.Intent;
 import android.hardware.input.InputManager;
 import android.os.Bundle;
 import android.util.Log;
@@ -34,6 +35,7 @@ import com.openfps.engine.render.port.I_RenderPortFactory;
 import com.openfps.gdx.DebugSettings;
 import com.openfps.gdx.DefaultMenuActions;
 import com.openfps.gdx.FramebufferPresenter;
+import com.openfps.gdx.RenderMode;
 
 /**
  * Android entry point — the Activity declared as LAUNCHER in the manifest.
@@ -101,6 +103,43 @@ public final class AndroidLauncher extends AndroidApplication
     /** Window title. Android takes the visible label from the manifest. */
     private static final String TITLE = "OpenFPS";
 
+    /**
+     * The diagnostic system properties an {@code am start} extra may seed.
+     *
+     * <p><b>Why this list exists.</b> Both of these are read from
+     * {@code System.getProperty} — {@link DebugSettings#OVERLAY_PROPERTY} by the
+     * switch built below, {@link RenderMode#MODE_PROPERTY} by the
+     * {@link FramebufferPresenter} built beside it — and on desktop they are set
+     * with a {@code -D} that {@code desktop/build.gradle.kts} forwards into the
+     * forked JVM. An APK has no command line at all: there is no {@code -D} to
+     * give it and no launcher script in the middle to translate one. So the two
+     * settings most worth changing from outside the app were reachable on one
+     * platform and not the other, and an Android run could only ever show the
+     * defaults.</p>
+     *
+     * <p>An Intent extra is the platform's own equivalent, and {@code adb} can
+     * write one:</p>
+     *
+     * <pre>
+     *   adb shell am start -n com.openfps.android/.AndroidLauncher \
+     *       --es openfps.renderMode native --es openfps.debugOverlay true
+     * </pre>
+     *
+     * <p>String extras for every property regardless of its type, because the
+     * receiving code parses a string in both cases — {@code Boolean.parseBoolean}
+     * for the overlay, a label match for the mode — so {@code --es} keeps one
+     * shape here and one shape on the command line.</p>
+     *
+     * <p>An unlisted extra is ignored rather than forwarded blindly. A property
+     * name is a global, and an Activity that copied arbitrary extras into system
+     * properties would let anything that can start it set anything at all.</p>
+     */
+    private static final String[] LAUNCH_PROPERTIES =
+    {
+        DebugSettings.OVERLAY_PROPERTY,
+        RenderMode.MODE_PROPERTY,
+    };
+
     /** The window port. MUTABLE: created in onCreate, released in onDestroy. */
     private AndroidWindowPort windowPort;
 
@@ -138,6 +177,11 @@ public final class AndroidLauncher extends AndroidApplication
     {
         super.onCreate(savedInstanceState);
         Log.i(TAG, "AndroidLauncher starting");
+
+        // FIRST, before anything that reads a system property is constructed —
+        // DebugSettings and FramebufferPresenter both read theirs once, in their
+        // constructors, and both are built further down this method.
+        applyLaunchProperties();
 
         windowPort = new AndroidWindowPort(this);
         windowPort.init();
@@ -241,6 +285,40 @@ public final class AndroidLauncher extends AndroidApplication
             windowPort = null;
         }
         Log.i(TAG, "AndroidLauncher destroyed");
+    }
+
+    /**
+     * Copies the launch Intent's diagnostic extras into system properties.
+     *
+     * <p>See {@link #LAUNCH_PROPERTIES} for which extras are honoured and why an
+     * Intent is the only channel available on this platform. An absent extra
+     * leaves the property alone rather than clearing it, so a rotation — which
+     * re-runs {@code onCreate} with the same Intent, but a restart from the
+     * launcher icon with none — keeps whatever the previous launch asked for
+     * instead of quietly reverting to the default mid-session.</p>
+     *
+     * <p>Every forwarded value is logged. That is the point of the method as much
+     * as the forwarding is: a setting that silently does nothing is worse than
+     * one that is not offered, so logcat records what was asked for and the
+     * {@code DebugOverlay}'s {@code RES} line then shows what happened.</p>
+     */
+    private void applyLaunchProperties()
+    {
+        final Intent intent = getIntent();
+        if (intent == null)
+        {
+            return;
+        }
+        for (final String name : LAUNCH_PROPERTIES)
+        {
+            final String value = intent.getStringExtra(name);
+            if (value == null || value.isEmpty())
+            {
+                continue;
+            }
+            System.setProperty(name, value);
+            Log.i(TAG, "Launch extra: " + name + "=" + value);
+        }
     }
 
     /**

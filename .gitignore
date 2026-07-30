@@ -11,7 +11,16 @@ bin/
 *.log
 *.iml
 .idea/
-.vscode/
+# .vscode/* rather than .vscode/, because git does not look inside an ignored
+# DIRECTORY and a negation for a file within one never matches. Spelling it as
+# the contents is what lets the one workspace file below be committed.
+.vscode/*
+# tasks.json is project configuration, not personal state: it is what makes
+# `run-desktop.ps1` and `run-android.ps1` one command-palette entry each, and a
+# fresh clone with no tasks.json has to be told about them in prose instead.
+# settings.json stays ignored -- it holds absolute JDK paths valid on exactly
+# one machine -- and so does launch.json, which is a per-developer debugger set.
+!.vscode/tasks.json
 *.ipr
 *.iws
 *.iws.local

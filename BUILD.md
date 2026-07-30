@@ -88,6 +88,113 @@ between `run` doing what you meant and `run` opening a window you didn't want.
 
 ---
 
+## The two run scripts — start here
+
+Two PowerShell scripts at the repository root are the intended way to run the
+game on either platform. **Prefer them over the raw Gradle commands below.**
+
+```powershell
+.\run-desktop.ps1        # rebuild, verify, open a window
+.\run-android.ps1        # rebuild, boot the emulator, install, launch, tail logcat
+```
+
+They exist because of one specific, repeated failure: **reporting a feature as
+"not there" while running a build that predates it.** Both scripts recompile on
+every invocation, print the commit and the working-tree state *before* anything
+launches, and stop with a banner if the build fails rather than falling back to
+the binary that is already there. If the window you are looking at came from one
+of these scripts, the console above it says exactly which commit it is.
+
+From VS Code, both are one entry in **Ctrl+Shift+P → Tasks: Run Task** — see
+[VS Code tasks](#vs-code-tasks).
+
+### `run-desktop.ps1`
+
+| Option | Effect |
+|---|---|
+| `-RenderMode 480p\|720p\|native` | Internal render resolution. Confirm it on the overlay's `RES` line |
+| `-RenderFilter linear\|nearest` | How the finished frame is blitted up to the window |
+| `-DebugOverlay` | Start with `FPS` / `FRAME` / `RENDER` / `RES` on screen |
+| `-StartInGame` | Skip the menu, open straight into the world |
+| `-Fps 30\|60\|120` | Simulation tic rate |
+| `-FpsLog <seconds>` | `FramebufferPresenter`'s three-rate log — platform, presented, rendered |
+| `-Workers <n>` | Pin the render worker pool instead of sizing it from the CPU count |
+| `-Assets <dir>` / `-Model <file>.ofm` | Model root, or a single model on the orbit camera |
+| `-Net <id>:<port>` / `-Peer <id>@<host>:<port>` | Multiplayer, as in *Two peers on one machine* below |
+| `-Screenshot <file>.png` / `-ScreenshotFrame <n>` | Capture that frame and exit instead of waiting to be closed |
+| `-Clean` | Delete compiled output first, so the recompile is from scratch |
+| `-NoLaunch` | Build and report, then stop |
+| `--help` | The full list, with the reasoning. `-h` and `-Help` also work |
+
+```powershell
+# The one worth memorising: straight into the world, diagnostics visible.
+.\run-desktop.ps1 -StartInGame -DebugOverlay
+
+# Unattended capture at the window's own resolution.
+.\run-desktop.ps1 -StartInGame -DebugOverlay -RenderMode native -Screenshot C:\tmp\native.png
+```
+
+> **Why these options and not others.** Every `-D` the script passes is a
+> property that `desktop/build.gradle.kts` explicitly forwards into the forked
+> JVM. A `-D` on a Gradle command line otherwise lands on the **daemon** and
+> never reaches the game — it would look accepted and do nothing, which is
+> precisely the class of bug these scripts exist to remove. Add an option here
+> only after adding the property to that forwarding list.
+
+If `assets/models` is empty the script says so in words, names
+`:tools:regenerateDemoAssets`, and stops — rather than letting `DesktopLauncher`
+exit **3** and Gradle report it as `finished with non-zero exit value 3`.
+
+### `run-android.ps1`
+
+| Option | Effect |
+|---|---|
+| `-RenderMode 480p\|720p\|native` | Internal render resolution, as an Intent extra |
+| `-DebugOverlay` | Start with the diagnostic overlay on, as an Intent extra |
+| `-Avd <name>` | Which AVD to boot. Default `OpenFPS_API36` |
+| `-Window` | Show the emulator window. Headless by default |
+| `-GpuMode <mode>` | Emulator `-gpu`. Default `swiftshader_indirect` |
+| `-NoEmulator` | Require an already-connected device — use this for a physical phone |
+| `-BootTimeoutSeconds <n>` | How long to wait for `sys.boot_completed`. Default 300 |
+| `-Screenshot <file>.png` / `-ScreenshotDelaySeconds <n>` | Capture and exit |
+| `-Clean` / `-NoLaunch` / `-NoLogcat` | As on desktop; `-NoLogcat` skips the log tail |
+| `--help` | The full list |
+
+The script reuses a running emulator or device if there is one and boots the AVD
+otherwise, waiting on `sys.boot_completed` rather than on `adb devices` — the
+latter answers as soon as `adbd` is up, which is well before `am start` can
+work. It then force-stops the app, installs with `-r`, launches, and tails
+`adb logcat --pid=<pid>`.
+
+> **`-gpu host` is not the default and must not be.** On this machine's Intel
+> iGPU it dies with `Failed to find ColorBuffer`, and the crash-consent dialog it
+> leaves behind blocks the *next* boot until someone dismisses it by hand.
+> `swiftshader_indirect` is slower per frame and always comes up.
+
+**Options reach an APK through Intent extras, not `-D`.** An APK has no command
+line. `AndroidLauncher.LAUNCH_PROPERTIES` lists the properties an
+`am start --es <name> <value>` may seed, and copies them into system properties
+before the objects that read them are constructed. Each one is echoed in logcat
+as `Launch extra: <name>=<value>`, so there is no version of "it was ignored"
+that leaves no trace. Only listed names are honoured — a property name is a
+global, and an Activity that copied arbitrary extras into one would let anything
+that can start it set anything at all.
+
+**`-StartInGame` is desktop-only, and the script refuses it rather than ignoring
+it.** On desktop the flag sets `openfps.startInGame`, which
+`GdxFrameLoopListener` reads in its constructor. Android has no equivalent seam:
+entering the world fires the match gate, and the match gate is also what
+preloads the weapon sound — which needs a live `Gdx.audio` that does not exist
+until the frame loop has started. Tap **Single Player**.
+
+`-Screenshot` photographs the **menu**, because nothing unattended can tap that
+button and a hardcoded tap coordinate would rot the first time the menu is laid
+out differently. The script prints the two `adb` commands that get you into the
+world and take a second shot; on a 2400x1080 landscape panel the first menu
+button is at `input tap 1200 358`.
+
+---
+
 ## Standard Build (Desktop — Windows/Linux/macOS)
 
 ```powershell
@@ -127,6 +234,10 @@ Both `:engine` and `:desktop` apply the `application` plugin, so **bare
 # The playable demo, in a window (needs art — see below)
 .\gradlew :desktop:run
 ```
+
+> `:desktop:run` compiles first, so it is not itself a stale-build risk — but it
+> reports nothing about what it built. `.\run-desktop.ps1` wraps it with the
+> commit, the build result and the option pass-through; prefer that.
 
 | Flag | Effect | Honoured by |
 |---|---|---|
@@ -291,6 +402,10 @@ HTML reports, again per module: `engine\build\reports\tests\test\index.html`.
 Requires **Android SDK 36** and `ANDROID_HOME`. Gradle must run on JDK 17+
 (21 recommended).
 
+> `.\run-android.ps1` does everything in this section in one command, and waits
+> for the right things — see [The two run scripts](#the-two-run-scripts--start-here).
+> What follows is the same work by hand, for when you need one step of it.
+
 ```powershell
 $env:ANDROID_HOME = "C:\Users\<you>\AppData\Local\Android\Sdk"
 $env:JAVA_HOME = "C:\Program Files\Eclipse Adoptium\jdk-21.0.11.10-hotspot"
@@ -403,6 +518,34 @@ rather than regenerating at a lower version.
     }
 }
 ```
+
+### VS Code tasks
+
+`.vscode/tasks.json` **is committed** — it is the one file in that directory
+that is project configuration rather than personal state, and `.gitignore`
+un-ignores it by name. `settings.json` and `launch.json` stay ignored: the first
+holds absolute JDK paths valid on exactly one machine, and the second is a
+per-developer debugger set.
+
+**Ctrl+Shift+P → Tasks: Run Task**:
+
+| Task | What it runs |
+|---|---|
+| `run: desktop` | `run-desktop.ps1` — rebuild and play |
+| `run: desktop (in game, debug overlay)` | `-StartInGame -DebugOverlay` — the fastest way to confirm a running build is the one you just built |
+| `run: desktop (pick render mode)` | Prompts for 480p / 720p / native |
+| `run: desktop (build only)` | `-NoLaunch` — "did that compile?" without a window |
+| `run: android` | `run-android.ps1` — build, boot, install, launch, tail logcat |
+| `run: android (debug overlay)` | The same with the overlay on |
+| `run: android (pick render mode)` | Prompts for the mode |
+| `run: android (emulator window visible)` | `-Window`, still on swiftshader |
+| `gradle: build`, `gradle: test (...)`, `gradle: checkstyleMain`, `gradle: :desktop:run`, `gradle: :android:assembleDebug` | The plain Gradle set, unchanged |
+
+The run tasks invoke `powershell.exe` with `-ExecutionPolicy Bypass -File`
+rather than calling `.\run-desktop.ps1` as a shell command. A
+default-configured Windows refuses to run an unsigned `.ps1` at all, and the
+error it produces names execution policy rather than the task — which would turn
+a one-click launch into a support question on a fresh machine.
 
 ---
 

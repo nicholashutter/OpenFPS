@@ -68,6 +68,9 @@
 <li class="lv2"><a href="#prerequisites">Prerequisites</a></li>
 <li class="lv3"><a href="#installing-the-jdk-if-needed">Installing the JDK (if needed)</a></li>
 <li class="lv2"><a href="#the-modules">The modules</a></li>
+<li class="lv2"><a href="#the-two-run-scripts--start-here">The two run scripts — start here</a></li>
+<li class="lv3"><a href="#run-desktopps1">run-desktop.ps1</a></li>
+<li class="lv3"><a href="#run-androidps1">run-android.ps1</a></li>
 <li class="lv2"><a href="#standard-build-desktop--windowslinuxmacos">Standard Build (Desktop — Windows/Linux/macOS)</a></li>
 <li class="lv3"><a href="#what-build-does">What build Does</a></li>
 <li class="lv3"><a href="#run-the-engine">Run the Engine</a></li>
@@ -84,6 +87,7 @@
 <li class="lv2"><a href="#gradle-wrapper">Gradle wrapper</a></li>
 <li class="lv2"><a href="#intellij-idea">IntelliJ IDEA</a></li>
 <li class="lv2"><a href="#vs-code">VS Code</a></li>
+<li class="lv3"><a href="#vs-code-tasks">VS Code tasks</a></li>
 <li class="lv2"><a href="#troubleshooting">Troubleshooting</a></li>
 <li class="lv3"><a href="#could-not-find-toolchain">Could not find toolchain</a></li>
 <li class="lv3"><a href="#checkstyle-errors">Checkstyle errors</a></li>
@@ -92,7 +96,7 @@
 <li class="lv2"><a href="#cicd">CI/CD</a></li>
 </ul></details></aside>
 <main id="doc">
-<p class="crumb"><span class="tag">Building</span><span class="sep">/</span><code>BUILD.md</code><span class="sep">/</span>12 min read</p>
+<p class="crumb"><span class="tag">Building</span><span class="sep">/</span><code>BUILD.md</code><span class="sep">/</span>18 min read</p>
 <h1 id="buildmd--openfps-build-reference">BUILD.md — OpenFPS Build Reference<a class="anchor" href="#buildmd--openfps-build-reference" aria-label="Permalink">#</a></h1>
 <blockquote>
 <p>How to build, test, and run OpenFPS on all supported platforms.</p>
@@ -170,6 +174,103 @@ printed on a cached run. <strong>A green build is not evidence that <code>:andro
 compiles.</strong> Set <code>ANDROID_HOME</code> and check for <code>:android:</code> tasks in the output.</p>
 </blockquote>
 <hr>
+<h2 id="the-two-run-scripts--start-here">The two run scripts — start here<a class="anchor" href="#the-two-run-scripts--start-here" aria-label="Permalink">#</a></h2>
+<p>Two PowerShell scripts at the repository root are the intended way to run the
+game on either platform. <strong>Prefer them over the raw Gradle commands below.</strong></p>
+<div class="code" data-lang="powershell"><pre><code>.\run-desktop.ps1        # rebuild, verify, open a window
+.\run-android.ps1        # rebuild, boot the emulator, install, launch, tail logcat
+</code></pre></div>
+<p>They exist because of one specific, repeated failure: <strong>reporting a feature as
+"not there" while running a build that predates it.</strong> Both scripts recompile on
+every invocation, print the commit and the working-tree state <em>before</em> anything
+launches, and stop with a banner if the build fails rather than falling back to
+the binary that is already there. If the window you are looking at came from one
+of these scripts, the console above it says exactly which commit it is.</p>
+<p>From VS Code, both are one entry in <strong>Ctrl+Shift+P → Tasks: Run Task</strong> — see
+<a href="#vs-code-tasks">VS Code tasks</a>.</p>
+<h3 id="run-desktopps1"><code>run-desktop.ps1</code><a class="anchor" href="#run-desktopps1" aria-label="Permalink">#</a></h3>
+<div class="tablewrap"><table>
+<thead><tr><th>Option</th><th>Effect</th></tr></thead>
+<tbody>
+<tr><td><code>-RenderMode 480p|720p|native</code></td><td>Internal render resolution. Confirm it on the overlay's <code>RES</code> line</td></tr>
+<tr><td><code>-RenderFilter linear|nearest</code></td><td>How the finished frame is blitted up to the window</td></tr>
+<tr><td><code>-DebugOverlay</code></td><td>Start with <code>FPS</code> / <code>FRAME</code> / <code>RENDER</code> / <code>RES</code> on screen</td></tr>
+<tr><td><code>-StartInGame</code></td><td>Skip the menu, open straight into the world</td></tr>
+<tr><td><code>-Fps 30|60|120</code></td><td>Simulation tic rate</td></tr>
+<tr><td><code>-FpsLog &lt;seconds&gt;</code></td><td><code>FramebufferPresenter</code>'s three-rate log — platform, presented, rendered</td></tr>
+<tr><td><code>-Workers &lt;n&gt;</code></td><td>Pin the render worker pool instead of sizing it from the CPU count</td></tr>
+<tr><td><code>-Assets &lt;dir&gt;</code> / <code>-Model &lt;file&gt;.ofm</code></td><td>Model root, or a single model on the orbit camera</td></tr>
+<tr><td><code>-Net &lt;id&gt;:&lt;port&gt;</code> / <code>-Peer &lt;id&gt;@&lt;host&gt;:&lt;port&gt;</code></td><td>Multiplayer, as in <em>Two peers on one machine</em> below</td></tr>
+<tr><td><code>-Screenshot &lt;file&gt;.png</code> / <code>-ScreenshotFrame &lt;n&gt;</code></td><td>Capture that frame and exit instead of waiting to be closed</td></tr>
+<tr><td><code>-Clean</code></td><td>Delete compiled output first, so the recompile is from scratch</td></tr>
+<tr><td><code>-NoLaunch</code></td><td>Build and report, then stop</td></tr>
+<tr><td><code>--help</code></td><td>The full list, with the reasoning. <code>-h</code> and <code>-Help</code> also work</td></tr>
+</tbody>
+</table></div>
+<div class="code" data-lang="powershell"><pre><code># The one worth memorising: straight into the world, diagnostics visible.
+.\run-desktop.ps1 -StartInGame -DebugOverlay
+
+# Unattended capture at the window's own resolution.
+.\run-desktop.ps1 -StartInGame -DebugOverlay -RenderMode native -Screenshot C:\tmp\native.png
+</code></pre></div>
+<blockquote>
+<p><strong>Why these options and not others.</strong> Every <code>-D</code> the script passes is a
+property that <code>desktop/build.gradle.kts</code> explicitly forwards into the forked
+JVM. A <code>-D</code> on a Gradle command line otherwise lands on the <strong>daemon</strong> and
+never reaches the game — it would look accepted and do nothing, which is
+precisely the class of bug these scripts exist to remove. Add an option here
+only after adding the property to that forwarding list.</p>
+</blockquote>
+<p>If <code>assets/models</code> is empty the script says so in words, names
+<code>:tools:regenerateDemoAssets</code>, and stops — rather than letting <code>DesktopLauncher</code>
+exit <strong>3</strong> and Gradle report it as <code>finished with non-zero exit value 3</code>.</p>
+<h3 id="run-androidps1"><code>run-android.ps1</code><a class="anchor" href="#run-androidps1" aria-label="Permalink">#</a></h3>
+<div class="tablewrap"><table>
+<thead><tr><th>Option</th><th>Effect</th></tr></thead>
+<tbody>
+<tr><td><code>-RenderMode 480p|720p|native</code></td><td>Internal render resolution, as an Intent extra</td></tr>
+<tr><td><code>-DebugOverlay</code></td><td>Start with the diagnostic overlay on, as an Intent extra</td></tr>
+<tr><td><code>-Avd &lt;name&gt;</code></td><td>Which AVD to boot. Default <code>OpenFPS_API36</code></td></tr>
+<tr><td><code>-Window</code></td><td>Show the emulator window. Headless by default</td></tr>
+<tr><td><code>-GpuMode &lt;mode&gt;</code></td><td>Emulator <code>-gpu</code>. Default <code>swiftshader_indirect</code></td></tr>
+<tr><td><code>-NoEmulator</code></td><td>Require an already-connected device — use this for a physical phone</td></tr>
+<tr><td><code>-BootTimeoutSeconds &lt;n&gt;</code></td><td>How long to wait for <code>sys.boot_completed</code>. Default 300</td></tr>
+<tr><td><code>-Screenshot &lt;file&gt;.png</code> / <code>-ScreenshotDelaySeconds &lt;n&gt;</code></td><td>Capture and exit</td></tr>
+<tr><td><code>-Clean</code> / <code>-NoLaunch</code> / <code>-NoLogcat</code></td><td>As on desktop; <code>-NoLogcat</code> skips the log tail</td></tr>
+<tr><td><code>--help</code></td><td>The full list</td></tr>
+</tbody>
+</table></div>
+<p>The script reuses a running emulator or device if there is one and boots the AVD
+otherwise, waiting on <code>sys.boot_completed</code> rather than on <code>adb devices</code> — the
+latter answers as soon as <code>adbd</code> is up, which is well before <code>am start</code> can
+work. It then force-stops the app, installs with <code>-r</code>, launches, and tails
+<code>adb logcat --pid=&lt;pid&gt;</code>.</p>
+<blockquote>
+<p><strong><code>-gpu host</code> is not the default and must not be.</strong> On this machine's Intel
+iGPU it dies with <code>Failed to find ColorBuffer</code>, and the crash-consent dialog it
+leaves behind blocks the <em>next</em> boot until someone dismisses it by hand.
+<code>swiftshader_indirect</code> is slower per frame and always comes up.</p>
+</blockquote>
+<p><strong>Options reach an APK through Intent extras, not <code>-D</code>.</strong> An APK has no command
+line. <code>AndroidLauncher.LAUNCH_PROPERTIES</code> lists the properties an
+<code>am start --es &lt;name&gt; &lt;value&gt;</code> may seed, and copies them into system properties
+before the objects that read them are constructed. Each one is echoed in logcat
+as <code>Launch extra: &lt;name&gt;=&lt;value&gt;</code>, so there is no version of "it was ignored"
+that leaves no trace. Only listed names are honoured — a property name is a
+global, and an Activity that copied arbitrary extras into one would let anything
+that can start it set anything at all.</p>
+<p><strong><code>-StartInGame</code> is desktop-only, and the script refuses it rather than ignoring
+it.</strong> On desktop the flag sets <code>openfps.startInGame</code>, which
+<code>GdxFrameLoopListener</code> reads in its constructor. Android has no equivalent seam:
+entering the world fires the match gate, and the match gate is also what
+preloads the weapon sound — which needs a live <code>Gdx.audio</code> that does not exist
+until the frame loop has started. Tap <strong>Single Player</strong>.</p>
+<p><code>-Screenshot</code> photographs the <strong>menu</strong>, because nothing unattended can tap that
+button and a hardcoded tap coordinate would rot the first time the menu is laid
+out differently. The script prints the two <code>adb</code> commands that get you into the
+world and take a second shot; on a 2400x1080 landscape panel the first menu
+button is at <code>input tap 1200 358</code>.</p>
+<hr>
 <h2 id="standard-build-desktop--windowslinuxmacos">Standard Build (Desktop — Windows/Linux/macOS)<a class="anchor" href="#standard-build-desktop--windowslinuxmacos" aria-label="Permalink">#</a></h2>
 <div class="code" data-lang="powershell"><pre><code># From the project root:
 .\gradlew build
@@ -215,6 +316,11 @@ dependency ever reaches a shipped runtime classpath</p>
 # The playable demo, in a window (needs art — see below)
 .\gradlew :desktop:run
 </code></pre></div>
+<blockquote>
+<p><code>:desktop:run</code> compiles first, so it is not itself a stale-build risk — but it
+reports nothing about what it built. <code>.\run-desktop.ps1</code> wraps it with the
+commit, the build result and the option pass-through; prefer that.</p>
+</blockquote>
 <div class="tablewrap"><table>
 <thead><tr><th>Flag</th><th>Effect</th><th>Honoured by</th></tr></thead>
 <tbody>
@@ -339,6 +445,11 @@ the module split. Ignore it — nothing writes there any more.)</p>
 <h2 id="android-build">Android Build<a class="anchor" href="#android-build" aria-label="Permalink">#</a></h2>
 <p>Requires <strong>Android SDK 36</strong> and <code>ANDROID_HOME</code>. Gradle must run on JDK 17+
 (21 recommended).</p>
+<blockquote>
+<p><code>.\run-android.ps1</code> does everything in this section in one command, and waits
+for the right things — see <a href="#the-two-run-scripts--start-here">The two run scripts</a>.
+What follows is the same work by hand, for when you need one step of it.</p>
+</blockquote>
 <div class="code" data-lang="powershell"><pre><code>$env:ANDROID_HOME = "C:\Users\&lt;you&gt;\AppData\Local\Android\Sdk"
 $env:JAVA_HOME = "C:\Program Files\Eclipse Adoptium\jdk-21.0.11.10-hotspot"
 
@@ -450,6 +561,32 @@ rather than regenerating at a lower version.</p>
     }
 }
 </code></pre></div>
+<h3 id="vs-code-tasks">VS Code tasks<a class="anchor" href="#vs-code-tasks" aria-label="Permalink">#</a></h3>
+<p><code>.vscode/tasks.json</code> <strong>is committed</strong> — it is the one file in that directory
+that is project configuration rather than personal state, and <code>.gitignore</code>
+un-ignores it by name. <code>settings.json</code> and <code>launch.json</code> stay ignored: the first
+holds absolute JDK paths valid on exactly one machine, and the second is a
+per-developer debugger set.</p>
+<p><strong>Ctrl+Shift+P → Tasks: Run Task</strong>:</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Task</th><th>What it runs</th></tr></thead>
+<tbody>
+<tr><td><code>run: desktop</code></td><td><code>run-desktop.ps1</code> — rebuild and play</td></tr>
+<tr><td><code>run: desktop (in game, debug overlay)</code></td><td><code>-StartInGame -DebugOverlay</code> — the fastest way to confirm a running build is the one you just built</td></tr>
+<tr><td><code>run: desktop (pick render mode)</code></td><td>Prompts for 480p / 720p / native</td></tr>
+<tr><td><code>run: desktop (build only)</code></td><td><code>-NoLaunch</code> — "did that compile?" without a window</td></tr>
+<tr><td><code>run: android</code></td><td><code>run-android.ps1</code> — build, boot, install, launch, tail logcat</td></tr>
+<tr><td><code>run: android (debug overlay)</code></td><td>The same with the overlay on</td></tr>
+<tr><td><code>run: android (pick render mode)</code></td><td>Prompts for the mode</td></tr>
+<tr><td><code>run: android (emulator window visible)</code></td><td><code>-Window</code>, still on swiftshader</td></tr>
+<tr><td><code>gradle: build</code>, <code>gradle: test (...)</code>, <code>gradle: checkstyleMain</code>, <code>gradle: :desktop:run</code>, <code>gradle: :android:assembleDebug</code></td><td>The plain Gradle set, unchanged</td></tr>
+</tbody>
+</table></div>
+<p>The run tasks invoke <code>powershell.exe</code> with <code>-ExecutionPolicy Bypass -File</code>
+rather than calling <code>.\run-desktop.ps1</code> as a shell command. A
+default-configured Windows refuses to run an unsigned <code>.ps1</code> at all, and the
+error it produces names execution policy rather than the task — which would turn
+a one-click launch into a support question on a fresh machine.</p>
 <hr>
 <h2 id="troubleshooting">Troubleshooting<a class="anchor" href="#troubleshooting" aria-label="Permalink">#</a></h2>
 <h3 id="could-not-find-toolchain"><code>Could not find toolchain</code><a class="anchor" href="#could-not-find-toolchain" aria-label="Permalink">#</a></h3>
