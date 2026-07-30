@@ -22,6 +22,7 @@ import com.openfps.engine.gameplay.Match;
 import com.openfps.engine.gameplay.MatchSummary;
 import com.openfps.engine.gameplay.adapter.NullGameplayPort;
 import com.openfps.engine.gameplay.port.I_GameplayPort;
+import com.openfps.gdx.AccessibilitySettings;
 import com.openfps.gdx.DebugSettings;
 import com.openfps.engine.hal.adapter.AdapterFactorySelector;
 import com.openfps.engine.hal.adapter.desktop.DesktopDatagramPort;
@@ -197,6 +198,11 @@ public final class DesktopLauncher
         // only object that can see both the settings screen's switch and the
         // renderer it also drives. That is the composition root's job.
         final DebugSettings debug = new DebugSettings();
+        // Separate from the debug switch, and separately defaulted — the outline
+        // is a standard feature for players who need it and starts on, while the
+        // frame counter is a diagnostic and starts off. One boolean could not be
+        // both, which is how the toggle came to disagree with the game.
+        final AccessibilitySettings access = new AccessibilitySettings();
         final GdxAdapterFactory hal = new GdxAdapterFactory(
             AdapterFactorySelector.create(HalBackend.DESKTOP), window);
         final RendererHolder holder = new RendererHolder();
@@ -236,7 +242,8 @@ public final class DesktopLauncher
         attachMatchResult(window, gameplay[0]);
         attachMatchRestart(window, gameplay[0]);
         attachMatchStatus(window, gameplay[0], rate);
-        attachDebugSettings(window, debug, renderer);
+        attachDebugSettings(window, debug);
+        attachAccessibilitySettings(window, access, renderer);
 
         final NetSession netSession;
         try
@@ -463,30 +470,57 @@ public final class DesktopLauncher
     }
 
     /**
-     * Shares the debug switch with the window, and puts the renderer's outline
-     * pass behind it.
+     * Shares the debug switch with the window.
      *
-     * <p><b>Loosely, on purpose.</b> {@code DebugSettings} does not import the
-     * renderer and the renderer has never heard of a settings screen; the
-     * launcher, which already holds both, supplies the one-line observer. And
-     * attaching does not fire it — see {@code DebugSettings.onChange} — so
-     * whatever outline default the renderer was built with survives startup
-     * untouched, and only a player actually pressing the toggle moves it.</p>
+     * <p>Nothing but the frame counter is behind it any more. <b>It used to also
+     * drive the renderer's outline pass</b>, which made a visual aid a
+     * side-effect of a diagnostic and left the toggle's label describing one of
+     * the two things it did — see
+     * {@link #attachAccessibilitySettings} and {@code AccessibilitySettings}.</p>
      *
      * @param window the window whose settings screen flips the switch
      * @param debug the switch to share; must not be null
-     * @param renderer the renderer whose outline pass follows it, or null when
-     *     there is none
      */
     private static void attachDebugSettings(final GdxWindowPort window,
-        final DebugSettings debug, final SoftwareRenderPort renderer)
+        final DebugSettings debug)
     {
         window.attachDebugSettings(debug);
+    }
+
+    /**
+     * Shares the accessibility switches with the window, and puts the renderer's
+     * outline pass behind them.
+     *
+     * <p><b>Loosely, on purpose.</b> {@code AccessibilitySettings} does not
+     * import the renderer and the renderer has never heard of a settings screen;
+     * the launcher, which already holds both, supplies the one-line observer.</p>
+     *
+     * <p><b>The initial value is pushed across explicitly, and that line is the
+     * whole of a bug fix.</b> {@code onChange} deliberately does not fire on
+     * attach, so before this the renderer kept whatever default it was compiled
+     * with and the settings screen reported whatever default the switch was
+     * compiled with — two constants that agreed only by luck, and for a while
+     * did not: the outline defaulted on, its toggle defaulted off, and the
+     * screen said {@code OFF} over a game that was drawing outlines. Asserting
+     * the switch's value once here makes the label true because it was made
+     * true. It is a no-op when the two already agree, because
+     * {@code setOutlineEnabled} takes a value rather than a nudge.</p>
+     *
+     * @param window the window whose settings screen flips the switches
+     * @param access the switches to share; must not be null
+     * @param renderer the renderer whose outline pass follows them, or null when
+     *     there is none
+     */
+    private static void attachAccessibilitySettings(final GdxWindowPort window,
+        final AccessibilitySettings access, final SoftwareRenderPort renderer)
+    {
+        window.attachAccessibilitySettings(access);
         if (renderer == null)
         {
             return;
         }
-        debug.onChange(on -> renderer.setOutlineEnabled(on.booleanValue()));
+        renderer.setOutlineEnabled(access.isTargetOutlineVisible());
+        access.onChange(on -> renderer.setOutlineEnabled(on.booleanValue()));
     }
 
     /**

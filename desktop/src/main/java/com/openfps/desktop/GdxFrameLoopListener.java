@@ -15,6 +15,7 @@ import com.openfps.engine.gameplay.MatchMode;
 import com.openfps.engine.gameplay.MatchStatus;
 import com.openfps.engine.gameplay.MatchSummary;
 import com.openfps.engine.hal.port.I_FrameCallback;
+import com.openfps.gdx.AccessibilitySettings;
 import com.openfps.gdx.DebugOverlay;
 import com.openfps.gdx.DebugSettings;
 import com.openfps.gdx.DefaultMenuActions;
@@ -132,6 +133,16 @@ public final class GdxFrameLoopListener implements ApplicationListener
 
     /** The debug switch the settings screen flips and the overlay reads. Never null. */
     private final DebugSettings debug;
+
+    /**
+     * The visual aids the settings screen flips. Never null.
+     *
+     * <p>Nothing in this class reads it — the renderer's outline pass is what
+     * answers to it, through an observer the launcher hung on it. It is held here
+     * so that the settings screen flips <b>the launcher's object</b>, which is
+     * the only way the toggle and the outline can be the same switch.</p>
+     */
+    private final AccessibilitySettings accessibility;
 
     /**
      * The corner frame counter. Never null; it draws only while
@@ -319,6 +330,42 @@ public final class GdxFrameLoopListener implements ApplicationListener
         final FramebufferPresenter framePresenter, final GdxInputPort desktopInput,
         final DebugSettings debugSettings)
     {
+        this(callback, actions, framePresenter, desktopInput, debugSettings,
+            new AccessibilitySettings());
+    }
+
+    /**
+     * Creates the bridge with caller-supplied debug and accessibility switches.
+     *
+     * <p>The launcher supplies both when it wants to observe them — which it
+     * does for the accessibility group, to put the renderer's outline pass behind
+     * the target outline toggle. A window built without them gets private ones
+     * that nothing else can see, which is what every windowless test wants.</p>
+     *
+     * <p><b>The accessibility switch has to be the launcher's own object and not
+     * a copy of it.</b> A private one here would relabel its button perfectly
+     * well and the outline would simply stop answering — nothing would throw and
+     * nothing would look wrong until a player pressed the toggle and the game
+     * ignored them. {@code GdxFrameLoopListenerTest} asserts the identity for
+     * exactly that reason.</p>
+     *
+     * @param callback the engine callback to forward lifecycle to; must not
+     *     be null
+     * @param actions what the menu buttons do; must not be null
+     * @param framePresenter draws the rasterizer's finished frame, or null for
+     *     a menu-only window
+     * @param desktopInput polled once per frame for mouse and keyboard state,
+     *     or null for a window that reads no input
+     * @param debugSettings the switch the settings screen flips; must not be
+     *     null
+     * @param accessibilitySettings the visual aids the settings screen flips;
+     *     must not be null
+     */
+    public GdxFrameLoopListener(final I_FrameCallback callback, final MenuActions actions,
+        final FramebufferPresenter framePresenter, final GdxInputPort desktopInput,
+        final DebugSettings debugSettings,
+        final AccessibilitySettings accessibilitySettings)
+    {
         if (callback == null)
         {
             throw new IllegalArgumentException("callback must not be null");
@@ -331,7 +378,12 @@ public final class GdxFrameLoopListener implements ApplicationListener
         {
             throw new IllegalArgumentException("debugSettings must not be null");
         }
+        if (accessibilitySettings == null)
+        {
+            throw new IllegalArgumentException("accessibilitySettings must not be null");
+        }
         this.debug = debugSettings;
+        this.accessibility = accessibilitySettings;
         this.callback = callback;
         this.actions = new StartGameTransition(actions, uiState);
         this.presenter = framePresenter;
@@ -477,6 +529,12 @@ public final class GdxFrameLoopListener implements ApplicationListener
         return debug;
     }
 
+    /** Returns the visual aids this window's settings screen flips. Never null. */
+    public AccessibilitySettings accessibilitySettings()
+    {
+        return accessibility;
+    }
+
     /** Returns the corner frame counter. Never null. */
     public DebugOverlay debugOverlay()
     {
@@ -523,7 +581,8 @@ public final class GdxFrameLoopListener implements ApplicationListener
         WindowIcon.apply();
         menu = new MainMenuScreen(actions);
         menu.layoutFor(width, height);
-        settings = new SettingsScreen(debug, renderSettings(), uiState::returnToMenu);
+        settings = new SettingsScreen(accessibility, debug, renderSettings(),
+            uiState::returnToMenu);
         settings.layoutFor(width, height);
         appliedState = uiState.state();
         applyMenuInput(appliedState);

@@ -417,6 +417,16 @@ public final class SoftwareRenderPort implements I_RenderPort
      * round the outside, which reads as geometry rather than as a status
      * effect. That is the change that let this go back to true.</p>
      *
+     * <p><b>The platform side of it is an accessibility option and not a
+     * diagnostic</b> — {@code com.openfps.gdx.AccessibilitySettings}, presented
+     * under its own heading on the settings screen and defaulted on. It used to
+     * hang off the debug switch beside the frame counter, which meant this
+     * default and that switch's default disagreed and the toggle's label was
+     * wrong from the first frame. This class was never party to that: it takes a
+     * boolean from whoever composed it, and the fix was for the composition root
+     * to push its initial value in rather than assume the two constants
+     * matched.</p>
+     *
      * <p><b>It is a master switch and not a scope.</b> What it turns on is a
      * wireframe around the <i>one</i> entity under the point of aim
      * ({@link #aimedEntityId}), because a mark on all seven opponents at once

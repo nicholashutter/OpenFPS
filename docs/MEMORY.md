@@ -576,9 +576,11 @@ repository whose contribution rules require Javadoc to cite sources.
 at all unless `Scene#hasTaggedEntities()`."
 
 It gates on `worldEntityIds != null && outlineEnabled && aimedEntityId !=
-Scene.UNTAGGED` (`:1403`), and `SoftwareRenderPort.java:1143–1148` argues at
-length that answering from `hasTaggedEntities()` would be *wrong*. Not an
-allocation claim, but the named condition is not the one in the code.
+Scene.UNTAGGED`, and `SoftwareRenderPort` argues at length that answering from
+`hasTaggedEntities()` would be *wrong*. Not an allocation claim, but the named
+condition is not the one in the code. (`outlineEnabled` is now driven by
+`AccessibilitySettings` rather than by the debug switch; the gate itself is
+unchanged.)
 
 ### 6.3 Misleading rather than false
 

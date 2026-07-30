@@ -1235,11 +1235,12 @@ final class SoftwareRenderPortTest
 
     // Renders one frame with entity silhouettes switched on.
     //
-    // The outline is OFF by default — it is a debug aid, and a permanent
-    // highlight on every opponent reads as a hit marker to anyone playing. So
-    // a test that asserts on outline pixels has to ask for it, which is also
-    // the honest shape: the assertion and the switch that makes it true sit in
-    // the same place.
+    // The outline is ON by default — it is a visual aid rather than a debug aid,
+    // and it marks only the one entity under the point of aim. This asks for it
+    // anyway, and deliberately: a test that asserts on outline pixels should say
+    // so, so that the assertion and the switch that makes it true sit in the same
+    // place and the test does not quietly start passing for a different reason if
+    // the default moves again. It has moved twice.
     private static SoftwareRenderPort renderOutlined(final Scene scene, final Camera camera)
     {
         final SoftwareRenderPort port = newPort(null, SoftwareRenderPort.BACKFACE_CULL_MODE);

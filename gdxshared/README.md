@@ -165,6 +165,10 @@ every tic of an idle player.
 | `FramebufferPresenter.java` | Uploads R_'s finished frame and draws it fullscreen |
 | `RenderMode.java` | 480p / 720p / native, and the surface-to-framebuffer arithmetic |
 | `RenderSettings.java` | The switch the settings screen cycles; the presenter listens |
+| `AccessibilitySettings.java` | The target outline, on by default; the renderer's outline pass listens |
+| `DebugSettings.java` | The frame counter, off by default; deliberately NOT where the outline lives |
+| `SettingsScreen.java` | Accessibility and diagnostics, in two named groups |
+| `DebugOverlay.java` | The corner FPS / frame time / resolution readout |
 | `InputAccumulator.java` | Accumulate-and-latch between platform and tic rates; mouse displacement and stick rate |
 | `AnalogStick.java` | Radial dead zone, response curve, trigger threshold — no toolkit imports |
 | `UiState.java` / `UiStateMachine.java` | Menu or game, and what each permits |
