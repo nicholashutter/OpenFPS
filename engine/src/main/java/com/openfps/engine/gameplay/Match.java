@@ -105,6 +105,26 @@ public final class Match
     public static final int FIRST_BOT_ENTITY_ID = PLAYER_ENTITY_ID + 1;
 
     /**
+     * The first id handed to a remote peer's body, one past the whole bot block.
+     *
+     * <p><b>This class allocates it without using it</b>, and that is the point:
+     * the entity id space has to have exactly one owner, or two features that
+     * each pick "the next free id" independently will eventually pick the same
+     * one. {@code Match} is that owner because it already reserves
+     * {@link #PLAYER_ENTITY_ID} and hands out the bot block; a remote body is
+     * tagged by {@code DemoScene} rather than here, since it is a scene instance
+     * the match does not simulate.</p>
+     *
+     * <p>Reserved for {@code Constants.MAX_PLAYERS - 1} peers, the same bound
+     * {@code NetSession.MAX_PEERS} enforces. Sized off
+     * {@link #DEFAULT_BOT_COUNT} rather than the live roster because an id block
+     * must be a compile-time constant — a scene built with fewer bots would
+     * otherwise shift every remote id and make a saved reference to one mean a
+     * different body.</p>
+     */
+    public static final int FIRST_REMOTE_ENTITY_ID = FIRST_BOT_ENTITY_ID + DEFAULT_BOT_COUNT;
+
+    /**
      * Returned by {@link #firePlayerShot} when the shot hit nothing.
      *
      * <p>Below {@link Target#MIN_ENTITY_ID} rather than zero, so it cannot

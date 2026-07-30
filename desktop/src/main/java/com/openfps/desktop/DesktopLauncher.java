@@ -248,7 +248,7 @@ public final class DesktopLauncher
         final NetSession netSession;
         try
         {
-            netSession = openNetwork(netArgs, gameplay[0], config);
+            netSession = openNetwork(netArgs, gameplay[0], config, demo);
         }
         catch (final RuntimeException e)
         {
@@ -262,6 +262,14 @@ public final class DesktopLauncher
         if (netSession != null)
         {
             LOG.info("Network summary: {}", netSession);
+            // The other half of the summary, and the half that says whether the
+            // match was playable rather than merely connected: a session can report
+            // perfect traffic while every peer body sat still, which is precisely
+            // the failure that went unnoticed for as long as it did.
+            if (gameplay[0] != null && gameplay[0].remoteBodies() != null)
+            {
+                LOG.info("Remote body summary: {}", gameplay[0].remoteBodies());
+            }
             netSession.close();
         }
         session.stop();
@@ -322,10 +330,12 @@ public final class DesktopLauncher
      *     no match to network
      * @param config the running configuration, whose tic duration sizes the
      *     redundancy window
+     * @param demo the assembled world, whose pre-placed peer bodies the session
+     *     drives, or null when there is no demo scene
      * @return the open session, or null when networking was not requested
      */
     private static NetSession openNetwork(final NetArgs netArgs,
-        final DemoGameplayPort gameplay, final GameConfig config)
+        final DemoGameplayPort gameplay, final GameConfig config, final DemoScene demo)
     {
         if (!netArgs.isRequested() || gameplay == null)
         {
@@ -339,8 +349,16 @@ public final class DesktopLauncher
             netSession.addPeer(peer.id(), peer.address());
         }
         gameplay.attachNetwork(netSession);
-        LOG.info("Multiplayer: {} — the transport carries inputs both ways;"
-            + " remote bodies are not simulated into the world yet", netArgs);
+        // The bodies, without which the session is a perfectly working transport
+        // between two empty rooms. Attached only on the networked path: a
+        // single-player run has nobody to put in them, and the pool costs nothing
+        // while it stays hidden.
+        if (demo != null)
+        {
+            gameplay.attachRemoteBodies(demo.remotePlayers());
+        }
+        LOG.info("Multiplayer: {} — inputs both ways, and each peer is replayed"
+            + " into a body of its own", netArgs);
         return netSession;
     }
 

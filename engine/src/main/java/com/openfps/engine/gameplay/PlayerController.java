@@ -436,6 +436,38 @@ public final class PlayerController
     }
 
     /**
+     * Points the view at an absolute heading and elevation, leaving the position
+     * and the vertical velocity alone.
+     *
+     * <p><b>This exists for the network, and for nothing else.</b>
+     * {@link #update} integrates look as a <i>delta</i>, because that is what a
+     * mouse and a thumbstick report. A {@code TicCmd} does not: it carries the
+     * sender's <b>absolute</b> quantised yaw and pitch, deliberately, because an
+     * angle that is re-derived by summing deltas across a lossy link drifts
+     * further apart on every dropped packet and never recovers. So a peer's body
+     * is <i>told</i> where it is looking rather than asked to accumulate it.</p>
+     *
+     * <p><b>Why not {@link #respawnAt}, which can also set both angles.</b> That
+     * one clears {@link #velocityY} and moves the feet, which for a peer mid-jump
+     * would reset the arc sixty times a second — the body would never leave the
+     * floor. This sets the two angles and touches nothing else.</p>
+     *
+     * <p>Wrapped and clamped exactly as {@link #update} would, so no caller can
+     * put the controller into a state it could not otherwise reach.</p>
+     *
+     * @param headingRadians the yaw to face, in the controller's own convention
+     *     — sweeping from world {@code +z} toward world {@code +x}. Wrapped into
+     *     {@code [0, 2pi)}
+     * @param elevationRadians the pitch to look at, positive up; clamped to
+     *     {@code +-}{@link #MAX_PITCH_RADIANS}
+     */
+    public void setLook(final float headingRadians, final float elevationRadians)
+    {
+        this.yawRadians = wrapYaw(headingRadians);
+        this.pitchRadians = clampPitch(elevationRadians);
+    }
+
+    /**
      * Advances the player by one tic of input.
      *
      * Look is applied before movement, so a turn takes effect on the same tic

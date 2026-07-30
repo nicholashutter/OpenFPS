@@ -582,6 +582,9 @@ public final class DemoScene
     private final int[] botInstances;
     private final int[] botWeaponInstances;
     private final DemoEffects effects;
+
+    /** The pre-placed bodies a networked peer is simulated into. Never null. */
+    private final RemotePlayers remotePlayers;
     private final float spawnX;
     private final float spawnY;
     private final float spawnZ;
@@ -593,7 +596,8 @@ public final class DemoScene
     private DemoScene(final Scene builtScene, final Bot[] roster, final int[] instanceIndices,
         final int[] weaponIndices, final DemoEffects shotEffects, final float feetX,
         final float feetY, final float feetZ, final float yawRadians,
-        final DemoModels.Source modelSource, final PhysicsWorld solidGeometry)
+        final DemoModels.Source modelSource, final PhysicsWorld solidGeometry,
+        final RemotePlayers peerBodies)
     {
         this.physics = solidGeometry;
         this.scene = builtScene;
@@ -601,6 +605,7 @@ public final class DemoScene
         this.botInstances = instanceIndices;
         this.botWeaponInstances = weaponIndices;
         this.effects = shotEffects;
+        this.remotePlayers = peerBodies;
         this.spawnX = feetX;
         this.spawnY = feetY;
         this.spawnZ = feetZ;
@@ -649,6 +654,13 @@ public final class DemoScene
         final int[] instanceIndices = new int[BOT_ROUTE_CENTRES.length / BOT_STRIDE];
         final int[] weaponIndices = new int[instanceIndices.length];
         final Bot[] roster = addBots(builder, models, instanceIndices, weaponIndices);
+        // The other players' bodies, placed whether or not this run is networked.
+        // Unconditional on purpose: a Scene is immutable, so a body that is not
+        // placed here can never be placed at all, and --net is parsed by the
+        // launcher long after this. Seven unused instances cost seven hidden
+        // transforms and nothing else.
+        final RemotePlayers peers = RemotePlayers.addTo(builder, models, solidGeometry,
+            0.0f, 0.0f, -spawnDepth, 0.0f);
         // Unconditionally, and independent of which art is staged: the tracer
         // and the smoke are generated geometry, so they are the one part of the
         // demo that cannot be missing from a fresh clone.
@@ -665,7 +677,7 @@ public final class DemoScene
         // Facing +z, which is yaw 0 (PlayerController's convention), standing
         // back from the origin so the whole room is ahead rather than around.
         return new DemoScene(built, roster, instanceIndices, weaponIndices, shots, 0.0f, 0.0f,
-            -spawnDepth, 0.0f, models.source(), solidGeometry);
+            -spawnDepth, 0.0f, models.source(), solidGeometry, peers);
     }
 
     /**
@@ -853,15 +865,44 @@ public final class DemoScene
         {
             return DemoEffects.HIDDEN;
         }
-        final float yaw = bot.yawRadians();
-        final float sinYaw = (float) StrictMath.sin(yaw);
-        final float cosYaw = (float) StrictMath.cos(yaw);
-        final float x = bot.positionX()
+        return heldWeaponPlacement(bot.positionX(), bot.positionY(), bot.positionZ(),
+            bot.yawRadians());
+    }
+
+    /**
+     * Returns the placement transform for a carbine held by whoever is standing
+     * at a given placement.
+     *
+     * <p><b>Extracted from {@link #botWeaponPlacement} so there is exactly one
+     * definition of "where a held weapon is".</b> A remote peer's body holds the
+     * same carbine as a bot and has to hold it the same way; the arithmetic is
+     * the two-different-angles calculation described on
+     * {@link #botWeaponPlacement}, and duplicating it is how the two would come
+     * to disagree — one of them putting the gun in the wrong hand, or pointing it
+     * backwards, with nothing to say which was correct.</p>
+     *
+     * <p>Takes loose fields rather than a {@link Bot} precisely because a peer is
+     * not one: it is a {@link PlayerController}, which has the same position and
+     * yaw and none of the same type.</p>
+     *
+     * @param feetX the holder's position, world x
+     * @param feetY the holder's position, world y — the floor, not the eye
+     * @param feetZ the holder's position, world z
+     * @param yawRadians the holder's heading, in {@code PlayerController}'s
+     *     convention
+     * @return the weapon's model-to-world transform, never null
+     */
+    public static Mat4 heldWeaponPlacement(final float feetX, final float feetY,
+        final float feetZ, final float yawRadians)
+    {
+        final float sinYaw = (float) StrictMath.sin(yawRadians);
+        final float cosYaw = (float) StrictMath.cos(yawRadians);
+        final float x = feetX
             + BOT_WEAPON_FORWARD_UNITS * sinYaw - BOT_WEAPON_RIGHT_UNITS * cosYaw;
-        final float z = bot.positionZ()
+        final float z = feetZ
             + BOT_WEAPON_FORWARD_UNITS * cosYaw + BOT_WEAPON_RIGHT_UNITS * sinYaw;
-        return placement(x, bot.positionY() + BOT_WEAPON_HEIGHT_UNITS, z,
-            yaw + radians(BOT_WEAPON_YAW_DEGREES), BOT_WEAPON_WORLD_SCALE);
+        return placement(x, feetY + BOT_WEAPON_HEIGHT_UNITS, z,
+            yawRadians + radians(BOT_WEAPON_YAW_DEGREES), BOT_WEAPON_WORLD_SCALE);
     }
 
     /**
@@ -1417,6 +1458,22 @@ public final class DemoScene
     public DemoEffects effects()
     {
         return effects;
+    }
+
+    /**
+     * Returns the pool of pre-placed bodies a networked peer is simulated into.
+     *
+     * <p>Never null, and placed whether or not this run is networked — a
+     * {@link Scene} is immutable, so the bodies have to exist before the launcher
+     * has parsed {@code --net}. An un-networked run simply never makes one
+     * visible. Hand it to {@code DemoGameplayPort}, which drives it from the
+     * session's ring.</p>
+     *
+     * @return the peer body pool this scene placed, never null
+     */
+    public RemotePlayers remotePlayers()
+    {
+        return remotePlayers;
     }
 
     /**

@@ -303,9 +303,19 @@ final class DemoSceneTest
             // holding, and the crosshair does not go dead when it crosses the gun.
             // See addBots. This used to be one per bot only because the carbine
             // was never staged and no weapon instance was placed at all.
+            //
+            // And two per REMOTE PLAYER body, for the identical reason. Those are
+            // placed unconditionally — a Scene is immutable, so a peer's body
+            // cannot be created when the peer connects — and they are people
+            // holding carbines, so they are tagged exactly as the bots are. They
+            // are hidden until a peer's first input arrives, but hiding is a
+            // render-time override and does not untag anything, which is the
+            // distinction this assertion is really pinning down.
+            final int expected = demo.botCount() * 2 + demo.remotePlayers().bodyCount() * 2;
             assertThat(tagged)
-                .as("a body and a carbine per bot — the outline and the shot agree on count")
-                .isEqualTo(demo.botCount() * 2);
+                .as("a body and a carbine per bot and per peer — the outline and the"
+                    + " shot agree on count")
+                .isEqualTo(expected);
         }
 
         @Test

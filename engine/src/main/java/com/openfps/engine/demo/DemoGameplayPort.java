@@ -199,6 +199,17 @@ public final class DemoGameplayPort implements I_GameplayPort
     private volatile NetSession net;
 
     /**
+     * The peers' bodies, or null when nothing has been attached.
+     *
+     * <p>MUTABLE, attached by the launcher before the loop starts, the same shape
+     * and for the same reason as {@link #net} — the pool belongs to the
+     * {@code DemoScene}, which the bootstrap's gameplay factory cannot see.
+     * Volatile because the launcher attaches on the platform's main thread and
+     * the game loop thread reads it every tic.</p>
+     */
+    private volatile RemotePlayers remoteBodies;
+
+    /**
      * Where the weapon's noise goes. Never null.
      *
      * <p><b>Starts silent rather than starting absent.</b> A
@@ -526,15 +537,13 @@ public final class DemoGameplayPort implements I_GameplayPort
      * sent to every peer, and everything they have sent arrives in the same
      * call. Attaching null returns the port to a purely local match.</p>
      *
-     * <p><b>What this does and does not yet do.</b> It carries inputs both ways
-     * and keeps the acknowledgement and loss state that a lockstep simulation
-     * needs — the transport is real and tested over a real socket. It does
-     * <b>not</b> yet simulate remote players into bodies you can see and shoot:
-     * that needs a {@code PlayerController} per peer driven from the received
-     * ring, plus a stall rule for a peer whose tics have not arrived, and both
-     * are the next piece of work rather than part of this one. Saying so here
-     * because a session that exchanges packets perfectly and shows nobody looks
-     * exactly like a session that is broken.</p>
+     * <p><b>Peers become visible only if {@link #attachRemoteBodies} is also
+     * called.</b> The session on its own carries inputs and keeps the
+     * acknowledgement and loss state a lockstep simulation needs; the bodies are
+     * a separate attachment because the pool belongs to the scene, and a session
+     * with no pool is still a useful thing (every test in this class is one).
+     * Saying so here because a session that exchanges packets perfectly and shows
+     * nobody looks exactly like a session that is broken.</p>
      *
      * @param session the session to drive, or null for a local match
      */
@@ -553,6 +562,42 @@ public final class DemoGameplayPort implements I_GameplayPort
     public NetSession network()
     {
         return net;
+    }
+
+    /**
+     * Attaches the pool of bodies the peers are simulated into.
+     *
+     * <p>The other half of {@link #attachNetwork}, and the piece that turns
+     * arriving packets into someone you can see. Every tic, each connected peer's
+     * inputs are replayed out of the session's ring through its own
+     * {@link com.openfps.engine.gameplay.PlayerController} and its model is moved
+     * to the result — see {@link RemotePlayers}.</p>
+     *
+     * <p>A setter rather than a constructor parameter for the reason
+     * {@link #attachAudio} gives: this port is built inside
+     * {@code EngineMain.start} by a factory that takes only the input port, while
+     * the pool comes from the {@code DemoScene} the launcher holds.</p>
+     *
+     * <p>Harmless without a session — the bodies simply stay hidden, which is
+     * exactly what a single-player run wants.</p>
+     *
+     * @param bodies the pool to drive, or null to stop simulating peers
+     */
+    public void attachRemoteBodies(final RemotePlayers bodies)
+    {
+        this.remoteBodies = bodies;
+        if (bodies == null)
+        {
+            LOG.info("Remote bodies detached — peers will not be visible");
+            return;
+        }
+        LOG.info("Remote bodies attached: {}", bodies);
+    }
+
+    /** Returns the pool the peers are simulated into, or null when none is attached. */
+    public RemotePlayers remoteBodies()
+    {
+        return remoteBodies;
     }
 
     /**
@@ -624,6 +669,17 @@ public final class DemoGameplayPort implements I_GameplayPort
             // it needs no queue. See BotShotLog.
             spawnIncomingFire(ticIndex);
             exchangeNetwork(ticIndex, inputPort.currentInput());
+            // IMMEDIATELY after the exchange, because that call is what drained
+            // the socket: replaying here uses the commands that landed on THIS
+            // tic rather than making every peer's body a tic staler than the
+            // data available to it.
+            //
+            // And BEFORE the trigger, for the same reason the bots move before
+            // it — a shot should resolve against where the bodies are on this
+            // tic. The peers are not shootable yet (see advanceRemoteBodies),
+            // but putting the call in the wrong place now would make that a bug
+            // to find later rather than a line to delete.
+            advanceRemoteBodies();
             fireIfRequested(inputPort.currentInput().fire(), ticIndex);
             // AFTER the trigger and BEFORE the publish, which is not an
             // arbitrary order: a tracer spawned this tic sits at the muzzle,
@@ -633,6 +689,7 @@ public final class DemoGameplayPort implements I_GameplayPort
             // barrel is by the time anyone could see it anyway.
             advanceEffects();
             publishBotPlacements();
+            publishRemoteBodies();
             publishEffects();
             aimCamera();
             this.ticsApplied = ticsApplied + 1;
@@ -760,6 +817,60 @@ public final class DemoGameplayPort implements I_GameplayPort
             TicCmdEncoder.encodePitch(controller.pitchRadians()),
             TicCmdEncoder.encodeButtons(input));
         session.tick(ticIndex);
+    }
+
+    // Replays every peer's arrived inputs into its body.
+    //
+    // The whole of "a remote player is not simulated into a body", which was the
+    // oldest open item in the project: the inputs had been arriving correctly for
+    // some time and nothing consumed them, so two instances that were talking
+    // perfectly showed each other an empty room.
+    //
+    // Deliberately NOT gated on matchLive. A peer's body is not part of this
+    // match's state — Match has never heard of it — and freezing peers while the
+    // local player reads a menu would mean their inputs piled up unconsumed and
+    // then replayed in one burst on resume, teleporting everyone. Lockstep cannot
+    // drop input, so the only safe thing to do with it is keep applying it.
+    //
+    // The peers are not yet shootable: Match builds its target list from its bot
+    // roster, and adding a peer's hitbox to it is a separate piece of work with
+    // its own question attached (who decides a hit, when both peers resolve it
+    // independently). Bodies you can see and walk around, but not damage.
+    private void advanceRemoteBodies()
+    {
+        final RemotePlayers bodies = remoteBodies;
+        if (bodies == null)
+        {
+            return;
+        }
+        bodies.advance(net, deltaSeconds);
+    }
+
+    // Puts every peer body back on the spawn point for a rematch.
+    private void resetRemoteBodies()
+    {
+        final RemotePlayers bodies = remoteBodies;
+        if (bodies == null)
+        {
+            return;
+        }
+        bodies.reset(spawnX, spawnY, spawnZ, spawnYawRadians);
+    }
+
+    // Moves each live peer's model to where the replay says it is.
+    //
+    // Guarded on a bound scene for exactly the reason publishBotPlacements is:
+    // the game loop publishes tics from the moment it starts, which on desktop is
+    // before the launcher has called setScene, and setWorldTransform would throw
+    // against a renderer with no instance table.
+    private void publishRemoteBodies()
+    {
+        final RemotePlayers bodies = remoteBodies;
+        if (bodies == null || renderer.scene() == null)
+        {
+            return;
+        }
+        bodies.publish(renderer);
     }
 
     // Moves the opponents and lets them shoot back. Reports the result once,
@@ -1015,9 +1126,15 @@ public final class DemoGameplayPort implements I_GameplayPort
             // new one, and "the first bot to shoot at me was silent" is not a bug
             // anybody would trace back to a rematch.
             botVoices.clear();
+            // The peers go back to the spawn with everyone else. Their cursors are
+            // cleared too, so a body does not try to resume the tic sequence of the
+            // round that just ended — RemotePlayers.reset explains why that has to
+            // be forgotten rather than carried over.
+            resetRemoteBodies();
             // The un-hide. See the Javadoc above: this is what makes the corpses
             // visible again, and nothing in Match can do it.
             publishBotPlacements();
+            publishRemoteBodies();
             publishEffects();
             LOG.info("MATCH RESTARTED — {} opponents back up, {}", match.botCount(), match);
         }
