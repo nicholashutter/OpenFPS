@@ -9,6 +9,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.openfps.engine.gameplay.MatchMode;
+import com.openfps.engine.gameplay.MatchState;
+import com.openfps.engine.gameplay.MatchSummary;
 import com.openfps.gdx.AccessibilitySettings;
 import com.openfps.gdx.DebugSettings;
 import com.openfps.gdx.DefaultMenuActions;
@@ -308,6 +310,102 @@ class AndroidUiFrameCallbackTest
 
             assertThatCode(() -> ui.onFrame(0.016f)).doesNotThrowAnyException();
             assertThat(ui.isMenuActive()).isTrue();
+        }
+
+        @Test
+        @DisplayName("the back key leaves the settings screen instead of quitting the game")
+        void shouldReturnToTheMenuFromSettings()
+        {
+            // Found on the OpenFPS_API36 emulator, and it quit the app. The back key
+            // reached AndroidInputPort and banked a leave request, and this callback
+            // then threw it away because the old guard was "only a match can be
+            // left" — so nothing acted on the press, Android's default handling did,
+            // and reading the settings screen exited the game.
+            final AndroidInputPort input = new AndroidInputPort(2.0f);
+            final AndroidUiFrameCallback ui =
+                new AndroidUiFrameCallback(new RecordingActions(), null, input);
+            input.resize(1280, 720);
+            ui.uiState().openSettings();
+
+            input.keyDown(com.badlogic.gdx.Input.Keys.BACK);
+            ui.onFrame(0.016f);
+
+            assertThat(ui.uiState().state())
+                .as("back on the settings screen goes to the menu, not out of the app")
+                .isEqualTo(UiState.MENU);
+        }
+
+        @Test
+        @DisplayName("the back key leaves the end screen without throwing the result away")
+        void shouldReturnToTheMenuFromGameOver()
+        {
+            // The same defect on the screen where it costs more: the end screen is
+            // the only place the match result is ever shown, and quitting the app
+            // took it with it.
+            final AndroidInputPort input = new AndroidInputPort(2.0f);
+            final AndroidUiFrameCallback ui =
+                new AndroidUiFrameCallback(new RecordingActions(), null, input);
+            input.resize(1280, 720);
+            ui.uiState().startGame();
+            ui.uiState().endMatch(new MatchSummary(MatchState.WON, 7, 1, 7, 21, 13, 44, 56));
+
+            input.keyDown(com.badlogic.gdx.Input.Keys.BACK);
+            ui.onFrame(0.016f);
+
+            assertThat(ui.uiState().state()).isEqualTo(UiState.MENU);
+        }
+
+        @Test
+        @DisplayName("the input port consumes the back key, which is what stops Android acting")
+        void shouldConsumeTheBackKeyInEveryPointerState()
+        {
+            // The property the multiplexer in keepBackKey exists to preserve, pinned
+            // where it can be seen: catching the key is not what stops Android
+            // finishing the Activity — something in the processor chain returning
+            // true is. AndroidInputPort does, in every state, and a change that made
+            // its keyDown conditional on isPlaying would silently restore the bug.
+            final AndroidInputPort input = new AndroidInputPort(2.0f);
+            final AndroidUiFrameCallback ui =
+                new AndroidUiFrameCallback(new RecordingActions(), null, input);
+            input.resize(1280, 720);
+
+            assertThat(input.keyDown(com.badlogic.gdx.Input.Keys.BACK))
+                .as("consumed in the menu")
+                .isTrue();
+            ui.uiState().openSettings();
+            assertThat(input.keyDown(com.badlogic.gdx.Input.Keys.BACK))
+                .as("consumed on the settings screen, where the stage would not")
+                .isTrue();
+        }
+
+        @Test
+        @DisplayName("the port swallows touch releases, so it must sit BEHIND the stage")
+        void shouldPinWhyThePortGoesBehindTheStage()
+        {
+            // The hazard keepBackKey's ordering exists to avoid, pinned where a
+            // future edit that "tidies" the multiplexer argument order will trip
+            // over it.
+            //
+            // touchDown defers to the screen outside a match, which makes the port
+            // look safe to put in FRONT of the stage. touchUp does not defer: it
+            // returns true whatever the UI state, on purpose, because a release must
+            // always be honoured or a finger held across a transition stays down
+            // forever. In front of a stage those two combine into a screen whose
+            // buttons all draw correctly and none of which work — the tap starts a
+            // Scene2D click and the release never arrives to finish it. That is what
+            // the emulator showed: RENDER, DEBUG OVERLAY and BACK all inert.
+            final AndroidInputPort input = new AndroidInputPort(2.0f);
+            final AndroidUiFrameCallback ui =
+                new AndroidUiFrameCallback(new RecordingActions(), null, input);
+            input.resize(1280, 720);
+            ui.uiState().openSettings();
+
+            assertThat(input.touchDown(640, 360, 0, 0))
+                .as("a press outside a match is left to the screen")
+                .isFalse();
+            assertThat(input.touchUp(640, 360, 0, 0))
+                .as("but the RELEASE is always claimed — hence the port goes last")
+                .isTrue();
         }
     }
 

@@ -12,6 +12,8 @@ import android.util.Log;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
+import com.badlogic.gdx.InputMultiplexer;
+import com.badlogic.gdx.InputProcessor;
 import com.badlogic.gdx.utils.ScreenUtils;
 
 import com.openfps.engine.gameplay.MatchMode;
@@ -71,8 +73,19 @@ import com.openfps.gdx.UiStateMachine;
  * between "leave the match" and "quit the game", and the wrong one of those is
  * unrecoverable.</p>
  *
- * <p>The catch is asserted only while playing, so back still leaves the app
- * from the menu, which is what an Android user expects there.</p>
+ * <p>The catch is asserted in every state that has somewhere to go back <i>to</i>
+ * — see {@link UiState#backReturnsToMenu} — so back still leaves the app from the
+ * menu, which is what an Android user expects there, and leaves the screen
+ * everywhere else.</p>
+ *
+ * <p><b>Catching the key is only half of it, and the settings screen was missing
+ * both halves.</b> The catch stops <i>Android</i> acting; something still has to
+ * act. On the settings and end-of-match screens the input processor is a Scene2D
+ * stage, which has no listener for {@code Keys.BACK} and drops it, so
+ * {@link #keepBackKey} leaves {@link AndroidInputPort} in front of those stages in a
+ * multiplexer and {@link #consumeLeaveRequest} picks the request up as usual. Before
+ * that, back on the settings screen quit the game outright — and on the end screen
+ * it took the match result with it.</p>
  *
  * <b>Threading.</b> Every method runs on the GLSurfaceView render thread.
  *
@@ -193,6 +206,12 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
      * MUTABLE: set once by {@link #attachMatchGate} before the loop starts.
      */
     private Consumer<Boolean> matchGate;
+
+    /**
+     * Run once as soon as there is a surface, or null.
+     * MUTABLE: set once by {@link #attachAudioWarmup} before the loop starts.
+     */
+    private Runnable audioWarmup;
 
     /**
      * Creates a menu-only UI — no renderer, no touch controls.
@@ -382,6 +401,34 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
         this.ticsPerSecond = simulationTicsPerSecond;
     }
 
+    /**
+     * Names something to run once, as soon as there is a surface to run against.
+     *
+     * <p><b>This exists because entering a match is too late to warm the sounds
+     * up.</b> The warm-up used to hang off the match gate, on the reasoning that
+     * the surface is up by then and "the player is still finding their thumbs".
+     * The emulator disproved the second half: the gate is also what unfreezes the
+     * bots, so they open fire on the same edge, and the first bot shot arrived
+     * with {@code W/SoundPool: play soundID 2 not READY} — {@code SoundPool.load}
+     * is asynchronous and had not finished. The lead time the old seam assumed was
+     * zero.</p>
+     *
+     * <p>This edge is the earliest one that still satisfies the real constraint.
+     * {@code Gdx.audio} does not exist until the frame loop is running, so the
+     * Activity's {@code onCreate} cannot do it; {@link #onSurfaceReady} runs on the
+     * render thread once the surface exists, which is while the <b>menu</b> is
+     * still on screen. That buys the whole time a player spends reading it.</p>
+     *
+     * @param warmup run once from {@link #onSurfaceReady}, or null for a build
+     *     with nothing to warm up. Expected to be idempotent — the match gate
+     *     still calls it too, as a cheap backstop for a run that somehow reached a
+     *     match without a surface-ready
+     */
+    public void attachAudioWarmup(final Runnable warmup)
+    {
+        this.audioWarmup = warmup;
+    }
+
     /** Returns the debug switch this UI's settings screen flips. Never null. */
     public DebugSettings debugSettings()
     {
@@ -409,6 +456,12 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
         resizeWorld(width, height);
         appliedState = uiState.state();
         applyState(appliedState);
+        // Last, and while the menu is still what is on screen. See
+        // attachAudioWarmup for why this is not left to the match gate.
+        if (audioWarmup != null)
+        {
+            audioWarmup.run();
+        }
     }
 
     @Override
@@ -692,10 +745,14 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
     // key, leaving a settings screen whose buttons do nothing and no way off it.
     private void applyState(final UiState state)
     {
+        // Caught in every state that has somewhere to go back TO, which is all of
+        // them but the menu — see UiState.backReturnsToMenu. It used to be caught
+        // only while playing, which left back on the settings and end screens
+        // falling through to Android and finishing the Activity.
+        catchBackKey(state.backReturnsToMenu());
         if (state.usesPointer())
         {
             attachPointerScreen(state);
-            catchBackKey(false);
             if (input != null)
             {
                 // A finger held at the moment of leaving must not still be held
@@ -718,7 +775,6 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
                 Gdx.input.setInputProcessor(input);
             }
         }
-        catchBackKey(true);
     }
 
     // Gives the processor to whichever of the three button-bearing screens is
@@ -729,14 +785,60 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
         if (state.drawsSettings() && settings != null)
         {
             settings.attachInputProcessor();
-            return;
         }
-        if (state.drawsGameOver() && gameOver != null)
+        else if (state.drawsGameOver() && gameOver != null)
         {
             gameOver.attachInputProcessor();
+        }
+        else
+        {
+            menu.attachInputProcessor();
+        }
+        keepBackKey(state);
+    }
+
+    // Puts the input port BEHIND the screen's stage, for the back key alone.
+    //
+    // A MULTIPLEXER AS WELL AS setCatchKey, because the two do different halves and
+    // the settings screen was missing both. catchBackKey is what stops ANDROID
+    // acting on the press — libGDX's view-level handler reports the key as consumed
+    // only when it is in the caught set, and without that the Activity is finished
+    // out from under the app. This method is what gets the press to something that
+    // ACTS on it: in PLAYING the processor is AndroidInputPort, whose keyDown banks a
+    // leave request, but on the settings and end screens it is a Scene2D stage, which
+    // has no listener for Keys.BACK and drops it. So the port stays in the chain in
+    // front of the stage, and consumeLeaveRequest picks the request up as usual.
+    //
+    // Both halves were verified on the emulator by logging the catch state either
+    // side of the press, because each one alone looks like it works: with only the
+    // catch, the app stays put and the screen never changes; with only the
+    // multiplexer, the UI returns to the menu and the app goes to the home screen in
+    // the same press.
+    //
+    // THE ORDER IS THE WHOLE THING, and putting the port first breaks every button
+    // on both screens. AndroidInputPort.touchUp returns true UNCONDITIONALLY — it
+    // deliberately does not ask isPlayable, because a release must always be
+    // honoured or a finger held across a UI transition is left stuck down. In front
+    // of the stage that is fatal: touchDown falls through and starts a Scene2D
+    // click, touchUp is swallowed, the ClickListener never completes, and every
+    // button is drawn perfectly and does nothing. The emulator showed exactly that —
+    // RENDER, DEBUG OVERLAY and BACK all inert while the screen looked correct.
+    //
+    // Behind the stage, the stage takes what it wants and only what it drops reaches
+    // the port. A Scene2D stage has no listener for Keys.BACK, so the key falls
+    // through and nothing else does.
+    private void keepBackKey(final UiState state)
+    {
+        if (input == null || Gdx.input == null || !state.backReturnsToMenu())
+        {
             return;
         }
-        menu.attachInputProcessor();
+        final InputProcessor screen = Gdx.input.getInputProcessor();
+        if (screen == null)
+        {
+            return;
+        }
+        Gdx.input.setInputProcessor(new InputMultiplexer(screen, input));
     }
 
     // Drops the end screen once the player has left it. It holds a texture, a
@@ -769,17 +871,25 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
     }
 
     // Acts on the leave button or the back key, once per press.
+    //
+    // Every state that has somewhere to go back TO is honoured, not just PLAYING.
+    // The old early return read "only a match can be left", which was true of the
+    // on-screen LEAVE button — it is only drawn over the world — but not of the back
+    // key, which is a hardware control the player can press on any screen. Its
+    // effect was that back on the settings or end screen banked a leave request that
+    // nothing ever acted on, while Android finished the Activity underneath.
     private void consumeLeaveRequest()
     {
         if (input == null || !input.consumeLeaveRequest())
         {
             return;
         }
-        if (!uiState.isPlaying())
+        final UiState current = uiState.state();
+        if (!current.backReturnsToMenu())
         {
             return;
         }
-        Log.i(TAG, "Leaving the match — back to the menu");
+        Log.i(TAG, "Leaving " + current + " — back to the menu");
         uiState.returnToMenu();
     }
 

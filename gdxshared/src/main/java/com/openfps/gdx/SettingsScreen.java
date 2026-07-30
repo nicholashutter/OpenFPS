@@ -119,6 +119,18 @@ public final class SettingsScreen
     /** Where the heading's top edge sits, as a fraction of height from the top. */
     private static final float TITLE_TOP_FRACTION = 0.10f;
 
+    /**
+     * The most of the surface height the heading may occupy, whatever the width
+     * would otherwise give it.
+     *
+     * <p>The same cap, for the same reason, as
+     * {@link GameOverScreen#headingWidthFor}: {@link BlockTitle} derives its cell
+     * size from its <i>width</i>, so on a wide short panel a heading sized to look
+     * right horizontally is far too tall, and it is the item with the least claim
+     * on the space.</p>
+     */
+    private static final float HEADING_MAX_HEIGHT_FRACTION = 0.22f;
+
     /** Largest gap between the heading, each control and the Back key, in pixels. */
     private static final float CONTROL_GAP = 56.0f;
 
@@ -143,6 +155,13 @@ public final class SettingsScreen
 
     /** Group heading font magnification. */
     private static final float GROUP_FONT_SCALE = 1.15f;
+
+    /**
+     * How many pointer-sized buttons this screen stacks: three controls and the
+     * way back. Named because the fit rule counts them and a fourth control would
+     * otherwise be added without the arithmetic noticing.
+     */
+    private static final float BUTTON_COUNT = 4.0f;
 
     /** Button width in pixels. */
     private static final float BUTTON_WIDTH = 420.0f;
@@ -482,6 +501,40 @@ public final class SettingsScreen
      * <i>separation</i> above a heading is the same shared gap every other
      * boundary gets, so a group reads as one block with a name on it.</p>
      *
+     * <h2>Shrinking the gaps was not enough, and a phone proved it</h2>
+     *
+     * <p>Sharing the free space fixed the case where the <i>rhythm</i> did not
+     * fit. It cannot fix the case where the <b>content</b> does not fit, and on a
+     * 2400x1080 handset at 2.625x that is the case: four pointer-sized buttons,
+     * three explanatory lines and two group headings come to roughly 1140 px under
+     * a heading whose own bottom edge is already at 840 px. Every gap collapsed to
+     * zero and the BACK key still sat about 300 px below the bottom edge — on the
+     * one screen that owns the input processor, has un-caught the back key, and
+     * therefore has no other way off it. The emulator showed exactly that: the
+     * groups reading correctly, DEBUG OVERLAY sliced off at the bottom, and no
+     * BACK at all.</p>
+     *
+     * <p>So there are now three corrections, applied in the order that costs the
+     * player least, and the order is the whole argument:</p>
+     *
+     * <ol>
+     *   <li><b>The heading yields first</b>, capped by height as well as width —
+     *       it is decoration and it is the single largest item. Same rule, same
+     *       reasoning and the same inversion of {@link BlockTitle}'s arithmetic as
+     *       {@link GameOverScreen#headingWidthFor}.</li>
+     *   <li><b>Then the hints go.</b> They are sentences <i>about</i> controls,
+     *       not controls, and this screen's own rule is that a button already says
+     *       what the setting is and what state it is in — see the class Javadoc.
+     *       A player who cannot reach BACK has lost strictly more than a player
+     *       who cannot read why the render mode matters.</li>
+     *   <li><b>Then the gaps shrink</b>, as they already did.</li>
+     * </ol>
+     *
+     * <p><b>Nothing that is touched is ever scaled.</b> All four buttons keep their
+     * full pointer-sized boxes at every surface size, because a screen that fits by
+     * shrinking its own touch targets has solved the wrong problem — the same line
+     * {@link GameOverScreen#layoutFor} draws, and drawn in the same place.</p>
+     *
      * @param width window width in pixels
      * @param height window height in pixels
      */
@@ -489,38 +542,159 @@ public final class SettingsScreen
     {
         background.setBounds(0.0f, 0.0f, width, height);
 
-        final float headingWidth = width * TITLE_WIDTH_FRACTION;
-        final float cell = heading.cellSizeFor(headingWidth);
-        final float headingHeight = cell * BlockFont.GLYPH_HEIGHT;
-        final float headingTop = height * (1.0f - TITLE_TOP_FRACTION);
-        heading.setBounds((width - headingWidth) * 0.5f, headingTop - headingHeight,
-            headingWidth, headingHeight);
-
         final float buttonWidth = BUTTON_WIDTH * uiScale;
         final float buttonHeight = BUTTON_HEIGHT * uiScale;
         outlineButton.setSize(buttonWidth, buttonHeight);
         debugButton.setSize(buttonWidth, buttonHeight);
         renderButton.setSize(buttonWidth, buttonHeight);
         backButton.setSize(buttonWidth, buttonHeight);
-        // Packed before they are measured: a Label's height is whatever its
-        // wrapped text came to, and the gap below depends on that answer.
+        // Packed before anything is measured: a Label's height is whatever its
+        // text came to, and both the heading's budget and the hint decision
+        // depend on that answer.
         accessibilityGroup.pack();
         outlineHint.pack();
         displayGroup.pack();
         renderHint.pack();
         debugHint.pack();
 
+        final float headingTop = height * (1.0f - TITLE_TOP_FRACTION);
+        final float headingWidth = headingWidthFor(width, height, heading.widthInBlocks(),
+            headingHeightBudget(height, reachableContentHeight(buttonHeight)));
+        final float cell = heading.cellSizeFor(headingWidth);
+        final float headingHeight = cell * BlockFont.GLYPH_HEIGHT;
+        heading.setBounds((width - headingWidth) * 0.5f, headingTop - headingHeight,
+            headingWidth, headingHeight);
+
         final float controlsTop = headingTop - headingHeight;
-        final float gap = separationFor(controlsTop, buttonHeight);
+        final boolean showHints = hintsFit(
+            controlsTop - reachableContentHeight(buttonHeight), hintsHeight());
+        outlineHint.setVisible(showHints);
+        renderHint.setVisible(showHints);
+        debugHint.setVisible(showHints);
+
+        final float gap = separationFor(controlsTop, buttonHeight, showHints);
 
         // MUTABLE local — the y of the next thing to place, walking downwards.
         float cursor = controlsTop - gap;
         cursor = placeGroup(accessibilityGroup, cursor, width);
-        cursor = placeControl(outlineButton, outlineHint, cursor, width) - gap;
+        cursor = placeControl(outlineButton, outlineHint, cursor, width, showHints) - gap;
         cursor = placeGroup(displayGroup, cursor, width);
-        cursor = placeControl(renderButton, renderHint, cursor, width) - gap;
-        cursor = placeControl(debugButton, debugHint, cursor, width) - gap;
+        cursor = placeControl(renderButton, renderHint, cursor, width, showHints) - gap;
+        cursor = placeControl(debugButton, debugHint, cursor, width, showHints) - gap;
         backButton.setPosition((width - buttonWidth) * 0.5f, cursor - buttonHeight);
+    }
+
+    /**
+     * Returns the width to draw the heading at, capped by the surface and by
+     * whatever vertical room the reachable controls have left.
+     *
+     * <p>Static and taking the block count rather than reading it off the heading,
+     * so the rule can be asserted in a plain JVM — everything else on this screen
+     * needs a GL context to exist at all. It is the same rule
+     * {@link GameOverScreen#headingWidthFor} states, and it is written twice rather
+     * than shared because the two screens cap against different content and the
+     * shared version would take both their measurements as arguments and be no
+     * shorter.</p>
+     *
+     * @param width the surface width in pixels
+     * @param height the surface height in pixels
+     * @param blocks the heading's width in {@link BlockFont} cells
+     * @param heightBudget the most vertical room the heading may take, in pixels;
+     *     {@link Float#MAX_VALUE} means there is no such limit
+     * @return the heading width in pixels, never more than
+     *     {@link #TITLE_WIDTH_FRACTION} of the surface
+     */
+    public static float headingWidthFor(final float width, final float height,
+        final int blocks, final float heightBudget)
+    {
+        final float wanted = width * TITLE_WIDTH_FRACTION;
+        if (blocks <= 0)
+        {
+            return wanted;
+        }
+        // BlockTitle derives its cell size from its WIDTH and draws downward, so
+        // every height limit has to be expressed as a width by inverting that
+        // arithmetic. Doing it here rather than guessing a second constant is
+        // what keeps the two from drifting apart.
+        final float allowedHeight =
+            Math.min(height * HEADING_MAX_HEIGHT_FRACTION, heightBudget);
+        final float capped = (allowedHeight / BlockFont.GLYPH_HEIGHT) * blocks;
+        if (capped < wanted)
+        {
+            return capped;
+        }
+        return wanted;
+    }
+
+    /**
+     * Returns how much vertical room is left for the heading once everything that
+     * must stay reachable has taken its share.
+     *
+     * <p>Static and public because it is the half of the fit rule that decides
+     * whether the player has a way off this screen, and it is assertable without a
+     * window — which the rest of {@link #layoutFor} is not. Never negative: a
+     * heading of zero height is ugly and a BACK key below the bottom edge is a dead
+     * end, and only one of those two is recoverable.</p>
+     *
+     * @param surfaceHeight the surface height in pixels
+     * @param contentHeight the height of everything below the heading that must
+     *     stay on screen — all four buttons, both group headings and the bottom
+     *     margin
+     * @return pixels the heading may occupy, zero or more
+     */
+    public static float headingHeightBudget(final float surfaceHeight,
+        final float contentHeight)
+    {
+        final float budget = surfaceHeight * (1.0f - TITLE_TOP_FRACTION) - contentHeight;
+        if (budget < 0.0f)
+        {
+            return 0.0f;
+        }
+        return budget;
+    }
+
+    /**
+     * Returns whether the explanatory hints can be afforded.
+     *
+     * <p>The second of the three corrections {@link #layoutFor} documents, as
+     * arithmetic. A hint is a sentence about a control rather than a control, so it
+     * is the next thing to go after the heading has already yielded as far as it
+     * can — and it goes as a block of three, because two controls explained and one
+     * not reads as a rendering fault rather than as a decision.</p>
+     *
+     * <p>Static and public because it is the part of this layout whose failure is a
+     * screen with no way off it, and the part worth pinning without a window.</p>
+     *
+     * @param available pixels left once every reachable control has taken its
+     *     share; may be negative, which is the case this rule exists for
+     * @param hintsHeight the height the three hints and their gaps want, in pixels
+     * @return true if the hints fit and should be drawn
+     */
+    public static boolean hintsFit(final float available, final float hintsHeight)
+    {
+        if (!(hintsHeight > 0.0f))
+        {
+            return true;
+        }
+        return available >= hintsHeight;
+    }
+
+    // Everything below the heading that must stay on screen: the four buttons,
+    // the two group headings that name them, and the bottom margin. The hints are
+    // deliberately absent — they are what this measurement decides the fate of.
+    private float reachableContentHeight(final float buttonHeight)
+    {
+        return buttonHeight * BUTTON_COUNT + GROUP_GAP * uiScale * 2.0f
+            + accessibilityGroup.getHeight() + displayGroup.getHeight()
+            + BOTTOM_MARGIN * uiScale;
+    }
+
+    // What the three hints cost, their own gaps included. Measured rather than
+    // computed, because a Label's height is the font's business.
+    private float hintsHeight()
+    {
+        return HINT_GAP * uiScale * 3.0f
+            + outlineHint.getHeight() + renderHint.getHeight() + debugHint.getHeight();
     }
 
     // The gap each separation gets: the free space shared equally, never more
@@ -535,13 +709,17 @@ public final class SettingsScreen
     // six-pixel base; a Back key nobody can reach is not. So MIN_CONTROL_GAP
     // survives as the number a comfortable panel relaxes to and no longer as a
     // promise the geometry cannot keep.
-    private float separationFor(final float controlsTop, final float buttonHeight)
+    private float separationFor(final float controlsTop, final float buttonHeight,
+        final boolean showHints)
     {
-        final float content = buttonHeight * 4.0f + HINT_GAP * uiScale * 3.0f
-            + GROUP_GAP * uiScale * 2.0f
-            + outlineHint.getHeight() + renderHint.getHeight() + debugHint.getHeight()
-            + accessibilityGroup.getHeight() + displayGroup.getHeight();
-        final float free = controlsTop - BOTTOM_MARGIN * uiScale - content;
+        // MUTABLE local — the hints are added only when they are being drawn, or
+        // the gaps would be squeezed to pay for three labels nobody can see.
+        float content = reachableContentHeight(buttonHeight);
+        if (showHints)
+        {
+            content = content + hintsHeight();
+        }
+        final float free = controlsTop - content;
         final float shared = Math.min(CONTROL_GAP * uiScale, free / SEPARATION_COUNT);
         if (shared < MIN_CONTROL_GAP * uiScale)
         {
@@ -559,12 +737,20 @@ public final class SettingsScreen
 
     // Centres one button with its already-packed hint under it, and returns the
     // y the next thing may start from.
+    //
+    // A hidden hint costs nothing at all — not its height and not its gap. It is
+    // still positioned, so that a later resize which can afford it again finds it
+    // in the right place rather than wherever the last cramped layout left it.
     private float placeControl(final BlockButton button, final Label hint, final float top,
-        final float width)
+        final float width, final boolean showHints)
     {
         button.setPosition((width - button.getWidth()) * 0.5f, top - button.getHeight());
         final float hintTop = top - button.getHeight() - HINT_GAP * uiScale;
         hint.setPosition((width - hint.getWidth()) * 0.5f, hintTop - hint.getHeight());
+        if (!showHints)
+        {
+            return top - button.getHeight();
+        }
         return hintTop - hint.getHeight();
     }
 

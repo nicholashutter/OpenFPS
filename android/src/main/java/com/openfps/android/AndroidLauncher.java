@@ -563,13 +563,20 @@ public final class AndroidLauncher extends AndroidApplication
      * the first run of the packaged desktop build and there is no reason a
      * phone would be different.</p>
      *
-     * <p><b>The weapon's sound is loaded on the same edge</b>, and this is the
-     * only seam in the app where it can be. It needs a live {@code Gdx.audio},
-     * which does not exist until the frame loop is running, and it has to
-     * happen before the trigger rather than on it — {@code SoundPool.load} is
-     * asynchronous, so a sound created by the first shot is not ready to play
-     * until several shots later. Entering a match satisfies both: the surface
-     * is up, and the player is still finding their thumbs.</p>
+     * <p><b>The sounds are warmed up on the surface-ready edge, not this one.</b>
+     * They cannot be loaded in {@code onCreate} — {@code SoundPool} needs a live
+     * {@code Gdx.audio}, which does not exist until the frame loop is running —
+     * and loading them on the first trigger is worse still, because
+     * {@code SoundPool.load} is asynchronous and a sound created by the first shot
+     * is not ready to play until several shots later.</p>
+     *
+     * <p>This edge looked like the answer to both and is not, for a reason the
+     * emulator supplied: <b>the gate is what unfreezes the bots</b>, so they open
+     * fire on the very edge that starts the load, and the first bot shot logged
+     * {@code W/SoundPool: play soundID 2 not READY}. The warm-up therefore hangs
+     * off {@code AndroidUiFrameCallback.attachAudioWarmup}, which fires while the
+     * menu is still up. It is still called here as well, because
+     * {@code preload()} is idempotent and a backstop costs one map lookup.</p>
      *
      * @param ui the UI whose transitions drive the gate; must not be null
      * @param gameplay the match to freeze and unfreeze, or null when no world
@@ -579,6 +586,11 @@ public final class AndroidLauncher extends AndroidApplication
     private static void attachMatchGate(final AndroidUiFrameCallback ui,
         final DemoGameplayPort gameplay, final I_AudioPort audio)
     {
+        // Warmed on the surface-ready edge rather than only on this one, because
+        // the gate is ALSO what unfreezes the bots: they open fire on the same
+        // edge, so the lead time this seam was supposed to provide is zero and the
+        // first bot shot logged "not READY". See attachAudioWarmup.
+        ui.attachAudioWarmup(audio::preload);
         if (gameplay == null)
         {
             return;

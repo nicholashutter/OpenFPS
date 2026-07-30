@@ -9,11 +9,96 @@
 |---|---|
 | **State** | SHIPPING |
 | **Phase** | not a numbered phase |
-| **Tests** | 164 unique (328 executions — the suite runs against the debug and release variants). Plain JVM only; nothing device-backed |
+| **Tests** | 177 unique (354 executions — the suite runs against the debug and release variants), plus 12 added to `:gdxshared` for the settings screen's fit rule and the back-key states. Plain JVM only; nothing device-backed |
 | **Registered** | provides the Android HAL (`AndroidAdapterFactory`) and the LAUNCHER Activity |
-| **Verified** | 2026-07-28 — **played on the OpenFPS_API36 emulator: menu, match, seven bots, a kill**. The gamepad path added since has **not** been run on a device or emulator with a controller attached — see "Gamepad hot-plug" below for exactly which parts are reasoned from the platform contracts rather than observed |
+| **Verified** | 2026-07-30 — **a full parity pass on the OpenFPS_API36 emulator**: menu, settings, collision, a won match, the end screen, a rematch, both sounds, all three render modes and the touch pad. It found three defects, two of them dead ends. See "The 2026-07-30 parity pass" below for the row-by-row result and for the four things that still cannot be checked without hardware |
 
-### What the emulator run established
+## The 2026-07-30 parity pass
+
+Every row below was checked **on a running emulator**, not read out of the
+source. The reason for the exercise is that this platform has repeatedly been
+assumed to inherit shared code that it did not, and reading the wiring is exactly
+how that assumption survives: all three defects found here sit in code whose
+wiring is correct and whose *arithmetic or event routing* is not.
+
+| Feature | Verdict |
+|---|---|
+| Collision (`PhysicsWorld`) | **verified** — `PhysicsWorld{16 solids, body half-width 16.0}` at startup; walking into a wall stops, strafing into it slides along it, and the player never left the room |
+| Respawn, kills and deaths | **verified** — `KILLED … death 1, respawning in 120 tics` three times over with the match still running; `KILLS 0/7`, `DEATHS n`, and `HEALTH` turning red under 30 |
+| End screen | **verified** — `VICTORY`, five stat lines, and **PLAY AGAIN and BACK TO MENU both fully on screen** with margin below. The fit rule already in `GameOverScreen` holds at 2.625x |
+| Board reset | **verified** — `MATCH RESTARTED — 7 opponents back up`, counters zeroed, and all seven revived bots **drawn** rather than left invisible by the renderer-side degenerate transform |
+| Bot weapons and incoming fire | **verified** — carbines visible in every bot's hands, violet bolts in flight, and grey muzzle puffs. It is the **generated `BlockCarbine`**, not Kenney art: `blaster-p.ofm` is genuinely absent from `assets/models` on this machine, so desktop shows the same fallback. This is a missing asset, not an Android gap |
+| Audio | **FAILED, fixed** — both sounds do load, but the first bot shot beat the asynchronous `SoundPool.load` and logged `W/SoundPool: play soundID 2 not READY`. Warming up earlier fixed it: three cold runs now show both sounds loaded and **zero** `not READY` warnings |
+| Settings — ACCESSIBILITY | **FAILED, fixed** — see below. `TARGET OUTLINE ON` matches the red keyline actually drawn in the world at startup, and the switch is the launcher's own object |
+| Settings — DISPLAY & DIAGNOSTICS | **FAILED, fixed** — the screen had no reachable `BACK` |
+| Render modes | **verified** — cycled at runtime through `1067x480 (480P)`, `1600x720 (720P)` and `2400x1080 (NATIVE)`, aspect held on the short edge, blit filter switching to Nearest at native, and the overlay's `RES` line agreeing each time |
+| Controller | **partly verified** — better than "untested". Injected gamepad-source key events reach the bindings: `input gamepad keyevent 108` (START) left the match through the full `AndroidBindings` → `AndroidInputPort.keyDown` → `consumeLeaveRequest` path, and A/R1/L1 injected without a crash. The **axis** path is still unverified — see below |
+| Touch control pad | **verified** — stick, FIRE, JUMP and LEAVE all drawn and all working against a brightly lit room, and holding FIRE visibly grows it and takes its fill, rim and glyph to full opacity while JUMP beside it stays untouched |
+
+### The four defects it found
+
+1. **The settings screen had no way off it.** Every fixed metric on
+   `SettingsScreen` is multiplied by the panel's density, and at 2.625x four
+   pointer-sized buttons, three hint lines and two group headings came to roughly
+   1140 px under a heading whose bottom edge was already at 840 px. The existing
+   correction — sharing the free space between the gaps — cannot help when the
+   *content* does not fit: every gap collapsed to zero and `BACK` still sat about
+   300 px below the bottom edge, on the one screen that owns the input processor.
+   `GameOverScreen` had been given a heading cap for exactly this and
+   `SettingsScreen` never was. It now has the same cap plus one more step: the
+   hints are dropped when they cannot be afforded, because a sentence *about* a
+   control is not a control. No touch target is ever scaled.
+   `SettingsScreenFitTest` is the regression.
+
+2. **The back key quit the game from the settings and end screens.** It has
+   always worked in `PLAYING`, and that is what hid it: there the input processor
+   is `AndroidInputPort`, whose `keyDown` banks a leave request. On the other two
+   screens the processor is a Scene2D stage, which has no listener for
+   `Keys.BACK` and drops it — so nothing acted on the press and Android's default
+   handling did. From the end screen that threw the match result away with it.
+   Fixed in two halves, because each alone looks like it works: the key is now
+   *caught* in every state that has somewhere to go back to
+   (`UiState.backReturnsToMenu`), and the port is left in the processor chain
+   behind the stage so something still *acts* on it.
+
+3. **The first bot shot was silent, and the preload was in the wrong place.**
+   `preload()` hung off the match gate, on the reasoning that the surface is up by
+   then and the player is "still finding their thumbs". But the gate is also what
+   unfreezes the bots, so they open fire on the very edge that starts the
+   asynchronous `SoundPool.load`, and the lead time was zero:
+   `W/SoundPool: play soundID 2 not READY`. It now warms up on the surface-ready
+   edge instead — the earliest point at which `Gdx.audio` exists, and one that
+   happens while the menu is still on screen. The gate still calls it as an
+   idempotent backstop.
+
+4. **A trap found while fixing 2.** Putting the port in **front** of the stage
+   makes every button on both screens inert while still drawing perfectly:
+   `AndroidInputPort.touchUp` returns true unconditionally — deliberately, so a
+   finger held across a transition is never left stuck — so the press starts a
+   Scene2D click and the release never arrives to finish it. The emulator showed
+   `RENDER`, `DEBUG OVERLAY` and `BACK` all dead. The port goes **last** in the
+   multiplexer, and a test pins why.
+
+### What this pass still could not check
+
+- **Gamepad axes.** `adb shell input` can synthesize a gamepad *key* event but
+  not a joystick `MotionEvent`, so `dispatchGenericMotionEvent` and the
+  `AXIS_Z`/`AXIS_RZ` right-stick mapping remain reasoned from the platform
+  contracts. A physical pad is the only way to settle them.
+- **Hot-plug.** `InputManager.InputDeviceListener` firing on a Bluetooth drop
+  needs a real pad to drop.
+- **A real pad's identity.** That `SOURCE_JOYSTICK` classifies actual hardware
+  and that its `BUTTON_*` numbering matches `AndroidBindings`.
+- Everything in "What is still not verified on a device" below — context loss,
+  rotation, ARM hardware, and process death — which this pass did not touch.
+
+One caveat worth recording rather than hiding: the back-key check passed on six
+of seven runs, with the seventh backgrounding the app. Every run logged the
+correct state transition, so the flake is in the emulator's input delivery under
+`swiftshader_indirect` rather than in the decision, but it has not been chased to
+the bottom.
+
+### What the earlier emulator run established
 
 The whole loop works on a phone. Measured on the OpenFPS_API36 AVD, API 36,
 2400×1080 landscape at 2.625× density:
@@ -267,14 +352,22 @@ five `getAxisValue` calls and a source check, because a `MotionEvent` cannot be
 constructed in a local unit test: everything that can be wrong happens in
 `onGamepadAxes`, which takes plain floats and is fully covered.
 
-**What is not verified.** No device or emulator has been driven with a controller
-attached, so four things here are reasoned from the platform contracts rather
-than observed: the `MotionEvent` axis numbering (`AXIS_Z`/`AXIS_RZ` being the
-right stick), the `SOURCE_JOYSTICK` check classifying real pads correctly,
-`InputDeviceListener` firing on a Bluetooth drop, and libGDX forwarding
-`BUTTON_*` key events from the surface. Everything on this side of those calls —
-the sign of every axis, the trigger threshold, hot-plug clearing state, and touch
-and pad working simultaneously — is covered by tests that need none of them.
+**What is not verified.** No pad has ever been *attached*, but the 2026-07-30
+pass narrowed this list by one: `adb shell input gamepad keyevent` injects a
+real gamepad-source key event, and `BUTTON_START` travelled the whole path —
+libGDX forwarding it from the surface, `AndroidBindings` naming it, and
+`AndroidInputPort.keyDown` banking the leave request — to take the player out of
+a match. So **libGDX forwarding `BUTTON_*` key events is now observed** rather
+than assumed.
+
+Three things still are not, and no amount of `adb` will settle them: the
+`MotionEvent` axis numbering (`AXIS_Z`/`AXIS_RZ` being the right stick), because
+`input` cannot synthesize a joystick motion event at all; the `SOURCE_JOYSTICK`
+check classifying real pads correctly; and `InputDeviceListener` firing on a
+Bluetooth drop, which needs a real pad to drop. Everything on this side of those
+calls — the sign of every axis, the trigger threshold, hot-plug clearing state,
+and touch and pad working simultaneously — is covered by tests that need none of
+them.
 
 ## Files
 
@@ -304,7 +397,7 @@ and pad working simultaneously — is covered by tests that need none of them.
 - `persistence/` — `RoomUserProfilePort` over `UserProfileEntity`,
   `UserProfileDao` and `OpenFpsDatabase`
 
-**164 tests in this module** — all plain JVM unit tests, no Robolectric and no
+**177 tests in this module** — all plain JVM unit tests, no Robolectric and no
 instrumentation. They cover what can honestly be covered off a device: the whole
 touch-gesture layer (which control a pixel belongs to, stick deflection and its
 dead zone, the drawn thumb clamped to its ring, the resting stick clearing the

@@ -449,6 +449,49 @@ class UiStateMachineTest
         }
 
         @Test
+        @DisplayName("back leaves every screen except the menu, which it leaves the app from")
+        void shouldSendBackToTheMenuFromEveryScreenButTheMenu()
+        {
+            // Found on the OpenFPS_API36 emulator: back on the settings screen quit
+            // the game outright. Android's default handling finishes the Activity,
+            // and SETTINGS and GAME_OVER had both taken the input processor away
+            // from the thing that was bound to the key while neither catching it nor
+            // acting on it. From GAME_OVER that threw the match result away with it.
+            assertThat(UiState.SETTINGS.backReturnsToMenu())
+                .as("a settings screen is left, not quit from")
+                .isTrue();
+            assertThat(UiState.GAME_OVER.backReturnsToMenu())
+                .as("and so is an end screen")
+                .isTrue();
+            assertThat(UiState.PLAYING.backReturnsToMenu())
+                .as("back has always left a match")
+                .isTrue();
+            assertThat(UiState.MENU.backReturnsToMenu())
+                .as("but back from the front screen leaves the app, per Android")
+                .isFalse();
+        }
+
+        @Test
+        @DisplayName("every state that owns a stage is one back can be escaped from")
+        void shouldNeverStrandAScreenThatOwnsTheProcessor()
+        {
+            // The property rather than the four answers: a screen that holds the
+            // input processor and is not the menu must have a back route, because it
+            // has taken the key away from whatever else was listening. Adding a
+            // fifth state — a pause or loading screen — has to answer this or fail
+            // here rather than becoming another dead end on a phone.
+            for (final UiState state : UiState.values())
+            {
+                if (state.usesPointer() && !state.drawsMenu())
+                {
+                    assertThat(state.backReturnsToMenu())
+                        .as("%s owns a stage with no way back off it", state)
+                        .isTrue();
+                }
+            }
+        }
+
+        @Test
         @DisplayName("toString names the current state, for logs and failures")
         void shouldDescribeItself()
         {
