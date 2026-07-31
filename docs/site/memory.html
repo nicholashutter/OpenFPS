@@ -90,7 +90,7 @@
 <li class="lv2"><a href="#11-reproducing-this">11. Reproducing this</a></li>
 </ul></details></aside>
 <main id="doc">
-<p class="crumb"><span class="tag">Reference</span><span class="sep">/</span><code>docs/MEMORY.md</code><span class="sep">/</span>33 min read</p>
+<p class="crumb"><span class="tag">Reference</span><span class="sep">/</span><code>docs/MEMORY.md</code><span class="sep">/</span>34 min read</p>
 <h1 id="memory-what-openfps-reserves-what-it-churns">Memory: what OpenFPS reserves, what it churns<a class="anchor" href="#memory-what-openfps-reserves-what-it-churns" aria-label="Permalink">#</a></h1>
 <blockquote>
 <p>Measurement document. How many bytes the engine pre-allocates, how many it
@@ -242,7 +242,7 @@ It also roughly doubled something that <em>is</em> worth a thought; see § 5.2.<
 <tr><td><code>TicCmdBuffer.latestTics</code> <code>int[8]</code></td><td></td><td>48</td></tr>
 <tr><td><code>NetSession.sendBuffer</code> <code>byte[1200]</code> (<a href="https://github.com/nicholashutter/OpenFPS/blob/main/engine/src/main/java/com/openfps/engine/net/NetSession.java" class="ext" rel="noopener noreferrer" target="_blank"><code>NetSession.java:101</code></a>)</td><td><code>RedundantSender.MAX_DATAGRAM_BYTES = 1200</code></td><td>1,216</td></tr>
 <tr><td>7 × <code>PeerConnection</code> + <code>AckWindow</code></td><td><code>MAX_PEERS = MAX_PLAYERS − 1</code></td><td>664</td></tr>
-<tr><td><code>DemoEffects</code> tracer + smoke pools, 12 arrays (<a href="https://github.com/nicholashutter/OpenFPS/blob/main/engine/src/main/java/com/openfps/engine/demo/DemoEffects.java" class="ext" rel="noopener noreferrer" target="_blank"><code>DemoEffects.java:516–526</code></a>)</td><td><code>MAX_TRACERS = 3</code>, <code>MAX_PUFFS = 3</code>, <code>PUFF_STAGES = 4</code>, <code>PUFF_LOBES = 3</code> → 39 scene instances</td><td>624</td></tr>
+<tr><td><code>DemoEffects</code> tracer + smoke pools, 12 arrays (<a href="https://github.com/nicholashutter/OpenFPS/blob/main/engine/src/main/java/com/openfps/engine/demo/DemoEffects.java" class="ext" rel="noopener noreferrer" target="_blank"><code>DemoEffects.java</code></a>)</td><td><code>MAX_TRACERS = 3</code>, <code>MAX_PUFFS = 4</code>, <code>PUFF_STAGES = 6</code>, <code>PUFF_LOBES = 5</code> → 123 scene instances</td><td>984</td></tr>
 <tr><td><code>Match.bots</code> <code>Bot[7]</code> + 7 <code>Bot</code> + one reused <code>HitResult</code></td><td><code>DEFAULT_BOT_COUNT = 7</code></td><td>576</td></tr>
 <tr><td><code>PhysicsWorld.solids</code> <code>float[16 × 4]</code></td><td>16 boxes, <code>SOLID_STRIDE = 4</code></td><td>272</td></tr>
 <tr><td><code>SoftwareRenderPort.blendedRenderers</code> <code>SpanRenderer[256]</code> (<code>:1023</code>)</td><td><code>Scene.OPAQUE + 1</code></td><td>1,040</td></tr>
@@ -550,14 +550,16 @@ per tic.</strong> The Scene itself is untouched."</p>
 then per living bot <code>DemoScene.placement:960</code> + <code>Mat4.ofRowMajor:80</code> +
 <code>Mat4.ofRowMajor:82</code>. <strong>22 objects / 1,280 B per tic</strong>, and the profile puts all
 three lines in its top four.</p>
-<p><strong>F3 — <code>DemoEffects.java:79–85</code>.</strong> "<strong>A tic allocates one <code>Mat4</code> per <em>visible</em>
-effect and nothing else.</strong>"</p>
+<p><strong>F3 — <code>DemoEffects</code>, the "Allocation" section.</strong> "<strong>A tic allocates one <code>Mat4</code>
+per <em>visible</em> effect and nothing else.</strong>"</p>
 <p>Wrong twice. One "<code>Mat4</code>" is three objects / 176 B, because
 <code>Mat4.ofRowMajor:80</code> copies the caller's <code>float[16]</code>. And a visible puff
-publishes <code>PUFF_LOBES = 3</code> instances (<code>DemoEffects.java:778–782</code>), so it is
-three <code>Mat4</code> = 9 objects / 528 B. Worst case 36 objects / 2,112 B per tic against
-a claimed 6. The same file states the honest version at <code>:124</code> ("one more <code>Mat4</code>
-per tic per visible <strong>puff</strong>" — per <em>lobe</em>), so the two contradict each other.</p>
+publishes <code>PUFF_LOBES</code> instances, so it is five <code>Mat4</code> = 15 objects / 880 B.
+Worst case — three tracers and four puffs — is 23 <code>Mat4</code> = 69 objects / 4,048 B
+per tic against a claimed 7. The same file states the honest version in
+<code>PUFF_LOBES</code>'s own Javadoc ("one more <code>Mat4</code> per tic per visible <strong>puff</strong>" — per
+<em>lobe</em>), so the two contradict each other. The numbers got worse when the puff
+grew from three lobes to five; the contradiction is the same one.</p>
 <p><strong>F4 — <code>SoftwareRenderPort.java:237–239</code>.</strong> "<strong>a scene swap that stays within the
 high-water mark allocates nothing at all.</strong>"</p>
 <p>Only <code>growBuffersFor</code> is gated on the high-water mark (<code>:1090–1093</code>). <code>bindScene</code>
@@ -619,9 +621,11 @@ repository whose contribution rules require Javadoc to cite sources.</p>
 <p><strong>F11 — <code>OutlinePass.java:150–154</code>.</strong> "<code>SoftwareRenderPort</code> does not run the pass
 at all unless <code>Scene#hasTaggedEntities()</code>."</p>
 <p>It gates on <code>worldEntityIds != null &amp;&amp; outlineEnabled &amp;&amp; aimedEntityId !=
-Scene.UNTAGGED</code> (<code>:1403</code>), and <code>SoftwareRenderPort.java:1143–1148</code> argues at
-length that answering from <code>hasTaggedEntities()</code> would be <em>wrong</em>. Not an
-allocation claim, but the named condition is not the one in the code.</p>
+Scene.UNTAGGED</code>, and <code>SoftwareRenderPort</code> argues at length that answering from
+<code>hasTaggedEntities()</code> would be <em>wrong</em>. Not an allocation claim, but the named
+condition is not the one in the code. (<code>outlineEnabled</code> is now driven by
+<code>AccessibilitySettings</code> rather than by the debug switch; the gate itself is
+unchanged.)</p>
 <h3 id="63-misleading-rather-than-false">6.3 Misleading rather than false<a class="anchor" href="#63-misleading-rather-than-false" aria-label="Permalink">#</a></h3>
 <p><strong><code>DemoGameplayPort.java:573–576</code></strong> — "<strong>Two Vec3 allocations per SHOT, not per
 tic.</strong>" Literally true of lines 578–579. Twelve lines below, <code>aimCamera</code> calls

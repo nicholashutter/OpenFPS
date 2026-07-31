@@ -97,9 +97,14 @@ Anti-patterns in `STYLE.md` § 13.4 are instant review failures.
 | Engine tests | `engine/src/test/java/com/openfps/engine/` |
 | Desktop launcher (libGDX LWJGL3) | `desktop/src/main/java/com/openfps/desktop/` |
 | Android launcher (libGDX Android) | `android/src/main/java/com/openfps/android/` |
+| Shared libGDX code (no backend) | `gdxshared/src/main/java/com/openfps/gdx/` |
+| Allocation audit | `docs/MEMORY.md` |
+| WebAssembly port assessment | `docs/WASM.md` |
+| Run scripts (always rebuild) | `run-desktop.ps1`, `run-android.ps1`, `.vscode/tasks.json` |
 
-The project is a **three-module Gradle build**: `:engine` (pure Java 17, no
-platform dependencies, builds and tests headless anywhere), `:desktop`, and
+The project is a **five-module Gradle build**: `:engine` (pure Java 17, no
+platform dependencies, builds and tests headless anywhere), `:gdxshared`
+(libGDX **core** only, no backend), `:desktop`, `:tools` (build-time only), and
 `:android`. `:android` is only included when an Android SDK is present — see
 the guard in `settings.gradle.kts`. Paths were flat `src/main/java/...` before
 the module split; anything still saying that is stale.
@@ -118,12 +123,21 @@ the module split; anything still saying that is stale.
 # Checkstyle only
 .\gradlew checkstyleMain
 
-# Run the engine headless (2s smoke run, then clean shutdown)
-.\gradlew run
-.\gradlew run --args="--fps=120 --headless"
+# Run the engine headless (2s smoke run, then clean shutdown).
+# NAME THE MODULE. Both :engine and :desktop apply the `application` plugin,
+# so a bare `.\gradlew run` resolves to TWO tasks and launches both.
+.\gradlew :engine:run
+.\gradlew :engine:run --args="--fps=120 --headless"
 
 # Run the windowed desktop client
 .\gradlew :desktop:run
+
+# Preferred: the run scripts rebuild every time and print the commit they are
+# running before anything opens, so a window is never ambiguous about which
+# build produced it. This is how you check a change actually landed.
+.\run-desktop.ps1 -StartInGame -DebugOverlay
+.\run-desktop.ps1 -TwoPeers -StartInGame     # two peers, distinct ports + profile DBs
+.\run-android.ps1 -RenderMode 480p
 
 # Android: there is NO -Pandroid flag. :android is included automatically
 # when ANDROID_HOME / ANDROID_SDK_ROOT / local.properties is present.
@@ -199,13 +213,18 @@ public void spawnEntity(final int entityType)
 - Do NOT write to `System.out` / `System.err` in production code — use **SLF4J** (`LoggerFactory.getLogger`)
 - Do NOT use `System.Logger` or `java.util.logging` — they're banned in favor of SLF4J
 - Do NOT import `java.util.List<Integer>` or any boxed collection in hot paths
-- Do NOT add Android-specific code outside `hal.adapter.mobile`
+- Do NOT add Android-specific code outside the `:android` module. (There is no
+  `hal.adapter.mobile` package and there is not going to be one: an Android
+  adapter needs the Android SDK, and `:engine` must stay buildable without it.
+  `:android` owns `AndroidAdapterFactory` and everything under it.)
 - Do NOT skip updating `PLAN.md` section 7 when completing a roadmap item
-- Do NOT `new byte[]` outside a memory port adapter. (The Phase 5 framebuffer
-  is an unresolved conflict with this rule — it needs raw `int[]`/`float[]`
-  access in a per-pixel loop, which `I_MemoryPort`'s handle indirection cannot
-  give it. **Open question, not an exemption**: `render/README.md` § 11a states
-  the options. Decide it before implementing `Framebuffer`; do not just do it.)
+- Do NOT `new byte[]` outside a memory port adapter. (**One sanctioned
+  exception, already decided — not an open question.** `Framebuffer` allocates
+  its `int[]` colour and `float[]` depth arrays directly, because the port hands
+  out byte-addressed handles and the rasterizer needs typed arrays the JIT can
+  bounds-check-eliminate. The reasoning is recorded in `render/README.md` § 11a
+  and `STYLE.md`. It covers `Framebuffer` and nothing else; a new caller wanting
+  the same exemption needs the same argument made again.)
 - Do NOT `System.nanoTime()` / `System.currentTimeMillis()` in engine code — use
   `I_TimePort` (`nanos()`/`millis()` monotonic, `epochMillis()` wall clock).
   Sanctioned exceptions: the time-port adapters, and shutdown timeouts that
@@ -257,19 +276,19 @@ their module-root `README.md`.
 | Subsystem | Package | Status |
 |---|---|---|
 | Core Loop | `core` | Phase 1.3 — event-driven, multi-threaded, configurable 30/60/120 Hz; pool also does caller-participating parallel fan-out (`submitParallel`) |
-| Gameplay | `gameplay` | **SHIPPING**, registered as `P_`. `PlayerController` (first-person movement + gravity and a jump, StrictMath-deterministic), `Hitscan` / `Target` / `HitResult`, and the match layer: `Bot`, `BotPattern`, `Match`, `MatchState`, `MatchMode`. Bots walk closed-form routes — position at tic *n* is a pure function of *n*, so they cannot drift and a late-joining peer computes the same answer without replaying history — and shoot back through the same `Hitscan` the player's own weapon uses, so one bot genuinely blocks another's shot. **Three kills without dying** arm a super blaster for `SUPER_BLASTER_TICS` (240 tics, never milliseconds) at exactly twice `PLAYER_SHOT_DAMAGE`; a death takes both the streak and a live buff, `reset()` clears both, and a kill while it is live neither extends nor refreshes the window |
-| Render | `render` | **Built and shipping** (409 tests), registered as `R_`. Multi-threaded software triangle rasterizer: `Framebuffer`, `Camera`, `TriangleClipper`, `Rasterizer`, `SpanRenderer`, `TextureSampler`, `MipChain`, `ModelFormat`, `Scene`, `SoftwareRenderPort`. Two passes per frame (world, then view-space viewmodel with a depth clear between). Measured p50 4.9 ms at 1280x720 on 8 workers. `docs/ASSETS.md` § 2 is the canonical target; `render/README.md` is the full spec — read it before touching any render code. The 2.5D DOOM renderer (visplanes, column renderer, 8-bit palette) is retired |
+| Gameplay | `gameplay` | **SHIPPING**, registered as `P_`. `PlayerController` (first-person movement + gravity and a jump, StrictMath-deterministic), `Hitscan` / `Target` / `HitResult`, `PhysicsWorld`, and the match layer: `Bot`, `BotPattern`, `BotRng`, `BotSkill`, `BotShotLog`, `Match`, `MatchState`, `MatchMode`, `MatchStatus`, `MatchSummary`. `PhysicsWorld` holds solid AABBs in a flat `float[]` and slides **x then z, in that fixed order for determinism**, feeding the clipped x into the z pass so corners do not leak; it is **horizontal only**, so crates, the staircase and the ramp are not stand-on-able until a `floorHeightAt` lands. `BotRng` is seeded, **stateless**, and addressed by `(seed, tic, entityId, channel)` so a late joiner computes the same answer without replaying history. Bots walk closed-form routes — position at tic *n* is a pure function of *n*, so they cannot drift and a late-joining peer computes the same answer without replaying history — and shoot back through the same `Hitscan` the player's own weapon uses, so one bot genuinely blocks another's shot. **Three kills without dying** arm a super blaster for `SUPER_BLASTER_TICS` (240 tics, never milliseconds) at exactly twice `PLAYER_SHOT_DAMAGE`; a death takes both the streak and a live buff, `reset()` clears both, and a kill while it is live neither extends nor refreshes the window |
+| Render | `render` | **Built and shipping** (516 tests), registered as `R_`. Multi-threaded software triangle rasterizer: `Framebuffer`, `Camera`, `TriangleClipper`, `Rasterizer`, `SpanRenderer`, `TextureSampler`, `MipChain`, `ModelFormat`, `Scene`, `Rgba`, `OutlinePass`, `SoftwareRenderPort`. A frame is world instances → `OutlinePass` (only if the scene has tagged entities; it needs the finished id buffer) → translucent instances sorted back-to-front, depth-tested and never depth-written → clear depth, not colour → the view-space viewmodel. Measured p50 4.9 ms at 1280x720 on 8 workers, and **bit-identical at every worker count** — that invariant is the safety net for culling and worker-count changes, so a change that breaks it is wrong even if it looks right. **Known hole: the translucent phase has no pooled-equals-serial assertion** (`SoftwareRenderPortTranslucentTest` renders serially only), which is precisely where a blend's read-modify-write makes tile ownership load-bearing — see `render/README.md` § Status. Render size is decoupled from surface size by `RenderMode` in `:gdxshared` (P480 default / P720 / NATIVE, a ceiling on the short edge, never upscaling). `docs/ASSETS.md` § 2 is the canonical target; `render/README.md` is the full spec — read it before touching any render code. The 2.5D DOOM renderer (visplanes, column renderer, 8-bit palette) is retired |
 | Audio | `audio` | **SHIPPING, and deliberately five sounds.** Registered as `S_`; the port now comes from `I_AdapterFactory.getAudioPort()` rather than being a hard-coded null. `I_AudioPort` is six methods — play a `SoundId`, stop, clamp a volume, ask whether anything is audible — with `NullAudioPort` (silent, counts plays) and `GdxAudioPort` in `:gdxshared`, wired by `GdxAdapterFactory` and `AndroidAdapterFactory`. The weapon fires audibly from `DemoGameplayPort`, in two voices — the ordinary blaster and the super blaster a kill streak buys — beside the bots' carbine and the two-note chime that lands and then unwinds with the reward. **Every sound is generated, not shipped**: `BlasterSound`, `CarbineSound`, `SuperBlasterSound` and `PowerChimeSound` + `WavAudio` synthesise PCM at runtime, so there is no audio asset, no licence question and nothing in `NOTICE` to add — which is how the old "no audio row in `docs/ASSETS.md` § 3" blocker was retired for the demo without pretending to have answered it for a real sound bank. **No mixer, no positional audio, no music, and none of them half-started** — `audio/README.md` keeps the 3D formulae as a reading list, explicitly not as a spec this code is failing to meet. Everything degrades: no device, headless JVM, unwritable cache all log once and keep playing |
-| Network | `net` | **PARTIAL — the transport ships, the simulation does not.** `NetSession` opens a real socket over `DesktopDatagramPort` and drives the primitives that were already built (`TicCmd`, `TicCmdBuffer`, `AckWindow`, `PeerConnection`, `RedundantSender`, `NetBytes`), plus `TicCmdEncoder` for the float-to-wire quantisation. Verified two ways: a loopback test over two real UDP sockets, and two live game processes, which exchanged 77 KB with zero malformed packets and zero strangers. **What is NOT done: remote players are not simulated into bodies.** That needs a `PlayerController` per peer driven from the received ring, plus a stall rule for a peer whose tics have not arrived. A session that exchanges packets perfectly and shows nobody looks exactly like a broken one, so do not read "multiplayer works" as more than the transport |
+| Network | `net` | **PARTIAL — the transport ships and peers are visible; match state is not replicated.** `NetSession` opens a real socket over `DesktopDatagramPort` and drives the primitives (`TicCmd`, `TicCmdBuffer`, `AckWindow`, `PeerConnection`, `RedundantSender`, `NetBytes`), plus `TicCmdEncoder` for the float-to-wire quantisation. `demo/RemotePlayers` replays each peer's commands through its own `PlayerController` on the shared `PhysicsWorld`, so two processes now draw each other's bodies — verified by loopback over two real sockets and by two live processes exchanging 77 KB with zero malformed packets and zero strangers. **What is NOT done: `Match` has never heard of a remote player**, so peers are visible but **not shootable**, and two divergences follow from that one gap, both measured rather than reasoned about: (1) a respawn is a teleport driven by `Match`, not by an input, so the peer replaying your commands never sees it — in an 11-second run the local player respawned while the other peer's copy was still walking 380 units away; (2) a late join costs a **constant** 17.07-unit offset (4 missing leading tics × 4.267 units) because a body anchors on the oldest tic still in the ring — constant, not accumulating, since every later tic is applied exactly once. Desync detection (§ 10's periodic `stateHash`) is **deliberately not started**: it needs a second packet type and the shipped 20-byte header has no discriminator, and until match state is replicated the simulations are *known* to differ, so it would fire on every comparison and tell nobody anything |
 | Resource | `resource` | `WadReader`, `LumpCache`, `MapLumpParser`, `LittleEndian`, `WadFilePort` all built (101 tests). **Not registered** — no `W_` subsystem yet. Its *role* is now an open question: `docs/ASSETS.md` moves all art to preprocessed glTF, so the WAD path has no art left to read. See `render/README.md` § 11b. Do not delete it and do not build `ImageDecoder` until that is resolved |
 | Memory | `memory` | Phase 1.1 — state machine, two backends (`JvmMemoryPort`, `ZoneMemoryPort`), factory |
 | HAL | `hal` | Ports + `nulladapter` + `sqlite` + `desktop` (time, datagram) adapters, system info, user profile. Also `GameAction` / `InputBinding` / `ActionBindings` — the controls table. The engine owns which actions exist and deliberately ships **no default key codes**: a key code is a platform number and `:engine` may not import a toolkit that defines one, so each platform supplies its own table |
-| *(not a subsystem)* | `demo` | `DemoScene`, `DemoModels`, `DemoGameplayPort` — the playable match: room layout, kit scale, weapon pose, and seven bots with their routes. Drives `Match` per tic and publishes each bot's placement to the renderer. Platform-free so `:tools` can render it headlessly and `:desktop` can run it live. Not registered with `SubsystemRegistry` |
+| *(not a subsystem)* | `demo` | `DemoScene`, `DemoModels`, `DemoEffects`, `DemoGameplayPort`, `RemotePlayers`, `BotFireVoices`, `BlockCarbine` — the playable match: room layout, solid geometry, kit scale, weapon pose, and seven bots with their routes, weapons, tracers, smoke and fire voices. Drives `Match` per tic and publishes each bot's placement to the renderer. `RemotePlayers` does the same for network peers. Every effect instance is **pre-allocated at build time and moved via `setWorldTransform`**, hidden with a degenerate transform rather than created and destroyed — `Scene` is immutable by design. Platform-free so `:tools` can render it headlessly and `:desktop` can run it live. Not registered with `SubsystemRegistry` |
 
 | Module | Contains |
 |---|---|
 | `:engine` | Everything above. Pure Java 17, **no platform dependencies** — this is what CI builds and tests with no display and no Android SDK. Keep it that way |
-| `:gdxshared` | The libGDX code that is **not** platform-specific: `FramebufferPresenter`, the block welcome screen, `UiState`/`UiStateMachine`, `InputAccumulator`. Depends on libGDX **core** and no backend, which is what lets both launchers use it and keeps it buildable with no display and no Android SDK. Adding a backend dependency here breaks one of the two platforms — see `gdxshared/README.md` |
+| `:gdxshared` | The libGDX code that is **not** platform-specific: `FramebufferPresenter`, `RenderMode`/`RenderSettings`, the block welcome / settings / game-over screens, `UiState`/`UiStateMachine`, `InputAccumulator`, `AnalogStick`, `DebugSettings`/`DebugOverlay`/`FpsMeter`, `AccessibilitySettings`, `ScoreOverlay`, `GdxAudioPort`. **`AccessibilitySettings` is deliberately separate from `DebugSettings`** — the enemy outline is an accessibility feature that defaults ON, not a debug toggle that defaults off, and the two live in different menus for that reason. Depends on libGDX **core** and no backend, which is what lets both launchers use it and keeps it buildable with no display and no Android SDK. Adding a backend dependency here breaks one of the two platforms — see `gdxshared/README.md` |
 | `:desktop` | libGDX LWJGL3 backend: `GdxWindowPort`, `GdxInputPort`, `DesktopBindings`, `GdxFrameLoopListener`, `GdxAdapterFactory`, `WindowIcon`, `NetArgs`, `DesktopLauncher` |
 | `:android` | libGDX Android backend: `AndroidLauncher`, `AndroidWindowPort`, `AndroidAdapterFactory`, `AndroidUiFrameCallback`, the touch control scheme (`AndroidInputPort`, `TouchLayout`, `TouchOverlay`, `AndroidBindings`), `ApkModelSource`, Room-backed `RoomUserProfilePort`. **Playable** as of 2026-07-28. Only included in the build when an Android SDK is present (`ANDROID_HOME` / `ANDROID_SDK_ROOT` / `local.properties`) — otherwise `settings.gradle.kts` silently skips it, so a green `gradlew build` does **not** imply `:android` compiles |
 | `:tools` | **Build-time only, never shipped.** glTF → `ModelFormat` converter (`GltfConverter`), `ModelBuilder`, `MipGenerator`, `ProceduralRoom`, and the headless `DemoPreviewMain` / `RenderPreviewMain` harnesses. Depends on `:engine` one way; nothing depends on it. The root `verifyToolsIsolation` task fails the build if it ever reaches a runtime classpath |
@@ -280,8 +299,17 @@ platform-free. Both implement `I_WindowPort` and drive `I_FrameCallback` —
 which is also the presentation path for the Phase 5 rasterizer. The engine
 produces a finished framebuffer; the adapter uploads it.
 
-**1578 tests passing** (1177 `:engine`, 86 `:gdxshared`, 119 `:desktop`, 73 `:tools`, 123 `:android` — distinct tests; `:android:test` runs its suite twice, once per variant), Checkstyle clean — see
-`BUILD.md` for run instructions and `PLAN.md` § 8 for the per-suite breakdown.
+**2339 tests passing** (1625 `:engine`, 300 `:gdxshared`, 177 `:android`,
+164 `:desktop`, 73 `:tools`), Checkstyle clean — see `BUILD.md` for run
+instructions and `README.md` § Test Coverage for the per-package breakdown.
+
+These are **distinct** tests, and every previous figure in this file was wrong
+in one of two directions, so count them the same way or do not quote a number:
+`:android:test` runs its suite against a debug and a release variant, so its raw
+XML tally is 354 and double-counts everything; and a `@Nested` class writes its
+own XML file, so counting files — or counting `@Test` annotations in source —
+gives a third answer again. The figure above is the sum of the `tests=`
+attribute of every `<testsuite>` Gradle actually wrote, `:android` counted once.
 
 ---
 

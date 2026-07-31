@@ -74,7 +74,7 @@
 <li class="lv2"><a href="#files">Files</a></li>
 </ul></details></aside>
 <main id="doc">
-<p class="crumb"><span class="tag">Modules</span><span class="sep">/</span><code>desktop/README.md</code><span class="sep">/</span>7 min read</p>
+<p class="crumb"><span class="tag">Modules</span><span class="sep">/</span><code>desktop/README.md</code><span class="sep">/</span>8 min read</p>
 <h1 id="desktop--the-windowed-launcher"><code>:desktop</code> — the windowed launcher<a class="anchor" href="#desktop--the-windowed-launcher" aria-label="Permalink">#</a></h1>
 <blockquote>
 <p>The only module allowed to touch LWJGL3 and GLFW. It gives the engine a real
@@ -87,7 +87,7 @@ produced.</p>
 <tbody>
 <tr><td><strong>State</strong></td><td>SHIPPING</td></tr>
 <tr><td><strong>Phase</strong></td><td>1.5 complete (§ 7); presentation landed with Phase 5</td></tr>
-<tr><td><strong>Tests</strong></td><td>151</td></tr>
+<tr><td><strong>Tests</strong></td><td>164 — counted, not remembered: <code>gradlew :desktop:test</code></td></tr>
 <tr><td><strong>Registered</strong></td><td>provides the windowed HAL (<code>GdxAdapterFactory</code>) and the <code>main</code> behind <code>gradlew :desktop:run</code></td></tr>
 <tr><td><strong>Verified</strong></td><td>2026-07-28</td></tr>
 </tbody>
@@ -106,8 +106,12 @@ interface now live in <strong><code>:gdxshared</code></strong>, because <code>:a
 them and none of them names a backend. Nothing changed about what they do; the
 test count here dropped from 195 to 118 because 77 tests went with them. See
 <code>gdxshared/README.md</code>.</p>
-<p><strong>Not built.</strong> Nothing outstanding for Phases 1.5 and 5. Start Game and Settings
-record intent only — there is no map loader and no settings screen to open yet.</p>
+<p><strong>Not built.</strong> Nothing outstanding for Phases 1.5 and 5. Start Game records intent
+only — there is no map loader. Settings opens a real screen: an <strong>Accessibility</strong>
+group holding the target outline (on by default, and the launcher pushes that
+value into <code>SoftwareRenderPort</code> at composition time so the label cannot disagree
+with the game), and a <strong>Display &amp;amp; Diagnostics</strong> group holding the render mode
+and the frame counter.</p>
 <p><strong>Blocked on.</strong> Nothing.</p>
 <p><strong>Next step.</strong> Nothing outstanding — this module follows the renderer. The two
 open Phase 5 items (<code>render/README.md</code>) both surface here when they land.</p>
@@ -207,6 +211,17 @@ seconds — the only way to measure the <em>windowed</em> rate — and
 <code>-Dopenfps.screenshot=&lt;path&gt;</code> writes a frame to PNG.
 <code>-Dopenfps.workers=N</code> pins the worker pool, which <code>ThreadPoolFactory</code> otherwise
 sizes from the processor count; the boot log says which of the two happened.</p>
+<p>Two of them <strong>script the player</strong>, and they exist because an unattended capture
+run has no hands: <code>GdxInputPort.pollDevice</code> refuses to read the device unless the
+cursor is caught and the window focused, neither of which a screenshot run can
+promise. <code>-Dopenfps.autoWalkTics=N</code> (with <code>autoWalkForward</code> / <code>autoWalkStrafe</code>)
+holds a movement axis, which is what makes collision photographable;
+<code>-Dopenfps.autoFireTics=N</code> holds the <strong>trigger</strong>, which is what makes a kill
+streak photographable. The walk takes precedence while it lasts, so the pair
+reads as a sequence — line a target up, then stand still and shoot. Both are off
+by default and both log loudly when on, because a run that moves or fires by
+itself looks like a stuck key rather than like a switch somebody set.
+<code>engine/gameplay/README.md</code> has the two recipes and the figures they produced.</p>
 <h2 id="files">Files<a class="anchor" href="#files" aria-label="Permalink">#</a></h2>
 <ul>
 <li>
@@ -219,7 +234,8 @@ sizes from the processor count; the boot log says which of the two happened.</p>
 <p><code>GdxWindowPort.java</code> — LWJGL3 window and frame loop (22 tests)</p>
 </li>
 <li>
-<p><code>GdxInputPort.java</code> — the platform half of input (11 tests)</p>
+<p><code>GdxInputPort.java</code> — the platform half of input, plus the scripted walk and
+scripted trigger the capture harness drives it with (12 tests)</p>
 </li>
 <li>
 <p><code>GamepadSource.java</code> — the controller seam, so hot-plug is a unit test</p>
@@ -245,7 +261,7 @@ new dependency. See <code>NOTICE</code> on why not <code>gdx-controllers</code>/
 <code>MenuButtonListener.java</code> — the Scene2D menu and its testable seam (9 tests)</p>
 </li>
 </ul>
-<p><strong>151 tests in this module.</strong> Run with <code>.\gradlew.bat :desktop:test</code>.</p>
+<p><strong>152 tests in this module.</strong> Run with <code>.\gradlew.bat :desktop:test</code>.</p>
 <footer class="pagefoot"><p>Source: <a class="ext" rel="noopener noreferrer" target="_blank" href="https://github.com/nicholashutter/OpenFPS/blob/main/desktop/README.md">desktop/README.md</a>. This page is generated — edit the Markdown, not the HTML.</p></footer>
 </main>
 </div>

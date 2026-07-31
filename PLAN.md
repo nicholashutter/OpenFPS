@@ -1,6 +1,6 @@
 # OpenFPS — Project Plan
 
-> **Status**: Pre-alpha — Phases 0 through 1.5 complete, plus Phase 5 (render). Event-driven engine, unified memory, multi-threaded worker pool, configurable 30/60/120 Hz, SQLite user-profile persistence, desktop HAL with a real window and input, and a multi-threaded software triangle rasterizer driving a playable first-person demo at 1280x720. Phase 2 (WAD) is partly done and unregistered; Phase 3 (net) has its lockstep primitives built but no socket wired. **1239 tests** — 977 `:engine`, 125 `:desktop`, 73 `:tools`, 64 `:android`.
+> **Status**: Pre-alpha — Phases 0 through 1.5 complete, plus Phase 5 (render). Event-driven engine, unified memory, multi-threaded worker pool, configurable 30/60/120 Hz, SQLite user-profile persistence, desktop HAL with a real window and input, and a multi-threaded software triangle rasterizer driving a playable first-person match. Phase 4 (gameplay) landed ahead of its number: collision, hitscan, bots, scoring, respawn and a kill streak. Phase 6 (audio) is started and narrow — every sound synthesised at runtime. Phase 2 (WAD) is partly done and unregistered. Phase 3 (net) has a real socket and visible peers, but **match state is not replicated, so peers are not shootable**. **2339 tests** — 1625 `:engine`, 300 `:gdxshared`, 177 `:android`, 164 `:desktop`, 73 `:tools`.
 > **Engine Version**: 0.1.0-SNAPSHOT
 > **Target JVM**: 17 LTS (Java 17 source/target, runs on 17+)
 > **Platforms**: Windows, Linux, macOS (`:desktop`, libGDX LWJGL3 backend); Android (`:android`, libGDX Android backend). `:engine` is platform-free and runs headless on any JVM 17+.
@@ -42,7 +42,7 @@ The engine is now an **event queue processor**: subsystems communicate exclusive
                               v
 +----------------------------------------------------------------+
 |  WORKER POOL    com.openfps.engine.core.pool.WorkerPool        |
-|  N = logicalProcessorCount / 2 hot threads, pre-started        |
+|  N = logicalProcessorCount - 1 hot threads, pre-started        |
 |  Each: take() -> dispatch() -> loop                            |
 +----------------------------------------------------------------+
                               |
@@ -149,7 +149,7 @@ Every subsystem has:
 `ShutdownEvent`. Without it, every shutdown logged a "no subsystem registered"
 warning, because `ShutdownEvent` targets CORE and nothing owned that ID.
 
-### 3.2 Gameplay — `com.openfps.engine.gameplay` — **first-person controller done, rest stub**
+### 3.2 Gameplay — `com.openfps.engine.gameplay` — **shipping: controller, hitscan, collision and the match layer** (348 tests)
 
 **P_ Player & World Logic**
 
@@ -159,16 +159,20 @@ warning, because `ShutdownEvent` targets CORE and nothing owned that ID.
   determinism note in § 4.
 - `I_PlayerInput` — the four movement channels the controller consumes
 - `PlayerInputView` — adapts `hal.port.InputState` onto `I_PlayerInput`
-- `PlayerState`: position (fixed-point), velocity, angle, pitch, health, inventory
-- `Entity`: abstract base for all game objects (players, projectiles, pickups, doors)
-- `PhysicsWorld`: collision detection, gravity, sliding along walls (BSP-assisted)
-- `MapSubsector`: sector adjacency, portal handling
+- `Hitscan` / `Target` / `HitResult` — **done.** Instant-hit weapons; bots shoot through the same path the player does, so one bot genuinely blocks another's shot
+- `PhysicsWorld` — **done, horizontally.** Solid AABBs in a flat `float[]`; slides **x then z in that fixed order for determinism**, feeding the clipped x into the z pass so corners cannot leak. **No `floorHeightAt` yet**, so crates, the staircase and the ramp are not stand-on-able
+- `Match`, `MatchState`, `MatchMode`, `MatchStatus`, `MatchSummary` — **done.** Kills, deaths, respawn, end-of-match, rematch, and the three-kill streak that arms a double-damage super blaster for `SUPER_BLASTER_TICS` (240 tics, never milliseconds)
+- `Bot`, `BotPattern`, `BotSkill`, `BotShotLog` — **done.** Closed-form routes: position at tic *n* is a pure function of *n*, so bots cannot drift and a late-joining peer computes the same answer without replaying history
+- `BotRng` — **done.** Seeded, **stateless**, addressed by `(seed, tic, entityId, channel)`
+- `PlayerState`: position (fixed-point), velocity, angle, pitch, health, inventory — *not built; `PlayerController` holds this state directly today*
+- `Entity`: abstract base for all game objects (players, projectiles, pickups, doors) — *not built*
+- `MapSubsector`: sector adjacency, portal handling — *not built*
 - `I_GameplayPort` — `tick(int)`, `loadMap(String)`, `spawnEntity(...)`, `removeEntity(...)`
 - `NullGameplayPort` — stub
 
 **Subsystem wrapper**: `GameplaySubsystem` — routes `TickEvent` to `port.tick()`, `MapLoadEvent` to `port.loadMap()`.
 
-### 3.3 Render — `com.openfps.engine.render` — **built** (316 tests)
+### 3.3 Render — `com.openfps.engine.render` — **built and shipping** (516 tests)
 
 **R_ Multi-threaded software triangle rasterizer**
 
@@ -198,26 +202,37 @@ The earlier 2.5D design (BSP visibility, visplanes, column renderer, affine mapp
 
 **BSP**: retired as the renderer's *visibility* algorithm — the z-buffer does that job now. It is **not** deleted from the project: Phase 4 keeps `BspTraverser` as a gameplay/collision structure (§ 3.2, `gameplay/README.md`).
 
-**Open questions blocking implementation** — see `render/README.md` § 11: (a) framebuffer allocation vs. `I_MemoryPort`, (b) the role of the WAD subsystem now that art is preprocessed glTF, (c) no performance number in this design has been measured yet.
+**Those open questions, resolved** — see `render/README.md` § 11. (a) Framebuffer allocation vs. `I_MemoryPort` is **decided**: `Framebuffer` allocates `int[]`/`float[]` directly as the one sanctioned exception to the memory-port rule, because the port hands out byte-addressed handles and the inner loop needs typed arrays the JIT can bounds-check-eliminate. (b) The WAD subsystem's role is **still open** — `resource` remains BUILT-UNWIRED with 101 tests and no art left to read. (c) Performance is now **measured, not estimated**: p50 4.9 ms at 1280×720 on 8 workers against 22.1 ms serial, bit-identical at every worker count.
+
+**Render size is decoupled from surface size.** `RenderMode` (in `:gdxshared`) puts a ceiling on the short edge — `P480` default, `P720`, `NATIVE` — and the result is blitted up to the actual surface. A ceiling, never a target: a surface already below it renders at its own size and is never enlarged.
 
 **Subsystem wrapper**: `RenderSubsystem` — routes `RenderFrameEvent` to `port.renderFrame()`.
 
-### 3.4 Audio — `com.openfps.engine.audio` — **stub**
+### 3.4 Audio — `com.openfps.engine.audio` — **shipping, deliberately narrow** (81 tests)
 
 **S_ Sound**
 
-- `SoundEngine`: voice allocation, mix loop
-- `SoundEmitter`: 3D position + velocity
-- `I_AudioPort` — `playSfx`, `playMusic`, `stopAll`
-- `NullAudioPort` — stub
+- `I_AudioPort` — six methods: play a `SoundId`, stop, clamp a volume, ask whether anything is audible
+- `SoundId` — the closed set of sounds
+- `NullAudioPort` — silent, counts plays (headless and test path)
+- `GdxAudioPort` — in `:gdxshared`, supplied by `GdxAdapterFactory` / `AndroidAdapterFactory` via `I_AdapterFactory.getAudioPort()`
+- `synth/` — `SoundBank`, `BlasterSound`, `CarbineSound`, `SuperBlasterSound`, `PowerChimeSound`, `WavAudio`
 
-**Subsystem wrapper**: `AudioSubsystem` — init/shutdown only for now (event types for SFX/music are Phase 6 work).
+**Every sound is generated at runtime, not shipped.** The synth package writes PCM in code, so there is no audio asset in the repository, no licence question, and nothing to add to `NOTICE`. That is how the old "`docs/ASSETS.md` § 3 has no audio row" blocker was retired for the demo *without* pretending to have answered it for a real sound bank.
 
-### 3.5 Network — `com.openfps.engine.net` — **stub**
+**What is deliberately absent**: no mixer, no positional audio, no music — and none of them half-started. `audio/README.md` keeps the 3D formulae as a reading list, explicitly not as a spec this code is failing to meet. Everything degrades: no device, headless JVM, and an unwritable cache each log once and keep playing.
+
+**Subsystem wrapper**: `AudioSubsystem` — registered as `S_`, port supplied by the adapter factory rather than hard-coded null.
+
+### 3.5 Network — `com.openfps.engine.net` — **partial: transport ships, match state does not** (129 tests here, 13 more in `demo/RemotePlayersTest`)
 
 **G_ Peer-to-Peer Networking**
 
-- `PeerConnection` — per-peer state (address, RTT, ack window, loss stats); no socket
+`NetSession` opens a real socket over `DesktopDatagramPort`; `TicCmdEncoder` does the float-to-wire quantisation; `demo/RemotePlayers` replays each peer's commands through its own `PlayerController` on the shared `PhysicsWorld`, so two processes draw each other's bodies. Measured live: 77 KB exchanged, zero malformed packets, zero strangers.
+
+**Still open, and the next real work**: `Match` has never heard of a remote player, so peers are visible but **not shootable**, respawn is not replicated (a teleport driven by `Match`, not by an input), and a late join costs a constant 17.07-unit offset. Desync detection is deliberately not started — the 20-byte header has no discriminator for a second packet type, and until match state is replicated the simulations are known to differ, so it would fire constantly and tell nobody anything.
+
+- `PeerConnection` — per-peer state (address, RTT, ack window, loss stats)
 - `TicCmdBuffer` — ring buffer of `TicCmd` per peer, indexed by tic number
 - `RedundantSender` — packs all cmds since the peer's last ack into every packet
 - `SnapshotDelta` — diff-based state serialization between tics
@@ -490,21 +505,33 @@ what actually exists, with the original intent noted where it diverged.
 - [ ] `BlockmapBuilder` — pre-compute BLOCKMAP from LINEDEFS
 - [ ] A `W_` subsystem registering `WadFilePort` with the `SubsystemRegistry`
 
-### Phase 3 — Networking — **primitives built, nothing wired**
+### Phase 3 — Networking — **transport wired and measured; match state not replicated**
 - [x] Transport decision recorded (`net/README.md` § "Transport decision") — UDP + redundant redelivery, no dependency added
-- [x] `PeerConnection` (peer state — address, EWMA RTT, ack window; no socket)
+- [x] `PeerConnection` (peer state — address, EWMA RTT, ack window)
 - [x] `TicCmdBuffer` (lockstep) — 64x8 preallocated ring, zero per-tic allocation, decoupled from render. Note the sim rate is configurable 30/60/120, not fixed at 60
 - [x] `RedundantSender` + `AckWindow` — redundant input redelivery, 64-bit ack bitfield
+- [x] `TicCmdEncoder` — float-to-wire quantisation
+- [x] `NetSession` — a real socket over `DesktopDatagramPort`, attached by `DesktopLauncher`
+- [x] `demo/RemotePlayers` — replays a peer's commands through its own `PlayerController` on the shared `PhysicsWorld`, so peers appear as bodies
+- [x] Two live processes: `.\run-desktop.ps1 -TwoPeers -StartInGame`, distinct ports (5021/5022) and profile DBs
+- [ ] **Replicate match state** — `Match` has never heard of a remote player. This is the next real step and it is the root cause of all three items below
+- [ ] Peers are visible but **not shootable**
+- [ ] Respawn is not replicated (a teleport driven by `Match`, not by an input)
+- [ ] A late join costs a constant 17.07-unit offset (4 missing leading tics × 4.267 units)
+- [ ] Desync detection (§ 10's periodic `stateHash`) — **deliberately not started.** Needs a second packet type and the shipped 20-byte header has no discriminator; until match state is replicated the simulations are known to differ, so it would fire on every comparison
 - [ ] `SnapshotDelta` (encode/decode)
 - [ ] `Discovery` (LAN broadcast)
 
-**These six classes are library-only.** `EngineMain` still registers `NullNetworkPort`; nothing in the running engine constructs a `PeerConnection`, `TicCmdBuffer` or `RedundantSender`, and no socket is opened. 87 tests cover them in isolation. Wiring them to `DesktopDatagramPort` is the next real Phase 3 step.
+**Measured, not asserted**: a loopback test over two real UDP sockets, and two live game processes that exchanged 77 KB with zero malformed packets and zero strangers. Do not read this as "multiplayer works" — a session that exchanges packets perfectly and cannot shoot the other player is exactly where this is.
 
-### Phase 4 — Gameplay — **planned**
+### Phase 4 — Gameplay — **the match layer landed early; the WAD-backed world did not**
+- [x] `PhysicsWorld` horizontal collision + slide — x then z in a fixed order, corner-safe
+- [x] `Hitscan` / `Target` / `HitResult`, shared by the player and the bots
+- [x] `Match` + `Bot` + `BotRng` — kills, deaths, respawn, scoring, rematch, kill streak
+- [ ] `PhysicsWorld.floorHeightAt(...)` — **the next gameplay step.** Collision is horizontal only, so the crates the jump was tuned to clear are not stand-on-able. One addition unlocks crates, staircase and ramp together
 - [ ] `LagCompensator` (rewind for hits) — moved from Phase 3; under pure lockstep there is nothing to rewind, so this only becomes meaningful once prediction/snapshot exists
 - [ ] `PlayerState` data class
 - [ ] `Entity` base + concrete types (monster, projectile, pickup, door)
-- [ ] `PhysicsWorld.moveWithSlide(player, dx, dy)` — collision + slide
 - [ ] `MapLoader` — read THINGS / LINEDEFS / SECTORS from WAD
 - [ ] `BspTraverser` — leaf lookup, reused in both gameplay and render
 
@@ -536,51 +563,52 @@ Render target: `docs/ASSETS.md` § 2. Ordered by dependency.
 
 Retired from this phase and deliberately not listed: `BspTraverser` (moved to Phase 4 as a gameplay/collision structure), `WallClipper`, `VisplaneBuilder`, `ColumnRenderer`, palette blitting.
 
-### Phase 6 — Audio — **planned**
+### Phase 6 — Audio — **started, deliberately narrow**
+- [x] `I_AudioPort` + `SoundId` + `NullAudioPort`, registered as `S_`, port supplied by `I_AdapterFactory.getAudioPort()`
+- [x] `GdxAudioPort` in `:gdxshared`, wired by both launchers
+- [x] `synth/` — `SoundBank` plus `BlasterSound`, `CarbineSound`, `SuperBlasterSound`, `PowerChimeSound`, `WavAudio`. **Every sound is generated at runtime**, so the repository ships no audio asset and `NOTICE` needs no entry
+- [x] Voice limiting; graceful degradation on no device, headless JVM, unwritable cache
 - [ ] `SoundEngine` — voice allocation, mix loop
 - [ ] `SoundEmitter` — 3D position + velocity
 - [ ] `MusicPlayer` — OGG/MIDI streaming
 - [ ] `PcmLoader` — read SFX from WAD lumps
 
+The four unchecked items are **deliberately not half-started**. `audio/README.md` keeps the 3D formulae as a reading list, explicitly not as a spec this code is failing to meet.
+
 ---
 
 ## 8. Test Coverage Summary
 
-**392 tests, all passing** — 354 in `:engine`, 38 in `:desktop`.
+**2339 tests, all passing** — 1625 `:engine`, 300 `:gdxshared`, 177 `:android`,
+164 `:desktop`, 73 `:tools`.
 
-| Suite | Module | Tests | Coverage |
-|---|---|---|---|
-| `FixedMathTest` | engine | 6 | fixed-point arithmetic |
-| `UserProfileTest` | engine | 12 | field validation, withXxx copies, equals/hashCode |
-| `FrameRateTest` | engine | 9 | per-rate math, parser, rejection |
-| `GameConfigTest` | engine | 10 | factories, drift correction (1000-tic sim) |
-| `SharedEventBusTest` | engine | 10 | FIFO, backpressure, drain, lifecycle |
-| `WorkerPoolTest` | engine | 7 | hot threads, parallel dispatch, error recovery |
-| `SubsystemStateTest` | engine | 10 | transitions, error handling, thread-safety |
-| `AdapterFactoryTest` | engine | 11 | HAL backend selection |
-| `DesktopAdapterFactoryTest` | engine | 5 | desktop factory wiring |
-| `DesktopTimePortTest` | engine | 7 | monotonic vs. wall clock |
-| `DesktopDatagramPortTest` | engine | 14 | bind, send, receive, direct-buffer reuse |
-| `MemoryUserProfilePortTest` | engine | 15 | in-memory CRUD, state machine |
-| `SqliteUserProfilePortTest` | engine | 15 | SQLite CRUD, upsert, persistence, state machine |
-| `MemoryPortTest` | engine | 35 | both backends (7 `@Nested` groups): positive, negative, random, overflow, underflow, state machine, tags |
-| `TicCmdTest`, `TicCmdBufferTest`, `PeerConnectionTest`, `RedundantSenderTest`, `AckWindowTest` | engine | 87 | lockstep tic buffers, peer state, redundant redelivery, 64-bit ack bitfield |
-| `LittleEndianTest` | engine | 10 | LE primitive readers |
-| `WadReaderTest` | engine | 27 | header + directory parse, lump slicing |
-| `LumpCacheTest` | engine | 21 | demand load, ref counting, pinning, eviction |
-| `MapLumpParserTest` | engine | 16 | THINGS / LINEDEFS / SECTORS / VERTEXES |
-| `WadFilePortTest` | engine | 27 | real `I_WadPort` end to end |
-| `GdxWindowPortTest` | desktop | 18 | `I_WindowPort` lifecycle, frame loop, close requests |
-| `GdxFrameLoopListenerTest` | desktop | 6 | `I_FrameCallback` dispatch |
-| `GdxAdapterFactoryTest` | desktop | 5 | factory wiring |
-| `DefaultMenuActionsTest`, `MenuButtonListenerTest` | desktop | 9 | main-menu actions |
+**The per-package breakdown lives in `README.md` § Test Coverage and nowhere
+else.** This section used to carry a per-suite table of its own; it drifted to
+392 while the real figure was six times that, because two tables of the same
+numbers only ever agree on the day they are written. Each package's own
+`## Status` block carries its count, and those sit next to the code.
 
-Run with: `.\gradlew.bat test`. `.\gradlew.bat build` additionally runs
-Checkstyle over main and test sources and fails on any violation.
+Counting rule, because three plausible methods give three different answers:
+sum the `tests=` attribute of every `<testsuite>` element Gradle wrote under
+`<module>/build/test-results/`, and count `:android` **once**. Its suite runs
+against a debug and a release variant, so a raw tally reports 354. Counting XML
+files instead undercounts nothing but splits `@Nested` groups; counting `@Test`
+annotations in source misses parameterized and repeated tests.
 
-> The `:engine` numbers above cover subsystems whose PLAN sections still read
-> "stub" (net, resource). Those sections are pending their own revisions; the
-> test counts here are measured, not aspirational.
+Run with `.\gradlew.bat test`. `.\gradlew.bat build` additionally runs
+Checkstyle over main and test sources and fails on any violation
+(`maxWarnings = 0`).
+
+Two properties are enforced by tests rather than by convention, and both are
+load-bearing rather than nice-to-have:
+
+- **Renderer determinism** — the demo shots are rendered at every worker count
+  from serial through 16 and compared byte-for-byte. This is the safety net for
+  culling and worker-count changes.
+- **Simulation determinism** — `PlayerController` is checked at the
+  constant-pool level to prove it never references `java/lang/Math`, only
+  `StrictMath`. Lockstep needs transcendentals to agree bit-for-bit across
+  machines, and only `StrictMath` guarantees that.
 
 ---
 

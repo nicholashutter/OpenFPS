@@ -52,7 +52,7 @@ import org.slf4j.LoggerFactory;
  *   4. Load or create user profile
  *   5. Event bus (single shared queue, blocking backpressure)
  *   6. Subsystem registry — register all subsystems
- *   7. Worker pool — N = cores/2 hot threads
+ *   7. Worker pool — N = cores - 1 hot threads (see ThreadPoolFactory)
  *   8. Start the pool
  *   9. Start GameLoop on its own thread (event producer)
  *  10. Wait for the loop to finish

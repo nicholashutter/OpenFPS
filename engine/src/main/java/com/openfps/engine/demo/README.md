@@ -9,7 +9,7 @@
 |---|---|
 | **State** | SHIPPING |
 | **Phase** | not a phase item — this is the playable demo content |
-| **Tests** | 79 |
+| **Tests** | 184 — counted, not remembered: `gradlew :engine:test --tests 'com.openfps.engine.demo.*'` |
 | **Registered** | not registered — not a subsystem; it is a composition root that consumes the engine |
 | **Verified** | 2026-07-29 |
 
@@ -25,9 +25,11 @@ to start a demo with no floor. `:desktop:run` shows all of it in a window.
 
 **Blocked on.** Nothing.
 
-**Next step.** This package follows the renderer. There is nothing to do here
-until the `render/README.md` polish items — the bilinear quality toggle and the
-independent internal render resolution — land.
+**Next step.** This package follows the renderer, and one of the two items it
+used to wait on has landed: the independent internal render resolution now
+exists as `RenderMode` in `:gdxshared`. The bilinear quality toggle is the
+remaining one. Separately, `RemotePlayers` lives here and gains nothing more
+until `Match` learns about remote players — see `net/README.md`.
 
 ## The rematch, and why it is a reset rather than a rebuild
 

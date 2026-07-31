@@ -66,7 +66,10 @@
 <aside class="rail"><details class="toc" id="toc" open><summary>On this page</summary>
 <ul>
 <li class="lv2"><a href="#status">Status</a></li>
-<li class="lv3"><a href="#what-the-emulator-run-established">What the emulator run established</a></li>
+<li class="lv2"><a href="#the-2026-07-30-parity-pass">The 2026-07-30 parity pass</a></li>
+<li class="lv3"><a href="#the-four-defects-it-found">The four defects it found</a></li>
+<li class="lv3"><a href="#what-this-pass-still-could-not-check">What this pass still could not check</a></li>
+<li class="lv3"><a href="#what-the-earlier-emulator-run-established">What the earlier emulator run established</a></li>
 <li class="lv3"><a href="#what-that-run-found-which-is-the-more-useful-half">What that run found, which is the more useful half</a></li>
 <li class="lv2"><a href="#what-is-still-not-verified-on-a-device">What is still not verified on a device</a></li>
 <li class="lv2"><a href="#a-green-build-does-not-mean-this-module-compiles">A green build does not mean this module compiles</a></li>
@@ -79,7 +82,7 @@
 <li class="lv2"><a href="#files">Files</a></li>
 </ul></details></aside>
 <main id="doc">
-<p class="crumb"><span class="tag">Modules</span><span class="sep">/</span><code>android/README.md</code><span class="sep">/</span>14 min read</p>
+<p class="crumb"><span class="tag">Modules</span><span class="sep">/</span><code>android/README.md</code><span class="sep">/</span>20 min read</p>
 <h1 id="android--the-android-launcher"><code>:android</code> — the Android launcher<a class="anchor" href="#android--the-android-launcher" aria-label="Permalink">#</a></h1>
 <blockquote>
 <p>libGDX's Android backend, the software rasterizer on a GLSurfaceView, a
@@ -91,12 +94,109 @@ thumbstick, and the Room half of <code>I_UserProfilePort</code>. <strong>It is p
 <tbody>
 <tr><td><strong>State</strong></td><td>SHIPPING</td></tr>
 <tr><td><strong>Phase</strong></td><td>not a numbered phase</td></tr>
-<tr><td><strong>Tests</strong></td><td>164 unique (328 executions — the suite runs against the debug and release variants). Plain JVM only; nothing device-backed</td></tr>
+<tr><td><strong>Tests</strong></td><td>177 unique (354 executions — the suite runs against the debug and release variants), plus 12 added to <code>:gdxshared</code> for the settings screen's fit rule and the back-key states. Plain JVM only; nothing device-backed</td></tr>
 <tr><td><strong>Registered</strong></td><td>provides the Android HAL (<code>AndroidAdapterFactory</code>) and the LAUNCHER Activity</td></tr>
-<tr><td><strong>Verified</strong></td><td>2026-07-28 — <strong>played on the OpenFPS_API36 emulator: menu, match, seven bots, a kill</strong>. The gamepad path added since has <strong>not</strong> been run on a device or emulator with a controller attached — see "Gamepad hot-plug" below for exactly which parts are reasoned from the platform contracts rather than observed</td></tr>
+<tr><td><strong>Verified</strong></td><td>2026-07-30 — <strong>a full parity pass on the OpenFPS_API36 emulator</strong>: menu, settings, collision, a won match, the end screen, a rematch, both sounds, all three render modes and the touch pad. It found three defects, two of them dead ends. See "The 2026-07-30 parity pass" below for the row-by-row result and for the four things that still cannot be checked without hardware</td></tr>
 </tbody>
 </table></div>
-<h3 id="what-the-emulator-run-established">What the emulator run established<a class="anchor" href="#what-the-emulator-run-established" aria-label="Permalink">#</a></h3>
+<h2 id="the-2026-07-30-parity-pass">The 2026-07-30 parity pass<a class="anchor" href="#the-2026-07-30-parity-pass" aria-label="Permalink">#</a></h2>
+<p>Every row below was checked <strong>on a running emulator</strong>, not read out of the
+source. The reason for the exercise is that this platform has repeatedly been
+assumed to inherit shared code that it did not, and reading the wiring is exactly
+how that assumption survives: all three defects found here sit in code whose
+wiring is correct and whose <em>arithmetic or event routing</em> is not.</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Feature</th><th>Verdict</th></tr></thead>
+<tbody>
+<tr><td>Collision (<code>PhysicsWorld</code>)</td><td><strong>verified</strong> — <code>PhysicsWorld{16 solids, body half-width 16.0}</code> at startup; walking into a wall stops, strafing into it slides along it, and the player never left the room</td></tr>
+<tr><td>Respawn, kills and deaths</td><td><strong>verified</strong> — <code>KILLED … death 1, respawning in 120 tics</code> three times over with the match still running; <code>KILLS 0/7</code>, <code>DEATHS n</code>, and <code>HEALTH</code> turning red under 30</td></tr>
+<tr><td>End screen</td><td><strong>verified</strong> — <code>VICTORY</code>, five stat lines, and <strong>PLAY AGAIN and BACK TO MENU both fully on screen</strong> with margin below. The fit rule already in <code>GameOverScreen</code> holds at 2.625x</td></tr>
+<tr><td>Board reset</td><td><strong>verified</strong> — <code>MATCH RESTARTED — 7 opponents back up</code>, counters zeroed, and all seven revived bots <strong>drawn</strong> rather than left invisible by the renderer-side degenerate transform</td></tr>
+<tr><td>Bot weapons and incoming fire</td><td><strong>verified</strong> — carbines visible in every bot's hands, violet bolts in flight, and grey muzzle puffs. It is the <strong>generated <code>BlockCarbine</code></strong>, not Kenney art: <code>blaster-p.ofm</code> is genuinely absent from <code>assets/models</code> on this machine, so desktop shows the same fallback. This is a missing asset, not an Android gap</td></tr>
+<tr><td>Audio</td><td><strong>FAILED, fixed</strong> — both sounds do load, but the first bot shot beat the asynchronous <code>SoundPool.load</code> and logged <code>W/SoundPool: play soundID 2 not READY</code>. Warming up earlier fixed it: three cold runs now show both sounds loaded and <strong>zero</strong> <code>not READY</code> warnings</td></tr>
+<tr><td>Settings — ACCESSIBILITY</td><td><strong>FAILED, fixed</strong> — see below. <code>TARGET OUTLINE ON</code> matches the red keyline actually drawn in the world at startup, and the switch is the launcher's own object</td></tr>
+<tr><td>Settings — DISPLAY &amp; DIAGNOSTICS</td><td><strong>FAILED, fixed</strong> — the screen had no reachable <code>BACK</code></td></tr>
+<tr><td>Render modes</td><td><strong>verified</strong> — cycled at runtime through <code>1067x480 (480P)</code>, <code>1600x720 (720P)</code> and <code>2400x1080 (NATIVE)</code>, aspect held on the short edge, blit filter switching to Nearest at native, and the overlay's <code>RES</code> line agreeing each time</td></tr>
+<tr><td>Controller</td><td><strong>partly verified</strong> — better than "untested". Injected gamepad-source key events reach the bindings: <code>input gamepad keyevent 108</code> (START) left the match through the full <code>AndroidBindings</code> → <code>AndroidInputPort.keyDown</code> → <code>consumeLeaveRequest</code> path, and A/R1/L1 injected without a crash. The <strong>axis</strong> path is still unverified — see below</td></tr>
+<tr><td>Touch control pad</td><td><strong>verified</strong> — stick, FIRE, JUMP and LEAVE all drawn and all working against a brightly lit room, and holding FIRE visibly grows it and takes its fill, rim and glyph to full opacity while JUMP beside it stays untouched</td></tr>
+</tbody>
+</table></div>
+<h3 id="the-four-defects-it-found">The four defects it found<a class="anchor" href="#the-four-defects-it-found" aria-label="Permalink">#</a></h3>
+<ol>
+<li>
+<p><strong>The settings screen had no way off it.</strong> Every fixed metric on
+<code>SettingsScreen</code> is multiplied by the panel's density, and at 2.625x four
+pointer-sized buttons, three hint lines and two group headings came to roughly
+1140 px under a heading whose bottom edge was already at 840 px. The existing
+correction — sharing the free space between the gaps — cannot help when the
+<em>content</em> does not fit: every gap collapsed to zero and <code>BACK</code> still sat about
+300 px below the bottom edge, on the one screen that owns the input processor.
+<code>GameOverScreen</code> had been given a heading cap for exactly this and
+<code>SettingsScreen</code> never was. It now has the same cap plus one more step: the
+hints are dropped when they cannot be afforded, because a sentence <em>about</em> a
+control is not a control. No touch target is ever scaled.
+<code>SettingsScreenFitTest</code> is the regression.</p>
+</li>
+<li>
+<p><strong>The back key quit the game from the settings and end screens.</strong> It has
+always worked in <code>PLAYING</code>, and that is what hid it: there the input processor
+is <code>AndroidInputPort</code>, whose <code>keyDown</code> banks a leave request. On the other two
+screens the processor is a Scene2D stage, which has no listener for
+<code>Keys.BACK</code> and drops it — so nothing acted on the press and Android's default
+handling did. From the end screen that threw the match result away with it.
+Fixed in two halves, because each alone looks like it works: the key is now
+<em>caught</em> in every state that has somewhere to go back to
+(<code>UiState.backReturnsToMenu</code>), and the port is left in the processor chain
+behind the stage so something still <em>acts</em> on it.</p>
+</li>
+<li>
+<p><strong>The first bot shot was silent, and the preload was in the wrong place.</strong>
+<code>preload()</code> hung off the match gate, on the reasoning that the surface is up by
+then and the player is "still finding their thumbs". But the gate is also what
+unfreezes the bots, so they open fire on the very edge that starts the
+asynchronous <code>SoundPool.load</code>, and the lead time was zero:
+<code>W/SoundPool: play soundID 2 not READY</code>. It now warms up on the surface-ready
+edge instead — the earliest point at which <code>Gdx.audio</code> exists, and one that
+happens while the menu is still on screen. The gate still calls it as an
+idempotent backstop.</p>
+</li>
+<li>
+<p><strong>A trap found while fixing 2.</strong> Putting the port in <strong>front</strong> of the stage
+makes every button on both screens inert while still drawing perfectly:
+<code>AndroidInputPort.touchUp</code> returns true unconditionally — deliberately, so a
+finger held across a transition is never left stuck — so the press starts a
+Scene2D click and the release never arrives to finish it. The emulator showed
+<code>RENDER</code>, <code>DEBUG OVERLAY</code> and <code>BACK</code> all dead. The port goes <strong>last</strong> in the
+multiplexer, and a test pins why.</p>
+</li>
+</ol>
+<h3 id="what-this-pass-still-could-not-check">What this pass still could not check<a class="anchor" href="#what-this-pass-still-could-not-check" aria-label="Permalink">#</a></h3>
+<ul>
+<li>
+<p><strong>Gamepad axes.</strong> <code>adb shell input</code> can synthesize a gamepad <em>key</em> event but
+not a joystick <code>MotionEvent</code>, so <code>dispatchGenericMotionEvent</code> and the
+<code>AXIS_Z</code>/<code>AXIS_RZ</code> right-stick mapping remain reasoned from the platform
+contracts. A physical pad is the only way to settle them.</p>
+</li>
+<li>
+<p><strong>Hot-plug.</strong> <code>InputManager.InputDeviceListener</code> firing on a Bluetooth drop
+needs a real pad to drop.</p>
+</li>
+<li>
+<p><strong>A real pad's identity.</strong> That <code>SOURCE_JOYSTICK</code> classifies actual hardware
+and that its <code>BUTTON_*</code> numbering matches <code>AndroidBindings</code>.</p>
+</li>
+<li>
+<p>Everything in "What is still not verified on a device" below — context loss,
+rotation, ARM hardware, and process death — which this pass did not touch.</p>
+</li>
+</ul>
+<p>One caveat worth recording rather than hiding: the back-key check passed on six
+of seven runs, with the seventh backgrounding the app. Every run logged the
+correct state transition, so the flake is in the emulator's input delivery under
+<code>swiftshader_indirect</code> rather than in the decision, but it has not been chased to
+the bottom.</p>
+<h3 id="what-the-earlier-emulator-run-established">What the earlier emulator run established<a class="anchor" href="#what-the-earlier-emulator-run-established" aria-label="Permalink">#</a></h3>
 <p>The whole loop works on a phone. Measured on the OpenFPS_API36 AVD, API 36,
 2400×1080 landscape at 2.625× density:</p>
 <ul>
@@ -334,14 +434,21 @@ Dispatch sees every event first and still calls <code>super</code>. The extracti
 five <code>getAxisValue</code> calls and a source check, because a <code>MotionEvent</code> cannot be
 constructed in a local unit test: everything that can be wrong happens in
 <code>onGamepadAxes</code>, which takes plain floats and is fully covered.</p>
-<p><strong>What is not verified.</strong> No device or emulator has been driven with a controller
-attached, so four things here are reasoned from the platform contracts rather
-than observed: the <code>MotionEvent</code> axis numbering (<code>AXIS_Z</code>/<code>AXIS_RZ</code> being the
-right stick), the <code>SOURCE_JOYSTICK</code> check classifying real pads correctly,
-<code>InputDeviceListener</code> firing on a Bluetooth drop, and libGDX forwarding
-<code>BUTTON_*</code> key events from the surface. Everything on this side of those calls —
-the sign of every axis, the trigger threshold, hot-plug clearing state, and touch
-and pad working simultaneously — is covered by tests that need none of them.</p>
+<p><strong>What is not verified.</strong> No pad has ever been <em>attached</em>, but the 2026-07-30
+pass narrowed this list by one: <code>adb shell input gamepad keyevent</code> injects a
+real gamepad-source key event, and <code>BUTTON_START</code> travelled the whole path —
+libGDX forwarding it from the surface, <code>AndroidBindings</code> naming it, and
+<code>AndroidInputPort.keyDown</code> banking the leave request — to take the player out of
+a match. So <strong>libGDX forwarding <code>BUTTON_*</code> key events is now observed</strong> rather
+than assumed.</p>
+<p>Three things still are not, and no amount of <code>adb</code> will settle them: the
+<code>MotionEvent</code> axis numbering (<code>AXIS_Z</code>/<code>AXIS_RZ</code> being the right stick), because
+<code>input</code> cannot synthesize a joystick motion event at all; the <code>SOURCE_JOYSTICK</code>
+check classifying real pads correctly; and <code>InputDeviceListener</code> firing on a
+Bluetooth drop, which needs a real pad to drop. Everything on this side of those
+calls — the sign of every axis, the trigger threshold, hot-plug clearing state,
+and touch and pad working simultaneously — is covered by tests that need none of
+them.</p>
 <h2 id="files">Files<a class="anchor" href="#files" aria-label="Permalink">#</a></h2>
 <ul>
 <li>
@@ -398,7 +505,7 @@ physical button is a different number on desktop, which is exactly what
 <code>UserProfileDao</code> and <code>OpenFpsDatabase</code></p>
 </li>
 </ul>
-<p><strong>164 tests in this module</strong> — all plain JVM unit tests, no Robolectric and no
+<p><strong>177 tests in this module</strong> — all plain JVM unit tests, no Robolectric and no
 instrumentation. They cover what can honestly be covered off a device: the whole
 touch-gesture layer (which control a pixel belongs to, stick deflection and its
 dead zone, the drawn thumb clamped to its ring, the resting stick clearing the

@@ -9,7 +9,7 @@
 |---|---|
 | **State** | SHIPPING |
 | **Phase** | created 2026-07-28, when `:android` needed a presenter and a UI state machine that already existed in `:desktop` |
-| **Tests** | 76 |
+| **Tests** | 300 — counted, not remembered: `gradlew :gdxshared:test`. The old figure here said 76, which was the count before the render modes, analog stick, settings/score/end-of-match screens and accessibility settings arrived |
 | **Registered** | consumed by `:desktop` and `:android`; depends on `:engine` and libGDX **core** only |
 | **Verified** | 2026-07-28 |
 

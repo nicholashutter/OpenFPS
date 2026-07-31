@@ -66,10 +66,12 @@
 <aside class="rail"><details class="toc" id="toc" open><summary>On this page</summary>
 <ul>
 <li class="lv2"><a href="#status">Status</a></li>
-<li class="lv3"><a href="#the-transport-ships-the-simulation-does-not">The transport ships. The simulation does not.</a></li>
+<li class="lv3"><a href="#the-transport-ships-and-peers-now-have-bodies">The transport ships, and peers now have bodies.</a></li>
+<li class="lv3"><a href="#what-is-still-not-in-lockstep-and-this-is-the-important-part">What is still NOT in lockstep, and this is the important part</a></li>
 <li class="lv2"><a href="#what-lives-here">What lives here</a></li>
 <li class="lv2"><a href="#subsystem-layout">Subsystem layout</a></li>
-<li class="lv2"><a href="#library-only-nothing-in-the-running-engine-uses-these">Library-only: nothing in the running engine uses these</a></li>
+<li class="lv2"><a href="#running-two-peers">Running two peers</a></li>
+<li class="lv2"><a href="#what-actually-runs-and-what-is-still-library-only">What actually runs, and what is still library-only</a></li>
 <li class="lv2"><a href="#p2p-model">P2P model</a></li>
 <li class="lv3"><a href="#topology">Topology</a></li>
 <li class="lv3"><a href="#ticcmd-structure">TicCmd structure</a></li>
@@ -95,7 +97,7 @@
 <li class="lv2"><a href="#todo-phase-3">TODO (Phase 3)</a></li>
 </ul></details></aside>
 <main id="doc">
-<p class="crumb"><span class="tag">Packages</span><span class="sep">/</span><code>engine/src/main/java/com/openfps/engine/net/README.md</code><span class="sep">/</span>28 min read</p>
+<p class="crumb"><span class="tag">Packages</span><span class="sep">/</span><code>engine/src/main/java/com/openfps/engine/net/README.md</code><span class="sep">/</span>32 min read</p>
 <h1 id="net-g_--peer-to-peer-networking">Net (G_) — Peer-to-Peer Networking<a class="anchor" href="#net-g_--peer-to-peer-networking" aria-label="Permalink">#</a></h1>
 <blockquote>
 <p>G_ is the network layer. The engine is P2P-first — no dedicated server required
@@ -106,13 +108,13 @@ for small matches. Authority is distributed: every player is a peer.</p>
 <thead><tr><th>Field</th><th>Value</th></tr></thead>
 <tbody>
 <tr><td><strong>State</strong></td><td>PARTIAL</td></tr>
-<tr><td><strong>Phase</strong></td><td><code>PLAN.md</code> Phase 3 — transport wired and measured; lockstep simulation not started</td></tr>
-<tr><td><strong>Tests</strong></td><td>129</td></tr>
+<tr><td><strong>Phase</strong></td><td><code>PLAN.md</code> Phase 3 — transport wired and measured; peers are simulated into visible bodies; match state is not replicated</td></tr>
+<tr><td><strong>Tests</strong></td><td>142 (129 here, 13 in <code>demo/RemotePlayersTest</code>)</td></tr>
 <tr><td><strong>Registered</strong></td><td>G_ via <code>NetSubsystem</code> with <code>NullNetworkPort</code>; the live path is <code>NetSession</code>, attached by <code>DesktopLauncher</code></td></tr>
-<tr><td><strong>Verified</strong></td><td>2026-07-28</td></tr>
+<tr><td><strong>Verified</strong></td><td>2026-07-30</td></tr>
 </tbody>
 </table></div>
-<h3 id="the-transport-ships-the-simulation-does-not">The transport ships. The simulation does not.<a class="anchor" href="#the-transport-ships-the-simulation-does-not" aria-label="Permalink">#</a></h3>
+<h3 id="the-transport-ships-and-peers-now-have-bodies">The transport ships, and peers now have bodies.<a class="anchor" href="#the-transport-ships-and-peers-now-have-bodies" aria-label="Permalink">#</a></h3>
 <p><code>NetSession</code> opens a real socket and drives the primitives that were already
 here. It has been verified twice over, deliberately at two different levels:</p>
 <ul>
@@ -126,39 +128,71 @@ truncates a full window, a channel left blocking so the first empty read
 hangs the game loop.</p>
 </li>
 <li>
-<p><strong>Two live game processes.</strong> They exchanged 77 KB, 338 packets out and 223
-in, 2,460 commands accepted, with <strong>zero malformed and zero from strangers</strong>.
-The asymmetry is the second process starting later, and the wide commands
-per packet is the redundancy window adapting to the loss that caused.</p>
+<p><strong>Two live game processes.</strong> 374 packets each way, 2,796 commands accepted,
+<strong>zero malformed and zero from strangers</strong>, and each peer replayed the other
+into a body it could see. Launch both with
+<code>run-desktop.ps1 -TwoPeers -StartInGame</code>.</p>
 </li>
 </ul>
-<p><strong>What is not done: a remote player is not simulated into a body.</strong> The inputs
-arrive and the ack state is live; nothing turns them into someone you can see
-and shoot. That needs a <code>PlayerController</code> per peer driven from the received
-ring, plus a rule for what to do when a peer's tics have not arrived. Stated
-plainly here because a session that exchanges packets perfectly and shows
-nobody looks exactly like a session that is broken.</p>
+<p><strong>A remote player IS now simulated into a body</strong> — <code>demo/RemotePlayers</code>, which
+replays each peer's commands through its own <code>PlayerController</code> bound to the
+room's own <code>PhysicsWorld</code>. Nothing sends a position: two peers handed the same
+commands at the same tics compute the same place. Measured across two
+processes, each computed the other's walk to the same float.</p>
+<h3 id="what-is-still-not-in-lockstep-and-this-is-the-important-part">What is still NOT in lockstep, and this is the important part<a class="anchor" href="#what-is-still-not-in-lockstep-and-this-is-the-important-part" aria-label="Permalink">#</a></h3>
+<p><strong>Only movement is replicated. Match state is not.</strong> Each peer runs its own
+<code>Match</code>, whose bots shoot only at the local player, and <code>Match</code> has never heard
+of a remote player. Three consequences, all observed rather than predicted:</p>
+<ol>
+<li>
+<p><strong>Peers are not shootable.</strong> <code>Match</code> builds its target list from its bot
+roster, so a peer's body is visible and solid-looking but takes no damage.
+Who decides a hit, when both peers resolve it independently, is a real
+design question and not an oversight.</p>
+</li>
+<li>
+<p><strong>Death and respawn do not cross the wire.</strong> A respawn is a teleport driven
+by <code>Match</code>, not by an input, so the peer replaying your commands never sees
+it: your body carries on walking from where you died while you stand back at
+the spawn. Caught in an 11-second run where the local player was killed at
+tic 486 and respawned, and the peer's copy of it was 380 units away.</p>
+</li>
+<li>
+<p><strong>A late join costs a permanent offset.</strong> A peer's body is anchored on the
+oldest tic still in the ring, so commands sent before the second process's
+socket was up are simply gone. Measured: 4 missing leading tics at 4.267
+units per tic left a <strong>constant</strong> 17.07-unit offset — constant, not
+accumulating, because every later tic is applied exactly once. Fixing it
+needs an agreed start tic, which is session establishment rather than
+transport.</p>
+</li>
+</ol>
+<p>Stated at this length because a session that exchanges packets perfectly and
+shows a body in the wrong place looks exactly like a session that is broken.</p>
 <p><strong>Built.</strong> Six classes — <code>TicCmd</code>, <code>TicCmdBuffer</code>, <code>AckWindow</code>,
 <code>PeerConnection</code>, <code>RedundantSender</code>, <code>NetBytes</code> — implementing the 12-byte
 command, the 64-bit ack bitfield and the § 4 redundant-redelivery packet, under
 87 passing tests. The transport decision is recorded and settled: UDP plus
 redundant redelivery, no dependency added.</p>
-<p><strong>Not built.</strong> <code>SnapshotDelta</code> and <code>Discovery</code>. And the wiring: <code>EngineMain</code>
-registers <code>NetSubsystem(new NullNetworkPort())</code>, the six classes' only callers
-outside themselves are their own tests, and <strong>no socket is ever opened</strong>.</p>
-<p><strong>Blocked on.</strong> Nothing. This is wiring work, not a design question — the ADR
-below settled the design.</p>
-<p><strong>Next step.</strong> Wire the six primitives to
-<code>hal.adapter.desktop.DesktopDatagramPort</code> behind a real <code>I_NetworkPort</code>. That
-port already exists, is tested, and uses a preallocated direct <code>ByteBuffer</code>.</p>
+<p><strong>Not built.</strong> <code>SnapshotDelta</code> and <code>Discovery</code>. <code>EngineMain</code> still registers
+<code>NetSubsystem(new NullNetworkPort())</code> — the live session deliberately bypasses
+it, for the socket-ownership reason given below.</p>
+<p><strong>Blocked on.</strong> Nothing. The remaining items are design questions with known
+shapes, not unknowns.</p>
+<p><strong>Next step.</strong> An <strong>agreed start tic</strong>, so a peer that connects late does not
+lose the commands sent before its socket existed. It is the smallest remaining
+correctness gap and it has a measured cost (a constant 17-unit offset in the
+run above). After that, teaching <code>Match</code> about remote players, which is what
+makes peers shootable and makes a respawn visible to anyone else.</p>
 <p><a href="#transport-decision">Transport decision</a>, at the bottom of this file, is the
 ADR that settled the protocol. Its conclusions have since been folded back into
 the sections above it — § 12 lists every correction that was applied — so the
 two halves now agree and can be read in either order.</p>
 <h2 id="what-lives-here">What lives here<a class="anchor" href="#what-lives-here" aria-label="Permalink">#</a></h2>
-<p>Six classes are built and tested. <strong>None of them is wired to a socket</strong> — see
-<a href="#library-only-nothing-in-the-running-engine-uses-these">Library-only</a> below,
-which is the single most important thing to know about this package.</p>
+<p>Six classes are built and tested, and <code>NetSession</code> drives all of them over a
+real socket — see
+<a href="#what-actually-runs-and-what-is-still-library-only">What actually runs</a> below
+for the two pieces that are still not wired.</p>
 <div class="tablewrap"><table>
 <thead><tr><th>Class</th><th>What it is</th></tr></thead>
 <tbody>
@@ -168,6 +202,8 @@ which is the single most important thing to know about this package.</p>
 <tr><td><code>PeerConnection</code></td><td>Per-peer state — address, EWMA RTT, ack window, loss stats. <strong>No socket.</strong></td></tr>
 <tr><td><code>RedundantSender</code></td><td>Packs and unpacks the redundant-input packet — the § 4 reliability layer</td></tr>
 <tr><td><code>NetBytes</code></td><td>Package-private big-endian primitive codec; the one byte-order site</td></tr>
+<tr><td><code>NetSession</code></td><td>The live end: owns the socket, the peer table and the per-tic send/receive</td></tr>
+<tr><td><code>TicCmdEncoder</code></td><td>Quantises axes, yaw, pitch and buttons onto the wire and back</td></tr>
 </tbody>
 </table></div>
 <p>Still to write: <code>SnapshotDelta</code> (diff-based state serialization between tics)
@@ -180,30 +216,52 @@ and <code>Discovery</code> (LAN peer discovery via UDP broadcast).</p>
 ├── PeerConnection.java      per-peer state; holds no socket
 ├── RedundantSender.java     packet pack/unpack (static; the format is stateless)
 ├── NetBytes.java            package-private big-endian primitives
+├── NetSession.java          the socket, the peers, and a tic in and out
+├── TicCmdEncoder.java       input &lt;-&gt; wire quantisation
 ├── port/
 │   └── I_NetworkPort.java   interface — called by core per tic
 └── adapter/
-    └── NullNetworkPort.java stub — and still the only implementation
+    └── NullNetworkPort.java stub — what NetSubsystem still registers
 </code></pre></div>
-<p>87 tests cover the six classes. They are unit tests with no I/O at all, which is
-a direct consequence of <code>PeerConnection</code> holding no socket: every packet in the
-test suite is a <code>byte[]</code> that never leaves the JVM.</p>
-<h2 id="library-only-nothing-in-the-running-engine-uses-these">Library-only: nothing in the running engine uses these<a class="anchor" href="#library-only-nothing-in-the-running-engine-uses-these" aria-label="Permalink">#</a></h2>
-<p><code>EngineMain</code> registers <code>NetSubsystem(new NullNetworkPort())</code>. Nothing in the
-running engine constructs a <code>PeerConnection</code>, a <code>TicCmdBuffer</code> or a
-<code>RedundantSender</code>; outside the six classes themselves, their only callers are
-their own tests. No socket is opened, no datagram is sent, and no tic command
-crosses a wire.</p>
-<p>So the six classes are a <strong>correct, tested implementation of a protocol nobody
-speaks yet</strong>. The next real Phase 3 step is wiring them to
-<code>hal.adapter.desktop.DesktopDatagramPort</code> behind a real <code>I_NetworkPort</code> — at
-which point <code>NetSubsystem.onEvent</code>, which is currently the base-class no-op,
-starts routing <code>NetworkPacketEvent</code>.</p>
-<p>Read every "ships", "sends" and "receives" below with that in mind: they
-describe the protocol these classes implement, not traffic the engine currently
-produces.</p>
+<p>87 tests cover the six primitives. They are unit tests with no I/O at all, which
+is a direct consequence of <code>PeerConnection</code> holding no socket: every packet in
+that part of the suite is a <code>byte[]</code> that never leaves the JVM.
+<code>NetSessionLoopbackTest</code> is the exception and the point — two real UDP sockets,
+because the ways a real socket fails are not reachable from a scripted one.</p>
+<h2 id="running-two-peers">Running two peers<a class="anchor" href="#running-two-peers" aria-label="Permalink">#</a></h2>
+<div class="code" data-lang="powershell"><pre><code>.\run-desktop.ps1 -TwoPeers -StartInGame
+</code></pre></div>
+<p>Two windows, wired to each other on localhost: player 1 on UDP 5021 and player 2
+on 5022, each with its own profile database under <code>desktop/build/net-peers</code>.
+The two ids spawn at opposite ends of the room facing each other, so the first
+thing each player sees is the other one. Keyboard and mouse follow window focus,
+so click between them.</p>
+<p>It starts two plain JVMs from an <code>installDist</code> image rather than running
+<code>gradlew :desktop:run</code> twice — two concurrent Gradle builds in one project
+directory serialise on Gradle's locks, so the second window would open only when
+the first closed.</p>
+<h2 id="what-actually-runs-and-what-is-still-library-only">What actually runs, and what is still library-only<a class="anchor" href="#what-actually-runs-and-what-is-still-library-only" aria-label="Permalink">#</a></h2>
+<p><strong>The six classes are live.</strong> <code>NetSession</code> owns a <code>DesktopDatagramPort</code>, binds
+it, and drives all six every tic; <code>DemoGameplayPort.exchangeNetwork</code> is the
+caller, and <code>demo/RemotePlayers</code> consumes the other end. Two processes on
+localhost do open sockets, send datagrams and cross tic commands.</p>
+<p>Two things named below are still not wired, and neither is on the live path:</p>
+<ul>
+<li>
+<p><code>NetSubsystem</code> still registers <code>NullNetworkPort</code>, and its <code>onEvent</code> is still
+the base-class no-op. <strong>The live session deliberately does not go through
+it</strong> — <code>DesktopLauncher</code> builds <code>NetSession</code> its own second
+<code>DesktopDatagramPort</code>, because two owners of one socket would race over
+<code>receive()</code>, each draining packets the other needed.</p>
+</li>
+<li>
+<p><code>SnapshotDelta</code> and <code>Discovery</code> are unwritten, so peer addresses come from
+<code>--peer=</code> on the command line and there is no state sync at all.</p>
+</li>
+</ul>
 <h2 id="p2p-model">P2P model<a class="anchor" href="#p2p-model" aria-label="Permalink">#</a></h2>
-<p>The primitives below are built; the topology they serve is not yet running.</p>
+<p>The primitives below are built and running. The mesh has been exercised with two
+peers; the 8-player fanout the topology describes has not.</p>
 <h3 id="topology">Topology<a class="anchor" href="#topology" aria-label="Permalink">#</a></h3>
 <p>v1 is a <strong>full mesh</strong>: every peer sends directly to every other peer, with no
 hub. That is O(n²) in packets — the same input is unicast 7 times in an 8-player
@@ -748,7 +806,7 @@ dedicated server" premise.</p>
 <tr><td><code>TicCmd</code> / <code>NetBytes</code></td><td>The 12-byte command and the one big-endian codec behind it</td><td>Built</td></tr>
 <tr><td><code>Discovery</code></td><td>Unchanged — LAN broadcast, <code>DEFAULT_NET_PORT</code></td><td>Not started</td></tr>
 <tr><td><code>SnapshotDelta</code></td><td>Phase 4+ state sync, per § 5</td><td>Not started</td></tr>
-<tr><td><code>DesktopNetworkPort</code></td><td><strong>Datagram-only</strong>. One direct <code>ByteBuffer</code>, reused.</td><td><code>hal.adapter.desktop.DesktopDatagramPort</code> exists; <strong>nothing in <code>net/</code> is wired to it</strong></td></tr>
+<tr><td><code>DesktopNetworkPort</code></td><td><strong>Datagram-only</strong>. One direct <code>ByteBuffer</code>, reused.</td><td>Built and live — <code>NetSession</code> owns a <code>DesktopDatagramPort</code> and drives it every tic</td></tr>
 </tbody>
 </table></div>
 <p>Reserved constants that become load-bearing:</p>
@@ -802,7 +860,7 @@ port table, <code>STYLE.md</code> § 13.1, <code>PLAN.md</code> § 3.8, both HAL
 <tr><td>TODO left <code>PeerConnection</code> / <code>TicCmdBuffer</code> / <code>RedundantSender</code> unchecked</td><td>All three shipped. Only <code>SnapshotDelta</code> and <code>Discovery</code> remain unwritten</td></tr>
 <tr><td>A banner claiming this file's ADR "supersedes several numbers" above it</td><td>The corrections in the table above were applied in place; the banner was describing work already done</td></tr>
 <tr><td>§ 6 "16 (header)"</td><td>Shipped header is <strong>20 bytes</strong> — the ack needs an explicit anchor tic (§ 4)</td></tr>
-<tr><td>Nothing said the classes are unwired</td><td><a href="#library-only-nothing-in-the-running-engine-uses-these">Library-only</a> says it up front</td></tr>
+<tr><td>Nothing said the classes are unwired</td><td>They are wired now — <a href="#what-actually-runs-and-what-is-still-library-only">What actually runs</a> says what is and is not</td></tr>
 </tbody>
 </table></div>
 <h2 id="13-revisit-triggers">13. Revisit triggers<a class="anchor" href="#13-revisit-triggers" aria-label="Permalink">#</a></h2>
@@ -839,10 +897,23 @@ which changes the transport requirements wholesale</p>
 <p><code>NetBytes.java</code> <em>(package-private)</em></p>
 </li>
 <li>
+<p><code>NetSession.java</code> — the live end: one socket, the peers, a tic in and out</p>
+</li>
+<li>
+<p><code>TicCmdEncoder.java</code> — quantises input to the wire and back</p>
+</li>
+<li>
 <p><code>port/I_NetworkPort.java</code></p>
 </li>
 <li>
 <p><code>adapter/NullNetworkPort.java</code></p>
+</li>
+</ul>
+<p>Outside this package, the other half of a networked match:</p>
+<ul>
+<li>
+<p><code>demo/RemotePlayers.java</code> — one <code>PlayerController</code> per peer, replayed from
+the ring, and the pre-placed bodies they are drawn into</p>
 </li>
 </ul>
 <h2 id="todo-phase-3">TODO (Phase 3)<a class="anchor" href="#todo-phase-3" aria-label="Permalink">#</a></h2>
@@ -853,8 +924,22 @@ which changes the transport requirements wholesale</p>
 <li class="task done"><code>AckWindow</code> (64-bit ack bitfield + highest contiguous tic)</li>
 <li class="task done"><code>PeerConnection</code> (peer state — address, EWMA RTT, ack window; no socket)</li>
 <li class="task done"><code>RedundantSender</code> (redundant input redelivery — § 4)</li>
-<li class="task todo"><strong>Wire the above to <code>DesktopDatagramPort</code></strong> behind a real <code>I_NetworkPort</code>.
-    This is the next step, and until it happens all six classes are library-only.</li>
+<li class="task done"><strong>Wire the above to <code>DesktopDatagramPort</code></strong> — <code>NetSession</code> does it, and
+    <code>DesktopLauncher --net=&lt;id&gt;:&lt;port&gt; --peer=&lt;id&gt;@&lt;host&gt;:&lt;port&gt;</code> opens it</li>
+<li class="task done"><strong>Simulate remote players into visible bodies</strong> — <code>demo/RemotePlayers</code>,
+    one <code>PlayerController</code> per peer replayed from the received ring</li>
+<li class="task todo"><strong>An agreed start tic.</strong> Without one, a peer that connects late loses the
+    commands sent before its socket existed and its body keeps a constant
+    offset for the rest of the match. This is the next real correctness item.</li>
+<li class="task todo"><strong>Replicate match state</strong>, so peers can be shot and so a respawn is not
+    invisible to everyone else. Needs <code>Match</code> to know about remote players,
+    which is what makes both of those one piece of work rather than two.</li>
+<li class="task todo"><strong>Desync detection</strong> — § 10's periodic <code>playerId | ticNumber | stateHash</code>.
+    Deliberately not started: it needs a second packet type on the socket, and
+    the shipped 20-byte header has no discriminator, so the format and its 87
+    tests change together. Worth doing once match state is replicated, since
+    until then the simulations are <em>known</em> to differ and it would fire
+    constantly.</li>
 <li class="task todo"><code>SnapshotDelta</code> (encode/decode)</li>
 <li class="task todo"><code>Discovery</code> (LAN broadcast)</li>
 </ul>

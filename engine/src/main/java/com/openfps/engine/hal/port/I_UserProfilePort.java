@@ -16,7 +16,7 @@ import java.util.Optional;
  * Persists {@link UserProfile} records. The default desktop
  * implementation uses Xerial SQLite JDBC (in
  * {@code hal.adapter.sqlite}). The Android implementation will use
- * Room (in {@code hal.adapter.mobile}, Phase 3+). The in-memory
+ * Room (in the {@code :android} module, as {@code RoomUserProfilePort}). The in-memory
  * implementation lives in {@code hal.adapter.nulladapter} for tests.
  *
  * State machine: UNINITIALIZED → READY → SHUTDOWN.

@@ -290,7 +290,7 @@ button is at <code>input tap 1200 358</code>.</p>
 <p>Runs Checkstyle over main <em>and</em> test sources (<code>maxWarnings = 0</code> — one warning fails the build)</p>
 </li>
 <li>
-<p>Compiles and runs all JUnit 5 tests — <strong>1239</strong> of them (977 <code>:engine</code>, 125 <code>:desktop</code>, 73 <code>:tools</code>, 64 <code>:android</code> when an SDK is present)</p>
+<p>Compiles and runs all JUnit 5 tests — <strong>2339</strong> of them (1625 <code>:engine</code>, 300 <code>:gdxshared</code>, 177 <code>:android</code> when an SDK is present, 164 <code>:desktop</code>, 73 <code>:tools</code>). <code>:android</code> is counted <strong>once</strong>: its suite runs against a debug and a release variant, so the raw XML tally reports 354</p>
 </li>
 <li>
 <p>Assembles JAR artifacts</p>

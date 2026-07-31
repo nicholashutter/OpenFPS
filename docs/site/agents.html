@@ -84,7 +84,7 @@
 <li class="lv2"><a href="#subsystem-owners-living">Subsystem Owners (Living)</a></li>
 </ul></details></aside>
 <main id="doc">
-<p class="crumb"><span class="tag">Overview</span><span class="sep">/</span><code>AGENTS.md</code><span class="sep">/</span>12 min read</p>
+<p class="crumb"><span class="tag">Overview</span><span class="sep">/</span><code>AGENTS.md</code><span class="sep">/</span>15 min read</p>
 <h1 id="agentsmd--openfps-engine-agent-instructions">AGENTS.md — OpenFPS Engine Agent Instructions<a class="anchor" href="#agentsmd--openfps-engine-agent-instructions" aria-label="Permalink">#</a></h1>
 <p>This file provides project-specific context and conventions for AI coding agents
 working in this repository. It supplements, not replaces, the agent's built-in
@@ -239,10 +239,15 @@ Single-operation lambdas and method references are fine.</p>
 <tr><td>Engine tests</td><td><code>engine/src/test/java/com/openfps/engine/</code></td></tr>
 <tr><td>Desktop launcher (libGDX LWJGL3)</td><td><code>desktop/src/main/java/com/openfps/desktop/</code></td></tr>
 <tr><td>Android launcher (libGDX Android)</td><td><code>android/src/main/java/com/openfps/android/</code></td></tr>
+<tr><td>Shared libGDX code (no backend)</td><td><code>gdxshared/src/main/java/com/openfps/gdx/</code></td></tr>
+<tr><td>Allocation audit</td><td><code>docs/MEMORY.md</code></td></tr>
+<tr><td>WebAssembly port assessment</td><td><code>docs/WASM.md</code></td></tr>
+<tr><td>Run scripts (always rebuild)</td><td><code>run-desktop.ps1</code>, <code>run-android.ps1</code>, <code>.vscode/tasks.json</code></td></tr>
 </tbody>
 </table></div>
-<p>The project is a <strong>three-module Gradle build</strong>: <code>:engine</code> (pure Java 17, no
-platform dependencies, builds and tests headless anywhere), <code>:desktop</code>, and
+<p>The project is a <strong>five-module Gradle build</strong>: <code>:engine</code> (pure Java 17, no
+platform dependencies, builds and tests headless anywhere), <code>:gdxshared</code>
+(libGDX <strong>core</strong> only, no backend), <code>:desktop</code>, <code>:tools</code> (build-time only), and
 <code>:android</code>. <code>:android</code> is only included when an Android SDK is present — see
 the guard in <code>settings.gradle.kts</code>. Paths were flat <code>src/main/java/...</code> before
 the module split; anything still saying that is stale.</p>
@@ -257,12 +262,21 @@ the module split; anything still saying that is stale.</p>
 # Checkstyle only
 .\gradlew checkstyleMain
 
-# Run the engine headless (2s smoke run, then clean shutdown)
-.\gradlew run
-.\gradlew run --args="--fps=120 --headless"
+# Run the engine headless (2s smoke run, then clean shutdown).
+# NAME THE MODULE. Both :engine and :desktop apply the `application` plugin,
+# so a bare `.\gradlew run` resolves to TWO tasks and launches both.
+.\gradlew :engine:run
+.\gradlew :engine:run --args="--fps=120 --headless"
 
 # Run the windowed desktop client
 .\gradlew :desktop:run
+
+# Preferred: the run scripts rebuild every time and print the commit they are
+# running before anything opens, so a window is never ambiguous about which
+# build produced it. This is how you check a change actually landed.
+.\run-desktop.ps1 -StartInGame -DebugOverlay
+.\run-desktop.ps1 -TwoPeers -StartInGame     # two peers, distinct ports + profile DBs
+.\run-android.ps1 -RenderMode 480p
 
 # Android: there is NO -Pandroid flag. :android is included automatically
 # when ANDROID_HOME / ANDROID_SDK_ROOT / local.properties is present.
@@ -338,17 +352,22 @@ public void spawnEntity(final int entityType)
 <p>Do NOT import <code>java.util.List&lt;Integer&gt;</code> or any boxed collection in hot paths</p>
 </li>
 <li>
-<p>Do NOT add Android-specific code outside <code>hal.adapter.mobile</code></p>
+<p>Do NOT add Android-specific code outside the <code>:android</code> module. (There is no
+<code>hal.adapter.mobile</code> package and there is not going to be one: an Android
+adapter needs the Android SDK, and <code>:engine</code> must stay buildable without it.
+<code>:android</code> owns <code>AndroidAdapterFactory</code> and everything under it.)</p>
 </li>
 <li>
 <p>Do NOT skip updating <code>PLAN.md</code> section 7 when completing a roadmap item</p>
 </li>
 <li>
-<p>Do NOT <code>new byte[]</code> outside a memory port adapter. (The Phase 5 framebuffer
-is an unresolved conflict with this rule — it needs raw <code>int[]</code>/<code>float[]</code>
-access in a per-pixel loop, which <code>I_MemoryPort</code>'s handle indirection cannot
-give it. <strong>Open question, not an exemption</strong>: <code>render/README.md</code> § 11a states
-the options. Decide it before implementing <code>Framebuffer</code>; do not just do it.)</p>
+<p>Do NOT <code>new byte[]</code> outside a memory port adapter. (<strong>One sanctioned
+exception, already decided — not an open question.</strong> <code>Framebuffer</code> allocates
+its <code>int[]</code> colour and <code>float[]</code> depth arrays directly, because the port hands
+out byte-addressed handles and the rasterizer needs typed arrays the JIT can
+bounds-check-eliminate. The reasoning is recorded in <code>render/README.md</code> § 11a
+and <code>STYLE.md</code>. It covers <code>Framebuffer</code> and nothing else; a new caller wanting
+the same exemption needs the same argument made again.)</p>
 </li>
 <li>
 <p>Do NOT <code>System.nanoTime()</code> / <code>System.currentTimeMillis()</code> in engine code — use
@@ -419,21 +438,21 @@ their module-root <code>README.md</code>.</p>
 <thead><tr><th>Subsystem</th><th>Package</th><th>Status</th></tr></thead>
 <tbody>
 <tr><td>Core Loop</td><td><code>core</code></td><td>Phase 1.3 — event-driven, multi-threaded, configurable 30/60/120 Hz; pool also does caller-participating parallel fan-out (<code>submitParallel</code>)</td></tr>
-<tr><td>Gameplay</td><td><code>gameplay</code></td><td><strong>SHIPPING</strong>, registered as <code>P_</code>. <code>PlayerController</code> (first-person movement + gravity and a jump, StrictMath-deterministic), <code>Hitscan</code> / <code>Target</code> / <code>HitResult</code>, and the match layer: <code>Bot</code>, <code>BotPattern</code>, <code>Match</code>, <code>MatchState</code>, <code>MatchMode</code>. Bots walk closed-form routes — position at tic <em>n</em> is a pure function of <em>n</em>, so they cannot drift and a late-joining peer computes the same answer without replaying history — and shoot back through the same <code>Hitscan</code> the player's own weapon uses, so one bot genuinely blocks another's shot</td></tr>
-<tr><td>Render</td><td><code>render</code></td><td><strong>Built and shipping</strong> (409 tests), registered as <code>R_</code>. Multi-threaded software triangle rasterizer: <code>Framebuffer</code>, <code>Camera</code>, <code>TriangleClipper</code>, <code>Rasterizer</code>, <code>SpanRenderer</code>, <code>TextureSampler</code>, <code>MipChain</code>, <code>ModelFormat</code>, <code>Scene</code>, <code>SoftwareRenderPort</code>. Two passes per frame (world, then view-space viewmodel with a depth clear between). Measured p50 4.9 ms at 1280x720 on 8 workers. <code>docs/ASSETS.md</code> § 2 is the canonical target; <code>render/README.md</code> is the full spec — read it before touching any render code. The 2.5D DOOM renderer (visplanes, column renderer, 8-bit palette) is retired</td></tr>
-<tr><td>Audio</td><td><code>audio</code></td><td><strong>SHIPPING, and deliberately one sound.</strong> Registered as <code>S_</code>; the port now comes from <code>I_AdapterFactory.getAudioPort()</code> rather than being a hard-coded null. <code>I_AudioPort</code> is six methods — play a <code>SoundId</code>, stop, clamp a volume, ask whether anything is audible — with <code>NullAudioPort</code> (silent, counts plays) and <code>GdxAudioPort</code> in <code>:gdxshared</code>, wired by <code>GdxAdapterFactory</code> and <code>AndroidAdapterFactory</code>. The weapon fires audibly from <code>DemoGameplayPort</code>. <strong>The sound is generated, not shipped</strong>: <code>BlasterSound</code> + <code>WavAudio</code> synthesise a blaster into PCM at runtime, so there is no audio asset, no licence question and nothing in <code>NOTICE</code> to add — which is how the old "no audio row in <code>docs/ASSETS.md</code> § 3" blocker was retired for the demo without pretending to have answered it for a real sound bank. <strong>No mixer, no positional audio, no music, and none of them half-started</strong> — <code>audio/README.md</code> keeps the 3D formulae as a reading list, explicitly not as a spec this code is failing to meet. Everything degrades: no device, headless JVM, unwritable cache all log once and keep playing</td></tr>
-<tr><td>Network</td><td><code>net</code></td><td><strong>PARTIAL — the transport ships, the simulation does not.</strong> <code>NetSession</code> opens a real socket over <code>DesktopDatagramPort</code> and drives the primitives that were already built (<code>TicCmd</code>, <code>TicCmdBuffer</code>, <code>AckWindow</code>, <code>PeerConnection</code>, <code>RedundantSender</code>, <code>NetBytes</code>), plus <code>TicCmdEncoder</code> for the float-to-wire quantisation. Verified two ways: a loopback test over two real UDP sockets, and two live game processes, which exchanged 77 KB with zero malformed packets and zero strangers. <strong>What is NOT done: remote players are not simulated into bodies.</strong> That needs a <code>PlayerController</code> per peer driven from the received ring, plus a stall rule for a peer whose tics have not arrived. A session that exchanges packets perfectly and shows nobody looks exactly like a broken one, so do not read "multiplayer works" as more than the transport</td></tr>
+<tr><td>Gameplay</td><td><code>gameplay</code></td><td><strong>SHIPPING</strong>, registered as <code>P_</code>. <code>PlayerController</code> (first-person movement + gravity and a jump, StrictMath-deterministic), <code>Hitscan</code> / <code>Target</code> / <code>HitResult</code>, <code>PhysicsWorld</code>, and the match layer: <code>Bot</code>, <code>BotPattern</code>, <code>BotRng</code>, <code>BotSkill</code>, <code>BotShotLog</code>, <code>Match</code>, <code>MatchState</code>, <code>MatchMode</code>, <code>MatchStatus</code>, <code>MatchSummary</code>. <code>PhysicsWorld</code> holds solid AABBs in a flat <code>float[]</code> and slides <strong>x then z, in that fixed order for determinism</strong>, feeding the clipped x into the z pass so corners do not leak; it is <strong>horizontal only</strong>, so crates, the staircase and the ramp are not stand-on-able until a <code>floorHeightAt</code> lands. <code>BotRng</code> is seeded, <strong>stateless</strong>, and addressed by <code>(seed, tic, entityId, channel)</code> so a late joiner computes the same answer without replaying history. Bots walk closed-form routes — position at tic <em>n</em> is a pure function of <em>n</em>, so they cannot drift and a late-joining peer computes the same answer without replaying history — and shoot back through the same <code>Hitscan</code> the player's own weapon uses, so one bot genuinely blocks another's shot. <strong>Three kills without dying</strong> arm a super blaster for <code>SUPER_BLASTER_TICS</code> (240 tics, never milliseconds) at exactly twice <code>PLAYER_SHOT_DAMAGE</code>; a death takes both the streak and a live buff, <code>reset()</code> clears both, and a kill while it is live neither extends nor refreshes the window</td></tr>
+<tr><td>Render</td><td><code>render</code></td><td><strong>Built and shipping</strong> (516 tests), registered as <code>R_</code>. Multi-threaded software triangle rasterizer: <code>Framebuffer</code>, <code>Camera</code>, <code>TriangleClipper</code>, <code>Rasterizer</code>, <code>SpanRenderer</code>, <code>TextureSampler</code>, <code>MipChain</code>, <code>ModelFormat</code>, <code>Scene</code>, <code>Rgba</code>, <code>OutlinePass</code>, <code>SoftwareRenderPort</code>. A frame is world instances → <code>OutlinePass</code> (only if the scene has tagged entities; it needs the finished id buffer) → translucent instances sorted back-to-front, depth-tested and never depth-written → clear depth, not colour → the view-space viewmodel. Measured p50 4.9 ms at 1280x720 on 8 workers, and <strong>bit-identical at every worker count</strong> — that invariant is the safety net for culling and worker-count changes, so a change that breaks it is wrong even if it looks right. <strong>Known hole: the translucent phase has no pooled-equals-serial assertion</strong> (<code>SoftwareRenderPortTranslucentTest</code> renders serially only), which is precisely where a blend's read-modify-write makes tile ownership load-bearing — see <code>render/README.md</code> § Status. Render size is decoupled from surface size by <code>RenderMode</code> in <code>:gdxshared</code> (P480 default / P720 / NATIVE, a ceiling on the short edge, never upscaling). <code>docs/ASSETS.md</code> § 2 is the canonical target; <code>render/README.md</code> is the full spec — read it before touching any render code. The 2.5D DOOM renderer (visplanes, column renderer, 8-bit palette) is retired</td></tr>
+<tr><td>Audio</td><td><code>audio</code></td><td><strong>SHIPPING, and deliberately five sounds.</strong> Registered as <code>S_</code>; the port now comes from <code>I_AdapterFactory.getAudioPort()</code> rather than being a hard-coded null. <code>I_AudioPort</code> is six methods — play a <code>SoundId</code>, stop, clamp a volume, ask whether anything is audible — with <code>NullAudioPort</code> (silent, counts plays) and <code>GdxAudioPort</code> in <code>:gdxshared</code>, wired by <code>GdxAdapterFactory</code> and <code>AndroidAdapterFactory</code>. The weapon fires audibly from <code>DemoGameplayPort</code>, in two voices — the ordinary blaster and the super blaster a kill streak buys — beside the bots' carbine and the two-note chime that lands and then unwinds with the reward. <strong>Every sound is generated, not shipped</strong>: <code>BlasterSound</code>, <code>CarbineSound</code>, <code>SuperBlasterSound</code> and <code>PowerChimeSound</code> + <code>WavAudio</code> synthesise PCM at runtime, so there is no audio asset, no licence question and nothing in <code>NOTICE</code> to add — which is how the old "no audio row in <code>docs/ASSETS.md</code> § 3" blocker was retired for the demo without pretending to have answered it for a real sound bank. <strong>No mixer, no positional audio, no music, and none of them half-started</strong> — <code>audio/README.md</code> keeps the 3D formulae as a reading list, explicitly not as a spec this code is failing to meet. Everything degrades: no device, headless JVM, unwritable cache all log once and keep playing</td></tr>
+<tr><td>Network</td><td><code>net</code></td><td><strong>PARTIAL — the transport ships and peers are visible; match state is not replicated.</strong> <code>NetSession</code> opens a real socket over <code>DesktopDatagramPort</code> and drives the primitives (<code>TicCmd</code>, <code>TicCmdBuffer</code>, <code>AckWindow</code>, <code>PeerConnection</code>, <code>RedundantSender</code>, <code>NetBytes</code>), plus <code>TicCmdEncoder</code> for the float-to-wire quantisation. <code>demo/RemotePlayers</code> replays each peer's commands through its own <code>PlayerController</code> on the shared <code>PhysicsWorld</code>, so two processes now draw each other's bodies — verified by loopback over two real sockets and by two live processes exchanging 77 KB with zero malformed packets and zero strangers. <strong>What is NOT done: <code>Match</code> has never heard of a remote player</strong>, so peers are visible but <strong>not shootable</strong>, and two divergences follow from that one gap, both measured rather than reasoned about: (1) a respawn is a teleport driven by <code>Match</code>, not by an input, so the peer replaying your commands never sees it — in an 11-second run the local player respawned while the other peer's copy was still walking 380 units away; (2) a late join costs a <strong>constant</strong> 17.07-unit offset (4 missing leading tics × 4.267 units) because a body anchors on the oldest tic still in the ring — constant, not accumulating, since every later tic is applied exactly once. Desync detection (§ 10's periodic <code>stateHash</code>) is <strong>deliberately not started</strong>: it needs a second packet type and the shipped 20-byte header has no discriminator, and until match state is replicated the simulations are <em>known</em> to differ, so it would fire on every comparison and tell nobody anything</td></tr>
 <tr><td>Resource</td><td><code>resource</code></td><td><code>WadReader</code>, <code>LumpCache</code>, <code>MapLumpParser</code>, <code>LittleEndian</code>, <code>WadFilePort</code> all built (101 tests). <strong>Not registered</strong> — no <code>W_</code> subsystem yet. Its <em>role</em> is now an open question: <code>docs/ASSETS.md</code> moves all art to preprocessed glTF, so the WAD path has no art left to read. See <code>render/README.md</code> § 11b. Do not delete it and do not build <code>ImageDecoder</code> until that is resolved</td></tr>
 <tr><td>Memory</td><td><code>memory</code></td><td>Phase 1.1 — state machine, two backends (<code>JvmMemoryPort</code>, <code>ZoneMemoryPort</code>), factory</td></tr>
 <tr><td>HAL</td><td><code>hal</code></td><td>Ports + <code>nulladapter</code> + <code>sqlite</code> + <code>desktop</code> (time, datagram) adapters, system info, user profile. Also <code>GameAction</code> / <code>InputBinding</code> / <code>ActionBindings</code> — the controls table. The engine owns which actions exist and deliberately ships <strong>no default key codes</strong>: a key code is a platform number and <code>:engine</code> may not import a toolkit that defines one, so each platform supplies its own table</td></tr>
-<tr><td><em>(not a subsystem)</em></td><td><code>demo</code></td><td><code>DemoScene</code>, <code>DemoModels</code>, <code>DemoGameplayPort</code> — the playable match: room layout, kit scale, weapon pose, and seven bots with their routes. Drives <code>Match</code> per tic and publishes each bot's placement to the renderer. Platform-free so <code>:tools</code> can render it headlessly and <code>:desktop</code> can run it live. Not registered with <code>SubsystemRegistry</code></td></tr>
+<tr><td><em>(not a subsystem)</em></td><td><code>demo</code></td><td><code>DemoScene</code>, <code>DemoModels</code>, <code>DemoEffects</code>, <code>DemoGameplayPort</code>, <code>RemotePlayers</code>, <code>BotFireVoices</code>, <code>BlockCarbine</code> — the playable match: room layout, solid geometry, kit scale, weapon pose, and seven bots with their routes, weapons, tracers, smoke and fire voices. Drives <code>Match</code> per tic and publishes each bot's placement to the renderer. <code>RemotePlayers</code> does the same for network peers. Every effect instance is <strong>pre-allocated at build time and moved via <code>setWorldTransform</code></strong>, hidden with a degenerate transform rather than created and destroyed — <code>Scene</code> is immutable by design. Platform-free so <code>:tools</code> can render it headlessly and <code>:desktop</code> can run it live. Not registered with <code>SubsystemRegistry</code></td></tr>
 </tbody>
 </table></div>
 <div class="tablewrap"><table>
 <thead><tr><th>Module</th><th>Contains</th></tr></thead>
 <tbody>
 <tr><td><code>:engine</code></td><td>Everything above. Pure Java 17, <strong>no platform dependencies</strong> — this is what CI builds and tests with no display and no Android SDK. Keep it that way</td></tr>
-<tr><td><code>:gdxshared</code></td><td>The libGDX code that is <strong>not</strong> platform-specific: <code>FramebufferPresenter</code>, the block welcome screen, <code>UiState</code>/<code>UiStateMachine</code>, <code>InputAccumulator</code>. Depends on libGDX <strong>core</strong> and no backend, which is what lets both launchers use it and keeps it buildable with no display and no Android SDK. Adding a backend dependency here breaks one of the two platforms — see <code>gdxshared/README.md</code></td></tr>
+<tr><td><code>:gdxshared</code></td><td>The libGDX code that is <strong>not</strong> platform-specific: <code>FramebufferPresenter</code>, <code>RenderMode</code>/<code>RenderSettings</code>, the block welcome / settings / game-over screens, <code>UiState</code>/<code>UiStateMachine</code>, <code>InputAccumulator</code>, <code>AnalogStick</code>, <code>DebugSettings</code>/<code>DebugOverlay</code>/<code>FpsMeter</code>, <code>AccessibilitySettings</code>, <code>ScoreOverlay</code>, <code>GdxAudioPort</code>. <strong><code>AccessibilitySettings</code> is deliberately separate from <code>DebugSettings</code></strong> — the enemy outline is an accessibility feature that defaults ON, not a debug toggle that defaults off, and the two live in different menus for that reason. Depends on libGDX <strong>core</strong> and no backend, which is what lets both launchers use it and keeps it buildable with no display and no Android SDK. Adding a backend dependency here breaks one of the two platforms — see <code>gdxshared/README.md</code></td></tr>
 <tr><td><code>:desktop</code></td><td>libGDX LWJGL3 backend: <code>GdxWindowPort</code>, <code>GdxInputPort</code>, <code>DesktopBindings</code>, <code>GdxFrameLoopListener</code>, <code>GdxAdapterFactory</code>, <code>WindowIcon</code>, <code>NetArgs</code>, <code>DesktopLauncher</code></td></tr>
 <tr><td><code>:android</code></td><td>libGDX Android backend: <code>AndroidLauncher</code>, <code>AndroidWindowPort</code>, <code>AndroidAdapterFactory</code>, <code>AndroidUiFrameCallback</code>, the touch control scheme (<code>AndroidInputPort</code>, <code>TouchLayout</code>, <code>TouchOverlay</code>, <code>AndroidBindings</code>), <code>ApkModelSource</code>, Room-backed <code>RoomUserProfilePort</code>. <strong>Playable</strong> as of 2026-07-28. Only included in the build when an Android SDK is present (<code>ANDROID_HOME</code> / <code>ANDROID_SDK_ROOT</code> / <code>local.properties</code>) — otherwise <code>settings.gradle.kts</code> silently skips it, so a green <code>gradlew build</code> does <strong>not</strong> imply <code>:android</code> compiles</td></tr>
 <tr><td><code>:tools</code></td><td><strong>Build-time only, never shipped.</strong> glTF → <code>ModelFormat</code> converter (<code>GltfConverter</code>), <code>ModelBuilder</code>, <code>MipGenerator</code>, <code>ProceduralRoom</code>, and the headless <code>DemoPreviewMain</code> / <code>RenderPreviewMain</code> harnesses. Depends on <code>:engine</code> one way; nothing depends on it. The root <code>verifyToolsIsolation</code> task fails the build if it ever reaches a runtime classpath</td></tr>
@@ -444,8 +463,16 @@ their module-root <code>README.md</code>.</p>
 platform-free. Both implement <code>I_WindowPort</code> and drive <code>I_FrameCallback</code> —
 which is also the presentation path for the Phase 5 rasterizer. The engine
 produces a finished framebuffer; the adapter uploads it.</p>
-<p><strong>1524 tests passing</strong> (1131 <code>:engine</code>, 79 <code>:gdxshared</code>, 118 <code>:desktop</code>, 73 <code>:tools</code>, 123 <code>:android</code> — distinct tests; <code>:android:test</code> runs its suite twice, once per variant), Checkstyle clean — see
-<code>BUILD.md</code> for run instructions and <code>PLAN.md</code> § 8 for the per-suite breakdown.</p>
+<p><strong>2339 tests passing</strong> (1625 <code>:engine</code>, 300 <code>:gdxshared</code>, 177 <code>:android</code>,
+164 <code>:desktop</code>, 73 <code>:tools</code>), Checkstyle clean — see <code>BUILD.md</code> for run
+instructions and <code>README.md</code> § Test Coverage for the per-package breakdown.</p>
+<p>These are <strong>distinct</strong> tests, and every previous figure in this file was wrong
+in one of two directions, so count them the same way or do not quote a number:
+<code>:android:test</code> runs its suite against a debug and a release variant, so its raw
+XML tally is 354 and double-counts everything; and a <code>@Nested</code> class writes its
+own XML file, so counting files — or counting <code>@Test</code> annotations in source —
+gives a third answer again. The figure above is the sum of the <code>tests=</code>
+attribute of every <code>&lt;testsuite&gt;</code> Gradle actually wrote, <code>:android</code> counted once.</p>
 <hr>
 <p><em>Update this file when the project structure or conventions change.</em></p>
 <footer class="pagefoot"><p>Source: <a class="ext" rel="noopener noreferrer" target="_blank" href="https://github.com/nicholashutter/OpenFPS/blob/main/AGENTS.md">AGENTS.md</a>. This page is generated — edit the Markdown, not the HTML.</p></footer>

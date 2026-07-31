@@ -70,10 +70,10 @@
 <li class="lv3"><a href="#module-dependency-graph-no-cycles">Module dependency graph (no cycles)</a></li>
 <li class="lv2"><a href="#3-subsystem-specification">3. Subsystem Specification</a></li>
 <li class="lv3"><a href="#31-core--comopenfpsenginecore--built">3.1 Core — com.openfps.engine.core — built</a></li>
-<li class="lv3"><a href="#32-gameplay--comopenfpsenginegameplay--first-person-controller-done-rest-stub">3.2 Gameplay — com.openfps.engine.gameplay — first-person controller done, rest stub</a></li>
-<li class="lv3"><a href="#33-render--comopenfpsenginerender--built-316-tests">3.3 Render — com.openfps.engine.render — built (316 tests)</a></li>
-<li class="lv3"><a href="#34-audio--comopenfpsengineaudio--stub">3.4 Audio — com.openfps.engine.audio — stub</a></li>
-<li class="lv3"><a href="#35-network--comopenfpsenginenet--stub">3.5 Network — com.openfps.engine.net — stub</a></li>
+<li class="lv3"><a href="#32-gameplay--comopenfpsenginegameplay--shipping-controller-hitscan-collision-and-the-match-layer-348-tests">3.2 Gameplay — com.openfps.engine.gameplay — shipping: controller, hitscan, collision and the match layer (348 tests)</a></li>
+<li class="lv3"><a href="#33-render--comopenfpsenginerender--built-and-shipping-516-tests">3.3 Render — com.openfps.engine.render — built and shipping (516 tests)</a></li>
+<li class="lv3"><a href="#34-audio--comopenfpsengineaudio--shipping-deliberately-narrow-81-tests">3.4 Audio — com.openfps.engine.audio — shipping, deliberately narrow (81 tests)</a></li>
+<li class="lv3"><a href="#35-network--comopenfpsenginenet--partial-transport-ships-match-state-does-not-129-tests-here-13-more-in-demoremoteplayerstest">3.5 Network — com.openfps.engine.net — partial: transport ships, match state does not (129 tests here, 13 more in demo/RemotePlayersTest)</a></li>
 <li class="lv3"><a href="#36-resource--comopenfpsengineresource--built-but-unregistered-101-tests">3.6 Resource — com.openfps.engine.resource — built but unregistered (101 tests)</a></li>
 <li class="lv3"><a href="#37-memory--comopenfpsenginememory--phase-11-complete">3.7 Memory — com.openfps.engine.memory — Phase 1.1 complete</a></li>
 <li class="lv3"><a href="#38-hal--comopenfpsenginehal--phase-14-complete">3.8 HAL — com.openfps.engine.hal — Phase 1.4 complete</a></li>
@@ -95,19 +95,19 @@
 <li class="lv3"><a href="#phase-14--user-profile-persistence-xerial-sqlite--done">Phase 1.4 — User profile persistence (Xerial SQLite) — done</a></li>
 <li class="lv3"><a href="#phase-15--desktop-hal-adapter-lwgjl3--done">Phase 1.5 — Desktop HAL adapter (LWGJL3) — done</a></li>
 <li class="lv3"><a href="#phase-2--wad-file-loader--partly-done">Phase 2 — WAD file loader — partly done</a></li>
-<li class="lv3"><a href="#phase-3--networking--primitives-built-nothing-wired">Phase 3 — Networking — primitives built, nothing wired</a></li>
-<li class="lv3"><a href="#phase-4--gameplay--planned">Phase 4 — Gameplay — planned</a></li>
+<li class="lv3"><a href="#phase-3--networking--transport-wired-and-measured-match-state-not-replicated">Phase 3 — Networking — transport wired and measured; match state not replicated</a></li>
+<li class="lv3"><a href="#phase-4--gameplay--the-match-layer-landed-early-the-wad-backed-world-did-not">Phase 4 — Gameplay — the match layer landed early; the WAD-backed world did not</a></li>
 <li class="lv3"><a href="#phase-5--render-software-triangle-rasterizer--done-pending-polish">Phase 5 — Render (software triangle rasterizer) — done, pending polish</a></li>
-<li class="lv3"><a href="#phase-6--audio--planned">Phase 6 — Audio — planned</a></li>
+<li class="lv3"><a href="#phase-6--audio--started-deliberately-narrow">Phase 6 — Audio — started, deliberately narrow</a></li>
 <li class="lv2"><a href="#8-test-coverage-summary">8. Test Coverage Summary</a></li>
 <li class="lv2"><a href="#9-contribution-guidelines">9. Contribution Guidelines</a></li>
 <li class="lv2"><a href="#10-document-to-code-mapping">10. Document-to-Code Mapping</a></li>
 </ul></details></aside>
 <main id="doc">
-<p class="crumb"><span class="tag">Architecture</span><span class="sep">/</span><code>PLAN.md</code><span class="sep">/</span>25 min read</p>
+<p class="crumb"><span class="tag">Architecture</span><span class="sep">/</span><code>PLAN.md</code><span class="sep">/</span>29 min read</p>
 <h1 id="openfps--project-plan">OpenFPS — Project Plan<a class="anchor" href="#openfps--project-plan" aria-label="Permalink">#</a></h1>
 <blockquote>
-<p><strong>Status</strong>: Pre-alpha — Phases 0 through 1.5 complete, plus Phase 5 (render). Event-driven engine, unified memory, multi-threaded worker pool, configurable 30/60/120 Hz, SQLite user-profile persistence, desktop HAL with a real window and input, and a multi-threaded software triangle rasterizer driving a playable first-person demo at 1280x720. Phase 2 (WAD) is partly done and unregistered; Phase 3 (net) has its lockstep primitives built but no socket wired. <strong>1239 tests</strong> — 977 <code>:engine</code>, 125 <code>:desktop</code>, 73 <code>:tools</code>, 64 <code>:android</code>.
+<p><strong>Status</strong>: Pre-alpha — Phases 0 through 1.5 complete, plus Phase 5 (render). Event-driven engine, unified memory, multi-threaded worker pool, configurable 30/60/120 Hz, SQLite user-profile persistence, desktop HAL with a real window and input, and a multi-threaded software triangle rasterizer driving a playable first-person match. Phase 4 (gameplay) landed ahead of its number: collision, hitscan, bots, scoring, respawn and a kill streak. Phase 6 (audio) is started and narrow — every sound synthesised at runtime. Phase 2 (WAD) is partly done and unregistered. Phase 3 (net) has a real socket and visible peers, but <strong>match state is not replicated, so peers are not shootable</strong>. <strong>2339 tests</strong> — 1625 <code>:engine</code>, 300 <code>:gdxshared</code>, 177 <code>:android</code>, 164 <code>:desktop</code>, 73 <code>:tools</code>.
 <strong>Engine Version</strong>: 0.1.0-SNAPSHOT
 <strong>Target JVM</strong>: 17 LTS (Java 17 source/target, runs on 17+)
 <strong>Platforms</strong>: Windows, Linux, macOS (<code>:desktop</code>, libGDX LWJGL3 backend); Android (<code>:android</code>, libGDX Android backend). <code>:engine</code> is platform-free and runs headless on any JVM 17+.
@@ -141,7 +141,7 @@
                               v
 +----------------------------------------------------------------+
 |  WORKER POOL    com.openfps.engine.core.pool.WorkerPool        |
-|  N = logicalProcessorCount / 2 hot threads, pre-started        |
+|  N = logicalProcessorCount - 1 hot threads, pre-started        |
 |  Each: take() -&gt; dispatch() -&gt; loop                            |
 +----------------------------------------------------------------+
                               |
@@ -282,7 +282,7 @@ Every subsystem has:</p>
 <p><strong>Subsystem wrapper</strong>: <code>CoreSubsystem</code> — claims <code>SubsystemId.CORE</code> and handles
 <code>ShutdownEvent</code>. Without it, every shutdown logged a "no subsystem registered"
 warning, because <code>ShutdownEvent</code> targets CORE and nothing owned that ID.</p>
-<h3 id="32-gameplay--comopenfpsenginegameplay--first-person-controller-done-rest-stub">3.2 Gameplay — <code>com.openfps.engine.gameplay</code> — <strong>first-person controller done, rest stub</strong><a class="anchor" href="#32-gameplay--comopenfpsenginegameplay--first-person-controller-done-rest-stub" aria-label="Permalink">#</a></h3>
+<h3 id="32-gameplay--comopenfpsenginegameplay--shipping-controller-hitscan-collision-and-the-match-layer-348-tests">3.2 Gameplay — <code>com.openfps.engine.gameplay</code> — <strong>shipping: controller, hitscan, collision and the match layer</strong> (348 tests)<a class="anchor" href="#32-gameplay--comopenfpsenginegameplay--shipping-controller-hitscan-collision-and-the-match-layer-348-tests" aria-label="Permalink">#</a></h3>
 <p><strong>P_ Player &amp; World Logic</strong></p>
 <ul>
 <li>
@@ -298,16 +298,28 @@ determinism note in § 4.</p>
 <p><code>PlayerInputView</code> — adapts <code>hal.port.InputState</code> onto <code>I_PlayerInput</code></p>
 </li>
 <li>
-<p><code>PlayerState</code>: position (fixed-point), velocity, angle, pitch, health, inventory</p>
+<p><code>Hitscan</code> / <code>Target</code> / <code>HitResult</code> — <strong>done.</strong> Instant-hit weapons; bots shoot through the same path the player does, so one bot genuinely blocks another's shot</p>
 </li>
 <li>
-<p><code>Entity</code>: abstract base for all game objects (players, projectiles, pickups, doors)</p>
+<p><code>PhysicsWorld</code> — <strong>done, horizontally.</strong> Solid AABBs in a flat <code>float[]</code>; slides <strong>x then z in that fixed order for determinism</strong>, feeding the clipped x into the z pass so corners cannot leak. <strong>No <code>floorHeightAt</code> yet</strong>, so crates, the staircase and the ramp are not stand-on-able</p>
 </li>
 <li>
-<p><code>PhysicsWorld</code>: collision detection, gravity, sliding along walls (BSP-assisted)</p>
+<p><code>Match</code>, <code>MatchState</code>, <code>MatchMode</code>, <code>MatchStatus</code>, <code>MatchSummary</code> — <strong>done.</strong> Kills, deaths, respawn, end-of-match, rematch, and the three-kill streak that arms a double-damage super blaster for <code>SUPER_BLASTER_TICS</code> (240 tics, never milliseconds)</p>
 </li>
 <li>
-<p><code>MapSubsector</code>: sector adjacency, portal handling</p>
+<p><code>Bot</code>, <code>BotPattern</code>, <code>BotSkill</code>, <code>BotShotLog</code> — <strong>done.</strong> Closed-form routes: position at tic <em>n</em> is a pure function of <em>n</em>, so bots cannot drift and a late-joining peer computes the same answer without replaying history</p>
+</li>
+<li>
+<p><code>BotRng</code> — <strong>done.</strong> Seeded, <strong>stateless</strong>, addressed by <code>(seed, tic, entityId, channel)</code></p>
+</li>
+<li>
+<p><code>PlayerState</code>: position (fixed-point), velocity, angle, pitch, health, inventory — <em>not built; <code>PlayerController</code> holds this state directly today</em></p>
+</li>
+<li>
+<p><code>Entity</code>: abstract base for all game objects (players, projectiles, pickups, doors) — <em>not built</em></p>
+</li>
+<li>
+<p><code>MapSubsector</code>: sector adjacency, portal handling — <em>not built</em></p>
 </li>
 <li>
 <p><code>I_GameplayPort</code> — <code>tick(int)</code>, <code>loadMap(String)</code>, <code>spawnEntity(...)</code>, <code>removeEntity(...)</code></p>
@@ -317,7 +329,7 @@ determinism note in § 4.</p>
 </li>
 </ul>
 <p><strong>Subsystem wrapper</strong>: <code>GameplaySubsystem</code> — routes <code>TickEvent</code> to <code>port.tick()</code>, <code>MapLoadEvent</code> to <code>port.loadMap()</code>.</p>
-<h3 id="33-render--comopenfpsenginerender--built-316-tests">3.3 Render — <code>com.openfps.engine.render</code> — <strong>built</strong> (316 tests)<a class="anchor" href="#33-render--comopenfpsenginerender--built-316-tests" aria-label="Permalink">#</a></h3>
+<h3 id="33-render--comopenfpsenginerender--built-and-shipping-516-tests">3.3 Render — <code>com.openfps.engine.render</code> — <strong>built and shipping</strong> (516 tests)<a class="anchor" href="#33-render--comopenfpsenginerender--built-and-shipping-516-tests" aria-label="Permalink">#</a></h3>
 <p><strong>R_ Multi-threaded software triangle rasterizer</strong></p>
 <p>z-buffer, perspective-correct interpolation, mipmapped bilinear sampling, 32-bit colour, glTF models with baked lighting. <code>docs/ASSETS.md</code> § 2 is the canonical render target; <code>render/README.md</code> is the full Phase 5 specification — every formula, citation, and open question. Read it before writing any render code.</p>
 <p>The earlier 2.5D design (BSP visibility, visplanes, column renderer, affine mapping, 8-bit palette, fixed 320×200) is <strong>retired</strong>: those were VGA-era compromises, not properties of software rendering, and they cannot draw a glTF model.</p>
@@ -346,30 +358,38 @@ determinism note in § 4.</p>
 <p><strong>Threading</strong>: tiled with exclusive ownership. Triangles are binned to the tiles they touch during setup; each worker owns its tiles outright and is the only writer to those regions of the colour and depth buffers. That invariant is what makes the design lock-free — no synchronisation on the depth buffer, no false sharing between workers. Parallel work goes through the existing <code>WorkerPool</code>, never <code>new Thread</code>. The submit-and-await operation this needed (<code>submitParallel</code>, caller-participating) landed with Phase 5, along with a <code>DRAINING</code> pool state so a shutdown in flight cannot strand a tile pass.</p>
 <p><strong>Presentation</strong>: not R_'s job. The engine produces a finished framebuffer; the platform adapter uploads it. <code>I_WindowPort</code> / <code>I_FrameCallback</code> are the hook and already exist — do not design a new window port.</p>
 <p><strong>BSP</strong>: retired as the renderer's <em>visibility</em> algorithm — the z-buffer does that job now. It is <strong>not</strong> deleted from the project: Phase 4 keeps <code>BspTraverser</code> as a gameplay/collision structure (§ 3.2, <code>gameplay/README.md</code>).</p>
-<p><strong>Open questions blocking implementation</strong> — see <code>render/README.md</code> § 11: (a) framebuffer allocation vs. <code>I_MemoryPort</code>, (b) the role of the WAD subsystem now that art is preprocessed glTF, (c) no performance number in this design has been measured yet.</p>
+<p><strong>Those open questions, resolved</strong> — see <code>render/README.md</code> § 11. (a) Framebuffer allocation vs. <code>I_MemoryPort</code> is <strong>decided</strong>: <code>Framebuffer</code> allocates <code>int[]</code>/<code>float[]</code> directly as the one sanctioned exception to the memory-port rule, because the port hands out byte-addressed handles and the inner loop needs typed arrays the JIT can bounds-check-eliminate. (b) The WAD subsystem's role is <strong>still open</strong> — <code>resource</code> remains BUILT-UNWIRED with 101 tests and no art left to read. (c) Performance is now <strong>measured, not estimated</strong>: p50 4.9 ms at 1280×720 on 8 workers against 22.1 ms serial, bit-identical at every worker count.</p>
+<p><strong>Render size is decoupled from surface size.</strong> <code>RenderMode</code> (in <code>:gdxshared</code>) puts a ceiling on the short edge — <code>P480</code> default, <code>P720</code>, <code>NATIVE</code> — and the result is blitted up to the actual surface. A ceiling, never a target: a surface already below it renders at its own size and is never enlarged.</p>
 <p><strong>Subsystem wrapper</strong>: <code>RenderSubsystem</code> — routes <code>RenderFrameEvent</code> to <code>port.renderFrame()</code>.</p>
-<h3 id="34-audio--comopenfpsengineaudio--stub">3.4 Audio — <code>com.openfps.engine.audio</code> — <strong>stub</strong><a class="anchor" href="#34-audio--comopenfpsengineaudio--stub" aria-label="Permalink">#</a></h3>
+<h3 id="34-audio--comopenfpsengineaudio--shipping-deliberately-narrow-81-tests">3.4 Audio — <code>com.openfps.engine.audio</code> — <strong>shipping, deliberately narrow</strong> (81 tests)<a class="anchor" href="#34-audio--comopenfpsengineaudio--shipping-deliberately-narrow-81-tests" aria-label="Permalink">#</a></h3>
 <p><strong>S_ Sound</strong></p>
 <ul>
 <li>
-<p><code>SoundEngine</code>: voice allocation, mix loop</p>
+<p><code>I_AudioPort</code> — six methods: play a <code>SoundId</code>, stop, clamp a volume, ask whether anything is audible</p>
 </li>
 <li>
-<p><code>SoundEmitter</code>: 3D position + velocity</p>
+<p><code>SoundId</code> — the closed set of sounds</p>
 </li>
 <li>
-<p><code>I_AudioPort</code> — <code>playSfx</code>, <code>playMusic</code>, <code>stopAll</code></p>
+<p><code>NullAudioPort</code> — silent, counts plays (headless and test path)</p>
 </li>
 <li>
-<p><code>NullAudioPort</code> — stub</p>
+<p><code>GdxAudioPort</code> — in <code>:gdxshared</code>, supplied by <code>GdxAdapterFactory</code> / <code>AndroidAdapterFactory</code> via <code>I_AdapterFactory.getAudioPort()</code></p>
+</li>
+<li>
+<p><code>synth/</code> — <code>SoundBank</code>, <code>BlasterSound</code>, <code>CarbineSound</code>, <code>SuperBlasterSound</code>, <code>PowerChimeSound</code>, <code>WavAudio</code></p>
 </li>
 </ul>
-<p><strong>Subsystem wrapper</strong>: <code>AudioSubsystem</code> — init/shutdown only for now (event types for SFX/music are Phase 6 work).</p>
-<h3 id="35-network--comopenfpsenginenet--stub">3.5 Network — <code>com.openfps.engine.net</code> — <strong>stub</strong><a class="anchor" href="#35-network--comopenfpsenginenet--stub" aria-label="Permalink">#</a></h3>
+<p><strong>Every sound is generated at runtime, not shipped.</strong> The synth package writes PCM in code, so there is no audio asset in the repository, no licence question, and nothing to add to <code>NOTICE</code>. That is how the old "<code>docs/ASSETS.md</code> § 3 has no audio row" blocker was retired for the demo <em>without</em> pretending to have answered it for a real sound bank.</p>
+<p><strong>What is deliberately absent</strong>: no mixer, no positional audio, no music — and none of them half-started. <code>audio/README.md</code> keeps the 3D formulae as a reading list, explicitly not as a spec this code is failing to meet. Everything degrades: no device, headless JVM, and an unwritable cache each log once and keep playing.</p>
+<p><strong>Subsystem wrapper</strong>: <code>AudioSubsystem</code> — registered as <code>S_</code>, port supplied by the adapter factory rather than hard-coded null.</p>
+<h3 id="35-network--comopenfpsenginenet--partial-transport-ships-match-state-does-not-129-tests-here-13-more-in-demoremoteplayerstest">3.5 Network — <code>com.openfps.engine.net</code> — <strong>partial: transport ships, match state does not</strong> (129 tests here, 13 more in <code>demo/RemotePlayersTest</code>)<a class="anchor" href="#35-network--comopenfpsenginenet--partial-transport-ships-match-state-does-not-129-tests-here-13-more-in-demoremoteplayerstest" aria-label="Permalink">#</a></h3>
 <p><strong>G_ Peer-to-Peer Networking</strong></p>
+<p><code>NetSession</code> opens a real socket over <code>DesktopDatagramPort</code>; <code>TicCmdEncoder</code> does the float-to-wire quantisation; <code>demo/RemotePlayers</code> replays each peer's commands through its own <code>PlayerController</code> on the shared <code>PhysicsWorld</code>, so two processes draw each other's bodies. Measured live: 77 KB exchanged, zero malformed packets, zero strangers.</p>
+<p><strong>Still open, and the next real work</strong>: <code>Match</code> has never heard of a remote player, so peers are visible but <strong>not shootable</strong>, respawn is not replicated (a teleport driven by <code>Match</code>, not by an input), and a late join costs a constant 17.07-unit offset. Desync detection is deliberately not started — the 20-byte header has no discriminator for a second packet type, and until match state is replicated the simulations are known to differ, so it would fire constantly and tell nobody anything.</p>
 <ul>
 <li>
-<p><code>PeerConnection</code> — per-peer state (address, RTT, ack window, loss stats); no socket</p>
+<p><code>PeerConnection</code> — per-peer state (address, RTT, ack window, loss stats)</p>
 </li>
 <li>
 <p><code>TicCmdBuffer</code> — ring buffer of <code>TicCmd</code> per peer, indexed by tic number</p>
@@ -791,19 +811,46 @@ what actually exists, with the original intent noted where it diverged.</p>
 <p>A <code>W_</code> subsystem registering <code>WadFilePort</code> with the <code>SubsystemRegistry</code></p>
 </li>
 </ul>
-<h3 id="phase-3--networking--primitives-built-nothing-wired">Phase 3 — Networking — <strong>primitives built, nothing wired</strong><a class="anchor" href="#phase-3--networking--primitives-built-nothing-wired" aria-label="Permalink">#</a></h3>
+<h3 id="phase-3--networking--transport-wired-and-measured-match-state-not-replicated">Phase 3 — Networking — <strong>transport wired and measured; match state not replicated</strong><a class="anchor" href="#phase-3--networking--transport-wired-and-measured-match-state-not-replicated" aria-label="Permalink">#</a></h3>
 <ul>
 <li class="task done">
 <p>Transport decision recorded (<code>net/README.md</code> § "Transport decision") — UDP + redundant redelivery, no dependency added</p>
 </li>
 <li class="task done">
-<p><code>PeerConnection</code> (peer state — address, EWMA RTT, ack window; no socket)</p>
+<p><code>PeerConnection</code> (peer state — address, EWMA RTT, ack window)</p>
 </li>
 <li class="task done">
 <p><code>TicCmdBuffer</code> (lockstep) — 64x8 preallocated ring, zero per-tic allocation, decoupled from render. Note the sim rate is configurable 30/60/120, not fixed at 60</p>
 </li>
 <li class="task done">
 <p><code>RedundantSender</code> + <code>AckWindow</code> — redundant input redelivery, 64-bit ack bitfield</p>
+</li>
+<li class="task done">
+<p><code>TicCmdEncoder</code> — float-to-wire quantisation</p>
+</li>
+<li class="task done">
+<p><code>NetSession</code> — a real socket over <code>DesktopDatagramPort</code>, attached by <code>DesktopLauncher</code></p>
+</li>
+<li class="task done">
+<p><code>demo/RemotePlayers</code> — replays a peer's commands through its own <code>PlayerController</code> on the shared <code>PhysicsWorld</code>, so peers appear as bodies</p>
+</li>
+<li class="task done">
+<p>Two live processes: <code>.\run-desktop.ps1 -TwoPeers -StartInGame</code>, distinct ports (5021/5022) and profile DBs</p>
+</li>
+<li class="task todo">
+<p><strong>Replicate match state</strong> — <code>Match</code> has never heard of a remote player. This is the next real step and it is the root cause of all three items below</p>
+</li>
+<li class="task todo">
+<p>Peers are visible but <strong>not shootable</strong></p>
+</li>
+<li class="task todo">
+<p>Respawn is not replicated (a teleport driven by <code>Match</code>, not by an input)</p>
+</li>
+<li class="task todo">
+<p>A late join costs a constant 17.07-unit offset (4 missing leading tics × 4.267 units)</p>
+</li>
+<li class="task todo">
+<p>Desync detection (§ 10's periodic <code>stateHash</code>) — <strong>deliberately not started.</strong> Needs a second packet type and the shipped 20-byte header has no discriminator; until match state is replicated the simulations are known to differ, so it would fire on every comparison</p>
 </li>
 <li class="task todo">
 <p><code>SnapshotDelta</code> (encode/decode)</p>
@@ -812,9 +859,21 @@ what actually exists, with the original intent noted where it diverged.</p>
 <p><code>Discovery</code> (LAN broadcast)</p>
 </li>
 </ul>
-<p><strong>These six classes are library-only.</strong> <code>EngineMain</code> still registers <code>NullNetworkPort</code>; nothing in the running engine constructs a <code>PeerConnection</code>, <code>TicCmdBuffer</code> or <code>RedundantSender</code>, and no socket is opened. 87 tests cover them in isolation. Wiring them to <code>DesktopDatagramPort</code> is the next real Phase 3 step.</p>
-<h3 id="phase-4--gameplay--planned">Phase 4 — Gameplay — <strong>planned</strong><a class="anchor" href="#phase-4--gameplay--planned" aria-label="Permalink">#</a></h3>
+<p><strong>Measured, not asserted</strong>: a loopback test over two real UDP sockets, and two live game processes that exchanged 77 KB with zero malformed packets and zero strangers. Do not read this as "multiplayer works" — a session that exchanges packets perfectly and cannot shoot the other player is exactly where this is.</p>
+<h3 id="phase-4--gameplay--the-match-layer-landed-early-the-wad-backed-world-did-not">Phase 4 — Gameplay — <strong>the match layer landed early; the WAD-backed world did not</strong><a class="anchor" href="#phase-4--gameplay--the-match-layer-landed-early-the-wad-backed-world-did-not" aria-label="Permalink">#</a></h3>
 <ul>
+<li class="task done">
+<p><code>PhysicsWorld</code> horizontal collision + slide — x then z in a fixed order, corner-safe</p>
+</li>
+<li class="task done">
+<p><code>Hitscan</code> / <code>Target</code> / <code>HitResult</code>, shared by the player and the bots</p>
+</li>
+<li class="task done">
+<p><code>Match</code> + <code>Bot</code> + <code>BotRng</code> — kills, deaths, respawn, scoring, rematch, kill streak</p>
+</li>
+<li class="task todo">
+<p><code>PhysicsWorld.floorHeightAt(...)</code> — <strong>the next gameplay step.</strong> Collision is horizontal only, so the crates the jump was tuned to clear are not stand-on-able. One addition unlocks crates, staircase and ramp together</p>
+</li>
 <li class="task todo">
 <p><code>LagCompensator</code> (rewind for hits) — moved from Phase 3; under pure lockstep there is nothing to rewind, so this only becomes meaningful once prediction/snapshot exists</p>
 </li>
@@ -823,9 +882,6 @@ what actually exists, with the original intent noted where it diverged.</p>
 </li>
 <li class="task todo">
 <p><code>Entity</code> base + concrete types (monster, projectile, pickup, door)</p>
-</li>
-<li class="task todo">
-<p><code>PhysicsWorld.moveWithSlide(player, dx, dy)</code> — collision + slide</p>
 </li>
 <li class="task todo">
 <p><code>MapLoader</code> — read THINGS / LINEDEFS / SECTORS from WAD</p>
@@ -895,8 +951,20 @@ Render target: <code>docs/ASSETS.md</code> § 2. Ordered by dependency.</p>
 </li>
 </ul>
 <p>Retired from this phase and deliberately not listed: <code>BspTraverser</code> (moved to Phase 4 as a gameplay/collision structure), <code>WallClipper</code>, <code>VisplaneBuilder</code>, <code>ColumnRenderer</code>, palette blitting.</p>
-<h3 id="phase-6--audio--planned">Phase 6 — Audio — <strong>planned</strong><a class="anchor" href="#phase-6--audio--planned" aria-label="Permalink">#</a></h3>
+<h3 id="phase-6--audio--started-deliberately-narrow">Phase 6 — Audio — <strong>started, deliberately narrow</strong><a class="anchor" href="#phase-6--audio--started-deliberately-narrow" aria-label="Permalink">#</a></h3>
 <ul>
+<li class="task done">
+<p><code>I_AudioPort</code> + <code>SoundId</code> + <code>NullAudioPort</code>, registered as <code>S_</code>, port supplied by <code>I_AdapterFactory.getAudioPort()</code></p>
+</li>
+<li class="task done">
+<p><code>GdxAudioPort</code> in <code>:gdxshared</code>, wired by both launchers</p>
+</li>
+<li class="task done">
+<p><code>synth/</code> — <code>SoundBank</code> plus <code>BlasterSound</code>, <code>CarbineSound</code>, <code>SuperBlasterSound</code>, <code>PowerChimeSound</code>, <code>WavAudio</code>. <strong>Every sound is generated at runtime</strong>, so the repository ships no audio asset and <code>NOTICE</code> needs no entry</p>
+</li>
+<li class="task done">
+<p>Voice limiting; graceful degradation on no device, headless JVM, unwritable cache</p>
+</li>
 <li class="task todo">
 <p><code>SoundEngine</code> — voice allocation, mix loop</p>
 </li>
@@ -910,45 +978,40 @@ Render target: <code>docs/ASSETS.md</code> § 2. Ordered by dependency.</p>
 <p><code>PcmLoader</code> — read SFX from WAD lumps</p>
 </li>
 </ul>
+<p>The four unchecked items are <strong>deliberately not half-started</strong>. <code>audio/README.md</code> keeps the 3D formulae as a reading list, explicitly not as a spec this code is failing to meet.</p>
 <hr>
 <h2 id="8-test-coverage-summary">8. Test Coverage Summary<a class="anchor" href="#8-test-coverage-summary" aria-label="Permalink">#</a></h2>
-<p><strong>392 tests, all passing</strong> — 354 in <code>:engine</code>, 38 in <code>:desktop</code>.</p>
-<div class="tablewrap"><table>
-<thead><tr><th>Suite</th><th>Module</th><th>Tests</th><th>Coverage</th></tr></thead>
-<tbody>
-<tr><td><code>FixedMathTest</code></td><td>engine</td><td>6</td><td>fixed-point arithmetic</td></tr>
-<tr><td><code>UserProfileTest</code></td><td>engine</td><td>12</td><td>field validation, withXxx copies, equals/hashCode</td></tr>
-<tr><td><code>FrameRateTest</code></td><td>engine</td><td>9</td><td>per-rate math, parser, rejection</td></tr>
-<tr><td><code>GameConfigTest</code></td><td>engine</td><td>10</td><td>factories, drift correction (1000-tic sim)</td></tr>
-<tr><td><code>SharedEventBusTest</code></td><td>engine</td><td>10</td><td>FIFO, backpressure, drain, lifecycle</td></tr>
-<tr><td><code>WorkerPoolTest</code></td><td>engine</td><td>7</td><td>hot threads, parallel dispatch, error recovery</td></tr>
-<tr><td><code>SubsystemStateTest</code></td><td>engine</td><td>10</td><td>transitions, error handling, thread-safety</td></tr>
-<tr><td><code>AdapterFactoryTest</code></td><td>engine</td><td>11</td><td>HAL backend selection</td></tr>
-<tr><td><code>DesktopAdapterFactoryTest</code></td><td>engine</td><td>5</td><td>desktop factory wiring</td></tr>
-<tr><td><code>DesktopTimePortTest</code></td><td>engine</td><td>7</td><td>monotonic vs. wall clock</td></tr>
-<tr><td><code>DesktopDatagramPortTest</code></td><td>engine</td><td>14</td><td>bind, send, receive, direct-buffer reuse</td></tr>
-<tr><td><code>MemoryUserProfilePortTest</code></td><td>engine</td><td>15</td><td>in-memory CRUD, state machine</td></tr>
-<tr><td><code>SqliteUserProfilePortTest</code></td><td>engine</td><td>15</td><td>SQLite CRUD, upsert, persistence, state machine</td></tr>
-<tr><td><code>MemoryPortTest</code></td><td>engine</td><td>35</td><td>both backends (7 <code>@Nested</code> groups): positive, negative, random, overflow, underflow, state machine, tags</td></tr>
-<tr><td><code>TicCmdTest</code>, <code>TicCmdBufferTest</code>, <code>PeerConnectionTest</code>, <code>RedundantSenderTest</code>, <code>AckWindowTest</code></td><td>engine</td><td>87</td><td>lockstep tic buffers, peer state, redundant redelivery, 64-bit ack bitfield</td></tr>
-<tr><td><code>LittleEndianTest</code></td><td>engine</td><td>10</td><td>LE primitive readers</td></tr>
-<tr><td><code>WadReaderTest</code></td><td>engine</td><td>27</td><td>header + directory parse, lump slicing</td></tr>
-<tr><td><code>LumpCacheTest</code></td><td>engine</td><td>21</td><td>demand load, ref counting, pinning, eviction</td></tr>
-<tr><td><code>MapLumpParserTest</code></td><td>engine</td><td>16</td><td>THINGS / LINEDEFS / SECTORS / VERTEXES</td></tr>
-<tr><td><code>WadFilePortTest</code></td><td>engine</td><td>27</td><td>real <code>I_WadPort</code> end to end</td></tr>
-<tr><td><code>GdxWindowPortTest</code></td><td>desktop</td><td>18</td><td><code>I_WindowPort</code> lifecycle, frame loop, close requests</td></tr>
-<tr><td><code>GdxFrameLoopListenerTest</code></td><td>desktop</td><td>6</td><td><code>I_FrameCallback</code> dispatch</td></tr>
-<tr><td><code>GdxAdapterFactoryTest</code></td><td>desktop</td><td>5</td><td>factory wiring</td></tr>
-<tr><td><code>DefaultMenuActionsTest</code>, <code>MenuButtonListenerTest</code></td><td>desktop</td><td>9</td><td>main-menu actions</td></tr>
-</tbody>
-</table></div>
-<p>Run with: <code>.\gradlew.bat test</code>. <code>.\gradlew.bat build</code> additionally runs
-Checkstyle over main and test sources and fails on any violation.</p>
-<blockquote>
-<p>The <code>:engine</code> numbers above cover subsystems whose PLAN sections still read
-"stub" (net, resource). Those sections are pending their own revisions; the
-test counts here are measured, not aspirational.</p>
-</blockquote>
+<p><strong>2339 tests, all passing</strong> — 1625 <code>:engine</code>, 300 <code>:gdxshared</code>, 177 <code>:android</code>,
+164 <code>:desktop</code>, 73 <code>:tools</code>.</p>
+<p><strong>The per-package breakdown lives in <code>README.md</code> § Test Coverage and nowhere
+else.</strong> This section used to carry a per-suite table of its own; it drifted to
+392 while the real figure was six times that, because two tables of the same
+numbers only ever agree on the day they are written. Each package's own
+<code>## Status</code> block carries its count, and those sit next to the code.</p>
+<p>Counting rule, because three plausible methods give three different answers:
+sum the <code>tests=</code> attribute of every <code>&lt;testsuite&gt;</code> element Gradle wrote under
+<code>&lt;module&gt;/build/test-results/</code>, and count <code>:android</code> <strong>once</strong>. Its suite runs
+against a debug and a release variant, so a raw tally reports 354. Counting XML
+files instead undercounts nothing but splits <code>@Nested</code> groups; counting <code>@Test</code>
+annotations in source misses parameterized and repeated tests.</p>
+<p>Run with <code>.\gradlew.bat test</code>. <code>.\gradlew.bat build</code> additionally runs
+Checkstyle over main and test sources and fails on any violation
+(<code>maxWarnings = 0</code>).</p>
+<p>Two properties are enforced by tests rather than by convention, and both are
+load-bearing rather than nice-to-have:</p>
+<ul>
+<li>
+<p><strong>Renderer determinism</strong> — the demo shots are rendered at every worker count
+from serial through 16 and compared byte-for-byte. This is the safety net for
+culling and worker-count changes.</p>
+</li>
+<li>
+<p><strong>Simulation determinism</strong> — <code>PlayerController</code> is checked at the
+constant-pool level to prove it never references <code>java/lang/Math</code>, only
+<code>StrictMath</code>. Lockstep needs transcendentals to agree bit-for-bit across
+machines, and only <code>StrictMath</code> guarantees that.</p>
+</li>
+</ul>
 <hr>
 <h2 id="9-contribution-guidelines">9. Contribution Guidelines<a class="anchor" href="#9-contribution-guidelines" aria-label="Permalink">#</a></h2>
 <ol>

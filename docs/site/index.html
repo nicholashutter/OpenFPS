@@ -82,7 +82,7 @@
 <li class="lv2"><a href="#license">License</a></li>
 </ul></details></aside>
 <main id="doc">
-<p class="crumb"><span class="tag">Overview</span><span class="sep">/</span><code>README.md</code><span class="sep">/</span>12 min read</p>
+<p class="crumb"><span class="tag">Overview</span><span class="sep">/</span><code>README.md</code><span class="sep">/</span>14 min read</p>
 <h1 id="openfps">OpenFPS<a class="anchor" href="#openfps" aria-label="Permalink">#</a></h1>
 <blockquote>
 <p>Open-source peer-to-peer FPS game engine targeting the JVM. Event-driven, multi-threaded, hexagonal architecture, and a software triangle rasterizer with no GPU shading path.</p>
@@ -90,23 +90,27 @@
 <p><a href="https://github.com/nicholashutter/OpenFPS/blob/main/LICENSE" class="ext" rel="noopener noreferrer" target="_blank"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT" loading="lazy"></a>
 <a href="https://adoptium.net/" class="ext" rel="noopener noreferrer" target="_blank"><img src="https://img.shields.io/badge/Java-17%20LTS-ED8B00.svg" alt="Java Version" loading="lazy"></a>
 <a href="https://gradle.org/" class="ext" rel="noopener noreferrer" target="_blank"><img src="https://img.shields.io/badge/Gradle-8.13-02303A.svg" alt="Gradle" loading="lazy"></a>
-<a href="build.html"><img src="https://img.shields.io/badge/tests-1524%20passing-brightgreen.svg" alt="Tests" loading="lazy"></a>
+<a href="build.html"><img src="https://img.shields.io/badge/tests-2339%20passing-brightgreen.svg" alt="Tests" loading="lazy"></a>
 <a href="plan.html"><img src="https://img.shields.io/badge/status-pre--alpha-blue.svg" alt="Status" loading="lazy"></a></p>
 <h2 id="overview">Overview<a class="anchor" href="#overview" aria-label="Permalink">#</a></h2>
 <p>OpenFPS is a from-scratch FPS game engine written in Java 17, designed around the original Doom subsystem architecture (D_ / P_ / R_ / S_ / G_ / W_ / Z_ / I_) adapted for modern JVM targets.</p>
-<p>The engine is an <strong>event queue processor</strong>: subsystems communicate by publishing events to a shared bus, and a pool of N dedicated worker threads (N = logical CPU count / 2) consumes events and dispatches them to the target subsystem. Each subsystem is its own state machine. Every allocation goes through a single memory port.</p>
-<p><strong>Currently in pre-alpha, and it is a game now rather than a demo.</strong> A blocky title screen, a single-player match against seven bots that patrol and shoot back, hitscan combat with a crosshair and outlined opponents, and a UDP transport that two live processes have been measured exchanging. It runs on a phone: the same rasterizer, the same match, driven by a thumbstick. 1524 tests passing, Checkstyle clean, build green.</p>
-<p>What is <em>not</em> yet true: remote players are not simulated into bodies you can see, and the Android build boots the engine but never puts the world on screen. Both are stated precisely in <a href="agents.html">AGENTS.md</a>.</p>
+<p>The engine is an <strong>event queue processor</strong>: subsystems communicate by publishing events to a shared bus, and a pool of N dedicated worker threads (N = logical processors − 1) consumes events and dispatches them to the target subsystem. Each subsystem is its own state machine. Every allocation goes through a single memory port.</p>
+<p><strong>Currently in pre-alpha, and it is a game now rather than a demo.</strong> A blocky title screen, a single-player match against seven bots that patrol, take cover behind solid geometry and shoot back with visible tracers, hitscan combat with a crosshair and red-outlined opponents, wall collision, respawn and scoring, and a three-kill streak that buys a double-damage super blaster. Every sound is synthesised at runtime, so the repository ships no audio asset. It runs on a phone at parity: the same rasterizer, the same match, driven by a thumbstick — or by a gamepad on either platform. Two processes exchange inputs over UDP and each draws the other's body. 2339 tests passing, Checkstyle clean, build green.</p>
+<p>What is <em>not</em> yet true: <strong>remote peers are visible but not shootable.</strong> Each peer runs its own <code>Match</code>, and <code>Match</code> has never heard of a remote player, so hits, respawns and scores are not replicated. That single gap is stated precisely — with the two measured divergences it causes — in <a href="agents.html">AGENTS.md</a> and
+<a href="engine-net.html"><code>net/README.md</code></a>.</p>
 <h2 id="key-design-decisions">Key Design Decisions<a class="anchor" href="#key-design-decisions" aria-label="Permalink">#</a></h2>
 <ul>
 <li>
 <p><strong>Event-driven architecture</strong> — every subsystem interaction is an event; the worker pool dispatches them</p>
 </li>
 <li>
-<p><strong>Multi-threaded by default</strong> — N = <code>logicalProcessorCount / 2</code> hot worker threads, pre-started at boot</p>
+<p><strong>Multi-threaded by default</strong> — N = <code>logicalProcessorCount − 1</code> hot worker threads, pre-started at boot, one processor left for the game loop and the platform frame pump. Override with <code>-Dopenfps.workers=N</code></p>
 </li>
 <li>
 <p><strong>Software rendering</strong> — a multi-threaded triangle rasterizer. The GPU is used only to blit one finished framebuffer per frame</p>
+</li>
+<li>
+<p><strong>Render size is decoupled from surface size</strong> — <code>RenderMode</code> P480 (default) / P720 / NATIVE names the short edge as a <em>ceiling</em>, never a target, and never upscales past native</p>
 </li>
 <li>
 <p><strong>Per-subsystem state machines</strong> — <code>UNINITIALIZED → READY → ERROR → SHUTDOWN</code>, no shared state, no silent failures</p>
@@ -190,8 +194,8 @@ code 3 rather than opening an empty window.</p>
 <thead><tr><th>Module</th><th>Contains</th><th>Notes</th></tr></thead>
 <tbody>
 <tr><td><code>:engine</code></td><td>The whole engine: core, memory, HAL ports, gameplay, render, net, resource, audio, demo</td><td>Pure Java 17, <strong>no platform dependencies</strong>. Builds and tests headless anywhere</td></tr>
-<tr><td><code>:gdxshared</code></td><td>The libGDX code that is not platform-specific — framebuffer presentation, the welcome screen, the UI state machine, the input accumulator</td><td>Depends on libGDX <strong>core</strong> and no backend. Both launchers use it; neither writes it twice</td></tr>
-<tr><td><code>:desktop</code></td><td>libGDX LWJGL3 backend — window, mouse and keyboard, <code>DesktopLauncher</code></td><td></td></tr>
+<tr><td><code>:gdxshared</code></td><td>The libGDX code that is not platform-specific — framebuffer presentation, the render-mode ceiling, the menu / settings / game-over screens and the UI state machine, the input accumulator and analog stick, the debug overlay and FPS meter, the accessibility and render settings, the generated-audio port</td><td>Depends on libGDX <strong>core</strong> and no backend. Both launchers use it; neither writes it twice</td></tr>
+<tr><td><code>:desktop</code></td><td>libGDX LWJGL3 backend — window, mouse and keyboard, GLFW gamepad, UDP peer args, <code>DesktopLauncher</code></td><td></td></tr>
 <tr><td><code>:tools</code></td><td>Build-time only: glTF → <code>ModelFormat</code> converter, mip generation, headless preview harnesses</td><td>Nothing depends on it. <code>verifyToolsIsolation</code> fails the build if it ever reaches a runtime classpath</td></tr>
 <tr><td><code>:android</code></td><td>libGDX Android backend — <code>AndroidLauncher</code>, the touch control scheme, Room-backed profile storage</td><td><strong>Playable.</strong> Only included when an Android SDK is present; without <code>ANDROID_HOME</code>, <code>settings.gradle.kts</code> silently skips it, so a green <code>gradlew build</code> does not prove <code>:android</code> compiles</td></tr>
 </tbody>
@@ -214,16 +218,26 @@ adapter uploads it as a single texture.</p>
 <p><strong>Threading</strong> — triangles are binned to 64×64 tiles; each worker owns its tiles outright and is the only writer to those regions of the colour and depth buffers, so the depth buffer needs no synchronisation</p>
 </li>
 <li>
-<p><strong>Two passes per frame</strong> — the world, then the view-space viewmodel with a depth clear between them, which is what stops the held weapon clipping through walls</p>
+<p><strong>Two passes per frame, and two phases between them</strong> — world instances, then the outline pass (which needs the finished id buffer), then translucent instances sorted back-to-front and depth-tested but never depth-written, then a depth clear, then the view-space viewmodel. The depth clear is what stops the held weapon clipping through walls; the ordering is why the weapon draws <em>over</em> outlines rather than under them</p>
+</li>
+<li>
+<p><strong>Accessibility is a first-class setting, not a debug flag</strong> — hovered enemies take a thin red outline, on by default, toggled in its own options menu (<code>-Dopenfps.targetOutline=false</code> opts out)</p>
 </li>
 </ul>
 <p><strong>Measured</strong>, not estimated, at 1280x720 on the 295-instance demo room
 (Intel Core Ultra 7 155H): <strong>p50 4.9 ms</strong> at 8 workers, 3.9 ms at 16, against
 22.1 ms serial. Output is bit-identical across every worker count — the tile
 ownership rule makes the parallel result reproducible, not merely close.</p>
-<p>720p is the shipping target and the number is measured rather than chosen:
-1080p costs 10.3 ms per frame in fill alone, which consumes the entire renderer
-budget inside a 16.7 ms frame before a single triangle is considered.</p>
+<p><strong>Render size is decoupled from surface size.</strong> <code>RenderMode</code> picks a ceiling on
+the short edge — <code>P480</code> (default), <code>P720</code>, or <code>NATIVE</code> — and the framebuffer is
+allocated to that, then blitted up to whatever the window or phone panel
+actually is. It is a ceiling and never a target: a surface already smaller than
+the ceiling is rendered at its own size rather than being enlarged. Set it with
+<code>-Dopenfps.renderMode=480p|720p|native</code>, or <code>-RenderMode</code> on either run script.</p>
+<p>The default is 480p because the cost is fill-bound and measured: 1080p costs
+10.3 ms per frame in fill alone, which consumes the entire renderer budget
+inside a 16.7 ms frame before a single triangle is considered. A phone panel is
+native-3k and would pay that several times over.</p>
 <p><a href="assets.html">docs/ASSETS.md</a> § 2 is the canonical render target;
 <a href="engine-render.html"><code>render/README.md</code></a>
 is the full specification — every formula, citation, and open question.</p>
@@ -246,7 +260,7 @@ is the full specification — every formula, citation, and open question.</p>
         v
   +-------------------+      +-------------------+
   |   Worker Pool     | ---&gt; | SubsystemRegistry |
-  |  N = cores/2 hot  |      |  + CORE (shutdown)|
+  |  N = cores-1 hot  |      |  + CORE (shutdown)|
   |  threads, pre-    |      |  + P_ Gameplay    |
   |  started. Each:   |      |  + R_ Render      |
   |  take → dispatch  |      |  + S_ Audio       |
@@ -339,28 +353,48 @@ rasterizer needs typed arrays the JIT can bounds-check-eliminate. See
 │   │   ├── EngineSession.java non-blocking start/stop, used by the windowed launchers
 │   │   ├── GameLoop.java      FrameRate.java      GameConfig.java
 │   ├── common/                FixedMath (16.16 fixed-point), Constants, UserProfile
-│   ├── gameplay/              PlayerController, PlayerInputView, I_PlayerInput, ports
+│   ├── gameplay/              PlayerController, PhysicsWorld, Hitscan, Target, HitResult,
+│   │                          Match, MatchState, MatchMode, MatchSummary, Bot, BotPattern,
+│   │                          BotRng, BotSkill, BotShotLog, PlayerInputView, ports
 │   ├── render/                Framebuffer, Camera, Rasterizer, SpanRenderer, TriangleClipper,
-│   │                          TextureSampler, MipChain, ModelFormat, Scene, SoftwareRenderPort
-│   ├── demo/                  DemoScene, DemoGameplayPort — the playable demo's content
-│   ├── audio/                 port/I_AudioPort     adapter/NullAudioPort  (stub)
-│   ├── net/                   TicCmd, TicCmdBuffer, AckWindow, PeerConnection, RedundantSender
+│   │                          TextureSampler, MipChain, ModelFormat, Scene, Rgba,
+│   │                          OutlinePass, SoftwareRenderPort
+│   ├── demo/                  DemoScene, DemoModels, DemoEffects, DemoGameplayPort,
+│   │                          RemotePlayers, BotFireVoices, BlockCarbine — the demo's content
+│   ├── audio/                 port/{I_AudioPort, SoundId}  adapter/NullAudioPort
+│   │                          synth/ SoundBank + Blaster/Carbine/SuperBlaster/PowerChime
+│   │                          + WavAudio — every sound generated, none shipped
+│   ├── net/                   TicCmd, TicCmdBuffer, TicCmdEncoder, AckWindow, NetBytes,
+│   │                          PeerConnection, RedundantSender, NetSession
 │   ├── resource/              WadReader, LumpCache, MapLumpParser, WadFilePort (built, unregistered)
 │   ├── memory/                port/I_MemoryPort  adapter/{Jvm,Zone}MemoryPort  factory  exception
 │   └── hal/                   I_ Hardware abstraction
 │       ├── port/              I_TimePort, I_InputPort, I_WindowPort, I_FrameCallback, InputState,
 │       │                      I_DatagramPort, I_FilePort, I_SystemInfoPort, I_UserProfilePort
+│       ├── GameAction, InputBinding, ActionBindings — the controls table (no default key codes)
 │       └── adapter/           nulladapter/  sqlite/  desktop/ (time, datagram)
+├── gdxshared/src/main/java/com/openfps/gdx/     :gdxshared — libGDX core, no backend
+│                              FramebufferPresenter, InputAccumulator, AnalogStick,
+│                              RenderMode, RenderSettings, DebugSettings, DebugOverlay,
+│                              AccessibilitySettings, FpsMeter, ScoreOverlay, GdxAudioPort,
+│                              MainMenuScreen, SettingsScreen, GameOverScreen, UiStateMachine
 ├── desktop/src/main/java/com/openfps/desktop/   :desktop — libGDX LWJGL3
-│                              GdxWindowPort, GdxInputPort, InputAccumulator,
-│                              FramebufferPresenter, MainMenuScreen, DesktopLauncher
+│                              GdxWindowPort, GdxInputPort, GlfwGamepad, DesktopBindings,
+│                              GdxAdapterFactory, NetArgs, WindowIcon, DesktopLauncher
 ├── android/src/main/java/com/openfps/android/   :android — libGDX Android + Room
+│                              AndroidLauncher, AndroidWindowPort, AndroidInputPort,
+│                              TouchLayout, TouchOverlay, ApkModelSource, RoomUserProfilePort
 ├── tools/src/main/java/com/openfps/tools/       :tools — build-time only
 │                              GltfConverter, ModelBuilder, MipGenerator, ProceduralRoom,
 │                              DemoPreviewMain, RenderPreviewMain
 ├── assets/                    gitignored — staged glTF and converted .ofm models
+├── run-desktop.ps1            always-rebuild launcher; -RenderMode, -TwoPeers, -StartInGame
+├── run-android.ps1            always-rebuild launcher: build, install, launch, logcat
+├── .vscode/tasks.json         the same two launchers as VSCode tasks
 ├── docs/ASSETS.md             render target, budgets, measured costs
 ├── docs/DEMO_ASSETS.md        demo art provenance, licences, SHA-256s
+├── docs/MEMORY.md             pre-allocated vs dynamic allocation audit
+├── docs/WASM.md               WebAssembly port viability assessment
 ├── PLAN.md   STYLE.md   AGENTS.md   BUILD.md
 └── config/checkstyle/         Checkstyle configuration
 </code></pre></div>
@@ -377,15 +411,25 @@ website rather than a folder of files:</p>
 dark mode, no external assets. The task fails if any cross-document link does
 not resolve. The Markdown stays the source of truth.</p>
 <h2 id="test-coverage">Test Coverage<a class="anchor" href="#test-coverage" aria-label="Permalink">#</a></h2>
-<p><strong>1524 tests, all passing</strong> — 1131 <code>:engine</code>, 79 <code>:gdxshared</code>, 118 <code>:desktop</code>, 73 <code>:tools</code>, 123 <code>:android</code>.
-These are <em>distinct</em> tests. An earlier count said 1516 and was slightly wrong in a
-specific way: <code>:android:test</code> builds a debug and a release variant and runs the
-same suite twice, so a raw tally of its XML double-counts every Android test.</p>
+<p><strong>2339 tests, all passing</strong> — 1625 <code>:engine</code>, 300 <code>:gdxshared</code>, 177 <code>:android</code>,
+164 <code>:desktop</code>, 73 <code>:tools</code>.</p>
+<p>These are <em>distinct</em> tests, and the distinction matters twice.
+<code>:android:test</code> builds a debug and a release variant and runs the same suite
+against both, so a raw tally of its XML reports 354 and double-counts every
+Android test. And a <code>@Nested</code> class writes its own XML file, so counting files —
+or counting <code>@Test</code> annotations in the source — gives a third, different answer.
+The numbers here come from summing the <code>tests=</code> attribute of every
+<code>&lt;testsuite&gt;</code> Gradle actually wrote:</p>
+<div class="code" data-lang="powershell"><pre><code># what produced the table below
+Select-String -Path .\engine\build\test-results\test\*.xml -Pattern '&lt;testsuite .*tests="(\d+)"'
+</code></pre></div>
 <div class="tablewrap"><table>
-<thead><tr><th>Module</th><th>Tests</th><th>Largest suites</th></tr></thead>
+<thead><tr><th>Module</th><th>Tests</th><th>Breakdown</th></tr></thead>
 <tbody>
-<tr><td><code>:engine</code></td><td>828</td><td>render 316, resource 101, hal 91, net 87, gameplay 77, core 68, memory 35, demo 35, common 12</td></tr>
-<tr><td><code>:desktop</code></td><td>99</td><td>window port lifecycle, input accumulation, presentation wiring</td></tr>
+<tr><td><code>:engine</code></td><td>1625</td><td>render 516, gameplay 348, demo 184, net 129, hal 114, resource 101, core 99, audio 81, memory 35, common 12, root 6</td></tr>
+<tr><td><code>:gdxshared</code></td><td>300</td><td>render modes and the never-enlarge rule, input accumulation and stick-vs-mouse look, UI state machine, settings/score/end-of-match text, block font, audio port</td></tr>
+<tr><td><code>:android</code></td><td>177</td><td>touch layout and the reachable-back-button fit rule, bindings, adapter factory, Room profile storage</td></tr>
+<tr><td><code>:desktop</code></td><td>164</td><td>window port lifecycle, cursor capture and vertical look, gamepad sticks and hot-plug, net args, presentation wiring</td></tr>
 <tr><td><code>:tools</code></td><td>73</td><td>glTF conversion, model round-trip, mip generation, budget enforcement</td></tr>
 </tbody>
 </table></div>
@@ -442,8 +486,8 @@ licence terms are recorded in <a href="demo-assets.html">docs/DEMO_ASSETS.md</a>
 <section class="mapsec" data-hue="1">
 <h3 class="mapgroup"><span class="dot"></span>Overview</h3>
 <div class="cards">
-<a class="card" href="index.html"><span class="card-title">Overview</span><span class="card-sub">OpenFPS</span><span class="card-text">Open-source peer-to-peer FPS game engine targeting the JVM. Event-driven, multi-threaded, hexagonal architecture, and a software triangle rasterizer with no GPU shading path.</span><span class="card-meta">12 min</span></a>
-<a class="card" href="agents.html"><span class="card-title">Agent instructions</span><span class="card-sub">AGENTS.md — OpenFPS Engine Agent Instructions</span><span class="card-text">This file provides project-specific context and conventions for AI coding agents working in this repository. It supplements, not replaces, the agent's built-in persona (Mavis) and the global…</span><span class="card-meta">12 min</span></a>
+<a class="card" href="index.html"><span class="card-title">Overview</span><span class="card-sub">OpenFPS</span><span class="card-text">Open-source peer-to-peer FPS game engine targeting the JVM. Event-driven, multi-threaded, hexagonal architecture, and a software triangle rasterizer with no GPU shading path.</span><span class="card-meta">14 min</span></a>
+<a class="card" href="agents.html"><span class="card-title">Agent instructions</span><span class="card-sub">AGENTS.md — OpenFPS Engine Agent Instructions</span><span class="card-text">This file provides project-specific context and conventions for AI coding agents working in this repository. It supplements, not replaces, the agent's built-in persona (Mavis) and the global…</span><span class="card-meta">15 min</span></a>
 </div>
 </section>
 <section class="mapsec" data-hue="2">
@@ -456,30 +500,30 @@ licence terms are recorded in <a href="demo-assets.html">docs/DEMO_ASSETS.md</a>
 <h3 class="mapgroup"><span class="dot"></span>Architecture</h3>
 <div class="cards">
 <a class="card" href="style.html"><span class="card-title">Code style</span><span class="card-sub">OpenFPS — Code Style Guide</span><span class="card-text">This document defines the coding conventions for all Java source in the OpenFPS engine. Compliance is enforced by Checkstyle. Rules here supersede Checkstyle defaults where noted.</span><span class="card-meta">17 min</span></a>
-<a class="card" href="plan.html"><span class="card-title">Project plan</span><span class="card-sub">OpenFPS — Project Plan</span><span class="card-text">Status: Pre-alpha — Phases 0 through 1.5 complete, plus Phase 5 (render). Event-driven engine, unified memory, multi-threaded worker pool, configurable 30/60/120 Hz, SQLite user-profile…</span><span class="card-meta">25 min</span></a>
+<a class="card" href="plan.html"><span class="card-title">Project plan</span><span class="card-sub">OpenFPS — Project Plan</span><span class="card-text">Status: Pre-alpha — Phases 0 through 1.5 complete, plus Phase 5 (render). Event-driven engine, unified memory, multi-threaded worker pool, configurable 30/60/120 Hz, SQLite user-profile…</span><span class="card-meta">29 min</span></a>
 </div>
 </section>
 <section class="mapsec" data-hue="4">
 <h3 class="mapgroup"><span class="dot"></span>Modules</h3>
 <div class="cards">
 <a class="card" href="engine.html"><span class="card-title">:engine</span><span class="card-sub">OpenFPS — Engine Subsystem Map</span><span class="card-text">For new contributors: read this first. Every Java package below has a README.md with the full subsystem spec. This page is the 2-line elevator pitch for each.</span><span class="card-meta">3 min</span></a>
-<a class="card" href="desktop.html"><span class="card-title">:desktop</span><span class="card-sub">:desktop — the windowed launcher</span><span class="card-text">The only module allowed to touch LWJGL3 and GLFW. It gives the engine a real window, a real mouse, and somewhere to put the pixels the software rasterizer produced.</span><span class="card-meta">7 min</span></a>
-<a class="card" href="android.html"><span class="card-title">:android</span><span class="card-sub">:android — the Android launcher</span><span class="card-text">libGDX's Android backend, the software rasterizer on a GLSurfaceView, a thumbstick, and the Room half of I_UserProfilePort. It is playable.</span><span class="card-meta">14 min</span></a>
+<a class="card" href="desktop.html"><span class="card-title">:desktop</span><span class="card-sub">:desktop — the windowed launcher</span><span class="card-text">The only module allowed to touch LWJGL3 and GLFW. It gives the engine a real window, a real mouse, and somewhere to put the pixels the software rasterizer produced.</span><span class="card-meta">8 min</span></a>
+<a class="card" href="android.html"><span class="card-title">:android</span><span class="card-sub">:android — the Android launcher</span><span class="card-text">libGDX's Android backend, the software rasterizer on a GLSurfaceView, a thumbstick, and the Room half of I_UserProfilePort. It is playable.</span><span class="card-meta">20 min</span></a>
 <a class="card" href="tools.html"><span class="card-title">:tools</span><span class="card-sub">:tools — build-time asset tooling</span><span class="card-text">Nothing in this module is ever shipped. It converts art offline, verifies it against the budget, and renders preview frames without a display. No class here reaches a runtime classpath, and…</span><span class="card-meta">5 min</span></a>
-<a class="card" href="gdxshared.html"><span class="card-title">:gdxshared</span><span class="card-sub">:gdxshared — the libGDX code that is not platform-specific</span><span class="card-text">Both launchers use libGDX. Neither of them should have to write the framebuffer presenter twice.</span><span class="card-meta">7 min</span></a>
+<a class="card" href="gdxshared.html"><span class="card-title">:gdxshared</span><span class="card-sub">:gdxshared — the libGDX code that is not platform-specific</span><span class="card-text">Both launchers use libGDX. Neither of them should have to write the framebuffer presenter twice.</span><span class="card-meta">8 min</span></a>
 </div>
 </section>
 <section class="mapsec" data-hue="5">
 <h3 class="mapgroup"><span class="dot"></span>Packages</h3>
 <div class="cards">
-<a class="card" href="engine-core.html"><span class="card-title">Core</span><span class="card-sub">Core — Engine Entry, Event Bus, and Worker Pool</span><span class="card-text">The engine is an event queue processor. All subsystem interactions go through events. A pool of dedicated worker threads consumes from the queue and dispatches to subsystems.</span><span class="card-meta">9 min</span></a>
+<a class="card" href="engine-core.html"><span class="card-title">Core</span><span class="card-sub">Core — Engine Entry, Event Bus, and Worker Pool</span><span class="card-text">The engine is an event queue processor. All subsystem interactions go through events. A pool of dedicated worker threads consumes from the queue and dispatches to subsystems.</span><span class="card-meta">10 min</span></a>
 <a class="card" href="engine-common.html"><span class="card-title">Common</span><span class="card-sub">Common — Shared Types and Math</span><span class="card-text">Utilities used by every other subsystem. Nothing platform-specific lives here.</span><span class="card-meta">7 min</span></a>
 <a class="card" href="engine-hal.html"><span class="card-title">HAL (I_)</span><span class="card-sub">HAL (I_) — Hardware Abstraction Layer</span><span class="card-text">Every platform dependency the engine has, named as an interface here and satisfied somewhere else. Nothing in :engine outside hal/adapter/ may import a platform API — and hal/adapter/ itself…</span><span class="card-meta">9 min</span></a>
-<a class="card" href="engine-gameplay.html"><span class="card-title">Gameplay (P_)</span><span class="card-sub">Gameplay (P_) — Player, Entities, Map Logic</span><span class="card-text">P_ is the gameplay / physics layer. Holds everything that changes during play.</span><span class="card-meta">16 min</span></a>
-<a class="card" href="engine-render.html"><span class="card-title">Render (R_)</span><span class="card-sub">Render (R_) — Multi-threaded Software Triangle Rasterizer</span><span class="card-text">R_ takes the current game state and produces a finished framebuffer. It is pure math over primitive arrays — no window, no graphics API, no GPU. The platform adapter uploads the finished…</span><span class="card-meta">51 min</span></a>
+<a class="card" href="engine-gameplay.html"><span class="card-title">Gameplay (P_)</span><span class="card-sub">Gameplay (P_) — Player, Entities, Map Logic</span><span class="card-text">P_ is the gameplay / physics layer. Holds everything that changes during play.</span><span class="card-meta">19 min</span></a>
+<a class="card" href="engine-render.html"><span class="card-title">Render (R_)</span><span class="card-sub">Render (R_) — Multi-threaded Software Triangle Rasterizer</span><span class="card-text">R_ takes the current game state and produces a finished framebuffer. It is pure math over primitive arrays — no window, no graphics API, no GPU. The platform adapter uploads the finished…</span><span class="card-meta">52 min</span></a>
 <a class="card" href="engine-demo.html"><span class="card-title">Demo</span><span class="card-sub">Demo — the playable first-person scene</span><span class="card-text">A room to stand in and a blaster to hold. This package is what turns the engine's working parts into something you can walk around in.</span><span class="card-meta">8 min</span></a>
-<a class="card" href="engine-audio.html"><span class="card-title">Audio (S_)</span><span class="card-sub">Audio (S_) — Sound</span><span class="card-text">The engine says "make this noise". Everything else — device, format, file, mixer — is behind the port.</span><span class="card-meta">10 min</span></a>
-<a class="card" href="engine-net.html"><span class="card-title">Net (G_)</span><span class="card-sub">Net (G_) — Peer-to-Peer Networking</span><span class="card-text">G_ is the network layer. The engine is P2P-first — no dedicated server required for small matches. Authority is distributed: every player is a peer.</span><span class="card-meta">28 min</span></a>
+<a class="card" href="engine-audio.html"><span class="card-title">Audio (S_)</span><span class="card-sub">Audio (S_) — Sound</span><span class="card-text">The engine says "make this noise". Everything else — device, format, file, mixer — is behind the port.</span><span class="card-meta">14 min</span></a>
+<a class="card" href="engine-net.html"><span class="card-title">Net (G_)</span><span class="card-sub">Net (G_) — Peer-to-Peer Networking</span><span class="card-text">G_ is the network layer. The engine is P2P-first — no dedicated server required for small matches. Authority is distributed: every player is a peer.</span><span class="card-meta">32 min</span></a>
 <a class="card" href="engine-resource.html"><span class="card-title">Resource (W_)</span><span class="card-sub">Resource (W_) — WAD File Loading</span><span class="card-text">W_ reads resource files and caches them so the same lump isn't read twice.</span><span class="card-meta">10 min</span></a>
 <a class="card" href="engine-memory.html"><span class="card-title">Memory (Z_)</span><span class="card-sub">Memory (Z_) — Zone / Heap Allocator</span><span class="card-text">Z_ is the engine's unified memory port. The entire engine allocates memory through I_MemoryPort — the rest of the code does not know whether the backing store is the JVM heap, a custom zone,…</span><span class="card-meta">7 min</span></a>
 </div>
@@ -489,8 +533,8 @@ licence terms are recorded in <a href="demo-assets.html">docs/DEMO_ASSETS.md</a>
 <div class="cards">
 <a class="card" href="assets.html"><span class="card-title">Assets and licensing</span><span class="card-sub">Game Data and Asset Licensing</span><span class="card-text">Policy document. What game data OpenFPS may legally ship, what technical shape it must be in, and how it reaches a developer's machine.  Every asset entering this repository must satisfy §3…</span><span class="card-meta">22 min</span></a>
 <a class="card" href="demo-assets.html"><span class="card-title">Demo asset manifest</span><span class="card-sub">Demo Asset Manifest</span><span class="card-text">Provenance record for the first-person demo's model set: one weapon and eight level pieces, plus a generated fallback room.  The binaries are not in git — docs/ASSETS.md § 6, enforced by…</span><span class="card-meta">10 min</span></a>
-<a class="card" href="memory.html"><span class="card-title">Memory: what OpenFPS reserves, what it churns</span><span class="card-sub">Memory: what OpenFPS reserves, what it churns</span><span class="card-text">Measurement document. How many bytes the engine pre-allocates, how many it allocates per frame and per tic, which of the Javadoc's allocation-freedom claims survive contact with a running…</span><span class="card-meta">33 min</span></a>
-<a class="card" href="wasm.html"><span class="card-title">WebAssembly</span><span class="card-sub">WebAssembly — can OpenFPS run in a browser?</span><span class="card-text">Feasibility assessment. What a browser target would cost, which of the existing ports survive it, which two things in the architecture it breaks, and whether it is worth doing yet.  Nothing…</span><span class="card-meta">29 min</span></a>
+<a class="card" href="memory.html"><span class="card-title">Memory: what OpenFPS reserves, what it churns</span><span class="card-sub">Memory: what OpenFPS reserves, what it churns</span><span class="card-text">Measurement document. How many bytes the engine pre-allocates, how many it allocates per frame and per tic, which of the Javadoc's allocation-freedom claims survive contact with a running…</span><span class="card-meta">34 min</span></a>
+<a class="card" href="wasm.html"><span class="card-title">WebAssembly</span><span class="card-sub">WebAssembly — can OpenFPS run in a browser?</span><span class="card-text">Feasibility assessment. What a browser target would cost, which of the existing ports survive it, which three things in the architecture it breaks, and whether it is worth doing yet. …</span><span class="card-meta">43 min</span></a>
 </div>
 </section>
 <footer class="pagefoot"><p>Source: <a class="ext" rel="noopener noreferrer" target="_blank" href="https://github.com/nicholashutter/OpenFPS/blob/main/README.md">README.md</a>. This page is generated — edit the Markdown, not the HTML.</p></footer>

@@ -109,7 +109,7 @@
 <li class="lv2"><a href="#16-style-note-for-anyone-copying-from-this-document">16. Style note for anyone copying from this document</a></li>
 </ul></details></aside>
 <main id="doc">
-<p class="crumb"><span class="tag">Packages</span><span class="sep">/</span><code>engine/src/main/java/com/openfps/engine/render/README.md</code><span class="sep">/</span>51 min read</p>
+<p class="crumb"><span class="tag">Packages</span><span class="sep">/</span><code>engine/src/main/java/com/openfps/engine/render/README.md</code><span class="sep">/</span>52 min read</p>
 <h1 id="render-r_--multi-threaded-software-triangle-rasterizer">Render (R_) — Multi-threaded Software Triangle Rasterizer<a class="anchor" href="#render-r_--multi-threaded-software-triangle-rasterizer" aria-label="Permalink">#</a></h1>
 <blockquote>
 <p>R_ takes the current game state and produces a finished framebuffer. It is
@@ -122,25 +122,37 @@ platform adapter uploads the finished buffer; R_ never presents.</p>
 <tbody>
 <tr><td><strong>State</strong></td><td>SHIPPING</td></tr>
 <tr><td><strong>Phase</strong></td><td><code>PLAN.md</code> Phase 5 — done, pending polish (§ 3.3)</td></tr>
-<tr><td><strong>Tests</strong></td><td>409</td></tr>
+<tr><td><strong>Tests</strong></td><td>516 — counted, not remembered: <code>gradlew :engine:test --tests 'com.openfps.engine.render.*'</code></td></tr>
 <tr><td><strong>Registered</strong></td><td>R_ via <code>RenderSubsystem</code>. Which port it gets depends on the caller: <code>EngineMain</code>'s own default is <code>NullRenderPort</code> (the headless path), and the real <code>SoftwareRenderPort</code> is supplied through <code>I_RenderPortFactory</code> by <code>DesktopLauncher</code>. So the running desktop app renders; <code>EngineMain.main</code> alone does not</td></tr>
-<tr><td><strong>Verified</strong></td><td>2026-07-28</td></tr>
+<tr><td><strong>Verified</strong></td><td>2026-07-30</td></tr>
 </tbody>
 </table></div>
 <p><strong>Built.</strong> The full software triangle rasterizer — <code>Framebuffer</code>, <code>Camera</code>,
 <code>TriangleClipper</code>, <code>Rasterizer</code>, <code>SpanRenderer</code>, <code>TextureSampler</code>, <code>MipChain</code>,
-<code>ModelFormat</code>, <code>Scene</code>, <code>Rgba</code>, <code>Mat4</code>, <code>Vec3</code> — drawing two passes per frame:
-world, then the view-space viewmodel after a depth clear. Measured p50 4.9 ms at
-1280×720 on 8 workers, with output bit-identical across every worker count.</p>
-<p><strong>Not built.</strong> Two polish items, both in § 14. (1) A bilinear/nearest quality
-toggle — <code>TextureSampler</code> is unconditionally bilinear and no config field
-exists. (2) An internal render-resolution cap independent of window size; a
-<code>RenderResolution</code> class was written for it but never landed, and needs
-re-applying against the batched pipeline.</p>
+<code>ModelFormat</code>, <code>Scene</code>, <code>Rgba</code>, <code>Mat4</code>, <code>Vec3</code>, <code>OutlinePass</code> — drawing world
+instances, then the outline pass, then the translucent phase, then the
+view-space viewmodel after a depth clear. Measured p50 4.9 ms at 1280×720 on 8
+workers. The internal render-resolution cap <strong>has landed</strong> as <code>RenderMode</code> in
+<code>:gdxshared</code> (§ 3 Resolution) — the <code>RenderResolution</code> class this block used to
+say was written-but-never-applied is gone; do not go looking for it.</p>
+<p><strong>Not built.</strong> One polish item (§ 14): a bilinear/nearest quality toggle.
+<code>TextureSampler</code> is unconditionally bilinear and no config field exists.</p>
+<p><strong>A hole in the bit-identity net, and it is in the newest code.</strong> Output is
+asserted bit-identical between the serial and pooled paths for backface cull,
+multi-instance, many-instance and tagged (outline) frames — but <strong>not for the
+translucent phase</strong>. <code>SoftwareRenderPortTranslucentTest</code> only ever renders on
+the serial path, and <code>SoftwareRenderPortTest</code>'s bit-identity group never builds
+a translucent scene. So the blanket claim "bit-identical across every worker
+count" is true of everything it covers and <strong>unverified for translucency</strong>,
+which is exactly where a blend's read-modify-write makes tile ownership
+load-bearing. A pooled-equals-serial case over a translucent scene is the
+cheapest way to close it.</p>
 <p><strong>Blocked on.</strong> Nothing for the renderer itself. § 11(b), the WAD subsystem's
 remaining role, is still open but no longer blocks it.</p>
-<p><strong>Next step.</strong> The bilinear toggle. Bilinear alone costs 2.9× the entire rest of
-the span loop (§ 9, <code>docs/ASSETS.md</code> § 2), so it is the cheapest path to 1080p60.</p>
+<p><strong>Next step.</strong> The translucent bit-identity case above — it is small, and it
+guards an invariant the rest of this document leans on. Then the bilinear
+toggle: bilinear alone costs 2.9× the entire rest of the span loop (§ 9,
+<code>docs/ASSETS.md</code> § 2), so it is the cheapest path to 1080p60.</p>
 <p><strong>This document is the Phase 5 specification.</strong> <code>docs/ASSETS.md</code> § 2 is the
 canonical statement of the render target; this file is its implementation
 spec. Where the two disagree, <code>docs/ASSETS.md</code> wins and this file is the bug.</p>
@@ -323,11 +335,27 @@ the depth buffer is a memset the JIT turns into the fastest path available.
 </li>
 </ul>
 <h3 id="resolution">Resolution<a class="anchor" href="#resolution" aria-label="Permalink">#</a></h3>
-<p>Not fixed. The framebuffer is allocated at the surface size reported by
-<code>I_FrameCallback.onSurfaceReady(width, height)</code> and reallocated on
-<code>onResize(width, height)</code>. <code>docs/ASSETS.md</code> § 2 budgets 1080p at 2× overdraw;
-rendering at a lower internal resolution and letting the adapter scale is a
-legitimate quality knob, not a fixed constraint.</p>
+<p>Not fixed, and <strong>no longer tied to the surface size</strong> — that knob is now built.
+The framebuffer is allocated at the size <code>I_FrameCallback.onSurfaceReady(width,
+height)</code> reports <em>after</em> <code>RenderMode</code> (in <code>:gdxshared</code>) has applied a ceiling to
+the short edge, and reallocated the same way on <code>onResize(width, height)</code>. The
+adapter scales the finished frame up to the real surface.</p>
+<p><code>RenderMode</code> is <code>P480</code> (the default), <code>P720</code>, or <code>NATIVE</code>, named for the short
+edge in landscape. Two properties matter to anything reading this file:</p>
+<ul>
+<li>
+<p>It is a <strong>ceiling, never a target</strong>. A surface already shorter than the
+ceiling renders at its own size; the renderer never enlarges to meet a number.</p>
+</li>
+<li>
+<p>The renderer itself is unchanged by it. A smaller framebuffer is just a
+smaller framebuffer — the tile ownership rule, the bit-identity invariant and
+every formula below hold at any size.</p>
+</li>
+</ul>
+<p><code>docs/ASSETS.md</code> § 2 budgets 1080p at 2× overdraw and that is still the
+canonical target; 480p is the <em>default</em> because fill cost is measured — 1080p
+costs 10.3 ms per frame in fill alone, before a triangle is considered.</p>
 <blockquote>
 <p><strong>Decided — <code>Framebuffer</code> allocates its own <code>int[]</code> and <code>float[]</code> directly,
 once at <code>init</code> and again only on <code>resize</code>, not through <code>I_MemoryPort</code>.

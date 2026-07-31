@@ -55,7 +55,7 @@ import java.util.UUID;
  *  - Xerial SQLite JDBC: https://github.com/xerial/sqlite-jdbc
  *  - SQLite WAL mode: https://www.sqlite.org/wal.html
  *  - Room (Android) is the future Android-side implementation of the
- *    same port interface — see {@code hal.adapter.mobile} (Phase 3+).
+ *    same port interface — see {@code RoomUserProfilePort} in {@code :android}.
  */
 public final class SqliteUserProfilePort implements I_UserProfilePort
 {

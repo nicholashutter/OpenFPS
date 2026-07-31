@@ -67,6 +67,7 @@
 <ul>
 <li class="lv2"><a href="#status">Status</a></li>
 <li class="lv2"><a href="#what-lives-here">What lives here</a></li>
+<li class="lv2"><a href="#why-the-voice-limit-is-not-in-here">Why the voice limit is not in here</a></li>
 <li class="lv2"><a href="#the-port-is-six-methods-and-that-is-the-design">The port is six methods, and that is the design</a></li>
 <li class="lv2"><a href="#where-the-sound-comes-from--the-licence-question-answered">Where the sound comes from — the licence question, answered</a></li>
 <li class="lv2"><a href="#two-pieces-of-arithmetic-worth-knowing-about">Two pieces of arithmetic worth knowing about</a></li>
@@ -77,7 +78,7 @@
 <li class="lv2"><a href="#files-and-tests">Files and tests</a></li>
 </ul></details></aside>
 <main id="doc">
-<p class="crumb"><span class="tag">Packages</span><span class="sep">/</span><code>engine/src/main/java/com/openfps/engine/audio/README.md</code><span class="sep">/</span>10 min read</p>
+<p class="crumb"><span class="tag">Packages</span><span class="sep">/</span><code>engine/src/main/java/com/openfps/engine/audio/README.md</code><span class="sep">/</span>14 min read</p>
 <h1 id="audio-s_--sound">Audio (S_) — Sound<a class="anchor" href="#audio-s_--sound" aria-label="Permalink">#</a></h1>
 <blockquote>
 <p>The engine says "make this noise". Everything else — device, format, file,
@@ -87,40 +88,123 @@ mixer — is behind the port.</p>
 <div class="tablewrap"><table>
 <thead><tr><th>Field</th><th>Value</th></tr></thead>
 <tbody>
-<tr><td><strong>State</strong></td><td>SHIPPING (one sound)</td></tr>
+<tr><td><strong>State</strong></td><td>SHIPPING (five sounds)</td></tr>
+<tr><td><strong>Tests</strong></td><td>81 — counted, not remembered: <code>gradlew :engine:test --tests 'com.openfps.engine.audio.*'</code></td></tr>
 <tr><td><strong>Phase</strong></td><td><code>PLAN.md</code> Phase 6 — started, deliberately narrow</td></tr>
-<tr><td><strong>Tests</strong></td><td>42 (<code>:engine</code> 39, <code>:gdxshared</code> 3 groups over 8)</td></tr>
 <tr><td><strong>Registered</strong></td><td>S_ via <code>AudioSubsystem</code>, port supplied by <code>I_AdapterFactory.getAudioPort()</code></td></tr>
-<tr><td><strong>Verified</strong></td><td>2026-07-29</td></tr>
+<tr><td><strong>Verified</strong></td><td>2026-07-30</td></tr>
 </tbody>
 </table></div>
 <p><strong>Built.</strong> <code>I_AudioPort</code> and <code>SoundId</code>; <code>AudioVolume</code> (the clamp); <code>BlasterSound</code>
-and <code>WavAudio</code> (synthesis and container); <code>NullAudioPort</code> (silent, recording);
-<code>GdxAudioPort</code> in <code>:gdxshared</code> (real, lazy, degrades). The weapon fires audibly
-in the demo on desktop and Android, from <code>DemoGameplayPort.fireIfRequested</code>.</p>
-<p><strong>Not built.</strong> Positional audio, music, a mixer, a voice limit, <code>SoundEngine</code>,
-<code>SoundEmitter</code>, <code>MusicPlayer</code>, <code>PcmLoader</code>. None of it exists and none of it is
-half-started. See "What this is not".</p>
+(the player's weapon), <code>CarbineSound</code> (a bot's), <code>SuperBlasterSound</code> (the player's
+weapon while a kill streak is being spent), <code>PowerChimeSound</code> (that reward
+arriving, and the same chime backwards when it goes), <code>SoundBank</code> (which id is
+which) and <code>WavAudio</code> (the container); <code>NullAudioPort</code> (silent, recording);
+<code>GdxAudioPort</code> in <code>:gdxshared</code> (real, lazy, degrades). The player's weapon fires
+audibly from <code>DemoGameplayPort.fireIfRequested</code> and return fire from
+<code>spawnIncomingFire</code>, on desktop and Android.</p>
+<p><strong>The three reward sounds are the prediction above coming true.</strong> The next step
+used to read "a hit confirmation would now cost one enum value, one synth class
+and one branch". Three sounds landed instead and cost exactly that each — two
+synth classes, three enum values, three branches in <code>SoundBank</code>, <strong>no adapter
+change at all</strong>. That is the seam working.</p>
+<p>They also set two rules the next sound should read first:</p>
+<ul>
+<li>
+<p><strong>A sound may be required to be the SAME as another one.</strong> <code>CarbineSound</code> exists
+to be told apart from the player's weapon and argues at length that the two must
+therefore sit in different families. <code>SuperBlasterSound</code> has the opposite
+requirement — the player has to hear their own weapon upgraded rather than
+replaced — so it is built <em>out of</em> <code>BlasterSound</code>'s sweep, with its endpoints
+derived from that class's constants rather than written down again.</p>
+</li>
+<li>
+<p><strong>Two ids may share one synth class when they are one sound in two
+directions.</strong> <code>PowerChimeSound</code> generates the award and the expiry from one
+generator with its two notes swapped, because rising against falling is the
+whole message and two classes would have let them drift into being merely
+different noises. <code>SoundBankTest</code> still holds: they are different bytes and
+different file names.</p>
+</li>
+</ul>
+<p><strong>Voice limiting</strong> exists for return fire only, in <code>demo/BotFireVoices</code>: one
+voice per tic and a six-tic minimum interval. It is not in this package and not
+behind the port, deliberately — see § "Why the voice limit is not in here".</p>
+<p><strong>Not built.</strong> Positional audio, music, a mixer, <code>SoundEngine</code>, <code>SoundEmitter</code>,
+<code>MusicPlayer</code>, <code>PcmLoader</code>. None of it exists and none of it is half-started.
+See "What this is not".</p>
 <p><strong>Blocked on.</strong> Nothing. The source-format question that used to block this
-package is settled <em>for the demo</em> by generating the sound (§ "Where the sound
+package is settled <em>for the demo</em> by generating the sounds (§ "Where the sound
 comes from"); it remains genuinely open for a real sound bank, and that is
 recorded rather than pretended away.</p>
-<p><strong>Next step.</strong> Nothing is queued. The next honest piece of work is a second
-sound — a hit confirmation or a bot's shot — because one sound cannot tell you
-whether the port's shape is right.</p>
+<p><strong>What the second sound found.</strong> The next step used to read: "one sound cannot
+tell you whether the port's shape is right." It was worth doing, and the answer
+is that <code>I_AudioPort</code> and <code>SoundId</code> were both fine and <strong>the seam between the
+synthesis and the adapter did not exist</strong>. <code>GdxAudioPort.stage</code> named
+<code>BlasterSound</code> outright, so a second id staged, loaded, warmed and played — as
+the player's own weapon. Green build, working audio, and the only symptom
+audible rather than assertable. <code>SoundBank</code> is that missing seam: the engine
+answers <em>what a sound is</em>, an adapter answers <em>how this platform plays bytes</em>,
+and adding a third sound now touches no adapter at all. <code>SoundBankTest</code> asserts
+over <code>SoundId.values()</code> that no two ids share a buffer or a file name, which is
+the property whose absence made the bug invisible.</p>
+<p><strong>Next step.</strong> Nothing is queued. A hit confirmation is the obvious next sound,
+and the reward sounds have just demonstrated the price: one enum value, one synth
+class, one branch in <code>SoundBank</code>, and nothing outside <code>:engine</code>.</p>
 <h2 id="what-lives-here">What lives here<a class="anchor" href="#what-lives-here" aria-label="Permalink">#</a></h2>
 <div class="code"><pre><code>audio/
 ├── port/
 │   ├── I_AudioPort.java    the contract: init, shutdown, play, stopAll,
 │   │                       setMasterVolume, masterVolume, isAudible
-│   └── SoundId.java        the closed set of sounds — one, today
+│   └── SoundId.java        the closed set of sounds — five, today
 ├── synth/
-│   ├── BlasterSound.java   generates the weapon sound as 16-bit PCM
+│   ├── BlasterSound.java   the player's weapon: a pitch sweep
+│   ├── CarbineSound.java   a bot's weapon: a noise crack, and NOT a sweep
+│   ├── SuperBlasterSound.java  the player's weapon on a kill streak: the SAME
+│   │                       sweep with an octave of weight under it
+│   ├── PowerChimeSound.java    two notes: rising when the reward lands,
+│   │                       falling when it goes. One class, one message
+│   ├── SoundBank.java      which SoundId is which sound, as playable bytes
 │   └── WavAudio.java       wraps PCM in a RIFF/WAVE container
 ├── AudioVolume.java        the one definition of a legal volume
 └── adapter/
     └── NullAudioPort.java  silent, and counts what it was asked to play
 </code></pre></div>
+<p><code>SoundBank</code> is the seam an adapter goes through, and the only one. An adapter
+must name no synthesis class: see § "What the second sound found" above for the
+bug that rule was written from.</p>
+<h2 id="why-the-voice-limit-is-not-in-here">Why the voice limit is not in here<a class="anchor" href="#why-the-voice-limit-is-not-in-here" aria-label="Permalink">#</a></h2>
+<p>Because it is a rule about <strong>this game's opponents</strong>, not about sound. The port's
+contract is explicit that overlapping plays overlap in the mix — "firing again
+before the last shot has decayed must not cut it off. That is what a weapon
+sounds like" — and both shipped backends do exactly that. A port that silently
+dropped plays would be one nobody could reason about.</p>
+<p>But seven bots roll for the trigger independently every tic their weapon is
+ready, and two things follow that a single shooter cannot do. Several can fire on
+one tic, and <strong>copies of one generated buffer started on the same tic are the
+same waveform added to itself</strong> — identical samples, perfectly in phase — so
+seven of them is one shot at seven times the amplitude, which clips. And the
+long-run rate is bounded by nothing audible, so a burst becomes texture rather
+than a warning.</p>
+<p><code>demo/BotFireVoices</code> owns both numbers, and both are derived:</p>
+<ul>
+<li>
+<p><strong>One voice per tic.</strong> The second copy is not a smaller contribution, it is a
+doubling; there is no second shot in there to hear.</p>
+</li>
+<li>
+<p><strong>Six tics minimum</strong>, so ten a second. <code>CarbineSound.DURATION_MS</code> is 120 ms,
+which at 60 Hz is 7.2 tics, so six admits at most <code>ceil(7.2 / 6) = 2</code>
+overlapping voices — enough that "more than one of them is shooting" is
+audible, and two at <code>PEAK</code> 0.45 reach 0.90, inside full scale. The measured
+room fires once every 18 tics between the seven of them, so the gate only ever
+closes on a burst; a limiter that shaped the <em>average</em> would be changing the
+demo's balance from the audio layer.</p>
+</li>
+</ul>
+<p>The gate is a pure function of the tic index. No wall clock, for the reason
+<code>BotRng</code> gives — a gate that opened on different tics on two peers would be a
+divergence in the one layer nobody would look in.</p>
 <p>The real backend is <strong>not here</strong>, and cannot be: it needs <code>Gdx.audio</code>, and
 <code>:engine</code> imports no libGDX. <code>GdxAudioPort</code> lives in <code>:gdxshared</code> and is wired in
 by <code>GdxAdapterFactory</code> (<code>:desktop</code>) and <code>AndroidAdapterFactory</code> (<code>:android</code>).
@@ -261,10 +345,14 @@ why CI can assert the cadence without a sound card.</p>
 </li>
 </ul>
 <h2 id="what-this-is-not">What this is not<a class="anchor" href="#what-this-is-not" aria-label="Permalink">#</a></h2>
-<p><strong>There is no mixer, no voice limit, no positional audio and no music.</strong> Not
-"not yet, see the formulae below" — not at all. The port cannot express a
-position, <code>SoundId</code> carries no volume or pitch, and nothing here allocates a
-mixing buffer.</p>
+<p><strong>There is no mixer, no positional audio and no music.</strong> Not "not yet, see the
+formulae below" — not at all. The port cannot express a position, <code>SoundId</code>
+carries no volume or pitch, and nothing here allocates a mixing buffer.</p>
+<p><strong>There is no voice limit <em>in this package</strong></em> either, and that is a different
+statement from there being none: return fire is capped by <code>demo/BotFireVoices</code>
+above the port, for the reason § "Why the voice limit is not in here" gives. What
+does not exist is any notion of voices <em>inside</em> the audio layer — no count of what
+is playing, no priority, no culling.</p>
 <p>That is a narrowing, and it was chosen. A 32-voice mixer with distance
 attenuation is a real piece of work, and building the <em>interface</em> for one before
 building the thing is how this package spent several phases as eighty lines of
@@ -312,10 +400,13 @@ no interface pretends otherwise.</p>
 <thead><tr><th>File</th><th>Tests</th></tr></thead>
 <tbody>
 <tr><td><code>port/I_AudioPort.java</code></td><td>contract exercised via <code>NullAudioPortTest</code></td></tr>
-<tr><td><code>port/SoundId.java</code></td><td>—</td></tr>
+<tr><td><code>port/SoundId.java</code></td><td>covered by <code>SoundBankTest</code>, which iterates <code>values()</code></td></tr>
 <tr><td><code>AudioVolume.java</code></td><td><code>AudioVolumeTest</code> — 8, including the NaN one-liner trap</td></tr>
 <tr><td><code>synth/BlasterSound.java</code></td><td><code>BlasterSoundTest</code> — 12</td></tr>
+<tr><td><code>synth/CarbineSound.java</code></td><td><code>CarbineSoundTest</code> — well formed, reproducible, and measurably not a pitch sweep</td></tr>
+<tr><td><code>synth/SoundBank.java</code></td><td><code>SoundBankTest</code> — no two ids share a buffer or a file name</td></tr>
 <tr><td><code>synth/WavAudio.java</code></td><td><code>WavAudioTest</code> — 12, header read back independently</td></tr>
+<tr><td><code>demo/BotFireVoices.java</code></td><td><code>BotFireVoicesTest</code> — the cap, the headroom, and the first shot</td></tr>
 <tr><td><code>adapter/NullAudioPort.java</code></td><td><code>NullAudioPortTest</code> — 10, incl. concurrent play</td></tr>
 <tr><td><code>:gdxshared</code> <code>GdxAudioPort.java</code></td><td><code>GdxAudioPortTest</code> — 8, all of them the no-device path</td></tr>
 <tr><td><code>demo/DemoGameplayPort</code></td><td><code>DemoGameplayPortAudioTest</code> — 9, cadence and silence</td></tr>

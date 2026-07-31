@@ -89,7 +89,7 @@ anything needing a device or a native library lives in a platform module.</p>
 <tbody>
 <tr><td><strong>State</strong></td><td>SHIPPING</td></tr>
 <tr><td><strong>Phase</strong></td><td>1.4, 1.5 complete</td></tr>
-<tr><td><strong>Tests</strong></td><td>110</td></tr>
+<tr><td><strong>Tests</strong></td><td>114 — counted, not remembered: <code>gradlew :engine:test --tests 'com.openfps.engine.hal.*'</code></td></tr>
 <tr><td><strong>Registered</strong></td><td>I_ via <code>HalSubsystem</code></td></tr>
 <tr><td><strong>Verified</strong></td><td>2026-07-28</td></tr>
 </tbody>
@@ -103,11 +103,14 @@ anything needing a device or a native library lives in a platform module.</p>
 platform-free and <code>:desktop</code> decorates it (§ "Where the window and input actually
 live").</p>
 <p><strong>Not built.</strong> Nothing outstanding for these phases. There is no <code>mobile/</code>
-adapter family; <code>I_UserProfilePort</code> names <code>hal.adapter.mobile</code> as where a Room
-implementation will go, not as somewhere that exists.</p>
+adapter family and there is not going to be one: an Android adapter needs the
+Android SDK, and <code>:engine</code> must stay buildable without it. The Room-backed
+profile store ships as <code>RoomUserProfilePort</code> in the <code>:android</code> module.</p>
 <p><strong>Blocked on.</strong> Nothing.</p>
-<p><strong>Next step.</strong> Android — the second platform is what proves the port set, and it
-is the only named backend with nothing written for it (<code>PLAN.md</code> § 6).</p>
+<p><strong>Next step.</strong> Nothing outstanding. Android was the open item and it <strong>shipped</strong>
+— the second platform did what it was supposed to do here, which was prove the
+port set by being implemented against it. It lives in <code>:android</code>, not under
+<code>hal/adapter/</code>, for the reason given below.</p>
 <h2 id="layout">Layout<a class="anchor" href="#layout" aria-label="Permalink">#</a></h2>
 <div class="code"><pre><code>hal/
 ├── port/                interfaces + one value type — core depends on these
@@ -131,9 +134,12 @@ is the only named backend with nothing written for it (<code>PLAN.md</code> § 6
 <p><code>InputState</code> is the one non-interface in <code>port/</code> on purpose: it is the value the
 input port hands back, and it has no platform in it, so it belongs with the
 contract rather than with any adapter.</p>
-<p>There is no <code>mobile/</code> directory. Android is a stated target (<code>PLAN.md</code> § 6) but
-nothing has been written for it — <code>I_UserProfilePort</code> names <code>hal.adapter.mobile</code>
-as where its Room implementation will go, not as somewhere that exists.</p>
+<p>There is no <code>mobile/</code> directory, and that is now a settled decision rather than
+a gap. Android <strong>is</strong> built and playable, but it lives in the <code>:android</code> module:
+<code>AndroidAdapterFactory</code>, <code>AndroidWindowPort</code>, <code>AndroidInputPort</code> and the
+Room-backed <code>RoomUserProfilePort</code>. An adapter under <code>hal/adapter/</code> would drag the
+Android SDK into <code>:engine</code>, which must keep building and testing headless with
+no SDK present. Same reasoning as the window and input ports below.</p>
 <h2 id="where-the-window-and-input-actually-live">Where the window and input actually live<a class="anchor" href="#where-the-window-and-input-actually-live" aria-label="Permalink">#</a></h2>
 <p><strong><code>hal/adapter/desktop/</code> contains no window and no input.</strong> It holds
 <code>DesktopAdapterFactory</code>, <code>DesktopDatagramPort</code> and <code>DesktopTimePort</code> — a real

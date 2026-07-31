@@ -5,24 +5,26 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Java Version](https://img.shields.io/badge/Java-17%20LTS-ED8B00.svg)](https://adoptium.net/)
 [![Gradle](https://img.shields.io/badge/Gradle-8.13-02303A.svg)](https://gradle.org/)
-[![Tests](https://img.shields.io/badge/tests-1524%20passing-brightgreen.svg)](BUILD.md)
+[![Tests](https://img.shields.io/badge/tests-2339%20passing-brightgreen.svg)](BUILD.md)
 [![Status](https://img.shields.io/badge/status-pre--alpha-blue.svg)](PLAN.md)
 
 ## Overview
 
 OpenFPS is a from-scratch FPS game engine written in Java 17, designed around the original Doom subsystem architecture (D_ / P_ / R_ / S_ / G_ / W_ / Z_ / I_) adapted for modern JVM targets.
 
-The engine is an **event queue processor**: subsystems communicate by publishing events to a shared bus, and a pool of N dedicated worker threads (N = logical CPU count / 2) consumes events and dispatches them to the target subsystem. Each subsystem is its own state machine. Every allocation goes through a single memory port.
+The engine is an **event queue processor**: subsystems communicate by publishing events to a shared bus, and a pool of N dedicated worker threads (N = logical processors − 1) consumes events and dispatches them to the target subsystem. Each subsystem is its own state machine. Every allocation goes through a single memory port.
 
-**Currently in pre-alpha, and it is a game now rather than a demo.** A blocky title screen, a single-player match against seven bots that patrol and shoot back, hitscan combat with a crosshair and outlined opponents, and a UDP transport that two live processes have been measured exchanging. It runs on a phone: the same rasterizer, the same match, driven by a thumbstick. 1524 tests passing, Checkstyle clean, build green.
+**Currently in pre-alpha, and it is a game now rather than a demo.** A blocky title screen, a single-player match against seven bots that patrol, take cover behind solid geometry and shoot back with visible tracers, hitscan combat with a crosshair and red-outlined opponents, wall collision, respawn and scoring, and a three-kill streak that buys a double-damage super blaster. Every sound is synthesised at runtime, so the repository ships no audio asset. It runs on a phone at parity: the same rasterizer, the same match, driven by a thumbstick — or by a gamepad on either platform. Two processes exchange inputs over UDP and each draws the other's body. 2339 tests passing, Checkstyle clean, build green.
 
-What is *not* yet true: remote players are not simulated into bodies you can see, and the Android build boots the engine but never puts the world on screen. Both are stated precisely in [AGENTS.md](AGENTS.md).
+What is *not* yet true: **remote peers are visible but not shootable.** Each peer runs its own `Match`, and `Match` has never heard of a remote player, so hits, respawns and scores are not replicated. That single gap is stated precisely — with the two measured divergences it causes — in [AGENTS.md](AGENTS.md) and
+[`net/README.md`](engine/src/main/java/com/openfps/engine/net/README.md).
 
 ## Key Design Decisions
 
 - **Event-driven architecture** — every subsystem interaction is an event; the worker pool dispatches them
-- **Multi-threaded by default** — N = `logicalProcessorCount / 2` hot worker threads, pre-started at boot
+- **Multi-threaded by default** — N = `logicalProcessorCount − 1` hot worker threads, pre-started at boot, one processor left for the game loop and the platform frame pump. Override with `-Dopenfps.workers=N`
 - **Software rendering** — a multi-threaded triangle rasterizer. The GPU is used only to blit one finished framebuffer per frame
+- **Render size is decoupled from surface size** — `RenderMode` P480 (default) / P720 / NATIVE names the short edge as a *ceiling*, never a target, and never upscales past native
 - **Per-subsystem state machines** — `UNINITIALIZED → READY → ERROR → SHUTDOWN`, no shared state, no silent failures
 - **Unified memory port** — one interface, two backends (`JvmMemoryPort` for GC-managed, `ZoneMemoryPort` for bulk-free)
 - **Configurable frame rate** — 30 / 60 / 120 Hz, picked at boot via `--fps=N`, with drift-correction math
@@ -105,8 +107,8 @@ To look at the renderer without a window, both preview harnesses are headless:
 | Module | Contains | Notes |
 |---|---|---|
 | `:engine` | The whole engine: core, memory, HAL ports, gameplay, render, net, resource, audio, demo | Pure Java 17, **no platform dependencies**. Builds and tests headless anywhere |
-| `:gdxshared` | The libGDX code that is not platform-specific — framebuffer presentation, the welcome screen, the UI state machine, the input accumulator | Depends on libGDX **core** and no backend. Both launchers use it; neither writes it twice |
-| `:desktop` | libGDX LWJGL3 backend — window, mouse and keyboard, `DesktopLauncher` | |
+| `:gdxshared` | The libGDX code that is not platform-specific — framebuffer presentation, the render-mode ceiling, the menu / settings / game-over screens and the UI state machine, the input accumulator and analog stick, the debug overlay and FPS meter, the accessibility and render settings, the generated-audio port | Depends on libGDX **core** and no backend. Both launchers use it; neither writes it twice |
+| `:desktop` | libGDX LWJGL3 backend — window, mouse and keyboard, GLFW gamepad, UDP peer args, `DesktopLauncher` | |
 | `:tools` | Build-time only: glTF → `ModelFormat` converter, mip generation, headless preview harnesses | Nothing depends on it. `verifyToolsIsolation` fails the build if it ever reaches a runtime classpath |
 | `:android` | libGDX Android backend — `AndroidLauncher`, the touch control scheme, Room-backed profile storage | **Playable.** Only included when an Android SDK is present; without `ANDROID_HOME`, `settings.gradle.kts` silently skips it, so a green `gradlew build` does not prove `:android` compiles |
 
@@ -120,16 +122,25 @@ adapter uploads it as a single texture.
 - **Geometry** — near-plane Sutherland-Hodgman clipping in homogeneous space, backface cull, perspective-correct interpolation
 - **Shading** — mipmapped bilinear sampling with the −0.5 texel-centre offset; baked vertex lighting, no dynamic lights
 - **Threading** — triangles are binned to 64×64 tiles; each worker owns its tiles outright and is the only writer to those regions of the colour and depth buffers, so the depth buffer needs no synchronisation
-- **Two passes per frame** — the world, then the view-space viewmodel with a depth clear between them, which is what stops the held weapon clipping through walls
+- **Two passes per frame, and two phases between them** — world instances, then the outline pass (which needs the finished id buffer), then translucent instances sorted back-to-front and depth-tested but never depth-written, then a depth clear, then the view-space viewmodel. The depth clear is what stops the held weapon clipping through walls; the ordering is why the weapon draws *over* outlines rather than under them
+- **Accessibility is a first-class setting, not a debug flag** — hovered enemies take a thin red outline, on by default, toggled in its own options menu (`-Dopenfps.targetOutline=false` opts out)
 
 **Measured**, not estimated, at 1280x720 on the 295-instance demo room
 (Intel Core Ultra 7 155H): **p50 4.9 ms** at 8 workers, 3.9 ms at 16, against
 22.1 ms serial. Output is bit-identical across every worker count — the tile
 ownership rule makes the parallel result reproducible, not merely close.
 
-720p is the shipping target and the number is measured rather than chosen:
-1080p costs 10.3 ms per frame in fill alone, which consumes the entire renderer
-budget inside a 16.7 ms frame before a single triangle is considered.
+**Render size is decoupled from surface size.** `RenderMode` picks a ceiling on
+the short edge — `P480` (default), `P720`, or `NATIVE` — and the framebuffer is
+allocated to that, then blitted up to whatever the window or phone panel
+actually is. It is a ceiling and never a target: a surface already smaller than
+the ceiling is rendered at its own size rather than being enlarged. Set it with
+`-Dopenfps.renderMode=480p|720p|native`, or `-RenderMode` on either run script.
+
+The default is 480p because the cost is fill-bound and measured: 1080p costs
+10.3 ms per frame in fill alone, which consumes the entire renderer budget
+inside a 16.7 ms frame before a single triangle is considered. A phone panel is
+native-3k and would pay that several times over.
 
 [docs/ASSETS.md](docs/ASSETS.md) § 2 is the canonical render target;
 [`render/README.md`](engine/src/main/java/com/openfps/engine/render/README.md)
@@ -156,7 +167,7 @@ is the full specification — every formula, citation, and open question.
         v
   +-------------------+      +-------------------+
   |   Worker Pool     | ---> | SubsystemRegistry |
-  |  N = cores/2 hot  |      |  + CORE (shutdown)|
+  |  N = cores-1 hot  |      |  + CORE (shutdown)|
   |  threads, pre-    |      |  + P_ Gameplay    |
   |  started. Each:   |      |  + R_ Render      |
   |  take → dispatch  |      |  + S_ Audio       |
@@ -240,28 +251,48 @@ OpenFPS/
 │   │   ├── EngineSession.java non-blocking start/stop, used by the windowed launchers
 │   │   ├── GameLoop.java      FrameRate.java      GameConfig.java
 │   ├── common/                FixedMath (16.16 fixed-point), Constants, UserProfile
-│   ├── gameplay/              PlayerController, PlayerInputView, I_PlayerInput, ports
+│   ├── gameplay/              PlayerController, PhysicsWorld, Hitscan, Target, HitResult,
+│   │                          Match, MatchState, MatchMode, MatchSummary, Bot, BotPattern,
+│   │                          BotRng, BotSkill, BotShotLog, PlayerInputView, ports
 │   ├── render/                Framebuffer, Camera, Rasterizer, SpanRenderer, TriangleClipper,
-│   │                          TextureSampler, MipChain, ModelFormat, Scene, SoftwareRenderPort
-│   ├── demo/                  DemoScene, DemoGameplayPort — the playable demo's content
-│   ├── audio/                 port/I_AudioPort     adapter/NullAudioPort  (stub)
-│   ├── net/                   TicCmd, TicCmdBuffer, AckWindow, PeerConnection, RedundantSender
+│   │                          TextureSampler, MipChain, ModelFormat, Scene, Rgba,
+│   │                          OutlinePass, SoftwareRenderPort
+│   ├── demo/                  DemoScene, DemoModels, DemoEffects, DemoGameplayPort,
+│   │                          RemotePlayers, BotFireVoices, BlockCarbine — the demo's content
+│   ├── audio/                 port/{I_AudioPort, SoundId}  adapter/NullAudioPort
+│   │                          synth/ SoundBank + Blaster/Carbine/SuperBlaster/PowerChime
+│   │                          + WavAudio — every sound generated, none shipped
+│   ├── net/                   TicCmd, TicCmdBuffer, TicCmdEncoder, AckWindow, NetBytes,
+│   │                          PeerConnection, RedundantSender, NetSession
 │   ├── resource/              WadReader, LumpCache, MapLumpParser, WadFilePort (built, unregistered)
 │   ├── memory/                port/I_MemoryPort  adapter/{Jvm,Zone}MemoryPort  factory  exception
 │   └── hal/                   I_ Hardware abstraction
 │       ├── port/              I_TimePort, I_InputPort, I_WindowPort, I_FrameCallback, InputState,
 │       │                      I_DatagramPort, I_FilePort, I_SystemInfoPort, I_UserProfilePort
+│       ├── GameAction, InputBinding, ActionBindings — the controls table (no default key codes)
 │       └── adapter/           nulladapter/  sqlite/  desktop/ (time, datagram)
+├── gdxshared/src/main/java/com/openfps/gdx/     :gdxshared — libGDX core, no backend
+│                              FramebufferPresenter, InputAccumulator, AnalogStick,
+│                              RenderMode, RenderSettings, DebugSettings, DebugOverlay,
+│                              AccessibilitySettings, FpsMeter, ScoreOverlay, GdxAudioPort,
+│                              MainMenuScreen, SettingsScreen, GameOverScreen, UiStateMachine
 ├── desktop/src/main/java/com/openfps/desktop/   :desktop — libGDX LWJGL3
-│                              GdxWindowPort, GdxInputPort, InputAccumulator,
-│                              FramebufferPresenter, MainMenuScreen, DesktopLauncher
+│                              GdxWindowPort, GdxInputPort, GlfwGamepad, DesktopBindings,
+│                              GdxAdapterFactory, NetArgs, WindowIcon, DesktopLauncher
 ├── android/src/main/java/com/openfps/android/   :android — libGDX Android + Room
+│                              AndroidLauncher, AndroidWindowPort, AndroidInputPort,
+│                              TouchLayout, TouchOverlay, ApkModelSource, RoomUserProfilePort
 ├── tools/src/main/java/com/openfps/tools/       :tools — build-time only
 │                              GltfConverter, ModelBuilder, MipGenerator, ProceduralRoom,
 │                              DemoPreviewMain, RenderPreviewMain
 ├── assets/                    gitignored — staged glTF and converted .ofm models
+├── run-desktop.ps1            always-rebuild launcher; -RenderMode, -TwoPeers, -StartInGame
+├── run-android.ps1            always-rebuild launcher: build, install, launch, logcat
+├── .vscode/tasks.json         the same two launchers as VSCode tasks
 ├── docs/ASSETS.md             render target, budgets, measured costs
 ├── docs/DEMO_ASSETS.md        demo art provenance, licences, SHA-256s
+├── docs/MEMORY.md             pre-allocated vs dynamic allocation audit
+├── docs/WASM.md               WebAssembly port viability assessment
 ├── PLAN.md   STYLE.md   AGENTS.md   BUILD.md
 └── config/checkstyle/         Checkstyle configuration
 ```
@@ -286,15 +317,28 @@ not resolve. The Markdown stays the source of truth.
 
 ## Test Coverage
 
-**1524 tests, all passing** — 1131 `:engine`, 79 `:gdxshared`, 118 `:desktop`, 73 `:tools`, 123 `:android`.
-These are *distinct* tests. An earlier count said 1516 and was slightly wrong in a
-specific way: `:android:test` builds a debug and a release variant and runs the
-same suite twice, so a raw tally of its XML double-counts every Android test.
+**2339 tests, all passing** — 1625 `:engine`, 300 `:gdxshared`, 177 `:android`,
+164 `:desktop`, 73 `:tools`.
 
-| Module | Tests | Largest suites |
+These are *distinct* tests, and the distinction matters twice.
+`:android:test` builds a debug and a release variant and runs the same suite
+against both, so a raw tally of its XML reports 354 and double-counts every
+Android test. And a `@Nested` class writes its own XML file, so counting files —
+or counting `@Test` annotations in the source — gives a third, different answer.
+The numbers here come from summing the `tests=` attribute of every
+`<testsuite>` Gradle actually wrote:
+
+```powershell
+# what produced the table below
+Select-String -Path .\engine\build\test-results\test\*.xml -Pattern '<testsuite .*tests="(\d+)"'
+```
+
+| Module | Tests | Breakdown |
 |---|---|---|
-| `:engine` | 828 | render 316, resource 101, hal 91, net 87, gameplay 77, core 68, memory 35, demo 35, common 12 |
-| `:desktop` | 99 | window port lifecycle, input accumulation, presentation wiring |
+| `:engine` | 1625 | render 516, gameplay 348, demo 184, net 129, hal 114, resource 101, core 99, audio 81, memory 35, common 12, root 6 |
+| `:gdxshared` | 300 | render modes and the never-enlarge rule, input accumulation and stick-vs-mouse look, UI state machine, settings/score/end-of-match text, block font, audio port |
+| `:android` | 177 | touch layout and the reachable-back-button fit rule, bindings, adapter factory, Room profile storage |
+| `:desktop` | 164 | window port lifecycle, cursor capture and vertical look, gamepad sticks and hot-plug, net args, presentation wiring |
 | `:tools` | 73 | glTF conversion, model round-trip, mip generation, budget enforcement |
 
 Run with `.\gradlew.bat test`. `.\gradlew.bat build` also runs Checkstyle over

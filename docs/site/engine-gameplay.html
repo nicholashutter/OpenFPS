@@ -81,6 +81,7 @@
 <li class="lv3"><a href="#what-is-solid-in-the-demo-room">What is solid in the demo room</a></li>
 <li class="lv3"><a href="#cost-and-determinism">Cost and determinism</a></li>
 <li class="lv3"><a href="#driving-it-without-a-keyboard">Driving it without a keyboard</a></li>
+<li class="lv3"><a href="#photographing-a-kill-streak-the-same-way">Photographing a kill streak the same way</a></li>
 <li class="lv2"><a href="#physics-math--whats-coming">Physics math — what's coming</a></li>
 <li class="lv3"><a href="#collision-detection">Collision detection</a></li>
 <li class="lv3"><a href="#gravity">Gravity</a></li>
@@ -91,7 +92,7 @@
 <li class="lv2"><a href="#todo-phase-4">TODO (Phase 4)</a></li>
 </ul></details></aside>
 <main id="doc">
-<p class="crumb"><span class="tag">Packages</span><span class="sep">/</span><code>engine/src/main/java/com/openfps/engine/gameplay/README.md</code><span class="sep">/</span>16 min read</p>
+<p class="crumb"><span class="tag">Packages</span><span class="sep">/</span><code>engine/src/main/java/com/openfps/engine/gameplay/README.md</code><span class="sep">/</span>19 min read</p>
 <h1 id="gameplay-p_--player-entities-map-logic">Gameplay (P_) — Player, Entities, Map Logic<a class="anchor" href="#gameplay-p_--player-entities-map-logic" aria-label="Permalink">#</a></h1>
 <blockquote>
 <p>P_ is the gameplay / physics layer. Holds everything that <em>changes during play</em>.</p>
@@ -102,9 +103,9 @@
 <tbody>
 <tr><td><strong>State</strong></td><td>SHIPPING</td></tr>
 <tr><td><strong>Phase</strong></td><td>4 — the match layer landed ahead of its phase, as the controller did</td></tr>
-<tr><td><strong>Tests</strong></td><td>321 — counted, not remembered: <code>gradlew :engine:test --tests 'com.openfps.engine.gameplay.*'</code></td></tr>
+<tr><td><strong>Tests</strong></td><td>348 — counted, not remembered: <code>gradlew :engine:test --tests 'com.openfps.engine.gameplay.*'</code></td></tr>
 <tr><td><strong>Registered</strong></td><td>P_ via <code>GameplaySubsystem</code></td></tr>
-<tr><td><strong>Verified</strong></td><td>2026-07-29</td></tr>
+<tr><td><strong>Verified</strong></td><td>2026-07-30</td></tr>
 </tbody>
 </table></div>
 <h3 id="the-match-layer">The match layer<a class="anchor" href="#the-match-layer" aria-label="Permalink">#</a></h3>
@@ -136,6 +137,34 @@ which defaults to <code>Match.UNLIMITED_DEATHS</code>; a death respawns the play
 counted in <strong>tics</strong> and never in milliseconds — a wall-clock delay would elapse
 on different tics on two peers, which is the same class of desync <code>BotRng</code> exists
 to prevent arriving by a different door.</p>
+<p><strong>Three kills without dying earn a bigger gun.</strong> <code>SUPER_BLASTER_KILL_STREAK</code>
+kills in <strong>one life</strong> arm the super blaster for <code>SUPER_BLASTER_TICS</code>, during which
+a shot does <code>SUPER_BLASTER_SHOT_DAMAGE</code> — two hits to kill instead of three. The
+four decisions behind it, each argued at its own constant:</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Decision</th><th>Answer</th><th>Why, in one line</th></tr></thead>
+<tbody>
+<tr><td>What counts as a streak</td><td>kills <strong>without dying</strong>; a death zeroes it</td><td>that is what the word means to a player; a running total changes the gun at a moment nothing on screen accounts for</td></tr>
+<tr><td>Duration</td><td><strong>240 tics</strong>, never milliseconds</td><td>a wall-clock window expires on different tics on two peers, which here is a shot doing 68 damage on one and 34 on the other</td></tr>
+<tr><td>Damage</td><td><code>PLAYER_SHOT_DAMAGE * SUPER_BLASTER_DAMAGE_MULTIPLIER</code>, derived</td><td>a second literal is one re-balance away from a reward that has quietly stopped being double anything</td></tr>
+<tr><td>A kill while it is live</td><td>neither extends nor refreshes; another full streak re-arms it</td><td>extending is a positive feedback loop, and in a seven-bot room nothing stops it — the reward would end the round rather than punctuate it</td></tr>
+</tbody>
+</table></div>
+<p>Two further rules that are easy to leave out and impossible to see missing.
+<strong>A death cancels a live buff</strong>, because being alive and three ahead is its only
+precondition. And <strong><code>reset()</code> clears both the streak and the buff</strong> — a rematch
+opening with four seconds of double damage nobody earned is the same class of bug
+this reset already shipped once, when reviving the bots left them invisible.</p>
+<p>The window is a <strong>countdown</strong> rather than an absolute expiry tic, which is the one
+place it differs from the respawn: a respawn is scheduled inside <code>tick</code>, which is
+handed the tic index, while the award happens inside <code>firePlayerShot</code>, which
+deliberately has no clock. A countdown also cannot be stranded by a caller that
+skips a tic index.</p>
+<p>The player is told three ways, because a buff with no feedback is
+indistinguishable from no buff: a <code>STREAK n/3</code> line in the score panel at all
+times, a centred plaque counting down while it is live, and three sounds —
+earning it, firing it, and losing it. See <code>gdxshared/ScoreOverlay</code> and
+<code>audio/README.md</code>.</p>
 <p><strong>Built.</strong> <code>PlayerController</code> — first-person look and movement, <code>StrictMath</code>
 throughout so lockstep peers stay bit-identical, pitch clamped to ±89°, eye at
 <code>EYE_HEIGHT_UNITS</code> 41 — plus <code>PlayerInputView</code>, the one class that adapts the
@@ -190,7 +219,8 @@ stateless, addressed by <code>(tic, entity, channel)</code></p>
 profile that exists so the geometry tests stay about geometry rather than dice</p>
 </li>
 <li>
-<p><code>Match</code> / <code>MatchState</code> — the rules, the score, the respawn, and <code>reset()</code></p>
+<p><code>Match</code> / <code>MatchState</code> — the rules, the score, the respawn, the kill streak and
+the super blaster, and <code>reset()</code></p>
 </li>
 <li>
 <p><code>MatchStatus</code> / <code>MatchSummary</code> — the two immutable copies that cross to the
@@ -407,6 +437,33 @@ proof takeable:</p>
 measurement. Walking forward from the spawn: <strong><code>z = 1087.998</code></strong> before this
 landed — 774 units outside the room — and <strong><code>z = 297.6</code></strong> after, on the contact
 plane to the last digit.</p>
+<h3 id="photographing-a-kill-streak-the-same-way">Photographing a kill streak the same way<a class="anchor" href="#photographing-a-kill-streak-the-same-way" aria-label="Permalink">#</a></h3>
+<p><code>openfps.autoFireTics</code> is the same hook one feature further on: it holds the
+<strong>trigger</strong>, so a run can earn the super blaster with nobody at the keyboard. The
+walk takes precedence while it lasts, so the two properties read as a sequence —
+line a target up, then stand still and shoot.</p>
+<div class="code"><pre><code>gradlew :desktop:run "--args=--start-in-game"
+        -Dopenfps.autoWalkTics=18 -Dopenfps.autoWalkForward=0
+        -Dopenfps.autoWalkStrafe=1 -Dopenfps.autoFireTics=900
+        -Dopenfps.screenshot=C:\tmp\f.png
+        -Dopenfps.screenshotFrame=140 -Dopenfps.screenshotCount=70
+        -Dopenfps.screenshotExit=true
+</code></pre></div>
+<p>Eighteen tics of pure strafe is <strong>76.8 units</strong> at
+<code>PlayerController.MOVE_SPEED_UNITS_PER_SECOND</code>, which puts the player's eye on the
+line through both sentries — <code>BOT_ROUTE_CENTRES</code> entries 1 and 2, at
+<code>x = -78</code> and <code>x = -88</code>, whose boxes are 16 units either side of their feet. They
+are motionless, so the first six shots are six hits and two kills; the pacing bot
+on route 0 crosses the same line for the third. Reproducibly: <strong>kills on tics 42,
+78 and 222, the award on 222 and the expiry on 462</strong> — exactly
+<code>222 + SUPER_BLASTER_TICS</code>, on three separate runs.</p>
+<p>The measurements taken from that burst are in the commit that added the HUD. The
+short version, all from <code>ScoreOverlay.SUPER_COLOUR</code> (255, 184, 46) counted out of
+the PNGs: the plaque's heading is <strong>4800 amber pixels over 461 × 41</strong>, the panel's
+streak line is <strong>972 over 187 × 27</strong>, both appear on the same frame and both are
+<strong>zero</strong> on the frame after the expiry. The countdown's digit measures 350, 375,
+350 then 250 pixels — 14, 15, 14 and 10 <code>BlockFont</code> cells, which are the glyphs
+<strong>4, 3, 2, 1</strong>.</p>
 <h2 id="physics-math--whats-coming">Physics math — what's coming<a class="anchor" href="#physics-math--whats-coming" aria-label="Permalink">#</a></h2>
 <p>These are documented in advance so you can verify the formulas before they're coded.
 Implementation will reference this README for the source of each formula.</p>

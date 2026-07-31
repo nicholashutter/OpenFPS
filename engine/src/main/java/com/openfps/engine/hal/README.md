@@ -11,7 +11,7 @@
 |---|---|
 | **State** | SHIPPING |
 | **Phase** | 1.4, 1.5 complete |
-| **Tests** | 110 |
+| **Tests** | 114 — counted, not remembered: `gradlew :engine:test --tests 'com.openfps.engine.hal.*'` |
 | **Registered** | I_ via `HalSubsystem` |
 | **Verified** | 2026-07-28 |
 
@@ -25,13 +25,16 @@ platform-free and `:desktop` decorates it (§ "Where the window and input actual
 live").
 
 **Not built.** Nothing outstanding for these phases. There is no `mobile/`
-adapter family; `I_UserProfilePort` names `hal.adapter.mobile` as where a Room
-implementation will go, not as somewhere that exists.
+adapter family and there is not going to be one: an Android adapter needs the
+Android SDK, and `:engine` must stay buildable without it. The Room-backed
+profile store ships as `RoomUserProfilePort` in the `:android` module.
 
 **Blocked on.** Nothing.
 
-**Next step.** Android — the second platform is what proves the port set, and it
-is the only named backend with nothing written for it (`PLAN.md` § 6).
+**Next step.** Nothing outstanding. Android was the open item and it **shipped**
+— the second platform did what it was supposed to do here, which was prove the
+port set by being implemented against it. It lives in `:android`, not under
+`hal/adapter/`, for the reason given below.
 
 ## Layout
 
@@ -60,9 +63,12 @@ hal/
 input port hands back, and it has no platform in it, so it belongs with the
 contract rather than with any adapter.
 
-There is no `mobile/` directory. Android is a stated target (`PLAN.md` § 6) but
-nothing has been written for it — `I_UserProfilePort` names `hal.adapter.mobile`
-as where its Room implementation will go, not as somewhere that exists.
+There is no `mobile/` directory, and that is now a settled decision rather than
+a gap. Android **is** built and playable, but it lives in the `:android` module:
+`AndroidAdapterFactory`, `AndroidWindowPort`, `AndroidInputPort` and the
+Room-backed `RoomUserProfilePort`. An adapter under `hal/adapter/` would drag the
+Android SDK into `:engine`, which must keep building and testing headless with
+no SDK present. Same reasoning as the window and input ports below.
 
 ## Where the window and input actually live
 

@@ -8,6 +8,7 @@
 | Field | Value |
 |---|---|
 | **State** | SHIPPING (five sounds) |
+| **Tests** | 81 — counted, not remembered: `gradlew :engine:test --tests 'com.openfps.engine.audio.*'` |
 | **Phase** | `PLAN.md` Phase 6 — started, deliberately narrow |
 | **Registered** | S_ via `AudioSubsystem`, port supplied by `I_AdapterFactory.getAudioPort()` |
 | **Verified** | 2026-07-30 |

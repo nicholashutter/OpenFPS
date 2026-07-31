@@ -10,7 +10,7 @@
 |---|---|
 | **State** | SHIPPING |
 | **Phase** | 1.2, 1.3 complete |
-| **Tests** | 68 |
+| **Tests** | 99 — counted, not remembered: `gradlew :engine:test --tests 'com.openfps.engine.core.*'` |
 | **Registered** | CORE via `CoreSubsystem`; this package also owns `SubsystemRegistry` itself and all seven subsystems (Core, Memory, Hal, Net, Gameplay, Render, Audio) |
 | **Verified** | 2026-07-28 |
 
@@ -23,10 +23,12 @@ and `EngineSession` for non-blocking start/stop.
 
 **Blocked on.** Nothing.
 
-**Next step.** Pool sizing still comes from
-`I_SystemInfoPort.logicalProcessorCount() / 2`; read the true physical-core
-count instead, via a Phase 2 desktop adapter (oshi/JNA), as § Threading below
-already says it should.
+**Next step.** Nothing outstanding. Pool sizing was the open item here and it is
+now `logicalProcessorCount − RESERVED_PROCESSORS` rather than the old halving,
+so the hardware maps its own maximum — see § Threading. Reading the *physical*
+core count (via a desktop adapter over oshi/JNA) remains a possible refinement
+rather than a queued task: it would change the answer only on SMT machines, and
+`-Dopenfps.workers=N` already covers anybody who wants a different number.
 
 ## What lives here
 
@@ -92,7 +94,7 @@ DRAINING.
   +-----+------+      +---------------+      +-------------------+
   |            |  ──> |               | ───> |                   |
   | EventBus   |      | WorkerPool    |      | SubsystemRegistry|
-  | (shared    |      | (N=cores/2    |      |  + GameplaySubsys |
+  | (shared    |      | (N=cores-1    |      |  + GameplaySubsys |
   |  queue)    |      |  hot threads) |      |  + RenderSubsys   |
   |            |      |               |      |  + ...            |
   +-----+------+      +-------+-------+      +-------------------+
@@ -138,11 +140,23 @@ The subsystem's `onEvent()` must be thread-safe.
 ## Threading
 
 The default thread layout is:
-- **N worker threads** (N = `logicalProcessorCount / 2`, min 1) — pre-started, hot
+- **N worker threads** (N = `logicalProcessorCount − RESERVED_PROCESSORS`, min
+  `MINIMUM_WORKERS`; both are 1 today) — pre-started, hot
 - **1 GameLoop thread** — produces events at the configured rate (30/60/120 Hz)
 - **1 main thread** — blocks on `loopThread.join()`
 
-Total: 1 + 1 + N threads. For a 16-core machine, N = 8, so 10 threads total.
+Total: 1 + 1 + N threads. For a 16-core machine, N = 15, so 17 threads total.
+
+The rule used to be `cores / 2`, which left half the machine idle on every
+device the engine runs on. It is now one worker per logical processor less the
+one reserved for the game loop and the platform frame pump, so the hardware maps
+its own maximum. Pin it with `-Dopenfps.workers=N` — the pool logs which of the
+two rules produced its count at every boot, because a pool sized by a rule
+nobody can see is a pool nobody can debug.
+
+`ThreadPoolFactory.recommendedWorkerCount(int)` is deliberately pure arithmetic
+— no property read, no `Runtime` call — so a test can ask what a 1-, 2- or
+64-processor machine would get without mutating global JVM state.
 
 The pool size comes from `I_SystemInfoPort.logicalProcessorCount() / 2`.
 This is the "half as many dedicated threads as the hardware has" rule

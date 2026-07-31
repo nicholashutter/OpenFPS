@@ -75,7 +75,7 @@
 <li class="lv2"><a href="#files">Files</a></li>
 </ul></details></aside>
 <main id="doc">
-<p class="crumb"><span class="tag">Modules</span><span class="sep">/</span><code>gdxshared/README.md</code><span class="sep">/</span>7 min read</p>
+<p class="crumb"><span class="tag">Modules</span><span class="sep">/</span><code>gdxshared/README.md</code><span class="sep">/</span>8 min read</p>
 <h1 id="gdxshared--the-libgdx-code-that-is-not-platform-specific"><code>:gdxshared</code> — the libGDX code that is not platform-specific<a class="anchor" href="#gdxshared--the-libgdx-code-that-is-not-platform-specific" aria-label="Permalink">#</a></h1>
 <blockquote>
 <p>Both launchers use libGDX. Neither of them should have to write the framebuffer
@@ -87,7 +87,7 @@ presenter twice.</p>
 <tbody>
 <tr><td><strong>State</strong></td><td>SHIPPING</td></tr>
 <tr><td><strong>Phase</strong></td><td>created 2026-07-28, when <code>:android</code> needed a presenter and a UI state machine that already existed in <code>:desktop</code></td></tr>
-<tr><td><strong>Tests</strong></td><td>76</td></tr>
+<tr><td><strong>Tests</strong></td><td>300 — counted, not remembered: <code>gradlew :gdxshared:test</code>. The old figure here said 76, which was the count before the render modes, analog stick, settings/score/end-of-match screens and accessibility settings arrived</td></tr>
 <tr><td><strong>Registered</strong></td><td>consumed by <code>:desktop</code> and <code>:android</code>; depends on <code>:engine</code> and libGDX <strong>core</strong> only</td></tr>
 <tr><td><strong>Verified</strong></td><td>2026-07-28</td></tr>
 </tbody>
@@ -224,6 +224,10 @@ every tic of an idle player.</p>
 <tr><td><code>FramebufferPresenter.java</code></td><td>Uploads R_'s finished frame and draws it fullscreen</td></tr>
 <tr><td><code>RenderMode.java</code></td><td>480p / 720p / native, and the surface-to-framebuffer arithmetic</td></tr>
 <tr><td><code>RenderSettings.java</code></td><td>The switch the settings screen cycles; the presenter listens</td></tr>
+<tr><td><code>AccessibilitySettings.java</code></td><td>The target outline, on by default; the renderer's outline pass listens</td></tr>
+<tr><td><code>DebugSettings.java</code></td><td>The frame counter, off by default; deliberately NOT where the outline lives</td></tr>
+<tr><td><code>SettingsScreen.java</code></td><td>Accessibility and diagnostics, in two named groups</td></tr>
+<tr><td><code>DebugOverlay.java</code></td><td>The corner FPS / frame time / resolution readout</td></tr>
 <tr><td><code>InputAccumulator.java</code></td><td>Accumulate-and-latch between platform and tic rates; mouse displacement and stick rate</td></tr>
 <tr><td><code>AnalogStick.java</code></td><td>Radial dead zone, response curve, trigger threshold — no toolkit imports</td></tr>
 <tr><td><code>UiState.java</code> / <code>UiStateMachine.java</code></td><td>Menu or game, and what each permits</td></tr>
@@ -236,6 +240,7 @@ every tic of an idle player.</p>
 <tr><td><code>BlockButton.java</code></td><td>A beveled key with a hover lift</td></tr>
 <tr><td><code>MenuBackground.java</code></td><td>The checkered field and its diagonal sheen</td></tr>
 <tr><td><code>MenuPalette.java</code></td><td>Every colour the menu uses, in one place</td></tr>
+<tr><td><code>ScoreOverlay.java</code></td><td>The corner score, the death notice, and the super-blaster plaque. Three things and three sizes of feedback: reference, interruption, reward</td></tr>
 </tbody>
 </table></div>
 <footer class="pagefoot"><p>Source: <a class="ext" rel="noopener noreferrer" target="_blank" href="https://github.com/nicholashutter/OpenFPS/blob/main/gdxshared/README.md">gdxshared/README.md</a>. This page is generated — edit the Markdown, not the HTML.</p></footer>

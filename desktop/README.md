@@ -10,7 +10,7 @@
 |---|---|
 | **State** | SHIPPING |
 | **Phase** | 1.5 complete (§ 7); presentation landed with Phase 5 |
-| **Tests** | 151 |
+| **Tests** | 164 — counted, not remembered: `gradlew :desktop:test` |
 | **Registered** | provides the windowed HAL (`GdxAdapterFactory`) and the `main` behind `gradlew :desktop:run` |
 | **Verified** | 2026-07-28 |
 

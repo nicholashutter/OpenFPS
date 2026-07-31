@@ -87,7 +87,7 @@ engine's working parts into something you can walk around in.</p>
 <tbody>
 <tr><td><strong>State</strong></td><td>SHIPPING</td></tr>
 <tr><td><strong>Phase</strong></td><td>not a phase item — this is the playable demo content</td></tr>
-<tr><td><strong>Tests</strong></td><td>79</td></tr>
+<tr><td><strong>Tests</strong></td><td>184 — counted, not remembered: <code>gradlew :engine:test --tests 'com.openfps.engine.demo.*'</code></td></tr>
 <tr><td><strong>Registered</strong></td><td>not registered — not a subsystem; it is a composition root that consumes the engine</td></tr>
 <tr><td><strong>Verified</strong></td><td>2026-07-29</td></tr>
 </tbody>
@@ -101,9 +101,11 @@ player and restoring the whole world for a rematch; <code>DemoAssetException</co
 to start a demo with no floor. <code>:desktop:run</code> shows all of it in a window.</p>
 <p><strong>Not built.</strong> Nothing outstanding.</p>
 <p><strong>Blocked on.</strong> Nothing.</p>
-<p><strong>Next step.</strong> This package follows the renderer. There is nothing to do here
-until the <code>render/README.md</code> polish items — the bilinear quality toggle and the
-independent internal render resolution — land.</p>
+<p><strong>Next step.</strong> This package follows the renderer, and one of the two items it
+used to wait on has landed: the independent internal render resolution now
+exists as <code>RenderMode</code> in <code>:gdxshared</code>. The bilinear quality toggle is the
+remaining one. Separately, <code>RemotePlayers</code> lives here and gains nothing more
+until <code>Match</code> learns about remote players — see <code>net/README.md</code>.</p>
 <h2 id="the-rematch-and-why-it-is-a-reset-rather-than-a-rebuild">The rematch, and why it is a reset rather than a rebuild<a class="anchor" href="#the-rematch-and-why-it-is-a-reset-rather-than-a-rebuild" aria-label="Permalink">#</a></h2>
 <p><code>DemoGameplayPort.restartMatch()</code> is what the end screen's PLAY AGAIN button
 runs. It restores four things with four different owners, and <strong>together is the
