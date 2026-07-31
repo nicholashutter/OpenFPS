@@ -62,25 +62,32 @@
     A peer to connect to, as <playerId>@<host>:<port>. May be repeated.
 
 .PARAMETER TwoPeers
-    Launches TWO instances wired to each other on localhost, which is the whole
-    of setting up a multiplayer test. Player 1 binds -BasePort and player 2 binds
-    the port above it; each gets its own profile database, and each gets its own
+    Launches TWO instances wired to each other on localhost -- a full mesh of 2,
+    which is the whole of setting up a multiplayer test. Player N binds
+    -BasePort + (N-1); each gets its own profile database, and each gets its own
     screenshot path when -Screenshot is given.
 
-    It does NOT use `gradlew :desktop:run` twice. Two concurrent Gradle
-    invocations in one project directory contend on Gradle's own locks, so the
-    second peer would block until the first exited -- which is exactly never for
-    a game you are playing. Instead this builds an installDist image once and
-    starts two plain JVMs from it. That also side-steps the -D problem the rest
-    of this script has to work around, because a property on a `java` command
-    line reaches the application by definition.
+    It does NOT use `gradlew :desktop:run` twice (or four times). Concurrent
+    Gradle invocations in one project directory contend on Gradle's own locks,
+    so the second peer would block until the first exited -- which is exactly
+    never for a game you are playing. Instead this builds an installDist image
+    once and starts plain JVMs from it. That also side-steps the -D problem the
+    rest of this script has to work around, because a property on a `java`
+    command line reaches the application by definition.
 
     Keyboard and mouse go to whichever window has focus -- that is the OS, not
-    the game. Click between them to drive each peer in turn.
+    the game. Click between windows to drive each peer in turn.
+
+.PARAMETER FourPeers
+    The same idea as -TwoPeers, scaled to four instances in a full mesh -- each
+    of the four gets a --peer for the other three. NetSession supports up to
+    Constants.MAX_PLAYERS - 1 = 7 remote peers, so four is well inside what the
+    engine already accepts; this is the CLI catching up. Mutually exclusive with
+    -TwoPeers.
 
 .PARAMETER BasePort
-    The UDP port player 1 binds under -TwoPeers; player 2 takes the next one up.
-    Default 5021, which is Constants.DEFAULT_NET_PORT.
+    The UDP port player 1 binds under -TwoPeers/-FourPeers; each following
+    player takes the next port up. Default 5021, which is Constants.DEFAULT_NET_PORT.
 
 .PARAMETER Screenshot
     Captures the window to this PNG and exits, instead of waiting for you to
@@ -128,6 +135,10 @@
     .\run-desktop.ps1 -TwoPeers -StartInGame
     Two windows, already talking to each other, both in the world. Walk in one
     and watch the body move in the other.
+
+.EXAMPLE
+    .\run-desktop.ps1 -FourPeers -StartInGame
+    Four windows, fully meshed, all in the world at once.
 #>
 [CmdletBinding(PositionalBinding = $false)]
 param(
@@ -161,6 +172,8 @@ param(
     [string[]] $Peer,
 
     [switch] $TwoPeers,
+
+    [switch] $FourPeers,
 
     [int] $BasePort = 5021,
 
@@ -206,23 +219,36 @@ if ($Rest)
     exit 2
 }
 
-# -TwoPeers assigns both identities and both ports itself, which is the entire
-# point of it. Honouring a -Net or -Peer alongside would mean two sources
-# deciding who player 1 is, and the losing one would fail as a bind conflict or
-# as a peer that never answers -- neither of which names its own cause.
-if ($TwoPeers -and ($Net -or $Peer))
+# How many instances -TwoPeers/-FourPeers launches. 0 means neither was given.
+$meshSize = 0
+if ($TwoPeers) { $meshSize = 2 }
+if ($FourPeers) { $meshSize = 4 }
+
+if ($TwoPeers -and $FourPeers)
 {
-    Write-Host '-TwoPeers sets --net and --peer for both instances itself.' -ForegroundColor Red
-    Write-Host 'Drop -Net/-Peer, or drop -TwoPeers and launch each peer yourself.' -ForegroundColor Yellow
+    Write-Host '-TwoPeers and -FourPeers are mutually exclusive -- pick one mesh size.' -ForegroundColor Red
     exit 2
 }
-if ($TwoPeers -and $Model)
+
+# -TwoPeers/-FourPeers assign every identity and port themselves, which is the
+# entire point of them. Honouring a -Net or -Peer alongside would mean two
+# sources deciding who player 1 is, and the losing one would fail as a bind
+# conflict or as a peer that never answers -- neither of which names its own
+# cause.
+if ($meshSize -gt 0 -and ($Net -or $Peer))
+{
+    Write-Host '-TwoPeers/-FourPeers set --net and --peer for every instance themselves.' -ForegroundColor Red
+    Write-Host 'Drop -Net/-Peer, or drop -TwoPeers/-FourPeers and launch each peer yourself.' -ForegroundColor Yellow
+    exit 2
+}
+if ($meshSize -gt 0 -and $Model)
 {
     # --model replaces the demo world with a single model on an orbit camera, and
     # DesktopLauncher attaches no gameplay port for it -- so there is no match to
-    # network and openNetwork returns null. Two of those would be two unconnected
-    # model viewers, reported here rather than discovered from a silent log.
-    Write-Host '-TwoPeers needs the demo world; -Model has no match to network.' -ForegroundColor Red
+    # network and openNetwork returns null. Multiple of those would be multiple
+    # unconnected model viewers, reported here rather than discovered from a
+    # silent log.
+    Write-Host '-TwoPeers/-FourPeers need the demo world; -Model has no match to network.' -ForegroundColor Red
     exit 2
 }
 
@@ -334,10 +360,11 @@ if ($Clean)
     }
 }
 
-# -TwoPeers launches plain JVMs rather than `gradlew :desktop:run`, so it needs a
-# runnable image with every dependency jar beside it. installDist produces exactly
-# that and depends on classes, so the freshness evidence below is unaffected.
-if ($TwoPeers)
+# -TwoPeers/-FourPeers launch plain JVMs rather than `gradlew :desktop:run`, so
+# they need a runnable image with every dependency jar beside it. installDist
+# produces exactly that and depends on classes, so the freshness evidence below
+# is unaffected.
+if ($meshSize -gt 0)
 {
     $compileTask = ':desktop:installDist'
 }
@@ -444,15 +471,19 @@ if ($Screenshot)
 }
 
 # --------------------------------------------------------------------------
-# 5a. Two peers, wired to each other
+# 5a. A full mesh of peers (-TwoPeers or -FourPeers), each wired to every other
 # --------------------------------------------------------------------------
-# Deliberately NOT two `gradlew :desktop:run` invocations. Two concurrent Gradle
-# builds in one project directory serialise on Gradle's locks, so the second peer
-# would sit waiting for the first to exit -- which for a game you are playing is
-# never. Running the installDist image directly also means a -D reaches the
-# application rather than the daemon, so the forwarding list in
+# Deliberately NOT N `gradlew :desktop:run` invocations. Concurrent Gradle
+# builds in one project directory serialise on Gradle's locks, so the second
+# peer would sit waiting for the first to exit -- which for a game you are
+# playing is never. Running the installDist image directly also means a -D
+# reaches the application rather than the daemon, so the forwarding list in
 # desktop/build.gradle.kts is not involved at all on this path.
-if ($TwoPeers)
+#
+# Full mesh, not a star: every id gets a --peer for every OTHER id. That
+# matches how NetSession actually works -- each process holds one PeerConnection
+# per remote player -- and it is what -TwoPeers already did for its one pair.
+if ($meshSize -gt 0)
 {
     $libDir = Join-Path $repo 'desktop\build\install\desktop\lib'
     if (-not (Test-Path $libDir))
@@ -461,9 +492,10 @@ if ($TwoPeers)
         Write-Host ('  Expected jars under {0}.' -f $libDir)
         exit 5
     }
-    # Per-peer scratch. Each peer needs its OWN profile database: both processes
-    # resolve ~/.openfps/profile.db by default, and two SQLite writers on one file
-    # is a corruption risk that surfaces on some later launch rather than now.
+    # Per-peer scratch. Each peer needs its OWN profile database: every process
+    # resolves ~/.openfps/profile.db by default, and multiple SQLite writers on
+    # one file is a corruption risk that surfaces on some later launch rather
+    # than now.
     $peerDir = Join-Path $repo 'desktop\build\net-peers'
     New-Item -ItemType Directory -Force $peerDir | Out-Null
 
@@ -476,30 +508,26 @@ if ($TwoPeers)
         $javaExe = 'java'
     }
 
-    $peerTwoPort = $BasePort + 1
+    # Player N binds BasePort + (N-1). Computed once so every id's --peer list
+    # can look up any other id's port without re-deriving it.
+    $portOf = @{}
+    for ($id = 1; $id -le $meshSize; $id++)
+    {
+        $portOf[$id] = $BasePort + ($id - 1)
+    }
+
     Write-Host ''
-    Write-Host ('  two peers   : player 1 on UDP {0}, player 2 on UDP {1}' -f `
-        $BasePort, $peerTwoPort) -ForegroundColor Cyan
+    Write-Host ('  mesh        : {0} peers, UDP {1}-{2}' -f `
+        $meshSize, $BasePort, ($BasePort + $meshSize - 1)) -ForegroundColor Cyan
     Write-Host ('  java        : {0}' -f $javaExe)
     Write-Host ('  profiles    : {0}' -f $peerDir)
     Write-Host '  input       : goes to whichever window has focus -- click between them.'
     Write-Host ''
 
     $started = @()
-    foreach ($id in 1, 2)
+    for ($id = 1; $id -le $meshSize; $id++)
     {
-        if ($id -eq 1)
-        {
-            $myPort = $BasePort
-            $otherId = 2
-            $otherPort = $peerTwoPort
-        }
-        else
-        {
-            $myPort = $peerTwoPort
-            $otherId = 1
-            $otherPort = $BasePort
-        }
+        $myPort = $portOf[$id]
 
         $jvmArgs = @('-cp', (Join-Path $libDir '*'))
         # Its own database, named after the peer so a stale one is obvious.
@@ -512,8 +540,8 @@ if ($TwoPeers)
         if ($Screenshot)
         {
             # One path per peer, for the same reason as the database: a shared path
-            # means whichever process wrote second is the only capture that
-            # survives, and the two would look like one run.
+            # means whichever process wrote last is the only capture that
+            # survives, and the mesh would look like one run.
             $stem = [IO.Path]::GetFileNameWithoutExtension($shotBase)
             $ext = [IO.Path]::GetExtension($shotBase)
             $peerShot = Join-Path (Split-Path $shotBase -Parent) ("{0}-peer{1}{2}" -f $stem, $id, $ext)
@@ -527,10 +555,17 @@ if ($TwoPeers)
         if ($StartInGame) { $jvmArgs += '--start-in-game' }
         if ($Assets) { $jvmArgs += "--assets=$Assets" }
         $jvmArgs += "--net=$($id):$myPort"
-        $jvmArgs += "--peer=$otherId@127.0.0.1:$otherPort"
 
-        Write-Host ('  peer {0}      : --net={0}:{1} --peer={2}@127.0.0.1:{3}' -f `
-            $id, $myPort, $otherId, $otherPort)
+        $peerDescr = @()
+        for ($otherId = 1; $otherId -le $meshSize; $otherId++)
+        {
+            if ($otherId -eq $id) { continue }
+            $jvmArgs += "--peer=$otherId@127.0.0.1:$($portOf[$otherId])"
+            $peerDescr += "$otherId@127.0.0.1:$($portOf[$otherId])"
+        }
+
+        Write-Host ('  peer {0}      : --net={0}:{1} --peer={2}' -f `
+            $id, $myPort, ($peerDescr -join ' --peer='))
         # WorkingDirectory is the repository root, because assets/models is
         # resolved relative to it exactly as :desktop:run's workingDir arranges.
         $started += Start-Process -FilePath $javaExe -ArgumentList $jvmArgs `
@@ -538,14 +573,14 @@ if ($TwoPeers)
     }
 
     Write-Host ''
-    Write-Host ('Both peers started (pids {0}).' -f (($started | ForEach-Object { $_.Id }) -join ', ')) `
-        -ForegroundColor Green
-    Write-Host 'Waiting for both windows to close.'
+    Write-Host ('{0} peers started (pids {1}).' -f `
+        $meshSize, (($started | ForEach-Object { $_.Id }) -join ', ')) -ForegroundColor Green
+    Write-Host ('Waiting for all {0} windows to close.' -f $meshSize)
     $started | Wait-Process
     $peerExits = ($started | ForEach-Object { $_.ExitCode }) -join ', '
     Write-Host ''
-    Write-Host ('Both peers exited (codes {0}). That was commit {1} ({2}).' -f `
-        $peerExits, $commit, $treeState) -ForegroundColor Green
+    Write-Host ('All {0} peers exited (codes {1}). That was commit {2} ({3}).' -f `
+        $meshSize, $peerExits, $commit, $treeState) -ForegroundColor Green
     foreach ($proc in $started)
     {
         if ($proc.ExitCode -ne 0)
