@@ -41,6 +41,18 @@ class PlayerInputViewTest
     }
 
     @Test
+    @DisplayName("jump and sprint are forwarded, unlike fire")
+    void shouldForwardJumpAndSprintButNotFire()
+    {
+        final InputState state = InputState.of(0.0f, 0.0f, 0.0f, 0.0f, true, true, true);
+        final PlayerInputView view = new PlayerInputView();
+        view.wrap(state);
+
+        assertThat(view.jump()).isTrue();
+        assertThat(view.sprint()).isTrue();
+    }
+
+    @Test
     @DisplayName("starts neutral so a controller can be updated before any input arrives")
     void shouldStartNeutral()
     {

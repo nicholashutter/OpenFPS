@@ -76,20 +76,28 @@ class PlayerControllerTest
         private final float yaw;
         private final float pitch;
         private final boolean jumping;
+        private final boolean sprinting;
 
         private Input(final float forward, final float strafe, final float yaw, final float pitch)
         {
-            this(forward, strafe, yaw, pitch, false);
+            this(forward, strafe, yaw, pitch, false, false);
         }
 
         private Input(final float forward, final float strafe, final float yaw, final float pitch,
             final boolean jump)
+        {
+            this(forward, strafe, yaw, pitch, jump, false);
+        }
+
+        private Input(final float forward, final float strafe, final float yaw, final float pitch,
+            final boolean jump, final boolean sprint)
         {
             this.forward = forward;
             this.strafe = strafe;
             this.yaw = yaw;
             this.pitch = pitch;
             this.jumping = jump;
+            this.sprinting = sprint;
         }
 
         @Override
@@ -121,6 +129,12 @@ class PlayerControllerTest
         {
             return jumping;
         }
+
+        @Override
+        public boolean sprint()
+        {
+            return sprinting;
+        }
     }
 
     private static final Input NONE = new Input(0.0f, 0.0f, 0.0f, 0.0f);
@@ -130,6 +144,11 @@ class PlayerControllerTest
     private static Input move(final float forward, final float strafe)
     {
         return new Input(forward, strafe, 0.0f, 0.0f);
+    }
+
+    private static Input moveSprinting(final float forward, final float strafe)
+    {
+        return new Input(forward, strafe, 0.0f, 0.0f, false, true);
     }
 
     private static Input look(final float yaw, final float pitch)
@@ -1131,8 +1150,14 @@ class PlayerControllerTest
     @DisplayName("falling and jumping")
     class FallingAndJumping
     {
-        /** Tics of 60 Hz simulation to run — one second, comfortably past a landing. */
-        private static final int ONE_SECOND_OF_TICS = 60;
+        /**
+         * Tics of 60 Hz simulation to run — two seconds, comfortably past a
+         * landing. Must exceed the jump's own hang time
+         * ({@code 2 * JUMP_SPEED_UNITS_PER_SECOND / GRAVITY_UNITS_PER_SECOND_SQUARED},
+         * about 1.72 s at the current constants) with margin, or a test that
+         * asserts the arc has finished would instead catch the player mid-air.
+         */
+        private static final int LANDING_TICS = 120;
 
         @Test
         @DisplayName("a grounded player who presses jump leaves the floor")
@@ -1153,7 +1178,7 @@ class PlayerControllerTest
         {
             final PlayerController player = new PlayerController();
             float peak = 0.0f;
-            for (int tic = 0; tic < ONE_SECOND_OF_TICS; tic++)
+            for (int tic = 0; tic < LANDING_TICS; tic++)
             {
                 player.update(NONE, TIC_60HZ);
                 peak = StrictMath.max(peak, player.positionY());
@@ -1163,7 +1188,7 @@ class PlayerControllerTest
             final PlayerController jumper = new PlayerController();
             jumper.update(JUMP, TIC_60HZ);
             float jumpPeak = jumper.positionY();
-            for (int tic = 1; tic < ONE_SECOND_OF_TICS; tic++)
+            for (int tic = 1; tic < LANDING_TICS; tic++)
             {
                 jumper.update(NONE, TIC_60HZ);
                 jumpPeak = StrictMath.max(jumpPeak, jumper.positionY());
@@ -1210,7 +1235,7 @@ class PlayerControllerTest
         {
             final PlayerController player = new PlayerController();
             player.update(JUMP, TIC_60HZ);
-            for (int tic = 1; tic < ONE_SECOND_OF_TICS; tic++)
+            for (int tic = 1; tic < LANDING_TICS; tic++)
             {
                 player.update(NONE, TIC_60HZ);
             }
@@ -1230,7 +1255,7 @@ class PlayerControllerTest
             final PlayerController player =
                 new PlayerController(5.0f, 500.0f, -9.0f, 0.0f, 0.0f);
 
-            for (int tic = 0; tic < ONE_SECOND_OF_TICS * 2; tic++)
+            for (int tic = 0; tic < LANDING_TICS * 2; tic++)
             {
                 player.update(NONE, TIC_60HZ);
             }
@@ -1266,7 +1291,7 @@ class PlayerControllerTest
             final PlayerController walking = new PlayerController();
             final PlayerController hopping = new PlayerController();
 
-            for (int tic = 0; tic < ONE_SECOND_OF_TICS; tic++)
+            for (int tic = 0; tic < LANDING_TICS; tic++)
             {
                 walking.update(move(1.0f, 0.0f), TIC_60HZ);
                 hopping.update(new Input(1.0f, 0.0f, 0.0f, 0.0f, tic == 0), TIC_60HZ);
@@ -1301,13 +1326,92 @@ class PlayerControllerTest
         private int[] jumpArc()
         {
             final PlayerController player = new PlayerController();
-            final int[] samples = new int[ONE_SECOND_OF_TICS];
-            for (int tic = 0; tic < ONE_SECOND_OF_TICS; tic++)
+            final int[] samples = new int[LANDING_TICS];
+            for (int tic = 0; tic < LANDING_TICS; tic++)
             {
                 player.update(new Input(0.3f, -0.7f, 0.01f, 0.002f, tic == 0), TIC_60HZ);
                 samples[tic] = Float.floatToRawIntBits(player.positionY());
             }
             return samples;
+        }
+    }
+
+    @Nested
+    @DisplayName("sprint")
+    class Sprint
+    {
+        @Test
+        @DisplayName("sprinting straight forward covers exactly SPRINT_MULTIPLIER times the ground")
+        void shouldMoveFartherWhenSprintingForward()
+        {
+            final PlayerController walker = new PlayerController();
+            final PlayerController sprinter = new PlayerController();
+
+            walker.update(move(1.0f, 0.0f), ONE_SECOND);
+            sprinter.update(moveSprinting(1.0f, 0.0f), ONE_SECOND);
+
+            // Exact, not approximate: at yaw 0 every trig factor involved is 0
+            // or +-1, so the sprinter's step is the walker's step scaled by one
+            // multiplication and nothing rounds differently between the two.
+            assertThat(sprinter.positionZ())
+                .isEqualTo(walker.positionZ() * PlayerController.SPRINT_MULTIPLIER);
+        }
+
+        @Test
+        @DisplayName("a forward-diagonal sprint is boosted on both axes")
+        void shouldBoostAForwardDiagonalSprint()
+        {
+            final PlayerController walker = new PlayerController();
+            final PlayerController sprinter = new PlayerController();
+
+            walker.update(move(1.0f, 1.0f), ONE_SECOND);
+            sprinter.update(moveSprinting(1.0f, 1.0f), ONE_SECOND);
+
+            assertThat(sprinter.positionZ())
+                .isEqualTo(walker.positionZ() * PlayerController.SPRINT_MULTIPLIER);
+            assertThat(sprinter.positionX())
+                .isEqualTo(walker.positionX() * PlayerController.SPRINT_MULTIPLIER);
+        }
+
+        @Test
+        @DisplayName("holding sprint with no forward component gives no boost when strafing")
+        void shouldGiveNoBoostWhenSprintingWithoutForwardInput()
+        {
+            final PlayerController strafer = new PlayerController();
+            final PlayerController sprintingStrafer = new PlayerController();
+
+            strafer.update(move(0.0f, 1.0f), ONE_SECOND);
+            sprintingStrafer.update(moveSprinting(0.0f, 1.0f), ONE_SECOND);
+
+            assertThat(sprintingStrafer.positionX()).isEqualTo(strafer.positionX());
+            assertThat(sprintingStrafer.positionZ()).isEqualTo(strafer.positionZ());
+        }
+
+        @Test
+        @DisplayName("holding sprint while moving backward gives no boost")
+        void shouldGiveNoBoostWhenSprintingBackward()
+        {
+            final PlayerController walker = new PlayerController();
+            final PlayerController sprinter = new PlayerController();
+
+            walker.update(move(-1.0f, 0.0f), ONE_SECOND);
+            sprinter.update(moveSprinting(-1.0f, 0.0f), ONE_SECOND);
+
+            assertThat(sprinter.positionZ()).isEqualTo(walker.positionZ());
+        }
+
+        @Test
+        @DisplayName("sprint does not affect vertical motion")
+        void shouldNotAlterTheJumpWhenSprinting()
+        {
+            final PlayerController jumper = new PlayerController();
+            final PlayerController sprintingJumper = new PlayerController();
+
+            jumper.update(JUMP, TIC_60HZ);
+            sprintingJumper.update(new Input(0.0f, 0.0f, 0.0f, 0.0f, true, true), TIC_60HZ);
+
+            assertThat(sprintingJumper.positionY()).isEqualTo(jumper.positionY());
+            assertThat(sprintingJumper.velocityY()).isEqualTo(jumper.velocityY());
         }
     }
 

@@ -29,10 +29,12 @@ import com.openfps.engine.hal.port.InputState;
  * re-pointed with {@link #wrap}, so the whole adapter costs a single object for
  * the life of the session.
  *
- * The action flags ({@code fire}, {@code jump}, {@code sprint}) are deliberately
- * not forwarded — {@link I_PlayerInput} does not expose them, because the
- * controller has no use for them yet. Whatever consumes them later should read
- * the {@link InputState} directly rather than widening this seam.
+ * {@code fire} is deliberately not forwarded — {@link I_PlayerInput} does not
+ * expose it, because the controller has no use for it. {@code jump} and
+ * {@code sprint} are forwarded: both are integrated directly into movement.
+ * Whatever consumes {@code fire} later should read the {@link InputState}
+ * directly rather than widening this seam for a flag the controller does not
+ * act on.
  *
  * <b>Threading:</b> not thread-safe, and does not need to be. The game loop
  * latches and applies input on one thread.
@@ -95,6 +97,12 @@ public final class PlayerInputView implements I_PlayerInput
     public boolean jump()
     {
         return source.jump();
+    }
+
+    @Override
+    public boolean sprint()
+    {
+        return source.sprint();
     }
 
     @Override

@@ -205,40 +205,69 @@ public final class PlayerController
         (float) Constants.PLAYER_SPEED / (float) Constants.MAP_SCALE * PLAYER_SPEED_REFERENCE_HZ;
 
     /**
-     * Downward acceleration in world units per second squared — <b>800</b>.
+     * How much faster sprint moves the player, as a multiplier on
+     * {@link #MOVE_SPEED_UNITS_PER_SECOND} — <b>1.5</b>.
+     *
+     * <p>The standard genre figure rather than a derived one: most shooters put
+     * a sprint boost somewhere around 1.4-1.6x walk speed, fast enough to feel
+     * like a real gear change and not so fast that strafing at walk speed reads
+     * as broken by comparison. Checked against {@code PhysicsWorld}'s own
+     * margin — see its class Javadoc, "Tunnelling" — because a faster player is
+     * a longer per-tic step, and a step that outgrows the thinnest wall's
+     * effective half-width would let a sprinting player pass through it. At the
+     * slowest supported tic rate (30 Hz) sprint's longest step is
+     * {@code MOVE_SPEED_UNITS_PER_SECOND * 1.5 / 30} ~= 12.8 world units,
+     * against that wall's 44.8-unit effective blocking width — 3.5x headroom,
+     * comfortably inside the margin the unsprinted case already relied on.</p>
+     */
+    public static final float SPRINT_MULTIPLIER = 1.5f;
+
+    /**
+     * Downward acceleration in world units per second squared — <b>350</b>.
      *
      * <p>Not Earth's 9.81 in disguise, and it should not be: a first-person game
      * that uses real gravity at this scale feels like walking on the Moon,
      * because the player is 56 units tall and moves at 256 units a second — a
      * body length every fifth of a second. Every shooter since Quake picks a
      * gravity that makes the jump land quickly rather than one that matches
-     * physics. 800 gives the arc below a total hang time of about 0.63 s, which
-     * is short enough that a jump reads as a hop rather than a float.</p>
+     * physics; this one instead picks a gravity that makes it land
+     * <b>slowly</b>, on purpose. 350 against {@link #JUMP_APEX_UNITS} gives a
+     * hang time of about 1.7 s — see the derivation at
+     * {@link #JUMP_SPEED_UNITS_PER_SECOND} — nearly three times the 0.63 s a
+     * Quake-style 800 would give the same apex, which is what turns a hop into
+     * a float: the player is visibly slow to leave the ground and slower still
+     * to return to it, the way a jetpack's thrust decays rather than a leg's
+     * push does.</p>
      */
-    public static final float GRAVITY_UNITS_PER_SECOND_SQUARED = 800.0f;
+    public static final float GRAVITY_UNITS_PER_SECOND_SQUARED = 350.0f;
 
     /**
-     * How high a jump rises above the floor, in world units — <b>40</b>.
+     * How high a jump rises above the floor, in world units — <b>130</b>.
      *
      * <p>This is the number with a reason, and {@link #JUMP_SPEED_UNITS_PER_SECOND}
      * is derived from it rather than the other way round. A demo crate is 32
      * world units tall once {@code DemoScene.KIT_WORLD_SCALE} is applied, so 40
-     * clears one with 8 units to spare — enough that the player does not have to
-     * be frame-perfect, not so much that the jump overshoots every piece of
-     * level geometry in the room. It also happens to sit just under
-     * {@link #EYE_HEIGHT_UNITS}, so the apex is about "your own eye height",
-     * which is the proportion a jump is judged by.</p>
+     * used to clear one crate with 8 units to spare; 130 clears a stack of three
+     * with room left over, and reaches roughly {@link #EYE_HEIGHT_UNITS} *
+     * three — a jump that carries the player over cover rather than merely off
+     * the ground, which is the "almost jetpacky" brief this constant is
+     * answering. Paired with the lowered {@link #GRAVITY_UNITS_PER_SECOND_SQUARED},
+     * the rise reads as sustained rather than snapped-to.</p>
      */
-    public static final float JUMP_APEX_UNITS = 40.0f;
+    public static final float JUMP_APEX_UNITS = 130.0f;
 
     /**
-     * Upward launch speed in world units per second, about 253.
+     * Upward launch speed in world units per second, about 302.
      *
      * <p><b>Derived</b> from the two constants above by the standard result
      * {@code apex = v^2 / 2g}, hence {@code v = sqrt(2 * g * apex)}. Written
      * that way so that changing the apex changes the jump and nothing has to be
      * re-tuned by hand — the alternative is two independent magic numbers that
-     * silently stop agreeing the first time either is touched.</p>
+     * silently stop agreeing the first time either is touched. Total hang time
+     * is {@code 2v/g}, about 1.72 s at the current constants — the number the
+     * "floatier, almost jetpacky" jump is actually judged by, since apex height
+     * alone does not communicate how long the player spends in the air getting
+     * there and back.</p>
      *
      * <p>{@code sqrt} is correctly rounded by IEEE 754 and therefore reproducible
      * on every conforming JVM, so this constant is bit-identical across peers.
@@ -653,6 +682,16 @@ public final class PlayerController
      * the player can really occupy. {@link PhysicsWorld} has the full argument,
      * including why the order is fixed rather than chosen per tic.</p>
      *
+     * <h2>Sprint is forward-gated</h2>
+     *
+     * <p>{@link I_PlayerInput#sprint()} only boosts the step when
+     * {@code forwardAxis > 0} — moving generally forward, including a
+     * forward-diagonal strafe. A player backpedalling or purely strafing while
+     * holding sprint gets ordinary walk speed. This is the same rule the genre
+     * has settled on: sprint is a forward gait, not a general speed modifier,
+     * and gating it here rather than upstream keeps {@link I_PlayerInput} a
+     * plain report of what was held.</p>
+     *
      * @param input this tic's movement axes
      * @param deltaSeconds the tic duration in seconds
      */
@@ -676,6 +715,10 @@ public final class PlayerController
             // anyway so that the "no java/lang/Math in this class" guard test
             // can be a single flat rule with no exceptions to remember.
             step = step / (float) StrictMath.sqrt(magnitudeSquared);
+        }
+        if (input.sprint() && forwardAxis > 0.0f)
+        {
+            step = step * SPRINT_MULTIPLIER;
         }
 
         // Yaw-only basis. Pitch is deliberately absent: forward here is the

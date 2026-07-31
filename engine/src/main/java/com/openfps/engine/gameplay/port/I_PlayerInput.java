@@ -115,4 +115,20 @@ public interface I_PlayerInput
      * @return true if the jump control was active during the sampled tic
      */
     boolean jump();
+
+    /**
+     * Returns whether the sprint modifier was held during this tic.
+     *
+     * <p>On the interface for the same reason {@link #jump()} is: the
+     * controller integrates it directly, scaling the ground move rather than
+     * passing the flag through for someone else to act on. See
+     * {@code PlayerController.applyMove}.</p>
+     *
+     * <p>A <i>level</i>, like every other flag here — true on every tic the
+     * modifier is held. The controller decides what "held while not moving
+     * forward" means; this method only reports whether the key was down.</p>
+     *
+     * @return true if the sprint modifier was active during the sampled tic
+     */
+    boolean sprint();
 }

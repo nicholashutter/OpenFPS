@@ -123,6 +123,19 @@ class PhysicsWorldTest
         {
             return false;
         }
+
+        /**
+         * Never sprints. Every test here is about the base horizontal speed
+         * against the room's geometry, and a sprint multiplier would confuse
+         * the one thing being measured with the boost applied on top of it.
+         *
+         * @return false, always
+         */
+        @Override
+        public boolean sprint()
+        {
+            return false;
+        }
     }
 
     @Nested

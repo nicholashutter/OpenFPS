@@ -98,9 +98,14 @@ import com.openfps.engine.common.Constants;
  * anyway: the thinnest solid in the demo room is a 12.8-unit wall slab, which
  * the 16-unit half-width widens to an effective 44.8 units of blocking, against
  * a longest possible step of {@code 256 / 30} = 8.5 world units at the slowest
- * supported tic rate. Five times the clearance needed, and the arithmetic is
- * written down here because "it is fast enough" is what stops being true when
- * someone adds a sprint multiplier.</p>
+ * supported tic rate — over five times the clearance needed. <b>Sprint has
+ * since been added</b> ({@code PlayerController.SPRINT_MULTIPLIER}, 1.5x), and
+ * the check was re-run rather than assumed: the sprinting step is
+ * {@code 256 * 1.5 / 30} ~= 12.8 units, against the same 44.8-unit wall — still
+ * 3.5x the clearance needed. The arithmetic stays written down here because
+ * this is exactly the kind of check that silently stops being true the next
+ * time someone adds a speed multiplier, and it is cheaper to re-derive than to
+ * assume.</p>
  *
  * <h2>Cost and determinism</h2>
  *

@@ -434,9 +434,11 @@ public final class RemotePlayers
         final PlayerController peer = controller[body];
         peer.setLook(TicCmdEncoder.decodeAngle(ring.angle(slot, tic)),
             TicCmdEncoder.decodePitch(ring.pitch(slot, tic)));
+        final int buttons = ring.buttons(slot, tic);
         wireInput.set(TicCmdEncoder.decodeAxis(ring.forward(slot, tic)),
             TicCmdEncoder.decodeAxis(ring.strafe(slot, tic)),
-            TicCmdEncoder.isDown(ring.buttons(slot, tic), TicCmdEncoder.BUTTON_JUMP));
+            TicCmdEncoder.isDown(buttons, TicCmdEncoder.BUTTON_JUMP),
+            TicCmdEncoder.isDown(buttons, TicCmdEncoder.BUTTON_SPRINT));
         peer.update(wireInput, deltaSeconds);
     }
 
@@ -683,12 +685,17 @@ public final class RemotePlayers
         /** Whether the peer held jump. MUTABLE, rewritten per command. */
         private boolean jumping;
 
+        /** Whether the peer held sprint. MUTABLE, rewritten per command. */
+        private boolean sprinting;
+
         // Points this adapter at one decoded command.
-        void set(final float forwardAxis, final float strafeAxis, final boolean jumpHeld)
+        void set(final float forwardAxis, final float strafeAxis, final boolean jumpHeld,
+            final boolean sprintHeld)
         {
             this.forward = forwardAxis;
             this.strafe = strafeAxis;
             this.jumping = jumpHeld;
+            this.sprinting = sprintHeld;
         }
 
         @Override
@@ -719,6 +726,12 @@ public final class RemotePlayers
         public boolean jump()
         {
             return jumping;
+        }
+
+        @Override
+        public boolean sprint()
+        {
+            return sprinting;
         }
     }
 }
