@@ -177,12 +177,6 @@ public final class GameLoop implements Runnable
         }
     }
 
-    /** Returns true if the loop is running. */
-    public boolean isRunning()
-    {
-        return running;
-    }
-
     private void sleepNanos(final long nanos)
     {
         final long ms = nanos / 1_000_000L;

@@ -39,24 +39,4 @@ public enum MatchMode
      * {@code net/README.md} for the transport and the lockstep model.</p>
      */
     MULTIPLAYER;
-
-    /**
-     * Returns whether this mode fills the room with locally simulated bots.
-     *
-     * @return true only for {@link #SINGLE_PLAYER}
-     */
-    public boolean spawnsBots()
-    {
-        return this == SINGLE_PLAYER;
-    }
-
-    /**
-     * Returns whether this mode needs a socket.
-     *
-     * @return true only for {@link #MULTIPLAYER}
-     */
-    public boolean needsNetwork()
-    {
-        return this == MULTIPLAYER;
-    }
 }

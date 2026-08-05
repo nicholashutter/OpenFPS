@@ -582,18 +582,6 @@ public final class FramebufferPresenter
         return renderPort.lastFrameNanos();
     }
 
-    /** Returns the surface width this presenter is sized for — what the quad covers. */
-    public int width()
-    {
-        return width;
-    }
-
-    /** Returns the surface height this presenter is sized for — what the quad covers. */
-    public int height()
-    {
-        return height;
-    }
-
     /**
      * Returns the framebuffer width the rasterizer is filling.
      *

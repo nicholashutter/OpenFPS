@@ -172,12 +172,6 @@ class RemotePlayersTest
             // being built can never be placed at all, so the bound has to be the
             // maximum rather than the actual.
             assertThat(peers.bodyCount()).isEqualTo(NetSession.MAX_PEERS);
-            for (int body = 0; body < peers.bodyCount(); body++)
-            {
-                assertThat(peers.weaponInstanceIndex(body))
-                    .as("body %d is holding something", body)
-                    .isNotEqualTo(DemoScene.NO_INSTANCE);
-            }
         }
 
         @Test

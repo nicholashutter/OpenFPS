@@ -52,6 +52,14 @@ public interface I_UserProfilePort
     // ===============================================================
     //  CRUD
     // ===============================================================
+    //
+    // Of the four methods below, only {@link #findAll()} and {@link #save(UserProfile)}
+    // have production callers today ({@code EngineMain} loads/creates/saves the
+    // active profile at boot and shutdown). {@code findById}, {@code count},
+    // {@code delete}, and {@code generateNewId} are part of the port's
+    // "real CRUD" surface and are exercised by the in-memory and SQLite tests;
+    // they are not currently called by any engine code. They are kept
+    // because removing them is a public-API decision rather than a clean-up.
 
     /**
      * Finds a profile by its ID.

@@ -79,56 +79,6 @@ package com.openfps.engine.net.port;
 public interface I_NetworkPort
 {
     /**
-     * Connects to a peer at the given address.
-     *
-     * @param address "host:port" string
-     * @return assigned peer ID, or -1 on failure
-     */
-    int connect(String address);
-
-    /**
-     * Disconnects the given peer.
-     *
-     * @param peerId the peer to disconnect
-     */
-    void disconnect(int peerId);
-
-    /**
-     * Broadcasts the local player's tic command to all connected peers.
-     *
-     * @param ticIndex the tic number
-     * @param cmdBytes serialized TicCmd bytes
-     */
-    void broadcastTicCmd(int ticIndex, byte[] cmdBytes);
-
-    /**
-     * Polls for received tic commands from peers.
-     * Returns null if no command is available for the given tic.
-     *
-     * @param ticIndex the tic number
-     * @param peerId the peer ID
-     * @return TicCmd bytes, or null
-     */
-    byte[] pollTicCmd(int ticIndex, int peerId);
-
-    /**
-     * Broadcasts a map-change announcement.
-     *
-     * @param mapName the name of the new map
-     */
-    void broadcastMapChange(String mapName);
-
-    /**
-     * Initiates LAN peer discovery via broadcast.
-     */
-    void discoverPeers();
-
-    /**
-     * Returns the number of currently connected peers.
-     */
-    int connectedPeerCount();
-
-    /**
      * Initializes the networking subsystem.
      */
     void init();

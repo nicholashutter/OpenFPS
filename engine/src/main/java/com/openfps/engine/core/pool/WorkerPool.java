@@ -325,12 +325,6 @@ public final class WorkerPool implements I_ThreadPoolPort
     }
 
     @Override
-    public int activeWorkerCount()
-    {
-        return activeWorkers.get();
-    }
-
-    @Override
     public State state()
     {
         return state;

@@ -212,7 +212,7 @@ button is at `input tap 1200 358`.
 
 1. Compiles all Java source across `:engine`, `:desktop` and `:tools`
 2. Runs Checkstyle over main *and* test sources (`maxWarnings = 0` — one warning fails the build)
-3. Compiles and runs all JUnit 5 tests — **2339** of them (1625 `:engine`, 300 `:gdxshared`, 177 `:android` when an SDK is present, 164 `:desktop`, 73 `:tools`). `:android` is counted **once**: its suite runs against a debug and a release variant, so the raw XML tally reports 354
+3. Compiles and runs all JUnit 5 tests — **2343** of them (1629 `:engine`, 300 `:gdxshared`, 177 `:android` when an SDK is present, 164 `:desktop`, 73 `:tools`). `:android` is counted **once**: its suite runs against a debug and a release variant, so the raw XML tally reports 354
 4. Assembles JAR artifacts
 5. Runs `verifyToolsIsolation`, which fails the build if `:tools` or its Gson
    dependency ever reaches a shipped runtime classpath

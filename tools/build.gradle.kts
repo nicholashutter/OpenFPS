@@ -268,14 +268,36 @@ val demoWeaponPack = "blaster-kit"
 val demoWeaponPieces = listOf("blaster-b", "blaster-p")
 val demoLevelPack = "prototype-kit"
 val demoLevelPieces = listOf(
-    "floor-square",   // floor tile
-    "wall",           // plain wall segment
-    "wall-corner",    // corner, so a room closes
-    "wall-doorway",   // a way out, which is what makes it read as a place
-    "shape-slope",    // ramp
+    "floor-square",       // floor tile
+    "wall",               // plain wall segment
+    "wall-corner",        // corner, so a room closes
+    "wall-doorway",       // a way out, which is what makes it read as a place
+    "shape-slope",        // ramp
     "stairs",
     "column",
-    "crate"           // prop, for parallax and a scale reference
+    "crate",              // prop, for parallax and a scale reference
+    // Below this line: added for the lane-map set (LaneMapLibrary). Every one
+    // of these is real Kenney art from the same already-vetted CC0 pack, not a
+    // new licence to track.
+    "wall-low",           // crouch-height cover — the piece a lane map is
+                           // built around; sightlines break at a body's chest
+                           // rather than only at full walls
+    "wall-corner-low",    // matching corner, so low cover can turn
+    "wall-window-medium", // a sightline between two lanes that is not a full
+                           // doorway — narrower, and blockable by a body in it
+    "wall-diagonal",      // an authored 45-degree wall face; PhysicsWorld still
+                           // blocks its full axis-aligned bounding square (see
+                           // LaneMapPhysics), so this is a visual angle only
+    "column-low",         // waist-height cover to break a lane's centre line
+    "stairs-small",       // a compact rise for a half-flight, not a full course
+    "floor-thick",        // an elevated ledge — placed a course up, it is the
+                           // high ground a 3-lane map's mid lane wants
+    "shape-cube-half",    // half-height block, modular cover
+    "vehicle",            // a wrecked-jeep-style centrepiece for a lane's open
+                           // ground, the same role Nuketown's car plays
+    "crate-color"         // a second crate look, free — same mesh budget, a
+                           // different bake, so two stacks of crates read as
+                           // two different stacks rather than one repeated
 )
 
 // Kenney's GLBs reference their atlas by RELATIVE URI — `Textures/colormap.png`

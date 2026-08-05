@@ -84,24 +84,6 @@ public interface I_GameplayPort
     boolean loadMap(String mapName);
 
     /**
-     * Spawns an entity of the given type at the given position.
-     *
-     * @param entityType type identifier
-     * @param x fixed-point x position
-     * @param y fixed-point y position
-     * @param z fixed-point z position
-     * @return entity ID, or -1 on failure
-     */
-    int spawnEntity(int entityType, int x, int y, int z);
-
-    /**
-     * Removes an entity from the active list.
-     *
-     * @param entityId the entity to remove
-     */
-    void removeEntity(int entityId);
-
-    /**
      * Initializes the gameplay subsystem.
      */
     void init();

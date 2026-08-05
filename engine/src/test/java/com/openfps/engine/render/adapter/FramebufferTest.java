@@ -518,7 +518,6 @@ final class FramebufferTest
             assertThat(fb.tileCount()).isEqualTo(1);
             assertThat(fb.tileWidth(0)).isEqualTo(1);
             assertThat(fb.tileHeight(0)).isEqualTo(1);
-            assertThat(fb.tileIndexAt(0, 0)).isZero();
         }
 
         @Test
@@ -563,15 +562,6 @@ final class FramebufferTest
             }
             assertThat(covered).isEqualTo(width * height);
             assertThat(owner).doesNotContain(-1);
-
-            // And tileIndexAt agrees with the sweep above.
-            for (int y = 0; y < height; y++)
-            {
-                for (int x = 0; x < width; x++)
-                {
-                    assertThat(fb.tileIndexAt(x, y)).isEqualTo(owner[y * width + x]);
-                }
-            }
         }
 
         @Test
@@ -587,29 +577,12 @@ final class FramebufferTest
         }
 
         @Test
-        void shouldFillTileBoundsWithInclusiveMaxima()
-        {
-            final Framebuffer fb = ready(200, 140, 64);
-            final int[] bounds = new int[Framebuffer.TILE_BOUNDS_LENGTH];
-            for (int tile = 0; tile < fb.tileCount(); tile++)
-            {
-                fb.tileBounds(tile, bounds);
-                assertThat(bounds[Framebuffer.TILE_BOUNDS_MIN_X]).isEqualTo(fb.tileMinX(tile));
-                assertThat(bounds[Framebuffer.TILE_BOUNDS_MIN_Y]).isEqualTo(fb.tileMinY(tile));
-                assertThat(bounds[Framebuffer.TILE_BOUNDS_MAX_X]).isEqualTo(fb.tileMaxX(tile));
-                assertThat(bounds[Framebuffer.TILE_BOUNDS_MAX_Y]).isEqualTo(fb.tileMaxY(tile));
-            }
-        }
-
-        @Test
         void shouldRejectOutOfRangeTilesAndPixels()
         {
             final Framebuffer fb = ready(200, 140, 64);
             assertThatThrownBy(() -> fb.tileMinX(12))
                 .isInstanceOf(IllegalArgumentException.class);
             assertThatThrownBy(() -> fb.tileMinX(-1))
-                .isInstanceOf(IllegalArgumentException.class);
-            assertThatThrownBy(() -> fb.tileBounds(0, new int[3]))
                 .isInstanceOf(IllegalArgumentException.class);
             assertThatThrownBy(() -> fb.pixel(200, 0))
                 .isInstanceOf(IllegalArgumentException.class);

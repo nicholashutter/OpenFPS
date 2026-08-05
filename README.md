@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Java Version](https://img.shields.io/badge/Java-17%20LTS-ED8B00.svg)](https://adoptium.net/)
 [![Gradle](https://img.shields.io/badge/Gradle-8.13-02303A.svg)](https://gradle.org/)
-[![Tests](https://img.shields.io/badge/tests-2339%20passing-brightgreen.svg)](BUILD.md)
+[![Tests](https://img.shields.io/badge/tests-2343%20passing-brightgreen.svg)](BUILD.md)
 [![Status](https://img.shields.io/badge/status-pre--alpha-blue.svg)](PLAN.md)
 
 ## Overview
@@ -14,7 +14,7 @@ OpenFPS is a from-scratch FPS game engine written in Java 17, designed around th
 
 The engine is an **event queue processor**: subsystems communicate by publishing events to a shared bus, and a pool of N dedicated worker threads (N = logical processors − 1) consumes events and dispatches them to the target subsystem. Each subsystem is its own state machine. Every allocation goes through a single memory port.
 
-**Currently in pre-alpha, and it is a game now rather than a demo.** A blocky title screen, a single-player match against seven bots that patrol, take cover behind solid geometry and shoot back with visible tracers, hitscan combat with a crosshair and red-outlined opponents, wall collision, respawn and scoring, and a three-kill streak that buys a double-damage super blaster. Every sound is synthesised at runtime, so the repository ships no audio asset. It runs on a phone at parity: the same rasterizer, the same match, driven by a thumbstick — or by a gamepad on either platform. Two processes exchange inputs over UDP and each draws the other's body. 2339 tests passing, Checkstyle clean, build green.
+**Currently in pre-alpha, and it is a game now rather than a demo.** A blocky title screen, a single-player match against seven bots that patrol, take cover behind solid geometry and shoot back with visible tracers, hitscan combat with a crosshair and red-outlined opponents, wall collision, respawn and scoring, and a three-kill streak that buys a double-damage super blaster. Every sound is synthesised at runtime, so the repository ships no audio asset. It runs on a phone at parity: the same rasterizer, the same match, driven by a thumbstick — or by a gamepad on either platform. Two processes exchange inputs over UDP and each draws the other's body. 2343 tests passing, Checkstyle clean, build green.
 
 What is *not* yet true: **remote peers are visible but not shootable.** Each peer runs its own `Match`, and `Match` has never heard of a remote player, so hits, respawns and scores are not replicated. That single gap is stated precisely — with the two measured divergences it causes — in [AGENTS.md](AGENTS.md) and
 [`net/README.md`](engine/src/main/java/com/openfps/engine/net/README.md).
@@ -317,7 +317,7 @@ not resolve. The Markdown stays the source of truth.
 
 ## Test Coverage
 
-**2339 tests, all passing** — 1625 `:engine`, 300 `:gdxshared`, 177 `:android`,
+**2343 tests, all passing** — 1629 `:engine`, 300 `:gdxshared`, 177 `:android`,
 164 `:desktop`, 73 `:tools`.
 
 These are *distinct* tests, and the distinction matters twice.
@@ -335,7 +335,7 @@ Select-String -Path .\engine\build\test-results\test\*.xml -Pattern '<testsuite 
 
 | Module | Tests | Breakdown |
 |---|---|---|
-| `:engine` | 1625 | render 516, gameplay 348, demo 184, net 129, hal 114, resource 101, core 99, audio 81, memory 35, common 12, root 6 |
+| `:engine` | 1629 | render 516, gameplay 348, demo 184, net 129, hal 114, resource 101, core 99, audio 81, memory 35, common 12, root 6 |
 | `:gdxshared` | 300 | render modes and the never-enlarge rule, input accumulation and stick-vs-mouse look, UI state machine, settings/score/end-of-match text, block font, audio port |
 | `:android` | 177 | touch layout and the reachable-back-button fit rule, bindings, adapter factory, Room profile storage |
 | `:desktop` | 164 | window port lifecycle, cursor capture and vertical look, gamepad sticks and hot-plug, net args, presentation wiring |

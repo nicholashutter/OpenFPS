@@ -107,9 +107,6 @@ public interface I_ThreadPoolPort
     /** Returns the configured number of workers. */
     int workerCount();
 
-    /** Returns the number of workers currently active. */
-    int activeWorkerCount();
-
     /** Returns the pool state. */
     State state();
 

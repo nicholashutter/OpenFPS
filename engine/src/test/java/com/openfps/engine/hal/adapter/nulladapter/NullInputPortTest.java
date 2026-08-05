@@ -22,19 +22,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 class NullInputPortTest
 {
     @Test
-    @DisplayName("reports the neutral snapshot before anything is sampled")
-    void shouldStartNeutral()
-    {
-        final NullInputPort port = new NullInputPort();
-        assertThat(port.currentInput()).isSameAs(InputState.NEUTRAL);
-        assertThat(port.currentInput().isNeutral()).isTrue();
-    }
-
-    @Test
-    @DisplayName("stays neutral no matter how many tics are sampled")
+    @DisplayName("is neutral before init, after init, and across many sampled tics")
     void shouldStayNeutralAcrossTics()
     {
         final NullInputPort port = new NullInputPort();
+        // Before any lifecycle: still neutral.
+        assertThat(port.currentInput()).isSameAs(InputState.NEUTRAL);
         port.init();
         for (int tic = 0; tic < 8; tic++)
         {

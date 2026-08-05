@@ -608,29 +608,6 @@ public final class RemotePlayers
     }
 
     /**
-     * Returns the scene instance index of a body's model.
-     *
-     * @param body which body, from 0
-     * @return its index among the scene's world instances
-     */
-    public int bodyInstanceIndex(final int body)
-    {
-        return bodyInstance[body];
-    }
-
-    /**
-     * Returns the scene instance index of a body's weapon.
-     *
-     * @param body which body, from 0
-     * @return its weapon's index, or {@link DemoScene#NO_INSTANCE} when no
-     *     carbine was staged
-     */
-    public int weaponInstanceIndex(final int body)
-    {
-        return weaponInstance[body];
-    }
-
-    /**
      * Returns a debug rendering of every live body's progress and placement.
      *
      * <p>The live bodies are listed individually rather than counted, because the

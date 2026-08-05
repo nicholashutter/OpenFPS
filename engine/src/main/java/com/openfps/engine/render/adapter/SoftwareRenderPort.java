@@ -2433,16 +2433,6 @@ public final class SoftwareRenderPort implements I_RenderPort
     }
 
     /**
-     * Whether the aiming reticle is being drawn.
-     *
-     * @return the current setting
-     */
-    public boolean isCrosshairEnabled()
-    {
-        return crosshairEnabled;
-    }
-
-    /**
      * Turns the entity wireframe highlight on or off. On by default.
      *
      * <p>Safe to flip between frames: it is one volatile read on the render
@@ -2455,16 +2445,6 @@ public final class SoftwareRenderPort implements I_RenderPort
     public void setOutlineEnabled(final boolean enabled)
     {
         this.outlineEnabled = enabled;
-    }
-
-    /**
-     * Whether the entity wireframe highlight is being drawn.
-     *
-     * @return the current setting
-     */
-    public boolean isOutlineEnabled()
-    {
-        return outlineEnabled;
     }
 
     /**

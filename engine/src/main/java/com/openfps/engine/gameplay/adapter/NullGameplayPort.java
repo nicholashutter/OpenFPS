@@ -26,18 +26,6 @@ public final class NullGameplayPort implements I_GameplayPort
     }
 
     @Override
-    public int spawnEntity(final int entityType, final int x, final int y, final int z)
-    {
-        return -1;
-    }
-
-    @Override
-    public void removeEntity(final int entityId)
-    {
-        // no-op
-    }
-
-    @Override
     public void init()
     {
         // no-op

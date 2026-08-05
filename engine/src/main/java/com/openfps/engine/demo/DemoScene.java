@@ -1679,20 +1679,6 @@ public final class DemoScene
         return slot;
     }
 
-    /**
-     * Returns the room's solid geometry.
-     *
-     * <p>Immutable and shared. Whatever else comes to move inside this room —
-     * bots, projectiles, a remote peer's body — should clip against this one
-     * instance rather than build a second description of the same walls.</p>
-     *
-     * @return the collision world this scene's players move in, never null
-     */
-    public PhysicsWorld physics()
-    {
-        return physics;
-    }
-
     /** Returns the spawn feet position, world x. */
     public float spawnX()
     {

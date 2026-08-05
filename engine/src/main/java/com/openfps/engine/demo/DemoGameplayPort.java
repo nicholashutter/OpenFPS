@@ -558,12 +558,6 @@ public final class DemoGameplayPort implements I_GameplayPort
         LOG.info("Network attached: {}", session);
     }
 
-    /** Returns the network session, or null for a local match. */
-    public NetSession network()
-    {
-        return net;
-    }
-
     /**
      * Attaches the pool of bodies the peers are simulated into.
      *
@@ -1012,20 +1006,6 @@ public final class DemoGameplayPort implements I_GameplayPort
         }
     }
 
-    /**
-     * Returns the gate deciding how much of the room's fire is heard. Never null.
-     *
-     * <p>Exposed so a test can assert the cap without a sound card, which is the
-     * only way it can be asserted at all: {@code NullAudioPort} counts plays but
-     * cannot say what a stack of them would sound like.</p>
-     *
-     * @return the bot-fire voice gate
-     */
-    public BotFireVoices botFireVoices()
-    {
-        return botVoices;
-    }
-
     // Ages every tracer and puff of smoke by one tic.
     //
     // NOT gated on matchLive, unlike the bots. A menu opening mid-burst must not
@@ -1245,32 +1225,6 @@ public final class DemoGameplayPort implements I_GameplayPort
     public boolean loadMap(final String mapName)
     {
         return false;
-    }
-
-    /**
-     * Returns -1 — the demo has no entity system.
-     *
-     * @param entityType ignored
-     * @param x ignored
-     * @param y ignored
-     * @param z ignored
-     * @return -1, always
-     */
-    @Override
-    public int spawnEntity(final int entityType, final int x, final int y, final int z)
-    {
-        return -1;
-    }
-
-    /**
-     * Does nothing — the demo has no entity system.
-     *
-     * @param entityId ignored
-     */
-    @Override
-    public void removeEntity(final int entityId)
-    {
-        // no entities to remove
     }
 
     /** Returns the player this port moves. Never null. */

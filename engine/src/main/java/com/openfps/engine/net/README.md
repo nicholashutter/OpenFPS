@@ -70,7 +70,10 @@ redundant redelivery, no dependency added.
 
 **Not built.** `SnapshotDelta` and `Discovery`. `EngineMain` still registers
 `NetSubsystem(new NullNetworkPort())` — the live session deliberately bypasses
-it, for the socket-ownership reason given below.
+it, for the socket-ownership reason given below. `I_NetworkPort` has been
+trimmed to just `init()` and `shutdown()` (the 2026-08 prune removed the six
+business methods that pre-dated `NetSession`'s redundant-redelivery transport
+and which nothing now calls).
 
 **Blocked on.** Nothing. The remaining items are design questions with known
 shapes, not unknowns.
@@ -120,7 +123,7 @@ net/
 ├── NetSession.java          the socket, the peers, and a tic in and out
 ├── TicCmdEncoder.java       input <-> wire quantisation
 ├── port/
-│   └── I_NetworkPort.java   interface — called by core per tic
+│   └── I_NetworkPort.java   interface — now just init()/shutdown() (see § 2026-08 prune)
 └── adapter/
     └── NullNetworkPort.java stub — what NetSubsystem still registers
 ```

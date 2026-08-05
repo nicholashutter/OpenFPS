@@ -243,7 +243,7 @@ public final class EngineMain
      * @param hal    the uninitialized HAL factory to boot against
      * @return a live session; call {@link EngineSession#stop()} to tear it down
      */
-    public EngineSession start(final GameConfig config, final I_AdapterFactory hal)
+    private EngineSession start(final GameConfig config, final I_AdapterFactory hal)
     {
         return start(config, hal, EngineMain::nullRenderPort);
     }
@@ -264,8 +264,8 @@ public final class EngineMain
      * @param renderPortFactory builds the render port; must not be null
      * @return a live session; call {@link EngineSession#stop()} to tear it down
      */
-    public EngineSession start(final GameConfig config, final I_AdapterFactory hal,
-                               final I_RenderPortFactory renderPortFactory)
+    private EngineSession start(final GameConfig config, final I_AdapterFactory hal,
+                                final I_RenderPortFactory renderPortFactory)
     {
         return start(config, hal, renderPortFactory, EngineMain::nullGameplayPort);
     }

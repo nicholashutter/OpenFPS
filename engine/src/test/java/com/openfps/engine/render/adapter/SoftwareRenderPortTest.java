@@ -744,9 +744,6 @@ final class SoftwareRenderPortTest
                 .build();
             final SoftwareRenderPort port = renderScene(tagged, sceneCamera(), null);
 
-            assertThat(port.isOutlineEnabled())
-                .as("on without being asked")
-                .isTrue();
             assertThat(port.scene().hasTaggedEntities())
                 .as("the scene really is tagged — this is not passing by accident")
                 .isTrue();

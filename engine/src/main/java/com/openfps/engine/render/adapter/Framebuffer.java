@@ -130,21 +130,6 @@ public final class Framebuffer
     /** Opaque black in RGBA8888 — the default colour clear value. */
     public static final int CLEAR_COLOR_OPAQUE_BLACK = 0x000000FF;
 
-    /** Required length of the array passed to {@link #tileBounds(int, int[])}. */
-    public static final int TILE_BOUNDS_LENGTH = 4;
-
-    /** Index of the inclusive minimum x in a {@link #tileBounds(int, int[])} result. */
-    public static final int TILE_BOUNDS_MIN_X = 0;
-
-    /** Index of the inclusive minimum y in a {@link #tileBounds(int, int[])} result. */
-    public static final int TILE_BOUNDS_MIN_Y = 1;
-
-    /** Index of the inclusive maximum x in a {@link #tileBounds(int, int[])} result. */
-    public static final int TILE_BOUNDS_MAX_X = 2;
-
-    /** Index of the inclusive maximum y in a {@link #tileBounds(int, int[])} result. */
-    public static final int TILE_BOUNDS_MAX_Y = 3;
-
     /** Bit width of one RGBA8888 channel. */
     private static final int CHANNEL_BITS = 8;
 
@@ -686,51 +671,6 @@ public final class Framebuffer
     public int tileHeight(final int tileIndex)
     {
         return tileMaxY(tileIndex) - tileMinY(tileIndex) + 1;
-    }
-
-    /**
-     * Writes a tile's pixel rectangle into a caller-supplied array, so the
-     * rasterizer can take all four bounds without four calls and without
-     * allocating. <b>Both maxima are inclusive.</b>
-     *
-     * @param tileIndex tile index in {@code [0, tileCount())}, row-major
-     * @param out array of at least {@link #TILE_BOUNDS_LENGTH} elements,
-     *     filled at {@link #TILE_BOUNDS_MIN_X}, {@link #TILE_BOUNDS_MIN_Y},
-     *     {@link #TILE_BOUNDS_MAX_X}, {@link #TILE_BOUNDS_MAX_Y}
-     * @throws IllegalArgumentException if the tile index is out of range or
-     *     the array is too short
-     */
-    public void tileBounds(final int tileIndex, final int[] out)
-    {
-        checkTile(tileIndex);
-        if (out == null || out.length < TILE_BOUNDS_LENGTH)
-        {
-            throw new IllegalArgumentException("tileBounds() needs an int["
-                + TILE_BOUNDS_LENGTH + "]");
-        }
-        final int minX = (tileIndex % tilesX) * tileSize;
-        final int minY = (tileIndex / tilesX) * tileSize;
-        out[TILE_BOUNDS_MIN_X] = minX;
-        out[TILE_BOUNDS_MIN_Y] = minY;
-        out[TILE_BOUNDS_MAX_X] = Math.min(minX + tileSize - 1, width - 1);
-        out[TILE_BOUNDS_MAX_Y] = Math.min(minY + tileSize - 1, height - 1);
-    }
-
-    /**
-     * Returns the index of the tile owning a pixel. Every visible pixel
-     * belongs to exactly one tile — that is the invariant the lock-free raster
-     * pass rests on (README section 7).
-     *
-     * @param x column, in {@code [0, width)}
-     * @param y row, in {@code [0, height)}
-     * @return tile index in {@code [0, tileCount())}
-     * @throws IllegalArgumentException if the coordinate is outside the
-     *     visible rectangle
-     */
-    public int tileIndexAt(final int x, final int y)
-    {
-        checkPixel(x, y);
-        return (y / tileSize) * tilesX + (x / tileSize);
     }
 
     // ---- presentation handoff ----

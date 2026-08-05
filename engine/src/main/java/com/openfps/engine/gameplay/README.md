@@ -154,7 +154,7 @@ gameplay/
 ├── PhysicsWorld.java              solid boxes; clips a desired move, slides
 ├── PlayerInputView.java           adapts the HAL InputState onto I_PlayerInput
 ├── port/
-│   ├── I_GameplayPort.java        interface — called by core per tic
+│   ├── I_GameplayPort.java        interface — called by core per tic (tick + loadMap + init/shutdown only since the 2026-08 prune)
 │   ├── I_GameplayPortFactory.java builds the port once the HAL is initialised
 │   └── I_PlayerInput.java         the four floats PlayerController consumes
 └── adapter/

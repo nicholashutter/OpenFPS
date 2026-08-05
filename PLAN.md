@@ -1,6 +1,6 @@
 # OpenFPS — Project Plan
 
-> **Status**: Pre-alpha — Phases 0 through 1.5 complete, plus Phase 5 (render). Event-driven engine, unified memory, multi-threaded worker pool, configurable 30/60/120 Hz, SQLite user-profile persistence, desktop HAL with a real window and input, and a multi-threaded software triangle rasterizer driving a playable first-person match. Phase 4 (gameplay) landed ahead of its number: collision, hitscan, bots, scoring, respawn and a kill streak. Phase 6 (audio) is started and narrow — every sound synthesised at runtime. Phase 2 (WAD) is partly done and unregistered. Phase 3 (net) has a real socket and visible peers, but **match state is not replicated, so peers are not shootable**. **2339 tests** — 1625 `:engine`, 300 `:gdxshared`, 177 `:android`, 164 `:desktop`, 73 `:tools`.
+> **Status**: Pre-alpha — Phases 0 through 1.5 complete, plus Phase 5 (render). Event-driven engine, unified memory, multi-threaded worker pool, configurable 30/60/120 Hz, SQLite user-profile persistence, desktop HAL with a real window and input, and a multi-threaded software triangle rasterizer driving a playable first-person match. Phase 4 (gameplay) landed ahead of its number: collision, hitscan, bots, scoring, respawn and a kill streak. Phase 6 (audio) is started and narrow — every sound synthesised at runtime. Phase 2 (WAD) is partly done and unregistered. Phase 3 (net) has a real socket and visible peers, but **match state is not replicated, so peers are not shootable**. **2343 tests** — 1629 `:engine`, 300 `:gdxshared`, 177 `:android`, 164 `:desktop`, 73 `:tools`.
 > **Engine Version**: 0.1.0-SNAPSHOT
 > **Target JVM**: 17 LTS (Java 17 source/target, runs on 17+)
 > **Platforms**: Windows, Linux, macOS (`:desktop`, libGDX LWJGL3 backend); Android (`:android`, libGDX Android backend). `:engine` is platform-free and runs headless on any JVM 17+.
@@ -579,7 +579,7 @@ The four unchecked items are **deliberately not half-started**. `audio/README.md
 
 ## 8. Test Coverage Summary
 
-**2339 tests, all passing** — 1625 `:engine`, 300 `:gdxshared`, 177 `:android`,
+**2343 tests, all passing** — 1629 `:engine`, 300 `:gdxshared`, 177 `:android`,
 164 `:desktop`, 73 `:tools`.
 
 **The per-package breakdown lives in `README.md` § Test Coverage and nowhere

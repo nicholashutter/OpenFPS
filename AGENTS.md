@@ -299,9 +299,16 @@ platform-free. Both implement `I_WindowPort` and drive `I_FrameCallback` —
 which is also the presentation path for the Phase 5 rasterizer. The engine
 produces a finished framebuffer; the adapter uploads it.
 
-**2339 tests passing** (1625 `:engine`, 300 `:gdxshared`, 177 `:android`,
+**2343 tests passing** (1629 `:engine`, 300 `:gdxshared`, 177 `:android`,
 164 `:desktop`, 73 `:tools`), Checkstyle clean — see `BUILD.md` for run
 instructions and `README.md` § Test Coverage for the per-package breakdown.
+
+The 2026-08 dead-code prune removed 7 unused public methods (see
+`PRUNE_AUDIT.md`) and merged 1 redundant test; the net change is +4 tests
+on `:engine` (some tests are written as `@Nested` so removing one method
+sometimes loses a test file and gains it back through a different
+counting route). The number of public methods on the engine dropped from
+~190 to ~180; the number of source lines on the engine dropped by ~250.
 
 These are **distinct** tests, and every previous figure in this file was wrong
 in one of two directions, so count them the same way or do not quote a number:
