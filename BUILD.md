@@ -230,6 +230,7 @@ Both `:engine` and `:desktop` apply the `application` plugin, so **bare
 .\gradlew :engine:run --args="--fps=30"
 .\gradlew :engine:run --args="--no-sqlite"
 .\gradlew :engine:run --args="--headless"
+.\gradlew :engine:run --args="--headless --map=cornerstone --fps=60"   # load the 16-map library sample
 
 # The playable demo, in a window (needs art — see below)
 .\gradlew :desktop:run
@@ -244,6 +245,7 @@ Both `:engine` and `:desktop` apply the `application` plugin, so **bare
 | `--fps=30\|60\|120` | Tic rate. Anything else is rejected at startup. Default 60 | both |
 | `--no-sqlite` | Use the in-memory profile port instead of on-disk SQLite | `:engine:run` only |
 | `--headless` | Force the null adapter factory (implies `--no-sqlite`) | `:engine:run` only |
+| `--map=<id>` | Which map to load. Defaults to `cornerstone`. See [docs/maps/README.md](docs/maps/README.md) for the registered list | both |
 | `--assets=<dir>` | Model root. Default `assets/models` | `:desktop:run` only |
 | `--start-in-game` | Skip the menu and open straight into the world | `:desktop:run` only |
 | `--net=<id>:<port>` | Be player `<id>`, listen on UDP `<port>`. `0` asks the OS for a free port | `:desktop:run` only |

@@ -32,6 +32,19 @@ public interface MenuActions
     /** Invoked when the user activates "Settings". */
     void onSettings();
 
+    /**
+     * Invoked when the user activates "Select Map" — opens a screen that lists
+     * the registered maps and lets the player pick one.
+     *
+     * <p>A separate method rather than a parameter on {@link #onSettings()}
+     * because the picker is a full screen, not a toggle on a shared one: it
+     * owns its own Scene2D stage and the player's next move is "pick a map",
+     * not "flip a switch". Forcing the two onto the same code path would
+     * give the caller a parameter to switch on at every implementor, which
+     * is the kind of signature that gets out of step with itself.</p>
+     */
+    void onMapSelection();
+
     /** Invoked when the user activates "Quit". Must close the window. */
     void onQuit();
 }

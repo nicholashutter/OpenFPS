@@ -57,6 +57,26 @@ final class DemoEffectsTest
     /** See {@link #EYE_X}. */
     private static final float EYE_Z = -192.0f;
 
+    /**
+     * The muzzle position the player's shot produces, derived the same way
+     * {@link DemoEffects#spawn} derives it: the eye offset by
+     * {@link DemoEffects#MUZZLE_FORWARD_UNITS} along the aim and
+     * {@link DemoEffects#MUZZLE_RIGHT_UNITS} along the right, with the gun's
+     * drop applied to Y. Pinned down so the flash test asserts a value the
+     * code would actually produce — the constants used here are the same
+     * numbers the spawner used.
+     */
+    private static final float EXPECTED_MUZZLE_X = EYE_X + 0.0f * DemoEffects.MUZZLE_FORWARD_UNITS
+        + (-1.0f) * DemoEffects.MUZZLE_RIGHT_UNITS;
+
+    /** See {@link #EXPECTED_MUZZLE_X}. */
+    private static final float EXPECTED_MUZZLE_Y = EYE_Y + 0.0f * DemoEffects.MUZZLE_FORWARD_UNITS
+        + 0.0f * DemoEffects.MUZZLE_RIGHT_UNITS - DemoEffects.MUZZLE_DROP_UNITS;
+
+    /** See {@link #EXPECTED_MUZZLE_X}. */
+    private static final float EXPECTED_MUZZLE_Z = EYE_Z + 1.0f * DemoEffects.MUZZLE_FORWARD_UNITS
+        + 0.0f * DemoEffects.MUZZLE_RIGHT_UNITS;
+
     /** Surface size for the port; nothing looks at the pixels here. */
     private static final int SURFACE = 32;
 
@@ -361,11 +381,16 @@ final class DemoEffectsTest
             final Scene.Builder builder = Scene.builder();
             final DemoEffects effects = DemoEffects.addTo(builder);
 
-            // Both halves of the pool: the player's outgoing fire and the bots'
-            // incoming fire share one array with a boundary at MAX_TRACERS.
+            // The full pool: tracer slots (one instance per slot), puff slots
+            // crossed with stages, lobes and colour variants (one instance per
+            // lobe per stage per variant), and one flash slot per muzzle flash.
+            // The flash is one instance per slot, the same shape as the tracer
+            // — a flash lives or dies and the size is a transform property,
+            // not a separate model.
             assertThat(effects.instanceCount()).isEqualTo(DemoEffects.tracerSlotCount()
                 + DemoEffects.puffSlotCount() * DemoEffects.PUFF_STAGES
-                    * DemoEffects.PUFF_LOBES);
+                    * DemoEffects.PUFF_LOBES * DemoEffects.PUFF_COLOR_VARIANTS
+                + DemoEffects.flashSlotCount());
             assertThat(builder.worldInstanceCount()).isEqualTo(effects.instanceCount());
         }
 
@@ -375,7 +400,9 @@ final class DemoEffectsTest
         {
             // Two lobes sharing an instance would look like one lobe and would
             // fight over the transform every tic — and it is exactly the sort of
-            // index arithmetic that goes wrong silently.
+            // index arithmetic that goes wrong silently. Every variant of every
+            // (slot, stage, lobe) is its own instance, not just the warm one,
+            // because the publish writes one per active variant.
             final Scene.Builder builder = Scene.builder();
             final DemoEffects effects = DemoEffects.addTo(builder);
 
@@ -386,15 +413,21 @@ final class DemoEffectsTest
                 {
                     for (int lobe = 0; lobe < DemoEffects.PUFF_LOBES; lobe++)
                     {
-                        assertThat(seen.add(
-                            Integer.valueOf(effects.puffInstanceIndex(slot, stage, lobe))))
-                            .as("puff %d stage %d lobe %d is a fresh instance", slot, stage, lobe)
-                            .isTrue();
+                        for (int variant = 0; variant < DemoEffects.PUFF_COLOR_VARIANTS; variant++)
+                        {
+                            assertThat(seen.add(
+                                Integer.valueOf(
+                                    effects.puffInstanceIndex(slot, stage, lobe, variant))))
+                                .as("puff %d stage %d lobe %d variant %d is a fresh instance",
+                                    slot, stage, lobe, variant)
+                                .isTrue();
+                        }
                     }
                 }
             }
             assertThat(seen).hasSize(
-                DemoEffects.MAX_PUFFS * DemoEffects.PUFF_STAGES * DemoEffects.PUFF_LOBES);
+                DemoEffects.MAX_PUFFS * DemoEffects.PUFF_STAGES * DemoEffects.PUFF_LOBES
+                    * DemoEffects.PUFF_COLOR_VARIANTS);
         }
 
         @Test
@@ -431,16 +464,29 @@ final class DemoEffectsTest
         }
 
         @Test
-        @DisplayName("one stage's lobes are consecutive instances, which keeps the run contiguous")
-        void lobesOfAStageAreAdjacent()
+        @DisplayName("a lobe's colour variants are consecutive instances, so a stage is one run")
+        void variantsOfALobeAreAdjacent()
         {
+            // The translucent phase draws maximal runs of EQUAL coverage. The
+            // load-bearing adjacency for that is "a stage's instances are
+            // consecutive": with the variant expansion, that means the
+            // variants of one lobe run together, then the next lobe's
+            // variants, and so on. A reader that does not have that property
+            // would pay a back-to-front pass per lobe.
             final Scene.Builder builder = Scene.builder();
             final DemoEffects effects = DemoEffects.addTo(builder);
 
+            for (int variant = 1; variant < DemoEffects.PUFF_COLOR_VARIANTS; variant++)
+            {
+                assertThat(effects.puffInstanceIndex(2, 1, 0, variant))
+                    .isEqualTo(effects.puffInstanceIndex(2, 1, 0, variant - 1) + 1);
+            }
             for (int lobe = 1; lobe < DemoEffects.PUFF_LOBES; lobe++)
             {
-                assertThat(effects.puffInstanceIndex(2, 1, lobe))
-                    .isEqualTo(effects.puffInstanceIndex(2, 1, lobe - 1) + 1);
+                assertThat(effects.puffInstanceIndex(2, 1, lobe, 0))
+                    .as("lobe %d starts a fresh variant run", lobe)
+                    .isEqualTo(effects.puffInstanceIndex(2, 1, lobe - 1, 0)
+                        + DemoEffects.PUFF_COLOR_VARIANTS);
             }
         }
 
@@ -454,7 +500,7 @@ final class DemoEffectsTest
 
             assertThat(scene.translucentInstanceCount())
                 .isEqualTo(DemoEffects.puffSlotCount() * DemoEffects.PUFF_STAGES
-                    * DemoEffects.PUFF_LOBES);
+                    * DemoEffects.PUFF_LOBES * DemoEffects.PUFF_COLOR_VARIANTS);
             for (int slot = 0; slot < DemoEffects.tracerSlotCount(); slot++)
             {
                 assertThat(scene.isWorldTranslucent(effects.tracerInstanceIndex(slot)))
@@ -859,6 +905,47 @@ final class DemoEffectsTest
             assertThat(fixture.effects.tracerRemaining(1))
                 .as("the second is brand new, in its own slot")
                 .isEqualTo(DemoEffects.TRACER_LIFE_TICS);
+        }
+
+        @Test
+        @DisplayName("a flash survives exactly its life and then expires")
+        void flashExpiresOnSchedule()
+        {
+            final Fixture fixture = new Fixture();
+            fixture.fire();
+
+            assertThat(fixture.effects.flashRemaining(0))
+                .isEqualTo(DemoEffects.FLASH_LIFE_TICS);
+            for (int tic = 1; tic < DemoEffects.FLASH_LIFE_TICS; tic++)
+            {
+                fixture.tic();
+                assertThat(fixture.effects.flashRemaining(0))
+                    .as("still glowing at tic %d of %d", tic, DemoEffects.FLASH_LIFE_TICS)
+                    .isEqualTo(DemoEffects.FLASH_LIFE_TICS - tic);
+            }
+            fixture.tic();
+
+            assertThat(fixture.effects.flashRemaining(0)).isEqualTo(DemoEffects.DEAD);
+        }
+
+        @Test
+        @DisplayName("a flash shares the same position as the tracer that left the muzzle")
+        void flashMatchesMuzzle()
+        {
+            // The flash is born at the muzzle, and the muzzle is also where
+            // the tracer starts. A flash that appeared anywhere else would
+            // be a puff of smoke without a shot, which is the wrong effect.
+            // The muzzle is derived from the eye and the aim the way
+            // DemoEffects.spawn() derives it, so the test exercises the
+            // SAME arithmetic and not a hand-rolled copy of it.
+            final Fixture fixture = new Fixture();
+            fixture.fire();
+
+            assertThat(DemoEffects.flashSlotCount())
+                .isEqualTo(DemoEffects.MAX_PLAYER_FLASHES + DemoEffects.MAX_BOT_FLASHES);
+            assertThat(fixture.effects.flashPositionX(0)).isEqualTo(EXPECTED_MUZZLE_X);
+            assertThat(fixture.effects.flashPositionY(0)).isEqualTo(EXPECTED_MUZZLE_Y);
+            assertThat(fixture.effects.flashPositionZ(0)).isEqualTo(EXPECTED_MUZZLE_Z);
         }
     }
 
@@ -1298,20 +1385,26 @@ final class DemoEffectsTest
         }
 
         @Test
-        @DisplayName("no bot can outlive its own puff, so the pool is sized for the whole room")
+        @DisplayName("the puff pool is sized for every bot's worst case, not the common one")
         void thePoolFitsTheWholeRoom()
         {
-            // MAX_BOT_PUFFS is derived rather than picked, and this is the relation
-            // it is derived from: a bot's cooldown is longer than a puff's life, so
-            // a bot can never have two puffs alive and seven bodies is the hard
-            // maximum. Drop the cooldown under PUFF_LIFE_TICS and this pool is
-            // undersized — which is exactly the change that would do it silently.
-            assertThat(com.openfps.engine.gameplay.BotSkill.DUMB.cooldownTics())
-                .as("a bot can now fire twice inside one puff's life")
-                .isGreaterThanOrEqualTo(DemoEffects.PUFF_LIFE_TICS);
+            // MAX_BOT_PUFFS is derived rather than picked, and the relation it
+            // is derived from is: a bot fires on every cooldown, and a puff lives
+            // for PUFF_LIFE_TICS, so the number of puffs a single bot can have
+            // alive at once is the ceiling of (PUFF_LIFE_TICS / cooldown) — one
+            // for the older ratio, two for the post-bump ratio. Seven bodies
+            // times that, plus one spare, is the pool size. Drop the cooldown
+            // under PUFF_LIFE_TICS / 2 and this pool is undersized — which is
+            // exactly the change that would do it silently.
+            final int maxConcurrent = (DemoEffects.PUFF_LIFE_TICS
+                + com.openfps.engine.gameplay.BotSkill.DUMB.cooldownTics() - 1)
+                / com.openfps.engine.gameplay.BotSkill.DUMB.cooldownTics();
             assertThat(DemoEffects.MAX_BOT_PUFFS)
-                .isGreaterThan(com.openfps.engine.gameplay.Match.DEFAULT_BOT_COUNT);
+                .as("the pool covers every bot's worst case plus one spare")
+                .isEqualTo(maxConcurrent
+                    * com.openfps.engine.gameplay.Match.DEFAULT_BOT_COUNT + 1);
             assertThat(DemoEffects.MAX_BOT_TRACERS)
+                .as("a bot never has two tracers alive, so the simple +1 spare holds")
                 .isGreaterThan(com.openfps.engine.gameplay.Match.DEFAULT_BOT_COUNT);
         }
     }

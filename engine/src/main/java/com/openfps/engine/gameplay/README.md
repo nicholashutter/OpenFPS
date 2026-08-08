@@ -8,9 +8,9 @@
 |---|---|
 | **State** | SHIPPING |
 | **Phase** | 4 — the match layer landed ahead of its phase, as the controller did |
-| **Tests** | 348 — counted, not remembered: `gradlew :engine:test --tests 'com.openfps.engine.gameplay.*'` |
+| **Tests** | 354 + 29 (map library + match mode dispatch) + 13 (Hardpoint mode logic) + 13 (Domination mode logic) + 16 (CTF mode logic) + 6 (MapScene wiring) + 6 (Pass 5 new HP map registrations) + 6 (Pass 6 new Domination map registrations) + 6 (Pass 7 new CTF map registrations) = 449 — counted, not remembered: `gradlew :engine:test --tests 'com.openfps.engine.gameplay.*'` |
 | **Registered** | P_ via `GameplaySubsystem` |
-| **Verified** | 2026-07-30 |
+| **Verified** | 2026-08-09 |
 
 ### The match layer
 
@@ -145,6 +145,65 @@ of it:
 
 `audio/README.md` and `net/README.md` mark their planned classes the same way;
 this file used not to, and read as an inventory of code that does not exist.
+
+**Map library (Pass 7 of 7 — the 16-map grid is complete).**
+A new subpackage, `com.openfps.engine.gameplay.map`, holds the map spec
+and registry: `MapSpec` (an immutable record-like class), `Lane` /
+`Chokepoint` / `SpawnPoint` / `Waypoint` (the structural data), `MapMarkers`
+(a sealed interface with four per-mode subtypes: `TeamDeathmatch`,
+`Hardpoint`, `Domination`, `CaptureTheFlag`), and the registry pair
+`MapLibrary` and `MapLoader`. The shipped maps are:
+`cornerstone` (Urban Warzone × TDM), `overpass` (Urban Warzone × Hardpoint),
+`tripoint` (Urban Warzone × Domination), and `extraction` (Urban Warzone ×
+CTF) — the four Urban Warzone maps covering all four modes (Pass 1 + 2).
+Three TDM maps in the other settings, with their textures Kenney-ized in
+Pass 5: `refinery` (Industrial Complex × TDM), `crossroads` (Desert Ravine ×
+TDM), and `arctic-station` (Arctic Station × TDM). Three Hardpoint maps in
+the other settings, added in Pass 5: `foundry` (Industrial Complex ×
+Hardpoint), `mesa` (Desert Ravine × Hardpoint), and `arctic-hp`/Subzero
+(Arctic Station × Hardpoint). Three Domination maps in the other
+settings, added in Pass 6: `pipeline` (Industrial Complex × Domination),
+`sandbar` (Desert Ravine × Domination), and `arctic-dom`/Frostline (Arctic
+Station × Domination). The CTF variants of the three non-Urban settings
+remain design-only. Three CTF maps in the other settings, added in
+Pass 7: `storage` (Industrial Complex × CTF), `stronghold` (Desert Ravine
+× CTF), and `coldfront` (Arctic Station × CTF). **The 16-map library is
+complete: 4 settings × 4 modes = 16 maps, all FULL.** `MapScene` (added
+in Pass 2) wraps a `MapSpec`'s
+`level.ofm` into a renderable `Scene` and is wired into the desktop
+launcher's `--map=<id>` path; the demo is bypassed in map mode and the
+per-tic simulation runs against the `MapSmokeGameplayPort` from the
+engine's existing `--map=` headless path. `Match` dispatches per-tic mode
+updates; all four mode logics are fully implemented
+(`Match.updateHardpoint` resolves the active holder, awards
+score-per-tick, advances the rotation on schedule, and records the
+per-team `hardpointRedScore` / `hardpointBlueScore`;
+`Match.updateDomination` resolves the per-flag owner from
+`isInDominationRadius` checks, awards 1 point per flag per tick, and
+records the per-team `dominationRedScore` / `dominationBlueScore`;
+`Match.updateCtf` handles pickup, return, capture, and drop-on-death for
+the local player, with `ctfRedFlagCarrier` / `ctfBlueFlagCarrier` slots,
+per-team `ctfRedCaptures` / `ctfBlueCaptures` counts, and a `state()`
+check that returns `WON` at 5 captures or the 10-minute time limit).
+`Bot` gained a `team` field so the resolve can read which side a body is
+on. The new `MatchMode` entries (`TDM`, `HARDPOINT`, `DOMINATION`, `CTF`)
+are siblings of the legacy two and are the rule sets the 16-map library
+carries. See `docs/maps/urban-warzone/01-cornerstone.md` through
+`04-ctf-extraction.md` for the four Urban Warzone designs (all FULL in
+Pass 2), the TDM maps at `docs/maps/industrial-complex/01-refinery.md`,
+`docs/maps/desert-ravine/01-crossroads.md`, and
+`docs/maps/arctic-station/01-icebridge.md` (FULL in Passes 1-4, textures
+Kenney-ized in Pass 5), the three Pass 5 Hardpoint maps at
+`docs/maps/industrial-complex/02-hp-foundry.md`,
+`docs/maps/desert-ravine/02-hp-mesa.md`, and
+`docs/maps/arctic-station/02-hp-arctic.md`, the three Pass 6
+Domination maps at `docs/maps/industrial-complex/03-dom-pipeline.md`,
+`docs/maps/desert-ravine/03-dom-sandbar.md`, and
+`docs/maps/arctic-station/03-dom-arctic.md`, and the three Pass 7
+CTF maps at `docs/maps/industrial-complex/04-ctf-storage.md`,
+`docs/maps/desert-ravine/04-ctf-stronghold.md`, and
+`docs/maps/arctic-station/04-ctf-arctic.md`. **The 16-map library is
+complete.**
 
 ## Subsystem layout
 

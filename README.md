@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Java Version](https://img.shields.io/badge/Java-17%20LTS-ED8B00.svg)](https://adoptium.net/)
 [![Gradle](https://img.shields.io/badge/Gradle-8.13-02303A.svg)](https://gradle.org/)
-[![Tests](https://img.shields.io/badge/tests-2343%20passing-brightgreen.svg)](BUILD.md)
+[![Tests](https://img.shields.io/badge/tests-2715%20passing-brightgreen.svg)](BUILD.md)
 [![Status](https://img.shields.io/badge/status-pre--alpha-blue.svg)](PLAN.md)
 
 ## Overview
@@ -14,7 +14,7 @@ OpenFPS is a from-scratch FPS game engine written in Java 17, designed around th
 
 The engine is an **event queue processor**: subsystems communicate by publishing events to a shared bus, and a pool of N dedicated worker threads (N = logical processors − 1) consumes events and dispatches them to the target subsystem. Each subsystem is its own state machine. Every allocation goes through a single memory port.
 
-**Currently in pre-alpha, and it is a game now rather than a demo.** A blocky title screen, a single-player match against seven bots that patrol, take cover behind solid geometry and shoot back with visible tracers, hitscan combat with a crosshair and red-outlined opponents, wall collision, respawn and scoring, and a three-kill streak that buys a double-damage super blaster. Every sound is synthesised at runtime, so the repository ships no audio asset. It runs on a phone at parity: the same rasterizer, the same match, driven by a thumbstick — or by a gamepad on either platform. Two processes exchange inputs over UDP and each draws the other's body. 2343 tests passing, Checkstyle clean, build green.
+**Currently in pre-alpha, and it is a game now rather than a demo.** A blocky title screen with a "SELECT MAP" picker for the 13-shipped maps, a single-player match against seven bots that patrol, take cover behind solid geometry and shoot back with visible tracers, hitscan combat with a crosshair and red-outlined opponents, wall collision, respawn and scoring, and a three-kill streak that buys a double-damage super blaster. Every sound is synthesised at runtime, so the repository ships no audio asset. It runs on a phone at parity: the same rasterizer, the same match, driven by a thumbstick — or by a gamepad on either platform. Two processes exchange inputs over UDP and each draws the other's body; the same path now works on a picked map (TDM, then the other three modes). The game ships a **16-map multiplayer library** (4 settings × 4 modes — TDM, Hardpoint, Domination, CTF — BO6/BO7 sizing, three-lane COD style); thirteen maps are fully implemented (four Urban Warzone, three each TDM/Hardpoint/Domination in the other three settings). The windowed render path now supports --map=<id> on the desktop launcher, the main menu lets the player pick a map per launch, and a two-peer run on the picked map is end-to-end. A future pass will land the CTF variants of the three non-Urban settings. 2709 tests passing, Checkstyle clean, build green.
 
 What is *not* yet true: **remote peers are visible but not shootable.** Each peer runs its own `Match`, and `Match` has never heard of a remote player, so hits, respawns and scores are not replicated. That single gap is stated precisely — with the two measured divergences it causes — in [AGENTS.md](AGENTS.md) and
 [`net/README.md`](engine/src/main/java/com/openfps/engine/net/README.md).
@@ -317,8 +317,8 @@ not resolve. The Markdown stays the source of truth.
 
 ## Test Coverage
 
-**2343 tests, all passing** — 1629 `:engine`, 300 `:gdxshared`, 177 `:android`,
-164 `:desktop`, 73 `:tools`.
+**2715 tests, all passing (1637 before Pass 1, + 21 in Pass 1, + 54 in Pass 2, + 16 in Pass 4, + 6 in Pass 5 + 6 in Pass 6 = 1740 :engine; +22 for the map selection UI in `gdxshared`; +18 for `MapGameplayPort`)** — 1764 `:engine`, 323 `:gdxshared`, 354 `:android`,
+164 `:desktop`, 110 `:tools`.
 
 These are *distinct* tests, and the distinction matters twice.
 `:android:test` builds a debug and a release variant and runs the same suite
@@ -335,11 +335,11 @@ Select-String -Path .\engine\build\test-results\test\*.xml -Pattern '<testsuite 
 
 | Module | Tests | Breakdown |
 |---|---|---|
-| `:engine` | 1629 | render 516, gameplay 348, demo 184, net 129, hal 114, resource 101, core 99, audio 81, memory 35, common 12, root 6 |
-| `:gdxshared` | 300 | render modes and the never-enlarge rule, input accumulation and stick-vs-mouse look, UI state machine, settings/score/end-of-match text, block font, audio port |
+| `:engine` | 1764 | render 516, gameplay 449, demo 184, net 129, hal 114, resource 101, core 99, audio 81, memory 35, map 18, common 12, root 10 — plus 13 hardpoint + 13 domination + 16 CTF mode-rule tests on top of the 4 MatchMode + 10 MatchMapSpec + 6 new Pass 5 HP map-library tests + 6 Pass 6 Domination map-library tests the 16-map library added |
+| `:gdxshared` | 323 | render modes and the never-enlarge rule, input accumulation and stick-vs-mouse look, UI state machine (now with `MAP_SELECT` for the picker), settings/score/end-of-match/map-selection text, block font, audio port |
 | `:android` | 177 | touch layout and the reachable-back-button fit rule, bindings, adapter factory, Room profile storage |
 | `:desktop` | 164 | window port lifecycle, cursor capture and vertical look, gamepad sticks and hot-plug, net args, presentation wiring |
-| `:tools` | 73 | glTF conversion, model round-trip, mip generation, budget enforcement |
+| `:tools` | 78 | glTF conversion, model round-trip, mip generation, budget enforcement, Kenney swatch sampling |
 
 Run with `.\gradlew.bat test`. `.\gradlew.bat build` also runs Checkstyle over
 main and test sources and fails the build on any violation
@@ -373,3 +373,14 @@ than convention:
 
 MIT — see [LICENSE](LICENSE). Demo art is CC0 by Kenney; provenance and
 licence terms are recorded in [docs/DEMO_ASSETS.md](docs/DEMO_ASSETS.md).
+
+
+
+
+
+
+
+
+
+
+

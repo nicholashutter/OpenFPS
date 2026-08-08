@@ -88,6 +88,18 @@ public enum UiState
     SETTINGS,
 
     /**
+     * The map picker is on screen and owns the pointer.
+     *
+     * <p>Reached from {@link #MENU} and returning only to it. The world is
+     * not drawn and the match does not advance — same as {@link #MENU} in
+     * every respect a consumer cares about, and a separate state only because
+     * a different screen is on the glass. The picker's selection is held in
+     * {@code MapSelection} and takes effect on the next launch; a same-process
+     * engine reload is a follow-up, not in this first pass.</p>
+     */
+    MAP_SELECT,
+
+    /**
      * The round is decided and its result is on screen.
      *
      * <p>The world stops being drawn the instant this begins. That is the
@@ -120,10 +132,12 @@ public enum UiState
         switch (this)
         {
             case MENU:
-                return target == PLAYING || target == SETTINGS;
+                return target == PLAYING || target == SETTINGS || target == MAP_SELECT;
             case PLAYING:
                 return target == MENU || target == GAME_OVER;
             case SETTINGS:
+                return target == MENU;
+            case MAP_SELECT:
                 return target == MENU;
             case GAME_OVER:
                 return target == MENU || target == PLAYING;
@@ -156,6 +170,16 @@ public enum UiState
     public boolean drawsSettings()
     {
         return this == SETTINGS;
+    }
+
+    /**
+     * Returns true while the map picker should be drawn and fed input events.
+     *
+     * @return true in {@link #MAP_SELECT} only
+     */
+    public boolean drawsMapSelect()
+    {
+        return this == MAP_SELECT;
     }
 
     /**

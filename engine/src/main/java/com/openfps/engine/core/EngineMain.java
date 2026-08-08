@@ -90,23 +90,27 @@ public final class EngineMain
         final FrameRate rate;
         final boolean useSqlite;
         final boolean headless;
+        final String mapId;
         try
         {
             rate = parseFpsArg(args);
             useSqlite = !hasFlag(args, "--no-sqlite");
             headless = hasFlag(args, "--headless");
+            mapId = parseMapArg(args);
         }
         catch (final IllegalArgumentException e)
         {
             LOG.error("Failed to parse arguments: {}", e.getMessage());
             System.err.println("ERROR: " + e.getMessage());
-            System.err.println("Usage: java -jar openfps.jar [--fps=30|60|120] [--no-sqlite] [--headless]");
+            System.err.println("Usage: java -jar openfps.jar [--fps=30|60|120]"
+                + " [--no-sqlite] [--headless] [--map=<id>]");
             System.exit(1);
             return;
         }
-        LOG.info("Engine version 0.1.0-SNAPSHOT, target rate={} Hz, java={}, sqlite={}, headless={}",
-            rate.fps(), System.getProperty("java.version"), useSqlite, headless);
-        new EngineMain().run(GameConfig.headless(rate), useSqlite, headless);
+        LOG.info("Engine version 0.1.0-SNAPSHOT, target rate={} Hz, java={}, sqlite={}, "
+            + "headless={}, map={}", rate.fps(), System.getProperty("java.version"), useSqlite,
+            headless, displayMapId(mapId));
+        new EngineMain().run(GameConfig.headless(rate), useSqlite, headless, mapId);
     }
 
     /**
@@ -139,6 +143,54 @@ public final class EngineMain
         return FrameRate.FPS_60;
     }
 
+    /**
+     * Parses the {@code --map=<id>} argument. Returns null if not present.
+     *
+     * <p>The id is whatever the caller typed after {@code --map=}; whether
+     * it is a real map is a runtime question, answered by
+     * {@code MapLibrary.has(id)}. A typo here fails at the first match
+     * lookup, not at parse time, because the engine does not have to
+     * know which maps exist to parse its own command line.</p>
+     *
+     * @param args the CLI arguments, may be null
+     * @return the map id, or null
+     */
+    public static String parseMapArg(final String[] args)
+    {
+        if (args == null)
+        {
+            return null;
+        }
+        for (final String arg : args)
+        {
+            if (arg == null)
+            {
+                continue;
+            }
+            if (arg.startsWith("--map="))
+            {
+                return arg.substring("--map=".length());
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Returns a printable representation of a map id: the id itself, or
+     * the literal {@code <none>} when null.
+     *
+     * @param mapId the parsed map id, may be null
+     * @return a non-null display string
+     */
+    private static String displayMapId(final String mapId)
+    {
+        if (mapId == null)
+        {
+            return "<none>";
+        }
+        return mapId;
+    }
+
     /** Returns true if {@code args} contains the given flag. */
     private static boolean hasFlag(final String[] args, final String flag)
     {
@@ -165,7 +217,37 @@ public final class EngineMain
      */
     public void run(final GameConfig config, final boolean useSqlite, final boolean headless)
     {
-        run(config, AdapterFactorySelector.create(selectBackend(useSqlite, headless)));
+        run(config, useSqlite, headless, null);
+    }
+
+    /**
+     * Runs the engine with the requested HAL factory, a bounded tic count
+     * and an optional map id.
+     *
+     * <p>When {@code mapId} is non-null the engine runs the headless map
+     * smoke test against the named map: a {@code MapSmokeGameplayPort}
+     * ticks a {@code Match} built from the spec until the round ends or
+     * the engine's max-tic cap is reached. A null {@code mapId} keeps the
+     * legacy behaviour of an empty null-port run.</p>
+     *
+     * <p>The map id is taken on trust by the engine and resolved through
+     * {@code MapLibrary}; an unknown id falls back to {@code cornerstone}
+     * at the gameplay-port layer and is logged at {@code WARN}, so a
+     * typo in {@code --map=} does not stop the engine from booting.</p>
+     *
+     * @param config    the game config (rate + maxTics)
+     * @param useSqlite if true, use the on-disk profile; false for the
+     *                  in-memory profile
+     * @param headless  if true, force the null adapter (overrides
+     *                  useSqlite)
+     * @param mapId     the id of the map to load, or null for the legacy
+     *                  no-map path
+     */
+    public void run(final GameConfig config, final boolean useSqlite, final boolean headless,
+        final String mapId)
+    {
+        run(config, AdapterFactorySelector.create(selectBackend(useSqlite, headless)),
+            EngineMain::nullRenderPort, mapSmokeFactory(mapId));
     }
 
     /**
@@ -209,6 +291,25 @@ public final class EngineMain
     }
 
     /**
+     * Runs the engine against a caller-supplied HAL factory, renderer and
+     * gameplay port factory. The full injection point a launcher needs to
+     * build both subsystems with their ports.
+     *
+     * @param config               the game config (rate + maxTics)
+     * @param hal                  the uninitialized HAL factory
+     * @param renderPortFactory    builds the render port
+     * @param gameplayPortFactory  builds the gameplay port
+     */
+    public void run(final GameConfig config, final I_AdapterFactory hal,
+                    final I_RenderPortFactory renderPortFactory,
+                    final I_GameplayPortFactory gameplayPortFactory)
+    {
+        final EngineSession session = start(config, hal, renderPortFactory, gameplayPortFactory);
+        session.awaitPlatformLoop();
+        session.stop();
+    }
+
+    /**
      * The default renderer: a null port that draws nothing.
      *
      * A method reference rather than a lambda body so the headless default
@@ -221,6 +322,29 @@ public final class EngineMain
     private static I_RenderPort nullRenderPort(final I_ThreadPoolPort pool, final I_TimePort time)
     {
         return new NullRenderPort();
+    }
+
+    /**
+     * Builds the headless gameplay port for a given map id, or the null
+     * port when no map is requested.
+     *
+     * <p>The factory is a method reference rather than a lambda body so
+     * the call site reads the same as the other engine-default factories
+     * and a future caller can override the map without rewriting the
+     * bootstrap.</p>
+     *
+     * @param mapId the id of the map to load, or null for the legacy
+     *              no-map path
+     * @return a fresh factory
+     */
+    private static I_GameplayPortFactory mapSmokeFactory(final String mapId)
+    {
+        if (mapId == null)
+        {
+            return EngineMain::nullGameplayPort;
+        }
+        return inputPort ->
+            com.openfps.engine.gameplay.map.MapSmokeGameplayPort.create(inputPort, mapId);
     }
 
     /**

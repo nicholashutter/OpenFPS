@@ -210,6 +210,19 @@ public final class DemoGameplayPort implements I_GameplayPort
     private volatile RemotePlayers remoteBodies;
 
     /**
+     * The local player's first-person body, or null when none has been attached.
+     *
+     * <p>MUTABLE, attached by the launcher before the loop starts, the same
+     * shape and for the same reason as {@link #remoteBodies} — the body
+     * belongs to the {@code DemoScene}, which the bootstrap's gameplay
+     * factory cannot see. The arms are procedurally generated so the body
+     * is always present in a built scene; null here means the launcher has
+     * not yet wired it in, which is harmless — the publish call is a
+     * no-op against null.</p>
+     */
+    private volatile LocalPlayerBody localBody;
+
+    /**
      * Where the weapon's noise goes. Never null.
      *
      * <p><b>Starts silent rather than starting absent.</b> A
@@ -595,6 +608,37 @@ public final class DemoGameplayPort implements I_GameplayPort
     }
 
     /**
+     * Attaches the local player's first-person body so its arms can be
+     * published every tic.
+     *
+     * <p>The same shape as {@link #attachRemoteBodies} for the same reason —
+     * the body is part of the {@code DemoScene}, which the bootstrap's
+     * factory does not see. Call before the loop starts; safe from any
+     * thread.</p>
+     *
+     * @param body the body to drive, or null to stop publishing the local
+     *     player's arms. Null is a legitimate state, not a degraded one:
+     *     the body is procedurally generated so this only happens when the
+     *     launcher has not yet wired it in
+     */
+    public void attachLocalBody(final LocalPlayerBody body)
+    {
+        this.localBody = body;
+        if (body == null)
+        {
+            LOG.info("Local body detached — the player's arms will not be drawn");
+            return;
+        }
+        LOG.info("Local body attached: {}", body);
+    }
+
+    /** Returns the local player's first-person body, or null when none is attached. */
+    public LocalPlayerBody localBody()
+    {
+        return localBody;
+    }
+
+    /**
      * Attaches the sound output the weapon fires through.
      *
      * <p>A setter rather than an eighth constructor parameter, and the same
@@ -684,6 +728,7 @@ public final class DemoGameplayPort implements I_GameplayPort
             advanceEffects();
             publishBotPlacements();
             publishRemoteBodies();
+            publishLocalBody();
             publishEffects();
             aimCamera();
             this.ticsApplied = ticsApplied + 1;
@@ -896,6 +941,23 @@ public final class DemoGameplayPort implements I_GameplayPort
             return;
         }
         bodies.publish(renderer);
+    }
+
+    // Puts the local player's first-person body where the camera is, with
+    // the bob that comes from the latest latched input.
+    //
+    // Sits beside publishBotPlacements and publishRemoteBodies because that
+    // is what it is — one model, moved per tic. The body is null when the
+    // launcher has not yet wired it in, and the publish call is a no-op in
+    // that case. Harmless against a renderer with no scene bound.
+    private void publishLocalBody()
+    {
+        final LocalPlayerBody body = localBody;
+        if (body == null || renderer.scene() == null)
+        {
+            return;
+        }
+        body.publish(renderer, controller, inputView, deltaSeconds);
     }
 
     // Moves the opponents and lets them shoot back. Reports the result once,

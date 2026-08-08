@@ -8,6 +8,7 @@ package com.openfps.desktop;
 import com.badlogic.gdx.ApplicationListener;
 import com.badlogic.gdx.Gdx;
 
+import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -22,6 +23,8 @@ import com.openfps.gdx.DefaultMenuActions;
 import com.openfps.gdx.FramebufferPresenter;
 import com.openfps.gdx.GameOverScreen;
 import com.openfps.gdx.MainMenuScreen;
+import com.openfps.gdx.MapSelection;
+import com.openfps.gdx.MapSelectionScreen;
 import com.openfps.gdx.MenuActions;
 import com.openfps.gdx.RenderSettings;
 import com.openfps.gdx.ScoreOverlay;
@@ -174,6 +177,28 @@ public final class GdxFrameLoopListener implements ApplicationListener
      * the same reason the menu is — there is no GL context until create().
      */
     private SettingsScreen settings;
+
+    /**
+     * The map picker UI.
+     * MUTABLE: built in {@link #create()}, released in {@link #dispose()}, for
+     * the same reason the menu and the settings screen are — there is no
+     * GL context until create().
+     */
+    private MapSelectionScreen mapSelect;
+
+    /**
+     * The shared map selection the picker writes to. Held by the launcher
+     * and passed through the window port; the screen reads it for the
+     * current selection and writes it on click.
+     */
+    private final MapSelection mapSelection;
+
+    /**
+     * The rows the picker shows, in display order. The launcher supplies
+     * this from {@code MapLibrary.ids()}; never null while the picker is
+     * wired, and never empty.
+     */
+    private final List<MapSelectionScreen.Entry> mapEntries;
 
     /**
      * The end-of-match UI, or null while no match has finished.
@@ -366,6 +391,50 @@ public final class GdxFrameLoopListener implements ApplicationListener
         final DebugSettings debugSettings,
         final AccessibilitySettings accessibilitySettings)
     {
+        this(callback, actions, framePresenter, desktopInput, debugSettings, accessibilitySettings,
+            new MapSelection(), java.util.Collections.emptyList());
+    }
+
+    /**
+     * Creates the bridge with caller-supplied debug, accessibility, and
+     * map-selection state.
+     *
+     * <p>The launcher supplies all three when it wants to observe them —
+     * which it does for the accessibility group and the map selection, so
+     * the renderer's outline pass follows the same toggle and the launcher
+     * can read the picked map back when the engine starts. A window built
+     * without them gets a private map selection the menu cannot change,
+     * which is what every windowless test wants.</p>
+     *
+     * <p>{@code mapEntries} is the list the picker shows. It is not null and
+     * not empty when the launcher supplies it; the picker is built only
+     * when both fields are present. A window without a picker is fine —
+     * a no-op {@link UiState#MAP_SELECT} transition would still resolve
+     * to the menu, because the state machine refuses nothing the transition
+     * table does not list, and the table lists {@code MAP_SELECT -> MENU}.</p>
+     *
+     * @param callback the engine callback to forward lifecycle to; must not
+     *     be null
+     * @param actions what the menu buttons do; must not be null
+     * @param framePresenter draws the rasterizer's finished frame, or null
+     *     for a menu-only window
+     * @param desktopInput polled once per frame, or null for a window that
+     *     reads no input
+     * @param debugSettings the switch the settings screen flips; must not be
+     *     null
+     * @param accessibilitySettings the visual aids the settings screen flips;
+     *     must not be null
+     * @param mapSelection the shared map selection; must not be null
+     * @param mapEntries the rows the picker shows; must not be null; can be
+     *     empty, in which case the picker is not built
+     */
+    public GdxFrameLoopListener(final I_FrameCallback callback, final MenuActions actions,
+        final FramebufferPresenter framePresenter, final GdxInputPort desktopInput,
+        final DebugSettings debugSettings,
+        final AccessibilitySettings accessibilitySettings,
+        final MapSelection mapSelection,
+        final List<MapSelectionScreen.Entry> mapEntries)
+    {
         if (callback == null)
         {
             throw new IllegalArgumentException("callback must not be null");
@@ -382,8 +451,18 @@ public final class GdxFrameLoopListener implements ApplicationListener
         {
             throw new IllegalArgumentException("accessibilitySettings must not be null");
         }
+        if (mapSelection == null)
+        {
+            throw new IllegalArgumentException("mapSelection must not be null");
+        }
+        if (mapEntries == null)
+        {
+            throw new IllegalArgumentException("mapEntries must not be null");
+        }
         this.debug = debugSettings;
         this.accessibility = accessibilitySettings;
+        this.mapSelection = mapSelection;
+        this.mapEntries = List.copyOf(mapEntries);
         this.callback = callback;
         this.actions = new StartGameTransition(actions, uiState);
         this.presenter = framePresenter;
@@ -584,6 +663,19 @@ public final class GdxFrameLoopListener implements ApplicationListener
         settings = new SettingsScreen(accessibility, debug, renderSettings(),
             uiState::returnToMenu);
         settings.layoutFor(width, height);
+        // The picker is built only when the launcher supplied entries. An empty
+        // entries list is the "no map picker wired" case every windowless test
+        // gets; the menu's SELECT MAP button still works (it transitions to
+        // MAP_SELECT), but the screen will not be drawn because it is null.
+        // A future pass can decide whether a null picker should refuse the
+        // transition outright — for now, a silent fallback to the menu is
+        // the lesser surprise.
+        if (!mapEntries.isEmpty())
+        {
+            mapSelect = new MapSelectionScreen(mapSelection, mapEntries,
+                uiState::returnToMenu);
+            mapSelect.layoutFor(width, height);
+        }
         appliedState = uiState.state();
         applyMenuInput(appliedState);
         if (presenter != null)
@@ -687,6 +779,11 @@ public final class GdxFrameLoopListener implements ApplicationListener
         if (settings != null && current.drawsSettings())
         {
             settings.render(deltaSeconds);
+            return;
+        }
+        if (mapSelect != null && current.drawsMapSelect())
+        {
+            mapSelect.render(deltaSeconds);
             return;
         }
         if (gameOver != null && current.drawsGameOver())
@@ -846,6 +943,11 @@ public final class GdxFrameLoopListener implements ApplicationListener
             settings.attachInputProcessor();
             return;
         }
+        if (mapSelect != null && state.drawsMapSelect())
+        {
+            mapSelect.attachInputProcessor();
+            return;
+        }
         if (gameOver != null && state.drawsGameOver())
         {
             gameOver.attachInputProcessor();
@@ -929,6 +1031,12 @@ public final class GdxFrameLoopListener implements ApplicationListener
             settings.dispose();
             settings = null;
         }
+        if (mapSelect != null)
+        {
+            mapSelect.detachInputProcessor();
+            mapSelect.dispose();
+            mapSelect = null;
+        }
         if (gameOver != null)
         {
             gameOver.detachInputProcessor();
@@ -1004,6 +1112,13 @@ public final class GdxFrameLoopListener implements ApplicationListener
         {
             delegate.onSettings();
             uiState.openSettings();
+        }
+
+        @Override
+        public void onMapSelection()
+        {
+            delegate.onMapSelection();
+            uiState.openMapSelect();
         }
 
         @Override

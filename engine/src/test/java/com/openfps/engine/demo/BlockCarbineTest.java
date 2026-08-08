@@ -65,6 +65,22 @@ final class BlockCarbineTest
     }
 
     @Test
+    @DisplayName("has nine parts: the original six plus muzzle, handguard, scope")
+    void shouldHaveNineParts()
+    {
+        // Six base parts (barrel, receiver, stock, magazine, grip, sight) plus
+        // three accents (muzzle device, handguard shell, scope tube) added so
+        // the gun reads as a weapon at across-the-room distances, not just as
+        // a long dark shape. The accents stay within the same +-HALF_* box as
+        // the real model — see the "occupies exactly blaster-p's model-space
+        // box" assertion, which is the contract that makes adding more parts
+        // safe.
+        assertThat(BlockCarbine.partCount())
+            .as("six base parts plus three accents")
+            .isEqualTo(9);
+    }
+
+    @Test
     @DisplayName("the muzzle end is the thin end")
     void shouldBeShapedLikeAWeapon()
     {

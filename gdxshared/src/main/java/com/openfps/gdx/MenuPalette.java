@@ -83,6 +83,12 @@ public final class MenuPalette
     /** Shade under the multiplayer action. */
     public static final Color NET_SHADE = new Color(0.14f, 0.37f, 0.60f, 1f);
 
+    /** Face of the map-select action — a warmer accent than the neutral yellow. */
+    public static final Color ACCENT_FACE = new Color(0.78f, 0.42f, 0.92f, 1f);
+
+    /** Shade under the map-select action. */
+    public static final Color ACCENT_SHADE = new Color(0.50f, 0.22f, 0.66f, 1f);
+
     /** Face of a neutral action. */
     public static final Color NEUTRAL_FACE = new Color(0.98f, 0.72f, 0.20f, 1f);
 

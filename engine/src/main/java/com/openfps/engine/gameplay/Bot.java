@@ -6,6 +6,7 @@
 package com.openfps.engine.gameplay;
 
 import com.openfps.engine.common.Constants;
+import com.openfps.engine.gameplay.map.Team;
 
 /**
  * One computer-controlled opponent: a body that walks a fixed route, turns
@@ -100,6 +101,18 @@ public final class Bot
     /** The scene instance and hitbox this bot owns. Strictly positive. */
     private final int entityId;
 
+    /**
+     * Which team this bot fights for. {@link Team#NEUTRAL} for the legacy
+     * single-player demo, which has no team assignment; team modes
+     * (TDM, Hardpoint, Domination, CTF) assign RED or BLUE at spawn.
+     *
+     * <p>Imported from the map subpackage because the question "which team
+     * does this body belong to" is a map-design question, not a bot-AI
+     * question, and a {@code MapSpec}'s {@code SpawnPoint}s are the
+     * authoritative source of that answer.</p>
+     */
+    private final Team team;
+
     /** Route centre, world x. */
     private final float homeX;
 
@@ -164,14 +177,12 @@ public final class Bot
     private boolean hasSeenPlayer;
 
     /**
-     * Creates a bot on a route.
+     * Creates a bot on a route, with no team assignment.
      *
-     * <p><b>The firing cadence is no longer a constructor argument.</b> It used
-     * to be an interval and an offset, because a bot fired on a fixed timer and
-     * the offsets were what stopped seven of them volleying together. Both are
-     * gone: firing is now a per-tic roll against {@link BotSkill}, which
-     * decorrelates the room by construction rather than by arithmetic, and the
-     * profile belongs to the {@link Match} rather than to each body.</p>
+     * <p>Equivalent to {@link #Bot(int, float, float, float, BotPattern, float,
+     * int, int, Team)} with {@link Team#NEUTRAL}. The legacy eight-argument
+     * constructor is the one every existing test and the legacy demo call;
+     * the team-aware overload exists for the 16-map library's team modes.</p>
      *
      * @param id the entity id this bot owns; must be at least
      *     {@link Target#MIN_ENTITY_ID}
@@ -190,6 +201,38 @@ public final class Bot
         final float routeCentreZ, final BotPattern routePattern,
         final float routeAmplitudeUnits, final int routePeriodTics, final int routePhaseTics)
     {
+        this(id, routeCentreX, routeCentreY, routeCentreZ, routePattern, routeAmplitudeUnits,
+            routePeriodTics, routePhaseTics, Team.NEUTRAL);
+    }
+
+    /**
+     * Creates a bot on a route, with a team assignment.
+     *
+     * <p>The team is read by the mode-specific Match layer to decide which
+     * side a body counts for in Hardpoint zone captures, Domination flag
+     * ownership, and CTF flag pickup. A {@link Team#NEUTRAL} bot does not
+     * count for any side — the legacy single-player demo uses NEUTRAL
+     * throughout because it has no team semantics.</p>
+     *
+     * @param id the entity id this bot owns; must be at least
+     *     {@link Target#MIN_ENTITY_ID}
+     * @param routeCentreX route centre, world x
+     * @param routeCentreY route centre, world y — the floor
+     * @param routeCentreZ route centre, world z
+     * @param routePattern which route to walk; must not be null
+     * @param routeAmplitudeUnits how far the route reaches from its centre; must
+     *     be finite and non-negative
+     * @param routePeriodTics tics for one circuit; must be positive
+     * @param routePhaseTics where in the circuit to start; any value, reduced
+     *     modulo the period
+     * @param team which team this bot fights for; must not be null
+     * @throws IllegalArgumentException if any argument is out of range
+     */
+    public Bot(final int id, final float routeCentreX, final float routeCentreY,
+        final float routeCentreZ, final BotPattern routePattern,
+        final float routeAmplitudeUnits, final int routePeriodTics, final int routePhaseTics,
+        final Team team)
+    {
         if (id < Target.MIN_ENTITY_ID)
         {
             throw new IllegalArgumentException(
@@ -198,6 +241,10 @@ public final class Bot
         if (routePattern == null)
         {
             throw new IllegalArgumentException("pattern must not be null");
+        }
+        if (team == null)
+        {
+            throw new IllegalArgumentException("team must not be null");
         }
         // Negated >= so NaN, which fails every comparison, is rejected here
         // rather than reaching a position and poisoning the hitbox.
@@ -223,6 +270,7 @@ public final class Bot
         this.amplitudeUnits = routeAmplitudeUnits;
         this.periodTics = routePeriodTics;
         this.phaseTics = routePhaseTics;
+        this.team = team;
         // Place it on its route immediately, so a bot is never at its home
         // point for one tic before the first update moves it there.
         moveTo(0);
@@ -521,6 +569,17 @@ public final class Bot
     public int entityId()
     {
         return entityId;
+    }
+
+    /**
+     * Returns which team this bot fights for. Never null.
+     *
+     * @return the team, or {@link Team#NEUTRAL} for a bot with no team
+     *     assignment
+     */
+    public Team team()
+    {
+        return team;
     }
 
     /** Returns the current feet position, world x. */

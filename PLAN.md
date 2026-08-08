@@ -1,6 +1,6 @@
 # OpenFPS — Project Plan
 
-> **Status**: Pre-alpha — Phases 0 through 1.5 complete, plus Phase 5 (render). Event-driven engine, unified memory, multi-threaded worker pool, configurable 30/60/120 Hz, SQLite user-profile persistence, desktop HAL with a real window and input, and a multi-threaded software triangle rasterizer driving a playable first-person match. Phase 4 (gameplay) landed ahead of its number: collision, hitscan, bots, scoring, respawn and a kill streak. Phase 6 (audio) is started and narrow — every sound synthesised at runtime. Phase 2 (WAD) is partly done and unregistered. Phase 3 (net) has a real socket and visible peers, but **match state is not replicated, so peers are not shootable**. **2343 tests** — 1629 `:engine`, 300 `:gdxshared`, 177 `:android`, 164 `:desktop`, 73 `:tools`.
+> **Status**: Pre-alpha — Phases 0 through 1.5 complete, plus Phase 5 (render) and Phase 7 (16-map library, **complete**: 16 of 16 maps fully implemented). Event-driven engine, unified memory, multi-threaded worker pool, configurable 30/60/120 Hz, SQLite user-profile persistence, desktop HAL with a real window and input, and a multi-threaded software triangle rasterizer driving a playable first-person match. Phase 4 (gameplay) landed ahead of its number: collision, hitscan, bots, scoring, respawn and a kill streak. Phase 6 (audio) is started and narrow — every sound synthesised at runtime. Phase 2 (WAD) is partly done and unregistered. Phase 3 (net) has a real socket and visible peers, but **match state is not replicated, so peers are not shootable**. **2715 tests** — 1764 `:engine`, 323 `:gdxshared`, 354 `:android` (both `testDebugUnitTest` and `testReleaseUnitTest` report separately), 164 `:desktop`, 110 `:tools`. **The 16-map library is complete**: 4 settings × 4 modes, 16 maps, all 4 mode logics (TDM, Hardpoint, Domination, CTF) implemented end-to-end with tests. The main menu now offers a `SELECT MAP` picker that lists every registered map and seeds the next launch (and `--map=`) from the player's choice.
 > **Engine Version**: 0.1.0-SNAPSHOT
 > **Target JVM**: 17 LTS (Java 17 source/target, runs on 17+)
 > **Platforms**: Windows, Linux, macOS (`:desktop`, libGDX LWJGL3 backend); Android (`:android`, libGDX Android backend). `:engine` is platform-free and runs headless on any JVM 17+.
@@ -229,6 +229,8 @@ The earlier 2.5D design (BSP visibility, visplanes, column renderer, affine mapp
 **G_ Peer-to-Peer Networking**
 
 `NetSession` opens a real socket over `DesktopDatagramPort`; `TicCmdEncoder` does the float-to-wire quantisation; `demo/RemotePlayers` replays each peer's commands through its own `PlayerController` on the shared `PhysicsWorld`, so two processes draw each other's bodies. Measured live: 77 KB exchanged, zero malformed packets, zero strangers.
+
+**Two processes on one machine, today**: `gradlew :desktop:installDist`, then launch two plain JVMs from the image with `--net=<id>:<port> --peer=<id>@<host>:<port>`. WSL2 with `apt install openjdk-21-jdk` works as the second peer (reach the host via the WSL gateway IP, e.g. `172.30.192.1`, not `127.0.0.1` — WSL2 has its own loopback). Full assessment, including the four-step cost to go from "peers see each other walk" to "two real machines play a real TDM match": [`docs/map-selection-and-network-report.md`](docs/map-selection-and-network-report.md).
 
 **Still open, and the next real work**: `Match` has never heard of a remote player, so peers are visible but **not shootable**, respawn is not replicated (a teleport driven by `Match`, not by an input), and a late join costs a constant 17.07-unit offset. Desync detection is deliberately not started — the 20-byte header has no discriminator for a second packet type, and until match state is replicated the simulations are known to differ, so it would fire constantly and tell nobody anything.
 
@@ -575,12 +577,76 @@ Retired from this phase and deliberately not listed: `BspTraverser` (moved to Ph
 
 The four unchecked items are **deliberately not half-started**. `audio/README.md` keeps the 3D formulae as a reading list, explicitly not as a spec this code is failing to meet.
 
+### Phase 7 — 16-map multiplayer library — **Pass 7 of 7 done; the 16-map grid is complete**
+
+The library is a 4-by-4 grid: four settings (Urban Warzone, Industrial Complex,
+Desert Ravine, Arctic Station) crossed with four multiplayer modes (TDM,
+Hardpoint, Domination, CTF). The implementation is sequenced over four
+passes — one setting per pass, TDM first because it is the only mode
+without per-tic state, then Hardpoint, Domination, CTF.
+
+**Pass 1 — Urban Warzone × TDM (Cornerstone), the architecture.** Done.
+
+- [x] `MatchMode` extended with `TDM`, `HARDPOINT`, `DOMINATION`, `CTF` siblings of the legacy two
+- [x] `MapSpec` data class — final, immutable, equal-by-id. Lanes, spawns, waypoints, mode-specific markers, asset paths
+- [x] `MapLibrary` registry (singleton, static-initialised, thread-safe) and `MapLoader` (delegates to library)
+- [x] `Match` extension — spec-aware constructors, `mode()` and `teamScores()` accessors, per-mode `updateMode(ticIndex, ...)` dispatch with the four modes each having a stub method that runs without error
+- [x] **`cornerstone` map** — fully implemented, runnable through `.\gradlew.bat :engine:run --args="--headless --map=cornerstone --fps=60"`. Level `.ofm` is procedurally generated by `:tools:buildCornerstoneMap` and committed as a deliberate small fixture
+- [x] `EngineMain --map=<id>` CLI arg + `MapSmokeGameplayPort` headless test path
+- [x] Design specs for `hp-overpass`, `dom-tripoint`, `ctf-extraction` — committed at `docs/maps/urban-warzone/`, all marked **DESIGN ONLY**
+- [x] `CornerstoneMapBuilder` (`:tools`) — procedural level model, 264 triangles, 264 generated, 60 mip textures
+- [x] Tests: `MapSpecTest`, `MapLibraryTest`, `MatchModeTest`, `MatchMapSpecTest`
+- [x] **Pass 2 — Urban Warzone × HP / Dom / CTF + Cornerstone asset swap + MapScene for the windowed render path.** Done.
+  - [x] **`refinery` map** — fully implemented, runnable through `.\gradlew.bat :engine:run --args="--headless --map=refinery --fps=60"`. Level `.ofm` is procedurally generated by `:tools:buildRefineryMap` and committed (564 triangles, 1128 vertices, 2 textures)
+  - [x] **Hardpoint mode logic** — `Match.updateHardpoint(...)` implements resolve / score / advance. `Bot.team()` (a new field), `Match.setPlayerTeam(...)`, per-team `hardpointRedScore` / `hardpointBlueScore`, `hardpointActiveHolder`, `hardpointActiveZoneIndex` accessors. `teamScores()` returns the Hardpoint scores
+  - [x] `RefineryMapBuilder` (`:tools`) — procedural level model with three distillation columns, a process hall, internal pipework, three boilers, four corner stairways, and a mid-level catwalk ring
+  - [x] Design specs for `hp-foundry`, `dom-pipeline`, `ctf-storage` — committed at `docs/maps/industrial-complex/`, all marked **DESIGN ONLY** (HP is **MODE READY** — the spec doc notes the mode logic is shipped but the map is not)
+  - [x] Tests: `MatchHardpointTest` (13 tests covering resolve, scoring, rotation, team scores, reset)
+- [ ] **Pass 3 — Industrial Complex × TDM + Hardpoint mode.**
+  - [x] **`crossroads` map** — fully implemented, runnable through `.\gradlew.bat :engine:run --args="--headless --map=crossroads --fps=60"`. Level `.ofm` is procedurally generated by `:tools:buildCrossroadsMap` and committed (444 triangles, 888 vertices, 2 textures). Small desert town at a four-way crossroads: shack row (N), central plaza (M), warehouse row (S), with two wash channels and four corner plaza walls as named chokepoints
+  - [x] **Domination mode logic** — `Match.updateDomination(...)` implements resolve / capture / score. Three flag owners (length-3 `Team[]`, init NEUTRAL, validated by `MapSpec` as exactly 3), per-tick scoring (1 per flag held), capture rules (contested/empty leave owner unchanged), per-team `dominationRedScore` / `dominationBlueScore`, `dominationFlagOwner(flagIndex)` accessor, `isInDominationRadius(...)` helper. `teamScores()` returns the Domination scores
+  - [x] `CrossroadsMapBuilder` (`:tools`) — procedural level model: 3-lane desert layout (shack/plaza/warehouse), 2 wash channel walls, 4 corner plaza walls, 2 wooden wells, 2 cactus pairs. Mirrors `CornerstoneMapBuilder` / `RefineryMapBuilder` style
+  - [x] Design specs for `hp-mesa`, `dom-sandbar`, `ctf-stronghold` — committed at `docs/maps/desert-ravine/`, all marked **DESIGN ONLY** (HP and Dom are **MODE READY** — the spec docs note the mode logic is shipped but the map is not)
+  - [x] Tests: `MatchDominationTest` (14 tests covering resolve, capture state, contested/empty rules, per-flag scoring, team scores, reset)
+- [x] **Pass 4 — Desert Ravine × TDM + Domination mode.**
+  - [x] **`arctic-station` map** — fully implemented, runnable through `.\gradlew.bat :engine:run --args="--headless --map=arctic-station --fps=60"`. Level `.ofm` is procedurally generated by `:tools:buildArcticStationMap` and committed (300 triangles, 600 vertices, 2 textures). Polar rest stop with two long east-west frozen bridges over a frozen ravine, fuel depots on the North Bridge, a service building anchoring the south, and snowdrift cover on the ravine floor
+  - [x] **CTF mode logic** — `Match.updateCtf(...)` implements pickup / return / capture / drop-on-death. Two flag carriers (`ctfRedFlagCarrier` / `ctfBlueFlagCarrier`, `null` = at home, otherwise the team carrying it), per-team `ctfRedCaptures` / `ctfBlueCaptures`, `ctfElapsedTics` for the time limit, `CTF_CAPTURE_LIMIT = 5` / `CTF_TIME_LIMIT_TICS = 36000` constants, `ctfRedCaptures()` / `ctfBlueCaptures()` / `ctfRedFlagCarrier()` / `ctfBlueFlagCarrier()` accessors. `teamScores()` returns the per-team CTF capture counts; `state()` returns `WON` at the capture or time limit
+  - [x] `ArcticStationMapBuilder` (`:tools`) — procedural level model: 2 long bridges (each a deck + underside pair), 2 fuel depots, 1 service building + canopy, 4 snowdrift walls, 4 bridge supports, 4 rocks, perimeter walls
+  - [x] Design specs for `hp-subzero`, `dom-frostline`, `ctf-coldfront` — committed at `docs/maps/arctic-station/`, all marked **MODE READY** (HP, Dom, and CTF logic are all shipped; the maps are not built — future passes)
+  - [x] Tests: `MatchCtfTest` (16 tests covering initial state, pickup, return/capture, drop on death, scoring, team scores accessor, capture limit, reset)
+- [x] **Pass 5 — Non-Urban × Hardpoint + Kenney-ize the 3 procedural TDM maps.**
+  - [x] **`foundry` map** (Industrial Complex × Hardpoint) — fully implemented, runnable through `.\gradlew.bat :engine:run --args="--headless --map=foundry --fps=60"`. Level `.ofm` is procedurally generated by `:tools:buildFoundryMap` and committed (552 triangles, 1104 vertices, 3 textures). 320×320 heavy-machinery foundry with three machine halls (cast-metal shop at z=270, assembly floor at z=160, cooling room at z=40), a vertical gantry at x=0, two horizontal gantries at y=64 (the casting-gantry at z=80 and the foundry spine at z=160), four corner stairways, eight crates, and a Kenney-textured palette
+  - [x] **`mesa` map** (Desert Ravine × Hardpoint) — fully implemented, runnable through `.\gradlew.bat :engine:run --args="--headless --map=mesa --fps=60"`. Level `.ofm` is procedurally generated by `:tools:buildMesaMap` and committed (672 triangles, 1344 vertices, 3 textures). 320×320 desert plateau with a raised mesa top (y=32) covering the centre, a low-roofed cave at the south end (HP_A), a 16% grade south ramp, an eight-tread north switchback, four corner rocks, two cactus pairs, two wash channels, four perimeter walls
+  - [x] **`arctic-hp` map (Subzero)** (Arctic Station × Hardpoint) — fully implemented, runnable through `.\gradlew.bat :engine:run --args="--headless --map=arctic-hp --fps=60"`. Level `.ofm` is procedurally generated by `:tools:buildSubzeroMap` and committed (312 triangles, 624 vertices, 3 textures). 320×320 polar research outpost with three small sheet-metal buildings (the Generator Shed at z=64, the Operations Trailer at z=160, the Fuel Depot at z=256) connected by two snow-walled trenches (the W trench and the E trench)
+  - [x] **`refinery` / `crossroads` / `arctic-station` texture swap** — the three TDM builders got a `--atlas=<colormap.png>` CLI flag mirroring the `CornerstoneMapBuilder` Pass 2 pattern. The level `.ofm` files were rebuilt from the Kenney Prototype Kit's `colormap.png` (CC0); the geometry stayed the same, only the textures changed. The build tasks now accept `-PrefineryAtlas=` / `-PcrossroadsAtlas=` / `-ParcticStationAtlas=`. **Pass 5 also migrated the asset paths in `Maps.java` for the three TDM maps from the pre-Pass 2 `assets/maps/<id>/level.ofm` form to the post-Pass 2 `engine/src/main/resources/maps/<id>/level.ofm` form, where the actual `.ofm` files have always lived — the pre-Pass 2 form was a Pass 2 drift the smoke test had not surfaced.**
+  - [x] `FoundryMapBuilder` / `MesaMapBuilder` / `SubzeroMapBuilder` (`:tools`) — three new procedural level builders. All three accept `--atlas=<colormap.png>` for Kenney-textured builds, with the pre-Pass 5 procedural fallback as the default
+  - [x] Tests: `MapLibraryTest` (+6 tests pinning the registration, mode/setting/lane-count, spawn-point-count, waypoint non-emptiness, and zone-id uniqueness for each new HP map)
+- [x] **Pass 6 — Non-Urban × Domination.** The Domination mode logic was already implemented in Pass 3 (`Match.updateDomination` + 13 `MatchDominationTest` cases); Pass 6 only adds the three new map instances, level models, factory methods, and MapLibraryTest entries. No `Match` / `MapMarkers` / `Maps` API changes.
+  - [x] **`pipeline` map** (Industrial Complex × Domination) — fully implemented, runnable through `.\gradlew.bat :engine:run --args="--headless --map=pipeline --fps=60"`. Level `.ofm` is procedurally generated by `:tools:buildPipelineMap` and committed (444 triangles, 888 vertices, 3 textures). 320×320 pipeline pumping station with three long east-west pipelines at z=64, z=160, z=256, three control valves at the centres, three north-south catwalks at y=64, two east-west underpasses at x=±100, four perimeter walls, eight cover crates, and a Kenney-textured palette
+  - [x] **`sandbar` map** (Desert Ravine × Domination) — fully implemented, runnable through `.\gradlew.bat :engine:run --args="--headless --map=sandbar --fps=60"`. Level `.ofm` is procedurally generated by `:tools:buildSandbarMap` and committed (552 triangles, 1104 vertices, 3 textures). 320×320 wide, shallow canyon with three flat-topped sandstone buttes at z=64, z=160, z=256 (each 96×32×96 with one 8-tread east-side ramp), a central dry riverbed (y=-8), two wash channels, four corner rocks, two cactus pairs, four perimeter walls, and a Kenney-textured palette
+  - [x] **`arctic-dom` map (Frostline)** (Arctic Station × Domination) — fully implemented, runnable through `.\gradlew.bat :engine:run --args="--headless --map=arctic-dom --fps=60"`. Level `.ofm` is procedurally generated by `:tools:buildArcticDomMap` and committed (396 triangles, 792 vertices, 3 textures). 320×320 polar ice road with three flag platforms at z=80, z=160, z=240 (each 16×16×16 with a 4-tread ramp and a 32-tall radar mast on top), a central east-west ice road (x=144..176, z=80..240), two 16-tall snow walls at z=64 and z=256 with 32-wide underpass gaps at x=±100, four perimeter walls, and a Kenney-textured palette. **The map id is `arctic-dom`; the display name is "Frostline" (per the design spec)**
+  - [x] `PipelineMapBuilder` / `SandbarMapBuilder` / `ArcticDomMapBuilder` (`:tools`) — three new procedural level builders. All three accept `--atlas=<colormap.png>` for Kenney-textured builds, with the pre-Pass 6 procedural fallback as the default
+  - [x] Tests: `MapLibraryTest` (+6 tests pinning the registration, mode/setting/lane-count, spawn-point-count, waypoint non-emptiness, and flag-id uniqueness for each new Domination map; the `arctic-dom` test also pins the `displayName() == "Frostline"` invariant so a future rename is intentional)
+- [x] **Pass 7 — Non-Urban × CTF.** The CTF mode logic was already implemented in Pass 4 (`Match.updateCtf` + 16 `MatchCtfTest` cases); Pass 7 only adds the three new map instances, level models, factory methods, and MapLibraryTest entries. No `Match` / `MapMarkers` / `Maps` API changes.
+  - [x] **`storage` map** (Industrial Complex × CTF) — fully implemented, runnable through `.\gradlew.bat :engine:run --args="--headless --map=storage --fps=60"`. Level `.ofm` is procedurally generated by `:tools:buildStorageMap` and committed (192 triangles, 384 vertices, 2 textures). 320×320 chemical storage facility with two warehouse buildings (one per team) at the south-west and north-east corners, eight storage tanks arranged in two rows of four in the centre (the maze), and a single north-south catwalk at x=0, y=64
+  - [x] **`stronghold` map** (Desert Ravine × CTF) — fully implemented, runnable through `.\gradlew.bat :engine:run --args="--headless --map=stronghold --fps=60"`. Level `.ofm` is procedurally generated by `:tools:buildStrongholdMap` and committed (168 triangles, 336 vertices, 2 textures). 320×320 sandstone fortress with two gate towers (east and west), four corner towers (16×16×32 each), a 96×96 central courtyard, a 16×16×8 fountain at the courtyard centre, and two flanking cliff walls (north and south) at y=32
+  - [x] **`coldfront` map** (Arctic Station × CTF) — fully implemented, runnable through `.\gradlew.bat :engine:run --args="--headless --map=coldfront --fps=60"`. Level `.ofm` is procedurally generated by `:tools:buildColdfrontMap` and committed (132 triangles, 264 vertices, 2 textures). 320×320 polar-research base split across two sides of a frozen river — RED base on the west bank (32×32 main hut at (-128, 160) + 16×16×48 watchtower at (-32, 160) + 24×24×16 service shed at (-64, 120)) and BLUE base on the east bank (mirror)
+  - [x] `StorageMapBuilder` / `StrongholdMapBuilder` / `ColdfrontMapBuilder` (`:tools`) — three new procedural level builders. Snow-tone / sandstone / sheet-metal palettes matching each map's setting
+  - [x] Tests: `MapLibraryTest` (+6 tests pinning the registration, mode/setting/lane-count, spawn-point-count, waypoint non-emptiness, and 2-bases with positive radii for each new CTF map)
+
+The three per-mode implementations are intentionally stubbed in Pass 1 —
+the mode enum, the per-mode dispatch and the marker subtypes are all real,
+but the actual capture / rotation / pickup logic is left for the
+mode-specific pass. A future pass plugs each mode's rules into the
+`updateHardpoint` / `updateDomination` / `updateCtf` stubs without changing
+any other class.
+
 ---
 
 ## 8. Test Coverage Summary
 
-**2343 tests, all passing** — 1629 `:engine`, 300 `:gdxshared`, 177 `:android`,
-164 `:desktop`, 73 `:tools`.
+**2471 tests, all passing** — 1746 `:engine`, 300 `:gdxshared`, 177 `:android`,
+164 `:desktop`, 84 `:tools`.
 
 **The per-package breakdown lives in `README.md` § Test Coverage and nowhere
 else.** This section used to carry a per-suite table of its own; it drifted to
@@ -633,3 +699,6 @@ This plan is the source of truth. When code is written:
 - Keep section numbers stable; append `-impl` notes below the specification
 
 Per-package READMEs in `src/main/java/com/openfps/engine/<subsystem>/README.md` are the FDE entry point for that subsystem — read them in order: `core → common → hal → gameplay → render → audio → net → resource → memory`.
+
+
+

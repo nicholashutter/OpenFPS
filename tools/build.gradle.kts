@@ -425,3 +425,662 @@ tasks.register<JavaExec>("verifyModels") {
         listOf("--out=" + rootDirectory.dir(outputDir.get()).asFile.absolutePath)
     })
 }
+
+// Builds the Cornerstone map's level model: a procedurally generated 320x320
+// urban block with three lanes, perimeter walls, four landmark buildings and
+// a row of crates. Output goes to engine/src/main/resources/maps/cornerstone/
+// and is committed via `git add -f` (the `*.ofm` pattern in .gitignore is
+// overridden for this small committed fixture).
+//
+//   .\gradlew.bat :tools:buildCornerstoneMap
+//
+//   .\gradlew.bat :tools:buildCornerstoneMap -PcornerstoneAtlas=<path>
+//
+// The optional `-PcornerstoneAtlas=` argument points the builder at the
+// Kenney Prototype Kit's colormap.png so the committed model uses Kenney
+// floor / wall colours rather than the procedural generator. Without the
+// atlas, the builder falls back to the pre-Pass 2 procedural textures.
+//
+// Deliberately NOT wired into `build`. It writes into the working tree, and a
+// model that does not parse or that goes over budget should not stop anyone
+// compiling the engine.
+tasks.register<JavaExec>("buildCornerstoneMap") {
+    group = "openfps"
+    description = "Generates the Cornerstone map's level.ofm from the procedural builder."
+
+    mainClass.set("com.openfps.tools.CornerstoneMapBuilder")
+    classpath = sourceSets["main"].runtimeClasspath
+
+    val outputDir = providers.gradleProperty("cornerstoneOut")
+        .orElse("engine/src/main/resources/maps/cornerstone")
+    val atlasPath = providers.gradleProperty("cornerstoneAtlas")
+    val rootDirectory = rootProject.layout.projectDirectory
+
+    argumentProviders.add(CommandLineArgumentProvider {
+        val arguments = mutableListOf(
+            "--out=" + rootDirectory.dir(outputDir.get()).asFile.absolutePath
+        )
+        val atlas = atlasPath.orNull
+        if (atlas != null)
+        {
+            arguments.add("--atlas=" + File(atlas).absolutePath)
+        }
+        arguments
+    })
+}
+
+// Builds the Refinery map's level model: a procedurally generated 320x320
+// industrial complex with three lanes, multi-level catwalks, and four named
+// landmarks (Distillation Tower, Process Hall, Boiler, Control Room).
+// Output goes to engine/src/main/resources/maps/refinery/ and is committed
+// via `git add -f` (the same exception the Cornerstone model uses).
+//
+//   .\gradlew.bat :tools:buildRefineryMap
+//
+//   .\gradlew.bat :tools:buildRefineryMap -PrefineryAtlas=<path>
+//
+// The optional `-PrefineryAtlas=` argument points the builder at the
+// Kenney Prototype Kit's colormap.png so the floor / wall textures come
+// from the pack (Pass 5 Kenney-ize). Without the atlas, the builder uses
+// the pre-Pass 5 procedural generator.
+//
+// Deliberately NOT wired into `build`. Same reason as buildCornerstoneMap.
+tasks.register<JavaExec>("buildRefineryMap") {
+    group = "openfps"
+    description = "Generates the Refinery map's level.ofm from the procedural builder."
+
+    mainClass.set("com.openfps.tools.RefineryMapBuilder")
+    classpath = sourceSets["main"].runtimeClasspath
+
+    val outputDir = providers.gradleProperty("refineryOut")
+        .orElse("engine/src/main/resources/maps/refinery")
+    val atlasPath = providers.gradleProperty("refineryAtlas")
+    val rootDirectory = rootProject.layout.projectDirectory
+
+    argumentProviders.add(CommandLineArgumentProvider {
+        val arguments = mutableListOf(
+            "--out=" + rootDirectory.dir(outputDir.get()).asFile.absolutePath
+        )
+        val atlas = atlasPath.orNull
+        if (atlas != null)
+        {
+            arguments.add("--atlas=" + File(atlas).absolutePath)
+        }
+        arguments
+    })
+}
+
+// Builds the Crossroads map's level model: a procedurally generated
+// 320x320 desert town with three lanes, a central plaza at the four-way
+// crossroads, low sandstone buildings, weathered wood wells, and
+// sparse cover. Output goes to engine/src/main/resources/maps/crossroads/
+// and is committed via `git add -f` (the same exception the cornerstone
+// and refinery models use).
+//
+//   .\gradlew.bat :tools:buildCrossroadsMap
+//
+//   .\gradlew.bat :tools:buildCrossroadsMap -PcrossroadsAtlas=<path>
+//
+// The optional `-PcrossroadsAtlas=` argument points the builder at the
+// Kenney Prototype Kit's colormap.png so the floor / wall textures come
+// from the pack (Pass 5 Kenney-ize). Without the atlas, the builder uses
+// the pre-Pass 5 procedural generator.
+//
+// Deliberately NOT wired into `build`. Same reason as the other
+// buildMap tasks.
+tasks.register<JavaExec>("buildCrossroadsMap") {
+    group = "openfps"
+    description = "Generates the Crossroads map's level.ofm from the procedural builder."
+
+    mainClass.set("com.openfps.tools.CrossroadsMapBuilder")
+    classpath = sourceSets["main"].runtimeClasspath
+
+    val outputDir = providers.gradleProperty("crossroadsOut")
+        .orElse("engine/src/main/resources/maps/crossroads")
+    val atlasPath = providers.gradleProperty("crossroadsAtlas")
+    val rootDirectory = rootProject.layout.projectDirectory
+
+    argumentProviders.add(CommandLineArgumentProvider {
+        val arguments = mutableListOf(
+            "--out=" + rootDirectory.dir(outputDir.get()).asFile.absolutePath
+        )
+        val atlas = atlasPath.orNull
+        if (atlas != null)
+        {
+            arguments.add("--atlas=" + File(atlas).absolutePath)
+        }
+        arguments
+    })
+}
+
+// Builds the Icebridge map's level model: a procedurally generated
+// 320x320 polar rest stop with two long east-west frozen bridges over
+// a frozen ravine, a service building anchoring the south, fuel depots
+// on the North Bridge, and snowdrift cover on the ravine floor. Output
+// goes to engine/src/main/resources/maps/arctic-station/ and is
+// committed via `git add -f` (the same exception the cornerstone,
+// refinery, and crossroads models use).
+//
+//   .\gradlew.bat :tools:buildArcticStationMap
+//
+//   .\gradlew.bat :tools:buildArcticStationMap -ParcticStationAtlas=<path>
+//
+// The optional `-ParcticStationAtlas=` argument points the builder at
+// the Kenney Prototype Kit's colormap.png so the floor / wall textures
+// come from the pack (Pass 5 Kenney-ize). Without the atlas, the
+// builder uses the pre-Pass 5 procedural generator.
+//
+// Deliberately NOT wired into `build`. Same reason as the other
+// buildMap tasks.
+tasks.register<JavaExec>("buildArcticStationMap") {
+    group = "openfps"
+    description = "Generates the Icebridge map's level.ofm from the procedural builder."
+
+    mainClass.set("com.openfps.tools.ArcticStationMapBuilder")
+    classpath = sourceSets["main"].runtimeClasspath
+
+    val outputDir = providers.gradleProperty("arcticStationOut")
+        .orElse("engine/src/main/resources/maps/arctic-station")
+    val atlasPath = providers.gradleProperty("arcticStationAtlas")
+    val rootDirectory = rootProject.layout.projectDirectory
+
+    argumentProviders.add(CommandLineArgumentProvider {
+        val arguments = mutableListOf(
+            "--out=" + rootDirectory.dir(outputDir.get()).asFile.absolutePath
+        )
+        val atlas = atlasPath.orNull
+        if (atlas != null)
+        {
+            arguments.add("--atlas=" + File(atlas).absolutePath)
+        }
+        arguments
+    })
+}
+
+// Builds the Foundry map's level model: a 320x320 heavy-machinery
+// foundry with three machine halls (cast-metal shop, assembly floor,
+// cooling room) and a system of mid-level gantries connecting them.
+// Output goes to engine/src/main/resources/maps/foundry/ and is
+// committed via `git add -f` (same exception as the other maps).
+//
+//   .\gradlew.bat :tools:buildFoundryMap
+//
+//   .\gradlew.bat :tools:buildFoundryMap -PfoundryAtlas=<path>
+//
+// The optional `-PfoundryAtlas=` argument points the builder at the
+// Kenney Prototype Kit's colormap.png so the floor / wall textures
+// come from the pack. Without it, the builder uses the procedural
+// generator.
+//
+// Deliberately NOT wired into `build`. Same reason as the other
+// buildMap tasks.
+tasks.register<JavaExec>("buildFoundryMap") {
+    group = "openfps"
+    description = "Generates the Foundry (Industrial Hardpoint) map's level.ofm from the procedural builder."
+
+    mainClass.set("com.openfps.tools.FoundryMapBuilder")
+    classpath = sourceSets["main"].runtimeClasspath
+
+    val outputDir = providers.gradleProperty("foundryOut")
+        .orElse("engine/src/main/resources/maps/foundry")
+    val atlasPath = providers.gradleProperty("foundryAtlas")
+    val rootDirectory = rootProject.layout.projectDirectory
+
+    argumentProviders.add(CommandLineArgumentProvider {
+        val arguments = mutableListOf(
+            "--out=" + rootDirectory.dir(outputDir.get()).asFile.absolutePath
+        )
+        val atlas = atlasPath.orNull
+        if (atlas != null)
+        {
+            arguments.add("--atlas=" + File(atlas).absolutePath)
+        }
+        arguments
+    })
+}
+
+// Builds the Mesa map's level model: a 320x320 desert plateau with a
+// raised mesa top covering the centre, a low-roofed cave at the
+// south end, a south ramp and a north switchback. Output goes to
+// engine/src/main/resources/maps/mesa/ and is committed via `git
+// add -f` (same exception as the other maps).
+//
+//   .\gradlew.bat :tools:buildMesaMap
+//
+//   .\gradlew.bat :tools:buildMesaMap -PmesaAtlas=<path>
+//
+// The optional `-PmesaAtlas=` argument points the builder at the
+// Kenney Prototype Kit's colormap.png so the floor / wall textures
+// come from the pack. Without it, the builder uses the procedural
+// generator.
+//
+// Deliberately NOT wired into `build`. Same reason as the other
+// buildMap tasks.
+tasks.register<JavaExec>("buildMesaMap") {
+    group = "openfps"
+    description = "Generates the Mesa (Desert Hardpoint) map's level.ofm from the procedural builder."
+
+    mainClass.set("com.openfps.tools.MesaMapBuilder")
+    classpath = sourceSets["main"].runtimeClasspath
+
+    val outputDir = providers.gradleProperty("mesaOut")
+        .orElse("engine/src/main/resources/maps/mesa")
+    val atlasPath = providers.gradleProperty("mesaAtlas")
+    val rootDirectory = rootProject.layout.projectDirectory
+
+    argumentProviders.add(CommandLineArgumentProvider {
+        val arguments = mutableListOf(
+            "--out=" + rootDirectory.dir(outputDir.get()).asFile.absolutePath
+        )
+        val atlas = atlasPath.orNull
+        if (atlas != null)
+        {
+            arguments.add("--atlas=" + File(atlas).absolutePath)
+        }
+        arguments
+    })
+}
+
+// Builds the Subzero map's level model: a 320x320 polar research
+// outpost with three small sheet-metal buildings (the Generator
+// Shed, the Operations Trailer, the Fuel Depot) connected by a
+// system of snow-walled trenches. Output goes to
+// engine/src/main/resources/maps/arctic-hp/ and is committed via
+// `git add -f` (same exception as the other maps).
+//
+//   .\gradlew.bat :tools:buildSubzeroMap
+//
+//   .\gradlew.bat :tools:buildSubzeroMap -PsubzeroAtlas=<path>
+//
+// The optional `-PsubzeroAtlas=` argument points the builder at the
+// Kenney Prototype Kit's colormap.png so the floor / wall textures
+// come from the pack. Without it, the builder uses the procedural
+// generator.
+//
+// Deliberately NOT wired into `build`. Same reason as the other
+// buildMap tasks.
+tasks.register<JavaExec>("buildSubzeroMap") {
+    group = "openfps"
+    description = "Generates the Subzero (Arctic Hardpoint) map's level.ofm from the procedural builder."
+
+    mainClass.set("com.openfps.tools.SubzeroMapBuilder")
+    classpath = sourceSets["main"].runtimeClasspath
+
+    val outputDir = providers.gradleProperty("subzeroOut")
+        .orElse("engine/src/main/resources/maps/arctic-hp")
+    val atlasPath = providers.gradleProperty("subzeroAtlas")
+    val rootDirectory = rootProject.layout.projectDirectory
+
+    argumentProviders.add(CommandLineArgumentProvider {
+        val arguments = mutableListOf(
+            "--out=" + rootDirectory.dir(outputDir.get()).asFile.absolutePath
+        )
+        val atlas = atlasPath.orNull
+        if (atlas != null)
+        {
+            arguments.add("--atlas=" + File(atlas).absolutePath)
+        }
+        arguments
+    })
+}
+
+// Builds the Overpass map's level model: a 320x320 highway interchange
+// with two elevated overpasses, a service road, and a control building.
+// Output goes to engine/src/main/resources/maps/overpass/ and is
+// committed via `git add -f` (same exception as the other maps).
+//
+//   .\gradlew.bat :tools:buildOverpassMap
+//
+//   .\gradlew.bat :tools:buildOverpassMap -PoverpassAtlas=<path>
+//
+// Like the Cornerstone task, the optional `-PoverpassAtlas=` argument
+// points the builder at the Kenney Prototype Kit's colormap.png so the
+// floor / wall textures come from the pack. Without it, the builder
+// uses the procedural generator.
+//
+// Deliberately NOT wired into `build`. Same reason as the other buildMap
+// tasks.
+tasks.register<JavaExec>("buildOverpassMap") {
+    group = "openfps"
+    description = "Generates the Overpass (Hardpoint) map's level.ofm from the procedural builder."
+
+    mainClass.set("com.openfps.tools.OverpassMapBuilder")
+    classpath = sourceSets["main"].runtimeClasspath
+
+    val outputDir = providers.gradleProperty("overpassOut")
+        .orElse("engine/src/main/resources/maps/overpass")
+    val atlasPath = providers.gradleProperty("overpassAtlas")
+    val rootDirectory = rootProject.layout.projectDirectory
+
+    argumentProviders.add(CommandLineArgumentProvider {
+        val arguments = mutableListOf(
+            "--out=" + rootDirectory.dir(outputDir.get()).asFile.absolutePath
+        )
+        val atlas = atlasPath.orNull
+        if (atlas != null)
+        {
+            arguments.add("--atlas=" + File(atlas).absolutePath)
+        }
+        arguments
+    })
+}
+
+// Builds the Tripoint map's level model: a 320x320 three-way
+// intersection with three flags and three approach streets. Output
+// goes to engine/src/main/resources/maps/tripoint/ and is committed
+// via `git add -f` (same exception).
+//
+//   .\gradlew.bat :tools:buildTripointMap
+//
+//   .\gradlew.bat :tools:buildTripointMap -PtripointAtlas=<path>
+//
+// Deliberately NOT wired into `build`. Same reason as the other
+// buildMap tasks.
+tasks.register<JavaExec>("buildTripointMap") {
+    group = "openfps"
+    description = "Generates the Tripoint (Domination) map's level.ofm from the procedural builder."
+
+    mainClass.set("com.openfps.tools.TripointMapBuilder")
+    classpath = sourceSets["main"].runtimeClasspath
+
+    val outputDir = providers.gradleProperty("tripointOut")
+        .orElse("engine/src/main/resources/maps/tripoint")
+    val atlasPath = providers.gradleProperty("tripointAtlas")
+    val rootDirectory = rootProject.layout.projectDirectory
+
+    argumentProviders.add(CommandLineArgumentProvider {
+        val arguments = mutableListOf(
+            "--out=" + rootDirectory.dir(outputDir.get()).asFile.absolutePath
+        )
+        val atlas = atlasPath.orNull
+        if (atlas != null)
+        {
+            arguments.add("--atlas=" + File(atlas).absolutePath)
+        }
+        arguments
+    })
+}
+
+// Builds the Extraction map's level model: a 320x320 urban block split
+// by a long boulevard, with two bases (one per team) and flanking
+// cover walls. Output goes to engine/src/main/resources/maps/extraction/
+// and is committed via `git add -f` (same exception).
+//
+//   .\gradlew.bat :tools:buildExtractionMap
+//
+//   .\gradlew.bat :tools:buildExtractionMap -PextractionAtlas=<path>
+//
+// Deliberately NOT wired into `build`. Same reason as the other
+// buildMap tasks.
+tasks.register<JavaExec>("buildExtractionMap") {
+    group = "openfps"
+    description = "Generates the Extraction (CTF) map's level.ofm from the procedural builder."
+
+    mainClass.set("com.openfps.tools.ExtractionMapBuilder")
+    classpath = sourceSets["main"].runtimeClasspath
+
+    val outputDir = providers.gradleProperty("extractionOut")
+        .orElse("engine/src/main/resources/maps/extraction")
+    val atlasPath = providers.gradleProperty("extractionAtlas")
+    val rootDirectory = rootProject.layout.projectDirectory
+
+    argumentProviders.add(CommandLineArgumentProvider {
+        val arguments = mutableListOf(
+            "--out=" + rootDirectory.dir(outputDir.get()).asFile.absolutePath
+        )
+        val atlas = atlasPath.orNull
+        if (atlas != null)
+        {
+            arguments.add("--atlas=" + File(atlas).absolutePath)
+        }
+        arguments
+    })
+}
+
+// Builds the Pipeline map's level model: a 320x320 industrial
+// pipeline pumping station with three long east-west pipelines
+// (z=64, z=160, z=256) and three control valves. Three catwalks
+// at y=64 run north-south alongside the pipelines. Output goes
+// to engine/src/main/resources/maps/pipeline/ and is committed via
+// `git add -f` (same exception).
+//
+//   .\gradlew.bat :tools:buildPipelineMap
+//
+//   .\gradlew.bat :tools:buildPipelineMap -PpipelineAtlas=<path>
+//
+// The optional `-PpipelineAtlas=` argument points the builder at
+// the Kenney Prototype Kit's colormap.png so the floor / wall
+// textures come from the pack. Without it, the builder uses the
+// procedural generator.
+//
+// Deliberately NOT wired into `build`. Same reason as the other
+// buildMap tasks.
+tasks.register<JavaExec>("buildPipelineMap") {
+    group = "openfps"
+    description = "Generates the Pipeline (Industrial Domination) map's level.ofm from the procedural builder."
+
+    mainClass.set("com.openfps.tools.PipelineMapBuilder")
+    classpath = sourceSets["main"].runtimeClasspath
+
+    val outputDir = providers.gradleProperty("pipelineOut")
+        .orElse("engine/src/main/resources/maps/pipeline")
+    val atlasPath = providers.gradleProperty("pipelineAtlas")
+    val rootDirectory = rootProject.layout.projectDirectory
+
+    argumentProviders.add(CommandLineArgumentProvider {
+        val arguments = mutableListOf(
+            "--out=" + rootDirectory.dir(outputDir.get()).asFile.absolutePath
+        )
+        val atlas = atlasPath.orNull
+        if (atlas != null)
+        {
+            arguments.add("--atlas=" + File(atlas).absolutePath)
+        }
+        arguments
+    })
+}
+
+// Builds the Sandbar map's level model: a 320x320 wide, shallow
+// canyon with three flat-topped sandstone buttes at z=64, z=160,
+// and z=256. Each butte has a single 8-tread ramp on the east side.
+// A dry riverbed runs through the centre. Output goes to
+// engine/src/main/resources/maps/sandbar/ and is committed via
+// `git add -f` (same exception).
+//
+//   .\gradlew.bat :tools:buildSandbarMap
+//
+//   .\gradlew.bat :tools:buildSandbarMap -PsandbarAtlas=<path>
+//
+// Deliberately NOT wired into `build`. Same reason as the other
+// buildMap tasks.
+tasks.register<JavaExec>("buildSandbarMap") {
+    group = "openfps"
+    description = "Generates the Sandbar (Desert Domination) map's level.ofm from the procedural builder."
+
+    mainClass.set("com.openfps.tools.SandbarMapBuilder")
+    classpath = sourceSets["main"].runtimeClasspath
+
+    val outputDir = providers.gradleProperty("sandbarOut")
+        .orElse("engine/src/main/resources/maps/sandbar")
+    val atlasPath = providers.gradleProperty("sandbarAtlas")
+    val rootDirectory = rootProject.layout.projectDirectory
+
+    argumentProviders.add(CommandLineArgumentProvider {
+        val arguments = mutableListOf(
+            "--out=" + rootDirectory.dir(outputDir.get()).asFile.absolutePath
+        )
+        val atlas = atlasPath.orNull
+        if (atlas != null)
+        {
+            arguments.add("--atlas=" + File(atlas).absolutePath)
+        }
+        arguments
+    })
+}
+
+// Builds the Arctic-Dom (Frostline) map's level model: a 320x320
+// polar ice road with three flag platforms at z=80, z=160, and
+// z=240. Each platform is a 16x16 raised ice block with a radar
+// mast. The central ice road runs east-west at y=0, z=80..240.
+// Output goes to engine/src/main/resources/maps/arctic-dom/ and is
+// committed via `git add -f` (same exception).
+//
+//   .\gradlew.bat :tools:buildArcticDomMap
+//
+//   .\gradlew.bat :tools:buildArcticDomMap -ParcticDomAtlas=<path>
+//
+// Deliberately NOT wired into `build`. Same reason as the other
+// buildMap tasks.
+tasks.register<JavaExec>("buildArcticDomMap") {
+    group = "openfps"
+    description = "Generates the Arctic-Dom (Arctic Domination) map's level.ofm from the procedural builder."
+
+    mainClass.set("com.openfps.tools.ArcticDomMapBuilder")
+    classpath = sourceSets["main"].runtimeClasspath
+
+    val outputDir = providers.gradleProperty("arcticDomOut")
+        .orElse("engine/src/main/resources/maps/arctic-dom")
+    val atlasPath = providers.gradleProperty("arcticDomAtlas")
+    val rootDirectory = rootProject.layout.projectDirectory
+
+    argumentProviders.add(CommandLineArgumentProvider {
+        val arguments = mutableListOf(
+            "--out=" + rootDirectory.dir(outputDir.get()).asFile.absolutePath
+        )
+        val atlas = atlasPath.orNull
+        if (atlas != null)
+        {
+            arguments.add("--atlas=" + File(atlas).absolutePath)
+        }
+        arguments
+    })
+}
+
+// Builds the Storage map's level model: a 320x320 chemical storage
+// facility with two warehouse buildings (one per team) at opposite
+// ends, and a maze of eight storage tanks in the centre. Output
+// goes to engine/src/main/resources/maps/storage/ and is committed
+// via `git add -f`.
+//
+//   .\gradlew.bat :tools:buildStorageMap
+//
+// Deliberately NOT wired into `build`. Same reason as the other
+// buildMap tasks.
+tasks.register<JavaExec>("buildStorageMap") {
+    group = "openfps"
+    description = "Generates the Storage (Industrial CTF) map's level.ofm from the procedural builder."
+
+    mainClass.set("com.openfps.tools.StorageMapBuilder")
+    classpath = sourceSets["main"].runtimeClasspath
+
+    val outputDir = providers.gradleProperty("storageOut")
+        .orElse("engine/src/main/resources/maps/storage")
+    val rootDirectory = rootProject.layout.projectDirectory
+
+    argumentProviders.add(CommandLineArgumentProvider {
+        listOf("--out=" + rootDirectory.dir(outputDir.get()).asFile.absolutePath)
+    })
+}
+
+// Builds the Stronghold map's level model: a 320x320 sandstone fortress
+// with two gate towers, four corner towers, a central courtyard, and
+// two flanking cliff walls. Output goes to
+// engine/src/main/resources/maps/stronghold/ and is committed via
+// `git add -f`.
+//
+//   .\gradlew.bat :tools:buildStrongholdMap
+//
+// Deliberately NOT wired into `build`. Same reason as the other
+// buildMap tasks.
+tasks.register<JavaExec>("buildStrongholdMap") {
+    group = "openfps"
+    description = "Generates the Stronghold (Desert Ravine CTF) map's level.ofm from the procedural builder."
+
+    mainClass.set("com.openfps.tools.StrongholdMapBuilder")
+    classpath = sourceSets["main"].runtimeClasspath
+
+    val outputDir = providers.gradleProperty("strongholdOut")
+        .orElse("engine/src/main/resources/maps/stronghold")
+    val rootDirectory = rootProject.layout.projectDirectory
+
+    argumentProviders.add(CommandLineArgumentProvider {
+        listOf("--out=" + rootDirectory.dir(outputDir.get()).asFile.absolutePath)
+    })
+}
+
+// Builds the Coldfront map's level model: a 320x320 polar-research
+// base split across two sides of a frozen river. RED base on the west
+// bank, BLUE base on the east bank, with watchtowers watching the
+// river. Output goes to engine/src/main/resources/maps/coldfront/
+// and is committed via `git add -f`.
+//
+//   .\gradlew.bat :tools:buildColdfrontMap
+//
+// Deliberately NOT wired into `build`. Same reason as the other
+// buildMap tasks.
+tasks.register<JavaExec>("buildColdfrontMap") {
+    group = "openfps"
+    description = "Generates the Coldfront (Arctic Station CTF) map's level.ofm from the procedural builder."
+
+    mainClass.set("com.openfps.tools.ColdfrontMapBuilder")
+    classpath = sourceSets["main"].runtimeClasspath
+
+    val outputDir = providers.gradleProperty("coldfrontOut")
+        .orElse("engine/src/main/resources/maps/coldfront")
+    val rootDirectory = rootProject.layout.projectDirectory
+
+    argumentProviders.add(CommandLineArgumentProvider {
+        listOf("--out=" + rootDirectory.dir(outputDir.get()).asFile.absolutePath)
+    })
+}
+
+// Builds a map from a JSON config file. The new generator lives in
+// com.openfps.tools.mapgen, and this task is its Gradle seam: a config file
+// + a map id are all the user has to provide.
+//
+//   .\gradlew.bat :tools:buildMapFromConfig -Pconfig=tools/config/maps/sample-cornerstone.json -PmapId=sample-cornerstone
+//   .\gradlew.bat :tools:buildMapFromConfig -Pconfig=... -PmapId=... -Patlas=C:\path\to\colormap.png
+//
+// `-Pconfig` is the JSON. `-PmapId` names the output subdirectory under
+// engine/src/main/resources/maps (the same layout the existing 13
+// hand-written builders target). `-Patlas` is optional; without it the
+// generator uses procedural solid-colour tiles.
+//
+// Deliberately NOT wired into `build`. The same reason the other buildMap
+// tasks are not: it writes into the working tree, and a config that doesn't
+// produce a valid .ofm should not stop anyone compiling the engine.
+tasks.register<JavaExec>("buildMapFromConfig") {
+    group = "openfps"
+    description = "Generates a map level.ofm from a JSON config file using the config-driven generator."
+
+    mainClass.set("com.openfps.tools.mapgen.MapGenMain")
+    classpath = sourceSets["main"].runtimeClasspath
+
+    val configPath = providers.gradleProperty("config")
+    val mapId = providers.gradleProperty("mapId")
+    val atlasPath = providers.gradleProperty("atlas")
+    val rootDirectory = rootProject.layout.projectDirectory
+
+    argumentProviders.add(CommandLineArgumentProvider {
+        val cfg = configPath.orNull
+            ?: throw GradleException(
+                "-Pconfig=<path-to-config.json> is required."
+            )
+        val id = mapId.orNull
+            ?: throw GradleException(
+                "-PmapId=<id> is required (it names the output subdirectory)."
+            )
+        val configFile = rootDirectory.file(cfg).asFile
+        val outputDir = rootDirectory.dir("engine/src/main/resources/maps").dir(id)
+        val arguments = mutableListOf(
+            "--config=" + configFile.absolutePath,
+            "--out=" + outputDir.asFile.absolutePath
+        )
+        val atlas = atlasPath.orNull
+        if (atlas != null)
+        {
+            arguments.add("--atlas=" + rootDirectory.file(atlas).asFile.absolutePath)
+        }
+        arguments
+    })
+}

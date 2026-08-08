@@ -8,6 +8,8 @@ package com.openfps.desktop;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 
 import com.openfps.engine.core.EngineMain;
 import com.openfps.engine.core.EngineSession;
@@ -21,9 +23,14 @@ import com.openfps.engine.demo.DemoScene;
 import com.openfps.engine.gameplay.Match;
 import com.openfps.engine.gameplay.MatchSummary;
 import com.openfps.engine.gameplay.adapter.NullGameplayPort;
+import com.openfps.engine.gameplay.map.MapLibrary;
+import com.openfps.engine.gameplay.map.MapSpec;
+import com.openfps.engine.gameplay.map.Team;
 import com.openfps.engine.gameplay.port.I_GameplayPort;
 import com.openfps.gdx.AccessibilitySettings;
 import com.openfps.gdx.DebugSettings;
+import com.openfps.gdx.MapSelection;
+import com.openfps.gdx.MapSelectionScreen;
 import com.openfps.engine.hal.adapter.AdapterFactorySelector;
 import com.openfps.engine.hal.adapter.desktop.DesktopDatagramPort;
 import com.openfps.engine.net.NetSession;
@@ -83,6 +90,18 @@ public final class DesktopLauncher
 {
     /** CLI prefix naming the model file to draw. */
     public static final String MODEL_ARG = "--model=";
+
+    /**
+     * CLI prefix naming the map id to load, as {@code --map=<id>}.
+     *
+     * <p>When a map id is given, the launcher builds a {@link
+     * com.openfps.engine.gameplay.map.MapScene} from the spec and
+     * uses that as the rendered world. The legacy demo scene is
+     * bypassed — the per-tic gameplay port still runs (so the
+     * mode-specific rule logic ticks), but it is the map scene
+     * the renderer draws.</p>
+     */
+    public static final String MAP_ARG = "--map=";
 
     /** CLI prefix naming the model root the demo scene loads from. */
     public static final String ASSETS_ARG = "--assets=";
@@ -175,10 +194,29 @@ public final class DesktopLauncher
         // report and exit at a console, not behind a black GLFW window the
         // user then has to close to read the reason.
         final String explicitModel = modelArg(args);
+        final String mapId = mapArg(args);
         final DemoScene demo;
+        final com.openfps.engine.gameplay.map.MapScene mapScene;
         try
         {
-            demo = buildDemo(explicitModel, assetsArg(args));
+            if (mapId != null && !mapId.isEmpty())
+            {
+                // Map mode: skip the demo entirely. The map scene is built
+                // from the spec, and the gameplay port is the smoke
+                // port — the per-tic mode logic still ticks, but the
+                // demo's bots / UI hooks are not wired (a future pass
+                // can replace the smoke port with a real map-driven
+                // gameplay port).
+                LOG.info("--map={} given — building MapScene from the spec, demo bypassed",
+                    mapId);
+                mapScene = buildMapScene(mapId);
+                demo = null;
+            }
+            else
+            {
+                mapScene = null;
+                demo = buildDemo(explicitModel, assetsArg(args));
+            }
         }
         catch (final DemoAssetException e)
         {
@@ -220,10 +258,35 @@ public final class DesktopLauncher
         // the frame loop that reads it starts. There is no race — the engine
         // bootstrap has returned by then.
         final DemoGameplayPort[] gameplay = new DemoGameplayPort[1];
+        // Map mode has its own gameplay port — the spec-driven port, which
+        // the same factory path can return for either case because the
+        // shape of the port the engine wants is the same.
+        final com.openfps.engine.gameplay.map.MapGameplayPort[] mapPort = new com.openfps.engine.gameplay.map.MapGameplayPort[1];
+        // The player's team on a multiplayer map is derived from the net
+        // id (one peer per team, alternating), so the player on a 1-arg
+        // --net= with no peers lands on RED. Single-player runs leave
+        // this at NEUTRAL.
+        final com.openfps.engine.gameplay.map.Team playerTeam =
+            teamForPlayer(netArgs.localSpawnId());
 
         final EngineSession session = new EngineMain()
             .start(config, hal, holder, input ->
             {
+                // In map mode the demo-driven gameplay port is bypassed;
+                // the spec-driven MapGameplayPort is what runs. It does
+                // everything the demo port does — input, controller, net
+                // attach, respawn, mode dispatch — but the spec drives
+                // spawn placement, bot waypoints, and the match mode.
+                if (mapScene != null)
+                {
+                    final com.openfps.engine.gameplay.map.MapGameplayPort port =
+                        com.openfps.engine.gameplay.map.MapGameplayPort.create(
+                            mapScene.spec(), input, holder.renderer(), config,
+                            playerTeam,
+                            mapSpawnIndexFor(netArgs.localSpawnId(), playerTeam));
+                    mapPort[0] = port;
+                    return port;
+                }
                 final I_GameplayPort port = gameplayPort(input, holder, demo, config,
                     netArgs.localSpawnId());
                 if (port instanceof DemoGameplayPort)
@@ -233,23 +296,62 @@ public final class DesktopLauncher
                 return port;
             });
         final SoftwareRenderPort renderer = holder.renderer();
-        bindWorld(renderer, demo, explicitModel);
+        // In map mode bind the map scene to the renderer. In demo
+        // mode the existing bindWorld runs. The map bypasses every
+        // demo-specific UI hook (match gate, audio, match status)
+        // because there is no DemoGameplayPort to hook them into.
+        if (mapScene != null)
+        {
+            bindMapWorld(renderer, mapScene);
+        }
+        else
+        {
+            bindWorld(renderer, demo, explicitModel);
+        }
         window.attachRenderer(renderer);
-        attachMatchGate(window, gameplay[0]);
-        // The weapon's noise. From the HAL rather than constructed here, so the
-        // launcher makes no decision about audio beyond "use the platform's" —
-        // which is the same shape as the window and the input port above it.
-        attachAudio(hal, gameplay[0]);
-        attachMatchResult(window, gameplay[0]);
-        attachMatchRestart(window, gameplay[0]);
-        attachMatchStatus(window, gameplay[0], rate);
+        if (mapScene == null)
+        {
+            attachMatchGate(window, gameplay[0]);
+            // The weapon's noise. From the HAL rather than constructed here, so the
+            // launcher makes no decision about audio beyond "use the platform's" —
+            // which is the same shape as the window and the input port above it.
+            attachAudio(hal, gameplay[0]);
+            attachLocalBody(demo, gameplay[0]);
+            attachMatchResult(window, gameplay[0]);
+            attachMatchRestart(window, gameplay[0]);
+            attachMatchStatus(window, gameplay[0], rate);
+        }
+        else
+        {
+            // Map mode wires the same UI hooks the demo port gets, minus
+            // the demo-specific ones (no local body, no viewmodel). The
+            // match still freezes behind a menu, still ends, still
+            // reports a status — the window wants the same shapes it
+            // already knows how to draw.
+            attachMatchGateMap(window, mapPort[0]);
+            attachAudioMap(hal, mapPort[0]);
+            attachMatchResultMap(window, mapPort[0]);
+            attachMatchRestartMap(window, mapPort[0]);
+            attachMatchStatusMap(window, mapPort[0], rate);
+        }
         attachDebugSettings(window, debug);
         attachAccessibilitySettings(window, access, renderer);
+        attachMapSelection(window, args);
 
         final NetSession netSession;
         try
         {
-            netSession = openNetwork(netArgs, gameplay[0], config, demo);
+            // Networking now drives the spec's MapGameplayPort when a
+            // --map= is in play. The demo path is unchanged. Both
+            // ports carry the same network attach shape.
+            if (mapScene == null)
+            {
+                netSession = openNetwork(netArgs, gameplay[0], config, demo);
+            }
+            else
+            {
+                netSession = openNetworkMap(netArgs, mapPort[0], config, mapScene);
+            }
         }
         catch (final RuntimeException e)
         {
@@ -267,7 +369,10 @@ public final class DesktopLauncher
             // match was playable rather than merely connected: a session can report
             // perfect traffic while every peer body sat still, which is precisely
             // the failure that went unnoticed for as long as it did.
-            if (gameplay[0] != null && gameplay[0].remoteBodies() != null)
+            // Demo mode reports the local player's final placement beside the
+            // remote body summary; map mode does the same, minus the
+            // remote-body summary this first pass does not yet simulate.
+            if (mapScene == null && gameplay[0] != null && gameplay[0].remoteBodies() != null)
             {
                 // The local player's own final placement, printed beside the peer
                 // bodies so the two can be compared directly. This is the whole
@@ -281,6 +386,21 @@ public final class DesktopLauncher
                     gameplay[0].controller().positionZ(),
                     gameplay[0].controller().yawRadians());
                 LOG.info("Remote body summary: {}", gameplay[0].remoteBodies());
+            }
+            else if (mapScene != null && mapPort[0] != null)
+            {
+                // Map mode: print the local player's final placement. The
+                // peer's body is not yet simulated into the map scene, so
+                // the second line on the demo path has no map analogue
+                // yet — the lockstep claim is the two peers' position
+                // values being equal, which the OTHER peer's log will
+                // show for this player.
+                LOG.info("Local player {} finished at ({}, {}, {}) yaw {} (map={})",
+                    netArgs.playerId(), mapPort[0].controller().positionX(),
+                    mapPort[0].controller().positionY(),
+                    mapPort[0].controller().positionZ(),
+                    mapPort[0].controller().yawRadians(),
+                    mapScene.spec().id());
             }
             netSession.close();
         }
@@ -305,6 +425,26 @@ public final class DesktopLauncher
             return null;
         }
         return DemoScene.build(DemoModels.load(Path.of(assetRoot)));
+    }
+
+    /**
+     * Builds a {@link com.openfps.engine.gameplay.map.MapScene} for the
+     * given map id.
+     *
+     * <p>The map id is looked up through {@code MapLibrary}; an unknown
+     * id is logged at WARN and falls back to the shipped cornerstone
+     * map so the launcher's "the window must not crash" invariant is
+     * preserved. The fallback is the same shape the headless
+     * {@code --map=} path uses ({@code MapSmokeGameplayPort}).</p>
+     *
+     * @param mapId the id from {@code --map=}; must not be null
+     * @return the built map scene, never null
+     */
+    private static com.openfps.engine.gameplay.map.MapScene buildMapScene(final String mapId)
+    {
+        final com.openfps.engine.gameplay.map.MapSpec spec =
+            com.openfps.engine.gameplay.map.MapLoader.loadOrFallback(mapId);
+        return com.openfps.engine.gameplay.map.MapScene.build(spec);
     }
 
     // The demo's per-tic loop, or the do-nothing port when a single model was
@@ -378,6 +518,47 @@ public final class DesktopLauncher
         }
         LOG.info("Multiplayer: {} — inputs both ways, and each peer is replayed"
             + " into a body of its own", netArgs);
+        return netSession;
+    }
+
+    /**
+     * Opens the network session for a map-mode run, and attaches it to the
+     * map port.
+     *
+     * <p>The map port has the same network attach shape as the demo port
+     * (the same {@link NetSession#recordLocalCommand} / {@code tick}
+     * path) but it does not yet have visible peer bodies in the map scene
+     * — the peer's commands are on the wire, the local player's inputs
+     * are sent, and the lockstep claim is exercised end-to-end. The
+     * remote-body visual layer is the next pass; this method's
+     * responsibilities stop at the wire.</p>
+     *
+     * @param netArgs the parsed command line
+     * @param port the map port to attach the session to; null returns null
+     * @param config the running configuration
+     * @param mapScene the map scene, for logging
+     * @return the open session, or null when networking was not requested
+     */
+    private static NetSession openNetworkMap(final NetArgs netArgs,
+        final com.openfps.engine.gameplay.map.MapGameplayPort port,
+        final GameConfig config,
+        final com.openfps.engine.gameplay.map.MapScene mapScene)
+    {
+        if (!netArgs.isRequested() || port == null)
+        {
+            return null;
+        }
+        final NetSession netSession = new NetSession(new DesktopDatagramPort(),
+            netArgs.playerId(), config.nanosPerTic());
+        netSession.open(netArgs.port());
+        for (final NetArgs.Peer peer : netArgs.peers())
+        {
+            netSession.addPeer(peer.id(), peer.address());
+        }
+        port.attachNetwork(netSession);
+        LOG.info("Map multiplayer: {} on map={} — inputs both ways, each peer runs the"
+            + " same spec match. Peer bodies in the map scene are a follow-up; the"
+            + " lockstep claim is on the wire.", netArgs, mapScene.spec().id());
         return netSession;
     }
 
@@ -561,6 +742,139 @@ public final class DesktopLauncher
     }
 
     /**
+     * Shares the map selection with the window's picker, and gives the picker
+     * the list of registered maps to show.
+     *
+     * <p>The launcher is the composition root, so it is the only object that
+     * can see both {@link MapLibrary} (engine code) and {@link MapSelection}
+     * (platform code). It builds the {@code (id, displayName)} rows the
+     * screen needs and seeds the selection so the launcher's
+     * {@code --map=<id>} argument takes effect for this run as well as the
+     * next one.</p>
+     *
+     * <p>An empty registry produces an empty entries list. The picker's
+     * button still transitions, but the screen is never built and the
+     * player is silently returned to the menu — the same "no picker wired"
+     * shape every windowless test already passes.</p>
+     *
+     * @param window the window whose picker reads and writes the selection
+     * @param args the CLI arguments; {@code --map=} is honoured as the
+     *     initial selection when present
+     */
+    private static void attachMatchGateMap(final GdxWindowPort window,
+        final com.openfps.engine.gameplay.map.MapGameplayPort port)
+    {
+        if (port == null)
+        {
+            return;
+        }
+        window.attachMatchGate(live -> port.setMatchLive(live.booleanValue()));
+    }
+
+    /**
+     * Lets the UI find out that the round has been decided. Mirror of
+     * {@link #attachMatchResult} for the map port: the spec's match
+     * produces a {@link MatchSummary} the same way the demo's does, and
+     * the window reads it the same way.
+     */
+    private static void attachMatchResultMap(final GdxWindowPort window,
+        final com.openfps.engine.gameplay.map.MapGameplayPort port)
+    {
+        if (port == null)
+        {
+            return;
+        }
+        window.attachMatchResult(() ->
+        {
+            final com.openfps.engine.gameplay.Match round = port.match();
+            if (round == null || !round.state().isOver())
+            {
+                return null;
+            }
+            return MatchSummary.of(round);
+        });
+    }
+
+    /**
+     * Lets the end screen's Play Again button put the map world back.
+     *
+     * <p>The map port's {@code restartMatch} is a follow-up — there is
+     * no equivalent of the demo's rematch yet. The window therefore does
+     * not get a restart callback in map mode, and the end screen renders
+     * a Back-to-menu button only. Stating so here because a player who
+     * looks at the end of a map-mode match and does not see a Play Again
+     * would otherwise have no way to know whether it was intended.</p>
+     */
+    private static void attachMatchRestartMap(final GdxWindowPort window,
+        final com.openfps.engine.gameplay.map.MapGameplayPort port)
+    {
+        if (port == null)
+        {
+            return;
+        }
+        // Intentionally no-op: map mode has no restart path yet.
+    }
+
+    /**
+     * Lets the on-screen score read the live match figures for a map
+     * port. Same wiring as the demo path; the match status API is the
+     * same {@link com.openfps.engine.gameplay.MatchStatus} either way.
+     */
+    private static void attachMatchStatusMap(final GdxWindowPort window,
+        final com.openfps.engine.gameplay.map.MapGameplayPort port, final FrameRate rate)
+    {
+        if (port == null)
+        {
+            return;
+        }
+        // The match status is read every frame; the map port's accessor
+        // builds a new snapshot on demand, which is the right shape for
+        // the platform's per-frame copy.
+        window.attachMatchStatus(port::status, rate.fps());
+    }
+
+    /**
+     * Wires the map port's weapon noise. The audio port comes from the
+     * HAL rather than being constructed here, for the same reason the
+     * demo path's audio attach uses the HAL. {@code MapGameplayPort} does
+     * not have an {@code attachAudio} method yet — it reads the
+     * NullAudioPort default — so the wiring is a no-op until that ships.
+     * Stating the no-op here rather than silently omitting it so the
+     * shape of the launcher's attach path is uniform across modes.
+     */
+    private static void attachAudioMap(final GdxAdapterFactory hal,
+        final com.openfps.engine.gameplay.map.MapGameplayPort port)
+    {
+        if (port == null)
+        {
+            return;
+        }
+        // Map port has no attachAudio on this pass; the field defaults
+        // to NullAudioPort. The seam is documented so the next pass can
+        // add the setter without having to re-derive what was intended.
+    }
+
+    private static void attachMapSelection(final GdxWindowPort window, final String[] args)
+    {
+        final MapSelection selection = new MapSelection();
+        final String initial = mapArg(args);
+        if (initial != null && !initial.isEmpty() && MapLibrary.has(initial))
+        {
+            selection.setCurrentMapId(initial);
+        }
+        final List<MapSelectionScreen.Entry> entries = new ArrayList<>(MapLibrary.size());
+        for (final String id : MapLibrary.ids())
+        {
+            final MapSpec spec = MapLibrary.get(id);
+            entries.add(new MapSelectionScreen.Entry(spec.id(), spec.displayName()));
+        }
+        window.attachMapSelection(selection);
+        window.attachMapEntries(entries);
+        LOG.info("Map picker wired: {} map(s) registered, current selection = {}",
+            entries.size(), selection.currentMapId());
+    }
+
+    /**
      * Gives the match somewhere to play the weapon sound.
      *
      * <p>Attached after {@code start} rather than passed into it, because the
@@ -582,6 +896,19 @@ public final class DesktopLauncher
             return;
         }
         gameplay.attachAudio(hal.getAudioPort());
+    }
+
+    // Wires the local player's first-person body into the gameplay port, so
+    // the arms are published every tic. The body is part of the DemoScene
+    // and so cannot be passed at construction — the same shape
+    // attachRemoteBodies and attachAudio already document.
+    private static void attachLocalBody(final DemoScene demo, final DemoGameplayPort gameplay)
+    {
+        if (gameplay == null || demo == null)
+        {
+            return;
+        }
+        gameplay.attachLocalBody(demo.localBody());
     }
 
     // Where each bot's model sits among the scene's world instances, so the
@@ -632,6 +959,85 @@ public final class DesktopLauncher
     }
 
     /**
+     * Picks the team a player is on from their net id, the same
+     * deterministic assignment two peers on the same machine use to land
+     * on opposite sides of the map.
+     *
+     * <p>Net id 1 lands on {@link Team#RED}, 2 on {@link Team#BLUE}, 3 on
+     * RED again (the third peer takes the next slot of the team's
+     * spawn list), and so on. A net id of 0 (no networking) is
+     * {@link Team#NEUTRAL} — the single-player case — which the port
+     * then resolves to the first spec spawn of any team.</p>
+     *
+     * @param netSpawnId the net id, or 0 for a local run
+     * @return the team the player starts on
+     */
+    private static Team teamForPlayer(final int netSpawnId)
+    {
+        if (netSpawnId <= 0)
+        {
+            return Team.NEUTRAL;
+        }
+        if ((netSpawnId % 2) == 1)
+        {
+            return Team.RED;
+        }
+        return Team.BLUE;
+    }
+
+    /**
+     * Picks which spawn within the team the player starts on, again
+     * deterministically from the net id. Two peers with the same team
+     * and different ids land on different spawns, so neither starts on
+     * top of the other.
+     *
+     * @param netSpawnId the net id
+     * @param team the team the player is on
+     * @return the spawn index within the team, or -1 to fall back to the
+     *     first spec spawn of any team
+     */
+    private static int mapSpawnIndexFor(final int netSpawnId, final Team team)
+    {
+        if (netSpawnId <= 0)
+        {
+            return -1;
+        }
+        // For two peers on the same team (3rd, 4th, 5th...), the spawn
+        // index advances; for the normal 1v1 case, the index is 0 — the
+        // first RED or BLUE spawn, which is what a two-peer match wants.
+        if (team == Team.RED || team == Team.BLUE)
+        {
+            return (netSpawnId - 1) / 2;
+        }
+        return 0;
+    }
+
+    /**
+     * Hands the renderer the map scene the spec was built from. The
+     * map scene bypasses the demo entirely: no bots, no held weapon,
+     * no UI hooks — the per-tic simulation runs the map's mode
+     * logic but the rendered frame is just the level geometry.
+     *
+     * <p>The visual smoke test documented in {@code docs/pass2-report.md}
+     * is whether this is enough to put a map on screen. A future
+     * pass can replace this with a full map-driven demo (bots,
+     * weapon, UI), at which point this method and the
+     * {@code bindWorld} above converge.</p>
+     *
+     * @param renderer the renderer to bind the map scene into
+     * @param mapScene the map scene to draw
+     */
+    private static void bindMapWorld(final SoftwareRenderPort renderer,
+        final com.openfps.engine.gameplay.map.MapScene mapScene)
+    {
+        renderer.setScene(mapScene.scene());
+        renderer.setCrosshairEnabled(true);
+        LOG.info("Map world ready: {} — viewmodel and bots are bypassed in map mode,"
+            + " only the level geometry is rendered. The per-tic mode logic still ticks"
+            + " (the smoke gameplay port runs against the spec).", mapScene);
+    }
+
+    /**
      * Returns the {@code --assets=} argument, or the default model root.
      *
      * @param args the CLI arguments, may be null
@@ -678,6 +1084,22 @@ public final class DesktopLauncher
     public static String modelArg(final String[] args)
     {
         return valueOf(args, MODEL_ARG);
+    }
+
+    /**
+     * Returns the {@code --map=} argument, or null if none was given.
+     *
+     * <p>When non-null, the launcher builds a {@link
+     * com.openfps.engine.gameplay.map.MapScene} for the id and uses
+     * that as the rendered world. The legacy demo scene is bypassed
+     * — see {@link #buildMapScene(String)} and {@link #bindMapWorld}.</p>
+     *
+     * @param args the CLI arguments, may be null
+     * @return the map id, or null
+     */
+    public static String mapArg(final String[] args)
+    {
+        return valueOf(args, MAP_ARG);
     }
 
     // The value of the first argument carrying a given prefix, or null.

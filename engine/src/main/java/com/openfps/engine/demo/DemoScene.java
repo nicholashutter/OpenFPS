@@ -636,6 +636,10 @@ public final class DemoScene
 
     /** The pre-placed bodies a networked peer is simulated into. Never null. */
     private final RemotePlayers remotePlayers;
+
+    /** The local player's own first-person arms. Never null. */
+    private final LocalPlayerBody localBody;
+
     private final float spawnX;
     private final float spawnY;
     private final float spawnZ;
@@ -648,7 +652,7 @@ public final class DemoScene
         final int[] weaponIndices, final DemoEffects shotEffects, final float feetX,
         final float feetY, final float feetZ, final float yawRadians,
         final DemoModels.Source modelSource, final PhysicsWorld solidGeometry,
-        final RemotePlayers peerBodies)
+        final RemotePlayers peerBodies, final LocalPlayerBody localBody)
     {
         this.physics = solidGeometry;
         this.scene = builtScene;
@@ -657,6 +661,7 @@ public final class DemoScene
         this.botWeaponInstances = weaponIndices;
         this.effects = shotEffects;
         this.remotePlayers = peerBodies;
+        this.localBody = localBody;
         this.spawnX = feetX;
         this.spawnY = feetY;
         this.spawnZ = feetZ;
@@ -716,6 +721,12 @@ public final class DemoScene
         // and the smoke are generated geometry, so they are the one part of the
         // demo that cannot be missing from a fresh clone.
         final DemoEffects shots = DemoEffects.addTo(builder);
+        // Unconditionally too: the arms are procedurally generated and are
+        // the local player's own first-person body, so they exist whether or
+        // not character art is staged. A demo that ships without arms is a
+        // demo where the player holds nothing — the same degraded look the
+        // empty viewmodel produces today.
+        final LocalPlayerBody localBody = LocalPlayerBody.addTo(builder);
         addViewmodel(builder, models.weapon());
 
         final Scene built = builder.build();
@@ -728,7 +739,7 @@ public final class DemoScene
         // Facing +z, which is yaw 0 (PlayerController's convention), standing
         // back from the origin so the whole room is ahead rather than around.
         return new DemoScene(built, roster, instanceIndices, weaponIndices, shots, 0.0f, 0.0f,
-            -spawnDepth, 0.0f, models.source(), solidGeometry, peers);
+            -spawnDepth, 0.0f, models.source(), solidGeometry, peers, localBody);
     }
 
     /**
@@ -1525,6 +1536,22 @@ public final class DemoScene
     public RemotePlayers remotePlayers()
     {
         return remotePlayers;
+    }
+
+    /**
+     * Returns the local player's first-person body, which is its own arms
+     * and the bob that animates them.
+     *
+     * <p>Always present, since the arms are procedurally generated and do not
+     * depend on any staged art. {@code DemoGameplayPort} is the caller —
+     * {@link LocalPlayerBody#publish} is the per-tic seam — but a test or a
+     * screenshot tool can ask the same question.</p>
+     *
+     * @return the local body, never null
+     */
+    public LocalPlayerBody localBody()
+    {
+        return localBody;
     }
 
     /**

@@ -869,9 +869,11 @@ final class DemoSceneTest
             final int props = 4 + 8 + 1 + 1;
 
             // Floor and ceiling are the same grid twice, plus the tracer and
-            // smoke instances every scene carries whether or not art is staged.
+            // smoke instances every scene carries, plus the local player's
+            // arms — procedurally generated, so present whether or not art
+            // was staged.
             assertThat(scene.worldInstanceCount())
-                .isEqualTo(2 * tiles + walls + props + demo.effects().instanceCount());
+                .isEqualTo(2 * tiles + walls + props + demo.effects().instanceCount() + 1);
             assertThat(scene.viewInstanceCount()).isEqualTo(1);
         }
 
@@ -916,10 +918,13 @@ final class DemoSceneTest
             final DemoScene demo = DemoScene.build(DemoModels.load(root));
 
             assertThat(demo.source()).isEqualTo(DemoModels.Source.GENERATED_ROOM);
-            // The room, plus the effect pool — which is generated geometry and
-            // so is present even when no art at all was staged.
+            // The room, plus the effect pool — generated geometry, present
+            // even when no art at all was staged — plus the local player's
+            // arms. The fallback is the only scene with no character art
+            // and so the only one with neither bots nor peer bodies; the
+            // arms are still placed because they are procedural.
             assertThat(demo.scene().worldInstanceCount())
-                .isEqualTo(1 + demo.effects().instanceCount());
+                .isEqualTo(1 + demo.effects().instanceCount() + 1);
             assertThat(demo.scene().viewInstanceCount()).isZero();
         }
 

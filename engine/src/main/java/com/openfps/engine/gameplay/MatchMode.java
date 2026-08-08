@@ -19,6 +19,18 @@ package com.openfps.engine.gameplay;
  * single-player match is a real test of the multiplayer code path: if a shot
  * connects with a bot it will connect with a peer, because the same
  * {@code Hitscan} resolved both against the same kind of {@link Target}.</p>
+ *
+ * <h2>Pass 1 — the four real multiplayer modes</h2>
+ *
+ * <p>Four new entries — {@link #TDM}, {@link #HARDPOINT}, {@link #DOMINATION}
+ * and {@link #CTF} — are the rule sets the 16-map library ships. They are
+ * <b>siblings</b> of {@link #SINGLE_PLAYER} and {@link #MULTIPLAYER}, not
+ * replacements: the original two stay because the existing code references
+ * them and removing them would orphan every test and every launcher that
+ * distinguishes "is this a net match?" from "is this a real-game-mode
+ * match?". The new modes are what a {@link com.openfps.engine.gameplay.map.MapSpec}
+ * carries; the original two are the high-level question of "who supplies
+ * the bodies".</p>
  */
 public enum MatchMode
 {
@@ -38,5 +50,56 @@ public enum MatchMode
      * <p>Bots are not spawned — the room fills with whoever connects. See
      * {@code net/README.md} for the transport and the lockstep model.</p>
      */
-    MULTIPLAYER;
+    MULTIPLAYER,
+
+    /**
+     * Team Deathmatch. Respawn on death; score per kill; the round ends when
+     * one team reaches the kill limit or the time limit.
+     */
+    TDM,
+
+    /**
+     * Hardpoint. Capture and hold rotating zones; score per second held; the
+     * round ends when one team reaches the score limit or the time limit.
+     */
+    HARDPOINT,
+
+    /**
+     * Domination. Three flags (A, B, C); capture to score; the round ends when
+     * one team reaches the score limit or the time limit.
+     */
+    DOMINATION,
+
+    /**
+     * Capture The Flag. Two bases; pick up the enemy flag, return it to your
+     * own base; score per capture; the round ends at the capture limit or the
+     * time limit.
+     */
+    CTF;
+
+    /**
+     * Returns whether this is one of the four real multiplayer rule sets.
+     *
+     * <p>{@link #SINGLE_PLAYER} and {@link #MULTIPLAYER} return false; they
+     * are the high-level "who supplies the bodies" question, and the answer
+     * "yes" is what {@code Match} would need to dispatch per-tic mode
+     * updates. A null result from this method means the existing per-tic
+     * path is fine and no mode dispatch is required.</p>
+     *
+     * @return true for {@link #TDM}, {@link #HARDPOINT}, {@link #DOMINATION},
+     *     {@link #CTF}; false for the legacy two
+     */
+    public boolean isRuleSet()
+    {
+        switch (this)
+        {
+            case TDM:
+            case HARDPOINT:
+            case DOMINATION:
+            case CTF:
+                return true;
+            default:
+                return false;
+        }
+    }
 }

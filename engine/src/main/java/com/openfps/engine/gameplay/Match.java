@@ -5,6 +5,12 @@
 
 package com.openfps.engine.gameplay;
 
+import com.openfps.engine.gameplay.map.MapMarkers;
+import com.openfps.engine.gameplay.map.MapSpec;
+import com.openfps.engine.gameplay.map.Team;
+
+import java.util.List;
+
 /**
  * One round: a player, a set of {@link Bot}s, and the rules that decide who is
  * still standing.
@@ -345,6 +351,21 @@ public final class Match
      */
     public static final int UNLIMITED_DEATHS = 0;
 
+    /**
+     * The capture limit for a CTF match. A team that reaches this many captures
+     * wins the round; the standard COD number, hardcoded because every shipped
+     * map agrees on it and a future pass can lift it into the spec if the
+     * maps start to disagree.
+     */
+    public static final int CTF_CAPTURE_LIMIT = 5;
+
+    /**
+     * The time limit for a CTF match, in tics. At 60 Hz, this is ten minutes
+     * (600 seconds). The match is a draw if the time limit is reached before
+     * either team hits {@link #CTF_CAPTURE_LIMIT}.
+     */
+    public static final int CTF_TIME_LIMIT_TICS = 60 * 60 * 10;
+
     /** One full turn in radians, for the wild shot's arbitrary heading. */
     private static final float FULL_TURN_RADIANS = (float) (2.0 * StrictMath.PI);
 
@@ -464,6 +485,110 @@ public final class Match
     private boolean respawnedThisTic;
 
     /**
+     * The map spec this match is running. Null for the legacy single-room
+     * demo. Set by the spec-aware constructor; never reassigned.
+     */
+    private final MapSpec mapSpec;
+
+    /**
+     * Per-tic counter for Hardpoint zone rotation. MUTABLE. Zero when the
+     * match is not Hardpoint, and the value is meaningless between rounds.
+     */
+    private int hardpointRotationCounter;
+
+    /**
+     * Which Hardpoint zone is currently active (0-2). MUTABLE. Zero when
+     * the match is not Hardpoint, and the value is meaningless between
+     * rounds.
+     */
+    private int hardpointActiveZone;
+
+    /**
+     * Red team's Hardpoint score. MUTABLE. Zero when the match is not
+     * Hardpoint, and the value is meaningless between rounds.
+     */
+    private int hardpointRedScore;
+
+    /**
+     * Blue team's Hardpoint score. MUTABLE. Zero when the match is not
+     * Hardpoint, and the value is meaningless between rounds.
+     */
+    private int hardpointBlueScore;
+
+    /**
+     * Which team currently holds the active Hardpoint zone. MUTABLE.
+     * {@link Team#NEUTRAL} when no team holds the zone (it is empty or
+     * contested). Reset by {@link #reset()}.
+     */
+    private Team hardpointActiveHolder = Team.NEUTRAL;
+
+    /**
+     * The team the local player is on. MUTABLE; set by the gameplay
+     * port when the player picks a side at spawn. Defaults to
+     * {@link Team#NEUTRAL} for the legacy single-player demo and the
+     * headless smoke-test path, both of which have no team assignment.
+     */
+    private Team playerTeam = Team.NEUTRAL;
+
+    /**
+     * Per-flag owner for the three Domination flags, indexed by flag
+     * order in the spec. MUTABLE. Initialized to
+     * {@link Team#NEUTRAL} for all three — the spec's flags start
+     * unclaimed, which is the design doc's neutral start. Reset by
+     * {@link #reset()}.
+     */
+    private Team[] dominationFlagOwners = new Team[]
+    {
+        Team.NEUTRAL, Team.NEUTRAL, Team.NEUTRAL
+    };
+
+    /**
+     * Red team's Domination score. MUTABLE. Zero when the match is not
+     * Domination, and the value is meaningless between rounds.
+     */
+    private int dominationRedScore;
+
+    /**
+     * Blue team's Domination score. MUTABLE. Zero when the match is not
+     * Domination, and the value is meaningless between rounds.
+     */
+    private int dominationBlueScore;
+
+    /**
+     * Red team's CTF capture count. MUTABLE. Zero when the match is not
+     * CTF, and the value is meaningless between rounds.
+     */
+    private int ctfRedCaptures;
+
+    /**
+     * Blue team's CTF capture count. MUTABLE. Zero when the match is not
+     * CTF, and the value is meaningless between rounds.
+     */
+    private int ctfBlueCaptures;
+
+    /**
+     * Who is carrying RED's flag. {@code null} means the flag is on its base;
+     * otherwise, the carrier is on the named team (the only legal non-null
+     * value is {@link Team#BLUE}, because the player can only carry the
+     * enemy flag). MUTABLE.
+     */
+    private Team ctfRedFlagCarrier;
+
+    /**
+     * Who is carrying BLUE's flag. {@code null} means the flag is on its
+     * base; otherwise, the carrier is on the named team (the only legal
+     * non-null value is {@link Team#RED}). MUTABLE.
+     */
+    private Team ctfBlueFlagCarrier;
+
+    /**
+     * Tics elapsed since the CTF match started. Used by the time-limit check
+     * in {@link #state()}. Incremented on every {@link #updateCtf} call. The
+     * counter resets to zero in {@link #reset()}.
+     */
+    private int ctfElapsedTics;
+
+    /**
      * Creates a match against a given set of bots, with the default seed and the
      * dumb opponents the demo ships.
      *
@@ -498,6 +623,58 @@ public final class Match
      */
     public Match(final Bot[] opponents, final BotRng generator, final BotSkill botSkill,
         final int deathsAllowed)
+    {
+        this(opponents, generator, botSkill, deathsAllowed, null);
+    }
+
+    /**
+     * Creates a match against a given set of bots on a specific map. The
+     * match's mode is taken from the spec; the bots, the seed, the skill
+     * profile and the death limit match the no-spec constructor's defaults.
+     *
+     * <p>The spec is held by reference (immutable), so a future modification
+     * to the registry does not retroactively change this match's mode. The
+     * mode itself is read off the spec at construction time and again on
+     * every {@link #tick}; both reads see the same value because the spec
+     * is immutable.</p>
+     *
+     * @param opponents the bots to fight; same rules as
+     *     {@link #Match(Bot[], BotRng, BotSkill, int)}
+     * @param spec the map spec; must not be null
+     * @throws IllegalArgumentException if {@code opponents} is null or holds
+     *     a null, or if two bots share an entity id, or if {@code spec} is
+     *     null
+     */
+    public Match(final Bot[] opponents, final MapSpec spec)
+    {
+        this(opponents, new BotRng(), BotSkill.DUMB, UNLIMITED_DEATHS, spec);
+        // Validate after chaining. The 5-arg constructor accepts a null
+        // spec for the legacy demo path, but the 2-arg form is only ever
+        // useful with a real spec. The check is below the chained call
+        // because Java 17 forbids statements before this(...), and a
+        // null spec is the one input that breaks this contract.
+        if (spec == null)
+        {
+            throw new IllegalArgumentException("spec must not be null");
+        }
+    }
+
+    /**
+     * Creates a match against a given set of bots on a specific map, with
+     * the full set of construction arguments. The spec may be null for the
+     * legacy single-room demo.
+     *
+     * @param opponents the bots to fight; same rules as
+     *     {@link #Match(Bot[], BotRng, BotSkill, int)}
+     * @param generator where every random decision comes from; must not be null
+     * @param botSkill how badly the opponents shoot; must not be null
+     * @param deathsAllowed deaths before the round is lost, or
+     *     {@link #UNLIMITED_DEATHS}; must not be negative
+     * @param spec the map spec, or null for the legacy demo
+     * @throws IllegalArgumentException if any argument is out of range
+     */
+    public Match(final Bot[] opponents, final BotRng generator, final BotSkill botSkill,
+        final int deathsAllowed, final MapSpec spec)
     {
         if (opponents == null)
         {
@@ -541,6 +718,7 @@ public final class Match
         this.skill = botSkill;
         this.deathLimit = deathsAllowed;
         this.shots = new BotShotLog(bots.length);
+        this.mapSpec = spec;
     }
 
     /**
@@ -604,6 +782,44 @@ public final class Match
         this.respawnAtTic = 0;
         this.playerDown = false;
         this.respawnedThisTic = false;
+        // Mode-specific state, reset so a rematch opens in the same
+        // shape a fresh match would. Same justification as the
+        // super-blaster lines above: a Hardpoint rematch that
+        // remembered last round's active zone would open mid-rotation,
+        // and a player who earned four seconds of capture in a zone
+        // that is no longer active would see a HUD that does not agree
+        // with the room.
+        this.hardpointRotationCounter = 0;
+        this.hardpointActiveZone = 0;
+        this.hardpointRedScore = 0;
+        this.hardpointBlueScore = 0;
+        this.hardpointActiveHolder = Team.NEUTRAL;
+        // Domination per-flag owners reset to NEUTRAL so the round
+        // opens with the spec's neutral start, not with the previous
+        // round's captures. Same justification as the Hardpoint
+        // resets: a rematch that inherited a captured flag would
+        // open with a score nobody earned on this round.
+        for (int index = 0; index < dominationFlagOwners.length; index++)
+        {
+            dominationFlagOwners[index] = Team.NEUTRAL;
+        }
+        this.dominationRedScore = 0;
+        this.dominationBlueScore = 0;
+        // CTF per-flag carriers return to null and per-team capture
+        // counts return to zero. The match opens with both flags at
+        // home and no captures scored — a rematch that inherited a
+        // carried flag would open mid-run with a flag the carrier
+        // already had, and a rematch with an inherited capture count
+        // would be one closer to the limit than the round earned.
+        this.ctfRedFlagCarrier = null;
+        this.ctfBlueFlagCarrier = null;
+        this.ctfRedCaptures = 0;
+        this.ctfBlueCaptures = 0;
+        this.ctfElapsedTics = 0;
+        // The player's team is a rematch input, not a rematch
+        // output: a rematch opens with the same team the previous
+        // round did, set by the gameplay port. The smoke-test path
+        // does not change it, which is the right default.
         // The next tick would clear this anyway, so nothing observable depends on
         // it. It is here because the invariant MatchTest asserts is "a reset match
         // is indistinguishable from a freshly started one", and a field left
@@ -680,7 +896,508 @@ public final class Match
             bots[index].observePlayer(ticIndex, playerFeetX, playerFeetZ, skill);
         }
         faceAll();
-        return resolveBotFire(ticIndex, playerFeetX, playerFeetY, playerFeetZ);
+        final int damage = resolveBotFire(ticIndex, playerFeetX, playerFeetY, playerFeetZ);
+        // Mode-specific update, AFTER the bot fire has been resolved so a
+        // Hardpoint score from this tic reflects every bot that landed a
+        // shot on a player who is also holding a zone. No-op for modes that
+        // have no per-tic state (TDM); stubs for the other three that keep
+        // the simulation state coherent without implementing the rules.
+        updateMode(ticIndex, playerFeetX, playerFeetZ);
+        return damage;
+    }
+
+    /**
+     * Dispatches the per-tic mode update.
+     *
+     * <p>For {@link MatchMode#TDM} (and for the no-spec legacy demo, which
+     * runs as a default TDM) this is a no-op: TDM has no per-tic state
+     * beyond the respawn / score logic {@link #tick} already does. The
+     * other three modes have stubs that keep the rotation counters and
+     * flag-state tables coherent on every tic, with the actual scoring
+     * logic and capture detection left for the mode-specific
+     * implementation in Pass 2-4.</p>
+     *
+     * @param ticIndex the tic being processed
+     * @param playerX the player's feet, world x — the x used to test
+     *                capture radii
+     * @param playerZ the player's feet, world z — the z used to test
+     *                capture radii
+     */
+    private void updateMode(final int ticIndex, final float playerX, final float playerZ)
+    {
+        final MatchMode currentMode = mode();
+        switch (currentMode)
+        {
+            case TDM:
+                // No-op: the respawn, score, streak and bot-fire logic in
+                // tick() is the whole of TDM's per-tic work.
+                break;
+            case HARDPOINT:
+                updateHardpoint(ticIndex, playerX, playerZ);
+                break;
+            case DOMINATION:
+                updateDomination(ticIndex, playerX, playerZ);
+                break;
+            case CTF:
+                updateCtf(ticIndex, playerX, playerZ);
+                break;
+            default:
+                // SINGLE_PLAYER and MULTIPLAYER are not mode dispatchers;
+                // they fall back to TDM behaviour through mode().
+                break;
+        }
+    }
+
+    /**
+     * Hardpoint per-tic update.
+     *
+     * <p>Three steps, in order: <b>resolve</b> which team currently holds
+     * the active zone, <b>score</b> the holding team, then <b>advance</b>
+     * the rotation counter and rotate on schedule.</p>
+     *
+     * <h2>Resolve — who holds the zone</h2>
+     *
+     * <p>A body is in the active zone when its horizontal distance to the
+     * zone's centre is within {@code zone.radius()}. Both the player and
+     * every living bot are tested. The player counts for whichever team
+     * the match's caller hands in via {@code playerTeam} — the
+     * {@link #tick} signature does not take a team today, so the smoke-test
+     * path uses {@link Team#NEUTRAL}, and a real {@code MapScene} would
+     * forward the player's team from the spawn selection. A
+     * {@link Team#NEUTRAL} body does not claim the zone for either team.</p>
+     *
+     * <p>Two teams in the zone simultaneously leaves the zone
+     * <b>uncontested-held</b>: the contested rule is the same rule the
+     * UI shows as "CONTESTED", and the score is paused for the duration.
+     * The active holder field therefore reports
+     * {@link Team#NEUTRAL} when both teams are present or when no team
+     * is present, and the score does not advance on those tics.</p>
+     *
+     * <h2>Score</h2>
+     *
+     * <p>On every tic where the active holder is RED, red's score advances
+     * by {@code spec.scorePerTick()}. Same for blue. The score-per-tick
+     * rule is part of the spec, not a constant, because a future pass
+     * may want a faster rotation that earns less per held tic, or a
+     * slower one that earns more, and the spec is the right place to
+     * capture that trade.</p>
+     *
+     * <h2>Advance</h2>
+     *
+     * <p>The rotation counter advances by one every tic and wraps every
+     * {@code spec.rotationTics()} tics, moving the active zone index
+     * forward by one (mod the zone count). The counter and the index
+     * advance AFTER the score is awarded, so a tic on which the
+     * rotation triggers still scores the previous zone — the player
+     * who held the zone for the last tic of the rotation is paid for
+     * that last tic, and the next tic's score belongs to whoever
+     * holds the new active zone.</p>
+     */
+    private void updateHardpoint(final int ticIndex, final float playerX, final float playerZ)
+    {
+        if (!(mapSpec.markers() instanceof MapMarkers.Hardpoint hp))
+        {
+            return;
+        }
+        // 1. Resolve the active holder.
+        final MapMarkers.HardpointZone active = hp.zones().get(hardpointActiveZone);
+        final boolean playerInZone = isInHardpointZone(playerX, playerZ, active);
+        final boolean playerRed = playerInZone && playerTeam == Team.RED;
+        final boolean playerBlue = playerInZone && playerTeam == Team.BLUE;
+        final boolean redBody = playerRed || botTeamInZone(Team.RED, active);
+        final boolean blueBody = playerBlue || botTeamInZone(Team.BLUE, active);
+        final Team newHolder;
+        if (redBody && !blueBody)
+        {
+            newHolder = Team.RED;
+        }
+        else if (blueBody && !redBody)
+        {
+            newHolder = Team.BLUE;
+        }
+        else
+        {
+            newHolder = Team.NEUTRAL;
+        }
+        this.hardpointActiveHolder = newHolder;
+        // 2. Award score.
+        if (newHolder == Team.RED)
+        {
+            this.hardpointRedScore = hardpointRedScore + hp.scorePerTick();
+        }
+        if (newHolder == Team.BLUE)
+        {
+            this.hardpointBlueScore = hardpointBlueScore + hp.scorePerTick();
+        }
+        // 3. Advance the rotation.
+        this.hardpointRotationCounter = hardpointRotationCounter + 1;
+        if (hardpointRotationCounter >= hp.rotationTics())
+        {
+            this.hardpointRotationCounter = 0;
+            this.hardpointActiveZone = (hardpointActiveZone + 1) % hp.zones().size();
+        }
+    }
+
+    /**
+     * Returns whether a body at ({@code x}, {@code z}) is inside the
+     * capture radius of a Hardpoint zone. The check is horizontal —
+     * the y axis is the floor, not the body height, so a player on a
+     * catwalk above a zone is NOT in the zone.
+     *
+     * @param x body feet, world x
+     * @param z body feet, world z
+     * @param zone the zone to test against
+     * @return true if the body's horizontal distance to the zone's
+     *     centre is within the zone's radius
+     */
+    private static boolean isInHardpointZone(final float x, final float z,
+        final MapMarkers.HardpointZone zone)
+    {
+        final float dx = x - zone.x();
+        final float dz = z - zone.z();
+        // Squared distance — sqrt is unnecessary; the comparison is
+        // (d <= r), which is the same as (d^2 <= r^2). Saves a StrictMath.sqrt
+        // on the tic path.
+        return dx * dx + dz * dz <= zone.radius() * zone.radius();
+    }
+
+    /**
+     * Returns whether at least one living bot on the given team is in
+     * the given Hardpoint zone.
+     *
+     * <p>Iterates the bot array; a {@code Match} with seven bots runs
+     * this up to seven times per tic per team, which is the right
+     * answer for the current scale and is O(N) per tic — a
+     * future optimisation could bin bots to zones if the count
+     * climbs.</p>
+     *
+     * @param team the team to test
+     * @param zone the zone to test against
+     * @return true if any living bot on the team is in the zone
+     */
+    private boolean botTeamInZone(final Team team, final MapMarkers.HardpointZone zone)
+    {
+        for (int index = 0; index < bots.length; index++)
+        {
+            final Bot bot = bots[index];
+            if (!bot.isAlive() || bot.team() != team)
+            {
+                continue;
+            }
+            if (isInHardpointZone(bot.positionX(), bot.positionZ(), zone))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // (hasRedPresence / hasBluePresence were removed in Pass 2 when
+    // the resolve switched from "the player can be on a team that has
+    // at least one bot" to reading playerTeam directly — those helpers
+    // described the wrong condition.)
+
+    /**
+     * Domination per-tic update.
+     *
+     * <p>Two steps, in order: <b>resolve</b> each flag's owner from the
+     * bodies in its capture radius, then <b>score</b> each flag that
+     * has an owner.</p>
+     *
+     * <h2>Resolve — who owns each flag</h2>
+     *
+     * <p>For each flag, test every body (the player and every living
+     * bot) for whether its feet are inside the flag's capture radius.
+     * A body is RED if the player is on RED or the bot is on RED;
+     * same for BLUE. The resolve rule is:</p>
+     *
+     * <ul>
+     *   <li>Only RED bodies in the radius → owner = RED.</li>
+     *   <li>Only BLUE bodies in the radius → owner = BLUE.</li>
+     *   <li>Both teams in the radius (contested) → owner <b>unchanged</b>.
+     *       A contested flag does not switch sides; the team that held
+     *       it last keeps the score and the next tic re-resolves.</li>
+     *   <li>Neither team in the radius (empty) → owner <b>unchanged</b>.
+     *       This is the standard COD rule: a flag, once captured, stays
+     *       captured until the enemy team stands on it uncontested.</li>
+     * </ul>
+     *
+     * <p>The "unchanged on contested/empty" rule is the difference
+     * between a working Domination and a Domination that flips a flag
+     * the moment a defender steps on it. It is the rule the scoreboard
+     * reads as "DEFENDING", and the contested case is the one the
+     * HUD shows as "CONTESTED" with a per-tic flicker as bodies
+     * move in and out.</p>
+     *
+     * <h2>Score</h2>
+     *
+     * <p>On every tic, each flag whose owner is RED adds one point to
+     * the red score; each flag whose owner is BLUE adds one to the
+     * blue score. Three flags all held by RED score 3 per tic; one
+     * contested, one RED, one NEUTRAL scores 1 per tic. The
+     * Domination per-tick rate is hardcoded to 1 — different per map
+     * would be a future balance pass, not a Pass 3 change.</p>
+     */
+    private void updateDomination(final int ticIndex, final float playerX, final float playerZ)
+    {
+        if (!(mapSpec.markers() instanceof MapMarkers.Domination dom))
+        {
+            return;
+        }
+        // 1. Resolve each flag.
+        final List<MapMarkers.Flag> flags = dom.flags();
+        for (int index = 0; index < flags.size(); index++)
+        {
+            final MapMarkers.Flag flag = flags.get(index);
+            final boolean redIn = isInDominationRadius(playerX, playerZ, flag, Team.RED);
+            final boolean blueIn = isInDominationRadius(playerX, playerZ, flag, Team.BLUE);
+            final Team newOwner;
+            if (redIn && !blueIn)
+            {
+                newOwner = Team.RED;
+            }
+            else if (blueIn && !redIn)
+            {
+                newOwner = Team.BLUE;
+            }
+            else
+            {
+                // Contested (both in) or empty (neither in): the
+                // owner does not change. A NEUTRAL flag stays NEUTRAL
+                // (still empty); a captured flag stays captured
+                // (still contested or empty). The score logic
+                // below awards points only to the captured side.
+                continue;
+            }
+            dominationFlagOwners[index] = newOwner;
+        }
+        // 2. Score: one point per flag per tic for the holding team.
+        for (int index = 0; index < dominationFlagOwners.length; index++)
+        {
+            final Team owner = dominationFlagOwners[index];
+            if (owner == Team.RED)
+            {
+                this.dominationRedScore = dominationRedScore + 1;
+            }
+            else if (owner == Team.BLUE)
+            {
+                this.dominationBlueScore = dominationBlueScore + 1;
+            }
+        }
+    }
+
+    /**
+     * Returns whether a body on the given team is inside a Domination
+     * flag's capture radius. The check covers the player (whose team
+     * is {@link #playerTeam}) and every living bot on the given team.
+     *
+     * <p>The horizontal-distance comparison uses squared distance so
+     * the per-tic check does not call {@code StrictMath.sqrt}.</p>
+     *
+     * @param x body feet, world x
+     * @param z body feet, world z
+     * @param flag the flag to test against
+     * @param team the team whose presence is being checked
+     * @return true if a body on {@code team} is in {@code flag}'s
+     *     capture radius
+     */
+    private boolean isInDominationRadius(final float x, final float z,
+        final MapMarkers.Flag flag, final Team team)
+    {
+        if (playerTeam == team)
+        {
+            final float dx = x - flag.x();
+            final float dz = z - flag.z();
+            if (dx * dx + dz * dz <= flag.radius() * flag.radius())
+            {
+                return true;
+            }
+        }
+        for (int index = 0; index < bots.length; index++)
+        {
+            final Bot bot = bots[index];
+            if (!bot.isAlive() || bot.team() != team)
+            {
+                continue;
+            }
+            final float bx = bot.positionX();
+            final float bz = bot.positionZ();
+            final float dx = bx - flag.x();
+            final float dz = bz - flag.z();
+            if (dx * dx + dz * dz <= flag.radius() * flag.radius())
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Capture The Flag per-tic update.
+     *
+     * <p>Three checks, in order: <b>drop on death</b>, <b>pickup</b>, and
+     * <b>return or capture</b>. Each check is gated on the previous one
+     * not having moved a flag this tic — a flag that was just returned to
+     * its base by a save cannot be picked up again on the same tic, and a
+     * flag that was just captured cannot be picked up by the other team on
+     * the same tic. The order is the same as the player's intuition reads
+     * the screen.</p>
+     *
+     * <h2>Drop on death</h2>
+     *
+     * <p>If the player is on the floor waiting to respawn and was carrying
+     * a flag, that flag returns to its base. Drop on death is instant —
+     * there is no 30-second "lying on the ground" state. The standard COD
+     * rule: a dead carrier is a save, not a recovery.</p>
+     *
+     * <h2>Pickup</h2>
+     *
+     * <p>If the player is on team T and standing inside the enemy team's
+     * flag radius, and the enemy flag is on its base (not already being
+     * carried), the player picks it up. The flag's carrier becomes team T.
+     * A player cannot pick up the same flag twice; a player who is
+     * already carrying a flag touches the enemy base and the second flag
+     * is ignored.</p>
+     *
+     * <h2>Return or capture</h2>
+     *
+     * <p>If the player is on team T, carrying the enemy flag, and standing
+     * inside team T's flag radius, the carrier has "saved" the flag: both
+     * flags return to their bases (this is a no-op for the flag already
+     * on its base). If instead the player is inside team T's capture
+     * point radius, the carrier has scored: the carrying team earns one
+     * capture and both flags return to their bases. The capture point is
+     * spec-defined per base; in the standard pack it sits at the same
+     * coordinates as the home flag, so a save and a capture are different
+     * positions on the same base.</p>
+     */
+    private void updateCtf(final int ticIndex, final float playerX, final float playerZ)
+    {
+        if (!(mapSpec.markers() instanceof MapMarkers.CaptureTheFlag ctf))
+        {
+            return;
+        }
+        this.ctfElapsedTics = ctfElapsedTics + 1;
+        // 1. Drop on death: a dead carrier returns the flag to its base
+        // instantly. A player who is down is not in any flag's radius (a
+        // future "lying on the ground for 30s" pass would change this, but
+        // the standard COD rule is instant).
+        if (playerDown)
+        {
+            ctfRedFlagCarrier = null;
+            ctfBlueFlagCarrier = null;
+            return;
+        }
+        // 2. The player is the only carrier; bots do not pick up. A
+        // NEUTRAL player (legacy demo, smoke test) does not interact with
+        // flags at all.
+        if (playerTeam == Team.NEUTRAL)
+        {
+            return;
+        }
+        final boolean playerIsRed = playerTeam == Team.RED;
+        final MapMarkers.Base enemyBase;
+        final MapMarkers.Base homeBase;
+        if (playerIsRed)
+        {
+            enemyBase = ctf.blueBase();
+            homeBase = ctf.redBase();
+        }
+        else
+        {
+            enemyBase = ctf.redBase();
+            homeBase = ctf.blueBase();
+        }
+        // 3. Pickup: enemy flag at home (its slot is null), player inside
+        // the enemy flag's radius. Reads the carrier field directly so
+        // the check sees the start-of-tic state, not the post-pickup
+        // state from earlier in this tic.
+        final boolean enemyFlagAtHome;
+        if (playerIsRed)
+        {
+            enemyFlagAtHome = ctfBlueFlagCarrier == null;
+        }
+        else
+        {
+            enemyFlagAtHome = ctfRedFlagCarrier == null;
+        }
+        if (enemyFlagAtHome && isInCtfFlagRadius(playerX, playerZ, enemyBase))
+        {
+            if (playerIsRed)
+            {
+                ctfBlueFlagCarrier = Team.RED;
+            }
+            else
+            {
+                ctfRedFlagCarrier = Team.BLUE;
+            }
+        }
+        // 4. Return or capture: player carrying the enemy flag, touching
+        // their own base. The carrier check reads the field directly for
+        // the same reason as the pickup above.
+        final boolean isCarrying;
+        if (playerIsRed)
+        {
+            isCarrying = ctfBlueFlagCarrier == Team.RED;
+        }
+        else
+        {
+            isCarrying = ctfRedFlagCarrier == Team.BLUE;
+        }
+        if (isCarrying && isInCtfFlagRadius(playerX, playerZ, homeBase))
+        {
+            if (isInCtfCaptureRadius(playerX, playerZ, homeBase))
+            {
+                if (playerIsRed)
+                {
+                    this.ctfRedCaptures = ctfRedCaptures + 1;
+                }
+                else
+                {
+                    this.ctfBlueCaptures = ctfBlueCaptures + 1;
+                }
+            }
+            // Either save or capture, both flags return home.
+            ctfRedFlagCarrier = null;
+            ctfBlueFlagCarrier = null;
+        }
+    }
+
+    /**
+     * Returns whether the player's feet are inside the {@code base}'s
+     * flag pickup / return radius.
+     *
+     * <p>Uses squared distance, so the per-tic check does not call
+     * {@code StrictMath.sqrt}.</p>
+     *
+     * @param x player feet, world x
+     * @param z player feet, world z
+     * @param base the base to test
+     * @return true if the player is within {@code base.radius()} of the
+     *     flag's home position
+     */
+    private static boolean isInCtfFlagRadius(final float x, final float z,
+        final MapMarkers.Base base)
+    {
+        final float dx = x - base.flagX();
+        final float dz = z - base.flagZ();
+        return dx * dx + dz * dz <= base.radius() * base.radius();
+    }
+
+    /**
+     * Returns whether the player's feet are inside the {@code base}'s
+     * capture-point radius.
+     *
+     * <p>The capture point is spec-defined; in the standard pack it sits
+     * at the same coordinates as the home flag, but the spec lets a map
+     * place them independently. Uses squared distance.</p>
+     */
+    private static boolean isInCtfCaptureRadius(final float x, final float z,
+        final MapMarkers.Base base)
+    {
+        final float dx = x - base.captureX();
+        final float dz = z - base.captureZ();
+        return dx * dx + dz * dz <= base.radius() * base.radius();
     }
 
     // One tic off the super blaster, raising the expiry edge on the tic it runs
@@ -854,6 +1571,19 @@ public final class Match
         if (livingBots() == 0)
         {
             return MatchState.WON;
+        }
+        // CTF win conditions: a team reaches the capture limit, or the
+        // time limit is reached. Checked AFTER the living-bots rule
+        // because the legacy demo runs without a spec (no CTF check)
+        // and the bots-alive rule is the only one that fires there.
+        if (mapSpec != null && mode() == MatchMode.CTF)
+        {
+            if (ctfRedCaptures >= CTF_CAPTURE_LIMIT
+                || ctfBlueCaptures >= CTF_CAPTURE_LIMIT
+                || ctfElapsedTics >= CTF_TIME_LIMIT_TICS)
+            {
+                return MatchState.WON;
+            }
         }
         return MatchState.IN_PROGRESS;
     }
@@ -1069,7 +1799,7 @@ public final class Match
         return respawned;
     }
 
-    /** Returns how badly this match's opponents shoot. Never null. */
+    /** How badly this match's opponents shoot. Never null. */
     public BotSkill skill()
     {
         return skill;
@@ -1103,6 +1833,228 @@ public final class Match
     public int deathLimit()
     {
         return deathLimit;
+    }
+
+    /**
+     * Returns the map spec this match is running, or null for the legacy
+     * single-room demo.
+     *
+     * <p>Null is a supported state. The pre-Pass-1 demo has no spec — the
+     * demo room is hardcoded into {@code DemoScene} — and the match layer
+     * runs unchanged on it. A spec is only required when the match is
+     * running on one of the 16 library maps, because that is where the
+     * mode-specific rules live.</p>
+     *
+     * @return the spec, or null
+     */
+    public MapSpec mapSpec()
+    {
+        return mapSpec;
+    }
+
+    /**
+     * Returns the mode the match is running, or {@link MatchMode#TDM} for
+     * the legacy demo (which has no spec and runs a vanilla TDM).
+     *
+     * <p>The default TDM keeps the pre-Pass-1 demo running unchanged; a
+     * spec'd match returns the spec's mode.</p>
+     *
+     * @return the mode, never null
+     */
+    public MatchMode mode()
+    {
+        if (mapSpec == null)
+        {
+            return MatchMode.TDM;
+        }
+        return mapSpec.mode();
+    }
+
+    /**
+     * Returns the per-team score for the current round, indexed by team id
+     * (0 = red, 1 = blue). A team with no score yet returns 0.
+     *
+     * <p>Mode-specific: TDM (and the no-spec legacy demo) returns the
+     * shared kill count in the red slot and 0 in the blue slot — the
+     * legacy demo has no team semantics, so a single score on the red
+     * slot is the closest one can do. Hardpoint returns the two
+     * per-team scores accumulated by zone captures. Domination returns
+     * the per-team scores accumulated by flag holds. CTF returns the
+     * per-team capture counts.</p>
+     *
+     * @return a two-element array of red score, blue score
+     */
+    public int[] teamScores()
+    {
+        final int[] out = new int[2];
+        if (mapSpec == null)
+        {
+            out[0] = botsKilled;
+            return out;
+        }
+        switch (mode())
+        {
+            case TDM:
+                out[0] = botsKilled;
+                out[1] = 0;
+                break;
+            case HARDPOINT:
+                out[0] = hardpointRedScore;
+                out[1] = hardpointBlueScore;
+                break;
+            case DOMINATION:
+                out[0] = dominationRedScore;
+                out[1] = dominationBlueScore;
+                break;
+            case CTF:
+                out[0] = ctfRedCaptures;
+                out[1] = ctfBlueCaptures;
+                break;
+            default:
+                out[0] = 0;
+                out[1] = 0;
+                break;
+        }
+        return out;
+    }
+
+    /**
+     * Sets the local player's team.
+     *
+     * <p>The player has to be on a team for Hardpoint zone captures
+     * (and the future Domination / CTF mode rules) to credit the
+     * player. The legacy single-player demo leaves this at the default
+     * {@link Team#NEUTRAL}, which means the player is a body in the
+     * room but not a body on a side.</p>
+     *
+     * <p>Setting the team does not reset the match; if the player
+     * switches sides mid-round the new team takes over from the next
+     * tic. This is the correct behaviour for a menu-driven team
+     * change and the deliberate one for the smoke-test path, which
+     * never calls this method.</p>
+     *
+     * @param team the player's new team; must not be null
+     * @throws IllegalArgumentException if {@code team} is null
+     */
+    public void setPlayerTeam(final Team team)
+    {
+        if (team == null)
+        {
+            throw new IllegalArgumentException("team must not be null");
+        }
+        this.playerTeam = team;
+    }
+
+    /**
+     * Returns the local player's team. Defaults to {@link Team#NEUTRAL}
+     * for matches that have no team assignment (the legacy demo and the
+     * headless smoke test).
+     *
+     * @return the player's team, never null
+     */
+    public Team playerTeam()
+    {
+        return playerTeam;
+    }
+
+    /**
+     * Returns which team currently holds the active Hardpoint zone.
+     *
+     * <p>Useful for the HUD: a body on a side reads the held team from
+     * this accessor, sees its own team, and knows it is on the point.
+     * {@link Team#NEUTRAL} means the zone is empty or contested.</p>
+     *
+     * @return the active holder, never null
+     */
+    public Team hardpointActiveHolder()
+    {
+        return hardpointActiveHolder;
+    }
+
+    /**
+     * Returns the index of the currently active Hardpoint zone, in the
+     * order the spec declared them. Zero before the first rotation.
+     *
+     * @return the active zone index
+     */
+    public int hardpointActiveZoneIndex()
+    {
+        return hardpointActiveZone;
+    }
+
+    /**
+     * Returns the team that currently owns a Domination flag, by index.
+     *
+     * <p>Useful for the HUD: a body on a side reads the flag owner
+     * from this accessor and sees its own team, knowing it is on
+     * the point. {@link Team#NEUTRAL} means the flag is unclaimed.
+     * The same accessor covers the contested case — a contested
+     * flag does not switch sides, so the index returns the team
+     * that held it before the contest.</p>
+     *
+     * @param flagIndex the flag index, 0..2
+     * @return the owning team, never null
+     * @throws IllegalArgumentException if the index is out of range
+     */
+    public Team dominationFlagOwner(final int flagIndex)
+    {
+        if (flagIndex < 0 || flagIndex >= dominationFlagOwners.length)
+        {
+            throw new IllegalArgumentException("flagIndex out of range: " + flagIndex);
+        }
+        return dominationFlagOwners[flagIndex];
+    }
+
+    /**
+     * Returns red team's CTF capture count.
+     *
+     * <p>Zero when the match is not CTF, and the value is meaningless
+     * between rounds. The match ends when either team's count reaches
+     * {@link #CTF_CAPTURE_LIMIT}, at which point {@link #state()} returns
+     * {@link MatchState#WON}.</p>
+     *
+     * @return red team's capture count
+     */
+    public int ctfRedCaptures()
+    {
+        return ctfRedCaptures;
+    }
+
+    /**
+     * Returns blue team's CTF capture count. See {@link #ctfRedCaptures()}.
+     *
+     * @return blue team's capture count
+     */
+    public int ctfBlueCaptures()
+    {
+        return ctfBlueCaptures;
+    }
+
+    /**
+     * Returns who is carrying RED's flag, or {@code null} if the flag is
+     * on its base.
+     *
+     * <p>The standard COD rule: only the local player carries; bots never
+     * pick up. The only legal non-null value is {@link Team#BLUE}, because
+     * a RED player on their own flag is "touching base", not "carrying
+     * it".</p>
+     *
+     * @return the carrier team, or null if the flag is at home
+     */
+    public Team ctfRedFlagCarrier()
+    {
+        return ctfRedFlagCarrier;
+    }
+
+    /**
+     * Returns who is carrying BLUE's flag, or {@code null} if the flag is
+     * on its base. The mirror of {@link #ctfRedFlagCarrier()}.
+     *
+     * @return the carrier team, or null if the flag is at home
+     */
+    public Team ctfBlueFlagCarrier()
+    {
+        return ctfBlueFlagCarrier;
     }
 
     // Every bot whose weapon is ready this tic takes its shot. Returns the total

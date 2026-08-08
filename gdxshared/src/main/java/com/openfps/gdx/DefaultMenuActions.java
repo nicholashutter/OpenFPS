@@ -74,6 +74,15 @@ public final class DefaultMenuActions implements MenuActions
     }
 
     @Override
+    public void onMapSelection()
+    {
+        // The frame loop listener's StartGameTransition wrapper is the seam
+        // that actually drives the MENU -> MAP_SELECT transition. The actions
+        // object is the call site; the transition table is in UiState.
+        LOG.info("Menu: Select Map selected — opening the map picker");
+    }
+
+    @Override
     public void onQuit()
     {
         LOG.info("Menu: Quit selected — closing window");

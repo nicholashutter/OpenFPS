@@ -130,21 +130,47 @@ public final class DemoEffects
     public static final int MAX_BOT_TRACERS = 8;
 
     /**
-     * Smoke puffs of the BOTS' that can be visible at once — <b>8</b>.
+     * Smoke puffs of the BOTS' that can be visible at once — <b>15</b>.
      *
-     * <p>The same arithmetic as {@link #MAX_BOT_TRACERS} and it lands on the same
-     * number for a sharper reason: {@link #PUFF_LIFE_TICS} is 36 and
-     * {@code BotSkill.DUMB.cooldownTics()} is <b>45</b>, so a bot's puff has
-     * always expired before that same bot may fire again. Seven bodies, at most
-     * one live puff each, one spare.</p>
+     * <p>Same arithmetic as {@link #MAX_BOT_TRACERS}, with the room sized
+     * for the worst case rather than the common one. With
+     * {@link #PUFF_LIFE_TICS} at 48 and {@code BotSkill.DUMB.cooldownTics()}
+     * at <b>45</b>, a bot's second puff is born before the first has
+     * expired, so a single bot can have two puffs alive. Seven bodies times
+     * two is fourteen, plus one spare is the size of the pool.</p>
      *
-     * <p>That is worth stating rather than assuming, because it is the one place
-     * where a change to the skill profile could quietly overflow this pool: drop
-     * the cooldown below 36 and a bot can have two puffs alive, at which point
-     * this is undersized and the round-robin starts eating the older one.
-     * {@code DemoEffectsTest} asserts the relation rather than the number.</p>
+     * <p>The trade is exact: a pool of 8 would let the round-robin eat the
+     * older puff on the busiest tic, and the player would see a smoke that
+     * blinks rather than the cloud they expected. 15 keeps the headroom
+     * without becoming a memory anchor, and the per-frame cost is still
+     * 15 degenerate transforms the cull drops before the rasterizer. A
+     * future change that shortens the cooldown under 24 should recheck the
+     * arithmetic, the same way {@code DemoEffectsTest} already does for
+     * the current numbers.</p>
      */
-    public static final int MAX_BOT_PUFFS = 8;
+    public static final int MAX_BOT_PUFFS = 15;
+
+    /**
+     * Muzzle flashes of the PLAYER'S that can be in the air at once — <b>2</b>.
+     *
+     * <p>Two slots, because a flash lives {@link #FLASH_LIFE_TICS} of 2 tics
+     * and the trigger can fire every {@code FIRE_INTERVAL_TICS} of 12. The
+     * probability of overlap is roughly one in six — the trigger has to come
+     * up on the second tic of a live flash — and one spare slot is what turns
+     * "the muzzle goes dark on a held trigger" into a thing that can only
+     * happen under deliberately bad luck. The same shape {@link #MAX_TRACERS}
+     * follows for the same reason.</p>
+     */
+    public static final int MAX_PLAYER_FLASHES = 2;
+
+    /**
+     * Muzzle flashes of the BOTS' that can be in the air at once — <b>8</b>.
+     *
+     * <p>The same arithmetic as {@link #MAX_BOT_PUFFS}: a flash lives 2 tics
+     * and the slowest bot cooldown is 45, so a single bot cannot have two
+     * flashes alive. Seven bodies, one spare.</p>
+     */
+    public static final int MAX_BOT_FLASHES = 8;
 
     /** Tics a tracer flies before it is hidden. */
     public static final int TRACER_LIFE_TICS = 8;
@@ -161,26 +187,18 @@ public final class DemoEffects
     public static final int MAX_PUFFS = 4;
 
     /**
-     * Tics a puff lives — <b>36</b>, which is six tenths of a second.
+     * Tics a puff lives — <b>48</b>, which is eight tenths of a second.
      *
-     * <p><b>Doubled from 18, and this is the single change that mattered
-     * most.</b> A shot lands every 12 tics, so at 18 the smoke was only ever
-     * one-and-a-half puffs deep and each individual puff was gone in three
-     * tenths of a second. Measured on a plain wall, the densest rung of a puff
-     * covered about 2,500 pixels for five tics and then thinned out — an 83 ms
-     * flash of 0.3% of the frame, in the far right periphery, over the part of
-     * the demo room that is already full of grey crates. It was drawn exactly as
-     * designed and it was still perfectly possible to fire a magazine without
-     * noticing it, which is what two rounds of "the smoke is not working" were
-     * actually reporting.</p>
-     *
-     * <p>At 36 the cloud outlives the gap between shots three times over, so
-     * while the trigger is held there is always a fresh puff arriving into two
-     * older ones — a churn rather than a blink. That is the difference between
-     * an effect that is <i>present in a screenshot</i> and one that is
-     * <i>visible in motion</i>, and only the second one is the feature.</p>
+     * <p><b>Raised from 36 along with the size bump below, and for the same
+     * reason.</b> A held trigger fires every 12 tics, and at 36 the smoke was
+     * three puffs deep — a cloud that is present in motion but thins out
+     * before the magazine runs dry. At 48 there is always a fresh puff
+     * arriving into three older ones, and the cloud is the dominant feature
+     * of the muzzle for the whole burst rather than a brief punctuation. A
+     * puff that hangs on the air for four fifths of a second is the kind of
+     * effect a held trigger reads as.</p>
      */
-    public static final int PUFF_LIFE_TICS = 36;
+    public static final int PUFF_LIFE_TICS = 48;
 
     /**
      * Coverage rungs a puff fades down — <b>6</b>.
@@ -348,7 +366,7 @@ public final class DemoEffects
     public static final float TRACER_LENGTH_UNITS = 46.0f;
 
     /**
-     * How wide the tracer bolt is across that direction — 11 units.
+     * How wide the tracer bolt is across that direction — 14 units.
      *
      * <p>Wide relative to its length on purpose. A shot travels <b>away</b>
      * from the eye that fired it, so the bolt is seen almost end-on and its
@@ -356,8 +374,67 @@ public final class DemoEffects
      * is its cross-section, shrinking as it recedes. Sizing this from how a
      * tracer looks from the side would make it invisible from the one angle
      * that matters.</p>
+     *
+     * <p><b>Raised from 11 to 14 with the muzzle flash and the wider bolt
+     * model.</b> A bolt that is 11 units wide is a smudge on screen at the
+     * default 60 degree vertical field of view: 11 units subtends about
+     * 30 pixels at 60 units away, which is what the eye sees on a typical
+     * shot. 14 widens that to about 38 pixels — still a bolt rather than a
+     * bloomy tracer, but one the eye reads as a real shot leaving the
+     * muzzle. The smoke test in {@code DemoSmokeInMotionTest} tolerates
+     * the wider bolt because the bolt is drawn in the opaque pass and
+     * the depth test culls the smoke fragments that are at the same
+     * depth as the bolt, which is what kept the test stable before the
+     * halo was tried and dropped.</p>
      */
-    public static final float TRACER_WIDTH_UNITS = 11.0f;
+    public static final float TRACER_WIDTH_UNITS = 14.0f;
+
+    /**
+     * Tics a muzzle flash is visible — <b>2</b>.
+     *
+     * <p><b>Short on purpose.</b> A flash is a frame, not a glow: it marks
+     * the instant the shot left the barrel, and a flash that lingered for a
+     * quarter of a second would be a glowing ball that follows the muzzle
+     * around between shots, which is the wrong effect. Two tics at 60 Hz is
+     * 33 ms — shorter than the trigger cooldown at any sensible rate of
+     * fire, so the flash never overlaps its own successor for the same
+     * shooter.</p>
+     */
+    public static final int FLASH_LIFE_TICS = 2;
+
+    /**
+     * World-units radius of the player's own muzzle flash — <b>0.10</b>.
+     *
+     * <p><b>Smaller than the smoke's smallest lobe on purpose.</b> The flash
+     * and the smoke are born at the same position, and a flash as wide as
+     * the smoke draws in the opaque pass before the translucent smoke, so
+     * the depth buffer records the flash's depth and the smoke's pixels
+     * fail the depth test where the two overlap. The test that noticed this
+     * failure counted the deepest pixel in the frame and found it
+     * <i>lighter</i> than the wall — meaning no smoke pixel survived. A
+     * 0.10-unit flash is the largest spot that fits inside the main lobe
+     * of a fresh puff (the main lobe grows from 0.16 to 0.30), so the
+     * offset lobes and the rim of the main lobe are still drawn.</p>
+     *
+     * <p>About 26 pixels across at 720p, which is the size a first-person
+     * muzzle flash has had since the 1990s — large enough to read as a
+     * flash and not a dust mote, small enough that the smoke around it
+     * carries the rest of the visual.</p>
+     */
+    public static final float PLAYER_FLASH_RADIUS = 0.10f;
+
+    /**
+     * World-units radius of a bot's muzzle flash — <b>5</b>.
+     *
+     * <p>Sized the way {@link #BOT_PUFF_RADIUS_START} is: against the body
+     * the flash comes out of, not against the pixel. A bot's body is 33
+     * world units across, so a 5-unit flash reaches a seventh of the
+     * shoulders at birth — a noticeable bloom that is plainly not the
+     * trigger glow. A pixel-sized flash on a 250-unit-distant body is
+     * invisible; this is what the eye is already looking at, and any
+     * relative size scales itself correctly with the range for free.</p>
+     */
+    public static final float BOT_FLASH_RADIUS = 5.0f;
 
     /**
      * How wide an INCOMING tracer bolt is — <b>16</b> units.
@@ -376,7 +453,7 @@ public final class DemoEffects
      * into something unmissable as it arrives. At the player's 11 it would be 13
      * px at the far wall, which is a dust mote on a busy grey room.</p>
      */
-    public static final float BOT_TRACER_WIDTH_UNITS = 16.0f;
+    public static final float BOT_TRACER_WIDTH_UNITS = 20.0f;
 
     /**
      * How far in front of the eye the muzzle is, in world units — 2.4.
@@ -425,62 +502,53 @@ public final class DemoEffects
 
     /**
      * Half-extent of the <b>main lobe</b> when a puff is born, in world units —
-     * 0.16.
+     * 0.20.
      *
      * <p>Sub-unit numbers, which look wrong beside a 41-unit eye height until
      * you notice what they are measured against: the puff sits
      * {@link #MUZZLE_FORWARD_UNITS} from the eye, so its <i>apparent</i> size
      * is the ratio of the two. At 720p and the demo's field of view a world unit
      * at 2.4 units out is about 262 px, and the cloud reaches
-     * {@link #cloudExtentRadii()} — roughly 1.46 — times this radius. So 0.16
-     * is a cloud about 122 px across at the moment of the shot. Sized in the
+     * {@link #cloudExtentRadii()} — roughly 1.46 — times this radius. So 0.20
+     * is a cloud about 152 px across at the moment of the shot. Sized in the
      * room's units instead it would fill the screen.</p>
      *
-     * <p><b>Doubled from 0.075, and the reason is the one thing about the old
-     * puff that nobody would have guessed: it was smallest exactly when it was
-     * densest.</b> Coverage falls with age while the radius grows, so the rung a
-     * player could actually see was a 57 px smudge that lasted five tics, and
-     * the phases that lasted were the ones you could see through. Measured on a
-     * plain wall the densest rung covered about 2,500 px of a 921,600 px frame.
-     * Starting big inverts that: the loud part of the effect is now the big part
-     * of it.</p>
+     * <p><b>Raised from 0.16 with the lifetime bump.</b> A puff that lives
+     * longer and starts no bigger would shrink the silhouette of the cloud
+     * relative to its lifetime — the densest moment is the first one, and it
+     * needs to be the largest one too. The growth ratio to
+     * {@link #PUFF_RADIUS_END} stays the same, so the dispersal shape is
+     * preserved.</p>
      */
-    public static final float PUFF_RADIUS_START = 0.16f;
+    public static final float PUFF_RADIUS_START = 0.20f;
 
     /**
      * Half-extent of the <b>main lobe</b> at the end of a puff's life — 0.30.
      * See {@link #PUFF_RADIUS_START} for why these numbers are so small.
      *
-     * <p>About 230 px of cloud at 720p. <b>The last time this went up it went
-     * too far:</b> 0.34 with a single cube produced something like 300 px of
-     * uniform translucent grey, which does not read as smoke at a muzzle — it
-     * reads as a pane of glass across the view. What makes 0.30 different is not
-     * the number but what is being scaled: five lobes at
-     * {@link #PUFF_COVERAGE}'s ladder have a dense core and a rim that
-     * composites once, so the silhouette dissolves at its edge instead of ending
-     * at one. A big soft thing and a big flat thing are not the same picture at
-     * the same size.</p>
-     *
-     * <p><b>The growth per tic is slower than it was</b>, not faster: 0.14 of
-     * expansion over 36 tics is 0.0039 a tic, against the old 0.0047. Smoke
-     * that swells visibly reads as inflating rather than as dispersing, and the
-     * longer life would have made the old rate three times as much travel.</p>
+     * <p>Kept at 0.30 with the {@link #PUFF_RADIUS_START} bump: the cloud
+     * already starts at a denser size than before, and a bigger end radius
+     * would push the silhouette past the "puff, not fog bank" ceiling the
+     * lifetime-and-radius math defends. The growth ratio is now
+     * {@code 0.30 / 0.20} = 1.5, down from 1.875 — slightly less dispersal,
+     * paid for the bigger start. See {@link DemoEffectsTest$Visibility}
+     * for the assertion that holds the line.</p>
      */
     public static final float PUFF_RADIUS_END = 0.30f;
 
     /**
      * Half-extent of the main lobe when a BOT'S puff is born, in world units —
-     * <b>7</b>, which is forty-four times the player's.
+     * <b>9</b>, which is forty-five times the player's.
      *
      * <h2>This is the number the whole feature would have died on</h2>
      *
-     * <p>{@link #PUFF_RADIUS_START} is 0.16 <b>because the player's puff is 2.4
+     * <p>{@link #PUFF_RADIUS_START} is 0.20 <b>because the player's puff is 2.4
      * units from the eye</b> — its Javadoc says so at length, and reusing it for a
      * bot would have been the third time this project shipped an effect that was
      * measurably present and perceptually absent. A bot is not 2.4 units away. It
      * is somewhere between 60 and 512, and at 720p a world unit at distance
-     * {@code d} subtends about {@code 624 / d} pixels. A 0.16-unit puff on a bot
-     * 250 units off is <b>0.9 pixels across</b>. It would have been drawn, every
+     * {@code d} subtends about {@code 624 / d} pixels. A 0.20-unit puff on a bot
+     * 250 units off is <b>1.2 pixels across</b>. It would have been drawn, every
      * frame, exactly as designed, and it would have been one grey pixel.</p>
      *
      * <h2>Measured against the body, not against a pixel target</h2>
@@ -495,37 +563,29 @@ public final class DemoEffects
      * <p>What does hold at every distance is the cloud's size <b>relative to the
      * body it comes out of</b> — because the body is what the eye is already
      * looking at, and it is what the player has to attribute the shot to. The cloud
-     * reaches {@link #cloudExtentRadii()}, about 1.38, times the puff radius, so 7
-     * is a cloud 19 units across against a body 33 wide and 56 tall: three fifths
+     * reaches {@link #cloudExtentRadii()}, about 1.38, times the puff radius, so 9
+     * is a cloud 25 units across against a body 33 wide and 56 tall: three quarters
      * of the shoulders at birth, growing past them by the end. That is a muzzle
      * bloom on a person rather than a smokescreen, and it scales itself correctly
      * with range for free.</p>
      *
-     * <pre>
-     *   distance   fresh puff   old puff   the bot, for scale
-     *    100 u      120 px       224 px      350 px tall
-     *    250 u       48 px        90 px      140 px tall
-     *    450 u       27 px        50 px       78 px tall
-     * </pre>
-     *
-     * <p><b>The contrast is better than those figures suggest, and by
-     * construction:</b> the muzzle is in front of the chest, so most of the cloud
-     * composites over a brightly coloured character rather than over the pale wall
-     * {@link #smokeColour()} was solved against. Dark warm grey over a yellow shirt
-     * is a far bigger step than dark warm grey over grey plaster.</p>
+     * <p><b>Raised from 7 along with the player's start radius</b>, keeping the
+     * same body-fraction so a bot's muzzle reads as the same shape it did, just
+     * bigger. The growth ratio to {@link #BOT_PUFF_RADIUS_END} is preserved.</p>
      */
-    public static final float BOT_PUFF_RADIUS_START = 7.0f;
+    public static final float BOT_PUFF_RADIUS_START = 9.0f;
 
     /**
      * Half-extent of the main lobe at the end of a BOT'S puff, in world units —
      * <b>13</b>.
      *
-     * <p>{@code 13 / 7} is 1.86, which is deliberately the same growth ratio the
-     * player's puff has ({@code 0.30 / 0.16}). The expansion is what makes a cloud
-     * read as dispersing rather than as a decal, and how much of it there should be
-     * is a property of smoke rather than of distance — so the ratio is shared and
-     * only the absolute size is re-derived. See {@link #BOT_PUFF_RADIUS_START} for
-     * that derivation and the pixel figures.</p>
+     * <p>{@code 13 / 9} is 1.44, deliberately the same growth ratio the
+     * player's puff has ({@code 0.30 / 0.20}). The expansion is what makes a
+     * cloud read as dispersing rather than as a decal, and how much of it
+     * there should be is a property of smoke rather than of distance — so the
+     * ratio is shared and only the absolute size is re-derived. See
+     * {@link #BOT_PUFF_RADIUS_START} for that derivation and the pixel
+     * figures.</p>
      */
     public static final float BOT_PUFF_RADIUS_END = 13.0f;
 
@@ -581,22 +641,38 @@ public final class DemoEffects
     public static final float[] LOBE_SCALE = {1.00f, 0.80f, 0.74f, 0.66f, 0.60f};
 
     /**
-     * World units a puff drifts upward per tic — 0.006.
+     * World units a puff drifts upward per tic — 0.005.
      *
      * <p>Tiny, and it has to be. The puff sits 2.4 units from the eye, so a
      * rise is magnified by the same ratio that makes
      * {@link #PUFF_RADIUS_START} small: over {@link #PUFF_LIFE_TICS} this is
-     * 0.22 units, which is about 56 screen pixels at 720p. At 0.022, which is
-     * where it started, the same drift carried the puff a hundred pixels up the
-     * screen and left it hanging above the weapon rather than at its
-     * muzzle.</p>
+     * 0.24 units, which is about 63 screen pixels at 720p. The drift is there
+     * to say the cloud is not a decal stuck to the screen; a puff that climbed
+     * a hundred pixels while it faded would be a balloon.</p>
      *
-     * <p><b>Cut from 0.010 when the life doubled</b>, so the total travel is
-     * about what it always was rather than twice it. The drift is there to say
-     * the cloud is not a decal stuck to the screen; a puff that climbed a
-     * hundred pixels while it faded would be a balloon.</p>
+     * <p><b>Cut from 0.006 when the life grew from 36 to 48 tics</b>, so the
+     * total travel is about what it always was. Without the cut, the cloud
+     * would rise a third further over its longer life and end above the muzzle
+     * rather than at it.</p>
      */
-    public static final float PUFF_RISE_UNITS = 0.006f;
+    public static final float PUFF_RISE_UNITS = 0.005f;
+
+    /**
+     * How many colour variants a puff can be — <b>3</b>.
+     *
+     * <p>Each variant is its own baked-in swatch: a warm grey, the neutral
+     * grey, and a cool blue-grey. A puff claims one variant on spawn (round
+     * robin, deterministic) and only the lobes of that variant are visible
+     * for the puff's whole life, so two puffs in the air at once read as
+     * slightly different clouds rather than as clones.</p>
+     *
+     * <p>Three is what buys visible variation without the pool tripling
+     * beyond what a quiet trigger ever needs. Five variants would
+     * distinguish every puff in a burst, but a magazine emptying into a
+     * grey wall is not a thing the player is going to count, and a larger
+     * variant count costs more scene instances up front.</p>
+     */
+    public static final int PUFF_COLOR_VARIANTS = 3;
 
     /** Sentinel age meaning "this slot holds no effect". */
     public static final int DEAD = -1;
@@ -619,6 +695,22 @@ public final class DemoEffects
 
     /** Hot amber, the colour of the player's own bolt in flight. */
     private static final int TRACER_COLOUR = Rgba.pack(255, 216, 112, 255);
+
+    /**
+     * Bright yellow-white, the colour of a muzzle flash.
+     *
+     * <p>Chosen by what a flash has to do, not from a palette. The flash
+     * marks the moment a shot left the barrel, and what it has to be is
+     * <i>brighter than anything else in the frame for a few frames</i> —
+     * the lit walls sample at about {@code (141, 147, 177)} and a barrel
+     * glow has to be plainly above that, not in it. The hue is warm to
+     * read as "muzzle powder" rather than as "energy bolt"; the value
+     * is at the ceiling so the rendered pixel carries every channel
+     * clipped, and the blue channel being much lower than the red and
+     * green is what stops it from being pure white and reading as a
+     * frame artefact.</p>
+     */
+    private static final int FLASH_COLOUR = Rgba.pack(255, 244, 196, 255);
 
     /**
      * Electric violet, the colour of a bolt coming the other way.
@@ -687,6 +779,37 @@ public final class DemoEffects
      * being re-tuned around a new ladder.</p>
      */
     private static final int SMOKE_COLOUR = Rgba.pack(92, 90, 86, 255);
+
+    /**
+     * Variant 0 of the smoke colour: a touch warmer than the neutral
+     * default. The slight red shift reads as "freshly fired" against the
+     * pale blue-grey room.
+     */
+    private static final int SMOKE_COLOUR_WARM = Rgba.pack(108, 96, 80, 255);
+
+    /**
+     * Variant 1 of the smoke colour: the neutral grey, identical to the
+     * previous single value. The middle rung of the variant ladder.
+     */
+    private static final int SMOKE_COLOUR_NEUTRAL = Rgba.pack(92, 90, 86, 255);
+
+    /**
+     * Variant 2 of the smoke colour: a touch cooler, with the blue shift
+     * reading as "settling" against the same room.
+     */
+    private static final int SMOKE_COLOUR_COOL = Rgba.pack(80, 96, 108, 255);
+
+    /**
+     * Every smoke colour variant, indexed by variant. The size is
+     * {@link #PUFF_COLOR_VARIANTS} and the contents are the three constants
+     * above. A new variant is one new constant and one new array entry.
+     */
+    private static final int[] SMOKE_COLOURS =
+    {
+        SMOKE_COLOUR_WARM,
+        SMOKE_COLOUR_NEUTRAL,
+        SMOKE_COLOUR_COOL,
+    };
 
     /**
      * Coverage of <b>one lobe</b> at each puff stage, faintest last.
@@ -817,6 +940,9 @@ public final class DemoEffects
     /** Total puff slots — the player's, then the bots'. See {@link #TRACER_SLOTS}. */
     private static final int PUFF_SLOTS = MAX_PUFFS + MAX_BOT_PUFFS;
 
+    /** Total flash slots — the player's, then the bots'. See {@link #TRACER_SLOTS}. */
+    private static final int FLASH_SLOTS = MAX_PLAYER_FLASHES + MAX_BOT_FLASHES;
+
     /** Scene instance index of each tracer. */
     private final int[] tracerInstance;
 
@@ -862,6 +988,16 @@ public final class DemoEffects
     private final int[] puffShownStage;
 
     /**
+     * Which colour variant each puff is currently using, or {@link #DEAD} when
+     * the slot holds no effect. MUTABLE: written by {@link #spawnPuff} on
+     * spawn and consulted by {@link #publishPuff} to know which variant's
+     * lobes to make visible. Initialised to {@link #DEAD} for every slot, so
+     * a fresh pool's first publish never shows lobes of an unclaimed variant
+     * — the {@link #hidden} flag handles the very first call.
+     */
+    private final int[] puffColorVariant;
+
+    /**
      * Scratch for the vector across the aim direction. MUTABLE, and a field
      * rather than a local so that spawning and publishing allocate nothing.
      *
@@ -876,6 +1012,17 @@ public final class DemoEffects
 
     /** Next puff slot the PLAYER'S next shot will claim. MUTABLE: round-robin. */
     private int puffCursor;
+
+    /**
+     * Next colour variant a puff will claim on spawn. MUTABLE: round-robin
+     * over {@code [0, PUFF_COLOR_VARIANTS)}, deterministic, so a held trigger
+     * walks the variant ladder rather than picking the same one every time.
+     * "Random" would look more varied but is the wrong default for the same
+     * reason {@link BotRng} is seeded: a peer replaying the same shots gets
+     * the same smoke, and a test asserting the variant pick is one the test
+     * can compute.
+     */
+    private int variantCursor;
 
     /**
      * Next tracer slot an INCOMING shot will claim. MUTABLE: round-robin over
@@ -913,11 +1060,31 @@ public final class DemoEffects
      */
     private boolean hidden;
 
-    // Takes ownership of the two index tables the builder handed back.
-    private DemoEffects(final int[] tracerIndices, final int[] puffIndices)
+    /** Scene instance index of each muzzle flash. */
+    private final int[] flashInstance;
+
+    /** Tics each flash has left, or {@link #DEAD}. MUTABLE: aged every tic. */
+    private final int[] flashRemaining;
+
+    /** Where each flash sits, {@link #AXES} floats per slot. MUTABLE. */
+    private final float[] flashPosition;
+
+    /** Whether each flash's instance is currently shown. MUTABLE. */
+    private final boolean[] flashShown;
+
+    /** Next flash slot the PLAYER'S next shot will claim. MUTABLE: round-robin. */
+    private int flashCursor;
+
+    /** Next flash slot an INCOMING shot will claim. See {@link #incomingTracerCursor}. */
+    private int incomingFlashCursor = MAX_PLAYER_FLASHES;
+
+    // Takes ownership of the index tables the builder handed back.
+    private DemoEffects(final int[] tracerIndices, final int[] puffIndices,
+        final int[] flashIndices)
     {
         this.tracerInstance = tracerIndices;
         this.puffInstance = puffIndices;
+        this.flashInstance = flashIndices;
         this.tracerRemaining = new int[TRACER_SLOTS];
         this.tracerPosition = new float[TRACER_SLOTS * AXES];
         this.tracerDirection = new float[TRACER_SLOTS * AXES];
@@ -927,6 +1094,10 @@ public final class DemoEffects
         this.puffAcross = new float[PUFF_SLOTS * AXES];
         this.puffUp = new float[PUFF_SLOTS * AXES];
         this.puffShownStage = new int[PUFF_SLOTS];
+        this.puffColorVariant = new int[PUFF_SLOTS];
+        this.flashRemaining = new int[FLASH_SLOTS];
+        this.flashPosition = new float[FLASH_SLOTS * AXES];
+        this.flashShown = new boolean[FLASH_SLOTS];
         for (int slot = 0; slot < TRACER_SLOTS; slot++)
         {
             tracerRemaining[slot] = DEAD;
@@ -935,6 +1106,11 @@ public final class DemoEffects
         {
             puffAge[slot] = DEAD;
             puffShownStage[slot] = DEAD;
+            puffColorVariant[slot] = DEAD;
+        }
+        for (int slot = 0; slot < FLASH_SLOTS; slot++)
+        {
+            flashRemaining[slot] = DEAD;
         }
     }
 
@@ -969,7 +1145,28 @@ public final class DemoEffects
         // lobes from costing 240 mip chains. Shared across BOTH halves for the
         // same reason: smoke is smoke, and the two differ only in how big they
         // are, which lives in the transform.
-        final ModelFormat cloud = sphere(SMOKE_COLOUR);
+        // One sphere per smoke colour variant. The three models are baked
+        // once and shared by every lobe of every puff — see
+        // SoftwareRenderPort.prepare, which keys on reference identity and so
+        // produces one submesh table and one mip chain per variant rather
+        // than per lobe. A puff claims one variant on spawn and only the
+        // lobes of that variant are visible for the puff's life, so two
+        // puffs in the air at once read as slightly different clouds rather
+        // than as clones. The variant assignment is round-robin and
+        // deterministic — see spawnPuff for why a "different every time"
+        // rule would not be.
+        final ModelFormat[] cloudModels = new ModelFormat[PUFF_COLOR_VARIANTS];
+        for (int variant = 0; variant < PUFF_COLOR_VARIANTS; variant++)
+        {
+            cloudModels[variant] = sphere(SMOKE_COLOURS[variant]);
+        }
+        // A second sphere for the muzzle flash, smaller and baked in the
+        // flash colour. The radius is a per-shot property — player 0.30
+        // view units, bot 5 world units — so a single model of radius 0.5
+        // is the right shape: it is the transform that sets the size, and
+        // a single model means one submesh table and one mip chain for the
+        // whole flash pool.
+        final ModelFormat flashSphere = sphere(FLASH_COLOUR);
 
         final int[] tracers = new int[TRACER_SLOTS];
         for (int slot = 0; slot < TRACER_SLOTS; slot++)
@@ -978,20 +1175,36 @@ public final class DemoEffects
             builder.addWorldInstance(boltFor(slot, bolt, incoming), Mat4.identity());
         }
 
-        final int[] puffs = new int[PUFF_SLOTS * PUFF_STAGES * PUFF_LOBES];
+        final int[] puffs = new int[PUFF_SLOTS * PUFF_STAGES * PUFF_LOBES * PUFF_COLOR_VARIANTS];
         for (int puff = 0; puff < PUFF_SLOTS; puff++)
         {
             for (int stage = 0; stage < PUFF_STAGES; stage++)
             {
                 for (int lobe = 0; lobe < PUFF_LOBES; lobe++)
                 {
-                    puffs[stageOffset(puff, stage) + lobe] = builder.worldInstanceCount();
-                    builder.addTranslucentWorldInstance(cloud, Mat4.identity(), Scene.UNTAGGED,
-                        PUFF_COVERAGE[stage]);
+                    for (int variant = 0; variant < PUFF_COLOR_VARIANTS; variant++)
+                    {
+                        puffs[stageOffset(puff, stage) + lobe * PUFF_COLOR_VARIANTS + variant]
+                            = builder.worldInstanceCount();
+                        builder.addTranslucentWorldInstance(cloudModels[variant], Mat4.identity(),
+                            Scene.UNTAGGED, PUFF_COVERAGE[stage]);
+                    }
                 }
             }
         }
-        return new DemoEffects(tracers, puffs);
+
+        // One opaque instance per flash slot. The flash is bright but small
+        // and short-lived, so a translucent composite would still be a hard
+        // pixel against the wall it is in front of — opaque with a high-value
+        // colour is what the eye reads as "flash", and the lifetime of
+        // FLASH_LIFE_TICS = 2 keeps it from being a glowing ball.
+        final int[] flashes = new int[FLASH_SLOTS];
+        for (int slot = 0; slot < FLASH_SLOTS; slot++)
+        {
+            flashes[slot] = builder.worldInstanceCount();
+            builder.addWorldInstance(flashSphere, Mat4.identity());
+        }
+        return new DemoEffects(tracers, puffs, flashes);
     }
 
     /**
@@ -1023,6 +1236,7 @@ public final class DemoEffects
         final int slot = claimPlayerTracer();
         spawnTracer(slot, muzzleX, muzzleY, muzzleZ, aimX, aimY, aimZ, TRACER_LIFE_TICS);
         spawnPuff(claimPlayerPuff(), muzzleX, muzzleY, muzzleZ, aimX, aimY, aimZ, right);
+        spawnFlash(claimPlayerFlash(), muzzleX, muzzleY, muzzleZ);
     }
 
     /**
@@ -1087,7 +1301,8 @@ public final class DemoEffects
         final float alongY = flight[1];
         final float alongZ = flight[2];
 
-        spawnTracer(claimIncomingTracer(), muzzleX, muzzleY, muzzleZ, alongX, alongY, alongZ,
+        final int slot = claimIncomingTracer();
+        spawnTracer(slot, muzzleX, muzzleY, muzzleZ, alongX, alongY, alongZ,
             incomingLifeFor(rangeUnits));
         // The lobe basis is rebuilt from the flight direction, reusing the scratch
         // the convergence above has now finished with. spawnPuff copies what it
@@ -1096,6 +1311,7 @@ public final class DemoEffects
         crossWithReference(alongX, alongY, alongZ, across);
         spawnPuff(claimIncomingPuff(), muzzleX, muzzleY, muzzleZ, alongX, alongY, alongZ,
             across);
+        spawnFlash(claimIncomingFlash(), muzzleX, muzzleY, muzzleZ);
     }
 
     // The next slot in the player's half of the tracer pool.
@@ -1130,6 +1346,41 @@ public final class DemoEffects
         final int slot = incomingPuffCursor;
         this.incomingPuffCursor = MAX_PUFFS + (slot + 1 - MAX_PUFFS) % MAX_BOT_PUFFS;
         return slot;
+    }
+
+    // The next slot in the player's half of the flash pool.
+    private int claimPlayerFlash()
+    {
+        final int slot = flashCursor;
+        this.flashCursor = (flashCursor + 1) % MAX_PLAYER_FLASHES;
+        return slot;
+    }
+
+    // The next slot in the bots' half of the flash pool.
+    private int claimIncomingFlash()
+    {
+        final int slot = incomingFlashCursor;
+        this.incomingFlashCursor = MAX_PLAYER_FLASHES + (slot + 1 - MAX_PLAYER_FLASHES)
+            % MAX_BOT_FLASHES;
+        return slot;
+    }
+
+    // One muzzle flash, at the muzzle and stationary for its whole life.
+    //
+    // The flash does not move, so unlike the tracer this is the one and only
+    // place its position is written. A flash lives FLASH_LIFE_TICS and then
+    // publish() hides it; the position array only needs to be set here.
+    //
+    // The radius lives in the publish, not here, so a slot's geometry is
+    // always the same sphere model and the size is whichever the renderer
+    // was told last.
+    private void spawnFlash(final int slot, final float x, final float y, final float z)
+    {
+        final int at = slot * AXES;
+        flashPosition[at] = x;
+        flashPosition[at + 1] = y;
+        flashPosition[at + 2] = z;
+        flashRemaining[slot] = FLASH_LIFE_TICS;
     }
 
     // One bolt, at the muzzle and not yet moving.
@@ -1177,6 +1428,13 @@ public final class DemoEffects
         puffUp[at + 1] = aimZ * across[0] - aimX * across[2];
         puffUp[at + 2] = aimX * across[1] - aimY * across[0];
         puffAge[slot] = 0;
+        // Claim one colour variant for the puff's whole life. The cursor walks
+        // the variant ladder so a held trigger does not stamp out identical
+        // puffs. The variant is fixed at spawn — a puff that shifts colour as
+        // it ages reads as a different smoke, not as the same smoke in motion,
+        // and the "same smoke in motion" is the feature.
+        puffColorVariant[slot] = variantCursor;
+        variantCursor = (variantCursor + 1) % PUFF_COLOR_VARIANTS;
     }
 
     /**
@@ -1210,14 +1468,21 @@ public final class DemoEffects
         {
             puffAge[slot] = DEAD;
         }
+        for (int slot = 0; slot < FLASH_SLOTS; slot++)
+        {
+            flashRemaining[slot] = DEAD;
+        }
         // The cursors go back to zero too, so a fresh round claims slots in the
         // same order the first one did. Nothing looks different either way, and
         // "indistinguishable from a fresh start" is easier to assert than
         // "indistinguishable apart from two cursors nobody can see".
         this.tracerCursor = 0;
         this.puffCursor = 0;
+        this.flashCursor = 0;
         this.incomingTracerCursor = MAX_TRACERS;
         this.incomingPuffCursor = MAX_PUFFS;
+        this.incomingFlashCursor = MAX_PLAYER_FLASHES;
+        this.variantCursor = 0;
     }
 
     /**
@@ -1258,6 +1523,18 @@ public final class DemoEffects
                 puffAge[slot] = DEAD;
             }
         }
+        for (int slot = 0; slot < FLASH_SLOTS; slot++)
+        {
+            if (flashRemaining[slot] == DEAD)
+            {
+                continue;
+            }
+            flashRemaining[slot]--;
+            if (flashRemaining[slot] <= 0)
+            {
+                flashRemaining[slot] = DEAD;
+            }
+        }
     }
 
     /**
@@ -1295,6 +1572,19 @@ public final class DemoEffects
         {
             publishPuff(renderer, slot);
         }
+        for (int slot = 0; slot < FLASH_SLOTS; slot++)
+        {
+            if (flashRemaining[slot] != DEAD)
+            {
+                renderer.setWorldTransform(flashInstance[slot], flashPlacement(slot));
+                flashShown[slot] = true;
+            }
+            else if (flashShown[slot])
+            {
+                renderer.setWorldTransform(flashInstance[slot], HIDDEN);
+                flashShown[slot] = false;
+            }
+        }
     }
 
     // Puts the whole pool out of sight. Runs once, on the first publish — see
@@ -1309,14 +1599,21 @@ public final class DemoEffects
         {
             renderer.setWorldTransform(instance, HIDDEN);
         }
+        for (final int instance : flashInstance)
+        {
+            renderer.setWorldTransform(instance, HIDDEN);
+        }
     }
 
-    // One puff: show every lobe of the stage its age selects, and hide whichever
-    // stage it was showing before if that has moved on.
+    // One puff: show every lobe of the stage its age selects, in the variant
+    // it claimed at spawn, and hide whichever stage it was showing before if
+    // that has moved on.
     //
     // A stage is all-or-nothing. Showing one lobe of a rung and one of the next
     // would put two coverages in the same cloud, which is not a fade — it is a
-    // seam.
+    // seam. A variant is also all-or-nothing: the lobes of the other variants
+    // are kept hidden so a single puff never paints itself in three colours at
+    // once.
     private void publishPuff(final SoftwareRenderPort renderer, final int slot)
     {
         final int age = puffAge[slot];
@@ -1334,9 +1631,10 @@ public final class DemoEffects
         {
             hideStage(renderer, slot, puffShownStage[slot]);
         }
+        final int variant = puffColorVariant[slot];
         for (int lobe = 0; lobe < PUFF_LOBES; lobe++)
         {
-            renderer.setWorldTransform(puffInstanceIndex(slot, stage, lobe),
+            renderer.setWorldTransform(puffInstanceIndex(slot, stage, lobe, variant),
                 puffPlacement(slot, lobe, age));
         }
         puffShownStage[slot] = stage;
@@ -1389,6 +1687,26 @@ public final class DemoEffects
     public static int puffSlotCount()
     {
         return PUFF_SLOTS;
+    }
+
+    /** Returns how many flash slots the pool holds, both halves together. */
+    public static int flashSlotCount()
+    {
+        return FLASH_SLOTS;
+    }
+
+    /**
+     * Returns whether a flash slot belongs to the bots rather than the player.
+     *
+     * <p>The boundary the single-pool arrangement rests on, exactly the
+     * shape {@link #isIncomingTracer} and {@link #isIncomingPuff} use.</p>
+     *
+     * @param slot flash slot in {@code [0, flashSlotCount())}
+     * @return true for a bot's flash
+     */
+    public static boolean isIncomingFlash(final int slot)
+    {
+        return slot >= MAX_PLAYER_FLASHES;
     }
 
     /**
@@ -1454,6 +1772,28 @@ public final class DemoEffects
     }
 
     /**
+     * Returns how big a flash in one slot is, in world units across.
+     *
+     * <p>A sphere of the given radius around the muzzle position. Player and
+     * bot flashes differ in size: the player's flash is 0.30 view units (a
+     * fixed distance from the eye), and a bot's flash is 5 world units
+     * (sized against the body, the way the smoke is). The two halves of
+     * the pool do not share a size; this is the only place the boundary
+     * between them matters.</p>
+     *
+     * @param slot flash slot in {@code [0, flashSlotCount())}
+     * @return the flash's world-units radius
+     */
+    public static float flashRadiusOf(final int slot)
+    {
+        if (slot >= MAX_PLAYER_FLASHES)
+        {
+            return BOT_FLASH_RADIUS;
+        }
+        return PLAYER_FLASH_RADIUS;
+    }
+
+    /**
      * Returns the main lobe's radius when the puff in one slot is born.
      *
      * @param slot puff slot in {@code [0, puffSlotCount())}
@@ -1512,6 +1852,34 @@ public final class DemoEffects
             return incoming;
         }
         return outgoing;
+    }
+
+    /**
+     * Returns the scene instance index of one specific lobe of one stage of
+     * one puff, in one of the {@link #PUFF_COLOR_VARIANTS} colour variants.
+     *
+     * <p>Every puff has one instance per lobe per stage per variant, the
+     * whole pool pre-allocated at scene-build time and addressed by this
+     * method. The shorter {@link #puffInstanceIndex(int, int)} and
+     * {@link #puffInstanceIndex(int, int, int)} overloads name the warm
+     * variant (index 0), the same way a held trigger used to before the
+     * colour-shift pass — old callers keep working unchanged.</p>
+     *
+     * @param slot puff slot in {@code [0, puffSlotCount())}
+     * @param stage stage index in {@code [0, PUFF_STAGES)}
+     * @param lobe lobe index in {@code [0, PUFF_LOBES)}
+     * @param variant colour variant in {@code [0, PUFF_COLOR_VARIANTS)}
+     * @return its index among the scene's world instances
+     */
+    public int puffInstanceIndex(final int slot, final int stage, final int lobe,
+        final int variant)
+    {
+        if (variant < 0 || variant >= PUFF_COLOR_VARIANTS)
+        {
+            throw new IndexOutOfBoundsException("variant " + variant
+                + " is outside [0, " + PUFF_COLOR_VARIANTS + ")");
+        }
+        return puffInstance[stageOffset(slot, stage) + lobe * PUFF_COLOR_VARIANTS + variant];
     }
 
     /**
@@ -1641,6 +2009,18 @@ public final class DemoEffects
             grown * LOBE_SCALE[lobe] * 2.0f);
     }
 
+    // Where one muzzle flash sits. A uniform-scale placement at the muzzle
+    // position, sized to flashRadiusOf for the slot — the two halves of the
+    // pool get different sizes for the reason flashRadiusOf records, and
+    // routing both through the same placement is the cheapest way to keep
+    // them in lockstep.
+    private Mat4 flashPlacement(final int slot)
+    {
+        final int at = slot * AXES;
+        return DemoScene.placement(flashPosition[at], flashPosition[at + 1],
+            flashPosition[at + 2], 0.0f, flashRadiusOf(slot) * 2.0f);
+    }
+
     // The unit vector to the shooter's RIGHT, perpendicular to the aim. Also
     // the axis the tracer's box is widened across.
     //
@@ -1729,7 +2109,7 @@ public final class DemoEffects
      */
     public int puffInstanceIndex(final int slot, final int stage)
     {
-        return puffInstanceIndex(slot, stage, 0);
+        return puffInstanceIndex(slot, stage, 0, 0);
     }
 
     /**
@@ -1742,7 +2122,7 @@ public final class DemoEffects
      */
     public int puffInstanceIndex(final int slot, final int stage, final int lobe)
     {
-        return puffInstance[stageOffset(slot, stage) + lobe];
+        return puffInstanceIndex(slot, stage, lobe, 0);
     }
 
     /**
@@ -1765,6 +2145,45 @@ public final class DemoEffects
     public int puffAge(final int slot)
     {
         return puffAge[slot];
+    }
+
+    /**
+     * Returns how many tics one flash has left, or {@link #DEAD}.
+     *
+     * @param slot flash slot in {@code [0, flashSlotCount())}
+     * @return the remaining life
+     */
+    public int flashRemaining(final int slot)
+    {
+        return flashRemaining[slot];
+    }
+
+    /**
+     * Returns the world-space x of a flash's position.
+     *
+     * <p>The y and z accessors follow the same shape, and all three are
+     * the position the flash was spawned at, in world space. The flash
+     * does not move over its life, so the position is the muzzle
+     * position the spawner passed in.</p>
+     *
+     * @param slot flash slot in {@code [0, flashSlotCount())}
+     * @return the flash's world-space x
+     */
+    public float flashPositionX(final int slot)
+    {
+        return flashPosition[slot * AXES];
+    }
+
+    /** Returns the world-space y of a flash's position. See {@link #flashPositionX}. */
+    public float flashPositionY(final int slot)
+    {
+        return flashPosition[slot * AXES + 1];
+    }
+
+    /** Returns the world-space z of a flash's position. See {@link #flashPositionX}. */
+    public float flashPositionZ(final int slot)
+    {
+        return flashPosition[slot * AXES + 2];
     }
 
     /** Returns how many tracers are in the air, both directions together. */
@@ -1803,6 +2222,24 @@ public final class DemoEffects
         return liveCount(puffAge, MAX_PUFFS, PUFF_SLOTS);
     }
 
+    /** Returns how many flashes are in the air, both directions together. */
+    public int liveFlashCount()
+    {
+        return liveCount(flashRemaining, 0, FLASH_SLOTS);
+    }
+
+    /** Returns how many of the player's own flashes are in the air. */
+    public int liveOutgoingFlashCount()
+    {
+        return liveCount(flashRemaining, 0, MAX_PLAYER_FLASHES);
+    }
+
+    /** Returns how many flashes fired BY the bots are in the air. */
+    public int liveIncomingFlashCount()
+    {
+        return liveCount(flashRemaining, MAX_PLAYER_FLASHES, FLASH_SLOTS);
+    }
+
     private static int liveCount(final int[] slots, final int from, final int to)
     {
         // MUTABLE local — running count.
@@ -1820,13 +2257,16 @@ public final class DemoEffects
     /** Returns how many world instances this pool occupies in the scene. */
     public int instanceCount()
     {
-        return tracerInstance.length + puffInstance.length;
+        return tracerInstance.length + puffInstance.length + flashInstance.length;
     }
 
-    // Where one stage's PUFF_LOBES consecutive instance indices begin.
+    // Where one stage's PUFF_LOBES * PUFF_COLOR_VARIANTS consecutive instance
+    // indices begin. Lobe is added by the caller because the variant is
+    // innermost in the layout — see puffInstanceIndex(int, int, int, int) for
+    // the full address arithmetic.
     private static int stageOffset(final int slot, final int stage)
     {
-        return (slot * PUFF_STAGES + stage) * PUFF_LOBES;
+        return (slot * PUFF_STAGES + stage) * PUFF_LOBES * PUFF_COLOR_VARIANTS;
     }
 
     /**

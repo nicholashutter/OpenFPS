@@ -9,7 +9,7 @@ import com.openfps.engine.render.adapter.ModelFormat;
 import com.openfps.engine.render.adapter.Rgba;
 
 /**
- * S_ A carbine built from six boxes of arithmetic, for when the real one was
+ * S_ A carbine built from nine boxes of arithmetic, for when the real one was
  * never staged.
  *
  * <h2>Why this exists — the bug it closes</h2>
@@ -116,7 +116,20 @@ public final class BlockCarbine
     private static final int STEEL_COLOUR = Rgba.pack(46, 50, 56, 255);
 
     /**
-     * The six boxes, as {@code minX, minY, minZ, maxX, maxY, maxZ} in model
+     * Walnut, for the stock's wooden furniture — a third tone that breaks up what
+     * would otherwise be a single gunmetal silhouette.
+     *
+     * <p>Picked warm rather than cold, because the lit walls sample around
+     * {@code (141, 147, 177)} and the gunmetal averages {@code (78, 84, 92)}; a
+     * brown at the stock puts a third hue on the model without lifting the
+     * overall luminance, so the silhouette still reads against the same wall.
+     * It is also nothing like the real carbine's green, which is the
+     * pre-condition for a fallback that is supposed to look like a fallback.</p>
+     */
+    private static final int WOOD_COLOUR = Rgba.pack(82, 58, 36, 255);
+
+    /**
+     * The nine boxes, as {@code minX, minY, minZ, maxX, maxY, maxZ} in model
      * units, in the order {@link #COLOURS} names them.
      *
      * <p>Laid out so the union spans exactly the real model's box: the magazine
@@ -124,6 +137,19 @@ public final class BlockCarbine
      * barrel reaches {@code -HALF_LENGTH} — which is the muzzle — and the stock
      * reaches {@code +HALF_LENGTH}. {@code BlockCarbineTest} asserts that union
      * against {@link ModelFormat}'s own bounds rather than trusting the table.</p>
+     *
+     * <p>Three of the nine are <b>accents</b> added so the gun reads as a
+     * weapon at across-the-room distances, not just as a long dark shape: a
+     * muzzle device a hair fatter than the barrel at the very tip, a handguard
+     * a hair thicker than the barrel over its middle third, and a scope tube
+     * sitting on the rear of the receiver. All three stay within the same
+     * {@code +-HALF_*} box as the real model, so the muzzle derivation
+     * {@link DemoScene#BOT_WEAPON_MUZZLE_UNITS} and the world scale
+     * {@link DemoScene#BOT_WEAPON_WORLD_SCALE} keep working unchanged. A
+     * fallback that needed its own copies of those three numbers would be a
+     * second description of the same fact, and the failure mode of a second
+     * description is smoke coming out of the wrong end of a gun on machines
+     * nobody tested.</p>
      */
     private static final float[] PARTS =
     {
@@ -131,20 +157,37 @@ public final class BlockCarbine
         -0.028f, -0.020f, -HALF_LENGTH, 0.028f, 0.038f, -0.060f,
         // receiver, the thick middle
         -0.055f, -0.060f, -0.100f, 0.055f, 0.090f, 0.200f,
-        // stock, back to the butt
+        // stock, back to the butt (wood-furniture tone; the only wood in the
+        // gun, which is why the rest of the model stays gunmetal)
         -0.045f, -0.050f, 0.200f, 0.045f, 0.075f, HALF_LENGTH,
         // magazine, hanging below
         -0.035f, -HALF_HEIGHT, 0.020f, 0.035f, -0.050f, 0.120f,
         // grip, behind the magazine
         -0.040f, -0.160f, 0.160f, 0.040f, -0.050f, 0.260f,
-        // sight, standing on the receiver
+        // sight, standing on the receiver (front iron sight, runs the receiver's
+        // own width so it can claim to be a carrying handle from across the room)
         -HALF_WIDTH, 0.090f, -0.020f, HALF_WIDTH, HALF_HEIGHT, 0.080f,
+        // muzzle device, a hair fatter than the barrel at the very tip — same
+        // length in z (it does not push the muzzle beyond -HALF_LENGTH, which
+        // would change the muzzle derivation), so the muzzle flash and the
+        // smoke still appear at the end of the barrel they always have
+        -0.038f, -0.030f, -HALF_LENGTH, 0.038f, 0.048f, -0.395f,
+        // handguard, a thicker shell over the middle of the barrel, gunmetal so
+        // it reads as continuous with the receiver at the boundary; the cross-
+        // section is the largest the room allows without poking above the
+        // sight's bottom edge or below the magazine's top edge
+        -0.040f, -0.032f, -0.300f, 0.040f, 0.060f, -0.110f,
+        // scope tube, sitting on the rear of the receiver behind the sight;
+        // narrower in x than the receiver and well clear of the sight's z
+        // range (-0.020..0.080) so the two raised elements do not z-fight
+        -0.025f, 0.095f, 0.130f, 0.025f, 0.180f, 0.195f,
     };
 
     /** Which colour each of {@link #PARTS} is baked in. */
     private static final int[] COLOURS =
     {
-        STEEL_COLOUR, BODY_COLOUR, BODY_COLOUR, BODY_COLOUR, BODY_COLOUR, STEEL_COLOUR,
+        STEEL_COLOUR, BODY_COLOUR, WOOD_COLOUR, BODY_COLOUR, BODY_COLOUR, STEEL_COLOUR,
+        STEEL_COLOUR, BODY_COLOUR, STEEL_COLOUR,
     };
 
     /** Floats per entry in {@link #PARTS}: two corners of three coordinates. */

@@ -382,6 +382,12 @@ final class DemoSmokeInMotionTest
             // where it started every twelve tics. That it keeps climbing is what
             // makes the effect read as a cloud being fed rather than as a row of
             // separate puffs.
+            //
+            // The exact ratio the 3-puff cloud sits at over the 1-puff cloud
+            // changes with the radius-vs-life math: a fresh puff that starts
+            // bigger and lives longer is more "puff" and less "growth", so 3
+            // puffs cover somewhat less than 2x of a single fresh puff. The
+            // property the test still guards is the climb, not the multiplier.
             final Fixture fixture = new Fixture();
             fixture.tic(true, 0);
             final float afterOne = fixture.smokeFraction();
@@ -393,7 +399,7 @@ final class DemoSmokeInMotionTest
             assertThat(fixture.smokeFraction())
                 .as("three shots in, against one shot's %s", afterOne)
                 .isGreaterThan(HELD_TRIGGER_FRACTION)
-                .isGreaterThan(afterOne * 2.0f);
+                .isGreaterThan(afterOne * 1.5f);
             fixture.shutdown();
         }
 

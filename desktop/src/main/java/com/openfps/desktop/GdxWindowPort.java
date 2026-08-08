@@ -19,7 +19,11 @@ import com.openfps.gdx.AccessibilitySettings;
 import com.openfps.gdx.DebugSettings;
 import com.openfps.gdx.DefaultMenuActions;
 import com.openfps.gdx.FramebufferPresenter;
+import com.openfps.gdx.MapSelection;
+import com.openfps.gdx.MapSelectionScreen;
 import com.openfps.gdx.MenuActions;
+
+import java.util.List;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
@@ -165,6 +169,19 @@ public final class GdxWindowPort implements I_WindowPort
      */
     private volatile AccessibilitySettings accessibilitySettings;
 
+    /**
+     * The shared map selection, or null to let the listener keep a private one.
+     * MUTABLE: set by {@link #attachMapSelection} before {@link #runFrameLoop}.
+     */
+    private volatile MapSelection mapSelection;
+
+    /**
+     * The rows the picker shows, in display order. MUTABLE: set by
+     * {@link #attachMapEntries} before {@link #runFrameLoop}. An empty list
+     * means "no picker wired", the same shape every windowless test gets.
+     */
+    private volatile List<MapSelectionScreen.Entry> mapEntries;
+
     @Override
     public void init()
     {
@@ -228,7 +245,7 @@ public final class GdxWindowPort implements I_WindowPort
         {
             final GdxFrameLoopListener listener = new GdxFrameLoopListener(
                 callback, new DefaultMenuActions(this), presenter(), inputPort,
-                settings(), accessibility());
+                settings(), accessibility(), resolvedMapSelection(), resolvedMapEntries());
             listener.attachMatchGate(matchGate);
             listener.attachMatchResult(matchResult);
             listener.attachMatchRestart(matchRestart);
@@ -492,6 +509,66 @@ public final class GdxWindowPort implements I_WindowPort
         return accessibilitySettings;
     }
 
+    /**
+     * Names the shared map selection this window's picker should write to
+     * and read from.
+     *
+     * <p>Supplied by the launcher, which is the only object that can see
+     * both the picker's state and the engine's startup. The same shape as
+     * {@link #attachAccessibilitySettings} for the same reason: a
+     * window built without one gets a private selection the menu cannot
+     * change, which is what every windowless test wants.</p>
+     *
+     * @param selection the shared selection; null for a private one
+     */
+    public void attachMapSelection(final MapSelection selection)
+    {
+        if (state == State.RUNNING)
+        {
+            throw new IllegalStateException(
+                "attachMapSelection() while the loop is running");
+        }
+        this.mapSelection = selection;
+    }
+
+    /**
+     * Names the rows the picker shows, in display order. An empty list
+     * means "no picker wired" — the menu's SELECT MAP button still
+     * transitions, but the screen is null and the player is silently
+     * returned to the menu.
+     *
+     * @param entries the rows to show, in display order; null or empty
+     *     disables the picker
+     */
+    public void attachMapEntries(final List<MapSelectionScreen.Entry> entries)
+    {
+        if (state == State.RUNNING)
+        {
+            throw new IllegalStateException(
+                "attachMapEntries() while the loop is running");
+        }
+        if (entries == null)
+        {
+            this.mapEntries = List.of();
+        }
+        else
+        {
+            this.mapEntries = List.copyOf(entries);
+        }
+    }
+
+    /** Returns the selection named by {@link #attachMapSelection}, or null. */
+    public MapSelection mapSelection()
+    {
+        return mapSelection;
+    }
+
+    /** Returns the entries named by {@link #attachMapEntries}, or null. */
+    public List<MapSelectionScreen.Entry> mapEntries()
+    {
+        return mapEntries;
+    }
+
     // The attached switch, or a fresh private one. Resolved here so the
     // listener's five-argument constructor never sees a null.
     private DebugSettings settings()
@@ -512,6 +589,30 @@ public final class GdxWindowPort implements I_WindowPort
         if (attached == null)
         {
             return new AccessibilitySettings();
+        }
+        return attached;
+    }
+
+    // The attached map selection, or a fresh private one. Resolved here so
+    // the listener's seven-argument constructor never sees a null.
+    private MapSelection resolvedMapSelection()
+    {
+        final MapSelection attached = mapSelection;
+        if (attached == null)
+        {
+            return new MapSelection();
+        }
+        return attached;
+    }
+
+    // The attached map entries, or an empty list. Resolved here so the
+    // listener's seven-argument constructor never sees a null.
+    private List<MapSelectionScreen.Entry> resolvedMapEntries()
+    {
+        final List<MapSelectionScreen.Entry> attached = mapEntries;
+        if (attached == null)
+        {
+            return List.of();
         }
         return attached;
     }

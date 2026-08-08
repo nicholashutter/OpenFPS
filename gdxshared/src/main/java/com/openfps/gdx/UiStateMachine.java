@@ -201,6 +201,21 @@ public final class UiStateMachine
     }
 
     /**
+     * Opens the map picker from the menu: {@code MENU -> MAP_SELECT}.
+     *
+     * <p>Symmetric to {@link #openSettings}: a transition from the menu to
+     * a full screen the menu owns, returning only to the menu when the player
+     * leaves it. The picker's selection is held in {@code MapSelection} and
+     * takes effect on the next launch.</p>
+     *
+     * @throws IllegalStateException if the menu is not the screen in front
+     */
+    public void openMapSelect()
+    {
+        transitionTo(UiState.MAP_SELECT);
+    }
+
+    /**
      * Ends the round and shows its result: {@code PLAYING -> GAME_OVER}.
      *
      * <p>Driven by the platform UI noticing that {@code Match.state().isOver()},

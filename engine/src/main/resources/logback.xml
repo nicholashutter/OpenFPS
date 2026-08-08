@@ -13,6 +13,14 @@
     <logger name="com.openfps.engine.memory" level="INFO"/>
     <logger name="com.openfps.engine.net" level="INFO"/>
     <logger name="com.openfps.engine.gameplay" level="WARN"/>
+    <!--
+        The map port logs at INFO because the per-tic state is the load-bearing
+        signal a player reads: "Match live", "Map match state -> ...", "RESPAWNED
+        on ...". A WARN filter would silence the only feedback a player gets
+        from the map-mode path. The parent gameplay package stays WARN because
+        the demo's per-tic logs are noisier than the map's.
+    -->
+    <logger name="com.openfps.engine.gameplay.map" level="INFO"/>
     <logger name="com.openfps.engine.render" level="WARN"/>
     <logger name="com.openfps.engine.audio" level="WARN"/>
 

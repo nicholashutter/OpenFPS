@@ -954,6 +954,13 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
         }
 
         @Override
+        public void onMapSelection()
+        {
+            delegate.onMapSelection();
+            machine.openMapSelect();
+        }
+
+        @Override
         public void onQuit()
         {
             delegate.onQuit();
