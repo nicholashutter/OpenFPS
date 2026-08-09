@@ -46,6 +46,7 @@ class ThreadPoolFactoryTest
         {
             System.setProperty(ThreadPoolFactory.WORKER_COUNT_PROPERTY, savedProperty);
         }
+
         savedProperty = null;
     }
 
@@ -53,6 +54,7 @@ class ThreadPoolFactoryTest
     private void pinProperty(final String value)
     {
         savedProperty = System.getProperty(ThreadPoolFactory.WORKER_COUNT_PROPERTY);
+
         System.setProperty(ThreadPoolFactory.WORKER_COUNT_PROPERTY, value);
     }
 
@@ -98,15 +100,19 @@ class ThreadPoolFactoryTest
             // the cases someone happened to write down.
             // MUTABLE: the previous iteration's count, for the monotonic check
             int previous = 0;
+
             for (int processors = 1; processors <= 512; processors++)
             {
                 final int workers = ThreadPoolFactory.recommendedWorkerCount(processors);
+
                 assertThat(workers)
                     .as("workers for %d processors", processors)
                     .isGreaterThanOrEqualTo(previous)
                     .isLessThanOrEqualTo(processors);
+
                 previous = workers;
             }
+
             assertThat(previous).isEqualTo(511);
         }
 
@@ -175,6 +181,7 @@ class ThreadPoolFactoryTest
         void shouldHonourTheSystemProperty()
         {
             pinProperty("5");
+
             assertThat(ThreadPoolFactory.resolveWorkerCount(64)).isEqualTo(5);
         }
 
@@ -183,6 +190,7 @@ class ThreadPoolFactoryTest
         void shouldFallBackWhenThePropertyIsGarbage()
         {
             pinProperty("all of them");
+
             assertThat(ThreadPoolFactory.resolveWorkerCount(12))
                 .isEqualTo(ThreadPoolFactory.recommendedWorkerCount(12));
         }
@@ -197,24 +205,34 @@ class ThreadPoolFactoryTest
             // a count, so it holds on a one-core CI container and on a 128-way
             // build box alike.
             final int processors = new NullSystemInfoPort().logicalProcessorCount();
+
             final int workers = ThreadPoolFactory.resolveWorkerCount(processors);
+
             assertThat(workers).isGreaterThanOrEqualTo(ThreadPoolFactory.MINIMUM_WORKERS);
 
             final I_EventBusPort bus = EventBusFactory.createShared();
+
             bus.init(64);
+
             final I_ThreadPoolPort pool =
                 ThreadPoolFactory.createFixed(bus, new SubsystemRegistry());
+
             try
             {
                 pool.init(workers);
+
                 pool.start();
+
                 assertThat(pool.workerCount()).isEqualTo(workers);
+
                 assertThat(pool.state()).isEqualTo(I_ThreadPoolPort.State.RUNNING);
             }
             finally
             {
                 pool.shutdown();
+
                 pool.awaitTermination(5000);
+
                 bus.shutdown();
             }
         }

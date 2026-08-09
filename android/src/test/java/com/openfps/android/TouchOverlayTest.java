@@ -70,6 +70,7 @@ class TouchOverlayTest
                 assertThat(shape.length % 4)
                     .as("region %d is x0,y0,x1,y1 quadruples", region)
                     .isZero();
+
                 for (int index = 0; index < shape.length; index++)
                 {
                     assertThat(shape[index]).isBetween(0.0f, 1.0f);
@@ -82,7 +83,9 @@ class TouchOverlayTest
         void shouldDrawNothingForANonButton()
         {
             assertThat(TouchOverlay.glyphShapeFor(TouchLayout.REGION_LOOK)).isEmpty();
+
             assertThat(TouchOverlay.glyphShapeFor(TouchLayout.REGION_MOVE_STICK)).isEmpty();
+
             assertThat(TouchOverlay.glyphShapeFor(TouchLayout.REGION_NONE)).isEmpty();
         }
     }

@@ -50,6 +50,7 @@ class ActionBindingsTest
                 assertThat(bindings.isBound(action))
                     .as("%s must start unbound", action)
                     .isFalse();
+
                 assertThat(bindings.bindingsFor(action)).isEmpty();
             }
         }
@@ -61,6 +62,7 @@ class ActionBindingsTest
             final ActionBindings bindings = new ActionBindings();
 
             assertThat(bindings.isComplete()).isFalse();
+
             // Declaration order, so the report is stable rather than whichever
             // gap the iteration happened to reach first.
             assertThat(bindings.firstUnbound()).isEqualTo(GameAction.values()[0]);
@@ -74,6 +76,7 @@ class ActionBindingsTest
             // :engine. The module does not depend on libGDX and must not: the
             // codes are the platform's, and only the platform knows them.
             assertThat(new ActionBindings().isBound(GameAction.FIRE)).isFalse();
+
             assertThat(new ActionBindings().isBound(GameAction.JUMP)).isFalse();
         }
     }
@@ -90,6 +93,7 @@ class ActionBindingsTest
                 .bind(GameAction.JUMP, InputBinding.key(SOME_KEY));
 
             assertThat(bindings.isBound(GameAction.JUMP)).isTrue();
+
             assertThat(bindings.bindingsFor(GameAction.JUMP))
                 .containsExactly(InputBinding.key(SOME_KEY));
         }
@@ -135,6 +139,7 @@ class ActionBindingsTest
         void shouldCopyTheCallersArrayWhenBinding()
         {
             final InputBinding[] caller = { InputBinding.key(SOME_KEY) };
+
             final ActionBindings bindings = new ActionBindings().bind(GameAction.JUMP, caller);
 
             caller[0] = InputBinding.key(OTHER_KEY);
@@ -151,6 +156,7 @@ class ActionBindingsTest
         {
             final InputBinding[] tooMany =
                 new InputBinding[ActionBindings.MAX_BINDINGS_PER_ACTION + 1];
+
             for (int index = 0; index < tooMany.length; index++)
             {
                 tooMany[index] = InputBinding.key(index);
@@ -167,9 +173,11 @@ class ActionBindingsTest
         {
             assertThatThrownBy(() -> new ActionBindings().bind(null, InputBinding.key(SOME_KEY)))
                 .isInstanceOf(IllegalArgumentException.class);
+
             assertThatThrownBy(
                 () -> new ActionBindings().bind(GameAction.FIRE, (InputBinding[]) null))
                 .isInstanceOf(IllegalArgumentException.class);
+
             assertThatThrownBy(() -> new ActionBindings().bind(GameAction.FIRE,
                 InputBinding.key(SOME_KEY), null))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -198,12 +206,14 @@ class ActionBindingsTest
         void shouldReportCompleteWhenEveryActionIsBound()
         {
             final ActionBindings bindings = new ActionBindings();
+
             for (final GameAction action : GameAction.values())
             {
                 bindings.bind(action, InputBinding.key(action.ordinal()));
             }
 
             assertThat(bindings.isComplete()).isTrue();
+
             assertThat(bindings.firstUnbound()).isNull();
         }
 
@@ -212,6 +222,7 @@ class ActionBindingsTest
         void shouldNameTheGapWhenOneActionIsUnbound()
         {
             final ActionBindings bindings = new ActionBindings();
+
             for (final GameAction action : GameAction.values())
             {
                 if (action != GameAction.SPRINT)
@@ -221,6 +232,7 @@ class ActionBindingsTest
             }
 
             assertThat(bindings.isComplete()).isFalse();
+
             assertThat(bindings.firstUnbound()).isEqualTo(GameAction.SPRINT);
         }
     }
@@ -237,6 +249,7 @@ class ActionBindingsTest
             // button 0 is the left button and key 0 is ANY_KEY — collapse the
             // two and fire binds to every key on the keyboard.
             assertThat(InputBinding.key(0)).isNotEqualTo(InputBinding.mouseButton(0));
+
             assertThat(InputBinding.key(0).hashCode())
                 .isNotEqualTo(InputBinding.mouseButton(0).hashCode());
         }
@@ -246,6 +259,7 @@ class ActionBindingsTest
         void shouldCompareEqualWhenSourceAndCodeMatch()
         {
             assertThat(InputBinding.key(SOME_KEY)).isEqualTo(InputBinding.key(SOME_KEY));
+
             assertThat(InputBinding.key(SOME_KEY).hashCode())
                 .isEqualTo(InputBinding.key(SOME_KEY).hashCode());
         }
@@ -255,10 +269,13 @@ class ActionBindingsTest
         void shouldSetTheNamedSourceWhenUsingAFactory()
         {
             assertThat(InputBinding.key(1).source()).isEqualTo(InputBinding.Source.KEY);
+
             assertThat(InputBinding.mouseButton(1).source())
                 .isEqualTo(InputBinding.Source.MOUSE_BUTTON);
+
             assertThat(InputBinding.touchRegion(1).source())
                 .isEqualTo(InputBinding.Source.TOUCH_REGION);
+
             assertThat(InputBinding.key(7).code()).isEqualTo(7);
         }
 
@@ -280,13 +297,19 @@ class ActionBindingsTest
         void shouldMarkOnlyMovementActionsAsAxes()
         {
             assertThat(GameAction.MOVE_FORWARD.isAxis()).isTrue();
+
             assertThat(GameAction.MOVE_BACKWARD.isAxis()).isTrue();
+
             assertThat(GameAction.STRAFE_LEFT.isAxis()).isTrue();
+
             assertThat(GameAction.STRAFE_RIGHT.isAxis()).isTrue();
 
             assertThat(GameAction.FIRE.isAxis()).isFalse();
+
             assertThat(GameAction.JUMP.isAxis()).isFalse();
+
             assertThat(GameAction.SPRINT.isAxis()).isFalse();
+
             assertThat(GameAction.LEAVE_MATCH.isAxis()).isFalse();
         }
 
@@ -298,6 +321,7 @@ class ActionBindingsTest
             // without deciding which kind it is, which is the moment a bindings
             // UI would silently put it in the wrong group.
             int axes = 0;
+
             for (final GameAction action : GameAction.values())
             {
                 if (action.isAxis())
@@ -307,6 +331,7 @@ class ActionBindingsTest
             }
 
             assertThat(axes).isEqualTo(4);
+
             assertThat(GameAction.values()).hasSize(9);
         }
 

@@ -76,6 +76,7 @@ class EndOfMatchTextTest
         void shouldNotTightenAScreenThatAlreadyFits()
         {
             assertThat(GameOverScreen.gapFitFraction(500.0f, 300.0f)).isEqualTo(1.0f);
+
             assertThat(GameOverScreen.gapFitFraction(300.0f, 300.0f)).isEqualTo(1.0f);
         }
 
@@ -84,6 +85,7 @@ class EndOfMatchTextTest
         void shouldShrinkGapsWhenTheBlockIsTooTall()
         {
             assertThat(GameOverScreen.gapFitFraction(150.0f, 300.0f)).isEqualTo(0.5f);
+
             assertThat(GameOverScreen.gapFitFraction(240.0f, 300.0f)).isEqualTo(0.8f);
         }
 
@@ -95,6 +97,7 @@ class EndOfMatchTextTest
             // out of the top of the screen, which is the same dead end upside
             // down.
             assertThat(GameOverScreen.gapFitFraction(0.0f, 300.0f)).isEqualTo(0.0f);
+
             assertThat(GameOverScreen.gapFitFraction(-400.0f, 300.0f)).isEqualTo(0.0f);
         }
 
@@ -125,6 +128,7 @@ class EndOfMatchTextTest
             final float capped = GameOverScreen.headingWidthFor(2400.0f, 1080.0f, defeatBlocks());
 
             assertThat(capped).isLessThan(2400.0f * 0.52f);
+
             // A hundredth of a pixel of slack: the cap is set by inverting
             // BlockTitle's divide-by-cells and this multiplies it back, which
             // is not bit-exact in float. Anything that actually overflowed
@@ -150,14 +154,18 @@ class EndOfMatchTextTest
             // this screen. A gap fraction of zero says nothing about whether it
             // was enough.
             final float surfaceHeight = 1080.0f;
+
             final float fixedContent = 698.0f;
 
             final float budget =
                 GameOverScreen.headingHeightBudget(surfaceHeight, fixedContent);
+
             final float headingWidth =
                 GameOverScreen.headingWidthFor(2400.0f, surfaceHeight, 41, budget);
+
             final float headingHeight =
                 headingWidth / 41.0f * BlockFont.GLYPH_HEIGHT;
+
             // Where the layout actually puts the bottom of the stack, with the gaps
             // fully collapsed — which is what gapFitFraction gives when the budget
             // is this tight.
@@ -178,6 +186,7 @@ class EndOfMatchTextTest
             // zero height is ugly and recoverable, and a button below the bottom
             // edge is not.
             assertThat(GameOverScreen.headingHeightBudget(1080.0f, 2000.0f)).isZero();
+
             assertThat(GameOverScreen.headingWidthFor(2400.0f, 1080.0f, 41, 0.0f)).isZero();
         }
 
@@ -211,6 +220,7 @@ class EndOfMatchTextTest
         void shouldNameTheOutcome()
         {
             assertThat(GameOverScreen.headingText(won())).isEqualTo(GameOverScreen.WIN_TEXT);
+
             assertThat(GameOverScreen.headingText(lost())).isEqualTo(GameOverScreen.LOSS_TEXT);
         }
 
@@ -222,6 +232,7 @@ class EndOfMatchTextTest
             // result reads in the colours the player already learned on the
             // menu rather than in a third scheme invented for this screen.
             assertThat(GameOverScreen.headingColour(won())).isEqualTo(MenuPalette.PLAY_FACE);
+
             assertThat(GameOverScreen.headingColour(lost())).isEqualTo(MenuPalette.QUIT_FACE);
         }
 
@@ -233,7 +244,9 @@ class EndOfMatchTextTest
             // that failed this would take the window down at the moment a
             // player finished their first match.
             assertThat(BlockFont.widthInBlocks(GameOverScreen.WIN_TEXT)).isPositive();
+
             assertThat(BlockFont.widthInBlocks(GameOverScreen.LOSS_TEXT)).isPositive();
+
             assertThat(BlockFont.widthInBlocks(SettingsScreen.TITLE_TEXT)).isPositive();
         }
     }
@@ -248,6 +261,7 @@ class EndOfMatchTextTest
         {
             assertThat(GameOverScreen.summaryText(won())[0])
                 .contains("KILLS").contains("7 of 7");
+
             assertThat(GameOverScreen.summaryText(lost())[0]).contains("3 of 7");
         }
 
@@ -261,6 +275,7 @@ class EndOfMatchTextTest
             // afterthought. It is a SCORE — a death respawns the player.
             assertThat(GameOverScreen.summaryText(won())[1])
                 .contains("DEATHS").contains("1");
+
             assertThat(GameOverScreen.summaryText(lost())[1])
                 .contains("DEATHS").contains("4");
         }
@@ -273,6 +288,7 @@ class EndOfMatchTextTest
             // player compares between rounds, and the counts are what makes a
             // 100% round of one shot readable as the fluke it is.
             final String line = GameOverScreen.summaryText(won())[2];
+
             assertThat(line).contains("ACCURACY").contains("62%")
                 .contains("13 of 21");
         }
@@ -282,7 +298,9 @@ class EndOfMatchTextTest
         void shouldReportHealth()
         {
             final String[] lines = GameOverScreen.summaryText(won());
+
             assertThat(lines[3]).contains("DAMAGE TAKEN").contains("44");
+
             assertThat(lines[4]).contains("HEALTH LEFT").contains("56");
         }
 
@@ -295,6 +313,7 @@ class EndOfMatchTextTest
             // leaking onto a screen where it means nothing.
             final MatchSummary overkilled =
                 new MatchSummary(MatchState.LOST, 2, 3, 7, 10, 4, 102, -2);
+
             assertThat(GameOverScreen.summaryText(overkilled)[4])
                 .contains("HEALTH LEFT").contains("0").doesNotContain("-2");
         }
@@ -307,6 +326,7 @@ class EndOfMatchTextTest
             // round, so this is a real path rather than a contrived one.
             final MatchSummary silent =
                 new MatchSummary(MatchState.LOST, 0, 1, 7, 0, 0, 100, 0);
+
             assertThat(GameOverScreen.summaryText(silent)[2])
                 .contains("0%").contains("0 of 0");
         }
@@ -330,10 +350,12 @@ class EndOfMatchTextTest
         void shouldReportTheState()
         {
             final DebugSettings settings = new DebugSettings();
+
             assertThat(SettingsScreen.debugButtonLabel(settings))
                 .startsWith(SettingsScreen.DEBUG_LABEL).endsWith("OFF");
 
             settings.toggleOverlay();
+
             assertThat(SettingsScreen.debugButtonLabel(settings)).endsWith("ON");
         }
 

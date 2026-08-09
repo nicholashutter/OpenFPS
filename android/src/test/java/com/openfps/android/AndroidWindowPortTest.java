@@ -58,7 +58,9 @@ class AndroidWindowPortTest
         void shouldBeARealWindowPort()
         {
             final AndroidWindowPort port = new AndroidWindowPort(new FakeAndroidApplication());
+
             assertThat(port).isInstanceOf(I_WindowPort.class);
+
             assertThat(port.isRealWindow()).isTrue();
         }
     }
@@ -80,8 +82,11 @@ class AndroidWindowPortTest
         void shouldRecordACloseRequest()
         {
             final AndroidWindowPort port = new AndroidWindowPort(new FakeAndroidApplication());
+
             port.init();
+
             port.requestClose();
+
             assertThat(port.isCloseRequested()).isTrue();
         }
 
@@ -93,9 +98,13 @@ class AndroidWindowPortTest
             // finished once. Only the flag is observable here; that the second
             // call takes the no-op branch is what this pins down.
             final AndroidWindowPort port = new AndroidWindowPort(new FakeAndroidApplication());
+
             port.init();
+
             port.requestClose();
+
             port.requestClose();
+
             assertThat(port.isCloseRequested()).isTrue();
         }
 
@@ -104,7 +113,9 @@ class AndroidWindowPortTest
         void shouldHonourCloseBeforeInit()
         {
             final AndroidWindowPort port = new AndroidWindowPort(new FakeAndroidApplication());
+
             port.requestClose();
+
             assertThat(port.isCloseRequested()).isTrue();
         }
 
@@ -113,6 +124,7 @@ class AndroidWindowPortTest
         void shouldClearTheCloseFlagOnInit()
         {
             final AndroidWindowPort port = new AndroidWindowPort(new FakeAndroidApplication());
+
             port.requestClose();
 
             port.init();
@@ -125,7 +137,9 @@ class AndroidWindowPortTest
         void shouldClearTheCloseFlagOnShutdown()
         {
             final AndroidWindowPort port = new AndroidWindowPort(new FakeAndroidApplication());
+
             port.init();
+
             port.requestClose();
 
             port.shutdown();
@@ -147,13 +161,17 @@ class AndroidWindowPortTest
             // single frame can be scheduled, and trip the ANR watchdog. The
             // test completing at all is the assertion that it returned.
             final FakeAndroidApplication application = new FakeAndroidApplication();
+
             final AndroidWindowPort port = new AndroidWindowPort(application);
+
             port.init();
+
             port.create(WIDTH, HEIGHT, "OpenFPS");
 
             port.runFrameLoop(new RecordingFrameCallback());
 
             assertThat(application.initializeCount()).isEqualTo(1);
+
             assertThat(application.registeredListener()).isNotNull();
         }
 
@@ -162,15 +180,21 @@ class AndroidWindowPortTest
         void shouldWrapTheCallbackInTheBridge()
         {
             final FakeAndroidApplication application = new FakeAndroidApplication();
+
             final AndroidWindowPort port = new AndroidWindowPort(application);
+
             final RecordingFrameCallback callback = new RecordingFrameCallback();
+
             port.init();
+
             port.runFrameLoop(callback);
 
             assertThat(application.registeredListener()).isInstanceOf(GdxLifecycleBridge.class);
+
             // Type alone would not prove the callback is the one wired in, so
             // drive a lifecycle event libGDX would deliver and watch it land.
             application.registeredListener().pause();
+
             assertThat(callback.pauseCount()).isEqualTo(1);
         }
 
@@ -179,13 +203,17 @@ class AndroidWindowPortTest
         void shouldRejectNullCallback()
         {
             final FakeAndroidApplication application = new FakeAndroidApplication();
+
             final AndroidWindowPort port = new AndroidWindowPort(application);
+
             port.init();
 
             assertThatThrownBy(() -> port.runFrameLoop(null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("callback");
+
             assertThat(application.initializeCount()).isZero();
+
             // The rejection must not burn the one-shot guard either.
             assertThatCode(() -> port.runFrameLoop(new RecordingFrameCallback()))
                 .doesNotThrowAnyException();
@@ -196,13 +224,17 @@ class AndroidWindowPortTest
         void shouldRejectASecondFrameLoop()
         {
             final FakeAndroidApplication application = new FakeAndroidApplication();
+
             final AndroidWindowPort port = new AndroidWindowPort(application);
+
             port.init();
+
             port.runFrameLoop(new RecordingFrameCallback());
 
             assertThatThrownBy(() -> port.runFrameLoop(new RecordingFrameCallback()))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("already started");
+
             assertThat(application.initializeCount()).isEqualTo(1);
         }
 
@@ -211,14 +243,20 @@ class AndroidWindowPortTest
         void shouldAllowRestartAfterShutdown()
         {
             final FakeAndroidApplication application = new FakeAndroidApplication();
+
             final AndroidWindowPort port = new AndroidWindowPort(application);
+
             port.init();
+
             port.runFrameLoop(new RecordingFrameCallback());
+
             port.shutdown();
 
             port.init();
+
             assertThatCode(() -> port.runFrameLoop(new RecordingFrameCallback()))
                 .doesNotThrowAnyException();
+
             assertThat(application.initializeCount()).isEqualTo(2);
         }
 
@@ -230,13 +268,17 @@ class AndroidWindowPortTest
             // create() records the request and nothing more; the loop guard
             // must still be untouched afterwards.
             final FakeAndroidApplication application = new FakeAndroidApplication();
+
             final AndroidWindowPort port = new AndroidWindowPort(application);
+
             port.init();
 
             port.create(WIDTH, HEIGHT, "OpenFPS");
 
             assertThat(application.initializeCount()).isZero();
+
             assertThat(port.isCloseRequested()).isFalse();
+
             assertThatCode(() -> port.runFrameLoop(new RecordingFrameCallback()))
                 .doesNotThrowAnyException();
         }
@@ -255,11 +297,17 @@ class AndroidWindowPortTest
             final AndroidApplicationConfiguration config = startAndCaptureConfig();
 
             assertThat(config.r).isEqualTo(8);
+
             assertThat(config.g).isEqualTo(8);
+
             assertThat(config.b).isEqualTo(8);
+
             assertThat(config.a).isZero();
+
             assertThat(config.depth).isEqualTo(16);
+
             assertThat(config.stencil).isZero();
+
             assertThat(config.numSamples).isZero();
         }
 
@@ -279,7 +327,9 @@ class AndroidWindowPortTest
             final AndroidApplicationConfiguration config = startAndCaptureConfig();
 
             assertThat(config.useAccelerometer).isFalse();
+
             assertThat(config.useCompass).isFalse();
+
             assertThat(config.useGyroscope).isFalse();
         }
 
@@ -287,9 +337,13 @@ class AndroidWindowPortTest
         private AndroidApplicationConfiguration startAndCaptureConfig()
         {
             final FakeAndroidApplication application = new FakeAndroidApplication();
+
             final AndroidWindowPort port = new AndroidWindowPort(application);
+
             port.init();
+
             port.runFrameLoop(new RecordingFrameCallback());
+
             return application.registeredConfig();
         }
     }

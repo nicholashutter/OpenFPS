@@ -95,22 +95,37 @@ public final class Target
             throw new IllegalArgumentException(
                 "entityId must be at least " + MIN_ENTITY_ID + ", got " + entityId);
         }
+
         requireFinite("boxMinX", boxMinX);
+
         requireFinite("boxMinY", boxMinY);
+
         requireFinite("boxMinZ", boxMinZ);
+
         requireFinite("boxMaxX", boxMaxX);
+
         requireFinite("boxMaxY", boxMaxY);
+
         requireFinite("boxMaxZ", boxMaxZ);
+
         requireOrdered("x", boxMinX, boxMaxX);
+
         requireOrdered("y", boxMinY, boxMaxY);
+
         requireOrdered("z", boxMinZ, boxMaxZ);
 
         this.entityId = entityId;
+
         this.minX = boxMinX;
+
         this.minY = boxMinY;
+
         this.minZ = boxMinZ;
+
         this.maxX = boxMaxX;
+
         this.maxY = boxMaxY;
+
         this.maxZ = boxMaxZ;
     }
 
@@ -148,11 +163,13 @@ public final class Target
             throw new IllegalArgumentException(
                 "radius must be non-negative and a number, got " + radius);
         }
+
         if (!(height >= 0.0f))
         {
             throw new IllegalArgumentException(
                 "height must be non-negative and a number, got " + height);
         }
+
         return new Target(entityId,
             feetX - radius, feetY, feetZ - radius,
             feetX + radius, feetY + height, feetZ + radius);

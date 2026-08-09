@@ -71,7 +71,9 @@ final class GltfFixtures
     GltfFixtures()
     {
         final JsonObject asset = new JsonObject();
+
         asset.addProperty("version", "2.0");
+
         root.add("asset", asset);
     }
 
@@ -79,6 +81,7 @@ final class GltfFixtures
     GltfFixtures version(final String version)
     {
         root.getAsJsonObject("asset").addProperty("version", version);
+
         return this;
     }
 
@@ -88,13 +91,21 @@ final class GltfFixtures
     int bufferView(final byte[] data)
     {
         pad4();
+
         final int offset = binary.size();
+
         binary.writeBytes(data);
+
         final JsonObject view = new JsonObject();
+
         view.addProperty("buffer", 0);
+
         view.addProperty("byteOffset", offset);
+
         view.addProperty("byteLength", data.length);
+
         bufferViews.add(view);
+
         return bufferViews.size() - 1;
     }
 
@@ -102,11 +113,17 @@ final class GltfFixtures
     int accessor(final int view, final int componentType, final String type, final int count)
     {
         final JsonObject accessor = new JsonObject();
+
         accessor.addProperty("bufferView", view);
+
         accessor.addProperty("componentType", componentType);
+
         accessor.addProperty("type", type);
+
         accessor.addProperty("count", count);
+
         accessors.add(accessor);
+
         return accessors.size() - 1;
     }
 
@@ -114,6 +131,7 @@ final class GltfFixtures
     int floats(final String type, final float... values)
     {
         final int components = GltfAccessor.componentCount(type);
+
         return accessor(bufferView(floatBytes(values)), FLOAT, type, values.length / components);
     }
 
@@ -122,14 +140,19 @@ final class GltfFixtures
     int normalizedBytes(final String type, final int... values)
     {
         final int components = GltfAccessor.componentCount(type);
+
         final byte[] raw = new byte[values.length];
+
         for (int i = 0; i < values.length; i++)
         {
             raw[i] = (byte) values[i];
         }
+
         final int index = accessor(bufferView(raw), UNSIGNED_BYTE, type,
             values.length / components);
+
         accessors.get(index).getAsJsonObject().addProperty("normalized", true);
+
         return index;
     }
 
@@ -144,7 +167,9 @@ final class GltfFixtures
     int stridedView(final byte[] data, final int strideBytes)
     {
         final int view = bufferView(data);
+
         bufferViews.get(view).getAsJsonObject().addProperty("byteStride", strideBytes);
+
         return view;
     }
 
@@ -166,9 +191,13 @@ final class GltfFixtures
     int image(final String name, final byte[] png)
     {
         final JsonObject image = new JsonObject();
+
         image.addProperty("name", name);
+
         image.addProperty("bufferView", bufferView(png));
+
         images.add(image);
+
         return images.size() - 1;
     }
 
@@ -176,8 +205,11 @@ final class GltfFixtures
     int texture(final int imageIndex)
     {
         final JsonObject texture = new JsonObject();
+
         texture.addProperty("source", imageIndex);
+
         textures.add(texture);
+
         return textures.size() - 1;
     }
 
@@ -185,24 +217,34 @@ final class GltfFixtures
     int material(final int textureIndex, final float[] baseColorFactor)
     {
         final JsonObject pbr = new JsonObject();
+
         if (textureIndex >= 0)
         {
             final JsonObject reference = new JsonObject();
+
             reference.addProperty("index", textureIndex);
+
             pbr.add("baseColorTexture", reference);
         }
+
         if (baseColorFactor != null)
         {
             final JsonArray factor = new JsonArray();
+
             for (final float value : baseColorFactor)
             {
                 factor.add(value);
             }
+
             pbr.add("baseColorFactor", factor);
         }
+
         final JsonObject material = new JsonObject();
+
         material.add("pbrMetallicRoughness", pbr);
+
         materials.add(material);
+
         return materials.size() - 1;
     }
 
@@ -210,7 +252,9 @@ final class GltfFixtures
     void materialSlot(final int materialIndex, final String slot, final int textureIndex)
     {
         final JsonObject reference = new JsonObject();
+
         reference.addProperty("index", textureIndex);
+
         materials.get(materialIndex).getAsJsonObject().add(slot, reference);
     }
 
@@ -221,27 +265,35 @@ final class GltfFixtures
         final int indices, final int material, final int mode)
     {
         final JsonObject attributes = new JsonObject();
+
         attributes.addProperty("POSITION", position);
+
         if (texcoord >= 0)
         {
             attributes.addProperty("TEXCOORD_0", texcoord);
         }
+
         if (colour >= 0)
         {
             attributes.addProperty("COLOR_0", colour);
         }
 
         final JsonObject primitive = new JsonObject();
+
         primitive.add("attributes", attributes);
+
         if (indices >= 0)
         {
             primitive.addProperty("indices", indices);
         }
+
         if (material >= 0)
         {
             primitive.addProperty("material", material);
         }
+
         primitive.addProperty("mode", mode);
+
         return primitive;
     }
 
@@ -249,13 +301,18 @@ final class GltfFixtures
     int mesh(final JsonObject... primitives)
     {
         final JsonArray array = new JsonArray();
+
         for (final JsonObject primitive : primitives)
         {
             array.add(primitive);
         }
+
         final JsonObject mesh = new JsonObject();
+
         mesh.add("primitives", array);
+
         meshes.add(mesh);
+
         return meshes.size() - 1;
     }
 
@@ -264,14 +321,20 @@ final class GltfFixtures
         final float[] scale)
     {
         final JsonObject node = new JsonObject();
+
         if (meshIndex >= 0)
         {
             node.addProperty("mesh", meshIndex);
         }
+
         addVector(node, "translation", translation);
+
         addVector(node, "rotation", rotation);
+
         addVector(node, "scale", scale);
+
         nodes.add(node);
+
         return nodes.size() - 1;
     }
 
@@ -279,9 +342,13 @@ final class GltfFixtures
     int matrixNode(final int meshIndex, final float[] columnMajor)
     {
         final JsonObject node = new JsonObject();
+
         node.addProperty("mesh", meshIndex);
+
         addVector(node, "matrix", columnMajor);
+
         nodes.add(node);
+
         return nodes.size() - 1;
     }
 
@@ -289,10 +356,12 @@ final class GltfFixtures
     void children(final int nodeIndex, final int... childIndices)
     {
         final JsonArray array = new JsonArray();
+
         for (final int child : childIndices)
         {
             array.add(child);
         }
+
         nodes.get(nodeIndex).getAsJsonObject().add("children", array);
     }
 
@@ -300,12 +369,16 @@ final class GltfFixtures
     void scene(final int... rootNodes)
     {
         final JsonArray array = new JsonArray();
+
         for (final int node : rootNodes)
         {
             array.add(node);
         }
+
         final JsonObject scene = new JsonObject();
+
         scene.add("nodes", array);
+
         scenes.add(scene);
     }
 
@@ -315,15 +388,25 @@ final class GltfFixtures
     JsonObject document()
     {
         pad4();
+
         final JsonObject document = root.deepCopy();
+
         addIfPresent(document, "bufferViews", bufferViews);
+
         addIfPresent(document, "accessors", accessors);
+
         addIfPresent(document, "meshes", meshes);
+
         addIfPresent(document, "materials", materials);
+
         addIfPresent(document, "images", images);
+
         addIfPresent(document, "textures", textures);
+
         addIfPresent(document, "nodes", nodes);
+
         addIfPresent(document, "scenes", scenes);
+
         return document;
     }
 
@@ -331,17 +414,25 @@ final class GltfFixtures
     byte[] gltf()
     {
         final JsonObject document = document();
+
         final byte[] bytes = binary.toByteArray();
+
         if (bytes.length > 0)
         {
             final JsonObject buffer = new JsonObject();
+
             buffer.addProperty("byteLength", bytes.length);
+
             buffer.addProperty("uri", "data:application/octet-stream;base64,"
                 + Base64.getEncoder().encodeToString(bytes));
+
             final JsonArray buffers = new JsonArray();
+
             buffers.add(buffer);
+
             document.add("buffers", buffers);
         }
+
         return document.toString().getBytes(StandardCharsets.UTF_8);
     }
 
@@ -349,15 +440,22 @@ final class GltfFixtures
     byte[] glb()
     {
         final JsonObject document = document();
+
         final byte[] bytes = binary.toByteArray();
+
         if (bytes.length > 0)
         {
             final JsonObject buffer = new JsonObject();
+
             buffer.addProperty("byteLength", bytes.length);
+
             final JsonArray buffers = new JsonArray();
+
             buffers.add(buffer);
+
             document.add("buffers", buffers);
         }
+
         return glb(document.toString().getBytes(StandardCharsets.UTF_8), bytes);
     }
 
@@ -365,22 +463,34 @@ final class GltfFixtures
     static byte[] glb(final byte[] json, final byte[] bin)
     {
         final byte[] jsonChunk = padTo4(json, (byte) ' ');
+
         final byte[] binChunk = padTo4(bin, (byte) 0);
+
         final int total = 12 + 8 + jsonChunk.length + chunkSize(binChunk);
 
         final ByteBuffer out = ByteBuffer.allocate(total).order(ByteOrder.LITTLE_ENDIAN);
+
         out.putInt(GLB_MAGIC);
+
         out.putInt(2);
+
         out.putInt(total);
+
         out.putInt(jsonChunk.length);
+
         out.putInt(CHUNK_JSON);
+
         out.put(jsonChunk);
+
         if (binChunk.length > 0)
         {
             out.putInt(binChunk.length);
+
             out.putInt(CHUNK_BIN);
+
             out.put(binChunk);
         }
+
         return out.array();
     }
 
@@ -389,12 +499,19 @@ final class GltfFixtures
     static byte[] binOnlyGlb()
     {
         final ByteBuffer out = ByteBuffer.allocate(24).order(ByteOrder.LITTLE_ENDIAN);
+
         out.putInt(GLB_MAGIC);
+
         out.putInt(2);
+
         out.putInt(24);
+
         out.putInt(4);
+
         out.putInt(CHUNK_BIN);
+
         out.putInt(0);
+
         return out.array();
     }
 
@@ -405,16 +522,20 @@ final class GltfFixtures
     {
         final BufferedImage image = new BufferedImage(width, height,
             BufferedImage.TYPE_INT_ARGB);
+
         for (int y = 0; y < height; y++)
         {
             for (int x = 0; x < width; x++)
             {
                 final int texel = rgba[(y * width) + x];
+
                 image.setRGB(x, y, (Rgba.alpha(texel) << 24) | (Rgba.red(texel) << 16)
                     | (Rgba.green(texel) << 8) | Rgba.blue(texel));
             }
         }
+
         final ByteArrayOutputStream out = new ByteArrayOutputStream();
+
         try
         {
             ImageIO.write(image, "png", out);
@@ -423,6 +544,7 @@ final class GltfFixtures
         {
             throw new UncheckedIOException("cannot encode fixture PNG", e);
         }
+
         return out.toByteArray();
     }
 
@@ -430,7 +552,9 @@ final class GltfFixtures
     static byte[] solidPng(final int width, final int height, final int colour)
     {
         final int[] texels = new int[width * height];
+
         Arrays.fill(texels, colour);
+
         return png(width, height, texels);
     }
 
@@ -439,10 +563,12 @@ final class GltfFixtures
     {
         final ByteBuffer out = ByteBuffer.allocate(values.length * Float.BYTES)
             .order(ByteOrder.LITTLE_ENDIAN);
+
         for (final float value : values)
         {
             out.putFloat(value);
         }
+
         return out.array();
     }
 
@@ -450,8 +576,10 @@ final class GltfFixtures
     static byte[] indexBytes(final int componentType, final int... values)
     {
         final int width = indexWidth(componentType);
+
         final ByteBuffer out = ByteBuffer.allocate(values.length * width)
             .order(ByteOrder.LITTLE_ENDIAN);
+
         for (final int value : values)
         {
             if (width == 1)
@@ -467,6 +595,7 @@ final class GltfFixtures
                 out.putInt(value);
             }
         }
+
         return out.array();
     }
 
@@ -476,14 +605,17 @@ final class GltfFixtures
         {
             return 1;
         }
+
         if (componentType == UNSIGNED_SHORT)
         {
             return 2;
         }
+
         if (componentType == UNSIGNED_INT)
         {
             return 4;
         }
+
         throw new IllegalArgumentException("not an index component type: " + componentType);
     }
 
@@ -493,11 +625,14 @@ final class GltfFixtures
         {
             return;
         }
+
         final JsonArray array = new JsonArray();
+
         for (final float value : values)
         {
             array.add(value);
         }
+
         node.add(name, array);
     }
 
@@ -522,12 +657,16 @@ final class GltfFixtures
     private static byte[] padTo4(final byte[] data, final byte filler)
     {
         final int padded = (data.length + 3) & ~3;
+
         final byte[] out = new byte[padded];
+
         System.arraycopy(data, 0, out, 0, data.length);
+
         for (int i = data.length; i < padded; i++)
         {
             out[i] = filler;
         }
+
         return out;
     }
 
@@ -537,6 +676,7 @@ final class GltfFixtures
         {
             return 0;
         }
+
         return chunk.length + 8;
     }
 }

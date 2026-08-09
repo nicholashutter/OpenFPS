@@ -45,6 +45,7 @@ class MatchMapSpecTest
     void tearDown()
     {
         MapLibrary.unregisterAll();
+
         MapLibrary.registerDefaults();
     }
 
@@ -57,6 +58,7 @@ class MatchMapSpecTest
         void shouldReturnSpecMode()
         {
             final Match match = new Match(smallRoster(), tdmSpec());
+
             assertThat(match.mode()).isEqualTo(MatchMode.TDM);
         }
 
@@ -65,6 +67,7 @@ class MatchMapSpecTest
         void shouldDefaultToTdm()
         {
             final Match match = new Match(smallRoster());
+
             assertThat(match.mode()).isEqualTo(MatchMode.TDM);
         }
 
@@ -73,7 +76,9 @@ class MatchMapSpecTest
         void shouldExposeMapSpec()
         {
             final MapSpec spec = tdmSpec();
+
             final Match match = new Match(smallRoster(), spec);
+
             assertThat(match.mapSpec()).isSameAs(spec);
         }
 
@@ -95,10 +100,12 @@ class MatchMapSpecTest
         void shouldTickTdm()
         {
             final Match match = marksmanMatch(tdmSpec());
+
             for (int tic = 0; tic < 30; tic++)
             {
                 match.tick(tic, 0.0f, 0.0f, 0.0f);
             }
+
             // Marksman bots hit on tic 1; the match is over once the
             // player runs out of deaths. UNLIMITED_DEATHS, so the
             // assertion is the looser one: tics ran and produced a
@@ -112,11 +119,14 @@ class MatchMapSpecTest
         void shouldTickHardpoint()
         {
             final MapSpec spec = hardpointSpec();
+
             final Match match = marksmanMatch(spec);
+
             for (int tic = 0; tic < 30; tic++)
             {
                 match.tick(tic, 0.0f, 0.0f, 0.0f);
             }
+
             // The mode-dispatch path is the load-bearing piece here:
             // updateHardpoint runs every tic and the rotation counter
             // advances. The assertion is the same loose one as TDM.
@@ -129,11 +139,14 @@ class MatchMapSpecTest
         void shouldTickDomination()
         {
             final MapSpec spec = dominationSpec();
+
             final Match match = marksmanMatch(spec);
+
             for (int tic = 0; tic < 30; tic++)
             {
                 match.tick(tic, 0.0f, 0.0f, 0.0f);
             }
+
             assertThat(match.botsKilled() > 0 || match.playerDeaths() > 0
                 || match.state().isOver()).isTrue();
         }
@@ -143,11 +156,14 @@ class MatchMapSpecTest
         void shouldTickCtf()
         {
             final MapSpec spec = ctfSpec();
+
             final Match match = marksmanMatch(spec);
+
             for (int tic = 0; tic < 30; tic++)
             {
                 match.tick(tic, 0.0f, 0.0f, 0.0f);
             }
+
             assertThat(match.botsKilled() > 0 || match.playerDeaths() > 0
                 || match.state().isOver()).isTrue();
         }
@@ -162,7 +178,9 @@ class MatchMapSpecTest
         void shouldReturnPairOfScores()
         {
             final Match match = new Match(smallRoster(), tdmSpec());
+
             final int[] scores = match.teamScores();
+
             assertThat(scores).hasSize(2);
         }
     }
@@ -176,14 +194,20 @@ class MatchMapSpecTest
         void shouldResetSpecMode()
         {
             final MapSpec spec = hardpointSpec();
+
             final Match match = new Match(smallRoster(), spec);
+
             for (int tic = 0; tic < 30; tic++)
             {
                 match.tick(tic, 0.0f, 0.0f, 0.0f);
             }
+
             match.reset();
+
             final Match fresh = new Match(smallRoster(), spec);
+
             assertThat(match.playerHealth()).isEqualTo(fresh.playerHealth());
+
             assertThat(match.botsKilled()).isEqualTo(fresh.botsKilled());
         }
     }

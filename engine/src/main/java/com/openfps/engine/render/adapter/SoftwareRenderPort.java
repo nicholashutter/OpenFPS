@@ -802,15 +802,22 @@ public final class SoftwareRenderPort implements I_RenderPort
         {
             throw new IllegalArgumentException("timePort must not be null");
         }
+
         if (cull == null)
         {
             throw new IllegalArgumentException("cull must not be null");
         }
+
         this.pool = workerPool;
+
         this.time = timePort;
+
         this.cullMode = cull;
+
         this.framebuffer = new Framebuffer();
+
         this.spanRenderer = new SpanRenderer(SpanRenderer.ShadingMode.TEXTURED, ATTRIBUTE_COUNT);
+
         this.chunkCount = chunkCountFor(workerPool);
     }
 
@@ -823,6 +830,7 @@ public final class SoftwareRenderPort implements I_RenderPort
         {
             return 1;
         }
+
         return Math.max(1, workerPool.workerCount());
     }
 
@@ -839,12 +847,14 @@ public final class SoftwareRenderPort implements I_RenderPort
     public void shutdown()
     {
         frameLock.lock();
+
         try
         {
             if (framebuffer.state() == Framebuffer.State.READY)
             {
                 framebuffer.shutdown();
             }
+
             LOG.info("Software rasterizer shut down after {} frames", framesRendered);
         }
         finally
@@ -868,17 +878,22 @@ public final class SoftwareRenderPort implements I_RenderPort
     public void resize(final int newWidth, final int newHeight)
     {
         frameLock.lock();
+
         try
         {
             if (framebuffer.state() == Framebuffer.State.UNINITIALIZED)
             {
                 framebuffer.init(newWidth, newHeight);
+
                 resizePresentBuffers();
+
                 return;
             }
+
             if (framebuffer.state() == Framebuffer.State.READY)
             {
                 framebuffer.resize(newWidth, newHeight);
+
                 resizePresentBuffers();
             }
         }
@@ -898,15 +913,20 @@ public final class SoftwareRenderPort implements I_RenderPort
     private void resizePresentBuffers()
     {
         final int pixels = framebuffer.width() * framebuffer.height();
+
         presentLock.lock();
+
         try
         {
             if (frontColor == null || frontColor.length != pixels)
             {
                 this.frontColor = new int[pixels];
+
                 this.backColor = new int[pixels];
             }
+
             this.presentPixels = pixels;
+
             this.framePublished = false;
         }
         finally
@@ -971,7 +991,9 @@ public final class SoftwareRenderPort implements I_RenderPort
         {
             throw new IllegalArgumentException("scene must not be null");
         }
+
         frameLock.lock();
+
         try
         {
             bindScene(newScene);
@@ -980,6 +1002,7 @@ public final class SoftwareRenderPort implements I_RenderPort
         {
             frameLock.unlock();
         }
+
         LOG.info("Scene bound: {} world instances ({} triangles, {} translucent),"
             + " {} view instances ({}), {} textures, buffers sized for {}",
             newScene.worldInstanceCount(), newScene.worldTriangleCount(),
@@ -1027,15 +1050,18 @@ public final class SoftwareRenderPort implements I_RenderPort
     public void setWorldTransform(final int instanceIndex, final Mat4 modelToWorld)
     {
         final Mat4[] slots = worldOverrides;
+
         if (slots == null)
         {
             throw new IllegalStateException("setWorldTransform() before setScene()");
         }
+
         if (instanceIndex < 0 || instanceIndex >= slots.length)
         {
             throw new IndexOutOfBoundsException("world instance " + instanceIndex
                 + " is outside 0.." + (slots.length - 1));
         }
+
         slots[instanceIndex] = modelToWorld;
     }
 
@@ -1050,10 +1076,12 @@ public final class SoftwareRenderPort implements I_RenderPort
     public Mat4 worldTransformOverride(final int instanceIndex)
     {
         final Mat4[] slots = worldOverrides;
+
         if (slots == null)
         {
             throw new IllegalStateException("worldTransformOverride() before setScene()");
         }
+
         return slots[instanceIndex];
     }
 
@@ -1062,8 +1090,11 @@ public final class SoftwareRenderPort implements I_RenderPort
     private void bindScene(final Scene newScene)
     {
         growBuffersFor(newScene.maxPassTriangles());
+
         final Instance[] world = prepareWorld(newScene);
+
         final Instance[] hand = prepareView(newScene);
+
         // Built over BOTH partitions: a translucent instance's textures still
         // occupy the scene-wide table even though the translucent phase binds
         // no table, because the rebase walks every instance exactly once and a
@@ -1071,21 +1102,30 @@ public final class SoftwareRenderPort implements I_RenderPort
         this.sceneTextures = buildSceneTextures(world, hand);
 
         final int[] solid = sceneIndices(newScene, false);
+
         final Instance[] opaque = subset(world, solid);
+
         this.worldSceneIndex = solid;
+
         this.worldInstances = opaque;
+
         this.worldEntityIds = entityIdsFor(newScene, solid);
+
         bindVisibleWorld(opaque.length, worldEntityIds != null);
 
         bindTranslucent(newScene, world, sceneIndices(newScene, true));
 
         this.viewStarts = streamOffsets(hand);
+
         // One slot per instance, all null: a scene starts entirely static and
         // pays nothing for the override path until something is actually moved.
         // Indexed by SCENE index, not by pass position — see worldSceneIndex.
         this.worldOverrides = new Mat4[newScene.worldInstanceCount()];
+
         this.viewTransforms = new float[hand.length * Camera.WORLD_TO_CLIP_FLOATS];
+
         this.viewInstances = hand;
+
         this.scene = newScene;
     }
 
@@ -1098,13 +1138,18 @@ public final class SoftwareRenderPort implements I_RenderPort
     private void bindVisibleWorld(final int count, final boolean tagged)
     {
         this.visibleWorld = new Instance[count];
+
         this.visibleWorldStarts = new int[count + 1];
+
         this.visibleWorldTransforms = new float[count * Camera.WORLD_TO_CLIP_FLOATS];
+
         if (tagged)
         {
             this.visibleWorldIds = new int[count];
+
             return;
         }
+
         this.visibleWorldIds = null;
     }
 
@@ -1117,30 +1162,50 @@ public final class SoftwareRenderPort implements I_RenderPort
         if (indices.length == 0)
         {
             this.translucentInstances = null;
+
             this.translucentScene = null;
+
             this.translucentCoverage = null;
+
             this.translucentOrder = null;
+
             this.translucentDepth = null;
+
             this.translucentPassInstances = null;
+
             this.translucentPassStarts = null;
+
             this.translucentPassTransforms = null;
+
             this.blendedRenderers = null;
+
             return;
         }
+
         final int[] coverage = new int[indices.length];
+
         for (int slot = 0; slot < indices.length; slot++)
         {
             coverage[slot] = newScene.worldCoverage(indices[slot]);
         }
+
         this.translucentScene = indices;
+
         this.translucentInstances = subset(world, indices);
+
         this.translucentCoverage = coverage;
+
         this.translucentOrder = new int[indices.length];
+
         this.translucentDepth = new float[indices.length];
+
         this.translucentPassInstances = new Instance[indices.length];
+
         this.translucentPassStarts = new int[indices.length + 1];
+
         this.translucentPassTransforms =
             new float[indices.length * Camera.WORLD_TO_CLIP_FLOATS];
+
         this.blendedRenderers = blendedRenderersFor(coverage);
     }
 
@@ -1154,6 +1219,7 @@ public final class SoftwareRenderPort implements I_RenderPort
     private static SpanRenderer[] blendedRenderersFor(final int[] coverage)
     {
         final SpanRenderer[] table = new SpanRenderer[Scene.OPAQUE + 1];
+
         for (final int level : coverage)
         {
             if (table[level] == null)
@@ -1162,6 +1228,7 @@ public final class SoftwareRenderPort implements I_RenderPort
                     ATTRIBUTE_COUNT, level);
             }
         }
+
         return table;
     }
 
@@ -1177,6 +1244,7 @@ public final class SoftwareRenderPort implements I_RenderPort
     {
         // MUTABLE local — how many instances fall in this partition.
         int found = 0;
+
         for (int index = 0; index < source.worldInstanceCount(); index++)
         {
             if (source.isWorldTranslucent(index) == translucent)
@@ -1184,17 +1252,22 @@ public final class SoftwareRenderPort implements I_RenderPort
                 found++;
             }
         }
+
         final int[] out = new int[found];
+
         // MUTABLE local — the write cursor into the partition.
         int at = 0;
+
         for (int index = 0; index < source.worldInstanceCount(); index++)
         {
             if (source.isWorldTranslucent(index) == translucent)
             {
                 out[at] = index;
+
                 at++;
             }
         }
+
         return out;
     }
 
@@ -1207,11 +1280,14 @@ public final class SoftwareRenderPort implements I_RenderPort
         {
             return all;
         }
+
         final Instance[] out = new Instance[indices.length];
+
         for (int slot = 0; slot < indices.length; slot++)
         {
             out[slot] = all[indices[slot]];
         }
+
         return out;
     }
 
@@ -1224,25 +1300,36 @@ public final class SoftwareRenderPort implements I_RenderPort
         {
             return;
         }
+
         final int maxOutput = triangles * CLIP_EXPANSION;
 
         this.clipVertices = new float[maxOutput * TRIANGLE_FLOATS];
+
         this.clipMaterials = new int[maxOutput];
+
         this.clipColors = new int[maxOutput];
+
         this.clipEntityIds = new int[maxOutput];
+
         this.chunkProduced = new int[chunkCount];
 
         final TriangleClipper[] newClippers = new TriangleClipper[chunkCount];
+
         final float[][] newScratch = new float[chunkCount][];
+
         for (int chunk = 0; chunk < chunkCount; chunk++)
         {
             newClippers[chunk] = new TriangleClipper(ATTRIBUTE_COUNT);
+
             newScratch[chunk] = new float[TRIANGLE_FLOATS];
         }
+
         this.clippers = newClippers;
+
         this.chunkScratch = newScratch;
 
         this.rasterizer = new Rasterizer(ATTRIBUTE_COUNT, maxOutput, chunkCount, cullMode);
+
         this.sizedForTriangles = triangles;
     }
 
@@ -1254,10 +1341,12 @@ public final class SoftwareRenderPort implements I_RenderPort
     private static int[] streamOffsets(final Instance[] instances)
     {
         final int[] starts = new int[instances.length + 1];
+
         for (int index = 0; index < instances.length; index++)
         {
             starts[index + 1] = starts[index] + instances[index].model.triangleCount();
         }
+
         return starts;
     }
 
@@ -1282,17 +1371,22 @@ public final class SoftwareRenderPort implements I_RenderPort
     private static int[] entityIdsFor(final Scene source, final int[] indices)
     {
         final int[] out = new int[indices.length];
+
         // MUTABLE local — whether any instance in this partition is tagged.
         boolean any = false;
+
         for (int slot = 0; slot < indices.length; slot++)
         {
             out[slot] = source.worldEntityId(indices[slot]);
+
             any = any || out[slot] != Scene.UNTAGGED;
         }
+
         if (!any)
         {
             return null;
         }
+
         return out;
     }
 
@@ -1307,9 +1401,13 @@ public final class SoftwareRenderPort implements I_RenderPort
     private static MipChain[] buildSceneTextures(final Instance[] world, final Instance[] hand)
     {
         final int total = rebase(hand, rebase(world, 0));
+
         final MipChain[] table = new MipChain[total];
+
         copyTextures(world, table);
+
         copyTextures(hand, table);
+
         return table;
     }
 
@@ -1319,14 +1417,18 @@ public final class SoftwareRenderPort implements I_RenderPort
     {
         // MUTABLE local — the next free slot in the scene-wide texture table.
         int base = firstBase;
+
         for (final Instance instance : instances)
         {
             if (instance.textureBase != Instance.UNASSIGNED)
             {
                 continue;
             }
+
             instance.textureBase = base;
+
             final int[] materials = instance.triangleMaterial;
+
             for (int triangle = 0; triangle < materials.length; triangle++)
             {
                 if (materials[triangle] != Rasterizer.NO_MATERIAL)
@@ -1334,8 +1436,10 @@ public final class SoftwareRenderPort implements I_RenderPort
                     materials[triangle] += base;
                 }
             }
+
             base += instance.textures.length;
         }
+
         return base;
     }
 
@@ -1353,10 +1457,12 @@ public final class SoftwareRenderPort implements I_RenderPort
     private static Instance[] prepareWorld(final Scene source)
     {
         final Instance[] out = new Instance[source.worldInstanceCount()];
+
         for (int index = 0; index < out.length; index++)
         {
             out[index] = prepare(source.worldModel(index), out, index);
         }
+
         return out;
     }
 
@@ -1364,10 +1470,12 @@ public final class SoftwareRenderPort implements I_RenderPort
     private static Instance[] prepareView(final Scene source)
     {
         final Instance[] out = new Instance[source.viewInstanceCount()];
+
         for (int index = 0; index < out.length; index++)
         {
             out[index] = prepare(source.viewModel(index), out, index);
         }
+
         return out;
     }
 
@@ -1386,7 +1494,9 @@ public final class SoftwareRenderPort implements I_RenderPort
                 return done[index];
             }
         }
+
         final int triangles = source.triangleCount();
+
         return new Instance(source, buildTriangleMaterials(source, triangles),
             buildTriangleColors(source, triangles), buildTextures(source),
             buildBounds(source));
@@ -1407,36 +1517,60 @@ public final class SoftwareRenderPort implements I_RenderPort
     private static float[] buildBounds(final ModelFormat source)
     {
         final float[] box = new float[InstanceCull.BOX_FLOATS];
+
         final int vertices = source.vertexCount();
+
         if (vertices == 0)
         {
             return box;
         }
+
         // MUTABLE locals — the running box over the vertex block.
         float minX = source.positionX(0);
+
         float minY = source.positionY(0);
+
         float minZ = source.positionZ(0);
+
         float maxX = minX;
+
         float maxY = minY;
+
         float maxZ = minZ;
+
         for (int vertex = 1; vertex < vertices; vertex++)
         {
             final float x = source.positionX(vertex);
+
             final float y = source.positionY(vertex);
+
             final float z = source.positionZ(vertex);
+
             minX = Math.min(minX, x);
+
             minY = Math.min(minY, y);
+
             minZ = Math.min(minZ, z);
+
             maxX = Math.max(maxX, x);
+
             maxY = Math.max(maxY, y);
+
             maxZ = Math.max(maxZ, z);
         }
+
         box[0] = minX;
+
         box[1] = minY;
+
         box[2] = minZ;
+
         box[3] = maxX;
+
         box[4] = maxY;
+
         box[5] = maxZ;
+
         return box;
     }
 
@@ -1446,19 +1580,25 @@ public final class SoftwareRenderPort implements I_RenderPort
     private static int[] buildTriangleMaterials(final ModelFormat source, final int triangles)
     {
         final int[] out = new int[triangles];
+
         Arrays.fill(out, Rasterizer.NO_MATERIAL);
+
         for (int submesh = 0; submesh < source.submeshCount(); submesh++)
         {
             final int firstTriangle =
                 source.submeshFirstIndex(submesh) / ModelFormat.INDICES_PER_TRIANGLE;
+
             final int span =
                 source.submeshIndexCount(submesh) / ModelFormat.INDICES_PER_TRIANGLE;
+
             final int texture = source.submeshTextureIndex(submesh);
+
             for (int triangle = firstTriangle; triangle < firstTriangle + span; triangle++)
             {
                 out[triangle] = texture;
             }
         }
+
         return out;
     }
 
@@ -1466,11 +1606,14 @@ public final class SoftwareRenderPort implements I_RenderPort
     private static int[] buildTriangleColors(final ModelFormat source, final int triangles)
     {
         final int[] out = new int[triangles];
+
         final int[] indices = source.indices();
+
         for (int triangle = 0; triangle < triangles; triangle++)
         {
             out[triangle] = source.colour(indices[triangle * ModelFormat.INDICES_PER_TRIANGLE]);
         }
+
         return out;
     }
 
@@ -1478,10 +1621,12 @@ public final class SoftwareRenderPort implements I_RenderPort
     private static MipChain[] buildTextures(final ModelFormat source)
     {
         final MipChain[] out = new MipChain[source.textureCount()];
+
         for (int texture = 0; texture < out.length; texture++)
         {
             out[texture] = source.mipChain(texture);
         }
+
         return out;
     }
 
@@ -1505,7 +1650,9 @@ public final class SoftwareRenderPort implements I_RenderPort
         {
             return;
         }
+
         frameLock.lock();
+
         try
         {
             drawFrame(scene, ticIndex);
@@ -1534,6 +1681,7 @@ public final class SoftwareRenderPort implements I_RenderPort
         {
             throw failure;
         }
+
         LOG.debug("Frame {} abandoned: the worker pool stopped mid-frame", ticIndex);
     }
 
@@ -1542,10 +1690,15 @@ public final class SoftwareRenderPort implements I_RenderPort
     private void drawFrame(final Scene current, final int ticIndex)
     {
         final long started = time.nanos();
+
         final long passesBefore = parallelPasses + rasterizerPasses();
+
         final Camera view = cameraFor(current, ticIndex);
+
         this.lastCamera = view;
+
         this.geometryNear = view.near();
+
         final I_ThreadPoolPort workers = activePool();
 
         // Null unless the scene tags something, in which case it is the whole
@@ -1556,7 +1709,9 @@ public final class SoftwareRenderPort implements I_RenderPort
         // id buffer unconditionally: that is a third full-frame memset — 3.7 MB
         // at 720p — and an untagged scene must not pay it.
         framebuffer.clearColor(DEFAULT_CLEAR_COLOR);
+
         framebuffer.clearDepth();
+
         if (tagged != null)
         {
             framebuffer.clearEntityIds();
@@ -1567,6 +1722,7 @@ public final class SoftwareRenderPort implements I_RenderPort
         // the whole opaque partition is culled the pass costs no parallel
         // dispatches at all, because renderPass sees a zero triangle total.
         final int visible = packVisibleWorld(current, view, tagged);
+
         // MUTABLE local — triangles the whole scene handed the rasterizer.
         int triangles = renderPass(visibleWorld, visible, visibleWorldStarts,
             visibleWorldTransforms, visibleWorldIds, spanRenderer, sceneTextures, workers);
@@ -1588,6 +1744,7 @@ public final class SoftwareRenderPort implements I_RenderPort
         if (tagged != null && outlineEnabled && aimedEntityId != Scene.UNTAGGED)
         {
             this.parallelPasses = parallelPasses + 1L;
+
             outlinePass.draw(framebuffer, workers, aimedEntityId);
         }
 
@@ -1610,10 +1767,13 @@ public final class SoftwareRenderPort implements I_RenderPort
         // instances are always UNTAGGED, so the pass writes none, and the
         // outline has already been drawn.
         final Instance[] hand = viewInstances;
+
         if (hand.length > 0)
         {
             framebuffer.clearDepth();
+
             packView(current, view, hand.length);
+
             triangles += renderPass(hand, hand.length, viewStarts, viewTransforms, null,
                 spanRenderer, sceneTextures, workers);
         }
@@ -1633,10 +1793,14 @@ public final class SoftwareRenderPort implements I_RenderPort
         }
 
         publishFrame();
+
         this.lastFrameTriangles = triangles;
+
         this.lastFrameParallelPasses =
             (int) (parallelPasses + rasterizerPasses() - passesBefore);
+
         this.lastFrameNanos = time.nanos() - started;
+
         this.framesRendered = framesRendered + 1;
     }
 
@@ -1680,6 +1844,7 @@ public final class SoftwareRenderPort implements I_RenderPort
         {
             return Scene.UNTAGGED;
         }
+
         return framebuffer.entityIdAt(framebuffer.width() / 2, framebuffer.height() / 2);
     }
 
@@ -1699,36 +1864,53 @@ public final class SoftwareRenderPort implements I_RenderPort
     private int packVisibleWorld(final Scene current, final Camera view, final int[] tagged)
     {
         final Instance[] all = worldInstances;
+
         final Instance[] kept = visibleWorld;
+
         final int[] starts = visibleWorldStarts;
+
         final float[] slots = visibleWorldTransforms;
+
         final int[] keptIds = visibleWorldIds;
+
         final Mat4[] moved = worldOverrides;
+
         // The pass position and the scene index are the same number only for an
         // entirely opaque scene; the override table is addressed by the latter.
         final int[] sceneOf = worldSceneIndex;
+
         final float near = view.near();
 
         starts[0] = 0;
+
         // MUTABLE local — the write cursor, and therefore the kept count.
         int count = 0;
+
         for (int index = 0; index < all.length; index++)
         {
             final int at = count * Camera.WORLD_TO_CLIP_FLOATS;
+
             view.packModelToClip(placementOf(current, moved, sceneOf[index]), slots, at);
+
             final Instance instance = all[index];
+
             if (InstanceCull.isOutsideFrustum(slots, at, near, instance.bounds, 0))
             {
                 continue;
             }
+
             kept[count] = instance;
+
             starts[count + 1] = starts[count] + instance.model.triangleCount();
+
             if (keptIds != null)
             {
                 keptIds[count] = tagged[index];
             }
+
             count++;
         }
+
         return count;
     }
 
@@ -1740,6 +1922,7 @@ public final class SoftwareRenderPort implements I_RenderPort
         {
             return moved[index];
         }
+
         return current.worldTransform(index);
     }
 
@@ -1748,6 +1931,7 @@ public final class SoftwareRenderPort implements I_RenderPort
     private void packView(final Scene current, final Camera view, final int count)
     {
         final float[] slots = viewTransforms;
+
         for (int index = 0; index < count; index++)
         {
             view.packViewToClip(current.viewTransform(index), slots,
@@ -1769,28 +1953,42 @@ public final class SoftwareRenderPort implements I_RenderPort
         final MipChain[] textures, final I_ThreadPoolPort workers)
     {
         final int total = starts[count];
+
         if (total == 0)
         {
             return 0;
         }
+
         this.geometryInstances = instances;
+
         this.geometryInstanceCount = count;
+
         this.geometryStarts = starts;
+
         this.geometryTransforms = transforms;
+
         this.geometryEntityIds = instanceEntityIds;
+
         this.geometryTriangles = total;
+
         dispatch(geometryJob, chunkCount, workers);
+
         final int triangles = compactChunks(total);
+
         if (triangles == 0)
         {
             return 0;
         }
 
         final Rasterizer setup = rasterizer;
+
         setup.beginFrame(framebuffer);
+
         setup.setupAndBin(clipVertices, triangles, clipMaterials, clipColors,
             idStreamFor(instanceEntityIds), workers);
+
         setup.rasterize(renderer, textures, workers);
+
         return triangles;
     }
 
@@ -1844,30 +2042,41 @@ public final class SoftwareRenderPort implements I_RenderPort
         final I_ThreadPoolPort workers)
     {
         final int[] indices = translucentScene;
+
         if (indices == null)
         {
             return 0;
         }
+
         final int visible = sortBackToFront(current, view, indices);
 
         final int[] order = translucentOrder;
+
         final int[] coverage = translucentCoverage;
+
         // MUTABLE locals — triangles submitted so far, and the cursor walking
         // the sorted list one equal-coverage run at a time.
         int triangles = 0;
+
         int from = 0;
+
         while (from < visible)
         {
             final int level = coverage[order[from]];
+
             // MUTABLE local — the end of the run starting at `from`.
             int to = from;
+
             while (to < visible && coverage[order[to]] == level)
             {
                 to++;
             }
+
             triangles += drawTranslucentRun(current, view, from, to, level, workers);
+
             from = to;
         }
+
         return triangles;
     }
 
@@ -1901,45 +2110,67 @@ public final class SoftwareRenderPort implements I_RenderPort
     private int sortBackToFront(final Scene current, final Camera view, final int[] indices)
     {
         final Mat4[] moved = worldOverrides;
+
         final Vec3 eye = view.eye();
+
         final Vec3 forward = view.forward();
+
         final float[] depths = translucentDepth;
+
         final int[] order = translucentOrder;
+
         final Instance[] all = translucentInstances;
+
         final float[] scratch = cullTransform;
+
         final float near = view.near();
 
         // MUTABLE local — the write cursor into the visible prefix of `order`.
         int visible = 0;
+
         for (int slot = 0; slot < indices.length; slot++)
         {
             final Mat4 placement = placementOf(current, moved, indices[slot]);
+
             view.packModelToClip(placement, scratch, 0);
+
             if (InstanceCull.isOutsideFrustum(scratch, 0, near, all[slot].bounds, 0))
             {
                 continue;
             }
+
             final float dx = placement.get(0, Mat4.ORDER - 1) - eye.x();
+
             final float dy = placement.get(1, Mat4.ORDER - 1) - eye.y();
+
             final float dz = placement.get(2, Mat4.ORDER - 1) - eye.z();
+
             depths[slot] = dx * forward.x() + dy * forward.y() + dz * forward.z();
+
             order[visible] = slot;
+
             visible++;
         }
 
         for (int slot = 1; slot < visible; slot++)
         {
             final int moving = order[slot];
+
             final float depth = depths[moving];
+
             // MUTABLE local — the gap the moving entry is sifted down through.
             int gap = slot - 1;
+
             while (gap >= 0 && depths[order[gap]] < depth)
             {
                 order[gap + 1] = order[gap];
+
                 gap--;
             }
+
             order[gap + 1] = moving;
         }
+
         return visible;
     }
 
@@ -1953,23 +2184,35 @@ public final class SoftwareRenderPort implements I_RenderPort
         final int to, final int coverage, final I_ThreadPoolPort workers)
     {
         final Instance[] pass = translucentPassInstances;
+
         final int[] starts = translucentPassStarts;
+
         final float[] slots = translucentPassTransforms;
+
         final Instance[] all = translucentInstances;
+
         final int[] indices = translucentScene;
+
         final int[] order = translucentOrder;
+
         final Mat4[] moved = worldOverrides;
 
         final int count = to - from;
+
         starts[0] = 0;
+
         for (int slot = 0; slot < count; slot++)
         {
             final int which = order[from + slot];
+
             pass[slot] = all[which];
+
             starts[slot + 1] = starts[slot] + pass[slot].model.triangleCount();
+
             view.packModelToClip(placementOf(current, moved, indices[which]), slots,
                 slot * Camera.WORLD_TO_CLIP_FLOATS);
         }
+
         return renderPass(pass, count, starts, slots, null, blendedRenderers[coverage],
             null, workers);
     }
@@ -1983,6 +2226,7 @@ public final class SoftwareRenderPort implements I_RenderPort
         {
             return null;
         }
+
         return clipEntityIds;
     }
 
@@ -2003,25 +2247,37 @@ public final class SoftwareRenderPort implements I_RenderPort
     private void runGeometryChunk(final int chunk)
     {
         final Instance[] instances = geometryInstances;
+
         final int[] starts = geometryStarts;
+
         final int from = chunkStart(chunk, geometryTriangles);
+
         final int to = chunkStart(chunk + 1, geometryTriangles);
+
         final int outBase = from * CLIP_EXPANSION;
 
         // MUTABLE locals — the flat triangle reached, the instance it belongs
         // to, and the output triangles emitted so far.
         int flat = from;
+
         int index = instanceContaining(starts, geometryInstanceCount, from);
+
         int produced = 0;
+
         while (flat < to)
         {
             final int instanceEnd = starts[index + 1];
+
             final int runEnd = Math.min(to, instanceEnd);
+
             produced += clipRun(chunk, instances[index], index, flat - starts[index],
                 runEnd - starts[index], outBase + produced);
+
             flat = runEnd;
+
             index++;
         }
+
         chunkProduced[chunk] = produced;
     }
 
@@ -2037,6 +2293,7 @@ public final class SoftwareRenderPort implements I_RenderPort
                 return index;
             }
         }
+
         return Math.max(0, count - 1);
     }
 
@@ -2047,16 +2304,27 @@ public final class SoftwareRenderPort implements I_RenderPort
         final int localFrom, final int localTo, final int outBase)
     {
         final ModelFormat current = instance.model;
+
         final float near = geometryNear;
+
         final float[] transforms = geometryTransforms;
+
         final int transformAt = instanceIndex * Camera.WORLD_TO_CLIP_FLOATS;
+
         final int[] indices = current.indices();
+
         final float[] scratch = chunkScratch[chunk];
+
         final TriangleClipper clipper = clippers[chunk];
+
         final float[] out = clipVertices;
+
         final int[] materials = clipMaterials;
+
         final int[] colors = clipColors;
+
         final int[] sourceMaterial = instance.triangleMaterial;
+
         final int[] sourceColor = instance.triangleColor;
 
         // Null for the viewmodel pass and for every untagged scene, in which
@@ -2064,26 +2332,34 @@ public final class SoftwareRenderPort implements I_RenderPort
         // read here from the instance index rather than from `instance`, whose
         // prepared entry is shared between duplicate models.
         final int[] entityOut = passEntityOut();
+
         final int entityId = passEntityId(instanceIndex);
 
         // MUTABLE local — output triangles this run has emitted so far.
         int produced = 0;
+
         for (int triangle = localFrom; triangle < localTo; triangle++)
         {
             gatherTriangle(current, indices, triangle, transforms, transformAt, scratch);
+
             final int emitted = clipper.clipTriangle(near, scratch, 0, out,
                 (outBase + produced) * TRIANGLE_FLOATS);
+
             for (int k = 0; k < emitted; k++)
             {
                 materials[outBase + produced + k] = sourceMaterial[triangle];
+
                 colors[outBase + produced + k] = sourceColor[triangle];
             }
+
             if (entityOut != null)
             {
                 writeEntityIds(entityOut, outBase + produced, emitted, entityId);
             }
+
             produced += emitted;
         }
+
         return produced;
     }
 
@@ -2094,6 +2370,7 @@ public final class SoftwareRenderPort implements I_RenderPort
         {
             return null;
         }
+
         return clipEntityIds;
     }
 
@@ -2101,10 +2378,12 @@ public final class SoftwareRenderPort implements I_RenderPort
     private int passEntityId(final int instanceIndex)
     {
         final int[] ids = geometryEntityIds;
+
         if (ids == null)
         {
             return Scene.UNTAGGED;
         }
+
         return ids[instanceIndex];
     }
 
@@ -2134,13 +2413,18 @@ public final class SoftwareRenderPort implements I_RenderPort
         final float[] scratch)
     {
         final int base = triangle * ModelFormat.INDICES_PER_TRIANGLE;
+
         for (int corner = 0; corner < TriangleClipper.TRIANGLE_VERTICES; corner++)
         {
             final int vertex = indices[base + corner];
+
             final int at = corner * VERTEX_STRIDE;
+
             Camera.transformToClip(transform, transformAt, source.positionX(vertex),
                 source.positionY(vertex), source.positionZ(vertex), scratch, at);
+
             scratch[at + TriangleClipper.POSITION_FLOATS] = source.texCoordU(vertex);
+
             scratch[at + TriangleClipper.POSITION_FLOATS + 1] = source.texCoordV(vertex);
         }
     }
@@ -2155,31 +2439,42 @@ public final class SoftwareRenderPort implements I_RenderPort
     private int compactChunks(final int triangles)
     {
         final float[] out = clipVertices;
+
         final int[] materials = clipMaterials;
+
         final int[] colors = clipColors;
+
         // Null when this pass wrote no ids, in which case there is nothing to
         // close the gaps in.
         final int[] entityOut = passEntityOut();
 
         // MUTABLE local — the compacted output cursor, in triangles.
         int cursor = 0;
+
         for (int chunk = 0; chunk < chunkCount; chunk++)
         {
             final int source = chunkStart(chunk, triangles) * CLIP_EXPANSION;
+
             final int emitted = chunkProduced[chunk];
+
             if (emitted > 0 && cursor != source)
             {
                 System.arraycopy(out, source * TRIANGLE_FLOATS, out, cursor * TRIANGLE_FLOATS,
                     emitted * TRIANGLE_FLOATS);
+
                 System.arraycopy(materials, source, materials, cursor, emitted);
+
                 System.arraycopy(colors, source, colors, cursor, emitted);
+
                 if (entityOut != null)
                 {
                     System.arraycopy(entityOut, source, entityOut, cursor, emitted);
                 }
             }
+
             cursor += emitted;
         }
+
         return cursor;
     }
 
@@ -2194,14 +2489,17 @@ public final class SoftwareRenderPort implements I_RenderPort
         final I_ThreadPoolPort workers)
     {
         this.parallelPasses = parallelPasses + 1L;
+
         if (workers == null)
         {
             for (int index = 0; index < jobCount; index++)
             {
                 job.runJob(index);
             }
+
             return;
         }
+
         workers.submitParallel(job, jobCount);
     }
 
@@ -2216,10 +2514,12 @@ public final class SoftwareRenderPort implements I_RenderPort
     private I_ThreadPoolPort activePool()
     {
         final I_ThreadPoolPort workers = pool;
+
         if (workers == null || workers.state() != I_ThreadPoolPort.State.RUNNING)
         {
             return null;
         }
+
         return workers;
     }
 
@@ -2252,10 +2552,12 @@ public final class SoftwareRenderPort implements I_RenderPort
     private Camera cameraFor(final Scene current, final int ticIndex)
     {
         final Camera fixed = camera;
+
         if (fixed != null)
         {
             return fixed;
         }
+
         if (current.worldInstanceCount() == 0)
         {
             // Nothing to frame — a view-only scene needs a frustum, not a
@@ -2263,6 +2565,7 @@ public final class SoftwareRenderPort implements I_RenderPort
             return Camera.create(ORIGIN, VIEW_FORWARD, WORLD_UP, DEFAULT_FOV_Y, aspect(),
                 DEFAULT_NEAR);
         }
+
         return orbitCamera(current.worldModel(0), aspect(),
             ticIndex * ORBIT_RADIANS_PER_TIC);
     }
@@ -2287,26 +2590,35 @@ public final class SoftwareRenderPort implements I_RenderPort
         final float angleRadians)
     {
         final float centreX = (source.minX() + source.maxX()) * 0.5f;
+
         final float centreY = (source.minY() + source.maxY()) * 0.5f;
+
         final float centreZ = (source.minZ() + source.maxZ()) * 0.5f;
 
         final float spanX = source.maxX() - source.minX();
+
         final float spanY = source.maxY() - source.minY();
+
         final float spanZ = source.maxZ() - source.minZ();
+
         // MUTABLE local — the half-diagonal of the bounding box, floored so a
         // degenerate (flat or empty) model still gets a usable distance.
         float radius = 0.5f * (float) Math.sqrt(spanX * spanX + spanY * spanY + spanZ * spanZ);
+
         if (!(radius > 0.0f))
         {
             radius = 1.0f;
         }
 
         final float distance = radius * ORBIT_DISTANCE_FACTOR;
+
         final Vec3 eye = new Vec3(
             centreX + distance * (float) Math.sin(angleRadians),
             centreY + radius * ORBIT_HEIGHT_FACTOR,
             centreZ + distance * (float) Math.cos(angleRadians));
+
         final Vec3 target = new Vec3(centreX, centreY, centreZ);
+
         return Camera.lookingAt(eye, target, WORLD_UP, DEFAULT_FOV_Y, viewAspect, DEFAULT_NEAR);
     }
 
@@ -2335,19 +2647,23 @@ public final class SoftwareRenderPort implements I_RenderPort
     public boolean copyColorInto(final int[] destination)
     {
         presentLock.lock();
+
         try
         {
             if (!framePublished)
             {
                 return false;
             }
+
             if (destination == null || destination.length < presentPixels)
             {
                 throw new IllegalArgumentException("copyColorInto() needs an int["
                     + presentPixels + "] for a " + framebuffer.width() + "x"
                     + framebuffer.height() + " frame");
             }
+
             System.arraycopy(frontColor, 0, destination, 0, presentPixels);
+
             return true;
         }
         finally
@@ -2368,16 +2684,22 @@ public final class SoftwareRenderPort implements I_RenderPort
     private void publishFrame()
     {
         final int[] target = backColor;
+
         if (target == null || target.length != presentPixels)
         {
             return;
         }
+
         framebuffer.copyColorTo(target);
+
         presentLock.lock();
+
         try
         {
             this.backColor = frontColor;
+
             this.frontColor = target;
+
             this.framePublished = true;
         }
         finally
@@ -2536,10 +2858,12 @@ public final class SoftwareRenderPort implements I_RenderPort
     private long rasterizerPasses()
     {
         final Rasterizer current = rasterizer;
+
         if (current == null)
         {
             return 0L;
         }
+
         return current.parallelPasses();
     }
 
@@ -2609,9 +2933,13 @@ public final class SoftwareRenderPort implements I_RenderPort
             final MipChain[] instanceTextures, final float[] modelBounds)
         {
             this.model = instanceModel;
+
             this.triangleMaterial = materials;
+
             this.triangleColor = colors;
+
             this.textures = instanceTextures;
+
             this.bounds = modelBounds;
         }
     }

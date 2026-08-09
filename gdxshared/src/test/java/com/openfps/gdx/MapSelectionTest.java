@@ -64,6 +64,7 @@ class MapSelectionTest
             final MapSelection selection = new MapSelection();
 
             assertThat(selection.currentMapId()).isEqualTo("cornerstone");
+
             assertThat(selection.currentMapId()).isEqualTo(MapSelection.DEFAULT_MAP_ID);
         }
 
@@ -113,6 +114,7 @@ class MapSelectionTest
             assertThatThrownBy(() -> selection.setCurrentMapId(""))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("must not be null or blank");
+
             assertThatThrownBy(() -> selection.setCurrentMapId("   "))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("must not be null or blank");
@@ -143,7 +145,9 @@ class MapSelectionTest
             // Without that push the picker label and the launcher's read of
             // currentMapId would agree only by coincidence.
             final MapSelection selection = new MapSelection();
+
             final Recorder recorder = new Recorder();
+
             selection.onChange(recorder);
 
             assertThat(recorder.seen).isEmpty();
@@ -154,11 +158,15 @@ class MapSelectionTest
         void shouldReportEveryChange()
         {
             final MapSelection selection = new MapSelection();
+
             final Recorder recorder = new Recorder();
+
             selection.onChange(recorder);
 
             selection.setCurrentMapId("overpass");
+
             selection.setCurrentMapId("tripoint");
+
             selection.setCurrentMapId("extraction");
 
             assertThat(recorder.seen).containsExactly("overpass", "tripoint", "extraction");
@@ -172,14 +180,19 @@ class MapSelectionTest
             // so this is not a hypothetical caller: it is the one that has to
             // be free, exactly as the same call is on AccessibilitySettings.
             final MapSelection selection = new MapSelection();
+
             final Recorder recorder = new Recorder();
+
             selection.onChange(recorder);
 
             selection.setCurrentMapId("cornerstone");
+
             assertThat(recorder.seen).isEmpty();
 
             selection.setCurrentMapId("overpass");
+
             selection.setCurrentMapId("overpass");
+
             assertThat(recorder.seen).containsExactly("overpass");
         }
 
@@ -188,14 +201,19 @@ class MapSelectionTest
         void shouldStopReportingWhenDetached()
         {
             final MapSelection selection = new MapSelection();
+
             final Recorder recorder = new Recorder();
+
             selection.onChange(recorder);
+
             selection.setCurrentMapId("overpass");
 
             selection.onChange(null);
+
             selection.setCurrentMapId("tripoint");
 
             assertThat(recorder.seen).containsExactly("overpass");
+
             assertThat(selection.currentMapId()).isEqualTo("tripoint");
         }
 
@@ -220,6 +238,7 @@ class MapSelectionTest
         void shouldDescribeItself()
         {
             final MapSelection selection = new MapSelection();
+
             selection.setCurrentMapId("overpass");
 
             assertThat(selection.toString()).contains("overpass");

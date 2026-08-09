@@ -53,10 +53,15 @@ public final class Mat4
     public static Mat4 identity()
     {
         final float[] values = new float[ELEMENTS];
+
         values[0] = 1.0f;
+
         values[5] = 1.0f;
+
         values[10] = 1.0f;
+
         values[15] = 1.0f;
+
         return new Mat4(values);
     }
 
@@ -77,8 +82,11 @@ public final class Mat4
             throw new IllegalArgumentException(
                 "a 4x4 matrix needs " + ELEMENTS + " elements, got " + values.length);
         }
+
         final float[] copy = new float[ELEMENTS];
+
         System.arraycopy(values, 0, copy, 0, ELEMENTS);
+
         return new Mat4(copy);
     }
 
@@ -93,13 +101,21 @@ public final class Mat4
     public static Mat4 translation(final float tx, final float ty, final float tz)
     {
         final float[] values = new float[ELEMENTS];
+
         values[0] = 1.0f;
+
         values[5] = 1.0f;
+
         values[10] = 1.0f;
+
         values[15] = 1.0f;
+
         values[3] = tx;
+
         values[7] = ty;
+
         values[11] = tz;
+
         return new Mat4(values);
     }
 
@@ -115,19 +131,23 @@ public final class Mat4
     public Mat4 multiply(final Mat4 rhs)
     {
         final float[] out = new float[ELEMENTS];
+
         for (int row = 0; row < ORDER; row++)
         {
             for (int column = 0; column < ORDER; column++)
             {
                 // MUTABLE local — accumulator for one dot product.
                 float sum = 0.0f;
+
                 for (int k = 0; k < ORDER; k++)
                 {
                     sum += m[row * ORDER + k] * rhs.m[k * ORDER + column];
                 }
+
                 out[row * ORDER + column] = sum;
             }
         }
+
         return new Mat4(out);
     }
 
@@ -162,6 +182,7 @@ public final class Mat4
         for (int row = 0; row < ORDER; row++)
         {
             final int base = row * ORDER;
+
             out[outOffset + row] = m[base] * x + m[base + 1] * y + m[base + 2] * z + m[base + 3];
         }
     }
@@ -182,19 +203,24 @@ public final class Mat4
     public String toString()
     {
         final StringBuilder text = new StringBuilder("Mat4{");
+
         for (int row = 0; row < ORDER; row++)
         {
             text.append("\n  [");
+
             for (int column = 0; column < ORDER; column++)
             {
                 if (column > 0)
                 {
                     text.append(", ");
                 }
+
                 text.append(m[row * ORDER + column]);
             }
+
             text.append(']');
         }
+
         return text.append("\n}").toString();
     }
 }

@@ -221,6 +221,7 @@ public final class TouchLayout
             throw new IllegalArgumentException(
                 "density must be finite and positive, got " + screenDensity);
         }
+
         this.density = screenDensity;
     }
 
@@ -240,7 +241,9 @@ public final class TouchLayout
         {
             return;
         }
+
         this.width = surfaceWidth;
+
         this.height = surfaceHeight;
     }
 
@@ -469,6 +472,7 @@ public final class TouchLayout
         {
             return buttonRadius(region) * PRESSED_SCALE;
         }
+
         return buttonRadius(region);
     }
 
@@ -491,19 +495,23 @@ public final class TouchLayout
         {
             return REGION_NONE;
         }
+
         for (int index = 0; index < BUTTON_REGIONS.length; index++)
         {
             final int region = BUTTON_REGIONS[index];
+
             if (within(screenX, screenY, buttonCentreX(region), buttonCentreY(region),
                 buttonRadius(region)))
             {
                 return region;
             }
         }
+
         if (screenX < width * MOVE_HALF_FRACTION)
         {
             return REGION_MOVE_STICK;
         }
+
         return REGION_LOOK;
     }
 
@@ -563,13 +571,18 @@ public final class TouchLayout
         final float otherAnchor, final float otherCurrent)
     {
         final float along = current - anchor;
+
         final float across = otherCurrent - otherAnchor;
+
         final float distance = (float) Math.sqrt(along * along + across * across);
+
         final float range = stickRange();
+
         if (distance <= range || distance == 0.0f)
         {
             return along;
         }
+
         return along * range / distance;
     }
 
@@ -617,12 +630,16 @@ public final class TouchLayout
         final float currentX, final float currentY, final float numerator)
     {
         final float dx = currentX - anchorX;
+
         final float dy = currentY - anchorY;
+
         final float distance = (float) Math.sqrt(dx * dx + dy * dy);
+
         if (distance <= stickDeadZone())
         {
             return 0.0f;
         }
+
         return clampUnit(numerator / stickRange());
     }
 
@@ -631,7 +648,9 @@ public final class TouchLayout
         final float centreX, final float centreY, final float radius)
     {
         final float dx = x - centreX;
+
         final float dy = y - centreY;
+
         return (dx * dx) + (dy * dy) <= radius * radius;
     }
 
@@ -642,10 +661,12 @@ public final class TouchLayout
         {
             return 1.0f;
         }
+
         if (value < -1.0f)
         {
             return -1.0f;
         }
+
         return value;
     }
 

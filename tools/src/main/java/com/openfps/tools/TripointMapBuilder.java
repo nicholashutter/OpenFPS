@@ -106,14 +106,19 @@ public final class TripointMapBuilder
     public static void main(final String[] args)
     {
         final String out = option(args, "--out=");
+
         if (out == null)
         {
             LOG.error("usage: TripointMapBuilder --out=<directory>"
                 + " [--atlas=<colormap.png>]");
+
             return;
         }
+
         final String atlasOption = option(args, "--atlas=");
+
         final Path atlasPath;
+
         if (atlasOption == null)
         {
             atlasPath = null;
@@ -122,7 +127,9 @@ public final class TripointMapBuilder
         {
             atlasPath = Path.of(atlasOption);
         }
+
         final Path outDir = Path.of(out);
+
         try
         {
             Files.createDirectories(outDir);
@@ -131,8 +138,11 @@ public final class TripointMapBuilder
         {
             throw new UncheckedIOException("could not create output directory: " + outDir, e);
         }
+
         final byte[] bytes = build(atlasPath);
+
         final Path outFile = outDir.resolve(FILE_NAME);
+
         try
         {
             Files.write(outFile, bytes);
@@ -141,7 +151,9 @@ public final class TripointMapBuilder
         {
             throw new UncheckedIOException("could not write " + outFile, e);
         }
+
         final ModelFormat parsed = ModelFormat.read(bytes);
+
         LOG.info("Wrote {} ({} triangles, {} vertices, {} textures)",
             outFile, parsed.indexCount() / 3, parsed.vertexCount(), parsed.textureCount());
     }
@@ -174,7 +186,9 @@ public final class TripointMapBuilder
     public static byte[] build(final Path atlasPath)
     {
         final ModelBuilder builder = new ModelBuilder(MODEL_NAME);
+
         final int[] floorTexels;
+
         if (atlasPath != null)
         {
             floorTexels = KenneyTexture.forceOpaque(KenneyTexture.floor(atlasPath));
@@ -183,7 +197,9 @@ public final class TripointMapBuilder
         {
             floorTexels = floorTexels();
         }
+
         final int[] wallTexels;
+
         if (atlasPath != null)
         {
             wallTexels = KenneyTexture.forceOpaque(KenneyTexture.wall(atlasPath));
@@ -192,29 +208,44 @@ public final class TripointMapBuilder
         {
             wallTexels = wallTexels();
         }
+
         final int[] accentTexels = accentTexels();
+
         final int floorTexture = builder.addTexture("tripoint-floor", TEXTURE_EDGE,
             TEXTURE_EDGE, MipGenerator.generate(TEXTURE_EDGE, TEXTURE_EDGE, floorTexels));
+
         final int wallTexture = builder.addTexture("tripoint-wall", TEXTURE_EDGE,
             TEXTURE_EDGE, MipGenerator.generate(TEXTURE_EDGE, TEXTURE_EDGE, wallTexels));
+
         final int accentTexture = builder.addTexture("tripoint-accent", TEXTURE_EDGE,
             TEXTURE_EDGE, MipGenerator.generate(TEXTURE_EDGE, TEXTURE_EDGE, accentTexels));
 
         builder.beginSubmesh(floorTexture);
+
         addGroundSlab(builder);
+
         addApproachRoads(builder);
+
         addRoundabout(builder);
+
         builder.endSubmesh();
 
         builder.beginSubmesh(wallTexture);
+
         addPerimeterWalls(builder);
+
         addBackAlley(builder);
+
         addFlagStands(builder);
+
         addStreetlightBollards(builder);
+
         builder.endSubmesh();
 
         builder.beginSubmesh(accentTexture);
+
         addAccentGeometry(builder);
+
         builder.endSubmesh();
 
         return builder.toBytes();
@@ -258,11 +289,13 @@ public final class TripointMapBuilder
         // North approach: from the roundabout (z=180) up to FLAG_A
         // (z=48), at x=144..176.
         addBox(builder, 144.0f, 0.0f, 48.0f, 176.0f, 2.0f, 200.0f);
+
         // South-east approach: from the roundabout to FLAG_C_SE
         // (x=240, z=240). The road is a 32-wide strip running
         // diagonally; approximated as a 32-wide strip at the SE
         // quadrant.
         addBox(builder, 200.0f, 0.0f, 144.0f, 264.0f, 2.0f, 200.0f);
+
         // South-west approach: from the roundabout to FLAG_C_SW
         // (x=80, z=240).
         addBox(builder, 56.0f, 0.0f, 144.0f, 120.0f, 2.0f, 200.0f);
@@ -289,10 +322,15 @@ public final class TripointMapBuilder
     private static void addPerimeterWalls(final ModelBuilder builder)
     {
         final float halfWallHeight = 32.0f;
+
         final float e = HALF_EXTENT;
+
         addBox(builder, -e, 0.0f, -e - WALL_THICKNESS, e, halfWallHeight, -e);
+
         addBox(builder, -e, 0.0f, e, e, halfWallHeight, e + WALL_THICKNESS);
+
         addBox(builder, -e - WALL_THICKNESS, 0.0f, -e, -e, halfWallHeight, e);
+
         addBox(builder, e, 0.0f, -e, e + WALL_THICKNESS, halfWallHeight, e);
     }
 
@@ -306,6 +344,7 @@ public final class TripointMapBuilder
     private static void addBackAlley(final ModelBuilder builder)
     {
         addBox(builder, 80.0f, 0.0f, 196.0f, 140.0f, 24.0f, 204.0f);
+
         addBox(builder, 180.0f, 0.0f, 196.0f, 240.0f, 24.0f, 204.0f);
     }
 
@@ -319,8 +358,10 @@ public final class TripointMapBuilder
     {
         // FLAG_A: north
         addBox(builder, 156.0f, 0.0f, 44.0f, 164.0f, FLAG_STAND_HEIGHT, 52.0f);
+
         // FLAG_C_SE: south-east
         addBox(builder, 236.0f, 0.0f, 236.0f, 244.0f, FLAG_STAND_HEIGHT, 244.0f);
+
         // FLAG_C_SW: south-west
         addBox(builder, 76.0f, 0.0f, 236.0f, 84.0f, FLAG_STAND_HEIGHT, 244.0f);
     }
@@ -334,10 +375,13 @@ public final class TripointMapBuilder
     {
         // NW corner
         addBox(builder, 104.0f, 0.0f, 124.0f, 112.0f, 32.0f, 132.0f);
+
         // NE corner
         addBox(builder, 208.0f, 0.0f, 124.0f, 216.0f, 32.0f, 132.0f);
+
         // SW corner
         addBox(builder, 104.0f, 0.0f, 228.0f, 112.0f, 32.0f, 236.0f);
+
         // SE corner
         addBox(builder, 208.0f, 0.0f, 228.0f, 216.0f, 32.0f, 236.0f);
     }
@@ -353,9 +397,11 @@ public final class TripointMapBuilder
         // FLAG_A pole
         addBox(builder, 159.0f, FLAG_STAND_HEIGHT, 47.0f, 161.0f,
             FLAG_STAND_HEIGHT + 8.0f, 49.0f);
+
         // FLAG_C_SE pole
         addBox(builder, 239.0f, FLAG_STAND_HEIGHT, 239.0f, 241.0f,
             FLAG_STAND_HEIGHT + 8.0f, 241.0f);
+
         // FLAG_C_SW pole
         addBox(builder, 79.0f, FLAG_STAND_HEIGHT, 239.0f, 81.0f,
             FLAG_STAND_HEIGHT + 8.0f, 241.0f);
@@ -369,14 +415,19 @@ public final class TripointMapBuilder
     {
         // +x face
         addFace(builder, maxX, minY, maxZ, maxX, maxY, maxZ, maxX, maxY, minZ, maxX, minY, minZ);
+
         // -x face
         addFace(builder, minX, minY, minZ, minX, maxY, minZ, minX, maxY, maxZ, minX, minY, maxZ);
+
         // +y face
         addFace(builder, minX, maxY, maxZ, maxX, maxY, maxZ, maxX, maxY, minZ, minX, maxY, minZ);
+
         // -y face
         addFace(builder, minX, minY, minZ, maxX, minY, minZ, maxX, minY, maxZ, minX, minY, maxZ);
+
         // +z face
         addFace(builder, minX, minY, maxZ, minX, maxY, maxZ, maxX, maxY, maxZ, maxX, minY, maxZ);
+
         // -z face
         addFace(builder, maxX, minY, minZ, maxX, maxY, minZ, minX, maxY, minZ, minX, minY, minZ);
     }
@@ -389,15 +440,21 @@ public final class TripointMapBuilder
         final float cy, final float cz, final float dx, final float dy, final float dz)
     {
         final float uScale = 1.0f / WORLD_UNITS_PER_TILE;
+
         final int a = builder.addVertex(ax, ay, az, ax * uScale, az * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         final int b = builder.addVertex(bx, by, bz, bx * uScale, bz * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         final int c = builder.addVertex(cx, cy, cz, cx * uScale, cz * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         final int d = builder.addVertex(dx, dy, dz, dx * uScale, dz * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         builder.addTriangle(a, b, c);
+
         builder.addTriangle(a, c, d);
     }
 
@@ -408,51 +465,66 @@ public final class TripointMapBuilder
     private static int[] floorTexels()
     {
         final int base = Rgba.pack(86, 88, 92, 255);
+
         final int line = Rgba.pack(140, 144, 152, 255);
+
         final int[] out = new int[TEXTURE_EDGE * TEXTURE_EDGE];
+
         for (int y = 0; y < TEXTURE_EDGE; y++)
         {
             for (int x = 0; x < TEXTURE_EDGE; x++)
             {
                 int colour = base;
+
                 if (x == 0 || y == 0 || x == TEXTURE_EDGE - 1 || y == TEXTURE_EDGE - 1)
                 {
                     colour = line;
                 }
+
                 out[y * TEXTURE_EDGE + x] = colour;
             }
         }
+
         return out;
     }
 
     private static int[] wallTexels()
     {
         final int base = Rgba.pack(120, 124, 132, 255);
+
         final int shade = Rgba.pack(88, 92, 100, 255);
+
         final int[] out = new int[TEXTURE_EDGE * TEXTURE_EDGE];
+
         for (int y = 0; y < TEXTURE_EDGE; y++)
         {
             for (int x = 0; x < TEXTURE_EDGE; x++)
             {
                 int colour = base;
+
                 if ((x / 8 + y / 8) % 2 == 0)
                 {
                     colour = shade;
                 }
+
                 out[y * TEXTURE_EDGE + x] = colour;
             }
         }
+
         return out;
     }
 
     private static int[] accentTexels()
     {
         final int colour = Rgba.pack(220, 48, 48, 255);
+
         final int[] out = new int[TEXTURE_EDGE * TEXTURE_EDGE];
+
         for (int index = 0; index < out.length; index++)
         {
             out[index] = colour;
         }
+
         return out;
     }
 
@@ -465,6 +537,7 @@ public final class TripointMapBuilder
                 return arg.substring(prefix.length());
             }
         }
+
         return null;
     }
 }

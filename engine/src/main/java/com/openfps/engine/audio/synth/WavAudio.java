@@ -94,35 +94,54 @@ public final class WavAudio
         {
             throw new IllegalArgumentException("samples must not be null");
         }
+
         if (sampleRate <= 0)
         {
             throw new IllegalArgumentException("sampleRate must be positive, got " + sampleRate);
         }
+
         final int dataBytes = samples.length * BYTES_PER_SAMPLE;
+
         final byte[] out = new byte[HEADER_BYTES + dataBytes];
+
         int at = 0;
+
         at = ascii(out, at, "RIFF");
+
         // Total minus the eight bytes already written — the field that is
         // wrong in half the WAV writers ever published.
         at = int32(out, at, out.length - RIFF_PREAMBLE_BYTES);
+
         at = ascii(out, at, "WAVE");
+
         at = ascii(out, at, "fmt ");
+
         at = int32(out, at, FMT_CHUNK_BYTES);
+
         at = int16(out, at, FORMAT_PCM);
+
         at = int16(out, at, CHANNELS);
+
         at = int32(out, at, sampleRate);
+
         // Byte rate and block align are both derivable, and both are stored
         // anyway because the format stores them. A player that trusts them over
         // the other fields must still be told the truth.
         at = int32(out, at, sampleRate * CHANNELS * BYTES_PER_SAMPLE);
+
         at = int16(out, at, CHANNELS * BYTES_PER_SAMPLE);
+
         at = int16(out, at, BITS_PER_SAMPLE);
+
         at = ascii(out, at, "data");
+
         at = int32(out, at, dataBytes);
+
         for (final short sample : samples)
         {
             at = int16(out, at, sample);
         }
+
         return out;
     }
 
@@ -131,11 +150,14 @@ public final class WavAudio
     private static int ascii(final byte[] out, final int offset, final String tag)
     {
         int at = offset;
+
         for (int index = 0; index < tag.length(); index++)
         {
             out[at] = (byte) tag.charAt(index);
+
             at++;
         }
+
         return at;
     }
 
@@ -143,9 +165,13 @@ public final class WavAudio
     private static int int32(final byte[] out, final int offset, final int value)
     {
         out[offset] = (byte) (value & BYTE_MASK);
+
         out[offset + 1] = (byte) ((value >> 8) & BYTE_MASK);
+
         out[offset + 2] = (byte) ((value >> 16) & BYTE_MASK);
+
         out[offset + 3] = (byte) ((value >> 24) & BYTE_MASK);
+
         return offset + 4;
     }
 
@@ -153,7 +179,9 @@ public final class WavAudio
     private static int int16(final byte[] out, final int offset, final int value)
     {
         out[offset] = (byte) (value & BYTE_MASK);
+
         out[offset + 1] = (byte) ((value >> 8) & BYTE_MASK);
+
         return offset + 2;
     }
 }

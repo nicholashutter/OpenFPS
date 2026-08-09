@@ -58,7 +58,9 @@ public final class KenneySwatch
     public KenneySwatch(final String name, final int swatchCol, final int swatchRow)
     {
         this.name = name;
+
         this.swatchCol = swatchCol;
+
         this.swatchRow = swatchRow;
     }
 
@@ -75,16 +77,22 @@ public final class KenneySwatch
     {
         factory.registerSwatch(NAME_FLOOR, new KenneySwatch(NAME_FLOOR,
             KenneyTexture.FLOOR_SWATCH_COL, KenneyTexture.FLOOR_SWATCH_ROW));
+
         factory.registerSwatch(NAME_WALL, new KenneySwatch(NAME_WALL,
             KenneyTexture.WALL_SWATCH_COL, KenneyTexture.WALL_SWATCH_ROW));
+
         factory.registerSwatch(NAME_CRATE, new KenneySwatch(NAME_CRATE,
             KenneyTexture.CRATE_SWATCH_COL, KenneyTexture.CRATE_SWATCH_ROW));
+
         factory.registerSwatch(NAME_COLUMN, new KenneySwatch(NAME_COLUMN,
             KenneyTexture.COLUMN_SWATCH_COL, KenneyTexture.COLUMN_SWATCH_ROW));
+
         factory.registerSwatch(NAME_ACCENT, new KenneySwatch(NAME_ACCENT,
             KenneyTexture.ACCENT_SWATCH_COL, KenneyTexture.ACCENT_SWATCH_ROW));
+
         factory.registerSwatch(NAME_ACCENT_RED, new KenneySwatch(NAME_ACCENT_RED,
             KenneyTexture.ACCENT2_SWATCH_COL, KenneyTexture.ACCENT2_SWATCH_ROW));
+
         factory.registerSwatch(NAME_ACCENT_ORANGE, new KenneySwatch(NAME_ACCENT_ORANGE,
             KenneyTexture.ACCENT3_SWATCH_COL, KenneyTexture.ACCENT3_SWATCH_ROW));
     }
@@ -126,6 +134,7 @@ public final class KenneySwatch
         {
             return null;
         }
+
         return KenneyTexture.readSwatch(atlasPath, swatchCol, swatchRow);
     }
 }

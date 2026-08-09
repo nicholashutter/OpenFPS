@@ -82,17 +82,29 @@ public final class EngineSession
                   final I_WindowPort window)
     {
         this.memory = memory;
+
         this.hal = hal;
+
         this.bus = bus;
+
         this.subsystems = subsystems;
+
         this.pool = pool;
+
         this.loop = loop;
+
         this.loopThread = loopThread;
+
         this.userProfilePort = userProfilePort;
+
         this.profile = profile;
+
         this.timePort = timePort;
+
         this.window = window;
+
         this.frameCallback = new EngineFrameCallback(loopThread, window);
+
         this.stopped = false;
     }
 
@@ -137,6 +149,7 @@ public final class EngineSession
         if (!window.isRealWindow())
         {
             joinLoop(0L);
+
             return;
         }
 
@@ -145,6 +158,7 @@ public final class EngineSession
         // Either the loop ended on its own or the user closed the window.
         // shutdown() is idempotent, so calling it in both cases is fine.
         loop.shutdown();
+
         joinLoop(EngineMain.LOOP_JOIN_TIMEOUT_MS);
     }
 
@@ -158,6 +172,7 @@ public final class EngineSession
         {
             return;
         }
+
         stopped = true;
 
         // The loop may still be running when Android tears the Activity
@@ -165,23 +180,28 @@ public final class EngineSession
         // matters, because SharedEventBus.publish() throws once the bus
         // leaves READY, so a live producer would crash the drain below.
         loop.shutdown();
+
         joinLoop(EngineMain.LOOP_JOIN_TIMEOUT_MS);
 
         try
         {
             pool.shutdown();
+
             pool.awaitTermination(POOL_DRAIN_TIMEOUT_MS);
         }
         catch (final InterruptedException e)
         {
             Thread.currentThread().interrupt();
         }
+
         subsystems.shutdownAll();
+
         bus.shutdown();
 
         EngineMain.saveProfile(userProfilePort, profile, timePort);
 
         hal.shutdown();
+
         try
         {
             memory.shutdown();

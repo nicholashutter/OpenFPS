@@ -70,10 +70,15 @@ class GltfConverterTest
                 GltfConverter.convert("tri.gltf", triangleFixture().gltf()));
 
             assertThat(model.vertexCount()).isEqualTo(3);
+
             assertThat(model.triangleCount()).isEqualTo(1);
+
             assertThat(model.submeshCount()).isEqualTo(1);
+
             assertThat(model.indices()).containsExactly(0, 1, 2);
+
             assertThat(model.positionX(1)).isEqualTo(1.0f);
+
             assertThat(model.positionY(2)).isEqualTo(1.0f);
         }
 
@@ -82,6 +87,7 @@ class GltfConverterTest
         void shouldConvertGlbIdentically()
         {
             final byte[] fromGltf = GltfConverter.convert("tri.gltf", triangleFixture().gltf());
+
             final byte[] fromGlb = GltfConverter.convert("tri.glb", triangleFixture().glb());
 
             assertThat(fromGlb).isEqualTo(fromGltf);
@@ -102,6 +108,7 @@ class GltfConverterTest
         void shouldRejectGlbVersion()
         {
             final byte[] glb = triangleFixture().glb();
+
             glb[4] = 9;
 
             assertThatThrownBy(() -> GltfConverter.convert("bad.glb", glb))
@@ -114,6 +121,7 @@ class GltfConverterTest
         void shouldRejectGlbLength()
         {
             final byte[] glb = triangleFixture().glb();
+
             glb[8] = 0;
 
             assertThatThrownBy(() -> GltfConverter.convert("bad.glb", glb))
@@ -126,7 +134,9 @@ class GltfConverterTest
         void shouldRejectGlbChunkOverrun()
         {
             final byte[] glb = triangleFixture().glb();
+
             glb[13] = (byte) 0xFF;
+
             glb[14] = (byte) 0xFF;
 
             assertThatThrownBy(() -> GltfConverter.convert("bad.glb", glb))
@@ -185,15 +195,20 @@ class GltfConverterTest
         void shouldBakeTranslation()
         {
             final GltfFixtures fixture = new GltfFixtures();
+
             final int mesh = simpleMesh(fixture, -1);
+
             fixture.scene(fixture.node(mesh, new float[] {10.0f, 20.0f, 30.0f}, null, null));
 
             final ModelFormat model = ModelFormat.read(
                 GltfConverter.convert("moved.gltf", fixture.gltf()));
 
             assertThat(model.positionX(0)).isEqualTo(10.0f);
+
             assertThat(model.positionY(0)).isEqualTo(20.0f);
+
             assertThat(model.positionZ(0)).isEqualTo(30.0f);
+
             assertThat(model.positionX(1)).isEqualTo(11.0f);
         }
 
@@ -202,13 +217,16 @@ class GltfConverterTest
         void shouldBakeScale()
         {
             final GltfFixtures fixture = new GltfFixtures();
+
             final int mesh = simpleMesh(fixture, -1);
+
             fixture.scene(fixture.node(mesh, null, null, new float[] {3.0f, 4.0f, 5.0f}));
 
             final ModelFormat model = ModelFormat.read(
                 GltfConverter.convert("scaled.gltf", fixture.gltf()));
 
             assertThat(model.positionX(1)).isEqualTo(3.0f);
+
             assertThat(model.positionY(2)).isEqualTo(4.0f);
         }
 
@@ -217,14 +235,18 @@ class GltfConverterTest
         void shouldBakeRotation()
         {
             final float half = (float) Math.sqrt(0.5);
+
             final GltfFixtures fixture = new GltfFixtures();
+
             final int mesh = simpleMesh(fixture, -1);
+
             fixture.scene(fixture.node(mesh, null, new float[] {0.0f, 0.0f, half, half}, null));
 
             final ModelFormat model = ModelFormat.read(
                 GltfConverter.convert("turned.gltf", fixture.gltf()));
 
             assertThat(model.positionX(1)).isCloseTo(0.0f, offset(1.0e-6f));
+
             assertThat(model.positionY(1)).isCloseTo(1.0f, offset(1.0e-6f));
         }
 
@@ -239,16 +261,22 @@ class GltfConverterTest
                 0.0f, 0.0f, 2.0f, 0.0f,
                 5.0f, 6.0f, 7.0f, 1.0f,
             };
+
             final GltfFixtures fixture = new GltfFixtures();
+
             final int mesh = simpleMesh(fixture, -1);
+
             fixture.scene(fixture.matrixNode(mesh, columnMajor));
 
             final ModelFormat model = ModelFormat.read(
                 GltfConverter.convert("matrix.gltf", fixture.gltf()));
 
             assertThat(model.positionX(0)).isEqualTo(5.0f);
+
             assertThat(model.positionY(0)).isEqualTo(6.0f);
+
             assertThat(model.positionZ(0)).isEqualTo(7.0f);
+
             assertThat(model.positionX(1)).isEqualTo(7.0f);
         }
 
@@ -257,10 +285,15 @@ class GltfConverterTest
         void shouldComposeParentAndChild()
         {
             final GltfFixtures fixture = new GltfFixtures();
+
             final int mesh = simpleMesh(fixture, -1);
+
             final int child = fixture.node(mesh, new float[] {1.0f, 0.0f, 0.0f}, null, null);
+
             final int parent = fixture.node(-1, new float[] {10.0f, 0.0f, 0.0f}, null, null);
+
             fixture.children(parent, child);
+
             fixture.scene(parent);
 
             final ModelFormat model = ModelFormat.read(
@@ -274,9 +307,13 @@ class GltfConverterTest
         void shouldRejectNodeCycle()
         {
             final GltfFixtures fixture = new GltfFixtures();
+
             final int mesh = simpleMesh(fixture, -1);
+
             final int node = fixture.node(mesh, null, null, null);
+
             fixture.children(node, node);
+
             fixture.scene(node);
 
             assertThatThrownBy(() -> GltfConverter.convert("cycle.gltf", fixture.gltf()))
@@ -289,6 +326,7 @@ class GltfConverterTest
         void shouldConvertMeshesWithoutAScene()
         {
             final GltfFixtures fixture = new GltfFixtures();
+
             simpleMesh(fixture, -1);
 
             final ModelFormat model = ModelFormat.read(
@@ -302,15 +340,20 @@ class GltfConverterTest
         void shouldComputeBoundsAfterBaking()
         {
             final GltfFixtures fixture = new GltfFixtures();
+
             final int mesh = simpleMesh(fixture, -1);
+
             fixture.scene(fixture.node(mesh, new float[] {5.0f, 5.0f, 5.0f}, null, null));
 
             final ModelFormat model = ModelFormat.read(
                 GltfConverter.convert("bounds.gltf", fixture.gltf()));
 
             assertThat(model.minX()).isEqualTo(5.0f);
+
             assertThat(model.maxX()).isEqualTo(6.0f);
+
             assertThat(model.maxY()).isEqualTo(6.0f);
+
             assertThat(model.minZ()).isEqualTo(5.0f);
         }
     }
@@ -324,15 +367,19 @@ class GltfConverterTest
         void shouldExpandTriangleStrip()
         {
             final GltfFixtures fixture = new GltfFixtures();
+
             final int positions = fixture.floats("VEC3",
                 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f);
+
             final int indices = fixture.indices(GltfFixtures.UNSIGNED_SHORT, 0, 1, 2, 3);
+
             fixture.mesh(GltfFixtures.primitive(positions, -1, -1, indices, -1, 5));
 
             final ModelFormat model = ModelFormat.read(
                 GltfConverter.convert("strip.gltf", fixture.gltf()));
 
             assertThat(model.triangleCount()).isEqualTo(2);
+
             assertThat(model.indices()).containsExactly(0, 1, 2, 2, 1, 3);
         }
 
@@ -341,15 +388,19 @@ class GltfConverterTest
         void shouldExpandTriangleFan()
         {
             final GltfFixtures fixture = new GltfFixtures();
+
             final int positions = fixture.floats("VEC3",
                 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+
             final int indices = fixture.indices(GltfFixtures.UNSIGNED_SHORT, 0, 1, 2, 3);
+
             fixture.mesh(GltfFixtures.primitive(positions, -1, -1, indices, -1, 6));
 
             final ModelFormat model = ModelFormat.read(
                 GltfConverter.convert("fan.gltf", fixture.gltf()));
 
             assertThat(model.triangleCount()).isEqualTo(2);
+
             assertThat(model.indices()).containsExactly(0, 1, 2, 0, 2, 3);
         }
 
@@ -358,7 +409,9 @@ class GltfConverterTest
         void shouldRejectNonSurfaceTopology()
         {
             final GltfFixtures fixture = new GltfFixtures();
+
             final int positions = fixture.floats("VEC3", TRIANGLE);
+
             fixture.mesh(GltfFixtures.primitive(positions, -1, -1, -1, -1, 1));
 
             assertThatThrownBy(() -> GltfConverter.convert("lines.gltf", fixture.gltf()))
@@ -371,7 +424,9 @@ class GltfConverterTest
         void shouldSynthesiseIndices()
         {
             final GltfFixtures fixture = new GltfFixtures();
+
             final int positions = fixture.floats("VEC3", TRIANGLE);
+
             fixture.mesh(GltfFixtures.primitive(positions, -1, -1, -1, -1, 4));
 
             final ModelFormat model = ModelFormat.read(
@@ -385,7 +440,9 @@ class GltfConverterTest
         void shouldMapPrimitivesToSubmeshes()
         {
             final GltfFixtures fixture = new GltfFixtures();
+
             final int positions = fixture.floats("VEC3", TRIANGLE);
+
             fixture.mesh(GltfFixtures.primitive(positions, -1, -1, -1, -1, 4),
                 GltfFixtures.primitive(positions, -1, -1, -1, -1, 4));
 
@@ -393,8 +450,11 @@ class GltfConverterTest
                 GltfConverter.convert("two.gltf", fixture.gltf()));
 
             assertThat(model.submeshCount()).isEqualTo(2);
+
             assertThat(model.vertexCount()).isEqualTo(6);
+
             assertThat(model.submeshFirstIndex(1)).isEqualTo(3);
+
             assertThat(model.indices()).containsExactly(0, 1, 2, 3, 4, 5);
         }
 
@@ -403,8 +463,11 @@ class GltfConverterTest
         void shouldRejectOutOfRangeIndex()
         {
             final GltfFixtures fixture = new GltfFixtures();
+
             final int positions = fixture.floats("VEC3", TRIANGLE);
+
             final int indices = fixture.indices(GltfFixtures.UNSIGNED_SHORT, 0, 1, 99);
+
             fixture.mesh(GltfFixtures.primitive(positions, -1, -1, indices, -1, 4));
 
             assertThatThrownBy(() -> GltfConverter.convert("bad.gltf", fixture.gltf()))
@@ -417,8 +480,11 @@ class GltfConverterTest
         void shouldRejectMissingPosition()
         {
             final GltfFixtures fixture = new GltfFixtures();
+
             final JsonObject primitive = new JsonObject();
+
             primitive.add("attributes", new JsonObject());
+
             fixture.mesh(primitive);
 
             assertThatThrownBy(() -> GltfConverter.convert("nopos.gltf", fixture.gltf()))
@@ -436,7 +502,9 @@ class GltfConverterTest
         void shouldDecodeEveryIndexWidth()
         {
             assertThat(indicesOf(GltfFixtures.UNSIGNED_BYTE)).containsExactly(2, 1, 0);
+
             assertThat(indicesOf(GltfFixtures.UNSIGNED_SHORT)).containsExactly(2, 1, 0);
+
             assertThat(indicesOf(GltfFixtures.UNSIGNED_INT)).containsExactly(2, 1, 0);
         }
 
@@ -451,18 +519,26 @@ class GltfConverterTest
                 1.0f, 0.0f, 0.0f, 0.50f, 0.50f, 0.0f,
                 0.0f, 1.0f, 0.0f, 0.75f, 0.25f, 0.0f,
             };
+
             final GltfFixtures fixture = new GltfFixtures();
+
             final int view = fixture.stridedView(GltfFixtures.floatBytes(interleaved), 24);
+
             final int positions = fixture.accessor(view, GltfFixtures.FLOAT, "VEC3", 3);
+
             final int uvs = fixture.accessor(view, GltfFixtures.FLOAT, "VEC2", 3);
+
             fixture.accessorOffset(uvs, 12);
+
             fixture.mesh(GltfFixtures.primitive(positions, uvs, -1, -1, -1, 4));
 
             final ModelFormat model = ModelFormat.read(
                 GltfConverter.convert("strided.gltf", fixture.gltf()));
 
             assertThat(model.positionX(1)).isEqualTo(1.0f);
+
             assertThat(model.texCoordU(0)).isEqualTo(0.25f);
+
             assertThat(model.texCoordV(2)).isEqualTo(0.25f);
         }
 
@@ -471,8 +547,11 @@ class GltfConverterTest
         void shouldRejectSparseAccessor()
         {
             final GltfFixtures fixture = new GltfFixtures();
+
             final int positions = fixture.floats("VEC3", TRIANGLE);
+
             fixture.markSparse(positions);
+
             fixture.mesh(GltfFixtures.primitive(positions, -1, -1, -1, -1, 4));
 
             assertThatThrownBy(() -> GltfConverter.convert("sparse.gltf", fixture.gltf()))
@@ -485,8 +564,11 @@ class GltfConverterTest
         void shouldRejectAccessorOverrun()
         {
             final GltfFixtures fixture = new GltfFixtures();
+
             final int view = fixture.bufferView(GltfFixtures.floatBytes(TRIANGLE));
+
             final int positions = fixture.accessor(view, GltfFixtures.FLOAT, "VEC3", 99);
+
             fixture.mesh(GltfFixtures.primitive(positions, -1, -1, -1, -1, 4));
 
             assertThatThrownBy(() -> GltfConverter.convert("short.gltf", fixture.gltf()))
@@ -504,19 +586,27 @@ class GltfConverterTest
         void shouldDecodeBaseColourTexture()
         {
             final GltfFixtures fixture = new GltfFixtures();
+
             final int image = fixture.image("colormap",
                 GltfFixtures.solidPng(4, 4, Rgba.pack(200, 100, 50, 255)));
+
             final int material = fixture.material(fixture.texture(image), null);
+
             simpleMesh(fixture, material);
 
             final ModelFormat model = ModelFormat.read(
                 GltfConverter.convert("textured.gltf", fixture.gltf()));
 
             assertThat(model.textureCount()).isEqualTo(1);
+
             assertThat(model.textureWidth(0)).isEqualTo(4);
+
             assertThat(model.textureLevelCount(0)).isEqualTo(3);
+
             assertThat(model.submeshTextureIndex(0)).isZero();
+
             assertThat(model.mipChain(0).texel(0, 2, 3)).isEqualTo(Rgba.pack(200, 100, 50, 255));
+
             assertThat(model.mipChain(0).texel(2, 0, 0)).isEqualTo(Rgba.pack(200, 100, 50, 255));
         }
 
@@ -525,11 +615,16 @@ class GltfConverterTest
         void shouldDeduplicateTextures()
         {
             final GltfFixtures fixture = new GltfFixtures();
+
             final int image = fixture.image("colormap",
                 GltfFixtures.solidPng(2, 2, Rgba.pack(1, 2, 3, 255)));
+
             final int first = fixture.material(fixture.texture(image), null);
+
             final int second = fixture.material(fixture.texture(image), null);
+
             final int positions = fixture.floats("VEC3", TRIANGLE);
+
             fixture.mesh(GltfFixtures.primitive(positions, -1, -1, -1, first, 4),
                 GltfFixtures.primitive(positions, -1, -1, -1, second, 4));
 
@@ -537,7 +632,9 @@ class GltfConverterTest
                 GltfConverter.convert("shared.gltf", fixture.gltf()));
 
             assertThat(model.textureCount()).isEqualTo(1);
+
             assertThat(model.submeshTextureIndex(0)).isZero();
+
             assertThat(model.submeshTextureIndex(1)).isZero();
         }
 
@@ -546,12 +643,14 @@ class GltfConverterTest
         void shouldLeaveUntexturedSubmesh()
         {
             final GltfFixtures fixture = new GltfFixtures();
+
             simpleMesh(fixture, fixture.material(-1, new float[] {1.0f, 1.0f, 1.0f, 1.0f}));
 
             final ModelFormat model = ModelFormat.read(
                 GltfConverter.convert("flat.gltf", fixture.gltf()));
 
             assertThat(model.textureCount()).isZero();
+
             assertThat(model.submeshTextureIndex(0)).isEqualTo(ModelFormat.NO_TEXTURE);
         }
 
@@ -560,13 +659,19 @@ class GltfConverterTest
         void shouldDropNonAlbedoTextures()
         {
             final GltfFixtures fixture = new GltfFixtures();
+
             final int albedo = fixture.image("colormap",
                 GltfFixtures.solidPng(2, 2, Rgba.OPAQUE_BLACK));
+
             final int normal = fixture.image("normalmap",
                 GltfFixtures.solidPng(2, 2, Rgba.OPAQUE_BLACK));
+
             final int material = fixture.material(fixture.texture(albedo), null);
+
             fixture.materialSlot(material, "normalTexture", fixture.texture(normal));
+
             fixture.materialSlot(material, "emissiveTexture", fixture.texture(normal));
+
             simpleMesh(fixture, material);
 
             final ModelFormat model = ModelFormat.read(
@@ -580,6 +685,7 @@ class GltfConverterTest
         void shouldDefaultToWhite()
         {
             final GltfFixtures fixture = new GltfFixtures();
+
             simpleMesh(fixture, -1);
 
             final ModelFormat model = ModelFormat.read(
@@ -593,6 +699,7 @@ class GltfConverterTest
         void shouldBakeBaseColourFactor()
         {
             final GltfFixtures fixture = new GltfFixtures();
+
             simpleMesh(fixture, fixture.material(-1, new float[] {0.5f, 0.0f, 1.0f, 1.0f}));
 
             final ModelFormat model = ModelFormat.read(
@@ -603,8 +710,11 @@ class GltfConverterTest
             // straight multiply by 255, which would darken every flat-shaded
             // surface in the game by a visible amount.
             assertThat(Rgba.red(model.colour(0))).isBetween(186, 190);
+
             assertThat(Rgba.green(model.colour(0))).isZero();
+
             assertThat(Rgba.blue(model.colour(0))).isEqualTo(255);
+
             assertThat(Rgba.alpha(model.colour(0))).isEqualTo(255);
         }
 
@@ -613,19 +723,27 @@ class GltfConverterTest
         void shouldMultiplyVertexColourByFactor()
         {
             final GltfFixtures fixture = new GltfFixtures();
+
             final int material = fixture.material(-1, new float[] {1.0f, 1.0f, 0.0f, 1.0f});
+
             final int positions = fixture.floats("VEC3", TRIANGLE);
+
             final int colours = fixture.normalizedBytes("VEC4",
                 255, 255, 255, 255, 255, 0, 255, 255, 0, 0, 0, 255);
+
             fixture.mesh(GltfFixtures.primitive(positions, -1, colours, -1, material, 4));
 
             final ModelFormat model = ModelFormat.read(
                 GltfConverter.convert("vcol.gltf", fixture.gltf()));
 
             assertThat(Rgba.red(model.colour(0))).isEqualTo(255);
+
             assertThat(Rgba.green(model.colour(0))).isEqualTo(255);
+
             assertThat(Rgba.blue(model.colour(0))).isZero();
+
             assertThat(Rgba.green(model.colour(1))).isZero();
+
             assertThat(Rgba.red(model.colour(2))).isZero();
         }
 
@@ -634,9 +752,12 @@ class GltfConverterTest
         void shouldAcceptVec3VertexColour()
         {
             final GltfFixtures fixture = new GltfFixtures();
+
             final int positions = fixture.floats("VEC3", TRIANGLE);
+
             final int colours = fixture.floats("VEC3",
                 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f);
+
             fixture.mesh(GltfFixtures.primitive(positions, -1, colours, -1, -1, 4));
 
             final ModelFormat model = ModelFormat.read(
@@ -650,15 +771,20 @@ class GltfConverterTest
         void shouldKeepTexCoordOrientation()
         {
             final GltfFixtures fixture = new GltfFixtures();
+
             final int positions = fixture.floats("VEC3", TRIANGLE);
+
             final int uvs = fixture.floats("VEC2", TRIANGLE_UV);
+
             fixture.mesh(GltfFixtures.primitive(positions, uvs, -1, -1, -1, 4));
 
             final ModelFormat model = ModelFormat.read(
                 GltfConverter.convert("uv.gltf", fixture.gltf()));
 
             assertThat(model.texCoordU(1)).isEqualTo(1.0f);
+
             assertThat(model.texCoordV(1)).isEqualTo(0.0f);
+
             assertThat(model.texCoordV(2)).isEqualTo(1.0f);
         }
     }
@@ -672,13 +798,18 @@ class GltfConverterTest
         void shouldRejectTooManyTriangles()
         {
             final int overBudget = ModelFormat.MAX_TRIANGLES_PER_MODEL + 1;
+
             final GltfFixtures fixture = new GltfFixtures();
+
             final int positions = fixture.floats("VEC3", TRIANGLE);
+
             final int[] indices = new int[overBudget * 3];
+
             for (int i = 0; i < indices.length; i++)
             {
                 indices[i] = i % 3;
             }
+
             fixture.mesh(GltfFixtures.primitive(positions, -1, -1,
                 fixture.indices(GltfFixtures.UNSIGNED_SHORT, indices), -1, 4));
 
@@ -694,9 +825,12 @@ class GltfConverterTest
         void shouldRejectOversizedTexture()
         {
             final int edge = ModelFormat.MAX_TEXTURE_DIMENSION * 2;
+
             final GltfFixtures fixture = new GltfFixtures();
+
             final int image = fixture.image("colormap",
                 GltfFixtures.solidPng(edge, edge, Rgba.OPAQUE_BLACK));
+
             simpleMesh(fixture, fixture.material(fixture.texture(image), null));
 
             assertThatThrownBy(() -> GltfConverter.convert("big.glb", fixture.gltf()))
@@ -711,8 +845,10 @@ class GltfConverterTest
         void shouldRejectNonPowerOfTwoTexture()
         {
             final GltfFixtures fixture = new GltfFixtures();
+
             final int image = fixture.image("colormap",
                 GltfFixtures.solidPng(100, 100, Rgba.OPAQUE_BLACK));
+
             simpleMesh(fixture, fixture.material(fixture.texture(image), null));
 
             assertThatThrownBy(() -> GltfConverter.convert("odd.glb", fixture.gltf()))
@@ -726,15 +862,19 @@ class GltfConverterTest
         void shouldAcceptTextureAtTheBudget()
         {
             final int edge = ModelFormat.MAX_TEXTURE_DIMENSION;
+
             final GltfFixtures fixture = new GltfFixtures();
+
             final int image = fixture.image("colormap",
                 GltfFixtures.solidPng(edge, edge, Rgba.pack(9, 9, 9, 255)));
+
             simpleMesh(fixture, fixture.material(fixture.texture(image), null));
 
             final ModelFormat model = ModelFormat.read(
                 GltfConverter.convert("atbudget.glb", fixture.gltf()));
 
             assertThat(model.textureWidth(0)).isEqualTo(edge);
+
             assertThat(model.textureLevelCount(0)).isEqualTo(10);
         }
 
@@ -743,7 +883,9 @@ class GltfConverterTest
         void shouldRejectUndecodableImage()
         {
             final GltfFixtures fixture = new GltfFixtures();
+
             final int image = fixture.image("broken", new byte[] {1, 2, 3, 4, 5, 6, 7, 8});
+
             simpleMesh(fixture, fixture.material(fixture.texture(image), null));
 
             assertThatThrownBy(() -> GltfConverter.convert("broken.glb", fixture.gltf()))
@@ -756,7 +898,9 @@ class GltfConverterTest
     private static int simpleMesh(final GltfFixtures fixture, final int material)
     {
         final int positions = fixture.floats("VEC3", TRIANGLE);
+
         final int uvs = fixture.floats("VEC2", TRIANGLE_UV);
+
         return fixture.mesh(GltfFixtures.primitive(positions, uvs, -1, -1, material, 4));
     }
 
@@ -764,8 +908,11 @@ class GltfConverterTest
     private static GltfFixtures triangleFixture()
     {
         final GltfFixtures fixture = new GltfFixtures();
+
         final int mesh = simpleMesh(fixture, -1);
+
         fixture.scene(fixture.node(mesh, null, null, null));
+
         return fixture;
     }
 
@@ -773,9 +920,13 @@ class GltfConverterTest
     private static int[] indicesOf(final int componentType)
     {
         final GltfFixtures fixture = new GltfFixtures();
+
         final int positions = fixture.floats("VEC3", TRIANGLE);
+
         final int indices = fixture.indices(componentType, 2, 1, 0);
+
         fixture.mesh(GltfFixtures.primitive(positions, -1, -1, indices, -1, 4));
+
         return ModelFormat.read(GltfConverter.convert("idx.gltf", fixture.gltf())).indices();
     }
 }

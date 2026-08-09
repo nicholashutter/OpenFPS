@@ -655,17 +655,29 @@ public final class DemoScene
         final RemotePlayers peerBodies, final LocalPlayerBody localBody)
     {
         this.physics = solidGeometry;
+
         this.scene = builtScene;
+
         this.bots = roster;
+
         this.botInstances = instanceIndices;
+
         this.botWeaponInstances = weaponIndices;
+
         this.effects = shotEffects;
+
         this.remotePlayers = peerBodies;
+
         this.localBody = localBody;
+
         this.spawnX = feetX;
+
         this.spawnY = feetY;
+
         this.spawnZ = feetZ;
+
         this.spawnYawRadians = yawRadians;
+
         this.source = modelSource;
     }
 
@@ -687,29 +699,40 @@ public final class DemoScene
         }
 
         final Scene.Builder builder = Scene.builder();
+
         final float spawnDepth;
+
         // The solid geometry is built beside the visible geometry, in the same
         // branch, from the same constants. That adjacency is the point: the two
         // descriptions of the room cannot be given different extents without
         // someone editing both halves of one if-statement.
         final PhysicsWorld solidGeometry;
+
         if (models.isRealArt())
         {
             addKitRoom(builder, models);
+
             solidGeometry = kitRoomPhysics();
+
             spawnDepth = HALF_ROOM_UNITS * SPAWN_DEPTH_FRACTION;
         }
         else
         {
             builder.addWorldInstance(models.room(), placement(0.0f, 0.0f, 0.0f, 0.0f,
                 FALLBACK_WORLD_SCALE));
+
             solidGeometry = fallbackRoomPhysics();
+
             spawnDepth =
                 FALLBACK_INTERIOR_HALF_EXTENT * FALLBACK_WORLD_SCALE * SPAWN_DEPTH_FRACTION;
         }
+
         final int[] instanceIndices = new int[BOT_ROUTE_CENTRES.length / BOT_STRIDE];
+
         final int[] weaponIndices = new int[instanceIndices.length];
+
         final Bot[] roster = addBots(builder, models, instanceIndices, weaponIndices);
+
         // The other players' bodies, placed whether or not this run is networked.
         // Unconditional on purpose: a Scene is immutable, so a body that is not
         // placed here can never be placed at all, and --net is parsed by the
@@ -717,25 +740,31 @@ public final class DemoScene
         // transforms and nothing else.
         final RemotePlayers peers = RemotePlayers.addTo(builder, models, solidGeometry,
             0.0f, 0.0f, -spawnDepth, 0.0f);
+
         // Unconditionally, and independent of which art is staged: the tracer
         // and the smoke are generated geometry, so they are the one part of the
         // demo that cannot be missing from a fresh clone.
         final DemoEffects shots = DemoEffects.addTo(builder);
+
         // Unconditionally too: the arms are procedurally generated and are
         // the local player's own first-person body, so they exist whether or
         // not character art is staged. A demo that ships without arms is a
         // demo where the player holds nothing — the same degraded look the
         // empty viewmodel produces today.
         final LocalPlayerBody localBody = LocalPlayerBody.addTo(builder);
+
         addViewmodel(builder, models.weapon());
 
         final Scene built = builder.build();
+
         LOG.info("Demo scene built from {}: {} world instances ({} translucent),"
             + " {} view instances, largest {} triangles, world scale {}", models.source(),
             built.worldInstanceCount(), built.translucentInstanceCount(),
             built.viewInstanceCount(), built.maxInstanceTriangles(), worldScaleOf(models));
+
         LOG.info("Demo collision: {} — walls, doorway jambs, columns and crates are solid;"
             + " the staircase and the ramp are not", solidGeometry);
+
         // Facing +z, which is yaw 0 (PlayerController's convention), standing
         // back from the origin so the whole room is ahead rather than around.
         return new DemoScene(built, roster, instanceIndices, weaponIndices, shots, 0.0f, 0.0f,
@@ -793,13 +822,19 @@ public final class DemoScene
         }
 
         final ModelFormat[] people = models.characters();
+
         final ModelFormat blaster = models.botWeapon();
+
         final int count = BOT_ROUTE_CENTRES.length / BOT_STRIDE;
+
         final Bot[] roster = new Bot[count];
+
         for (int index = 0; index < count; index++)
         {
             final float homeX = BOT_ROUTE_CENTRES[index * BOT_STRIDE];
+
             final float homeZ = BOT_ROUTE_CENTRES[index * BOT_STRIDE + 1];
+
             final int entityId = Match.FIRST_BOT_ENTITY_ID + index;
 
             final Bot bot = new Bot(entityId, homeX, 0.0f, homeZ, BOT_PATTERNS[index],
@@ -810,15 +845,21 @@ public final class DemoScene
             // leaving holes in the arrangement. With the full seven it is one
             // distinct person each.
             final ModelFormat model = people[index % people.length];
+
             instanceIndices[index] = builder.worldInstanceCount();
+
             builder.addWorldInstance(model, botPlacement(bot), entityId);
+
             weaponIndices[index] = addBotWeapon(builder, blaster, bot);
+
             roster[index] = bot;
         }
+
         LOG.info("Demo bots: {} placed from {} model(s), ids {}..{}, {} world units tall,"
             + " radius {}, armed: {}", count, people.length, Match.FIRST_BOT_ENTITY_ID,
             Match.FIRST_BOT_ENTITY_ID + count - 1, PLAYER_HEIGHT_UNITS, PLAYER_RADIUS_UNITS,
             blaster != null);
+
         return roster;
     }
 
@@ -837,8 +878,11 @@ public final class DemoScene
         {
             return NO_INSTANCE;
         }
+
         final int at = builder.worldInstanceCount();
+
         builder.addWorldInstance(blaster, botWeaponPlacement(bot), bot.entityId());
+
         return at;
     }
 
@@ -885,6 +929,7 @@ public final class DemoScene
         {
             return DemoEffects.HIDDEN;
         }
+
         return placement(bot.positionX(), bot.positionY(), bot.positionZ(),
             bot.yawRadians(), CHARACTER_WORLD_SCALE);
     }
@@ -927,6 +972,7 @@ public final class DemoScene
         {
             return DemoEffects.HIDDEN;
         }
+
         return heldWeaponPlacement(bot.positionX(), bot.positionY(), bot.positionZ(),
             bot.yawRadians());
     }
@@ -958,11 +1004,15 @@ public final class DemoScene
         final float feetZ, final float yawRadians)
     {
         final float sinYaw = (float) StrictMath.sin(yawRadians);
+
         final float cosYaw = (float) StrictMath.cos(yawRadians);
+
         final float x = feetX
             + BOT_WEAPON_FORWARD_UNITS * sinYaw - BOT_WEAPON_RIGHT_UNITS * cosYaw;
+
         final float z = feetZ
             + BOT_WEAPON_FORWARD_UNITS * cosYaw + BOT_WEAPON_RIGHT_UNITS * sinYaw;
+
         return placement(x, feetY + BOT_WEAPON_HEIGHT_UNITS, z,
             yawRadians + radians(BOT_WEAPON_YAW_DEGREES), BOT_WEAPON_WORLD_SCALE);
     }
@@ -995,22 +1045,29 @@ public final class DemoScene
     public static void botMuzzle(final Bot bot, final float[] out)
     {
         final float yaw = bot.yawRadians();
+
         final float sinYaw = (float) StrictMath.sin(yaw);
+
         final float cosYaw = (float) StrictMath.cos(yaw);
+
         // PlayerController's basis, the same one botWeaponPlacement uses to put
         // the weapon's origin in the bot's hand: groundForward = (sin, 0, cos) and
         // groundRight = groundForward x up = (-cos, 0, sin).
         final float originX = bot.positionX()
             + BOT_WEAPON_FORWARD_UNITS * sinYaw - BOT_WEAPON_RIGHT_UNITS * cosYaw;
+
         final float originZ = bot.positionZ()
             + BOT_WEAPON_FORWARD_UNITS * cosYaw + BOT_WEAPON_RIGHT_UNITS * sinYaw;
 
         final float barrel = yaw + radians(BOT_BARREL_YAW_DEGREES);
+
         out[0] = originX + BOT_WEAPON_MUZZLE_UNITS * (float) StrictMath.sin(barrel);
+
         // Level, because the weapon is: placement() is a yaw and nothing else, so
         // the barrel has no elevation to follow and the muzzle sits at exactly the
         // height the weapon's origin does.
         out[1] = bot.positionY() + BOT_WEAPON_HEIGHT_UNITS;
+
         out[2] = originZ + BOT_WEAPON_MUZZLE_UNITS * (float) StrictMath.cos(barrel);
     }
 
@@ -1018,7 +1075,9 @@ public final class DemoScene
     private static void addKitRoom(final Scene.Builder builder, final DemoModels models)
     {
         addFloor(builder, models.floor());
+
         addWalls(builder, models.wall(), models.doorway());
+
         addProps(builder, models);
     }
 
@@ -1032,13 +1091,17 @@ public final class DemoScene
     private static void addFloor(final Scene.Builder builder, final ModelFormat tile)
     {
         final float ceiling = WALL_COURSES * KIT_WORLD_SCALE;
+
         for (int alongX = 0; alongX < ROOM_TILES; alongX++)
         {
             for (int alongZ = 0; alongZ < ROOM_TILES; alongZ++)
             {
                 final float x = tileCentre(alongX);
+
                 final float z = tileCentre(alongZ);
+
                 builder.addWorldInstance(tile, placement(x, 0.0f, z, 0.0f, KIT_WORLD_SCALE));
+
                 builder.addWorldInstance(tile, invertedPlacement(x, ceiling, z,
                     KIT_WORLD_SCALE));
             }
@@ -1060,16 +1123,21 @@ public final class DemoScene
         for (int course = 0; course < WALL_COURSES; course++)
         {
             final float y = course * KIT_WORLD_SCALE;
+
             for (int tile = 0; tile < ROOM_TILES; tile++)
             {
                 final float centre = tileCentre(tile);
+
                 builder.addWorldInstance(wall,
                     placement(-HALF_ROOM_UNITS, y, centre, 0.0f, KIT_WORLD_SCALE));
+
                 builder.addWorldInstance(wall,
                     placement(HALF_ROOM_UNITS, y, centre, 0.0f, KIT_WORLD_SCALE));
+
                 builder.addWorldInstance(wall,
                     placement(centre, y, -HALF_ROOM_UNITS, QUARTER_TURN_RADIANS,
                         KIT_WORLD_SCALE));
+
                 builder.addWorldInstance(southWallPiece(wall, doorway, course, tile),
                     placement(centre, y, HALF_ROOM_UNITS, QUARTER_TURN_RADIANS,
                         KIT_WORLD_SCALE));
@@ -1087,6 +1155,7 @@ public final class DemoScene
         {
             return doorway;
         }
+
         return wall;
     }
 
@@ -1099,12 +1168,16 @@ public final class DemoScene
     private static void addProps(final Scene.Builder builder, final DemoModels models)
     {
         final float columnOffset = HALF_ROOM_UNITS * COLUMN_FRACTION;
+
         builder.addWorldInstance(models.column(),
             placement(-columnOffset, 0.0f, -columnOffset, 0.0f, KIT_WORLD_SCALE));
+
         builder.addWorldInstance(models.column(),
             placement(columnOffset, 0.0f, -columnOffset, 0.0f, KIT_WORLD_SCALE));
+
         builder.addWorldInstance(models.column(),
             placement(-columnOffset, 0.0f, columnOffset, 0.0f, KIT_WORLD_SCALE));
+
         builder.addWorldInstance(models.column(),
             placement(columnOffset, 0.0f, columnOffset, 0.0f, KIT_WORLD_SCALE));
 
@@ -1117,6 +1190,7 @@ public final class DemoScene
 
         builder.addWorldInstance(models.stairs(),
             placement(0.0f, 0.0f, 224.0f, 0.0f, KIT_WORLD_SCALE));
+
         builder.addWorldInstance(models.slope(),
             placement(-96.0f, 0.0f, -160.0f, QUARTER_TURN_RADIANS, KIT_WORLD_SCALE));
     }
@@ -1192,29 +1266,41 @@ public final class DemoScene
     {
         final PhysicsWorld.Builder solid =
             PhysicsWorld.builder(PhysicsWorld.PLAYER_HALF_WIDTH_UNITS);
+
         final float inner = WALL_INNER_FACE_UNITS;
+
         final float outer = HALF_ROOM_UNITS + WALL_THICKNESS_GRID * KIT_WORLD_SCALE * 0.5f;
 
         // The two walls at constant x, each spanning the whole side.
         solid.addBox(-outer, -outer, -inner, outer);
+
         solid.addBox(inner, -outer, outer, outer);
+
         // The wall at -z, unbroken.
         solid.addBox(-outer, -outer, outer, -inner);
+
         // The wall at +z, in two pieces with the doorway between them. The gap
         // is one floor tile wide and centred on the tile the doorway model
         // replaced, so it is the opening you can see rather than an
         // approximation of it.
         solid.addBox(-outer, inner, DOORWAY_MIN_X_UNITS, outer);
+
         solid.addBox(DOORWAY_MAX_X_UNITS, inner, outer, outer);
 
         final float columnOffset = HALF_ROOM_UNITS * COLUMN_FRACTION;
+
         final float columnHalf = COLUMN_FOOTPRINT_GRID * KIT_WORLD_SCALE * 0.5f;
+
         solid.addBoxAt(-columnOffset, -columnOffset, columnHalf, columnHalf);
+
         solid.addBoxAt(columnOffset, -columnOffset, columnHalf, columnHalf);
+
         solid.addBoxAt(-columnOffset, columnOffset, columnHalf, columnHalf);
+
         solid.addBoxAt(columnOffset, columnOffset, columnHalf, columnHalf);
 
         final float crateHalf = CRATE_FOOTPRINT_GRID * KIT_WORLD_SCALE * 0.5f;
+
         for (int crate = 0; crate < CRATE_PLACEMENTS.length; crate += CRATE_STRIDE)
         {
             // Only the crates resting on the floor. The stacked one sits at
@@ -1225,9 +1311,11 @@ public final class DemoScene
             {
                 continue;
             }
+
             solid.addBoxAt(CRATE_PLACEMENTS[crate], CRATE_PLACEMENTS[crate + 2],
                 crateHalf, crateHalf);
         }
+
         return solid.build();
     }
 
@@ -1252,12 +1340,19 @@ public final class DemoScene
     {
         final PhysicsWorld.Builder solid =
             PhysicsWorld.builder(PhysicsWorld.PLAYER_HALF_WIDTH_UNITS);
+
         final float inner = FALLBACK_INTERIOR_HALF_EXTENT * FALLBACK_WORLD_SCALE;
+
         final float outer = inner + WALL_THICKNESS_GRID * KIT_WORLD_SCALE;
+
         solid.addBox(-outer, -outer, -inner, outer);
+
         solid.addBox(inner, -outer, outer, outer);
+
         solid.addBox(-outer, -outer, outer, -inner);
+
         solid.addBox(-outer, inner, outer, outer);
+
         return solid.build();
     }
 
@@ -1269,6 +1364,7 @@ public final class DemoScene
         {
             return;
         }
+
         builder.addViewInstance(weapon, weaponTransform());
     }
 
@@ -1330,8 +1426,11 @@ public final class DemoScene
             throw new IllegalArgumentException(
                 "scale must be positive, or the instance is mirrored or collapsed, got " + scale);
         }
+
         final float sin = (float) StrictMath.sin(yawRadians) * scale;
+
         final float cos = (float) StrictMath.cos(yawRadians) * scale;
+
         return Mat4.ofRowMajor(new float[]
         {
             cos, 0.0f, sin, x,
@@ -1379,6 +1478,7 @@ public final class DemoScene
         {
             throw new IllegalArgumentException("scale must be positive, got " + scale);
         }
+
         return Mat4.ofRowMajor(new float[]
         {
             -scale, 0.0f, 0.0f, x,
@@ -1410,6 +1510,7 @@ public final class DemoScene
         {
             return KIT_WORLD_SCALE;
         }
+
         return FALLBACK_WORLD_SCALE;
     }
 
@@ -1678,6 +1779,7 @@ public final class DemoScene
     public static float spawnYawFor(final int playerId)
     {
         final int slot = spawnSlot(playerId);
+
         return (float) StrictMath.atan2(-SPAWN_DIRECTIONS[slot * SPAWN_STRIDE],
             -SPAWN_DIRECTIONS[slot * SPAWN_STRIDE + 1]);
     }
@@ -1698,11 +1800,14 @@ public final class DemoScene
     private static int spawnSlot(final int playerId)
     {
         final int count = spawnPointCount();
+
         final int slot = playerId % count;
+
         if (slot < 0)
         {
             return slot + count;
         }
+
         return slot;
     }
 

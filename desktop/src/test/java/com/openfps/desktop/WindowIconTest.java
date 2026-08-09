@@ -87,15 +87,19 @@ class WindowIconTest
         void shouldBorderEveryEdge()
         {
             final int size = 32;
+
             final int[] pixels = WindowIcon.pixels(size);
 
             for (int index = 0; index < size; index++)
             {
                 assertThat(pixels[index]).as("top edge").isEqualTo(WindowIcon.BORDER_COLOR);
+
                 assertThat(pixels[(size - 1) * size + index]).as("bottom edge")
                     .isEqualTo(WindowIcon.BORDER_COLOR);
+
                 assertThat(pixels[index * size]).as("left edge")
                     .isEqualTo(WindowIcon.BORDER_COLOR);
+
                 assertThat(pixels[index * size + size - 1]).as("right edge")
                     .isEqualTo(WindowIcon.BORDER_COLOR);
             }
@@ -109,6 +113,7 @@ class WindowIconTest
             // and at 16 pixels that is the difference between "a game" and "a
             // medical app".
             final int size = 32;
+
             final int[] pixels = WindowIcon.pixels(size);
 
             assertThat(pixels[(size / 2) * size + size / 2])
@@ -126,6 +131,7 @@ class WindowIconTest
             final int[] pixels = WindowIcon.pixels(16);
 
             int green = 0;
+
             for (final int pixel : pixels)
             {
                 if (pixel == Crosshair.CORE_COLOR)
@@ -133,6 +139,7 @@ class WindowIconTest
                     green++;
                 }
             }
+
             assertThat(green).as("the reticle vanished at 16 pixels").isGreaterThan(16);
         }
 
@@ -148,6 +155,7 @@ class WindowIconTest
             for (final int size : WindowIcon.SIZES)
             {
                 final int[] pixels = WindowIcon.pixels(size);
+
                 for (int y = 0; y < size; y++)
                 {
                     for (int x = 0; x < size; x++)
@@ -155,6 +163,7 @@ class WindowIconTest
                         assertThat(pixels[y * size + x])
                             .as("horizontal mirror at (%d, %d), size %d", x, y, size)
                             .isEqualTo(pixels[y * size + (size - 1 - x)]);
+
                         assertThat(pixels[y * size + x])
                             .as("vertical mirror at (%d, %d), size %d", x, y, size)
                             .isEqualTo(pixels[(size - 1 - y) * size + x]);
@@ -169,6 +178,7 @@ class WindowIconTest
         {
             assertThatThrownBy(() -> WindowIcon.pixels(0))
                 .isInstanceOf(IllegalArgumentException.class);
+
             assertThatThrownBy(() -> WindowIcon.pixels(-8))
                 .isInstanceOf(IllegalArgumentException.class);
         }
@@ -192,10 +202,13 @@ class WindowIconTest
         void shouldWriteAValidHeaderWhenBuildingTheIco() throws IOException
         {
             final byte[] ico = IconFileMain.buildIco(WindowIcon.SIZES);
+
             final ByteBuffer buffer = ByteBuffer.wrap(ico).order(ByteOrder.LITTLE_ENDIAN);
 
             assertThat(buffer.getShort()).as("reserved").isZero();
+
             assertThat(buffer.getShort()).as("type 1 is an icon").isEqualTo((short) 1);
+
             assertThat(buffer.getShort()).as("image count")
                 .isEqualTo((short) WindowIcon.SIZES.length);
         }
@@ -208,23 +221,33 @@ class WindowIconTest
             // a file Windows ignores without a word. Following each one and
             // finding a PNG signature is the check that cannot pass by accident.
             final byte[] ico = IconFileMain.buildIco(WindowIcon.SIZES);
+
             final ByteBuffer buffer = ByteBuffer.wrap(ico).order(ByteOrder.LITTLE_ENDIAN);
 
             for (int index = 0; index < WindowIcon.SIZES.length; index++)
             {
                 buffer.position(HEADER_BYTES + index * ENTRY_BYTES);
+
                 assertThat(buffer.get() & 0xFF).as("width").isEqualTo(WindowIcon.SIZES[index]);
+
                 assertThat(buffer.get() & 0xFF).as("height").isEqualTo(WindowIcon.SIZES[index]);
+
                 buffer.get();
+
                 buffer.get();
+
                 buffer.getShort();
+
                 buffer.getShort();
+
                 final int length = buffer.getInt();
+
                 final int offset = buffer.getInt();
 
                 assertThat(offset + length)
                     .as("entry %d runs past the end of the file", index)
                     .isLessThanOrEqualTo(ico.length);
+
                 for (int magic = 0; magic < PNG_MAGIC.length; magic++)
                 {
                     assertThat(ico[offset + magic])
@@ -239,20 +262,27 @@ class WindowIconTest
         void shouldLayPayloadsOutAfterTheDirectory() throws IOException
         {
             final byte[] ico = IconFileMain.buildIco(WindowIcon.SIZES);
+
             final ByteBuffer buffer = ByteBuffer.wrap(ico).order(ByteOrder.LITTLE_ENDIAN);
+
             final int directoryEnd = HEADER_BYTES + ENTRY_BYTES * WindowIcon.SIZES.length;
 
             int previousEnd = directoryEnd;
+
             for (int index = 0; index < WindowIcon.SIZES.length; index++)
             {
                 buffer.position(HEADER_BYTES + index * ENTRY_BYTES + 8);
+
                 final int length = buffer.getInt();
+
                 final int offset = buffer.getInt();
 
                 assertThat(offset).as("entry %d overlaps what came before", index)
                     .isGreaterThanOrEqualTo(previousEnd);
+
                 previousEnd = offset + length;
             }
+
             assertThat(previousEnd).as("trailing bytes nothing points at")
                 .isEqualTo(ico.length);
         }
@@ -275,6 +305,7 @@ class WindowIconTest
         {
             assertThatThrownBy(() -> IconFileMain.buildIco(new int[0]))
                 .isInstanceOf(IllegalArgumentException.class);
+
             assertThatThrownBy(() -> IconFileMain.buildIco(null))
                 .isInstanceOf(IllegalArgumentException.class);
         }

@@ -96,14 +96,17 @@ public final class SoundBank
         {
             return WavAudio.wav(CarbineSound.samples(), CarbineSound.sampleRate());
         }
+
         if (sound == SoundId.SUPER_WEAPON_FIRE)
         {
             return WavAudio.wav(SuperBlasterSound.samples(), SuperBlasterSound.sampleRate());
         }
+
         if (sound == SoundId.SUPER_BLASTER_READY)
         {
             return WavAudio.wav(PowerChimeSound.readySamples(), PowerChimeSound.sampleRate());
         }
+
         if (sound == SoundId.SUPER_BLASTER_SPENT)
         {
             // The same chime backwards, which is why one class serves both ids —
@@ -111,6 +114,7 @@ public final class SoundBank
             // sound reached by two names. SoundBankTest asserts exactly that.
             return WavAudio.wav(PowerChimeSound.spentSamples(), PowerChimeSound.sampleRate());
         }
+
         return WavAudio.wav(BlasterSound.samples(), BlasterSound.sampleRate());
     }
 
@@ -126,14 +130,17 @@ public final class SoundBank
         {
             return CarbineSound.sampleRate();
         }
+
         if (sound == SoundId.SUPER_WEAPON_FIRE)
         {
             return SuperBlasterSound.sampleRate();
         }
+
         if (sound == SoundId.SUPER_BLASTER_READY || sound == SoundId.SUPER_BLASTER_SPENT)
         {
             return PowerChimeSound.sampleRate();
         }
+
         return BlasterSound.sampleRate();
     }
 
@@ -154,10 +161,12 @@ public final class SoundBank
         {
             return CarbineSound.sampleCount();
         }
+
         if (sound == SoundId.SUPER_WEAPON_FIRE)
         {
             return SuperBlasterSound.sampleCount();
         }
+
         if (sound == SoundId.SUPER_BLASTER_READY || sound == SoundId.SUPER_BLASTER_SPENT)
         {
             // One number for both, because the chime is two notes of equal length
@@ -165,6 +174,7 @@ public final class SoundBank
             // out of its way to have — see its sampleCount().
             return PowerChimeSound.sampleCount();
         }
+
         return BlasterSound.sampleCount();
     }
 
@@ -187,6 +197,7 @@ public final class SoundBank
     public static String fileName(final SoundId sound)
     {
         final SoundId named;
+
         if (sound == null)
         {
             named = SoundId.WEAPON_FIRE;
@@ -195,6 +206,7 @@ public final class SoundBank
         {
             named = sound;
         }
+
         return FILE_PREFIX + named.name().toLowerCase(Locale.ROOT).replace('_', '-')
             + FILE_SUFFIX;
     }

@@ -174,17 +174,21 @@ public final class BotSkill
         final int wildChancePermille, final int awarenessTics)
     {
         requirePermille("triggerChancePermille", triggerChancePermille);
+
         requirePermille("wildChancePermille", wildChancePermille);
+
         if (minimumCooldownTics <= 0)
         {
             throw new IllegalArgumentException(
                 "minimumCooldownTics must be positive, got " + minimumCooldownTics);
         }
+
         if (extraCooldownTics < 0)
         {
             throw new IllegalArgumentException(
                 "extraCooldownTics must not be negative, got " + extraCooldownTics);
         }
+
         // Negated >= so NaN, which fails every comparison, is rejected here
         // rather than reaching a shot direction and poisoning it.
         if (!(spreadRadians >= 0.0f) || Float.isInfinite(spreadRadians))
@@ -192,16 +196,23 @@ public final class BotSkill
             throw new IllegalArgumentException(
                 "spreadRadians must be finite and not negative, got " + spreadRadians);
         }
+
         if (awarenessTics <= 0)
         {
             throw new IllegalArgumentException(
                 "awarenessTics must be positive, got " + awarenessTics);
         }
+
         this.fireChancePermille = triggerChancePermille;
+
         this.cooldownTics = minimumCooldownTics;
+
         this.cooldownSpreadTics = extraCooldownTics;
+
         this.aimSpreadRadians = spreadRadians;
+
         this.wildShotChancePermille = wildChancePermille;
+
         this.reactionTics = awarenessTics;
     }
 
@@ -270,6 +281,7 @@ public final class BotSkill
         {
             return Integer.MAX_VALUE;
         }
+
         return cooldownTics + cooldownSpreadTics / 2 + BotRng.PER_MILLE / fireChancePermille;
     }
 

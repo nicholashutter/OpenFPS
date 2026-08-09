@@ -58,13 +58,21 @@ class MapLumpParserTest
             final MapLumpParser.Things things = MapLumpParser.parseThings(lump);
 
             assertThat(things.count()).isEqualTo(2);
+
             assertThat(things.x(0)).isEqualTo(1056);
+
             assertThat(things.y(0)).isEqualTo(-3616);
+
             assertThat(things.angle(0)).isEqualTo(90);
+
             assertThat(things.type(0)).isEqualTo(1);
+
             assertThat(things.flags(0)).isEqualTo(7);
+
             assertThat(things.x(1)).isEqualTo(-32768);
+
             assertThat(things.y(1)).isEqualTo(32767);
+
             assertThat(things.type(1)).isEqualTo(3004);
         }
 
@@ -113,14 +121,23 @@ class MapLumpParserTest
             final MapLumpParser.Linedefs lines = MapLumpParser.parseLinedefs(lump);
 
             assertThat(lines.count()).isEqualTo(2);
+
             assertThat(lines.startVertex(0)).isZero();
+
             assertThat(lines.endVertex(0)).isEqualTo(1);
+
             assertThat(lines.flags(0)).isEqualTo(1);
+
             assertThat(lines.rightSide(0)).isZero();
+
             assertThat(lines.startVertex(1)).isEqualTo(1);
+
             assertThat(lines.special(1)).isEqualTo(63);
+
             assertThat(lines.tag(1)).isEqualTo(12);
+
             assertThat(lines.rightSide(1)).isEqualTo(3);
+
             assertThat(lines.leftSide(1)).isEqualTo(4);
         }
 
@@ -133,7 +150,9 @@ class MapLumpParserTest
             final MapLumpParser.Linedefs lines = MapLumpParser.parseLinedefs(lump);
 
             assertThat(lines.leftSide(0)).isEqualTo(MapLumpParser.NO_SIDEDEF);
+
             assertThat(lines.leftSide(0)).isEqualTo(65535);
+
             assertThat(lines.isTwoSided(0)).isFalse();
         }
 
@@ -146,6 +165,7 @@ class MapLumpParserTest
             final MapLumpParser.Linedefs lines = MapLumpParser.parseLinedefs(lump);
 
             assertThat(lines.isTwoSided(0)).isTrue();
+
             assertThat(lines.leftSide(0)).isEqualTo(6);
         }
 
@@ -158,6 +178,7 @@ class MapLumpParserTest
             final MapLumpParser.Linedefs lines = MapLumpParser.parseLinedefs(lump);
 
             assertThat(lines.startVertex(0)).isEqualTo(40000);
+
             assertThat(lines.endVertex(0)).isEqualTo(50000);
         }
 
@@ -190,16 +211,27 @@ class MapLumpParserTest
             final MapLumpParser.Sectors sectors = MapLumpParser.parseSectors(lump);
 
             assertThat(sectors.count()).isEqualTo(2);
+
             assertThat(sectors.floorHeight(0)).isZero();
+
             assertThat(sectors.ceilingHeight(0)).isEqualTo(128);
+
             assertThat(sectors.floorTexture(0)).isEqualTo("FLOOR4_8");
+
             assertThat(sectors.ceilingTexture(0)).isEqualTo("CEIL3_5");
+
             assertThat(sectors.light(0)).isEqualTo(160);
+
             assertThat(sectors.floorHeight(1)).isEqualTo(-64);
+
             assertThat(sectors.floorTexture(1)).isEqualTo("NUKAGE1");
+
             assertThat(sectors.ceilingTexture(1)).isEqualTo("F_SKY1");
+
             assertThat(sectors.light(1)).isEqualTo(255);
+
             assertThat(sectors.special(1)).isEqualTo(7);
+
             assertThat(sectors.tag(1)).isEqualTo(3);
         }
 
@@ -244,11 +276,17 @@ class MapLumpParserTest
             final MapLumpParser.Vertexes vertexes = MapLumpParser.parseVertexes(lump);
 
             assertThat(vertexes.count()).isEqualTo(3);
+
             assertThat(vertexes.x(0)).isZero();
+
             assertThat(vertexes.y(0)).isZero();
+
             assertThat(vertexes.x(1)).isEqualTo(1024);
+
             assertThat(vertexes.y(1)).isEqualTo(-1024);
+
             assertThat(vertexes.x(2)).isEqualTo(-32768);
+
             assertThat(vertexes.y(2)).isEqualTo(32767);
         }
 
@@ -277,24 +315,35 @@ class MapLumpParserTest
             .lump("VERTEXES", WadBuilder.words(0, 0, 1024, -1024))
             .lump("SECTORS", sector(0, 128, "FLOOR4_8", "CEIL3_5", 160, 0, 0))
             .build();
+
         final WadReader reader = WadReader.fromBytes(image);
 
         final MapLumpParser.Things things =
             MapLumpParser.parseThings(reader.sliceLump(reader.findLump("THINGS")));
+
         final MapLumpParser.Linedefs lines =
             MapLumpParser.parseLinedefs(reader.sliceLump(reader.findLump("LINEDEFS")));
+
         final MapLumpParser.Vertexes vertexes =
             MapLumpParser.parseVertexes(reader.sliceLump(reader.findLump("VERTEXES")));
+
         final MapLumpParser.Sectors sectors =
             MapLumpParser.parseSectors(reader.sliceLump(reader.findLump("SECTORS")));
 
         assertThat(things.count()).isEqualTo(1);
+
         assertThat(things.x(0)).isEqualTo(1056);
+
         assertThat(lines.count()).isEqualTo(1);
+
         assertThat(lines.isTwoSided(0)).isFalse();
+
         assertThat(vertexes.count()).isEqualTo(2);
+
         assertThat(vertexes.y(1)).isEqualTo(-1024);
+
         assertThat(sectors.count()).isEqualTo(1);
+
         assertThat(sectors.ceilingTexture(0)).isEqualTo("CEIL3_5");
     }
 }

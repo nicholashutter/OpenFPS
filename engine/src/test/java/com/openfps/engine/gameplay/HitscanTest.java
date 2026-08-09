@@ -56,13 +56,17 @@ class HitscanTest
         void shouldHitWhenTargetIsStraightAhead()
         {
             final Target[] targets = {box(4, -1.0f, -1.0f, 10.0f, 1.0f, 1.0f, 12.0f)};
+
             final HitResult out = new HitResult();
 
             final boolean hit = fireForward(targets, out);
 
             assertThat(hit).isTrue();
+
             assertThat(out.hit()).isTrue();
+
             assertThat(out.entityId()).isEqualTo(4);
+
             assertThat(out.distance()).isEqualTo(10.0f);
         }
 
@@ -71,13 +75,17 @@ class HitscanTest
         void shouldMissWhenTargetIsOffToTheSide()
         {
             final Target[] targets = {box(4, 10.0f, -1.0f, 10.0f, 12.0f, 1.0f, 12.0f)};
+
             final HitResult out = new HitResult();
 
             final boolean hit = fireForward(targets, out);
 
             assertThat(hit).isFalse();
+
             assertThat(out.hit()).isFalse();
+
             assertThat(out.entityId()).isEqualTo(HitResult.NO_ENTITY);
+
             assertThat(out.distance()).isEqualTo(HitResult.NO_DISTANCE);
         }
 
@@ -89,6 +97,7 @@ class HitscanTest
             // origin. If the entry parameter were not clamped at zero this
             // would report a hit at a negative distance, which is the bug.
             final Target[] targets = {box(4, -1.0f, -1.0f, -12.0f, 1.0f, 1.0f, -10.0f)};
+
             final HitResult out = new HitResult();
 
             assertThat(fireForward(targets, out)).isFalse();
@@ -102,9 +111,11 @@ class HitscanTest
             // position. Touching counts, so this is a hit at distance 0 —
             // pinned here so the boundary rule is not accidentally reversed.
             final Target[] targets = {box(4, -1.0f, -1.0f, -10.0f, 1.0f, 1.0f, 0.0f)};
+
             final HitResult out = new HitResult();
 
             assertThat(fireForward(targets, out)).isTrue();
+
             assertThat(out.distance()).isEqualTo(0.0f);
         }
 
@@ -113,6 +124,7 @@ class HitscanTest
         void shouldHitWhenAimingDownADiagonal()
         {
             final Target[] targets = {box(4, 9.0f, -1.0f, 9.0f, 11.0f, 1.0f, 11.0f)};
+
             final HitResult out = new HitResult();
 
             final boolean hit = Hitscan.fire(0.0f, 0.0f, 0.0f, DIAGONAL, 0.0f, DIAGONAL,
@@ -120,6 +132,7 @@ class HitscanTest
 
             // Enters the x = 9 face at parameter 9 / (1/sqrt2) = 9*sqrt(2).
             assertThat(hit).isTrue();
+
             assertThat(out.distance())
                 .isCloseTo(9.0f * (float) StrictMath.sqrt(2.0), within(EPSILON));
         }
@@ -141,10 +154,13 @@ class HitscanTest
             // Callers keep fixed-size entity arrays with holes; compacting one
             // every tic would allocate, which is exactly what is banned.
             final Target[] targets = new Target[3];
+
             targets[1] = box(4, -1.0f, -1.0f, 10.0f, 1.0f, 1.0f, 12.0f);
+
             final HitResult out = new HitResult();
 
             assertThat(fireForward(targets, out)).isTrue();
+
             assertThat(out.entityId()).isEqualTo(4);
         }
 
@@ -157,10 +173,13 @@ class HitscanTest
                 box(4, -1.0f, -1.0f, 20.0f, 1.0f, 1.0f, 22.0f),
                 box(5, -1.0f, -1.0f, 10.0f, 1.0f, 1.0f, 12.0f),
             };
+
             final HitResult out = new HitResult();
 
             assertThat(Hitscan.fire(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, targets, 1, out)).isTrue();
+
             assertThat(out.entityId()).isEqualTo(4);
+
             assertThat(out.distance()).isEqualTo(20.0f);
         }
     }
@@ -179,10 +198,13 @@ class HitscanTest
                 box(3, -2.0f, -2.0f, 5.0f, 2.0f, 2.0f, 9.0f),
                 box(7, -2.0f, -2.0f, 12.0f, 2.0f, 2.0f, 16.0f),
             };
+
             final HitResult out = new HitResult();
 
             assertThat(fireForward(targets, out)).isTrue();
+
             assertThat(out.entityId()).isEqualTo(3);
+
             assertThat(out.distance()).isEqualTo(5.0f);
         }
 
@@ -197,9 +219,11 @@ class HitscanTest
                 box(1, -2.0f, -2.0f, 20.0f, 2.0f, 2.0f, 24.0f),
                 box(99, -2.0f, -2.0f, 5.0f, 2.0f, 2.0f, 9.0f),
             };
+
             final HitResult out = new HitResult();
 
             assertThat(fireForward(targets, out)).isTrue();
+
             assertThat(out.entityId()).isEqualTo(99);
         }
 
@@ -212,15 +236,21 @@ class HitscanTest
             // decide it — and two peers must not have to build their entity
             // lists in the same order.
             final Target low = box(3, -1.0f, -1.0f, 10.0f, 1.0f, 1.0f, 12.0f);
+
             final Target high = box(7, -2.0f, -2.0f, 10.0f, 2.0f, 2.0f, 20.0f);
 
             final HitResult lowFirst = new HitResult();
+
             final HitResult highFirst = new HitResult();
+
             assertThat(fireForward(new Target[] {low, high}, lowFirst)).isTrue();
+
             assertThat(fireForward(new Target[] {high, low}, highFirst)).isTrue();
 
             assertThat(lowFirst.entityId()).isEqualTo(3);
+
             assertThat(highFirst.entityId()).isEqualTo(3);
+
             assertThat(lowFirst.distance()).isEqualTo(highFirst.distance());
         }
 
@@ -229,21 +259,26 @@ class HitscanTest
         void shouldBreakThreeWayTiesByLowestIdFromEveryPermutation()
         {
             final Target a = box(11, -1.0f, -1.0f, 10.0f, 1.0f, 1.0f, 12.0f);
+
             final Target b = box(2, -2.0f, -2.0f, 10.0f, 2.0f, 2.0f, 13.0f);
+
             final Target c = box(40, -3.0f, -3.0f, 10.0f, 3.0f, 3.0f, 14.0f);
 
             final Target[][] permutations =
             {
                 {a, b, c}, {a, c, b}, {b, a, c}, {b, c, a}, {c, a, b}, {c, b, a},
             };
+
             final HitResult out = new HitResult();
 
             for (final Target[] permutation : permutations)
             {
                 assertThat(fireForward(permutation, out)).isTrue();
+
                 assertThat(out.entityId())
                     .as("permutation starting with id %d", permutation[0].entityId())
                     .isEqualTo(2);
+
                 assertThat(out.distance()).isEqualTo(10.0f);
             }
         }
@@ -262,10 +297,13 @@ class HitscanTest
             // connect. Making it a miss would create a dead zone at point
             // blank, which reads as the weapon being broken.
             final Target[] targets = {box(4, -5.0f, -5.0f, -5.0f, 5.0f, 5.0f, 5.0f)};
+
             final HitResult out = new HitResult();
 
             assertThat(fireForward(targets, out)).isTrue();
+
             assertThat(out.entityId()).isEqualTo(4);
+
             assertThat(out.distance()).isEqualTo(0.0f);
         }
 
@@ -274,14 +312,17 @@ class HitscanTest
         void shouldHitTheContainingBoxWhicheverWayTheShotFaces()
         {
             final Target[] targets = {box(4, -5.0f, -5.0f, -5.0f, 5.0f, 5.0f, 5.0f)};
+
             final HitResult out = new HitResult();
 
             assertThat(Hitscan.fire(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, -1.0f,
                 targets, 1, out)).isTrue();
+
             assertThat(out.distance()).isEqualTo(0.0f);
 
             assertThat(Hitscan.fire(0.0f, 0.0f, 0.0f, -1.0f, 0.0f, 0.0f,
                 targets, 1, out)).isTrue();
+
             assertThat(out.distance()).isEqualTo(0.0f);
         }
 
@@ -294,10 +335,13 @@ class HitscanTest
                 box(2, -1.0f, -1.0f, 10.0f, 1.0f, 1.0f, 12.0f),
                 box(50, -5.0f, -5.0f, -5.0f, 5.0f, 5.0f, 5.0f),
             };
+
             final HitResult out = new HitResult();
 
             assertThat(fireForward(targets, out)).isTrue();
+
             assertThat(out.entityId()).isEqualTo(50);
+
             assertThat(out.distance()).isEqualTo(0.0f);
         }
     }
@@ -316,13 +360,16 @@ class HitscanTest
             // is exactly 0, so the product is 0 * Infinity = NaN. NaN fails
             // every comparison, so the box silently reports a miss.
             final Target[] targets = {box(4, 0.0f, 0.0f, 10.0f, 2.0f, 2.0f, 12.0f)};
+
             final HitResult out = new HitResult();
 
             final boolean hit = Hitscan.fire(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f,
                 targets, 1, out);
 
             assertThat(hit).isTrue();
+
             assertThat(Float.isNaN(out.distance())).isFalse();
+
             assertThat(out.distance()).isEqualTo(10.0f);
         }
 
@@ -331,9 +378,11 @@ class HitscanTest
         void shouldHitWhenParallelRayOriginSitsExactlyOnTheSlabMaximum()
         {
             final Target[] targets = {box(4, -2.0f, -2.0f, 10.0f, 0.0f, 0.0f, 12.0f)};
+
             final HitResult out = new HitResult();
 
             assertThat(fireForward(targets, out)).isTrue();
+
             assertThat(out.distance()).isEqualTo(10.0f);
         }
 
@@ -342,6 +391,7 @@ class HitscanTest
         void shouldMissWhenParallelRayOriginIsOutsideTheSlab()
         {
             final Target[] targets = {box(4, 0.0f, 0.0f, 10.0f, 2.0f, 2.0f, 12.0f)};
+
             final HitResult out = new HitResult();
 
             // Just outside the x slab, everything else identical to the hit above.
@@ -357,12 +407,14 @@ class HitscanTest
             // did not, 1 / -0.0f is negative infinity and the slab arithmetic
             // produces the same NaN by the other route.
             final Target[] targets = {box(4, 0.0f, 0.0f, 10.0f, 2.0f, 2.0f, 12.0f)};
+
             final HitResult out = new HitResult();
 
             final boolean hit = Hitscan.fire(0.0f, 0.0f, 0.0f, -0.0f, -0.0f, 1.0f,
                 targets, 1, out);
 
             assertThat(hit).isTrue();
+
             assertThat(out.distance()).isEqualTo(10.0f);
         }
 
@@ -371,10 +423,12 @@ class HitscanTest
         void shouldTreatNegativeZeroOriginAsInsideASlabStartingAtZero()
         {
             final Target[] targets = {box(4, 0.0f, 0.0f, 10.0f, 2.0f, 2.0f, 12.0f)};
+
             final HitResult out = new HitResult();
 
             assertThat(Hitscan.fire(-0.0f, -0.0f, 0.0f, 0.0f, 0.0f, 1.0f,
                 targets, 1, out)).isTrue();
+
             assertThat(out.distance()).isEqualTo(10.0f);
         }
 
@@ -383,6 +437,7 @@ class HitscanTest
         void shouldHitWhenTwoDirectionComponentsAreZeroAndBothOriginsAreOnPlanes()
         {
             final Target[] targets = {box(4, 0.0f, 0.0f, 0.0f, 5.0f, 5.0f, 5.0f)};
+
             final HitResult out = new HitResult();
 
             // Origin on the x = 0 and y = 0 planes, aimed along +z from behind.
@@ -390,7 +445,9 @@ class HitscanTest
                 targets, 1, out);
 
             assertThat(hit).isTrue();
+
             assertThat(Float.isNaN(out.distance())).isFalse();
+
             assertThat(out.distance()).isEqualTo(3.0f);
         }
     }
@@ -406,10 +463,12 @@ class HitscanTest
             // Passes exactly along the y = 1 top face and the z = 0.5 interior
             // line, so the y slab contributes a boundary-touching containment.
             final Target[] targets = {box(4, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f)};
+
             final HitResult out = new HitResult();
 
             assertThat(Hitscan.fire(-5.0f, 1.0f, 0.5f, 1.0f, 0.0f, 0.0f,
                 targets, 1, out)).isTrue();
+
             assertThat(out.distance()).isEqualTo(5.0f);
         }
 
@@ -419,10 +478,12 @@ class HitscanTest
         {
             // Aimed along the x = 0, y = 0 corner line of the box.
             final Target[] targets = {box(4, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f)};
+
             final HitResult out = new HitResult();
 
             assertThat(Hitscan.fire(0.0f, 0.0f, -5.0f, 0.0f, 0.0f, 1.0f,
                 targets, 1, out)).isTrue();
+
             assertThat(out.distance()).isEqualTo(5.0f);
         }
 
@@ -434,12 +495,14 @@ class HitscanTest
             // to a point, so this is the `enter == exit` boundary. Inclusive
             // means it hits; an exclusive test would drop it.
             final Target[] targets = {box(4, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f)};
+
             final HitResult out = new HitResult();
 
             final boolean hit = Hitscan.fire(-1.0f, 0.0f, 0.5f, DIAGONAL, DIAGONAL, 0.0f,
                 targets, 1, out);
 
             assertThat(hit).isTrue();
+
             assertThat(out.distance()).isCloseTo(1.0f / DIAGONAL, within(EPSILON));
         }
 
@@ -449,10 +512,12 @@ class HitscanTest
         {
             // A floor plate or a trigger surface: min equals max on one axis.
             final Target[] targets = {box(4, -1.0f, 0.0f, -1.0f, 1.0f, 0.0f, 1.0f)};
+
             final HitResult out = new HitResult();
 
             assertThat(Hitscan.fire(0.0f, 5.0f, 0.0f, 0.0f, -1.0f, 0.0f,
                 targets, 1, out)).isTrue();
+
             assertThat(out.distance()).isEqualTo(5.0f);
         }
 
@@ -461,9 +526,11 @@ class HitscanTest
         void shouldHitADegenerateBoxThatIsAPoint()
         {
             final Target[] targets = {box(4, 0.0f, 0.0f, 7.0f, 0.0f, 0.0f, 7.0f)};
+
             final HitResult out = new HitResult();
 
             assertThat(fireForward(targets, out)).isTrue();
+
             assertThat(out.distance()).isEqualTo(7.0f);
         }
 
@@ -472,6 +539,7 @@ class HitscanTest
         void shouldMissAFlatBoxWhenTravellingParallelToIt()
         {
             final Target[] targets = {box(4, -1.0f, 0.0f, -1.0f, 1.0f, 0.0f, 1.0f)};
+
             final HitResult out = new HitResult();
 
             assertThat(Hitscan.fire(0.0f, 0.5f, -5.0f, 0.0f, 0.0f, 1.0f,
@@ -524,7 +592,9 @@ class HitscanTest
             // Reads the class's own constant rather than restating it, so
             // forking the tolerance breaks this test (STYLE.md § 13.3).
             final float slightlyLong = 1.0f + Hitscan.DIRECTION_LENGTH_TOLERANCE * 0.25f;
+
             final Target[] targets = {box(4, -1.0f, -1.0f, 10.0f, 1.0f, 1.0f, 12.0f)};
+
             final HitResult out = new HitResult();
 
             assertThat(Hitscan.fire(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, slightlyLong,
@@ -620,11 +690,17 @@ class HitscanTest
                 PLAYER_HALF_WIDTH, 64.0f);
 
             assertThat(player.entityId()).isEqualTo(6);
+
             assertThat(player.minX()).isEqualTo(10.0f - PLAYER_HALF_WIDTH);
+
             assertThat(player.maxX()).isEqualTo(10.0f + PLAYER_HALF_WIDTH);
+
             assertThat(player.minY()).isEqualTo(0.0f);
+
             assertThat(player.maxY()).isEqualTo(64.0f);
+
             assertThat(player.minZ()).isEqualTo(-4.0f - PLAYER_HALF_WIDTH);
+
             assertThat(player.maxZ()).isEqualTo(-4.0f + PLAYER_HALF_WIDTH);
         }
 
@@ -649,11 +725,14 @@ class HitscanTest
             {
                 Target.aroundFeet(6, 0.0f, 0.0f, 100.0f, PLAYER_HALF_WIDTH, 64.0f),
             };
+
             final HitResult out = new HitResult();
 
             assertThat(Hitscan.fire(0.0f, 41.0f, 0.0f, 0.0f, 0.0f, 1.0f,
                 targets, 1, out)).isTrue();
+
             assertThat(out.entityId()).isEqualTo(6);
+
             assertThat(out.distance()).isEqualTo(100.0f - PLAYER_HALF_WIDTH);
         }
     }
@@ -669,7 +748,9 @@ class HitscanTest
             final HitResult out = new HitResult();
 
             assertThat(out.hit()).isFalse();
+
             assertThat(out.entityId()).isEqualTo(HitResult.NO_ENTITY);
+
             assertThat(out.distance()).isEqualTo(HitResult.NO_DISTANCE);
         }
 
@@ -680,6 +761,7 @@ class HitscanTest
             // The reused-result design's one hazard: a caller that reads the
             // result without checking the boolean must still see a miss.
             final HitResult out = new HitResult();
+
             assertThat(fireForward(
                 new Target[] {box(4, -1.0f, -1.0f, 10.0f, 1.0f, 1.0f, 12.0f)}, out)).isTrue();
 
@@ -687,6 +769,7 @@ class HitscanTest
                 new Target[] {box(4, 50.0f, -1.0f, 10.0f, 52.0f, 1.0f, 12.0f)}, out)).isFalse();
 
             assertThat(out.entityId()).isEqualTo(HitResult.NO_ENTITY);
+
             assertThat(out.distance()).isEqualTo(HitResult.NO_DISTANCE);
         }
 
@@ -695,11 +778,13 @@ class HitscanTest
         void shouldResetOnDemand()
         {
             final HitResult out = new HitResult();
+
             fireForward(new Target[] {box(4, -1.0f, -1.0f, 10.0f, 1.0f, 1.0f, 12.0f)}, out);
 
             out.clear();
 
             assertThat(out.hit()).isFalse();
+
             assertThat(out.toString()).contains("miss");
         }
 
@@ -708,6 +793,7 @@ class HitscanTest
         void shouldUseSentinelsNoRealHitCanProduce()
         {
             assertThat(HitResult.NO_ENTITY).isLessThan(Target.MIN_ENTITY_ID);
+
             assertThat(HitResult.NO_DISTANCE).isLessThan(0.0f);
         }
     }
@@ -721,6 +807,7 @@ class HitscanTest
         void shouldReproduceTheSameBitsWhenRunTwice()
         {
             final int[] first = runScenario();
+
             final int[] second = runScenario();
 
             assertThat(second).isEqualTo(first);
@@ -734,15 +821,21 @@ class HitscanTest
             // could move the answer by even one ulp, two peers would eventually
             // disagree about a hit, which under lockstep is a desync.
             final Target near = box(31, -1.0f, -1.0f, 7.0f, 1.0f, 1.0f, 9.0f);
+
             final Target far = box(5, -3.0f, -3.0f, 25.0f, 3.0f, 3.0f, 30.0f);
+
             final Target middle = box(18, -2.0f, -2.0f, 12.0f, 2.0f, 2.0f, 16.0f);
 
             final HitResult forward = new HitResult();
+
             final HitResult reversed = new HitResult();
+
             assertThat(fireForward(new Target[] {near, middle, far}, forward)).isTrue();
+
             assertThat(fireForward(new Target[] {far, middle, near}, reversed)).isTrue();
 
             assertThat(reversed.entityId()).isEqualTo(forward.entityId());
+
             assertThat(Float.floatToRawIntBits(reversed.distance()))
                 .isEqualTo(Float.floatToRawIntBits(forward.distance()));
         }
@@ -772,6 +865,7 @@ class HitscanTest
             // Both are on the firing path, so the rule has to cover them too or
             // the guard just moves the problem one class sideways.
             assertThat(constantPoolOf(Target.class)).doesNotContain("java/lang/Math");
+
             assertThat(constantPoolOf(HitResult.class)).doesNotContain("java/lang/Math");
         }
 
@@ -794,6 +888,7 @@ class HitscanTest
             final String constantPool = constantPoolOf(Hitscan.class);
 
             assertThat(constantPool).doesNotContain("java/util/HashMap");
+
             assertThat(constantPool).doesNotContain("java/util/HashSet");
         }
     }
@@ -810,7 +905,9 @@ class HitscanTest
             box(7, -4.0f, -4.0f, 15.0f, 4.0f, 4.0f, 19.0f),
             box(21, -4.0f, -4.0f, 15.0f, 6.0f, 6.0f, 21.0f),
         };
+
         final HitResult out = new HitResult();
+
         final int[] bits = new int[64];
 
         for (int i = 0; i < 32; i++)
@@ -818,16 +915,23 @@ class HitscanTest
             // A fan of directions in the x/z plane, normalised exactly so the
             // unit-length check passes and the parameter is a true distance.
             final float weight = (float) (i - 16) / 64.0f;
+
             final float length = (float) StrictMath.sqrt(weight * weight + 1.0f);
+
             final float dirX = weight / length;
+
             final float dirZ = 1.0f / length;
 
             final boolean hit = Hitscan.fire(0.0f, 0.0f, 0.0f, dirX, 0.0f, dirZ,
                 targets, targets.length, out);
+
             bits[i * 2] = out.entityId();
+
             bits[i * 2 + 1] = Float.floatToRawIntBits(out.distance());
+
             assertThat(out.hit()).isEqualTo(hit);
         }
+
         return bits;
     }
 
@@ -851,9 +955,11 @@ class HitscanTest
     private static String constantPoolOf(final Class<?> type)
     {
         final String resource = type.getSimpleName() + ".class";
+
         try (InputStream in = type.getResourceAsStream(resource))
         {
             assertThat(in).as("class file for %s must be readable", type).isNotNull();
+
             return new String(in.readAllBytes(), StandardCharsets.ISO_8859_1);
         }
         catch (final IOException e)

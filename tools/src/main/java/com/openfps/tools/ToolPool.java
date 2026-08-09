@@ -40,6 +40,7 @@ public final class ToolPool
     private ToolPool(final I_EventBusPort eventBus, final I_ThreadPoolPort threadPool)
     {
         this.bus = eventBus;
+
         this.pool = threadPool;
     }
 
@@ -55,12 +56,18 @@ public final class ToolPool
         {
             return new ToolPool(null, null);
         }
+
         final I_EventBusPort eventBus = EventBusFactory.createShared();
+
         eventBus.init(BUS_CAPACITY);
+
         final I_ThreadPoolPort threadPool =
             ThreadPoolFactory.createFixed(eventBus, new SubsystemRegistry());
+
         threadPool.init(threads);
+
         threadPool.start();
+
         return new ToolPool(eventBus, threadPool);
     }
 
@@ -85,6 +92,7 @@ public final class ToolPool
         {
             return 0;
         }
+
         return pool.workerCount();
     }
 
@@ -95,6 +103,7 @@ public final class ToolPool
         {
             pool.shutdown();
         }
+
         if (bus != null)
         {
             bus.shutdown();

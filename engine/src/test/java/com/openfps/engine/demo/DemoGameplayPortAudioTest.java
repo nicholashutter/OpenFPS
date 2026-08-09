@@ -63,9 +63,13 @@ final class DemoGameplayPortAudioTest
     private static SoftwareRenderPort renderer()
     {
         final I_TimePort time = new NullTimePort();
+
         time.init();
+
         final SoftwareRenderPort port = new SoftwareRenderPort(null, time);
+
         port.init();
+
         return port;
     }
 
@@ -99,6 +103,7 @@ final class DemoGameplayPortAudioTest
     {
         final InputState state =
             InputState.of(0.0f, 0.0f, 0.0f, 0.0f, triggerDown, false, false);
+
         return new I_InputPort()
         {
             @Override
@@ -149,11 +154,13 @@ final class DemoGameplayPortAudioTest
     private static Match firingRange(final int count)
     {
         final Bot[] roster = new Bot[count];
+
         for (int index = 0; index < count; index++)
         {
             roster[index] = new Bot(Match.FIRST_BOT_ENTITY_ID + index, 0.0f, 0.0f,
                 OUT_OF_REACH_DISTANCE + index * 60.0f, BotPattern.SENTRY, 0.0f, 120, 0);
         }
+
         return new Match(roster);
     }
 
@@ -177,6 +184,7 @@ final class DemoGameplayPortAudioTest
     private static I_InputPort inputHeldFor(final int tics)
     {
         final InputState down = InputState.of(0.0f, 0.0f, 0.0f, 0.0f, true, false, false);
+
         return new I_InputPort()
         {
             /** MUTABLE: swapped for neutral once the hold is over. */
@@ -222,7 +230,9 @@ final class DemoGameplayPortAudioTest
     {
         final DemoGameplayPort port = new DemoGameplayPort(input(triggerDown), renderer(),
             new PlayerController(), config(), round, instancesFor(round));
+
         port.setMatchLive(true);
+
         return port;
     }
 
@@ -241,6 +251,7 @@ final class DemoGameplayPortAudioTest
             final DemoGameplayPort port = livePort(false, match());
 
             assertThat(port.audio()).isNotNull();
+
             assertThat(port.audio().isAudible()).isFalse();
         }
 
@@ -252,7 +263,9 @@ final class DemoGameplayPortAudioTest
             final DemoGameplayPort port = livePort(true, match());
 
             assertThatCode(() -> port.attachAudio(null)).doesNotThrowAnyException();
+
             assertThat(port.audio()).isNotNull();
+
             assertThatCode(() -> port.tick(0)).doesNotThrowAnyException();
         }
 
@@ -261,12 +274,15 @@ final class DemoGameplayPortAudioTest
         void shouldPlayThroughTheAttachedPort()
         {
             final NullAudioPort audio = new NullAudioPort();
+
             final DemoGameplayPort port = livePort(true, match());
+
             port.attachAudio(audio);
 
             port.tick(0);
 
             assertThat(audio.playCount()).isEqualTo(1L);
+
             assertThat(audio.lastSound()).isEqualTo(SoundId.WEAPON_FIRE);
         }
     }
@@ -284,13 +300,17 @@ final class DemoGameplayPortAudioTest
             // harmless, and this asserts the silence directly rather than
             // inferring it from a shot count.
             final NullAudioPort audio = new NullAudioPort();
+
             final Match round = match();
+
             final DemoGameplayPort port = livePort(true, round);
+
             port.attachAudio(audio);
 
             port.tick(0);
 
             assertThat(round.playerShotsFired()).isEqualTo(1);
+
             assertThat(audio.playCount()).isEqualTo(1L);
         }
 
@@ -304,18 +324,24 @@ final class DemoGameplayPortAudioTest
             // --fps, which is the exact coupling FIRE_INTERVAL_TICS exists to
             // break. It would also sound like a buzz rather than like a weapon.
             final NullAudioPort audio = new NullAudioPort();
+
             final Match round = match();
+
             final DemoGameplayPort port = livePort(true, round);
+
             port.attachAudio(audio);
 
             final int tics = 60;
+
             for (int tic = 0; tic < tics; tic++)
             {
                 port.tick(tic);
             }
 
             final long expected = 1L + (tics - 1) / DemoGameplayPort.FIRE_INTERVAL_TICS;
+
             assertThat(audio.playCount()).isEqualTo(expected);
+
             assertThat(audio.playCount()).isEqualTo((long) round.playerShotsFired());
         }
 
@@ -328,13 +354,17 @@ final class DemoGameplayPortAudioTest
             // happened when you connected would tell the player the outcome
             // before the game does. Same rule as the tracer.
             final NullAudioPort audio = new NullAudioPort();
+
             final Match round = match();
+
             final DemoGameplayPort port = livePort(true, round);
+
             port.attachAudio(audio);
 
             port.tick(0);
 
             assertThat(round.playerShotsHit()).as("the fixture was meant to miss").isZero();
+
             assertThat(audio.playCount())
                 .as("the shot was silent because it missed")
                 .isEqualTo(1L);
@@ -350,7 +380,9 @@ final class DemoGameplayPortAudioTest
         void shouldFireTheOrdinaryBlasterFirst()
         {
             final NullAudioPort audio = new NullAudioPort();
+
             final DemoGameplayPort port = livePort(true, firingRange(6));
+
             port.attachAudio(audio);
 
             port.tick(0);
@@ -367,14 +399,19 @@ final class DemoGameplayPortAudioTest
             // property of it. So the last sound on the arming tic is the chime — and
             // if it is the weapon instead, the award was announced after a return.
             final NullAudioPort audio = new NullAudioPort();
+
             final Match round = firingRange(6);
+
             final DemoGameplayPort port = livePort(true, round);
+
             port.attachAudio(audio);
 
             final int armedAt = runUntilArmed(port, round);
 
             assertThat(armedAt).as("the reward was never earned at all").isPositive();
+
             assertThat(round.botsKilled()).isEqualTo(Match.SUPER_BLASTER_KILL_STREAK);
+
             assertThat(audio.lastSound()).isEqualTo(SoundId.SUPER_BLASTER_READY);
         }
 
@@ -386,9 +423,13 @@ final class DemoGameplayPortAudioTest
             // modifies: the player hears their own trigger five times a second, so a
             // buff that changed the damage and not the noise could only be seen.
             final NullAudioPort audio = new NullAudioPort();
+
             final Match round = firingRange(6);
+
             final DemoGameplayPort port = livePort(true, round);
+
             port.attachAudio(audio);
+
             final int armedAt = runUntilArmed(port, round);
 
             for (int tic = armedAt + 1; tic <= armedAt + DemoGameplayPort.FIRE_INTERVAL_TICS;
@@ -398,6 +439,7 @@ final class DemoGameplayPortAudioTest
             }
 
             assertThat(round.isSuperBlaster()).isTrue();
+
             assertThat(audio.lastSound()).isEqualTo(SoundId.SUPER_WEAPON_FIRE);
         }
 
@@ -410,10 +452,14 @@ final class DemoGameplayPortAudioTest
             // one. The trigger is released before the window closes so that the
             // expiry is the last thing played rather than the next shot.
             final NullAudioPort audio = new NullAudioPort();
+
             final Match round = firingRange(6);
+
             final DemoGameplayPort port = new DemoGameplayPort(inputHeldFor(150), renderer(),
                 new PlayerController(), config(), round, instancesFor(round));
+
             port.setMatchLive(true);
+
             port.attachAudio(audio);
 
             // 150 tics of held trigger is thirteen shots at the twelve-tic cadence,
@@ -425,6 +471,7 @@ final class DemoGameplayPortAudioTest
             }
 
             assertThat(round.isSuperBlaster()).isFalse();
+
             assertThat(audio.lastSound()).isEqualTo(SoundId.SUPER_BLASTER_SPENT);
         }
 
@@ -436,11 +483,13 @@ final class DemoGameplayPortAudioTest
             for (int tic = 0; tic < 600; tic++)
             {
                 port.tick(tic);
+
                 if (round.isSuperBlaster())
                 {
                     return tic;
                 }
             }
+
             return -1;
         }
     }
@@ -454,7 +503,9 @@ final class DemoGameplayPortAudioTest
         void shouldBeSilentWithoutATrigger()
         {
             final NullAudioPort audio = new NullAudioPort();
+
             final DemoGameplayPort port = livePort(false, match());
+
             port.attachAudio(audio);
 
             for (int tic = 0; tic < 60; tic++)
@@ -474,11 +525,14 @@ final class DemoGameplayPortAudioTest
             // player mashing the mouse on the menu must not hear their blaster
             // through it.
             final NullAudioPort audio = new NullAudioPort();
+
             final DemoGameplayPort port = new DemoGameplayPort(input(true), renderer(),
                 new PlayerController(), config(), match(), new int[] {0});
+
             port.attachAudio(audio);
 
             assertThat(port.isMatchLive()).isFalse();
+
             for (int tic = 0; tic < 60; tic++)
             {
                 port.tick(tic);
@@ -488,7 +542,9 @@ final class DemoGameplayPortAudioTest
 
             // And it comes back when the world does.
             port.setMatchLive(true);
+
             port.tick(60);
+
             assertThat(audio.playCount()).isEqualTo(1L);
         }
 
@@ -500,9 +556,12 @@ final class DemoGameplayPortAudioTest
             // match, no opponents. Firing into it must be silent rather than
             // throwing on the null match.
             final NullAudioPort audio = new NullAudioPort();
+
             final DemoGameplayPort port = new DemoGameplayPort(input(true), renderer(),
                 new PlayerController(), config());
+
             port.attachAudio(audio);
+
             port.setMatchLive(true);
 
             for (int tic = 0; tic < 60; tic++)

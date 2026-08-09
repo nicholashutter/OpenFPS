@@ -37,6 +37,7 @@ final class BlasterSoundTest
         {
             assertThat(BlasterSound.sampleCount())
                 .isEqualTo(BlasterSound.SAMPLE_RATE * BlasterSound.DURATION_MS / 1000);
+
             assertThat(BlasterSound.samples()).hasSize(BlasterSound.sampleCount());
         }
 
@@ -45,11 +46,13 @@ final class BlasterSoundTest
         void shouldNotShareItsBuffer()
         {
             final short[] first = BlasterSound.samples();
+
             final short[] second = BlasterSound.samples();
 
             assertThat(first).isNotSameAs(second).isEqualTo(second);
 
             first[100] = 0;
+
             assertThat(BlasterSound.samples()[100])
                 .as("a mutated buffer leaked into the next generation")
                 .isEqualTo(second[100]);
@@ -92,6 +95,7 @@ final class BlasterSoundTest
         {
             assertThat(BlasterSound.frequencyAt(0))
                 .isCloseTo(BlasterSound.START_HZ, within(HZ_EPSILON));
+
             assertThat(BlasterSound.frequencyAt(BlasterSound.sampleCount()))
                 .isCloseTo(BlasterSound.END_HZ, within(HZ_EPSILON));
         }
@@ -101,10 +105,13 @@ final class BlasterSoundTest
         void shouldFallThroughout()
         {
             double previous = BlasterSound.frequencyAt(0);
+
             for (int index = 1; index < BlasterSound.sampleCount(); index++)
             {
                 final double current = BlasterSound.frequencyAt(index);
+
                 assertThat(current).isLessThanOrEqualTo(previous);
+
                 previous = current;
             }
         }
@@ -119,12 +126,15 @@ final class BlasterSoundTest
             // of that: the ratio across the first half equals the ratio across
             // the second.
             final int count = BlasterSound.sampleCount();
+
             final double firstHalf =
                 BlasterSound.frequencyAt(0) / BlasterSound.frequencyAt(count / 2);
+
             final double secondHalf =
                 BlasterSound.frequencyAt(count / 2) / BlasterSound.frequencyAt(count);
 
             assertThat(firstHalf).isCloseTo(secondHalf, within(0.01));
+
             // And it really is a ratio worth having: a linear sweep would put
             // the midpoint at (900 + 120) / 2 = 510 Hz. Geometric puts it at
             // sqrt(900 * 120) ~= 329 Hz, most of an octave lower.
@@ -150,8 +160,11 @@ final class BlasterSoundTest
             final short[] pcm = BlasterSound.samples();
 
             assertThat(BlasterSound.envelopeAt(0)).isEqualTo(0.0);
+
             assertThat(BlasterSound.envelopeAt(BlasterSound.sampleCount() - 1)).isEqualTo(0.0);
+
             assertThat(pcm[0]).isEqualTo((short) 0);
+
             assertThat(pcm[pcm.length - 1]).isEqualTo((short) 0);
         }
 
@@ -170,7 +183,9 @@ final class BlasterSoundTest
         void shouldBeSilentOutsideTheBuffer()
         {
             assertThat(BlasterSound.envelopeAt(-1)).isEqualTo(0.0);
+
             assertThat(BlasterSound.envelopeAt(BlasterSound.sampleCount())).isEqualTo(0.0);
+
             assertThat(BlasterSound.envelopeAt(Integer.MAX_VALUE)).isEqualTo(0.0);
         }
 
@@ -183,10 +198,12 @@ final class BlasterSoundTest
             // sample by sample, because the waveform itself crosses zero
             // constantly and any two adjacent samples prove nothing.
             final short[] pcm = BlasterSound.samples();
+
             final int third = pcm.length / 3;
 
             assertThat(peakBetween(pcm, third, 2 * third))
                 .isLessThan(peakBetween(pcm, 0, third));
+
             assertThat(peakBetween(pcm, 2 * third, pcm.length))
                 .isLessThan(peakBetween(pcm, third, 2 * third));
         }
@@ -206,10 +223,12 @@ final class BlasterSoundTest
         private static int peakBetween(final short[] pcm, final int from, final int to)
         {
             int peak = 0;
+
             for (int index = from; index < to; index++)
             {
                 peak = Math.max(peak, Math.abs(pcm[index]));
             }
+
             return peak;
         }
     }

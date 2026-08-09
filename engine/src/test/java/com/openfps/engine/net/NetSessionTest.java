@@ -84,6 +84,7 @@ class NetSessionTest
         public void send(final byte[] data, final String address)
         {
             sent.addLast(data.clone());
+
             destinations.addLast(address);
         }
 
@@ -117,6 +118,7 @@ class NetSessionTest
             while (!sent.isEmpty())
             {
                 other.inbox.addLast(sent.pollFirst());
+
                 destinations.pollFirst();
             }
         }
@@ -125,6 +127,7 @@ class NetSessionTest
         private void dropAll()
         {
             sent.clear();
+
             destinations.clear();
         }
     }
@@ -145,19 +148,29 @@ class NetSessionTest
         void shouldDeliverEveryTicWhenTheLinkIsClean()
         {
             final ScriptedSocket ourSocket = new ScriptedSocket();
+
             final ScriptedSocket theirSocket = new ScriptedSocket();
+
             final NetSession us = new NetSession(ourSocket, US, TIC_NANOS);
+
             final NetSession them = new NetSession(theirSocket, THEM, TIC_NANOS);
+
             us.open(0);
+
             them.open(0);
+
             us.addPeer(THEM, THEIR_ADDRESS);
+
             them.addPeer(US, "10.0.0.1:5021");
 
             for (int tic = 0; tic < 30; tic++)
             {
                 us.recordLocalCommand(commandFor(tic));
+
                 us.tick(tic);
+
                 ourSocket.deliverTo(theirSocket);
+
                 them.tick(tic);
             }
 
@@ -166,6 +179,7 @@ class NetSessionTest
                 assertThat(them.commands().has(1, tic))
                     .as("tic %d never arrived", tic)
                     .isTrue();
+
                 assertThat(them.commands().forward(1, tic)).isEqualTo(commandFor(tic).forward());
             }
         }
@@ -180,19 +194,29 @@ class NetSessionTest
             // several tics of frozen game. A command is twelve bytes, so
             // re-sending the last few every time makes the loss free.
             final ScriptedSocket ourSocket = new ScriptedSocket();
+
             final ScriptedSocket theirSocket = new ScriptedSocket();
+
             final NetSession us = new NetSession(ourSocket, US, TIC_NANOS);
+
             final NetSession them = new NetSession(theirSocket, THEM, TIC_NANOS);
+
             us.open(0);
+
             them.open(0);
+
             us.addPeer(THEM, THEIR_ADDRESS);
+
             them.addPeer(US, "10.0.0.1:5021");
 
             final int lostTic = 5;
+
             for (int tic = 0; tic < 20; tic++)
             {
                 us.recordLocalCommand(commandFor(tic));
+
                 us.tick(tic);
+
                 if (tic == lostTic)
                 {
                     ourSocket.dropAll();
@@ -201,6 +225,7 @@ class NetSessionTest
                 {
                     ourSocket.deliverTo(theirSocket);
                 }
+
                 them.tick(tic);
             }
 
@@ -208,6 +233,7 @@ class NetSessionTest
             assertThat(them.commands().has(1, lostTic))
                 .as("the redundancy window did not cover the lost tic")
                 .isTrue();
+
             assertThat(them.commands().forward(1, lostTic))
                 .isEqualTo(commandFor(lostTic).forward());
         }
@@ -217,18 +243,27 @@ class NetSessionTest
         void shouldRecoverABurstWithinTheWindow()
         {
             final ScriptedSocket ourSocket = new ScriptedSocket();
+
             final ScriptedSocket theirSocket = new ScriptedSocket();
+
             final NetSession us = new NetSession(ourSocket, US, TIC_NANOS);
+
             final NetSession them = new NetSession(theirSocket, THEM, TIC_NANOS);
+
             us.open(0);
+
             them.open(0);
+
             us.addPeer(THEM, THEIR_ADDRESS);
+
             them.addPeer(US, "10.0.0.1:5021");
 
             for (int tic = 0; tic < 40; tic++)
             {
                 us.recordLocalCommand(commandFor(tic));
+
                 us.tick(tic);
+
                 if (tic >= 10 && tic <= 12)
                 {
                     ourSocket.dropAll();
@@ -237,6 +272,7 @@ class NetSessionTest
                 {
                     ourSocket.deliverTo(theirSocket);
                 }
+
                 them.tick(tic);
             }
 
@@ -253,26 +289,40 @@ class NetSessionTest
         void shouldCountTrafficWhenExchanging()
         {
             final ScriptedSocket ourSocket = new ScriptedSocket();
+
             final ScriptedSocket theirSocket = new ScriptedSocket();
+
             final NetSession us = new NetSession(ourSocket, US, TIC_NANOS);
+
             final NetSession them = new NetSession(theirSocket, THEM, TIC_NANOS);
+
             us.open(0);
+
             them.open(0);
+
             us.addPeer(THEM, THEIR_ADDRESS);
+
             them.addPeer(US, "10.0.0.1:5021");
 
             for (int tic = 0; tic < 10; tic++)
             {
                 us.recordLocalCommand(commandFor(tic));
+
                 us.tick(tic);
+
                 ourSocket.deliverTo(theirSocket);
+
                 them.tick(tic);
             }
 
             assertThat(us.packetsSent()).isEqualTo(10);
+
             assertThat(them.packetsReceived()).isEqualTo(10);
+
             assertThat(them.commandsAccepted()).isGreaterThanOrEqualTo(10);
+
             assertThat(us.bytesSent()).isPositive();
+
             assertThat(them.bytesReceived()).isEqualTo(us.bytesSent());
         }
 
@@ -282,14 +332,19 @@ class NetSessionTest
         {
             // packWindow would otherwise be asked for a window ending at tic -1.
             final ScriptedSocket ourSocket = new ScriptedSocket();
+
             final NetSession us = new NetSession(ourSocket, US, TIC_NANOS);
+
             us.open(0);
+
             us.addPeer(THEM, THEIR_ADDRESS);
 
             us.tick(0);
+
             us.tick(1);
 
             assertThat(us.packetsSent()).isZero();
+
             assertThat(us.latestLocalTic()).isEqualTo(-1);
         }
     }
@@ -305,20 +360,31 @@ class NetSessionTest
             // Counted, not auto-connected. Adding peers from unsolicited traffic
             // is how a game becomes a reflector for someone else's traffic.
             final ScriptedSocket ourSocket = new ScriptedSocket();
+
             final ScriptedSocket strangerSocket = new ScriptedSocket();
+
             final NetSession us = new NetSession(ourSocket, US, TIC_NANOS);
+
             final NetSession stranger = new NetSession(strangerSocket, 99, TIC_NANOS);
+
             us.open(0);
+
             stranger.open(0);
+
             stranger.addPeer(US, "10.0.0.1:5021");
 
             stranger.recordLocalCommand(commandFor(0));
+
             stranger.tick(0);
+
             strangerSocket.deliverTo(ourSocket);
+
             us.tick(0);
 
             assertThat(us.packetsFromStrangers()).isEqualTo(1);
+
             assertThat(us.packetsReceived()).isZero();
+
             assertThat(us.commandsAccepted()).isZero();
         }
 
@@ -330,15 +396,21 @@ class NetSessionTest
             // not throw, and it must not be logged per packet either — that
             // would be a log-flooding hole.
             final ScriptedSocket ourSocket = new ScriptedSocket();
+
             final NetSession us = new NetSession(ourSocket, US, TIC_NANOS);
+
             us.open(0);
+
             us.addPeer(THEM, THEIR_ADDRESS);
 
             ourSocket.inbox.addLast(new byte[] { 1, 2, 3 });
+
             ourSocket.inbox.addLast(new byte[0]);
+
             us.tick(0);
 
             assertThat(us.packetsMalformed()).isEqualTo(2);
+
             assertThat(us.packetsReceived()).isZero();
         }
 
@@ -350,19 +422,28 @@ class NetSessionTest
             // one per tic would make the backlog permanent and the game
             // permanently behind.
             final ScriptedSocket ourSocket = new ScriptedSocket();
+
             final ScriptedSocket theirSocket = new ScriptedSocket();
+
             final NetSession us = new NetSession(ourSocket, US, TIC_NANOS);
+
             final NetSession them = new NetSession(theirSocket, THEM, TIC_NANOS);
+
             us.open(0);
+
             them.open(0);
+
             us.addPeer(THEM, THEIR_ADDRESS);
+
             them.addPeer(US, "10.0.0.1:5021");
 
             for (int tic = 0; tic < 5; tic++)
             {
                 them.recordLocalCommand(commandFor(tic));
+
                 them.tick(tic);
             }
+
             theirSocket.deliverTo(ourSocket);
 
             us.tick(5);
@@ -393,6 +474,7 @@ class NetSessionTest
             // Two peers on one id would share a buffer slot and overwrite each
             // other's inputs, which reads as one peer teleporting.
             final NetSession us = new NetSession(new ScriptedSocket(), US, TIC_NANOS);
+
             us.addPeer(THEM, THEIR_ADDRESS);
 
             assertThatThrownBy(() -> us.addPeer(THEM, "10.0.0.3:5021"))
@@ -405,12 +487,14 @@ class NetSessionTest
         void shouldFillEverySlotButOurOwn()
         {
             final NetSession us = new NetSession(new ScriptedSocket(), 0, TIC_NANOS);
+
             for (int peer = 1; peer <= NetSession.MAX_PEERS; peer++)
             {
                 assertThat(us.addPeer(peer, "10.0.0." + peer)).isEqualTo(peer);
             }
 
             assertThat(us.peerCount()).isEqualTo(Constants.MAX_PLAYERS - 1);
+
             assertThatThrownBy(() -> us.addPeer(99, "10.0.0.99"))
                 .isInstanceOf(IllegalStateException.class);
         }
@@ -422,7 +506,9 @@ class NetSessionTest
             final NetSession us = new NetSession(new ScriptedSocket(), US, TIC_NANOS);
 
             assertThat(NetSession.LOCAL_SLOT).isZero();
+
             assertThat(us.addPeer(THEM, THEIR_ADDRESS)).isEqualTo(1);
+
             assertThat(us.addPeer(3, "10.0.0.3")).isEqualTo(2);
         }
 
@@ -431,10 +517,13 @@ class NetSessionTest
         void shouldFindAPeerById()
         {
             final NetSession us = new NetSession(new ScriptedSocket(), US, TIC_NANOS);
+
             us.addPeer(THEM, THEIR_ADDRESS);
 
             assertThat(us.peerById(THEM)).isNotNull();
+
             assertThat(us.peerById(THEM).address()).isEqualTo(THEIR_ADDRESS);
+
             assertThat(us.peerById(4242)).isNull();
         }
 
@@ -444,8 +533,10 @@ class NetSessionTest
         {
             assertThatThrownBy(() -> new NetSession(null, US, TIC_NANOS))
                 .isInstanceOf(IllegalArgumentException.class);
+
             assertThatThrownBy(() -> new NetSession(new ScriptedSocket(), -1, TIC_NANOS))
                 .isInstanceOf(IllegalArgumentException.class);
+
             assertThatThrownBy(() -> new NetSession(new ScriptedSocket(), US, 0))
                 .isInstanceOf(IllegalArgumentException.class);
         }
@@ -456,14 +547,21 @@ class NetSessionTest
         {
             // Shutdown paths run whether or not startup got that far.
             final ScriptedSocket socket = new ScriptedSocket();
+
             final NetSession us = new NetSession(socket, US, TIC_NANOS);
+
             us.addPeer(THEM, THEIR_ADDRESS);
+
             us.recordLocalCommand(commandFor(0));
 
             assertThat(us.isOpen()).isFalse();
+
             assertThat(us.tick(0)).isZero();
+
             assertThat(us.packetsSent()).isZero();
+
             us.close();
+
             us.close();
         }
 
@@ -472,9 +570,11 @@ class NetSessionTest
         void shouldBindTheGivenPort()
         {
             final ScriptedSocket socket = new ScriptedSocket();
+
             new NetSession(socket, US, TIC_NANOS).open(NetSession.DEFAULT_PORT);
 
             assertThat(socket.boundPort).isEqualTo(Constants.DEFAULT_NET_PORT);
+
             assertThat(socket.live).isTrue();
         }
     }

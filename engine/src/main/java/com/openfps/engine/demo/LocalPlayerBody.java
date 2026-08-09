@@ -152,14 +152,18 @@ public final class LocalPlayerBody
         {
             throw new IllegalArgumentException("builder must not be null");
         }
+
         final int at = builder.worldInstanceCount();
+
         // UNTAGGED: the local player is not a target — it would shoot itself on
         // every trigger pull, and that is the bug Hitscan was built to avoid
         // for the bots. The outline pass would also draw a band of red around
         // a body that is always centred on the camera, which is the most
         // conspicuous possible artefact.
         builder.addWorldInstance(FirstPersonArms.model(), Mat4.identity());
+
         LOG.info("Local player body: arms placed at world instance {}", at);
+
         return new LocalPlayerBody(at);
     }
 
@@ -190,32 +194,41 @@ public final class LocalPlayerBody
         {
             throw new IllegalArgumentException("renderer must not be null");
         }
+
         if (controller == null)
         {
             throw new IllegalArgumentException("controller must not be null");
         }
+
         if (input == null)
         {
             throw new IllegalArgumentException("input must not be null");
         }
+
         if (!(deltaSeconds >= 0.0f))
         {
             throw new IllegalArgumentException("deltaSeconds must be non-negative, got "
                 + deltaSeconds);
         }
+
         if (renderer.scene() == null)
         {
             return;
         }
+
         // StrictMath.hypot is bit-exact across JVMs and is what the
         // controller itself uses; consistency is the bar. Clamp to
         // MAX_INTENSITY so the controller's diagonal-scaling does not
         // change the bob: a held forward (1, 0) and a held diagonal
         // (1/√2, 1/√2) both have unit intensity.
         final float forward = clamp(input.forwardAxis());
+
         final float strafe = clamp(input.strafeAxis());
+
         final float intensity = (float) StrictMath.hypot(forward, strafe);
+
         float clamped = intensity;
+
         if (clamped > MAX_INTENSITY)
         {
             clamped = MAX_INTENSITY;
@@ -227,16 +240,21 @@ public final class LocalPlayerBody
         // diagonal bobs at the same rate.
         this.bobPhase = bobPhase
             + (float) (clamped * BOB_FREQUENCY_HZ * 2.0 * StrictMath.PI * deltaSeconds);
+
         // Normalise the phase to keep float precision from degrading during
         // a long sprint — at 1e7 radians the spacing between adjacent floats
         // is about a radian, and the bob would visibly quantise.
         this.bobPhase = wrapPhase(bobPhase);
+
         final float bobY = clamped / MAX_INTENSITY * BOB_AMPLITUDE_UNITS
             * (float) StrictMath.sin(bobPhase);
 
         final float eyeX = controller.positionX();
+
         final float eyeY = controller.positionY() + PlayerController.EYE_HEIGHT_UNITS;
+
         final float eyeZ = controller.positionZ();
+
         renderer.setWorldTransform(armsInstance, armsTransform(eyeX, eyeY, eyeZ,
             controller.yawRadians(), controller.pitchRadians(), bobY));
     }
@@ -282,9 +300,13 @@ public final class LocalPlayerBody
         // already-deterministic state, so this is consistency rather than a
         // new source of divergence.
         final float cosYaw = (float) StrictMath.cos(yawRadians);
+
         final float sinYaw = (float) StrictMath.sin(yawRadians);
+
         final float cosPitch = (float) StrictMath.cos(pitchRadians);
+
         final float sinPitch = (float) StrictMath.sin(pitchRadians);
+
         final float cosPitchSq = cosPitch * cosPitch;
 
         // Camera basis in world coordinates, derived as forward x worldUp for
@@ -337,10 +359,12 @@ public final class LocalPlayerBody
         {
             return 1.0f;
         }
+
         if (axis < -1.0f)
         {
             return -1.0f;
         }
+
         return axis;
     }
 
@@ -351,11 +375,14 @@ public final class LocalPlayerBody
     private static float wrapPhase(final float phase)
     {
         final float twoPi = (float) (2.0 * StrictMath.PI);
+
         float reduced = phase - (float) Math.floor(phase / twoPi) * twoPi;
+
         if (reduced < 0.0f)
         {
             reduced = reduced + twoPi;
         }
+
         return reduced;
     }
 }

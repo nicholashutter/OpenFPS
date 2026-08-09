@@ -43,6 +43,7 @@ class DesktopAdapterFactoryTest
     static void redirectDatabaseToTempDir()
     {
         previousDbPath = System.getProperty(PROP_DB_PATH);
+
         System.setProperty(PROP_DB_PATH, tempDir.resolve("desktop-factory-test.db").toString());
     }
 
@@ -64,6 +65,7 @@ class DesktopAdapterFactoryTest
     void shouldSelectDesktopFactoryForDesktopBackend()
     {
         final I_AdapterFactory factory = AdapterFactorySelector.create(HalBackend.DESKTOP);
+
         assertThat(factory).isInstanceOf(DesktopAdapterFactory.class);
     }
 
@@ -72,11 +74,15 @@ class DesktopAdapterFactoryTest
     void shouldExposeRealTimeAndDatagramPorts()
     {
         final DesktopAdapterFactory factory = new DesktopAdapterFactory();
+
         factory.init();
+
         try
         {
             assertThat(factory.getTimePort()).isInstanceOf(DesktopTimePort.class);
+
             assertThat(factory.getDatagramPort()).isInstanceOf(DesktopDatagramPort.class);
+
             assertThat(factory.getUserProfilePort()).isInstanceOf(SqliteUserProfilePort.class);
         }
         finally
@@ -90,12 +96,17 @@ class DesktopAdapterFactoryTest
     void shouldKeepInputAndWindowNull()
     {
         final DesktopAdapterFactory factory = new DesktopAdapterFactory();
+
         factory.init();
+
         try
         {
             assertThat(factory.getWindowPort().isRealWindow()).isFalse();
+
             assertThat(factory.getInputPort().isShutdownRequested()).isFalse();
+
             assertThat(factory.getFilePort()).isNotNull();
+
             assertThat(factory.getSystemInfoPort()).isNotNull();
         }
         finally
@@ -109,11 +120,15 @@ class DesktopAdapterFactoryTest
     void shouldDriveUserProfileLifecycle()
     {
         final DesktopAdapterFactory factory = new DesktopAdapterFactory();
+
         factory.init();
+
         final I_UserProfilePort profiles = factory.getUserProfilePort();
+
         assertThat(profiles.state()).isEqualTo(I_UserProfilePort.State.READY);
 
         factory.shutdown();
+
         assertThat(profiles.state()).isEqualTo(I_UserProfilePort.State.SHUTDOWN);
     }
 
@@ -122,12 +137,15 @@ class DesktopAdapterFactoryTest
     void shouldInitializeTimePortDuringFactoryInit()
     {
         final DesktopAdapterFactory factory = new DesktopAdapterFactory();
+
         factory.init();
+
         try
         {
             // A factory-initialized clock reports a small elapsed time, not
             // the raw JVM-wide nanoTime value.
             assertThat(factory.getTimePort().nanos()).isGreaterThanOrEqualTo(0L);
+
             assertThat(factory.getTimePort().millis()).isGreaterThanOrEqualTo(0L);
         }
         finally

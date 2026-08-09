@@ -75,6 +75,7 @@ class BotSkillTest
             // demo goes quiet. The old cadence was 150 tics per bot, which across
             // seven bots is a shot somewhere every 21.
             final int oldRoomInterval = 150 / Match.DEFAULT_BOT_COUNT;
+
             final int newRoomInterval =
                 BotSkill.DUMB.meanShotIntervalTics() / Match.DEFAULT_BOT_COUNT;
 
@@ -106,10 +107,15 @@ class BotSkillTest
             // quietly becomes a statistical one and the suite starts failing once
             // a month for no reason. That is worth four lines here.
             assertThat(BotSkill.MARKSMAN.aimSpreadRadians()).isZero();
+
             assertThat(BotSkill.MARKSMAN.wildShotChancePermille()).isZero();
+
             assertThat(BotSkill.MARKSMAN.fireChancePermille()).isEqualTo(BotRng.PER_MILLE);
+
             assertThat(BotSkill.MARKSMAN.reactionTics()).isEqualTo(1);
+
             assertThat(BotSkill.MARKSMAN.cooldownSpreadTics()).isZero();
+
             assertThat(BotSkill.MARKSMAN.cooldownTics()).isEqualTo(1);
         }
 
@@ -132,8 +138,10 @@ class BotSkillTest
             assertThatThrownBy(() -> new BotSkill(-1, 45, 90, 0.2f, 150, 24))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("triggerChancePermille");
+
             assertThatThrownBy(() -> new BotSkill(1001, 45, 90, 0.2f, 150, 24))
                 .isInstanceOf(IllegalArgumentException.class);
+
             assertThatThrownBy(() -> new BotSkill(25, 45, 90, 0.2f, 1001, 24))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("wildChancePermille");
@@ -158,9 +166,11 @@ class BotSkillTest
             assertThatThrownBy(() -> new BotSkill(25, 45, 90, Float.NaN, 150, 24))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("spreadRadians");
+
             assertThatThrownBy(
                 () -> new BotSkill(25, 45, 90, Float.POSITIVE_INFINITY, 150, 24))
                 .isInstanceOf(IllegalArgumentException.class);
+
             assertThatThrownBy(() -> new BotSkill(25, 45, 90, -0.1f, 150, 24))
                 .isInstanceOf(IllegalArgumentException.class);
         }
@@ -172,6 +182,7 @@ class BotSkillTest
             assertThatThrownBy(() -> new BotSkill(25, 45, 90, 0.2f, 150, 0))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("awarenessTics");
+
             assertThatThrownBy(() -> new BotSkill(25, 45, -1, 0.2f, 150, 24))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("extraCooldownTics");

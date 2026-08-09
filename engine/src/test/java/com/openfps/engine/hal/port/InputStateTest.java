@@ -42,12 +42,19 @@ class InputStateTest
         void shouldBeEntirelyZero()
         {
             assertThat(InputState.NEUTRAL.forwardAxis()).isZero();
+
             assertThat(InputState.NEUTRAL.strafeAxis()).isZero();
+
             assertThat(InputState.NEUTRAL.yawDelta()).isZero();
+
             assertThat(InputState.NEUTRAL.pitchDelta()).isZero();
+
             assertThat(InputState.NEUTRAL.fire()).isFalse();
+
             assertThat(InputState.NEUTRAL.jump()).isFalse();
+
             assertThat(InputState.NEUTRAL.sprint()).isFalse();
+
             assertThat(InputState.NEUTRAL.isNeutral()).isTrue();
         }
 
@@ -57,7 +64,9 @@ class InputStateTest
         {
             final InputState built =
                 InputState.of(0.0f, 0.0f, 0.0f, 0.0f, false, false, false);
+
             assertThat(built).isEqualTo(InputState.NEUTRAL);
+
             assertThat(built.hashCode()).isEqualTo(InputState.NEUTRAL.hashCode());
         }
 
@@ -66,15 +75,21 @@ class InputStateTest
         void shouldNotCallAnythingElseNeutral()
         {
             assertThat(move(0.5f, 0.0f).isNeutral()).isFalse();
+
             assertThat(move(0.0f, -0.5f).isNeutral()).isFalse();
+
             assertThat(InputState.of(0.0f, 0.0f, 0.01f, 0.0f, false, false, false)
                 .isNeutral()).isFalse();
+
             assertThat(InputState.of(0.0f, 0.0f, 0.0f, 0.01f, false, false, false)
                 .isNeutral()).isFalse();
+
             assertThat(InputState.of(0.0f, 0.0f, 0.0f, 0.0f, true, false, false)
                 .isNeutral()).isFalse();
+
             assertThat(InputState.of(0.0f, 0.0f, 0.0f, 0.0f, false, true, false)
                 .isNeutral()).isFalse();
+
             assertThat(InputState.of(0.0f, 0.0f, 0.0f, 0.0f, false, false, true)
                 .isNeutral()).isFalse();
         }
@@ -89,7 +104,9 @@ class InputStateTest
         void shouldNotScaleASingleAxis()
         {
             assertThat(move(1.0f, 0.0f).forwardAxis()).isEqualTo(1.0f);
+
             assertThat(move(1.0f, 0.0f).strafeAxis()).isZero();
+
             assertThat(move(0.0f, -1.0f).strafeAxis()).isEqualTo(-1.0f);
         }
 
@@ -98,8 +115,11 @@ class InputStateTest
         void shouldNormaliseTheDiagonal()
         {
             final InputState diagonal = move(1.0f, 1.0f);
+
             assertThat(diagonal.forwardAxis()).isCloseTo(DIAGONAL, within(EPSILON));
+
             assertThat(diagonal.strafeAxis()).isCloseTo(DIAGONAL, within(EPSILON));
+
             assertThat(magnitude(diagonal)).isCloseTo(1.0f, within(EPSILON));
         }
 
@@ -108,10 +128,13 @@ class InputStateTest
         void shouldNormaliseEveryQuadrant()
         {
             assertThat(magnitude(move(1.0f, -1.0f))).isCloseTo(1.0f, within(EPSILON));
+
             assertThat(magnitude(move(-1.0f, 1.0f))).isCloseTo(1.0f, within(EPSILON));
+
             assertThat(magnitude(move(-1.0f, -1.0f))).isCloseTo(1.0f, within(EPSILON));
 
             assertThat(move(-1.0f, 1.0f).forwardAxis()).isCloseTo(-DIAGONAL, within(EPSILON));
+
             assertThat(move(-1.0f, 1.0f).strafeAxis()).isCloseTo(DIAGONAL, within(EPSILON));
         }
 
@@ -128,7 +151,9 @@ class InputStateTest
         void shouldLeaveShortVectorsAlone()
         {
             final InputState partial = move(0.5f, 0.5f);
+
             assertThat(partial.forwardAxis()).isEqualTo(0.5f);
+
             assertThat(partial.strafeAxis()).isEqualTo(0.5f);
         }
 
@@ -137,8 +162,11 @@ class InputStateTest
         void shouldClampOutOfRangeAxes()
         {
             assertThat(move(4.0f, 0.0f).forwardAxis()).isEqualTo(1.0f);
+
             assertThat(move(-4.0f, 0.0f).forwardAxis()).isEqualTo(-1.0f);
+
             assertThat(move(0.0f, 9.0f).strafeAxis()).isEqualTo(1.0f);
+
             assertThat(magnitude(move(7.0f, 7.0f))).isCloseTo(1.0f, within(EPSILON));
         }
 
@@ -149,13 +177,16 @@ class InputStateTest
             assertThatThrownBy(() -> move(Float.NaN, 0.0f))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("forwardAxis");
+
             assertThatThrownBy(() -> move(0.0f, Float.POSITIVE_INFINITY))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("strafeAxis");
+
             assertThatThrownBy(
                 () -> InputState.of(0.0f, 0.0f, Float.NaN, 0.0f, false, false, false))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("yawDelta");
+
             assertThatThrownBy(
                 () -> InputState.of(0.0f, 0.0f, 0.0f, Float.NaN, false, false, false))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -165,7 +196,9 @@ class InputStateTest
         private float magnitude(final InputState state)
         {
             final float forward = state.forwardAxis();
+
             final float strafe = state.strafeAxis();
+
             return (float) Math.sqrt(forward * forward + strafe * strafe);
         }
     }
@@ -180,7 +213,9 @@ class InputStateTest
         {
             final InputState fast =
                 InputState.of(0.0f, 0.0f, 12.5f, -3.25f, false, false, false);
+
             assertThat(fast.yawDelta()).isEqualTo(12.5f);
+
             assertThat(fast.pitchDelta()).isEqualTo(-3.25f);
         }
 
@@ -190,7 +225,9 @@ class InputStateTest
         {
             final InputState rightAndUp =
                 InputState.of(0.0f, 0.0f, 0.5f, 0.5f, false, false, false);
+
             assertThat(rightAndUp.yawDelta()).isPositive();
+
             assertThat(rightAndUp.pitchDelta()).isPositive();
         }
 
@@ -200,13 +237,19 @@ class InputStateTest
         {
             final InputState sampled =
                 InputState.of(1.0f, 0.0f, 0.4f, -0.2f, true, false, true);
+
             final InputState stripped = sampled.withoutLook();
 
             assertThat(stripped.yawDelta()).isZero();
+
             assertThat(stripped.pitchDelta()).isZero();
+
             assertThat(stripped.forwardAxis()).isEqualTo(sampled.forwardAxis());
+
             assertThat(stripped.fire()).isTrue();
+
             assertThat(stripped.sprint()).isTrue();
+
             // The original is untouched — that is the whole point of a copy.
             assertThat(sampled.yawDelta()).isEqualTo(0.4f);
         }
@@ -226,9 +269,11 @@ class InputStateTest
                 {
                     continue;
                 }
+
                 assertThat(Modifier.isFinal(field.getModifiers()))
                     .as("%s must be final", field.getName())
                     .isTrue();
+
                 assertThat(Modifier.isPrivate(field.getModifiers()))
                     .as("%s must be private", field.getName())
                     .isTrue();
@@ -245,6 +290,7 @@ class InputStateTest
                 {
                     continue;
                 }
+
                 assertThat(field.getType().isPrimitive())
                     .as("%s must be a primitive — no boxing", field.getName())
                     .isTrue();
@@ -273,14 +319,21 @@ class InputStateTest
         {
             final InputState state =
                 InputState.of(0.25f, -0.5f, 1.5f, -0.75f, true, true, false);
+
             for (int repeat = 0; repeat < 3; repeat++)
             {
                 assertThat(state.forwardAxis()).isEqualTo(0.25f);
+
                 assertThat(state.strafeAxis()).isEqualTo(-0.5f);
+
                 assertThat(state.yawDelta()).isEqualTo(1.5f);
+
                 assertThat(state.pitchDelta()).isEqualTo(-0.75f);
+
                 assertThat(state.fire()).isTrue();
+
                 assertThat(state.jump()).isTrue();
+
                 assertThat(state.sprint()).isFalse();
             }
         }
@@ -296,8 +349,10 @@ class InputStateTest
         {
             final InputState first =
                 InputState.of(0.5f, 0.25f, 0.1f, 0.2f, true, false, true);
+
             final InputState second =
                 InputState.of(0.5f, 0.25f, 0.1f, 0.2f, true, false, true);
+
             assertThat(first).isEqualTo(second).hasSameHashCodeAs(second);
         }
 
@@ -307,10 +362,13 @@ class InputStateTest
         {
             final InputState base =
                 InputState.of(0.5f, 0.25f, 0.1f, 0.2f, true, false, true);
+
             assertThat(base).isNotEqualTo(
                 InputState.of(0.5f, 0.25f, 0.1f, 0.2f, true, true, true));
+
             assertThat(base).isNotEqualTo(
                 InputState.of(0.5f, 0.25f, 0.1f, 0.3f, true, false, true));
+
             assertThat(base).isNotEqualTo("not a snapshot");
         }
 

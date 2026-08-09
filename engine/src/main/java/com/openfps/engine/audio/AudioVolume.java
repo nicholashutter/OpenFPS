@@ -70,14 +70,17 @@ public final class AudioVolume
         {
             return SILENT;
         }
+
         if (volume <= SILENT)
         {
             return SILENT;
         }
+
         if (volume > FULL)
         {
             return FULL;
         }
+
         return volume;
     }
 }

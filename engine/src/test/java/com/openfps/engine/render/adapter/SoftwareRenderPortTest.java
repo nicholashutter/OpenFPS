@@ -195,6 +195,7 @@ final class SoftwareRenderPortTest
         void shouldMatchTheOracleWhenCullingClockwise()
         {
             final int[] oracle = render(Rasterizer.CullMode.NONE, null);
+
             final int[] clockwise = render(Rasterizer.CullMode.CLOCKWISE, null);
 
             // A z-buffer resolves a closed mesh correctly with no culling, so
@@ -208,6 +209,7 @@ final class SoftwareRenderPortTest
         void shouldRenderInsideOutWhenCullingCounterClockwise()
         {
             final int[] oracle = render(Rasterizer.CullMode.NONE, null);
+
             final int[] counterClockwise =
                 render(Rasterizer.CullMode.COUNTER_CLOCKWISE, null);
 
@@ -225,6 +227,7 @@ final class SoftwareRenderPortTest
             // outward-facing towards it.
             assertThat(drawn).contains(CubeFixture.PLUS_X, CubeFixture.PLUS_Y,
                 CubeFixture.PLUS_Z);
+
             assertThat(drawn).doesNotContain(CubeFixture.MINUS_X, CubeFixture.MINUS_Y,
                 CubeFixture.MINUS_Z);
         }
@@ -238,6 +241,7 @@ final class SoftwareRenderPortTest
 
             assertThat(drawn).contains(CubeFixture.MINUS_X, CubeFixture.MINUS_Y,
                 CubeFixture.MINUS_Z);
+
             assertThat(drawn).doesNotContain(CubeFixture.PLUS_X, CubeFixture.PLUS_Y,
                 CubeFixture.PLUS_Z);
         }
@@ -269,12 +273,18 @@ final class SoftwareRenderPortTest
         void shouldProduceTheSameFrameInParallelAsSerially()
         {
             final int[] serial = render(SoftwareRenderPort.BACKFACE_CULL_MODE, null);
+
             final I_EventBusPort bus = EventBusFactory.createShared();
+
             bus.init(BUS_CAPACITY);
+
             final I_ThreadPoolPort pool =
                 ThreadPoolFactory.createFixed(bus, new SubsystemRegistry());
+
             pool.init(WORKERS);
+
             pool.start();
+
             try
             {
                 // Determinism is not needed for lockstep — the renderer cannot
@@ -288,6 +298,7 @@ final class SoftwareRenderPortTest
             finally
             {
                 pool.shutdown();
+
                 bus.shutdown();
             }
         }
@@ -300,12 +311,18 @@ final class SoftwareRenderPortTest
             // instance re-dispatches four passes and resets the rasterizer, so
             // there is more per-frame state to get wrong.
             final int[] serial = frameOf(mixedScene(), sceneCamera(), null);
+
             final I_EventBusPort bus = EventBusFactory.createShared();
+
             bus.init(BUS_CAPACITY);
+
             final I_ThreadPoolPort pool =
                 ThreadPoolFactory.createFixed(bus, new SubsystemRegistry());
+
             pool.init(WORKERS);
+
             pool.start();
+
             try
             {
                 assertThat(frameOf(mixedScene(), sceneCamera(), pool))
@@ -314,6 +331,7 @@ final class SoftwareRenderPortTest
             finally
             {
                 pool.shutdown();
+
                 bus.shutdown();
             }
         }
@@ -327,12 +345,18 @@ final class SoftwareRenderPortTest
             // this worker count, which is the part of the flattening that a
             // serial run would never exercise.
             final int[] serial = frameOf(manyInstanceScene(), sceneCamera(), null);
+
             final I_EventBusPort bus = EventBusFactory.createShared();
+
             bus.init(BUS_CAPACITY);
+
             final I_ThreadPoolPort pool =
                 ThreadPoolFactory.createFixed(bus, new SubsystemRegistry());
+
             pool.init(WORKERS);
+
             pool.start();
+
             try
             {
                 assertThat(frameOf(manyInstanceScene(), sceneCamera(), pool))
@@ -341,6 +365,7 @@ final class SoftwareRenderPortTest
             finally
             {
                 pool.shutdown();
+
                 bus.shutdown();
             }
         }
@@ -363,9 +388,11 @@ final class SoftwareRenderPortTest
                 renderScene(manyInstanceScene(), sceneCamera(), null);
 
             assertThat(port.scene().worldInstanceCount()).isEqualTo(MANY_INSTANCES);
+
             assertThat(port.lastFrameParallelPasses())
                 .as("world pass only — four passes however many instances are in it")
                 .isEqualTo(PASSES_PER_PASS);
+
             port.shutdown();
         }
 
@@ -376,6 +403,7 @@ final class SoftwareRenderPortTest
             final SoftwareRenderPort port = renderScene(mixedScene(), sceneCamera(), null);
 
             assertThat(port.lastFrameParallelPasses()).isEqualTo(2 * PASSES_PER_PASS);
+
             port.shutdown();
         }
 
@@ -389,14 +417,17 @@ final class SoftwareRenderPortTest
             // looks entirely plausible, because they are the same shape.
             final ModelFormat left = ModelFormat.read(QuadFixture.texturedSquare(
                 QUAD_HALF, UNTEXTURED_FALLBACK, LEFT_TEXTURE));
+
             final ModelFormat right = ModelFormat.read(QuadFixture.texturedSquare(
                 QUAD_HALF, UNTEXTURED_FALLBACK, RIGHT_TEXTURE));
+
             final Scene scene = Scene.builder()
                 .addWorldInstance(left, Mat4.translation(-2.0f * QUAD_HALF, 0.0f, 0.0f))
                 .addWorldInstance(right, Mat4.translation(2.0f * QUAD_HALF, 0.0f, 0.0f))
                 .build();
 
             final int[] frame = frameOf(scene, sceneCamera(), null);
+
             final Set<Integer> found = colorsIn(frame);
 
             assertThat(found)
@@ -415,8 +446,10 @@ final class SoftwareRenderPortTest
             // up as the duplicate losing its texture.
             final ModelFormat model = ModelFormat.read(QuadFixture.texturedSquare(
                 QUAD_HALF, UNTEXTURED_FALLBACK, LEFT_TEXTURE));
+
             final ModelFormat other = ModelFormat.read(QuadFixture.texturedSquare(
                 QUAD_HALF, UNTEXTURED_FALLBACK, RIGHT_TEXTURE));
+
             final Scene scene = Scene.builder()
                 .addWorldInstance(model, Mat4.translation(-2.0f * QUAD_HALF, 0.0f, 0.0f))
                 .addWorldInstance(other, Mat4.identity())
@@ -435,6 +468,7 @@ final class SoftwareRenderPortTest
 
             assertThat(scene.maxPassTriangles())
                 .isEqualTo(MANY_INSTANCES * QuadFixture.TRIANGLES);
+
             assertThat(scene.maxInstanceTriangles())
                 .as("still the largest single model, which is now a different number")
                 .isEqualTo(QuadFixture.TRIANGLES);
@@ -451,12 +485,17 @@ final class SoftwareRenderPortTest
         {
             final SoftwareRenderPort port =
                 newPort(null, SoftwareRenderPort.BACKFACE_CULL_MODE);
+
             port.resize(WIDTH, HEIGHT);
+
             port.loadModel(CubeFixture.build());
 
             assertThat(port.scene()).isNotNull();
+
             assertThat(port.scene().worldInstanceCount()).isEqualTo(1);
+
             assertThat(port.scene().viewInstanceCount()).isZero();
+
             port.shutdown();
         }
 
@@ -465,13 +504,17 @@ final class SoftwareRenderPortTest
         void shouldResolveInstancesByDepthIndependentlyOfOrder()
         {
             final ModelFormat near = quad(NEAR_COLOR);
+
             final ModelFormat far = quad(FAR_COLOR);
+
             final Mat4 nearAt = Mat4.translation(0.5f, 0.0f, 0.5f);
+
             final Mat4 farAt = Mat4.translation(-0.5f, 0.0f, -0.5f);
 
             final int[] nearFirst = frameOf(Scene.builder()
                 .addWorldInstance(near, nearAt).addWorldInstance(far, farAt).build(),
                 sceneCamera(), null);
+
             final int[] farFirst = frameOf(Scene.builder()
                 .addWorldInstance(far, farAt).addWorldInstance(near, nearAt).build(),
                 sceneCamera(), null);
@@ -479,6 +522,7 @@ final class SoftwareRenderPortTest
             // The overlap: the nearer instance owns it whatever order the two
             // arrived in, because the depth buffer carries across instances.
             assertThat(pixel(nearFirst, HALF_WIDTH, HALF_HEIGHT)).isEqualTo(NEAR_COLOR);
+
             assertThat(farFirst)
                 .as("submission order must not change one pixel")
                 .isEqualTo(nearFirst);
@@ -489,13 +533,16 @@ final class SoftwareRenderPortTest
         void shouldTranslateAnInstanceToTheProjectedPosition()
         {
             final float shiftX = 0.5f;
+
             final float shiftY = -0.25f;
+
             final int[] frame = frameOf(Scene.builder()
                 .addWorldInstance(quad(NEAR_COLOR),
                     Mat4.translation(shiftX, shiftY, 0.0f))
                 .build(), sceneCamera(), null);
 
             final int[] box = boundsOf(frame, NEAR_COLOR);
+
             assertProjected(box, shiftX, shiftY, QUAD_HALF, QUAD_HALF, CAMERA_Z);
         }
 
@@ -507,14 +554,17 @@ final class SoftwareRenderPortTest
             // projected box must come back transposed, not merely different.
             final ModelFormat oblong =
                 ModelFormat.read(QuadFixture.build(WIDE_HALF, NARROW_HALF, NEAR_COLOR));
+
             final int[] upright = frameOf(
                 Scene.of(oblong), sceneCamera(), null);
+
             final int[] turned = frameOf(Scene.builder()
                 .addWorldInstance(oblong, TransformFixture.rotationZ(QUARTER_TURN))
                 .build(), sceneCamera(), null);
 
             assertProjected(boundsOf(upright, NEAR_COLOR), 0.0f, 0.0f, WIDE_HALF,
                 NARROW_HALF, CAMERA_Z);
+
             assertProjected(boundsOf(turned, NEAR_COLOR), 0.0f, 0.0f, NARROW_HALF,
                 WIDE_HALF, CAMERA_Z);
         }
@@ -547,9 +597,11 @@ final class SoftwareRenderPortTest
             assertThat(pixel(frame, HALF_WIDTH, HALF_HEIGHT))
                 .as("the viewmodel is not occluded by the wall in front of it")
                 .isEqualTo(NEAR_COLOR);
+
             assertThat(pixel(frame, 1, 1))
                 .as("colour is not cleared between the passes, so the wall survives")
                 .isEqualTo(FAR_COLOR);
+
             assertProjected(boundsOf(frame, NEAR_COLOR), 0.0f, 0.0f, VIEWMODEL_HALF,
                 VIEWMODEL_HALF, VIEWMODEL_DEPTH);
         }
@@ -561,8 +613,11 @@ final class SoftwareRenderPortTest
             final SoftwareRenderPort port = renderScene(Scene.EMPTY, sceneCamera(), null);
 
             assertThat(port.framesRendered()).isEqualTo(1L);
+
             assertThat(port.lastFrameTriangles()).isZero();
+
             assertThat(colorsIn(copy(port))).isEmpty();
+
             port.shutdown();
         }
 
@@ -579,7 +634,9 @@ final class SoftwareRenderPortTest
                 .build(), null, null);
 
             assertThat(port.lastFrameTriangles()).isEqualTo(QuadFixture.TRIANGLES);
+
             assertThat(colorsIn(copy(port))).containsExactly(NEAR_COLOR);
+
             port.shutdown();
         }
 
@@ -590,6 +647,7 @@ final class SoftwareRenderPortTest
             final SoftwareRenderPort port = renderScene(mixedScene(), sceneCamera(), null);
 
             assertThat(port.lastFrameTriangles()).isEqualTo(3 * QuadFixture.TRIANGLES);
+
             port.shutdown();
         }
 
@@ -602,20 +660,29 @@ final class SoftwareRenderPortTest
             // correct — and so must the other order, which does reallocate.
             final SoftwareRenderPort port =
                 newPort(null, SoftwareRenderPort.BACKFACE_CULL_MODE);
+
             port.resize(WIDTH, HEIGHT);
+
             port.setCamera(sceneCamera());
 
             port.setScene(Scene.of(ModelFormat.read(CubeFixture.build())));
+
             port.renderFrame(0);
+
             final int cubeTriangles = port.lastFrameTriangles();
 
             port.setScene(Scene.of(quad(NEAR_COLOR)));
+
             port.renderFrame(1);
+
             assertThat(port.lastFrameTriangles()).isEqualTo(QuadFixture.TRIANGLES);
 
             port.setScene(Scene.of(ModelFormat.read(CubeFixture.build())));
+
             port.renderFrame(2);
+
             assertThat(port.lastFrameTriangles()).isEqualTo(cubeTriangles);
+
             port.shutdown();
         }
 
@@ -645,9 +712,11 @@ final class SoftwareRenderPortTest
 
             assertThat(port.framebuffer().entityIdAt(HALF_WIDTH, HALF_HEIGHT))
                 .isEqualTo(PLAYER_ID);
+
             assertThat(port.framebuffer().entityIdAt(1, 1))
                 .as("the background belongs to no entity")
                 .isEqualTo(Scene.UNTAGGED);
+
             port.shutdown();
         }
 
@@ -667,12 +736,15 @@ final class SoftwareRenderPortTest
             assertThat(port.framebuffer().entityIdAt(HALF_WIDTH, HALF_HEIGHT))
                 .as("the occluder owns the centre, so the entity does not")
                 .isEqualTo(Scene.UNTAGGED);
+
             assertThat(port.framebuffer().pixel(HALF_WIDTH, HALF_HEIGHT))
                 .as("and the occluder is genuinely in front — otherwise this proves nothing")
                 .isEqualTo(OCCLUDER_COLOR);
+
             assertThat(port.framebuffer().entityIdAt(ENTITY_ONLY_X, HALF_HEIGHT))
                 .as("beside the occluder the entity is still visible and still tagged")
                 .isEqualTo(PLAYER_ID);
+
             port.shutdown();
         }
 
@@ -685,14 +757,18 @@ final class SoftwareRenderPortTest
             // the other order that matters, so both are asserted.
             final SoftwareRenderPort entityFirst =
                 renderScene(occludedEntity(true), sceneCamera(), null);
+
             final SoftwareRenderPort occluderFirst =
                 renderScene(occludedEntity(false), sceneCamera(), null);
 
             assertThat(entityFirst.framebuffer().entityIdAt(HALF_WIDTH, HALF_HEIGHT))
                 .isEqualTo(Scene.UNTAGGED);
+
             assertThat(occluderFirst.framebuffer().entityIdAt(HALF_WIDTH, HALF_HEIGHT))
                 .isEqualTo(Scene.UNTAGGED);
+
             entityFirst.shutdown();
+
             occluderFirst.shutdown();
         }
 
@@ -703,15 +779,18 @@ final class SoftwareRenderPortTest
             final SoftwareRenderPort port = renderOutlined(Scene.builder()
                 .addWorldInstance(quad(NEAR_COLOR), Mat4.identity(), PLAYER_ID)
                 .build(), sceneCamera());
+
             final int[] frame = copy(port);
 
             assertThat(colorsIn(frame))
                 .as("the entity's own colour, the red line and its keyline, and nothing else")
                 .containsExactlyInAnyOrder(NEAR_COLOR, OutlinePass.OUTLINE_COLOR,
                     OutlinePass.KEYLINE_COLOR);
+
             assertThat(pixel(frame, HALF_WIDTH, HALF_HEIGHT))
                 .as("the middle of the entity is neither an edge nor next to one")
                 .isEqualTo(NEAR_COLOR);
+
             port.shutdown();
         }
 
@@ -742,23 +821,29 @@ final class SoftwareRenderPortTest
             final Scene tagged = Scene.builder()
                 .addWorldInstance(quad(NEAR_COLOR), Mat4.identity(), PLAYER_ID)
                 .build();
+
             final SoftwareRenderPort port = renderScene(tagged, sceneCamera(), null);
 
             assertThat(port.scene().hasTaggedEntities())
                 .as("the scene really is tagged — this is not passing by accident")
                 .isTrue();
+
             assertThat(port.framebuffer().entityIdAt(HALF_WIDTH, HALF_HEIGHT))
                 .as("the id buffer is written, so hits stay attributable")
                 .isEqualTo(PLAYER_ID);
+
             assertThat(colorsIn(copy(port)))
                 .as("and the edge highlight was painted")
                 .contains(OutlinePass.OUTLINE_COLOR);
 
             port.setOutlineEnabled(false);
+
             port.renderFrame(0);
+
             assertThat(colorsIn(copy(port)))
                 .as("switched off, nothing is painted — the frame is the bare scene")
                 .doesNotContain(OutlinePass.OUTLINE_COLOR);
+
             port.shutdown();
         }
 
@@ -775,14 +860,17 @@ final class SoftwareRenderPortTest
                 .addViewInstance(quad(VIEW_COLOR),
                     Mat4.translation(0.0f, 0.0f, VIEWMODEL_DEPTH))
                 .build(), sceneCamera(), null);
+
             final int[] frame = copy(port);
 
             assertThat(pixel(frame, HALF_WIDTH, HALF_HEIGHT))
                 .as("the weapon is on top of the entity, not outlined by it")
                 .isEqualTo(VIEW_COLOR);
+
             assertThat(port.framebuffer().entityIdAt(HALF_WIDTH, HALF_HEIGHT))
                 .as("the view pass left the id the world pass wrote exactly as it was")
                 .isEqualTo(PLAYER_ID);
+
             port.shutdown();
         }
 
@@ -799,6 +887,7 @@ final class SoftwareRenderPortTest
                 .addWorldInstance(quad(FAR_COLOR),
                     Mat4.translation(QUAD_HALF, 0.0f, -0.5f), SECOND_PLAYER_ID)
                 .build(), sceneCamera());
+
             final int[] frame = copy(port);
 
             // The junction runs down the middle of the frame, where the two
@@ -806,6 +895,7 @@ final class SoftwareRenderPortTest
             assertThat(columnHasOutline(frame, HALF_WIDTH))
                 .as("an outline between the two entities")
                 .isTrue();
+
             port.shutdown();
         }
 
@@ -818,32 +908,41 @@ final class SoftwareRenderPortTest
             // nothing, and the pass outlines where the entity WAS.
             final SoftwareRenderPort port =
                 newPort(null, SoftwareRenderPort.BACKFACE_CULL_MODE);
+
             port.resize(WIDTH, HEIGHT);
+
             port.setCamera(sceneCamera());
+
             // Without this the "no ghost" assertion below passes for the wrong
             // reason: nothing is outlined anywhere, so of course the vacated
             // columns are clean.
             port.setOutlineEnabled(true);
 
             port.setScene(taggedAt(-GHOST_SHIFT));
+
             port.renderFrame(0);
+
             assertThat(port.framebuffer().entityIdAt(VACATED_X, HALF_HEIGHT))
                 .as("the entity really was here in frame 0")
                 .isEqualTo(PLAYER_ID);
 
             port.setScene(taggedAt(GHOST_SHIFT));
+
             port.renderFrame(1);
 
             assertThat(port.framebuffer().entityIdAt(VACATED_X, HALF_HEIGHT))
                 .as("and is not here any more")
                 .isEqualTo(Scene.UNTAGGED);
+
             final int[] frame = copy(port);
+
             for (int x = 0; x <= VACATED_SWEEP_MAX_X; x++)
             {
                 assertThat(columnHasOutline(frame, x))
                     .as("column %d is behind the moved entity and must be clean", x)
                     .isFalse();
             }
+
             port.shutdown();
         }
 
@@ -858,11 +957,15 @@ final class SoftwareRenderPortTest
             final SoftwareRenderPort port = renderScene(mixedScene(), sceneCamera(), null);
 
             assertThat(port.scene().hasTaggedEntities()).isFalse();
+
             assertThat(port.framebuffer().entityIdBuffer()).containsOnly(Scene.UNTAGGED);
+
             assertThat(colorsIn(copy(port))).doesNotContain(OutlinePass.OUTLINE_COLOR);
+
             assertThat(port.lastFrameParallelPasses())
                 .as("eight, exactly as before the feature existed")
                 .isEqualTo(2 * PASSES_PER_PASS);
+
             port.shutdown();
         }
 
@@ -875,6 +978,7 @@ final class SoftwareRenderPortTest
                 .build(), sceneCamera());
 
             assertThat(port.lastFrameParallelPasses()).isEqualTo(PASSES_PER_PASS + 1);
+
             port.shutdown();
         }
 
@@ -887,14 +991,20 @@ final class SoftwareRenderPortTest
             // pass, which reads across tile boundaries and would break this if
             // it were ever fused into the raster pass.
             final int[] serialFrame = taggedFrameAndIds(null);
+
             for (final int workers : new int[] {1, 2, 3, 4, 8})
             {
                 final I_EventBusPort bus = EventBusFactory.createShared();
+
                 bus.init(BUS_CAPACITY);
+
                 final I_ThreadPoolPort pool =
                     ThreadPoolFactory.createFixed(bus, new SubsystemRegistry());
+
                 pool.init(workers);
+
                 pool.start();
+
                 try
                 {
                     assertThat(taggedFrameAndIds(pool))
@@ -904,6 +1014,7 @@ final class SoftwareRenderPortTest
                 finally
                 {
                     pool.shutdown();
+
                     bus.shutdown();
                 }
             }
@@ -924,13 +1035,18 @@ final class SoftwareRenderPortTest
             // the shear README § 7 warns about; copyColorTo is the de-padding
             // step that prevents it.
             final int size = 100;
+
             final SoftwareRenderPort port = newPort(null, SoftwareRenderPort.BACKFACE_CULL_MODE);
+
             port.resize(size, size);
+
             port.loadModel(CubeFixture.build());
+
             // Head-on at the +z face: its projection is an axis-aligned square,
             // so every covered row must span the identical columns.
             port.setCamera(Camera.lookingAt(new Vec3(0.0f, 0.0f, 4.0f), ORIGIN, UP,
                 FOV, 1.0f, NEAR));
+
             port.renderFrame(0);
 
             assertThat(port.framebuffer().strideInPixels())
@@ -938,8 +1054,11 @@ final class SoftwareRenderPortTest
                 .isGreaterThan(size);
 
             final int[] frame = new int[size * size];
+
             assertThat(port.copyColorInto(frame)).isTrue();
+
             assertRowsAlign(frame, size, size);
+
             port.shutdown();
         }
 
@@ -957,9 +1076,13 @@ final class SoftwareRenderPortTest
         void shouldReportNoFrameAfterAResize()
         {
             final SoftwareRenderPort port = newPort(null, SoftwareRenderPort.BACKFACE_CULL_MODE);
+
             port.resize(WIDTH, HEIGHT);
+
             port.loadModel(CubeFixture.build());
+
             port.renderFrame(0);
+
             assertThat(port.copyColorInto(new int[WIDTH * HEIGHT])).isTrue();
 
             // A frame captured at the old size is not a frame at the new one,
@@ -968,6 +1091,7 @@ final class SoftwareRenderPortTest
             port.resize(WIDTH / 2, HEIGHT / 2);
 
             assertThat(port.copyColorInto(new int[WIDTH * HEIGHT])).isFalse();
+
             port.shutdown();
         }
 
@@ -983,38 +1107,52 @@ final class SoftwareRenderPortTest
             // fails within a few dozen iterations.
             final Camera left = Camera.lookingAt(new Vec3(-1.0f, 0.0f, CAMERA_Z), ORIGIN, UP,
                 FOV, 1.0f, NEAR);
+
             final Camera right = Camera.lookingAt(new Vec3(1.0f, 0.0f, CAMERA_Z), ORIGIN, UP,
                 FOV, 1.0f, NEAR);
+
             final int[] fromLeft = frameOf(mixedScene(), left, null);
+
             final int[] fromRight = frameOf(mixedScene(), right, null);
+
             assertThat(fromLeft).as("the two poses must differ, or this proves nothing")
                 .isNotEqualTo(fromRight);
 
             final SoftwareRenderPort port = newPort(null, SoftwareRenderPort.BACKFACE_CULL_MODE);
+
             port.resize(WIDTH, HEIGHT);
+
             port.setScene(mixedScene());
+
             final Thread renderer = new Thread(() -> renderAlternating(port, left, right),
                 "tearing-probe-renderer");
+
             renderer.setDaemon(true);
+
             renderer.start();
 
             final int[] snapshot = new int[WIDTH * HEIGHT];
+
             // MUTABLE local — snapshots that actually carried a frame.
             int seen = 0;
+
             while (renderer.isAlive())
             {
                 if (port.copyColorInto(snapshot))
                 {
                     seen++;
+
                     assertThat(Arrays.equals(snapshot, fromLeft)
                         || Arrays.equals(snapshot, fromRight))
                         .as("a presented frame must be one whole frame, not a mixture")
                         .isTrue();
                 }
             }
+
             renderer.join(TEARING_TIMEOUT_MILLIS);
 
             assertThat(seen).as("the probe has to have presented something").isPositive();
+
             port.shutdown();
         }
     }
@@ -1028,18 +1166,25 @@ final class SoftwareRenderPortTest
         void shouldDoNothingBeforeSurfaceAndModel()
         {
             final SoftwareRenderPort port = newPort(null, SoftwareRenderPort.BACKFACE_CULL_MODE);
+
             port.renderFrame(0);
+
             assertThat(port.framesRendered()).isZero();
 
             port.resize(WIDTH, HEIGHT);
+
             port.renderFrame(1);
+
             assertThat(port.framesRendered())
                 .as("a surface without a model still has nothing to draw")
                 .isZero();
 
             port.loadModel(CubeFixture.build());
+
             port.renderFrame(2);
+
             assertThat(port.framesRendered()).isEqualTo(1L);
+
             port.shutdown();
         }
 
@@ -1048,15 +1193,20 @@ final class SoftwareRenderPortTest
         void shouldOrbitTheModelWhenNoCameraIsSet()
         {
             final SoftwareRenderPort port = newPort(null, SoftwareRenderPort.BACKFACE_CULL_MODE);
+
             port.resize(WIDTH, HEIGHT);
+
             port.loadModel(CubeFixture.build());
+
             port.renderFrame(0);
 
             assertThat(port.lastCamera()).isNotNull();
+
             // Tic 0 puts the orbit on the +z axis, raised enough to see the
             // top. Exactly those two faces, and no interior.
             assertThat(colorsIn(copy(port)))
                 .containsExactlyInAnyOrder(CubeFixture.PLUS_Z, CubeFixture.PLUS_Y);
+
             port.shutdown();
         }
 
@@ -1115,12 +1265,15 @@ final class SoftwareRenderPortTest
     private static Scene manyInstanceScene()
     {
         final Scene.Builder builder = Scene.builder();
+
         final ModelFormat model = quad(NEAR_COLOR);
+
         for (int index = 0; index < MANY_INSTANCES; index++)
         {
             builder.addWorldInstance(model,
                 Mat4.translation(0.0f, 0.0f, index * INSTANCE_SPACING));
         }
+
         return builder.build();
     }
 
@@ -1131,15 +1284,19 @@ final class SoftwareRenderPortTest
     private static Scene occludedEntity(final boolean entityFirst)
     {
         final Scene.Builder builder = Scene.builder();
+
         if (!entityFirst)
         {
             builder.addWorldInstance(occluder(), Mat4.translation(0.0f, 0.0f, OCCLUDER_Z));
         }
+
         builder.addWorldInstance(quad(NEAR_COLOR), Mat4.identity(), PLAYER_ID);
+
         if (entityFirst)
         {
             builder.addWorldInstance(occluder(), Mat4.translation(0.0f, 0.0f, OCCLUDER_Z));
         }
+
         return builder.build();
     }
 
@@ -1170,8 +1327,11 @@ final class SoftwareRenderPortTest
                 SECOND_PLAYER_ID)
             .addWorldInstance(occluder(), Mat4.translation(0.0f, 0.0f, OCCLUDER_Z))
             .build(), sceneCamera(), pool);
+
         final int[] frame = copy(port);
+
         final int[] both = Arrays.copyOf(frame, frame.length + WIDTH * HEIGHT);
+
         for (int y = 0; y < HEIGHT; y++)
         {
             for (int x = 0; x < WIDTH; x++)
@@ -1179,7 +1339,9 @@ final class SoftwareRenderPortTest
                 both[frame.length + y * WIDTH + x] = port.framebuffer().entityIdAt(x, y);
             }
         }
+
         port.shutdown();
+
         return both;
     }
 
@@ -1193,6 +1355,7 @@ final class SoftwareRenderPortTest
                 return true;
             }
         }
+
         return false;
     }
 
@@ -1205,11 +1368,14 @@ final class SoftwareRenderPortTest
         {
             // MUTABLE local — which pose this frame renders from.
             Camera pose = left;
+
             if (frame % 2 == 1)
             {
                 pose = right;
             }
+
             port.setCamera(pose);
+
             port.renderFrame(frame);
         }
     }
@@ -1220,13 +1386,18 @@ final class SoftwareRenderPortTest
         final I_ThreadPoolPort pool)
     {
         final SoftwareRenderPort port = newPort(pool, SoftwareRenderPort.BACKFACE_CULL_MODE);
+
         port.resize(WIDTH, HEIGHT);
+
         if (camera != null)
         {
             port.setCamera(camera);
         }
+
         port.setScene(scene);
+
         port.renderFrame(0);
+
         return port;
     }
 
@@ -1241,14 +1412,20 @@ final class SoftwareRenderPortTest
     private static SoftwareRenderPort renderOutlined(final Scene scene, final Camera camera)
     {
         final SoftwareRenderPort port = newPort(null, SoftwareRenderPort.BACKFACE_CULL_MODE);
+
         port.resize(WIDTH, HEIGHT);
+
         if (camera != null)
         {
             port.setCamera(camera);
         }
+
         port.setOutlineEnabled(true);
+
         port.setScene(scene);
+
         port.renderFrame(0);
+
         return port;
     }
 
@@ -1257,8 +1434,11 @@ final class SoftwareRenderPortTest
         final I_ThreadPoolPort pool)
     {
         final SoftwareRenderPort port = renderScene(scene, camera, pool);
+
         final int[] frame = copy(port);
+
         port.shutdown();
+
         return frame;
     }
 
@@ -1272,9 +1452,13 @@ final class SoftwareRenderPortTest
     {
         // MUTABLE locals — the running extremes of the covered pixels.
         int minX = WIDTH;
+
         int minY = HEIGHT;
+
         int maxX = -1;
+
         int maxY = -1;
+
         for (int y = 0; y < HEIGHT; y++)
         {
             for (int x = 0; x < WIDTH; x++)
@@ -1283,13 +1467,19 @@ final class SoftwareRenderPortTest
                 {
                     continue;
                 }
+
                 minX = Math.min(minX, x);
+
                 maxX = Math.max(maxX, x);
+
                 minY = Math.min(minY, y);
+
                 maxY = Math.max(maxY, y);
             }
         }
+
         assertThat(maxX).as("the instance must actually be on screen").isNotNegative();
+
         return new int[] {minX, minY, maxX, maxY};
     }
 
@@ -1308,11 +1498,14 @@ final class SoftwareRenderPortTest
         // +1 would be comparing a pixel index against an edge one pixel away.
         assertThat((float) box[0]).as("left edge")
             .isCloseTo(screenX(centreX - halfWidth, depth), within(PIXEL_TOLERANCE));
+
         assertThat((float) (box[2] + 1)).as("right edge")
             .isCloseTo(screenX(centreX + halfWidth, depth), within(PIXEL_TOLERANCE));
+
         // Screen y grows downward, so the top edge is the LARGER view y.
         assertThat((float) box[1]).as("top edge")
             .isCloseTo(screenY(centreY + halfHeight, depth), within(PIXEL_TOLERANCE));
+
         assertThat((float) (box[3] + 1)).as("bottom edge")
             .isCloseTo(screenY(centreY - halfHeight, depth), within(PIXEL_TOLERANCE));
     }
@@ -1334,13 +1527,20 @@ final class SoftwareRenderPortTest
     private static int[] render(final Rasterizer.CullMode cull, final I_ThreadPoolPort pool)
     {
         final SoftwareRenderPort port = newPort(pool, cull);
+
         port.resize(WIDTH, HEIGHT);
+
         port.loadModel(CubeFixture.build());
+
         port.setCamera(Camera.lookingAt(new Vec3(3.0f, 2.4f, 3.6f), ORIGIN, UP,
             FOV, (float) WIDTH / (float) HEIGHT, NEAR));
+
         port.renderFrame(0);
+
         final int[] frame = copy(port);
+
         port.shutdown();
+
         return frame;
     }
 
@@ -1348,14 +1548,18 @@ final class SoftwareRenderPortTest
         final Rasterizer.CullMode cull)
     {
         final I_TimePort time = new NullTimePort();
+
         time.init();
+
         return new SoftwareRenderPort(pool, time, cull);
     }
 
     private static int[] copy(final SoftwareRenderPort port)
     {
         final int[] frame = new int[port.surfaceWidth() * port.surfaceHeight()];
+
         port.copyColorInto(frame);
+
         return frame;
     }
 
@@ -1363,6 +1567,7 @@ final class SoftwareRenderPortTest
     private static Set<Integer> colorsIn(final int[] frame)
     {
         final Set<Integer> found = new HashSet<>();
+
         for (final int pixel : frame)
         {
             if (pixel != SoftwareRenderPort.DEFAULT_CLEAR_COLOR)
@@ -1370,6 +1575,7 @@ final class SoftwareRenderPortTest
                 found.add(pixel);
             }
         }
+
         return found;
     }
 
@@ -1381,24 +1587,34 @@ final class SoftwareRenderPortTest
         // MUTABLE locals — the span of the first covered row, and whether one
         // has been seen yet.
         int firstMin = -1;
+
         int firstMax = -1;
+
         for (int y = 0; y < height; y++)
         {
             final int min = firstCovered(frame, width, y, 1);
+
             if (min < 0)
             {
                 continue;
             }
+
             final int max = firstCovered(frame, width, y, -1);
+
             if (firstMin < 0)
             {
                 firstMin = min;
+
                 firstMax = max;
+
                 continue;
             }
+
             assertThat(min).as("left edge of row %d", y).isEqualTo(firstMin);
+
             assertThat(max).as("right edge of row %d", y).isEqualTo(firstMax);
         }
+
         assertThat(firstMin).as("the model must actually be on screen").isNotNegative();
     }
 
@@ -1409,18 +1625,22 @@ final class SoftwareRenderPortTest
     {
         // MUTABLE local — the scan cursor.
         int x = 0;
+
         if (step < 0)
         {
             x = width - 1;
         }
+
         while (x >= 0 && x < width)
         {
             if (frame[y * width + x] != SoftwareRenderPort.DEFAULT_CLEAR_COLOR)
             {
                 return x;
             }
+
             x += step;
         }
+
         return -1;
     }
 }

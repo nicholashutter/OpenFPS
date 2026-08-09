@@ -87,9 +87,13 @@ public final class GltfAsset
         final byte[] binaryChunk)
     {
         this.name = name;
+
         this.baseDirectory = baseDirectory;
+
         this.root = root;
+
         this.binaryChunk = binaryChunk;
+
         this.buffers = new byte[optionalArray(root, "buffers").size()][];
     }
 
@@ -136,6 +140,7 @@ public final class GltfAsset
         {
             return fromGlb(name, baseDirectory, bytes);
         }
+
         return new GltfAsset(name, baseDirectory,
             parseJson(name, new String(bytes, StandardCharsets.UTF_8)), null);
     }
@@ -175,16 +180,20 @@ public final class GltfAsset
     public JsonObject item(final String arrayName, final int index)
     {
         final JsonArray items = optionalArray(root, arrayName);
+
         if (index < 0 || index >= items.size())
         {
             throw new GltfException(name + ": " + arrayName + "[" + index + "] is out of range; "
                 + items.size() + " present");
         }
+
         final JsonElement element = items.get(index);
+
         if (!element.isJsonObject())
         {
             throw new GltfException(name + ": " + arrayName + "[" + index + "] is not an object");
         }
+
         return element.getAsJsonObject();
     }
 
@@ -206,10 +215,12 @@ public final class GltfAsset
             throw new GltfException(name + ": buffer " + index + " is out of range; "
                 + buffers.length + " present");
         }
+
         if (buffers[index] == null)
         {
             buffers[index] = resolveBuffer(index);
         }
+
         return buffers[index];
     }
 
@@ -223,19 +234,25 @@ public final class GltfAsset
     public byte[] imageBytes(final int index)
     {
         final JsonObject image = item("images", index);
+
         if (image.has("uri"))
         {
             return resolveUri(image.get("uri").getAsString(), "image " + index);
         }
+
         if (!image.has("bufferView"))
         {
             throw new GltfException(name + ": image " + index + " has neither uri nor bufferView");
         }
 
         final JsonObject view = item("bufferViews", image.get("bufferView").getAsInt());
+
         final byte[] source = buffer(view.get("buffer").getAsInt());
+
         final int offset = optionalInt(view, "byteOffset", 0);
+
         final int length = view.get("byteLength").getAsInt();
+
         if (offset < 0 || length < 0 || (long) offset + length > source.length)
         {
             throw new GltfException(name + ": image " + index + " bufferView [" + offset + ", +"
@@ -243,7 +260,9 @@ public final class GltfAsset
         }
 
         final byte[] encoded = new byte[length];
+
         System.arraycopy(source, offset, encoded, 0, length);
+
         return encoded;
     }
 
@@ -259,10 +278,12 @@ public final class GltfAsset
         final int fallback)
     {
         final JsonElement element = object.get(property);
+
         if (element == null || element.isJsonNull())
         {
             return fallback;
         }
+
         return element.getAsInt();
     }
 
@@ -278,10 +299,12 @@ public final class GltfAsset
         final boolean fallback)
     {
         final JsonElement element = object.get(property);
+
         if (element == null || element.isJsonNull())
         {
             return fallback;
         }
+
         return element.getAsBoolean();
     }
 
@@ -295,10 +318,12 @@ public final class GltfAsset
     public static JsonArray optionalArray(final JsonObject object, final String property)
     {
         final JsonElement element = object.get(property);
+
         if (element == null || !element.isJsonArray())
         {
             return new JsonArray();
         }
+
         return element.getAsJsonArray();
     }
 
@@ -315,7 +340,9 @@ public final class GltfAsset
         }
 
         final ByteBuffer in = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN);
+
         final int version = in.getInt(Integer.BYTES);
+
         if (version != GLB_VERSION)
         {
             throw new GltfException(name + ": GLB container version " + version
@@ -323,6 +350,7 @@ public final class GltfAsset
         }
 
         final int declaredLength = in.getInt(2 * Integer.BYTES);
+
         if (declaredLength != bytes.length)
         {
             throw new GltfException(name + ": GLB declares " + declaredLength + " bytes but is "
@@ -331,14 +359,19 @@ public final class GltfAsset
 
         // MUTABLE locals — the chunk scan's cursor and its two results.
         int cursor = GLB_HEADER_BYTES;
+
         String json = null;
+
         byte[] binary = null;
 
         while (cursor + GLB_CHUNK_HEADER_BYTES <= bytes.length)
         {
             final int chunkLength = in.getInt(cursor);
+
             final int chunkType = in.getInt(cursor + Integer.BYTES);
+
             final int dataStart = cursor + GLB_CHUNK_HEADER_BYTES;
+
             if (chunkLength < 0 || (long) dataStart + chunkLength > bytes.length)
             {
                 throw new GltfException(name + ": GLB chunk at byte " + cursor + " declares "
@@ -353,8 +386,10 @@ public final class GltfAsset
             else if (chunkType == CHUNK_BIN && binary == null)
             {
                 binary = new byte[chunkLength];
+
                 System.arraycopy(bytes, dataStart, binary, 0, chunkLength);
             }
+
             // Chunk data is padded to a 4-byte boundary; unknown types are
             // skipped, which is what the specification requires of a reader.
             cursor = dataStart + align4(chunkLength);
@@ -364,6 +399,7 @@ public final class GltfAsset
         {
             throw new GltfException(name + ": GLB contains no JSON chunk");
         }
+
         return new GltfAsset(name, baseDirectory, parseJson(name, json), binary);
     }
 
@@ -383,6 +419,7 @@ public final class GltfAsset
     private static JsonObject parseJson(final String name, final String json)
     {
         final JsonElement parsed;
+
         try
         {
             parsed = JsonParser.parseString(json);
@@ -391,23 +428,29 @@ public final class GltfAsset
         {
             throw new GltfException(name + ": JSON is malformed", e);
         }
+
         if (!parsed.isJsonObject())
         {
             throw new GltfException(name + ": top-level JSON is not an object");
         }
 
         final JsonObject document = parsed.getAsJsonObject();
+
         final JsonElement asset = document.get("asset");
+
         if (asset == null || !asset.isJsonObject() || !asset.getAsJsonObject().has("version"))
         {
             throw new GltfException(name + ": no asset.version — not a glTF document");
         }
+
         final String version = asset.getAsJsonObject().get("version").getAsString();
+
         if (!version.startsWith("2."))
         {
             throw new GltfException(name + ": glTF version " + version
                 + "; this converter implements 2.x only");
         }
+
         return document;
     }
 
@@ -417,6 +460,7 @@ public final class GltfAsset
     private byte[] resolveBuffer(final int index)
     {
         final JsonObject descriptor = item("buffers", index);
+
         if (!descriptor.has("uri"))
         {
             if (binaryChunk == null)
@@ -424,8 +468,10 @@ public final class GltfAsset
                 throw new GltfException(name + ": buffer " + index
                     + " has no uri, but the asset has no GLB binary chunk to take it from");
             }
+
             return binaryChunk;
         }
+
         return resolveUri(descriptor.get("uri").getAsString(), "buffer " + index);
     }
 
@@ -436,6 +482,7 @@ public final class GltfAsset
         {
             return decodeDataUri(uri, what);
         }
+
         if (baseDirectory == null)
         {
             throw new GltfException(name + ": " + what + " references the external file '" + uri
@@ -443,6 +490,7 @@ public final class GltfAsset
         }
 
         final Path target = baseDirectory.resolve(decodePath(uri, what));
+
         try
         {
             return Files.readAllBytes(target);
@@ -458,11 +506,13 @@ public final class GltfAsset
     private byte[] decodeDataUri(final String uri, final String what)
     {
         final int marker = uri.indexOf(BASE64_MARKER);
+
         if (marker < 0)
         {
             throw new GltfException(name + ": " + what
                 + " uses a data URI that is not base64-encoded; only base64 is supported");
         }
+
         try
         {
             return Base64.getDecoder().decode(uri.substring(marker + BASE64_MARKER.length()));
@@ -482,10 +532,12 @@ public final class GltfAsset
         try
         {
             final String path = new URI(uri).getPath();
+
             if (path == null)
             {
                 throw new GltfException(name + ": " + what + " has no usable path in '" + uri + "'");
             }
+
             return path;
         }
         catch (final URISyntaxException e)

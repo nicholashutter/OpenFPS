@@ -47,6 +47,7 @@ public final class DirectoryModelSource implements ModelSource
         {
             throw new IllegalArgumentException("modelRoot must not be null");
         }
+
         this.root = modelRoot;
     }
 

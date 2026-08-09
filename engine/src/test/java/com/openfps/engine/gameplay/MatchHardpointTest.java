@@ -69,9 +69,13 @@ class MatchHardpointTest
             // A single RED bot, placed far from any zone, so the
             // resolve sees "no bodies in the active zone".
             final Match match = hardpointMatch(List.of(redBotAt(1000.0f, 1000.0f, 0)));
+
             match.setPlayerTeam(Team.RED);
+
             match.tick(0, 1000.0f, 0.0f, 0.0f);
+
             assertThat(match.hardpointActiveHolder()).isEqualTo(Team.NEUTRAL);
+
             assertThat(match.teamScores()).containsExactly(0, 0);
         }
 
@@ -85,10 +89,14 @@ class MatchHardpointTest
                 redBotAt(0.0f, 0.0f, 0),
                 redBotAt(1000.0f, 1000.0f, 1)
             ));
+
             match.setPlayerTeam(Team.BLUE);
+
             // Player is far; the bot in zone_a holds it.
             match.tick(0, 1000.0f, 0.0f, 0.0f);
+
             assertThat(match.hardpointActiveHolder()).isEqualTo(Team.RED);
+
             assertThat(match.teamScores()).containsExactly(1, 0);
         }
 
@@ -100,9 +108,13 @@ class MatchHardpointTest
                 blueBotAt(0.0f, 0.0f, 0),
                 redBotAt(1000.0f, 1000.0f, 1)
             ));
+
             match.setPlayerTeam(Team.RED);
+
             match.tick(0, 1000.0f, 0.0f, 0.0f);
+
             assertThat(match.hardpointActiveHolder()).isEqualTo(Team.BLUE);
+
             assertThat(match.teamScores()).containsExactly(0, 1);
         }
 
@@ -117,9 +129,13 @@ class MatchHardpointTest
                 redBotAt(0.0f, 0.0f, 0),
                 blueBotAt(0.0f, 0.0f, 1)
             ));
+
             match.setPlayerTeam(Team.NEUTRAL);
+
             match.tick(0, 1000.0f, 0.0f, 0.0f);
+
             assertThat(match.hardpointActiveHolder()).isEqualTo(Team.NEUTRAL);
+
             assertThat(match.teamScores()).containsExactly(0, 0);
         }
 
@@ -130,10 +146,14 @@ class MatchHardpointTest
             // One RED bot far from the zone, so the match is not
             // WON. The player is the only body in zone_a.
             final Match match = hardpointMatch(List.of(redBotAt(1000.0f, 1000.0f, 0)));
+
             match.setPlayerTeam(Team.RED);
+
             // Player at the centre of zone_a.
             match.tick(0, 0.0f, 0.0f, 0.0f);
+
             assertThat(match.hardpointActiveHolder()).isEqualTo(Team.RED);
+
             assertThat(match.teamScores()).containsExactly(1, 0);
         }
 
@@ -148,9 +168,13 @@ class MatchHardpointTest
                 neutralBotAt(0.0f, 0.0f, 0),
                 redBotAt(1000.0f, 1000.0f, 1)
             ));
+
             match.setPlayerTeam(Team.RED);
+
             match.tick(0, 1000.0f, 0.0f, 0.0f);
+
             assertThat(match.hardpointActiveHolder()).isEqualTo(Team.NEUTRAL);
+
             assertThat(match.teamScores()).containsExactly(0, 0);
         }
     }
@@ -169,11 +193,14 @@ class MatchHardpointTest
                 redBotAt(0.0f, 0.0f, 0),
                 redBotAt(1000.0f, 1000.0f, 1)
             ));
+
             match.setPlayerTeam(Team.NEUTRAL);
+
             for (int tic = 0; tic < 10; tic++)
             {
                 match.tick(tic, 1000.0f, 0.0f, 0.0f);
             }
+
             assertThat(match.teamScores()).containsExactly(10, 0);
         }
 
@@ -187,14 +214,20 @@ class MatchHardpointTest
             // Driving 30 + 30 = 60 tics verifies the team-by-team
             // breakdown.
             final Bot redInZone = redBotAt(0.0f, 0.0f, 0);
+
             final Bot redFar = redBotAt(1000.0f, 1000.0f, 1);
+
             final Bot blueFar = blueBotAt(1000.0f, 1000.0f, 2);
+
             final Match match = hardpointMatch(List.of(redInZone, redFar, blueFar));
+
             match.setPlayerTeam(Team.NEUTRAL);
+
             for (int tic = 0; tic < 30; tic++)
             {
                 match.tick(tic, 1000.0f, 0.0f, 0.0f);
             }
+
             assertThat(match.teamScores()).containsExactly(30, 0);
         }
     }
@@ -208,6 +241,7 @@ class MatchHardpointTest
         void shouldStartAtZoneZero()
         {
             final Match match = hardpointMatch(List.of(redBotAt(1000.0f, 1000.0f, 0)));
+
             assertThat(match.hardpointActiveZoneIndex()).isEqualTo(0);
         }
 
@@ -216,10 +250,12 @@ class MatchHardpointTest
         void shouldRotateAfterThreshold()
         {
             final Match match = hardpointMatch(List.of(redBotAt(1000.0f, 1000.0f, 0)));
+
             for (int tic = 0; tic < ROTATION_TICS; tic++)
             {
                 match.tick(tic, 1000.0f, 0.0f, 0.0f);
             }
+
             // After exactly ROTATION_TICS tics, the counter is at
             // ROTATION_TICS, which triggers the wrap on this tic's
             // update. The zone is now 1.
@@ -231,12 +267,14 @@ class MatchHardpointTest
         void shouldRotateThroughAllZones()
         {
             final Match match = hardpointMatch(List.of(redBotAt(1000.0f, 1000.0f, 0)));
+
             // Drive (3 * ROTATION_TICS) tics; the index visits 0, 1,
             // 2, and wraps back to 0.
             for (int tic = 0; tic < 3 * ROTATION_TICS; tic++)
             {
                 match.tick(tic, 1000.0f, 0.0f, 0.0f);
             }
+
             assertThat(match.hardpointActiveZoneIndex()).isEqualTo(0);
         }
     }
@@ -250,14 +288,20 @@ class MatchHardpointTest
         void shouldReturnPerTeamScores()
         {
             final Match match = hardpointMatch(List.of(redBotAt(0.0f, 0.0f, 0)));
+
             match.setPlayerTeam(Team.NEUTRAL);
+
             for (int tic = 0; tic < 5; tic++)
             {
                 match.tick(tic, 1000.0f, 0.0f, 0.0f);
             }
+
             final int[] scores = match.teamScores();
+
             assertThat(scores).hasSize(2);
+
             assertThat(scores[0]).isEqualTo(5);
+
             assertThat(scores[1]).isEqualTo(0);
         }
     }
@@ -274,21 +318,30 @@ class MatchHardpointTest
                 redBotAt(0.0f, 0.0f, 0),
                 redBotAt(1000.0f, 1000.0f, 1)
             ));
+
             match.setPlayerTeam(Team.RED);
+
             for (int tic = 0; tic < 90; tic++)
             {
                 match.tick(tic, 0.0f, 0.0f, 0.0f);
             }
+
             // After 90 tics with rotation=60, the zone has rotated
             // at tic 60, so the active zone is at index 1.
             assertThat(match.hardpointActiveZoneIndex()).isEqualTo(1);
+
             assertThat(match.teamScores()[0]).isGreaterThan(0);
+
             match.reset();
+
             // After reset: zone back to 0, scores back to 0, holder
             // back to NEUTRAL. The player team is preserved.
             assertThat(match.hardpointActiveZoneIndex()).isEqualTo(0);
+
             assertThat(match.teamScores()).containsExactly(0, 0);
+
             assertThat(match.hardpointActiveHolder()).isEqualTo(Team.NEUTRAL);
+
             assertThat(match.playerTeam()).isEqualTo(Team.RED);
         }
     }
@@ -324,6 +377,7 @@ class MatchHardpointTest
             MatchMode.HARDPOINT, new MapDimensions(160.0f, 160.0f, 128.0f),
             threeLanes(), threeSpawns(), List.of(), new MapMarkers.Hardpoint(ZONES,
                 ROTATION_TICS, SCORE_PER_TICK), new MapAssets("a/level.ofm", "a/weapon.ofm", null));
+
         return new Match(roster.toArray(new Bot[0]), new BotRng(), BotSkill.MARKSMAN,
             Match.UNLIMITED_DEATHS, spec);
     }

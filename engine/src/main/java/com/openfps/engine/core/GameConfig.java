@@ -41,11 +41,14 @@ public final class GameConfig
         {
             throw new IllegalArgumentException("rate must not be null");
         }
+
         if (maxTics <= 0)
         {
             throw new IllegalArgumentException("maxTics must be > 0, got " + maxTics);
         }
+
         this.rate = rate;
+
         this.maxTics = maxTics;
     }
 

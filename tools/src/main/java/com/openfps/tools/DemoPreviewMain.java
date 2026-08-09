@@ -184,15 +184,20 @@ public final class DemoPreviewMain
     public static void main(final String[] args) throws IOException
     {
         final String outDir = option(args, "--outDir=");
+
         if (outDir == null || outDir.isEmpty())
         {
             LOG.error("Nothing to do: give --outDir=<directory>.");
+
             System.exit(EXIT_USAGE);
+
             return;
         }
 
         final String assets = optionOr(args, "--assets=", DEFAULT_ASSETS);
+
         final DemoScene demo;
+
         try
         {
             demo = DemoScene.build(DemoModels.load(Path.of(assets)));
@@ -200,13 +205,18 @@ public final class DemoPreviewMain
         catch (final DemoAssetException e)
         {
             LOG.error("Cannot build the demo scene: {}", e.getMessage());
+
             System.exit(EXIT_NO_ASSETS);
+
             return;
         }
 
         final int width = intOption(args, "--width=", DEFAULT_WIDTH);
+
         final int height = intOption(args, "--height=", DEFAULT_HEIGHT);
+
         final ToolPool pool = ToolPool.open(intOption(args, "--threads=", 0));
+
         try
         {
             renderAll(demo, Path.of(outDir), width, height, pool,
@@ -226,25 +236,34 @@ public final class DemoPreviewMain
         throws IOException
     {
         final I_TimePort time = new DesktopTimePort();
+
         time.init();
 
         final SoftwareRenderPort renderer = new SoftwareRenderPort(pool.port(), time);
+
         renderer.init();
+
         renderer.resize(width, height);
+
         renderer.setScene(demo.scene());
+
         final float aspect = (float) width / (float) height;
 
         // MUTABLE local — how many shots actually matched the filter.
         int written = 0;
+
         for (final Shot shot : SHOTS)
         {
             if (only != null && !only.isEmpty() && !only.equals(shot.name))
             {
                 continue;
             }
+
             renderShot(demo, shot, renderer, outDir, width, height, aspect);
+
             written++;
         }
+
         if (written == 0)
         {
             LOG.warn("No shot matched --shot={} — nothing was written.", only);
@@ -254,7 +273,9 @@ public final class DemoPreviewMain
         {
             measure(renderer, frames, width, height, pool);
         }
+
         renderer.shutdown();
+
         time.shutdown();
     }
 
@@ -264,14 +285,21 @@ public final class DemoPreviewMain
         final float aspect) throws IOException
     {
         final PlayerController controller = demo.spawnController();
+
         drive(controller, shot);
+
         renderer.setCamera(controller.camera(aspect));
+
         renderer.renderFrame(0);
 
         final Path out = outDir.resolve(shot.name + ".png");
+
         FramePng.write(renderer, out, width, height);
+
         LOG.info("{} -> {}", shot.name, out.toAbsolutePath());
+
         LOG.info("    {}", shot.description);
+
         LOG.info("    eye {}, yaw {} deg, pitch {} deg, {} triangles after clipping",
             controller.eyePosition(), degrees(controller.yawRadians()),
             degrees(controller.pitchRadians()), renderer.lastFrameTriangles());
@@ -294,8 +322,10 @@ public final class DemoPreviewMain
     private static void drive(final PlayerController controller, final Shot shot)
     {
         final PlayerInputView view = new PlayerInputView();
+
         step(controller, view, TURN_TICS, 0.0f, 0.0f, shot.aimYawDegrees,
             shot.aimPitchDegrees);
+
         step(controller, view, shot.walkTics, shot.forwardAxis, shot.strafeAxis,
             shot.walkYawDegrees, 0.0f);
     }
@@ -310,13 +340,18 @@ public final class DemoPreviewMain
         {
             return;
         }
+
         final float deltaSeconds = 1.0f / SCRIPT_HZ;
+
         final float yawPerTic = radians(yawDegrees) / tics;
+
         final float pitchPerTic = radians(pitchDegrees) / tics;
+
         for (int tic = 0; tic < tics; tic++)
         {
             view.wrap(InputState.of(forwardAxis, strafeAxis, yawPerTic, pitchPerTic,
                 false, false, false));
+
             controller.update(view, deltaSeconds);
         }
     }
@@ -333,23 +368,32 @@ public final class DemoPreviewMain
         final int width, final int height, final ToolPool pool)
     {
         final long[] samples = new long[frames];
+
         for (int frame = 0; frame < frames; frame++)
         {
             renderer.renderFrame(frame);
+
             samples[frame] = renderer.lastFrameNanos();
         }
+
         final int from = Math.min(WARMUP_FRAMES, frames - 1);
+
         final long[] timed = Arrays.copyOfRange(samples, from, frames);
+
         Arrays.sort(timed);
 
         // MUTABLE local — running total over the timed sample.
         long total = 0L;
+
         for (final long took : timed)
         {
             total += took;
         }
+
         final long best = timed[0];
+
         final double pixels = (double) width * (double) height;
+
         LOG.info("Full demo scene at {}x{}: best {} ms, p50 {} ms, p90 {} ms, p99 {} ms,"
             + " mean {} ms over {} frames ({} warmup discarded), {} worker threads,"
             + " {} triangles after clipping, {} parallel passes per frame",
@@ -360,6 +404,7 @@ public final class DemoPreviewMain
             format(total / (double) timed.length / NANOS_PER_MILLI), timed.length, from,
             pool.workerCount(), renderer.lastFrameTriangles(),
             renderer.lastFrameParallelPasses());
+
         LOG.info("Best frame: {} ns per screen pixel, {} fps; median frame: {} fps",
             format(best / pixels), format(1e9 / best),
             format(1e9 / percentile(timed, 50)));
@@ -369,6 +414,7 @@ public final class DemoPreviewMain
     private static long percentile(final long[] sorted, final int percent)
     {
         final int rank = (int) ((long) sorted.length * percent / 100L);
+
         return sorted[Math.min(rank, sorted.length - 1)];
     }
 
@@ -399,6 +445,7 @@ public final class DemoPreviewMain
                 return arg.substring(prefix.length());
             }
         }
+
         return null;
     }
 
@@ -406,20 +453,24 @@ public final class DemoPreviewMain
         final String fallback)
     {
         final String value = option(args, prefix);
+
         if (value == null || value.isEmpty())
         {
             return fallback;
         }
+
         return value;
     }
 
     private static int intOption(final String[] args, final String prefix, final int fallback)
     {
         final String value = option(args, prefix);
+
         if (value == null || value.isEmpty())
         {
             return fallback;
         }
+
         return Integer.parseInt(value);
     }
 
@@ -460,12 +511,19 @@ public final class DemoPreviewMain
             final float forward, final float strafe, final float walkYaw, final String what)
         {
             this.name = shotName;
+
             this.aimYawDegrees = aimYaw;
+
             this.aimPitchDegrees = aimPitch;
+
             this.walkTics = tics;
+
             this.forwardAxis = forward;
+
             this.strafeAxis = strafe;
+
             this.walkYawDegrees = walkYaw;
+
             this.description = what;
         }
     }

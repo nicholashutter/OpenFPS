@@ -37,14 +37,18 @@ final class SoundBankTest
         // add it here. That is exactly the discipline the adapter's loop over
         // values() already had, and which made the shared-buffer bug invisible.
         final Set<String> seen = new HashSet<>();
+
         for (final SoundId sound : SoundId.values())
         {
             final byte[] wav = SoundBank.wav(sound);
+
             assertThat(wav).as("%s baked nothing", sound).isNotEmpty();
+
             assertThat(seen.add(fingerprint(wav)))
                 .as("%s is byte-identical to another sound", sound)
                 .isTrue();
         }
+
         assertThat(seen).hasSameSizeAs(SoundId.values());
     }
 
@@ -55,11 +59,15 @@ final class SoundBankTest
         // They share a temp directory, so two ids on one name would have one
         // overwrite the other — and which one won would depend on bake order.
         final Set<String> names = new HashSet<>();
+
         for (final SoundId sound : SoundId.values())
         {
             final String name = SoundBank.fileName(sound);
+
             assertThat(name).endsWith(".wav");
+
             assertThat(name).doesNotContain("/").doesNotContain("\\");
+
             assertThat(names.add(name)).as("%s reuses a file name", sound).isTrue();
         }
     }
@@ -74,10 +82,13 @@ final class SoundBankTest
         // for every id.
         assertThat(SoundBank.sampleCount(SoundId.WEAPON_FIRE))
             .isEqualTo(BlasterSound.sampleCount());
+
         assertThat(SoundBank.sampleCount(SoundId.BOT_WEAPON_FIRE))
             .isEqualTo(CarbineSound.sampleCount());
+
         assertThat(SoundBank.sampleCount(SoundId.BOT_WEAPON_FIRE))
             .isNotEqualTo(SoundBank.sampleCount(SoundId.WEAPON_FIRE));
+
         assertThat(SoundBank.sampleRate(SoundId.BOT_WEAPON_FIRE))
             .isEqualTo(CarbineSound.sampleRate());
     }
@@ -89,9 +100,11 @@ final class SoundBankTest
         for (final SoundId sound : SoundId.values())
         {
             final byte[] wav = SoundBank.wav(sound);
+
             final int expected = WavAudio.HEADER_BYTES + SoundBank.sampleCount(sound) * 2;
 
             assertThat(wav).as("%s", sound).hasSize(expected);
+
             assertThat(new String(wav, 0, 4, java.nio.charset.StandardCharsets.US_ASCII))
                 .isEqualTo("RIFF");
         }
@@ -105,6 +118,7 @@ final class SoundBankTest
         // rejected, and an adapter has to be able to keep that promise without a
         // null check of its own.
         assertThat(SoundBank.wav(null)).isEqualTo(SoundBank.wav(SoundId.WEAPON_FIRE));
+
         assertThat(SoundBank.fileName(null))
             .isEqualTo(SoundBank.fileName(SoundId.WEAPON_FIRE));
     }
@@ -116,10 +130,12 @@ final class SoundBankTest
     {
         // MUTABLE local — the running fold.
         long fold = bytes.length;
+
         for (final byte value : bytes)
         {
             fold = fold * 31 + value;
         }
+
         return bytes.length + ":" + fold;
     }
 }

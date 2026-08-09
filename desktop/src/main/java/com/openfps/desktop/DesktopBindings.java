@@ -119,6 +119,7 @@ public final class DesktopBindings
         // because a stick axis has a direction and "is it held" has no answer.
         final InputBinding leftStick =
             InputBinding.gamepadAxis(GLFW.GLFW_GAMEPAD_AXIS_LEFT_X);
+
         return new ActionBindings()
             .bind(GameAction.MOVE_FORWARD,
                 InputBinding.key(Input.Keys.W), InputBinding.key(Input.Keys.UP),

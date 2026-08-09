@@ -36,6 +36,7 @@ public final class MenuButtonListener extends ChangeListener
         {
             throw new IllegalArgumentException("action must not be null");
         }
+
         this.action = action;
     }
 

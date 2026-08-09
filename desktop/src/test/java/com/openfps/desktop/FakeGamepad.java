@@ -59,6 +59,7 @@ final class FakeGamepad implements GamepadSource
     public void poll()
     {
         polls = polls + 1;
+
         previouslyPressed = new HashSet<>(pressed);
     }
 
@@ -75,6 +76,7 @@ final class FakeGamepad implements GamepadSource
         {
             return GlfwGamepad.NO_PAD;
         }
+
         return "Fake Pad";
     }
 
@@ -91,7 +93,9 @@ final class FakeGamepad implements GamepadSource
         {
             return false;
         }
+
         final Integer code = Integer.valueOf(buttonIndex);
+
         return pressed.contains(code) && !previouslyPressed.contains(code);
     }
 
@@ -136,7 +140,9 @@ final class FakeGamepad implements GamepadSource
     FakeGamepad withLeftStick(final float x, final float y)
     {
         this.leftX = x;
+
         this.leftY = y;
+
         return this;
     }
 
@@ -150,7 +156,9 @@ final class FakeGamepad implements GamepadSource
     FakeGamepad withRightStick(final float x, final float y)
     {
         this.rightX = x;
+
         this.rightY = y;
+
         return this;
     }
 
@@ -163,6 +171,7 @@ final class FakeGamepad implements GamepadSource
     FakeGamepad press(final int buttonIndex)
     {
         pressed.add(Integer.valueOf(buttonIndex));
+
         return this;
     }
 
@@ -175,6 +184,7 @@ final class FakeGamepad implements GamepadSource
     FakeGamepad release(final int buttonIndex)
     {
         pressed.remove(Integer.valueOf(buttonIndex));
+
         return this;
     }
 
@@ -187,6 +197,7 @@ final class FakeGamepad implements GamepadSource
     FakeGamepad pullTrigger(final int axisIndex)
     {
         pulledTriggers.add(Integer.valueOf(axisIndex));
+
         return this;
     }
 
@@ -207,6 +218,7 @@ final class FakeGamepad implements GamepadSource
     FakeGamepad unplug()
     {
         this.connected = false;
+
         return this;
     }
 
@@ -218,6 +230,7 @@ final class FakeGamepad implements GamepadSource
     FakeGamepad replug()
     {
         this.connected = true;
+
         return this;
     }
 
@@ -234,6 +247,7 @@ final class FakeGamepad implements GamepadSource
         {
             return 0.0f;
         }
+
         return value;
     }
 }

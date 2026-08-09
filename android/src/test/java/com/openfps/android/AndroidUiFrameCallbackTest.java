@@ -107,6 +107,7 @@ class AndroidUiFrameCallbackTest
             final AndroidUiFrameCallback ui = menuOnly();
 
             assertThat(ui.uiState().state()).isEqualTo(UiState.MENU);
+
             assertThat(ui.isMenuActive()).isTrue();
         }
 
@@ -117,6 +118,7 @@ class AndroidUiFrameCallbackTest
             // Both halves must read the same answer, or the port banks touches
             // the menu is also acting on.
             final AndroidInputPort input = new AndroidInputPort(2.0f);
+
             final AndroidUiFrameCallback ui = new AndroidUiFrameCallback(
                 new RecordingActions(), null, input);
 
@@ -139,6 +141,7 @@ class AndroidUiFrameCallbackTest
             // and the counter would still appear on the frames nobody was
             // watching for it. Identity is the only assertion that catches that.
             final DebugSettings shared = new DebugSettings();
+
             final AndroidUiFrameCallback ui = new AndroidUiFrameCallback(
                 new RecordingActions(), null, null, shared);
 
@@ -150,11 +153,14 @@ class AndroidUiFrameCallbackTest
         void shouldSeeChangesMadeThroughTheSharedSwitch()
         {
             final DebugSettings shared = new DebugSettings();
+
             final AndroidUiFrameCallback ui = new AndroidUiFrameCallback(
                 new RecordingActions(), null, null, shared);
 
             assertThat(ui.debugSettings().isOverlayVisible()).isFalse();
+
             shared.setOverlayVisible(true);
+
             assertThat(ui.debugSettings().isOverlayVisible()).isTrue();
         }
 
@@ -195,6 +201,7 @@ class AndroidUiFrameCallbackTest
             // TARGET OUTLINE button would relabel itself perfectly and the outline
             // would stop responding, with nothing thrown and nothing logged.
             final AccessibilitySettings shared = new AccessibilitySettings();
+
             final AndroidUiFrameCallback ui = new AndroidUiFrameCallback(
                 new RecordingActions(), null, null, new DebugSettings(), shared);
 
@@ -206,11 +213,14 @@ class AndroidUiFrameCallbackTest
         void shouldSeeChangesMadeThroughTheSharedSwitches()
         {
             final AccessibilitySettings shared = new AccessibilitySettings();
+
             final AndroidUiFrameCallback ui = new AndroidUiFrameCallback(
                 new RecordingActions(), null, null, new DebugSettings(), shared);
 
             assertThat(ui.accessibilitySettings().isTargetOutlineVisible()).isTrue();
+
             shared.setTargetOutlineVisible(false);
+
             assertThat(ui.accessibilitySettings().isTargetOutlineVisible()).isFalse();
         }
 
@@ -235,6 +245,7 @@ class AndroidUiFrameCallbackTest
             // shipped default: a test that saw the outline off would be testing a
             // configuration no player has.
             assertThat(menuOnly().accessibilitySettings()).isNotNull();
+
             assertThat(menuOnly().accessibilitySettings().isTargetOutlineVisible())
                 .as("and it is on, as it is for a player")
                 .isTrue();
@@ -260,13 +271,16 @@ class AndroidUiFrameCallbackTest
         void shouldEnterTheWorldOnStartGame()
         {
             final RecordingActions actions = new RecordingActions();
+
             final AndroidUiFrameCallback ui =
                 new AndroidUiFrameCallback(actions, null, null);
 
             ui.uiState().startGame(MatchMode.SINGLE_PLAYER);
 
             assertThat(ui.isMenuActive()).isFalse();
+
             assertThat(ui.uiState().mode()).isEqualTo(MatchMode.SINGLE_PLAYER);
+
             assertThat(actions.calls).isEmpty();
         }
 
@@ -286,13 +300,17 @@ class AndroidUiFrameCallbackTest
         void shouldReturnToTheMenuOnLeave()
         {
             final AndroidInputPort input = new AndroidInputPort(2.0f);
+
             final AndroidUiFrameCallback ui =
                 new AndroidUiFrameCallback(new RecordingActions(), null, input);
+
             input.resize(1280, 720);
+
             ui.uiState().startGame();
 
             input.touchDown((int) input.layout().leaveCentreX(),
                 (int) input.layout().leaveCentreY(), 0, 0);
+
             ui.onFrame(0.016f);
 
             assertThat(ui.isMenuActive()).isTrue();
@@ -306,15 +324,20 @@ class AndroidUiFrameCallbackTest
             // A back press landing in the menu must therefore be dropped rather
             // than acted on, or the first frame after returning crashes.
             final AndroidInputPort input = new AndroidInputPort(2.0f);
+
             final AndroidUiFrameCallback ui =
                 new AndroidUiFrameCallback(new RecordingActions(), null, input);
+
             input.resize(1280, 720);
+
             ui.uiState().startGame();
+
             ui.uiState().returnToMenu();
 
             input.keyDown(com.badlogic.gdx.Input.Keys.BACK);
 
             assertThatCode(() -> ui.onFrame(0.016f)).doesNotThrowAnyException();
+
             assertThat(ui.isMenuActive()).isTrue();
         }
 
@@ -328,12 +351,16 @@ class AndroidUiFrameCallbackTest
             // left" — so nothing acted on the press, Android's default handling did,
             // and reading the settings screen exited the game.
             final AndroidInputPort input = new AndroidInputPort(2.0f);
+
             final AndroidUiFrameCallback ui =
                 new AndroidUiFrameCallback(new RecordingActions(), null, input);
+
             input.resize(1280, 720);
+
             ui.uiState().openSettings();
 
             input.keyDown(com.badlogic.gdx.Input.Keys.BACK);
+
             ui.onFrame(0.016f);
 
             assertThat(ui.uiState().state())
@@ -349,13 +376,18 @@ class AndroidUiFrameCallbackTest
             // the only place the match result is ever shown, and quitting the app
             // took it with it.
             final AndroidInputPort input = new AndroidInputPort(2.0f);
+
             final AndroidUiFrameCallback ui =
                 new AndroidUiFrameCallback(new RecordingActions(), null, input);
+
             input.resize(1280, 720);
+
             ui.uiState().startGame();
+
             ui.uiState().endMatch(new MatchSummary(MatchState.WON, 7, 1, 7, 21, 13, 44, 56));
 
             input.keyDown(com.badlogic.gdx.Input.Keys.BACK);
+
             ui.onFrame(0.016f);
 
             assertThat(ui.uiState().state()).isEqualTo(UiState.MENU);
@@ -371,14 +403,18 @@ class AndroidUiFrameCallbackTest
             // true is. AndroidInputPort does, in every state, and a change that made
             // its keyDown conditional on isPlaying would silently restore the bug.
             final AndroidInputPort input = new AndroidInputPort(2.0f);
+
             final AndroidUiFrameCallback ui =
                 new AndroidUiFrameCallback(new RecordingActions(), null, input);
+
             input.resize(1280, 720);
 
             assertThat(input.keyDown(com.badlogic.gdx.Input.Keys.BACK))
                 .as("consumed in the menu")
                 .isTrue();
+
             ui.uiState().openSettings();
+
             assertThat(input.keyDown(com.badlogic.gdx.Input.Keys.BACK))
                 .as("consumed on the settings screen, where the stage would not")
                 .isTrue();
@@ -401,14 +437,18 @@ class AndroidUiFrameCallbackTest
             // Scene2D click and the release never arrives to finish it. That is what
             // the emulator showed: RENDER, DEBUG OVERLAY and BACK all inert.
             final AndroidInputPort input = new AndroidInputPort(2.0f);
+
             final AndroidUiFrameCallback ui =
                 new AndroidUiFrameCallback(new RecordingActions(), null, input);
+
             input.resize(1280, 720);
+
             ui.uiState().openSettings();
 
             assertThat(input.touchDown(640, 360, 0, 0))
                 .as("a press outside a match is left to the screen")
                 .isFalse();
+
             assertThat(input.touchUp(640, 360, 0, 0))
                 .as("but the RELEASE is always claimed — hence the port goes last")
                 .isTrue();
@@ -426,9 +466,11 @@ class AndroidUiFrameCallbackTest
             // A gate attached while the UI is already playing must not be left
             // believing the match is frozen for the rest of the run.
             final AndroidUiFrameCallback ui = menuOnly();
+
             final List<Boolean> seen = new ArrayList<>();
 
             ui.uiState().startGame();
+
             ui.attachMatchGate(seen::add);
 
             assertThat(seen).containsExactly(Boolean.TRUE);
@@ -442,6 +484,7 @@ class AndroidUiFrameCallbackTest
             // and fired from the moment the process started, so reading the
             // title screen for ten seconds cost a fifth of the player's health.
             final AndroidUiFrameCallback ui = menuOnly();
+
             final List<Boolean> seen = new ArrayList<>();
 
             ui.attachMatchGate(seen::add);
@@ -454,12 +497,17 @@ class AndroidUiFrameCallbackTest
         void shouldFireOncePerTransition()
         {
             final AndroidUiFrameCallback ui = menuOnly();
+
             final List<Boolean> seen = new ArrayList<>();
+
             ui.attachMatchGate(seen::add);
 
             ui.uiState().startGame();
+
             ui.onFrame(0.016f);
+
             ui.onFrame(0.016f);
+
             ui.onFrame(0.016f);
 
             assertThat(seen).containsExactly(Boolean.FALSE, Boolean.TRUE);
@@ -489,14 +537,19 @@ class AndroidUiFrameCallbackTest
             // finger down at that moment is still down on the way back — the
             // player returns already walking and firing.
             final AndroidInputPort input = new AndroidInputPort(2.0f);
+
             final AndroidUiFrameCallback ui =
                 new AndroidUiFrameCallback(new RecordingActions(), null, input);
+
             input.resize(1280, 720);
+
             ui.uiState().startGame();
+
             input.touchDown((int) input.layout().fireCentreX(),
                 (int) input.layout().fireCentreY(), 0, 0);
 
             ui.onPause();
+
             input.sampleInput(0);
 
             assertThat(input.currentInput().fire()).isFalse();

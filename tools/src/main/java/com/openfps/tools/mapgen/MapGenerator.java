@@ -71,6 +71,7 @@ public final class MapGenerator
     public MapGenerator(final Path atlasPath, final PrimitiveFactory factory)
     {
         this.atlasPath = atlasPath;
+
         this.factory = factory;
     }
 
@@ -84,25 +85,36 @@ public final class MapGenerator
     public byte[] generate(final MapGenConfig config)
     {
         final ModelBuilder builder = new ModelBuilder(config.id() + "-level");
+
         final int textureEdge = config.textureEdge();
+
         final Map<String, Integer> textureIndices = new LinkedHashMap<>();
+
         final Map<String, int[][]> mipCache = new HashMap<>();
+
         // First pass: group primitives by (submesh, texture) pair, preserving
         // config order. A LinkedHashMap with a composite key keeps the
         // submeshes in the order they were first declared.
         final Map<String, List<Primitive>> submeshGroups = new LinkedHashMap<>();
+
         for (final Primitive primitive : config.primitives())
         {
             final String key = primitive.submesh() + ":" + primitive.texture();
+
             final List<Primitive> group = submeshGroups.computeIfAbsent(key, k -> new ArrayList<>());
+
             group.add(primitive);
         }
+
         // Second pass: open each submesh, add its primitives, close it.
         for (final Map.Entry<String, List<Primitive>> entry : submeshGroups.entrySet())
         {
             final List<Primitive> group = entry.getValue();
+
             final Primitive first = group.get(0);
+
             final String swatchName = first.texture();
+
             // Re-use an already-loaded texture when two submeshes sample the
             // same swatch. The cached mip chain is byte-identical and the
             // model dedupes by content only when the writer checks, which
@@ -110,6 +122,7 @@ public final class MapGenerator
             // two texture records holding the same texels. Caching avoids
             // the duplicate and keeps the file smaller.
             int textureIndex;
+
             if (textureIndices.containsKey(swatchName))
             {
                 textureIndex = textureIndices.get(swatchName);
@@ -117,10 +130,14 @@ public final class MapGenerator
             else
             {
                 final int[][] levels = loadMips(swatchName, textureEdge, mipCache);
+
                 textureIndex = builder.addTexture(swatchName, textureEdge, textureEdge, levels);
+
                 textureIndices.put(swatchName, textureIndex);
             }
+
             builder.beginSubmesh(textureIndex);
+
             for (final Primitive primitive : group)
             {
                 // The cached mip chain is reused by index; the second
@@ -128,11 +145,15 @@ public final class MapGenerator
                 // open submesh and a sanity check for those that do not.
                 primitive.addTo(builder, textureIndex);
             }
+
             builder.endSubmesh();
         }
+
         final byte[] bytes = builder.toBytes();
+
         LOG.info("Generated {}: {} primitives, {} submeshes, {} textures",
             config.id(), config.primitives().size(), submeshGroups.size(), textureIndices.size());
+
         return bytes;
     }
 
@@ -144,28 +165,37 @@ public final class MapGenerator
         final Map<String, int[][]> mipCache)
     {
         final int[][] cached = mipCache.get(swatchName);
+
         if (cached != null)
         {
             return cached;
         }
+
         final int[] level0;
+
         final KenneySwatch swatch = factory.swatch(swatchName);
+
         if (swatch == null)
         {
             throw new IllegalStateException("unknown swatch: " + swatchName
                 + " (registered: " + factory.swatchNames() + ")");
         }
+
         if (atlasPath != null)
         {
             final int[] texels = swatch.load(atlasPath);
+
             level0 = KenneyTexture.forceOpaque(texels);
         }
         else
         {
             level0 = proceduralTile(swatchName, textureEdge);
         }
+
         final int[][] levels = MipGenerator.generate(textureEdge, textureEdge, level0);
+
         mipCache.put(swatchName, levels);
+
         return levels;
     }
 
@@ -175,6 +205,7 @@ public final class MapGenerator
     private static int[] proceduralTile(final String swatchName, final int textureEdge)
     {
         int colour;
+
         if (KenneySwatch.NAME_FLOOR.equals(swatchName))
         {
             colour = Rgba.pack(82, 84, 88, 255);
@@ -203,11 +234,14 @@ public final class MapGenerator
         {
             colour = Rgba.pack(196, 60, 124, 255);
         }
+
         final int[] texels = new int[textureEdge * textureEdge];
+
         for (int i = 0; i < texels.length; i++)
         {
             texels[i] = colour;
         }
+
         return texels;
     }
 }

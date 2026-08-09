@@ -183,6 +183,7 @@ public final class SuperBlasterSound
     public static double frequencyAt(final int index)
     {
         final double progress = index / (double) sampleCount();
+
         return START_HZ * Math.pow(END_HZ / START_HZ, progress);
     }
 
@@ -200,13 +201,18 @@ public final class SuperBlasterSound
     public static double envelopeAt(final int index)
     {
         final int count = sampleCount();
+
         if (index < 0 || index >= count)
         {
             return 0.0;
         }
+
         final double attack = Math.min(1.0, index / (double) ATTACK_SAMPLES);
+
         final double release = Math.min(1.0, (count - 1 - index) / (double) RELEASE_SAMPLES);
+
         final double decay = Math.exp(-DECAY_PER_SECOND * index / SAMPLE_RATE);
+
         return attack * decay * release;
     }
 
@@ -223,25 +229,32 @@ public final class SuperBlasterSound
     public static short[] samples()
     {
         final int count = sampleCount();
+
         final short[] pcm = new short[count];
+
         // Phase is ACCUMULATED at the FUNDAMENTAL, and the other two voices are
         // read off multiples of it rather than accumulated separately. That is what
         // keeps them locked: three independent accumulators would drift apart by a
         // rounding error per sample and the chord would slowly detune over 260 ms.
         double phase = 0.0;
+
         for (int index = 0; index < count; index++)
         {
             phase = phase + TWO_PI * frequencyAt(index) / SAMPLE_RATE;
+
             final double wave = SUB_LEVEL * Math.sin(phase)
                 + BLASTER_LEVEL * Math.sin(BLASTER_MULTIPLE * phase)
                 + EDGE_LEVEL * Math.sin(EDGE_MULTIPLE * phase);
+
             final double value = PEAK * envelopeAt(index) * wave * Short.MAX_VALUE;
+
             // Clamped rather than trusted, for the reason BlasterSound gives: a
             // cast that wraps turns a loud sample into an equally loud sample of
             // the opposite sign, which is a click and not a clip.
             pcm[index] = (short) Math.max(Short.MIN_VALUE,
                 Math.min(Short.MAX_VALUE, Math.round(value)));
         }
+
         return pcm;
     }
 }

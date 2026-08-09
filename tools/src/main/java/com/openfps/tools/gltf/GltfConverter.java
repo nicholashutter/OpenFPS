@@ -127,9 +127,13 @@ public final class GltfConverter
     private GltfConverter(final GltfAsset asset)
     {
         this.asset = asset;
+
         this.builder = new ModelBuilder(asset.name());
+
         this.textureByImage = new int[asset.array("images").size()];
+
         this.onStack = new boolean[asset.array("nodes").size()];
+
         Arrays.fill(textureByImage, -1);
     }
 
@@ -174,19 +178,23 @@ public final class GltfConverter
     public static void convert(final Path source, final Path target)
     {
         final byte[] model = convert(source);
+
         try
         {
             final Path parent = target.getParent();
+
             if (parent != null)
             {
                 Files.createDirectories(parent);
             }
+
             Files.write(target, model);
         }
         catch (final IOException e)
         {
             throw new GltfException("cannot write " + target, e);
         }
+
         LOG.info("Converted {} -> {} ({} bytes)", source.getFileName(), target.getFileName(),
             model.length);
     }
@@ -197,6 +205,7 @@ public final class GltfConverter
     private byte[] run()
     {
         final JsonArray scenes = asset.array("scenes");
+
         if (scenes.size() == 0)
         {
             convertAllMeshes();
@@ -204,8 +213,11 @@ public final class GltfConverter
         else
         {
             final int sceneIndex = GltfAsset.optionalInt(asset.root(), "scene", 0);
+
             final JsonObject scene = asset.item("scenes", sceneIndex);
+
             final JsonArray roots = GltfAsset.optionalArray(scene, "nodes");
+
             for (int i = 0; i < roots.size(); i++)
             {
                 visitNode(roots.get(i).getAsInt(), Mat4.identity());
@@ -214,6 +226,7 @@ public final class GltfConverter
 
         LOG.info("{}: {} vertices, {} triangles, {} textures", asset.name(),
             builder.vertexCount(), builder.triangleCount(), builder.textureCount());
+
         return builder.toBytes();
     }
 
@@ -221,6 +234,7 @@ public final class GltfConverter
     private void convertAllMeshes()
     {
         final int meshCount = asset.array("meshes").size();
+
         for (int mesh = 0; mesh < meshCount; mesh++)
         {
             convertMesh(mesh, Mat4.identity());
@@ -234,6 +248,7 @@ public final class GltfConverter
         {
             throw new GltfException(asset.name() + ": node " + nodeIndex + " is out of range");
         }
+
         if (onStack[nodeIndex])
         {
             throw new GltfException(asset.name() + ": node " + nodeIndex
@@ -241,18 +256,23 @@ public final class GltfConverter
         }
 
         onStack[nodeIndex] = true;
+
         final JsonObject node = asset.item("nodes", nodeIndex);
+
         final Mat4 world = parent.multiply(nodeTransform(node));
+
         if (node.has("mesh"))
         {
             convertMesh(node.get("mesh").getAsInt(), world);
         }
 
         final JsonArray children = GltfAsset.optionalArray(node, "children");
+
         for (int i = 0; i < children.size(); i++)
         {
             visitNode(children.get(i).getAsInt(), world);
         }
+
         onStack[nodeIndex] = false;
     }
 
@@ -263,6 +283,7 @@ public final class GltfConverter
         {
             return matrixOf(GltfAsset.optionalArray(node, "matrix"));
         }
+
         return translationOf(node).multiply(rotationOf(node)).multiply(scaleOf(node));
     }
 
@@ -274,7 +295,9 @@ public final class GltfConverter
             throw new GltfException("node matrix must have " + Mat4.ELEMENTS + " elements, got "
                 + values.size());
         }
+
         final float[] rowMajor = new float[Mat4.ELEMENTS];
+
         for (int row = 0; row < Mat4.ORDER; row++)
         {
             for (int column = 0; column < Mat4.ORDER; column++)
@@ -283,6 +306,7 @@ public final class GltfConverter
                     values.get((column * Mat4.ORDER) + row).getAsFloat();
             }
         }
+
         return Mat4.ofRowMajor(rowMajor);
     }
 
@@ -290,10 +314,12 @@ public final class GltfConverter
     private static Mat4 translationOf(final JsonObject node)
     {
         final JsonArray t = GltfAsset.optionalArray(node, "translation");
+
         if (t.size() != 3)
         {
             return Mat4.identity();
         }
+
         return Mat4.translation(t.get(0).getAsFloat(), t.get(1).getAsFloat(),
             t.get(2).getAsFloat());
     }
@@ -302,10 +328,12 @@ public final class GltfConverter
     private static Mat4 rotationOf(final JsonObject node)
     {
         final JsonArray q = GltfAsset.optionalArray(node, "rotation");
+
         if (q.size() != RGBA_COMPONENTS)
         {
             return Mat4.identity();
         }
+
         return quaternionMatrix(q.get(0).getAsFloat(), q.get(1).getAsFloat(),
             q.get(2).getAsFloat(), q.get(3).getAsFloat());
     }
@@ -315,16 +343,27 @@ public final class GltfConverter
         final float w)
     {
         final float[] m = new float[Mat4.ELEMENTS];
+
         m[0] = 1.0f - (2.0f * ((y * y) + (z * z)));
+
         m[1] = 2.0f * ((x * y) - (z * w));
+
         m[2] = 2.0f * ((x * z) + (y * w));
+
         m[4] = 2.0f * ((x * y) + (z * w));
+
         m[5] = 1.0f - (2.0f * ((x * x) + (z * z)));
+
         m[6] = 2.0f * ((y * z) - (x * w));
+
         m[8] = 2.0f * ((x * z) - (y * w));
+
         m[9] = 2.0f * ((y * z) + (x * w));
+
         m[10] = 1.0f - (2.0f * ((x * x) + (y * y)));
+
         m[15] = 1.0f;
+
         return Mat4.ofRowMajor(m);
     }
 
@@ -332,15 +371,22 @@ public final class GltfConverter
     private static Mat4 scaleOf(final JsonObject node)
     {
         final JsonArray s = GltfAsset.optionalArray(node, "scale");
+
         if (s.size() != 3)
         {
             return Mat4.identity();
         }
+
         final float[] m = new float[Mat4.ELEMENTS];
+
         m[0] = s.get(0).getAsFloat();
+
         m[5] = s.get(1).getAsFloat();
+
         m[10] = s.get(2).getAsFloat();
+
         m[15] = 1.0f;
+
         return Mat4.ofRowMajor(m);
     }
 
@@ -350,7 +396,9 @@ public final class GltfConverter
     private void convertMesh(final int meshIndex, final Mat4 transform)
     {
         final JsonObject mesh = asset.item("meshes", meshIndex);
+
         final JsonArray primitives = GltfAsset.optionalArray(mesh, "primitives");
+
         for (int i = 0; i < primitives.size(); i++)
         {
             convertPrimitive(meshIndex + "/" + i, primitives.get(i).getAsJsonObject(), transform);
@@ -362,6 +410,7 @@ public final class GltfConverter
         final Mat4 transform)
     {
         final JsonObject attributes = primitive.getAsJsonObject("attributes");
+
         if (attributes == null || !attributes.has("POSITION"))
         {
             throw new GltfException(asset.name() + ": primitive " + label + " has no POSITION");
@@ -369,25 +418,35 @@ public final class GltfConverter
 
         final float[] positions = GltfAccessor.readFloats(asset,
             attributes.get("POSITION").getAsInt(), 3);
+
         final int vertexCount = positions.length / 3;
+
         final float[] uvs = optionalAttribute(attributes, "TEXCOORD_0", 2, vertexCount);
+
         final float[] colours = optionalColours(attributes, vertexCount);
+
         final int[] triangles = triangulate(
             GltfAsset.optionalInt(primitive, "mode", MODE_TRIANGLES),
             indicesOf(primitive, vertexCount), label);
 
         final int materialIndex = GltfAsset.optionalInt(primitive, "material", -1);
+
         final float[] factor = baseColourFactor(materialIndex);
 
         builder.beginSubmesh(textureFor(materialIndex));
+
         final int base = builder.vertexCount();
+
         appendVertices(positions, uvs, colours, factor, transform, vertexCount);
+
         for (int i = 0; i < triangles.length; i += ModelFormat.INDICES_PER_TRIANGLE)
         {
             requireInRange(label, triangles, i, vertexCount);
+
             builder.addTriangle(base + triangles[i], base + triangles[i + 1],
                 base + triangles[i + 2]);
         }
+
         builder.endSubmesh();
     }
 
@@ -396,6 +455,7 @@ public final class GltfConverter
         final float[] factor, final Mat4 transform, final int vertexCount)
     {
         final float[] point = new float[Mat4.ORDER];
+
         for (int v = 0; v < vertexCount; v++)
         {
             transform.transformPoint(positions[v * 3], positions[(v * 3) + 1],
@@ -404,12 +464,16 @@ public final class GltfConverter
             // MUTABLE locals — texture coordinates default to the origin when
             // the primitive carries none, which is the untextured case.
             float u = 0.0f;
+
             float w = 0.0f;
+
             if (uvs != null)
             {
                 u = uvs[v * 2];
+
                 w = uvs[(v * 2) + 1];
             }
+
             builder.addVertex(point[0], point[1], point[2], u, w,
                 packColour(colours, v, factor));
         }
@@ -423,13 +487,16 @@ public final class GltfConverter
         {
             return null;
         }
+
         final float[] values = GltfAccessor.readFloats(asset, attributes.get(name).getAsInt(),
             components);
+
         if (values.length / components != vertexCount)
         {
             throw new GltfException(asset.name() + ": " + name + " has " + values.length / components
                 + " elements but POSITION has " + vertexCount);
         }
+
         return values;
     }
 
@@ -440,10 +507,15 @@ public final class GltfConverter
         {
             return null;
         }
+
         final int accessor = attributes.get("COLOR_0").getAsInt();
+
         final String type = asset.item("accessors", accessor).get("type").getAsString();
+
         final int components = GltfAccessor.componentCount(type);
+
         final float[] source = GltfAccessor.readFloats(asset, accessor, components);
+
         if (source.length / components != vertexCount)
         {
             throw new GltfException(asset.name() + ": COLOR_0 has " + source.length / components
@@ -451,11 +523,14 @@ public final class GltfConverter
         }
 
         final float[] rgba = new float[vertexCount * RGBA_COMPONENTS];
+
         Arrays.fill(rgba, 1.0f);
+
         for (int v = 0; v < vertexCount; v++)
         {
             System.arraycopy(source, v * components, rgba, v * RGBA_COMPONENTS, components);
         }
+
         return rgba;
     }
 
@@ -466,11 +541,14 @@ public final class GltfConverter
         {
             return GltfAccessor.readScalarInts(asset, primitive.get("indices").getAsInt());
         }
+
         final int[] implicit = new int[vertexCount];
+
         for (int i = 0; i < vertexCount; i++)
         {
             implicit[i] = i;
         }
+
         return implicit;
     }
 
@@ -486,16 +564,20 @@ public final class GltfConverter
                     + source.length + " indices, not a multiple of "
                     + ModelFormat.INDICES_PER_TRIANGLE);
             }
+
             return source;
         }
+
         if (mode == MODE_TRIANGLE_STRIP)
         {
             return expandStrip(source);
         }
+
         if (mode == MODE_TRIANGLE_FAN)
         {
             return expandFan(source);
         }
+
         throw new GltfException(asset.name() + ": primitive " + label + " uses mode " + mode
             + "; only TRIANGLES (" + MODE_TRIANGLES + "), TRIANGLE_STRIP (" + MODE_TRIANGLE_STRIP
             + ") and TRIANGLE_FAN (" + MODE_TRIANGLE_FAN + ") produce surfaces to rasterize");
@@ -508,23 +590,31 @@ public final class GltfConverter
         {
             return new int[0];
         }
+
         final int triangles = source.length - 2;
+
         final int[] out = new int[triangles * ModelFormat.INDICES_PER_TRIANGLE];
+
         for (int i = 0; i < triangles; i++)
         {
             final int at = i * ModelFormat.INDICES_PER_TRIANGLE;
+
             if (i % 2 == 0)
             {
                 out[at] = source[i];
+
                 out[at + 1] = source[i + 1];
             }
             else
             {
                 out[at] = source[i + 1];
+
                 out[at + 1] = source[i];
             }
+
             out[at + 2] = source[i + 2];
         }
+
         return out;
     }
 
@@ -535,15 +625,22 @@ public final class GltfConverter
         {
             return new int[0];
         }
+
         final int triangles = source.length - 2;
+
         final int[] out = new int[triangles * ModelFormat.INDICES_PER_TRIANGLE];
+
         for (int i = 0; i < triangles; i++)
         {
             final int at = i * ModelFormat.INDICES_PER_TRIANGLE;
+
             out[at] = source[0];
+
             out[at + 1] = source[i + 1];
+
             out[at + 2] = source[i + 2];
         }
+
         return out;
     }
 
@@ -554,6 +651,7 @@ public final class GltfConverter
         for (int i = 0; i < ModelFormat.INDICES_PER_TRIANGLE; i++)
         {
             final int index = triangles[at + i];
+
             if (index < 0 || index >= vertexCount)
             {
                 throw new GltfException(asset.name() + ": primitive " + label + " index "
@@ -569,7 +667,9 @@ public final class GltfConverter
     private float[] baseColourFactor(final int materialIndex)
     {
         final float[] factor = new float[RGBA_COMPONENTS];
+
         Arrays.fill(factor, 1.0f);
+
         if (materialIndex < 0)
         {
             return factor;
@@ -577,15 +677,19 @@ public final class GltfConverter
 
         final JsonObject pbr = asset.item("materials", materialIndex)
             .getAsJsonObject("pbrMetallicRoughness");
+
         if (pbr == null)
         {
             return factor;
         }
+
         final JsonArray values = GltfAsset.optionalArray(pbr, "baseColorFactor");
+
         for (int i = 0; i < Math.min(RGBA_COMPONENTS, values.size()); i++)
         {
             factor[i] = values.get(i).getAsFloat();
         }
+
         return factor;
     }
 
@@ -596,20 +700,27 @@ public final class GltfConverter
         {
             return ModelFormat.NO_TEXTURE;
         }
+
         final JsonObject material = asset.item("materials", materialIndex);
+
         reportIgnoredTextures(materialIndex, material);
 
         final JsonObject pbr = material.getAsJsonObject("pbrMetallicRoughness");
+
         if (pbr == null || !pbr.has("baseColorTexture"))
         {
             return ModelFormat.NO_TEXTURE;
         }
+
         final JsonObject reference = pbr.getAsJsonObject("baseColorTexture");
+
         final JsonObject texture = asset.item("textures", reference.get("index").getAsInt());
+
         if (!texture.has("source"))
         {
             return ModelFormat.NO_TEXTURE;
         }
+
         return imageTexture(texture.get("source").getAsInt());
     }
 
@@ -625,7 +736,9 @@ public final class GltfConverter
                     slot);
             }
         }
+
         final JsonObject pbr = material.getAsJsonObject("pbrMetallicRoughness");
+
         if (pbr != null && pbr.has("metallicRoughnessTexture"))
         {
             LOG.info("{}: material {} has metallicRoughnessTexture; dropped — albedo only",
@@ -640,22 +753,31 @@ public final class GltfConverter
         {
             throw new GltfException(asset.name() + ": image " + imageIndex + " is out of range");
         }
+
         if (textureByImage[imageIndex] >= 0)
         {
             return textureByImage[imageIndex];
         }
 
         final String label = imageLabel(imageIndex);
+
         final BufferedImage image = decodeImage(imageIndex, label);
+
         final int width = image.getWidth();
+
         final int height = image.getHeight();
+
         builder.checkTextureDimensions(label, width, height);
 
         final int[][] levels = MipGenerator.generate(width, height, toRgba(image));
+
         final int index = builder.addTexture(label, width, height, levels);
+
         textureByImage[imageIndex] = index;
+
         LOG.debug("{}: decoded texture '{}' {}x{} with {} mip levels", asset.name(), label,
             width, height, levels.length);
+
         return index;
     }
 
@@ -663,7 +785,9 @@ public final class GltfConverter
     private BufferedImage decodeImage(final int imageIndex, final String label)
     {
         final byte[] encoded = asset.imageBytes(imageIndex);
+
         final BufferedImage image;
+
         try
         {
             image = ImageIO.read(new ByteArrayInputStream(encoded));
@@ -673,11 +797,13 @@ public final class GltfConverter
             throw new GltfException(asset.name() + ": image '" + label + "' could not be decoded",
                 e);
         }
+
         if (image == null)
         {
             throw new GltfException(asset.name() + ": image '" + label
                 + "' is in a format ImageIO does not recognise; glTF permits PNG and JPEG");
         }
+
         return image;
     }
 
@@ -685,18 +811,22 @@ public final class GltfConverter
     private String imageLabel(final int imageIndex)
     {
         final JsonObject image = asset.item("images", imageIndex);
+
         if (image.has("name"))
         {
             return image.get("name").getAsString();
         }
+
         if (image.has("uri"))
         {
             final String uri = image.get("uri").getAsString();
+
             if (!uri.startsWith("data:"))
             {
                 return uri;
             }
         }
+
         return "image " + imageIndex;
     }
 
@@ -705,14 +835,19 @@ public final class GltfConverter
     private static int[] toRgba(final BufferedImage image)
     {
         final int width = image.getWidth();
+
         final int height = image.getHeight();
+
         final int[] argb = image.getRGB(0, 0, width, height, null, 0, width);
+
         final int[] rgba = new int[argb.length];
+
         for (int i = 0; i < argb.length; i++)
         {
             rgba[i] = Rgba.pack((argb[i] >>> 16) & 0xFF, (argb[i] >>> 8) & 0xFF, argb[i] & 0xFF,
                 (argb[i] >>> 24) & 0xFF);
         }
+
         return rgba;
     }
 
@@ -723,18 +858,26 @@ public final class GltfConverter
     {
         // MUTABLE locals — the running product of vertex colour and factor.
         float red = factor[0];
+
         float green = factor[1];
+
         float blue = factor[2];
+
         float alpha = factor[3];
 
         if (colours != null)
         {
             final int at = vertex * RGBA_COMPONENTS;
+
             red *= colours[at];
+
             green *= colours[at + 1];
+
             blue *= colours[at + 2];
+
             alpha *= colours[at + 3];
         }
+
         return Rgba.pack(toSrgbByte(red), toSrgbByte(green), toSrgbByte(blue), toByte(alpha));
     }
 
@@ -742,11 +885,14 @@ public final class GltfConverter
     private static int toSrgbByte(final float linear)
     {
         final float clamped = clamp01(linear);
+
         if (clamped <= SRGB_LINEAR_CUTOFF)
         {
             return Math.round(SRGB_LINEAR_SLOPE * clamped * CHANNEL_MAX);
         }
+
         final double encoded = (SRGB_SCALE * Math.pow(clamped, SRGB_EXPONENT)) - SRGB_OFFSET;
+
         return (int) Math.round(encoded * CHANNEL_MAX);
     }
 
@@ -763,10 +909,12 @@ public final class GltfConverter
         {
             return 0.0f;
         }
+
         if (value > 1.0f)
         {
             return 1.0f;
         }
+
         return value;
     }
 }

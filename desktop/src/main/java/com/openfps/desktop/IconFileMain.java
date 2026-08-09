@@ -98,16 +98,21 @@ public final class IconFileMain
             throw new IllegalArgumentException(
                 "usage: IconFileMain <output.ico>");
         }
+
         final Path target = Path.of(args[0]);
+
         final Path parent = target.getParent();
+
         if (parent != null)
         {
             Files.createDirectories(parent);
         }
+
         try (OutputStream out = Files.newOutputStream(target))
         {
             out.write(buildIco(WindowIcon.SIZES));
         }
+
         System.out.println("Wrote " + target.toAbsolutePath()
             + " (" + Files.size(target) + " bytes, "
             + WindowIcon.SIZES.length + " sizes)");
@@ -131,7 +136,9 @@ public final class IconFileMain
         {
             throw new IllegalArgumentException("an icon needs at least one size");
         }
+
         final List<byte[]> payloads = new ArrayList<>();
+
         for (final int size : sizes)
         {
             if (size < 1 || size > 255)
@@ -140,10 +147,12 @@ public final class IconFileMain
                     "icon size must be 1..255 — 256 is encoded as 0 and is not supported here,"
                         + " got " + size);
             }
+
             payloads.add(encodePng(size));
         }
 
         int total = HEADER_BYTES + ENTRY_BYTES * sizes.length;
+
         for (final byte[] payload : payloads)
         {
             total = total + payload.length;
@@ -151,28 +160,43 @@ public final class IconFileMain
 
         // Little-endian throughout: the ICO format is a Windows structure dump.
         final ByteBuffer file = ByteBuffer.allocate(total).order(ByteOrder.LITTLE_ENDIAN);
+
         file.putShort((short) 0);
+
         file.putShort(TYPE_ICON);
+
         file.putShort((short) sizes.length);
 
         int offset = HEADER_BYTES + ENTRY_BYTES * sizes.length;
+
         for (int index = 0; index < sizes.length; index++)
         {
             final byte[] payload = payloads.get(index);
+
             file.put((byte) sizes[index]);
+
             file.put((byte) sizes[index]);
+
             file.put((byte) 0);
+
             file.put((byte) 0);
+
             file.putShort(PLANES);
+
             file.putShort(BIT_DEPTH);
+
             file.putInt(payload.length);
+
             file.putInt(offset);
+
             offset = offset + payload.length;
         }
+
         for (final byte[] payload : payloads)
         {
             file.put(payload);
         }
+
         return file.array();
     }
 
@@ -180,8 +204,10 @@ public final class IconFileMain
     private static byte[] encodePng(final int size) throws IOException
     {
         final int[] packed = WindowIcon.pixels(size);
+
         final BufferedImage image =
             new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
+
         for (int y = 0; y < size; y++)
         {
             for (int x = 0; x < size; x++)
@@ -189,11 +215,14 @@ public final class IconFileMain
                 image.setRGB(x, y, toArgb(packed[y * size + x]));
             }
         }
+
         final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+
         if (!ImageIO.write(image, "png", bytes))
         {
             throw new IOException("no PNG writer available in this JVM");
         }
+
         return bytes.toByteArray();
     }
 

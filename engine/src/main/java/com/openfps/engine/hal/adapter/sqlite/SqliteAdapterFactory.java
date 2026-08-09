@@ -57,11 +57,17 @@ public final class SqliteAdapterFactory implements I_AdapterFactory
     public void init()
     {
         LOG.info("Initializing sqlite HAL adapter (Xerial SQLite for user profile)");
+
         timePort.init();
+
         inputPort.init();
+
         datagramPort.init();
+
         systemInfo.init();
+
         userProfile.init();
+
         windowPort.init();
     }
 
@@ -69,11 +75,17 @@ public final class SqliteAdapterFactory implements I_AdapterFactory
     public void shutdown()
     {
         LOG.info("Shutting down sqlite HAL adapter");
+
         windowPort.shutdown();
+
         userProfile.shutdown();
+
         systemInfo.shutdown();
+
         datagramPort.shutdown();
+
         inputPort.shutdown();
+
         timePort.shutdown();
     }
 

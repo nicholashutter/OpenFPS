@@ -61,7 +61,9 @@ class WadFilePortTest
     void setUp()
     {
         memory = MemoryPortFactory.createJvm(BUDGET);
+
         port = new WadFilePort(memory, BUDGET);
+
         port.init();
     }
 
@@ -87,8 +89,11 @@ class WadFilePortTest
         void shouldReportNoWadOpen()
         {
             assertThat(port.lumpCount()).isEqualTo(-1);
+
             assertThat(port.wadType()).isNull();
+
             assertThat(port.readLump(0)).isNull();
+
             assertThat(port.readLump("PLAYPAL")).isNull();
         }
 
@@ -125,11 +130,13 @@ class WadFilePortTest
         void shouldShutDown()
         {
             port.openInMemory(sampleIwad(), "test");
+
             port.readLump(0);
 
             port.shutdown();
 
             assertThat(port.lumpCount()).isEqualTo(-1);
+
             assertThat(memory.state()).isEqualTo(I_MemoryPort.State.SHUTDOWN);
         }
 
@@ -139,6 +146,7 @@ class WadFilePortTest
         {
             assertThatThrownBy(() -> new WadFilePort(null, BUDGET))
                 .isInstanceOf(WadException.class);
+
             assertThatThrownBy(() -> new WadFilePort(MemoryPortFactory.createJvm(BUDGET), -1))
                 .isInstanceOf(WadException.class);
         }
@@ -150,8 +158,11 @@ class WadFilePortTest
             final I_WadPort asPort = port;
 
             assertThat(asPort.lumpCount()).isEqualTo(-1);
+
             assertThat(asPort.open("no/such/file.wad")).isFalse();
+
             asPort.flushCache();
+
             asPort.close();
         }
     }
@@ -169,7 +180,9 @@ class WadFilePortTest
         void shouldOpenIwad()
         {
             assertThat(port.openInMemory(sampleIwad(), "sample")).isTrue();
+
             assertThat(port.wadType()).isEqualTo(WadReader.WadType.IWAD);
+
             assertThat(port.lumpCount()).isEqualTo(3);
         }
 
@@ -182,7 +195,9 @@ class WadFilePortTest
                 .build();
 
             assertThat(port.openInMemory(image, "patch")).isTrue();
+
             assertThat(port.wadType()).isEqualTo(WadReader.WadType.PWAD);
+
             assertThat(port.lumpCount()).isEqualTo(1);
         }
 
@@ -196,6 +211,7 @@ class WadFilePortTest
                 .build();
 
             assertThat(port.openInMemory(image, "corrupt")).isFalse();
+
             assertThat(port.lumpCount()).isEqualTo(-1);
         }
 
@@ -204,6 +220,7 @@ class WadFilePortTest
         void shouldFailOpenOnTruncatedImage()
         {
             assertThat(port.openInMemory(WadBuilder.bytes('I', 'W', 'A'), "stub")).isFalse();
+
             assertThat(port.lumpCount()).isEqualTo(-1);
         }
 
@@ -224,14 +241,18 @@ class WadFilePortTest
         void shouldCloseFirstWadWhenOpeningSecond()
         {
             port.openInMemory(sampleIwad(), "first");
+
             port.precacheLump(0);
+
             assertThat(port.cachedLumps()).isEqualTo(1);
 
             port.openInMemory(WadBuilder.pwad().lump("ONLY", WadBuilder.bytes(1)).build(),
                 "second");
 
             assertThat(port.lumpCount()).isEqualTo(1);
+
             assertThat(port.cachedLumps()).isZero();
+
             assertThat(memory.handleCount()).isZero();
         }
 
@@ -240,6 +261,7 @@ class WadFilePortTest
         void shouldTolerateRedundantClose()
         {
             port.close();
+
             port.close();
 
             assertThat(port.lumpCount()).isEqualTo(-1);
@@ -265,6 +287,7 @@ class WadFilePortTest
         void shouldReadLumpByIndex()
         {
             assertThat(port.readLump(0)).containsExactly(PLAYPAL);
+
             assertThat(port.readLump(2)).containsExactly(THINGS);
         }
 
@@ -273,6 +296,7 @@ class WadFilePortTest
         void shouldReadLumpByName()
         {
             assertThat(port.readLump("PLAYPAL")).containsExactly(PLAYPAL);
+
             assertThat(port.readLump("things")).containsExactly(THINGS);
         }
 
@@ -281,6 +305,7 @@ class WadFilePortTest
         void shouldReturnNullForUnknownName()
         {
             assertThat(port.readLump("NOSUCH")).isNull();
+
             assertThat(port.findLump("NOSUCH")).isEqualTo(WadReader.LUMP_NOT_FOUND);
         }
 
@@ -289,6 +314,7 @@ class WadFilePortTest
         void shouldReturnNullForOutOfRangeIndex()
         {
             assertThat(port.readLump(-1)).isNull();
+
             assertThat(port.readLump(3)).isNull();
         }
 
@@ -304,9 +330,11 @@ class WadFilePortTest
         void shouldServeRepeatedReadFromCache()
         {
             final byte[] first = port.readLump(0);
+
             final byte[] second = port.readLump("PLAYPAL");
 
             assertThat(second).isSameAs(first);
+
             assertThat(port.cachedLumps()).isEqualTo(1);
         }
     }
@@ -332,7 +360,9 @@ class WadFilePortTest
             port.precacheLump(0);
 
             assertThat(port.cachedLumps()).isEqualTo(1);
+
             assertThat(port.cachedBytes()).isEqualTo(PLAYPAL.length);
+
             assertThat(memory.allocatedBytes()).isEqualTo(PLAYPAL.length);
         }
 
@@ -341,9 +371,11 @@ class WadFilePortTest
         void shouldReleasePrecachedLump()
         {
             port.precacheLump(0);
+
             port.releaseLump(0);
 
             assertThat(port.cachedLumps()).isZero();
+
             assertThat(memory.handleCount()).isZero();
         }
 
@@ -352,13 +384,17 @@ class WadFilePortTest
         void shouldFlushCache()
         {
             port.precacheLump(0);
+
             port.readLump(2);
+
             assertThat(port.cachedLumps()).isEqualTo(2);
 
             port.flushCache();
 
             assertThat(port.cachedLumps()).isZero();
+
             assertThat(port.cachedBytes()).isZero();
+
             assertThat(memory.allocatedBytes()).isZero();
         }
 
@@ -367,6 +403,7 @@ class WadFilePortTest
         void shouldIgnoreOutOfRangePrecache()
         {
             port.precacheLump(99);
+
             port.releaseLump(99);
 
             assertThat(port.cachedLumps()).isZero();
@@ -379,10 +416,13 @@ class WadFilePortTest
             port.close();
 
             port.precacheLump(0);
+
             port.releaseLump(0);
+
             port.flushCache();
 
             assertThat(port.cachedLumps()).isZero();
+
             assertThat(port.cachedBytes()).isZero();
         }
     }
@@ -400,10 +440,13 @@ class WadFilePortTest
         void shouldOpenWadFromDisk(@TempDir final Path tempDir) throws IOException
         {
             final Path wadFile = tempDir.resolve("synth.wad");
+
             Files.write(wadFile, sampleIwad());
 
             assertThat(port.open(wadFile.toString())).isTrue();
+
             assertThat(port.lumpCount()).isEqualTo(3);
+
             assertThat(port.readLump("PLAYPAL")).containsExactly(PLAYPAL);
         }
 
@@ -412,6 +455,7 @@ class WadFilePortTest
         void shouldFailOpenOfMissingFile(@TempDir final Path tempDir)
         {
             assertThat(port.open(tempDir.resolve("absent.wad").toString())).isFalse();
+
             assertThat(port.lumpCount()).isEqualTo(-1);
         }
     }

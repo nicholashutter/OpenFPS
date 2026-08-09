@@ -45,7 +45,9 @@ final class FakeAndroidApplication extends AndroidApplication
         // Deliberately does NOT call super: the real implementation creates a
         // GLSurfaceView and a render thread.
         this.listener = applicationListener;
+
         this.config = configuration;
+
         this.initializeCount++;
     }
 

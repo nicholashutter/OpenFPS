@@ -183,10 +183,12 @@ public final class BlockFont
     public static int widthInBlocks(final String text)
     {
         requireDrawable(text);
+
         if (text.isEmpty())
         {
             return 0;
         }
+
         return text.length() * GLYPH_ADVANCE - GLYPH_SPACING;
     }
 
@@ -201,17 +203,22 @@ public final class BlockFont
     public static void forEachBlock(final String text, final BlockSink sink)
     {
         requireDrawable(text);
+
         if (sink == null)
         {
             throw new IllegalArgumentException("sink must not be null");
         }
+
         for (int glyphIndex = 0; glyphIndex < text.length(); glyphIndex++)
         {
             final int[] rows = GLYPHS.get(Character.toUpperCase(text.charAt(glyphIndex)));
+
             final int originColumn = glyphIndex * GLYPH_ADVANCE;
+
             for (int row = 0; row < GLYPH_HEIGHT; row++)
             {
                 final int mask = rows[row];
+
                 for (int cell = 0; cell < GLYPH_WIDTH; cell++)
                 {
                     if ((mask & (1 << cell)) != 0)
@@ -232,6 +239,7 @@ public final class BlockFont
         {
             throw new IllegalArgumentException("text must not be null");
         }
+
         for (int index = 0; index < text.length(); index++)
         {
             if (!isSupported(text.charAt(index)))
@@ -246,18 +254,23 @@ public final class BlockFont
     private static Map<Character, int[]> buildGlyphs()
     {
         final Map<Character, int[]> table = new HashMap<>();
+
         for (final String[] entry : GLYPH_ART)
         {
             final int[] rows = new int[GLYPH_HEIGHT];
+
             for (int row = 0; row < GLYPH_HEIGHT; row++)
             {
                 final String art = entry[row + 1];
+
                 if (art.length() != GLYPH_WIDTH)
                 {
                     throw new IllegalStateException("glyph '" + entry[0] + "' row " + row
                         + " is " + art.length() + " cells, expected " + GLYPH_WIDTH);
                 }
+
                 int mask = 0;
+
                 for (int cell = 0; cell < GLYPH_WIDTH; cell++)
                 {
                     if (art.charAt(cell) == ON)
@@ -265,10 +278,13 @@ public final class BlockFont
                         mask = mask | (1 << cell);
                     }
                 }
+
                 rows[row] = mask;
             }
+
             table.put(entry[0].charAt(0), rows);
         }
+
         return table;
     }
 }

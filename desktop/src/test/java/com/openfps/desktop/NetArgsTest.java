@@ -32,7 +32,9 @@ class NetArgsTest
         void shouldReportALocalMatchWhenNoNetArgument()
         {
             assertThat(NetArgs.parse(new String[] {"--fps=60"}).isRequested()).isFalse();
+
             assertThat(NetArgs.parse(new String[0]).isRequested()).isFalse();
+
             assertThat(NetArgs.parse(null).isRequested()).isFalse();
         }
 
@@ -60,8 +62,11 @@ class NetArgsTest
             final NetArgs args = NetArgs.parse(new String[] {"--net=1:5021"});
 
             assertThat(args.isRequested()).isTrue();
+
             assertThat(args.playerId()).isEqualTo(1);
+
             assertThat(args.port()).isEqualTo(5021);
+
             assertThat(args.peers()).isEmpty();
         }
 
@@ -84,9 +89,13 @@ class NetArgsTest
             });
 
             assertThat(args.peers()).hasSize(2);
+
             assertThat(args.peers().get(0).id()).isEqualTo(2);
+
             assertThat(args.peers().get(0).address()).isEqualTo("127.0.0.1:5022");
+
             assertThat(args.peers().get(1).id()).isEqualTo(3);
+
             assertThat(args.peers().get(1).address()).isEqualTo("10.0.0.5:5023");
         }
 
@@ -136,6 +145,7 @@ class NetArgsTest
             assertThatThrownBy(() -> NetArgs.parse(new String[] {"--net=me:5021"}))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("me");
+
             assertThatThrownBy(() -> NetArgs.parse(new String[] {"--net=1:http"}))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("http");
@@ -148,6 +158,7 @@ class NetArgsTest
             assertThatThrownBy(() -> NetArgs.parse(new String[] {"--net=1:70000"}))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("0..65535");
+
             assertThatThrownBy(() -> NetArgs.parse(new String[] {"--net=1:-1"}))
                 .isInstanceOf(IllegalArgumentException.class);
         }
@@ -197,6 +208,7 @@ class NetArgsTest
             assertThatThrownBy(
                 () -> NetArgs.parse(new String[] {"--net=1:5021", "--peer=127.0.0.1"}))
                 .isInstanceOf(IllegalArgumentException.class);
+
             assertThatThrownBy(() -> NetArgs.parse(new String[] {"--net=1:5021", "--peer=2@"}))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("no address");

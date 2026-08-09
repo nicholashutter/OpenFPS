@@ -40,6 +40,7 @@ class SettingsScreenTextTest
             assertThat(SettingsScreen.OUTLINE_LABEL)
                 .isEqualTo("TARGET OUTLINE")
                 .doesNotContainIgnoringCase("debug");
+
             assertThat(SettingsScreen.OUTLINE_HINT)
                 .as("and the hint says what it does, in the same language")
                 .containsIgnoringCase("aiming at")
@@ -89,6 +90,7 @@ class SettingsScreenTextTest
             // the word a player would look for.
             assertThat(SettingsScreen.ACCESSIBILITY_GROUP)
                 .isEqualTo("ACCESSIBILITY");
+
             assertThat(SettingsScreen.DISPLAY_GROUP)
                 .isNotEqualTo(SettingsScreen.ACCESSIBILITY_GROUP)
                 .containsIgnoringCase("diagnostics");
@@ -105,6 +107,7 @@ class SettingsScreenTextTest
             // prose and nobody diffs prose against behaviour.
             assertThat(SettingsScreen.DEBUG_HINT)
                 .doesNotContainIgnoringCase("outline");
+
             assertThat(SettingsScreen.debugButtonLabel(new DebugSettings()))
                 .as("and its own button still starts off, as a diagnostic should")
                 .isEqualTo("DEBUG OVERLAY   OFF");

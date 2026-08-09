@@ -53,12 +53,16 @@ class RasterizerTest
         if (pool != null && pool.state() != I_ThreadPoolPort.State.SHUTDOWN)
         {
             pool.shutdown();
+
             pool.awaitTermination(5000);
+
             pool = null;
         }
+
         if (bus != null && bus.state() != I_EventBusPort.State.SHUTDOWN)
         {
             bus.shutdown();
+
             bus = null;
         }
     }
@@ -67,10 +71,15 @@ class RasterizerTest
     private I_ThreadPoolPort startPool(final int workers)
     {
         bus = EventBusFactory.createShared();
+
         bus.init(512);
+
         pool = ThreadPoolFactory.createFixed(bus, new SubsystemRegistry());
+
         pool.init(workers);
+
         pool.start();
+
         return pool;
     }
 
@@ -80,10 +89,14 @@ class RasterizerTest
     {
         final float[] out = new float[TriangleClipper.TRIANGLE_VERTICES
             * TriangleClipper.POSITION_FLOATS];
+
         final float[] screen = {4.0f, 4.0f, 40.0f, 4.0f, 4.0f, 40.0f};
+
         final float[][] attributes = {RasterFixtures.NO_ATTRIBUTES,
             RasterFixtures.NO_ATTRIBUTES, RasterFixtures.NO_ATTRIBUTES};
+
         RasterFixtures.triangle(out, 0, width, height, screen, 1.0f, attributes);
+
         return out;
     }
 
@@ -92,10 +105,14 @@ class RasterizerTest
     {
         final float[] out = new float[TriangleClipper.TRIANGLE_VERTICES
             * TriangleClipper.POSITION_FLOATS];
+
         final float[] screen = {4.0f, 4.0f, 4.0f, 40.0f, 40.0f, 4.0f};
+
         final float[][] attributes = {RasterFixtures.NO_ATTRIBUTES,
             RasterFixtures.NO_ATTRIBUTES, RasterFixtures.NO_ATTRIBUTES};
+
         RasterFixtures.triangle(out, 0, width, height, screen, 1.0f, attributes);
+
         return out;
     }
 
@@ -104,6 +121,7 @@ class RasterizerTest
     {
         // MUTABLE local — running total.
         int painted = 0;
+
         for (int y = 0; y < target.height(); y++)
         {
             for (int x = 0; x < target.width(); x++)
@@ -114,6 +132,7 @@ class RasterizerTest
                 }
             }
         }
+
         return painted;
     }
 
@@ -157,10 +176,13 @@ class RasterizerTest
         void shouldDeriveStridesFromAttributeCount()
         {
             final Rasterizer rasterizer = new Rasterizer(2, 8, 1, Rasterizer.CullMode.NONE);
+
             assertThat(rasterizer.vertexStride())
                 .isEqualTo(TriangleClipper.POSITION_FLOATS + 2);
+
             assertThat(rasterizer.recordStride())
                 .isEqualTo(Rasterizer.RECORD_HEADER_FLOATS + Rasterizer.PLANE_FLOATS * 2);
+
             assertThat(Rasterizer.attributePlaneOffset(1))
                 .isEqualTo(Rasterizer.RECORD_HEADER_FLOATS + Rasterizer.PLANE_FLOATS);
         }
@@ -169,6 +191,7 @@ class RasterizerTest
         void shouldRejectUseBeforeBeginFrame()
         {
             final Rasterizer rasterizer = new Rasterizer(0, 8, 1, Rasterizer.CullMode.NONE);
+
             assertThatThrownBy(() -> rasterizer.setupAndBin(new float[9], 1, null, null))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("beginFrame");
@@ -178,6 +201,7 @@ class RasterizerTest
         void shouldRejectAnUninitialisedFramebuffer()
         {
             final Rasterizer rasterizer = new Rasterizer(0, 8, 1, Rasterizer.CullMode.NONE);
+
             assertThatThrownBy(() -> rasterizer.beginFrame(new Framebuffer(TILE)))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("READY");
@@ -187,8 +211,11 @@ class RasterizerTest
         void shouldRejectMoreTrianglesThanCapacity()
         {
             final Framebuffer target = RasterFixtures.framebuffer(WIDTH, HEIGHT, TILE);
+
             final Rasterizer rasterizer = new Rasterizer(0, 2, 1, Rasterizer.CullMode.NONE);
+
             rasterizer.beginFrame(target);
+
             assertThatThrownBy(() -> rasterizer.setupAndBin(new float[100], 3, null, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("triangles");
@@ -198,8 +225,11 @@ class RasterizerTest
         void shouldRejectAShortVertexStream()
         {
             final Framebuffer target = RasterFixtures.framebuffer(WIDTH, HEIGHT, TILE);
+
             final Rasterizer rasterizer = new Rasterizer(0, 4, 1, Rasterizer.CullMode.NONE);
+
             rasterizer.beginFrame(target);
+
             assertThatThrownBy(() -> rasterizer.setupAndBin(new float[8], 1, null, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("floats");
@@ -209,9 +239,13 @@ class RasterizerTest
         void shouldRejectASpanRendererWithADifferentAttributeCount()
         {
             final Framebuffer target = RasterFixtures.framebuffer(WIDTH, HEIGHT, TILE);
+
             final Rasterizer rasterizer = new Rasterizer(0, 4, 1, Rasterizer.CullMode.NONE);
+
             rasterizer.beginFrame(target);
+
             final SpanRenderer renderer = new SpanRenderer(SpanRenderer.ShadingMode.FLAT, 2);
+
             assertThatThrownBy(() -> rasterizer.rasterize(renderer, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("attributes");
@@ -225,10 +259,15 @@ class RasterizerTest
         private int paint(final Rasterizer.CullMode mode, final float[] vertices)
         {
             final Framebuffer target = RasterFixtures.framebuffer(WIDTH, HEIGHT, TILE);
+
             final Rasterizer rasterizer = new Rasterizer(0, 4, 1, mode);
+
             rasterizer.beginFrame(target);
+
             rasterizer.setupAndBin(vertices, 1, null, new int[] {RED});
+
             rasterizer.rasterize(new SpanRenderer(SpanRenderer.ShadingMode.FLAT, 0), null);
+
             return paintedCount(target);
         }
 
@@ -237,6 +276,7 @@ class RasterizerTest
         {
             assertThat(paint(Rasterizer.CullMode.NONE, clockwiseTriangle(WIDTH, HEIGHT)))
                 .isGreaterThan(0);
+
             assertThat(paint(Rasterizer.CullMode.NONE, counterClockwiseTriangle(WIDTH, HEIGHT)))
                 .isGreaterThan(0);
         }
@@ -246,6 +286,7 @@ class RasterizerTest
         {
             assertThat(paint(Rasterizer.CullMode.CLOCKWISE, clockwiseTriangle(WIDTH, HEIGHT)))
                 .isZero();
+
             assertThat(paint(Rasterizer.CullMode.CLOCKWISE,
                 counterClockwiseTriangle(WIDTH, HEIGHT))).isGreaterThan(0);
         }
@@ -255,6 +296,7 @@ class RasterizerTest
         {
             assertThat(paint(Rasterizer.CullMode.COUNTER_CLOCKWISE,
                 counterClockwiseTriangle(WIDTH, HEIGHT))).isZero();
+
             assertThat(paint(Rasterizer.CullMode.COUNTER_CLOCKWISE,
                 clockwiseTriangle(WIDTH, HEIGHT))).isGreaterThan(0);
         }
@@ -263,16 +305,26 @@ class RasterizerTest
         void shouldPaintTheSamePixelsForBothWindingsWhenCullingIsOff()
         {
             final Framebuffer a = RasterFixtures.framebuffer(WIDTH, HEIGHT, TILE);
+
             final Framebuffer b = RasterFixtures.framebuffer(WIDTH, HEIGHT, TILE);
+
             final Rasterizer rasterizer = new Rasterizer(0, 4, 1, Rasterizer.CullMode.NONE);
+
             final SpanRenderer renderer = new SpanRenderer(SpanRenderer.ShadingMode.FLAT, 0);
+
             rasterizer.beginFrame(a);
+
             rasterizer.setupAndBin(clockwiseTriangle(WIDTH, HEIGHT), 1, null, new int[] {RED});
+
             rasterizer.rasterize(renderer, null);
+
             rasterizer.beginFrame(b);
+
             rasterizer.setupAndBin(counterClockwiseTriangle(WIDTH, HEIGHT), 1, null,
                 new int[] {RED});
+
             rasterizer.rasterize(renderer, null);
+
             assertThat(b.colorBuffer()).isEqualTo(a.colorBuffer());
         }
     }
@@ -285,12 +337,18 @@ class RasterizerTest
         {
             final float[] vertices = new float[TriangleClipper.TRIANGLE_VERTICES
                 * TriangleClipper.POSITION_FLOATS];
+
             final float[][] attributes = {RasterFixtures.NO_ATTRIBUTES,
                 RasterFixtures.NO_ATTRIBUTES, RasterFixtures.NO_ATTRIBUTES};
+
             RasterFixtures.triangle(vertices, 0, WIDTH, HEIGHT, screen, 1.0f, attributes);
+
             final Rasterizer rasterizer = new Rasterizer(0, 4, 1, Rasterizer.CullMode.NONE);
+
             rasterizer.beginFrame(target);
+
             rasterizer.setupAndBin(vertices, 1, null, new int[] {RED});
+
             return rasterizer;
         }
 
@@ -298,10 +356,14 @@ class RasterizerTest
         void shouldRejectAZeroAreaTriangle()
         {
             final Framebuffer target = RasterFixtures.framebuffer(WIDTH, HEIGHT, TILE);
+
             final Rasterizer rasterizer =
                 setup(new float[] {4.0f, 4.0f, 20.0f, 20.0f, 40.0f, 40.0f}, target);
+
             assertThat(rasterizer.isLive(0)).isFalse();
+
             rasterizer.rasterize(new SpanRenderer(SpanRenderer.ShadingMode.FLAT, 0), null);
+
             assertThat(paintedCount(target)).isZero();
         }
 
@@ -309,8 +371,10 @@ class RasterizerTest
         void shouldRejectADuplicatedVertexTriangle()
         {
             final Framebuffer target = RasterFixtures.framebuffer(WIDTH, HEIGHT, TILE);
+
             final Rasterizer rasterizer =
                 setup(new float[] {4.0f, 4.0f, 4.0f, 4.0f, 40.0f, 40.0f}, target);
+
             assertThat(rasterizer.isLive(0)).isFalse();
         }
 
@@ -318,8 +382,10 @@ class RasterizerTest
         void shouldRejectATriangleEntirelyLeftOfTheViewport()
         {
             final Framebuffer target = RasterFixtures.framebuffer(WIDTH, HEIGHT, TILE);
+
             final Rasterizer rasterizer =
                 setup(new float[] {-40.0f, 4.0f, -8.0f, 4.0f, -40.0f, 40.0f}, target);
+
             assertThat(rasterizer.isLive(0)).isFalse();
         }
 
@@ -327,8 +393,10 @@ class RasterizerTest
         void shouldRejectATriangleEntirelyRightOfTheViewport()
         {
             final Framebuffer target = RasterFixtures.framebuffer(WIDTH, HEIGHT, TILE);
+
             final Rasterizer rasterizer = setup(new float[] {
                 WIDTH + 4.0f, 4.0f, WIDTH + 40.0f, 4.0f, WIDTH + 4.0f, 40.0f}, target);
+
             assertThat(rasterizer.isLive(0)).isFalse();
         }
 
@@ -336,8 +404,10 @@ class RasterizerTest
         void shouldRejectATriangleEntirelyAboveTheViewport()
         {
             final Framebuffer target = RasterFixtures.framebuffer(WIDTH, HEIGHT, TILE);
+
             final Rasterizer rasterizer =
                 setup(new float[] {4.0f, -40.0f, 40.0f, -40.0f, 4.0f, -8.0f}, target);
+
             assertThat(rasterizer.isLive(0)).isFalse();
         }
 
@@ -345,8 +415,10 @@ class RasterizerTest
         void shouldRejectATriangleEntirelyBelowTheViewport()
         {
             final Framebuffer target = RasterFixtures.framebuffer(WIDTH, HEIGHT, TILE);
+
             final Rasterizer rasterizer = setup(new float[] {
                 4.0f, HEIGHT + 4.0f, 40.0f, HEIGHT + 4.0f, 4.0f, HEIGHT + 40.0f}, target);
+
             assertThat(rasterizer.isLive(0)).isFalse();
         }
 
@@ -354,12 +426,18 @@ class RasterizerTest
         void shouldClampTheBoundingBoxOfAPartlyOffScreenTriangle()
         {
             final Framebuffer target = RasterFixtures.framebuffer(WIDTH, HEIGHT, TILE);
+
             final Rasterizer rasterizer = setup(new float[] {
                 -100.0f, -100.0f, 200.0f, -100.0f, -100.0f, 200.0f}, target);
+
             final float[] records = rasterizer.records();
+
             assertThat(records[Rasterizer.BOUND_MIN_X]).isZero();
+
             assertThat(records[Rasterizer.BOUND_MIN_Y]).isZero();
+
             assertThat(records[Rasterizer.BOUND_MAX_X]).isEqualTo(WIDTH - 1);
+
             assertThat(records[Rasterizer.BOUND_MAX_Y]).isEqualTo(HEIGHT - 1);
         }
 
@@ -367,8 +445,10 @@ class RasterizerTest
         void shouldNotBinARejectedTriangleIntoAnyTile()
         {
             final Framebuffer target = RasterFixtures.framebuffer(WIDTH, HEIGHT, TILE);
+
             final Rasterizer rasterizer =
                 setup(new float[] {4.0f, 4.0f, 20.0f, 20.0f, 40.0f, 40.0f}, target);
+
             for (int tile = 0; tile < target.tileCount(); tile++)
             {
                 assertThat(rasterizer.binnedTriangleCount(tile)).isZero();
@@ -384,18 +464,25 @@ class RasterizerTest
         void shouldBinATriangleIntoOnlyTheTilesItsBoxCovers()
         {
             final Framebuffer target = RasterFixtures.framebuffer(WIDTH, HEIGHT, TILE);
+
             final float[] vertices = new float[TriangleClipper.TRIANGLE_VERTICES
                 * TriangleClipper.POSITION_FLOATS];
+
             final float[][] attributes = {RasterFixtures.NO_ATTRIBUTES,
                 RasterFixtures.NO_ATTRIBUTES, RasterFixtures.NO_ATTRIBUTES};
+
             // Entirely inside tile (0, 0), which is the 16x16 top-left square.
             RasterFixtures.triangle(vertices, 0, WIDTH, HEIGHT,
                 new float[] {2.0f, 2.0f, 12.0f, 2.0f, 2.0f, 12.0f}, 1.0f, attributes);
+
             final Rasterizer rasterizer = new Rasterizer(0, 4, 1, Rasterizer.CullMode.NONE);
+
             rasterizer.beginFrame(target);
+
             rasterizer.setupAndBin(vertices, 1, null, null);
 
             assertThat(rasterizer.binnedTriangleCount(0)).isEqualTo(1);
+
             for (int tile = 1; tile < target.tileCount(); tile++)
             {
                 assertThat(rasterizer.binnedTriangleCount(tile)).isZero();
@@ -406,18 +493,25 @@ class RasterizerTest
         void shouldBinAFullScreenTriangleIntoEveryTile()
         {
             final Framebuffer target = RasterFixtures.framebuffer(WIDTH, HEIGHT, TILE);
+
             final float[] vertices = new float[TriangleClipper.TRIANGLE_VERTICES
                 * TriangleClipper.POSITION_FLOATS];
+
             final float[][] attributes = {RasterFixtures.NO_ATTRIBUTES,
                 RasterFixtures.NO_ATTRIBUTES, RasterFixtures.NO_ATTRIBUTES};
+
             RasterFixtures.triangle(vertices, 0, WIDTH, HEIGHT,
                 new float[] {-200.0f, -200.0f, 400.0f, -200.0f, -200.0f, 400.0f}, 1.0f,
                 attributes);
+
             final Rasterizer rasterizer = new Rasterizer(0, 4, 1, Rasterizer.CullMode.NONE);
+
             rasterizer.beginFrame(target);
+
             rasterizer.setupAndBin(vertices, 1, null, null);
 
             assertThat(target.tileCount()).isEqualTo(16);
+
             for (int tile = 0; tile < target.tileCount(); tile++)
             {
                 assertThat(rasterizer.binnedTriangleCount(tile)).isEqualTo(1);
@@ -428,18 +522,26 @@ class RasterizerTest
         void shouldBinATriangleSmallerThanOnePixel()
         {
             final Framebuffer target = RasterFixtures.framebuffer(WIDTH, HEIGHT, TILE);
+
             final float[] vertices = new float[TriangleClipper.TRIANGLE_VERTICES
                 * TriangleClipper.POSITION_FLOATS];
+
             final float[][] attributes = {RasterFixtures.NO_ATTRIBUTES,
                 RasterFixtures.NO_ATTRIBUTES, RasterFixtures.NO_ATTRIBUTES};
+
             RasterFixtures.triangle(vertices, 0, WIDTH, HEIGHT,
                 new float[] {20.1f, 20.1f, 20.3f, 20.1f, 20.1f, 20.3f}, 1.0f, attributes);
+
             final Rasterizer rasterizer = new Rasterizer(0, 4, 1, Rasterizer.CullMode.NONE);
+
             rasterizer.beginFrame(target);
+
             rasterizer.setupAndBin(vertices, 1, null, new int[] {RED});
 
             assertThat(rasterizer.isLive(0)).isTrue();
+
             rasterizer.rasterize(new SpanRenderer(SpanRenderer.ShadingMode.FLAT, 0), null);
+
             // No pixel centre falls inside it, so it covers nothing — and must
             // not have thrown or painted a neighbouring pixel doing so.
             assertThat(paintedCount(target)).isZero();
@@ -449,15 +551,23 @@ class RasterizerTest
         void shouldSurviveAResizeOfTheTileGrid()
         {
             final Rasterizer rasterizer = new Rasterizer(0, 4, 2, Rasterizer.CullMode.NONE);
+
             final Framebuffer small = RasterFixtures.framebuffer(32, 32, TILE);
+
             rasterizer.beginFrame(small);
+
             rasterizer.setupAndBin(clockwiseTriangle(32, 32), 1, null, new int[] {RED});
+
             rasterizer.rasterize(new SpanRenderer(SpanRenderer.ShadingMode.FLAT, 0), null);
 
             final Framebuffer large = RasterFixtures.framebuffer(WIDTH, HEIGHT, TILE);
+
             rasterizer.beginFrame(large);
+
             rasterizer.setupAndBin(clockwiseTriangle(WIDTH, HEIGHT), 1, null, new int[] {RED});
+
             rasterizer.rasterize(new SpanRenderer(SpanRenderer.ShadingMode.FLAT, 0), null);
+
             assertThat(paintedCount(large)).isGreaterThan(0);
         }
 
@@ -465,13 +575,21 @@ class RasterizerTest
         void shouldClearBinsBetweenFrames()
         {
             final Framebuffer target = RasterFixtures.framebuffer(WIDTH, HEIGHT, TILE);
+
             final Rasterizer rasterizer = new Rasterizer(0, 4, 1, Rasterizer.CullMode.NONE);
+
             final float[] vertices = clockwiseTriangle(WIDTH, HEIGHT);
+
             rasterizer.beginFrame(target);
+
             rasterizer.setupAndBin(vertices, 1, null, null);
+
             final int first = rasterizer.binnedTriangleCount(0);
+
             rasterizer.beginFrame(target);
+
             rasterizer.setupAndBin(vertices, 1, null, null);
+
             assertThat(rasterizer.binnedTriangleCount(0)).isEqualTo(first).isPositive();
         }
 
@@ -479,11 +597,17 @@ class RasterizerTest
         void shouldAcceptAnEmptyFrame()
         {
             final Framebuffer target = RasterFixtures.framebuffer(WIDTH, HEIGHT, TILE);
+
             final Rasterizer rasterizer = new Rasterizer(0, 4, 3, Rasterizer.CullMode.NONE);
+
             rasterizer.beginFrame(target);
+
             rasterizer.setupAndBin(new float[0], 0, null, null);
+
             rasterizer.rasterize(new SpanRenderer(SpanRenderer.ShadingMode.FLAT, 0), null);
+
             assertThat(paintedCount(target)).isZero();
+
             assertThat(rasterizer.triangleCount()).isZero();
         }
     }
@@ -497,31 +621,48 @@ class RasterizerTest
         private int drawOverlapping(final boolean nearFirst)
         {
             final Framebuffer target = RasterFixtures.framebuffer(WIDTH, HEIGHT, TILE);
+
             final int stride = TriangleClipper.POSITION_FLOATS;
+
             final float[] vertices = new float[2 * TriangleClipper.TRIANGLE_VERTICES * stride];
+
             final float[][] attributes = {RasterFixtures.NO_ATTRIBUTES,
                 RasterFixtures.NO_ATTRIBUTES, RasterFixtures.NO_ATTRIBUTES};
+
             final float[] screen = {4.0f, 4.0f, 60.0f, 4.0f, 4.0f, 60.0f};
+
             // w = 1 is nearer than w = 5, because the test is 1/w greater passes.
             final int[] colors = new int[2];
+
             if (nearFirst)
             {
                 RasterFixtures.triangle(vertices, 0, WIDTH, HEIGHT, screen, 1.0f, attributes);
+
                 RasterFixtures.triangle(vertices, 1, WIDTH, HEIGHT, screen, 5.0f, attributes);
+
                 colors[0] = RED;
+
                 colors[1] = Rgba.pack(0, 0, 255, 255);
             }
             else
             {
                 RasterFixtures.triangle(vertices, 0, WIDTH, HEIGHT, screen, 5.0f, attributes);
+
                 RasterFixtures.triangle(vertices, 1, WIDTH, HEIGHT, screen, 1.0f, attributes);
+
                 colors[0] = Rgba.pack(0, 0, 255, 255);
+
                 colors[1] = RED;
             }
+
             final Rasterizer rasterizer = new Rasterizer(0, 4, 1, Rasterizer.CullMode.NONE);
+
             rasterizer.beginFrame(target);
+
             rasterizer.setupAndBin(vertices, 2, null, colors);
+
             rasterizer.rasterize(new SpanRenderer(SpanRenderer.ShadingMode.FLAT, 0), null);
+
             return target.pixel(10, 10);
         }
 
@@ -529,6 +670,7 @@ class RasterizerTest
         void shouldKeepTheNearerSurfaceWhateverTheSubmissionOrder()
         {
             assertThat(drawOverlapping(true)).isEqualTo(RED);
+
             assertThat(drawOverlapping(false)).isEqualTo(RED);
         }
 
@@ -536,19 +678,27 @@ class RasterizerTest
         void shouldWriteOneOverWIntoTheDepthBuffer()
         {
             final Framebuffer target = RasterFixtures.framebuffer(WIDTH, HEIGHT, TILE);
+
             final float[] vertices = new float[TriangleClipper.TRIANGLE_VERTICES
                 * TriangleClipper.POSITION_FLOATS];
+
             final float[][] attributes = {RasterFixtures.NO_ATTRIBUTES,
                 RasterFixtures.NO_ATTRIBUTES, RasterFixtures.NO_ATTRIBUTES};
+
             RasterFixtures.triangle(vertices, 0, WIDTH, HEIGHT,
                 new float[] {4.0f, 4.0f, 60.0f, 4.0f, 4.0f, 60.0f}, 4.0f, attributes);
+
             final Rasterizer rasterizer = new Rasterizer(0, 4, 1, Rasterizer.CullMode.NONE);
+
             rasterizer.beginFrame(target);
+
             rasterizer.setupAndBin(vertices, 1, null, new int[] {RED});
+
             rasterizer.rasterize(new SpanRenderer(SpanRenderer.ShadingMode.FLAT, 0), null);
 
             assertThat(target.depthAt(10, 10))
                 .isCloseTo(0.25f, within(RenderTestEpsilon.EPSILON));
+
             assertThat(target.depthAt(WIDTH - 1, HEIGHT - 1))
                 .isEqualTo(Framebuffer.DEPTH_CLEAR);
         }
@@ -577,12 +727,18 @@ class RasterizerTest
             final int height)
         {
             final Framebuffer target = RasterFixtures.framebuffer(width, height, TILE);
+
             final Rasterizer rasterizer =
                 new Rasterizer(0, SCENE_TRIANGLES, chunks, Rasterizer.CullMode.NONE);
+
             final SpanRenderer renderer = new SpanRenderer(SpanRenderer.ShadingMode.FLAT, 0);
+
             rasterizer.beginFrame(target);
+
             rasterizer.setupAndBin(vertices, SCENE_TRIANGLES, null, colors, workerPool);
+
             rasterizer.rasterize(renderer, null, workerPool);
+
             return target;
         }
 
@@ -592,13 +748,17 @@ class RasterizerTest
         void shouldMatchSingleThreadedOutputAtEveryWorkerCount(final int workers)
         {
             final int[] colors = new int[SCENE_TRIANGLES];
+
             final float[] vertices =
                 RasterFixtures.randomScene(20260727L, SCENE_TRIANGLES, WIDTH, HEIGHT, colors);
+
             final Framebuffer serial = render(vertices, colors, 4, null, WIDTH, HEIGHT);
+
             final Framebuffer parallel =
                 render(vertices, colors, 4, startPool(workers), WIDTH, HEIGHT);
 
             assertThat(parallel.colorBuffer()).isEqualTo(serial.colorBuffer());
+
             assertThat(parallel.depthBuffer()).isEqualTo(serial.depthBuffer());
         }
 
@@ -608,16 +768,23 @@ class RasterizerTest
         void shouldMatchSingleThreadedOutputAtARaggedResolution(final int workers)
         {
             final int width = 70;
+
             final int height = 50;
+
             final int[] colors = new int[SCENE_TRIANGLES];
+
             final float[] vertices =
                 RasterFixtures.randomScene(31337L, SCENE_TRIANGLES, width, height, colors);
+
             final Framebuffer serial = render(vertices, colors, 4, null, width, height);
+
             final Framebuffer parallel =
                 render(vertices, colors, 4, startPool(workers), width, height);
 
             assertThat(serial.strideInPixels()).isNotEqualTo(serial.width());
+
             assertThat(parallel.colorBuffer()).isEqualTo(serial.colorBuffer());
+
             assertThat(parallel.depthBuffer()).isEqualTo(serial.depthBuffer());
         }
 
@@ -627,10 +794,14 @@ class RasterizerTest
         void shouldNotDependOnChunkCount(final int chunks)
         {
             final int[] colors = new int[SCENE_TRIANGLES];
+
             final float[] vertices =
                 RasterFixtures.randomScene(4242L, SCENE_TRIANGLES, WIDTH, HEIGHT, colors);
+
             final Framebuffer reference = render(vertices, colors, 1, null, WIDTH, HEIGHT);
+
             final Framebuffer chunked = render(vertices, colors, chunks, null, WIDTH, HEIGHT);
+
             assertThat(chunked.colorBuffer()).isEqualTo(reference.colorBuffer());
         }
 
@@ -639,12 +810,18 @@ class RasterizerTest
         void shouldBeReproducibleRunToRun()
         {
             final int[] colors = new int[SCENE_TRIANGLES];
+
             final float[] vertices =
                 RasterFixtures.randomScene(99L, SCENE_TRIANGLES, WIDTH, HEIGHT, colors);
+
             final I_ThreadPoolPort workerPool = startPool(4);
+
             final Framebuffer first = render(vertices, colors, 4, workerPool, WIDTH, HEIGHT);
+
             final Framebuffer second = render(vertices, colors, 4, workerPool, WIDTH, HEIGHT);
+
             assertThat(second.colorBuffer()).isEqualTo(first.colorBuffer());
+
             assertThat(second.depthBuffer()).isEqualTo(first.depthBuffer());
         }
 
@@ -653,16 +830,23 @@ class RasterizerTest
         void shouldPaintAcrossTileSeams()
         {
             final Framebuffer target = RasterFixtures.framebuffer(WIDTH, HEIGHT, TILE);
+
             final float[] vertices = new float[TriangleClipper.TRIANGLE_VERTICES
                 * TriangleClipper.POSITION_FLOATS];
+
             final float[][] attributes = {RasterFixtures.NO_ATTRIBUTES,
                 RasterFixtures.NO_ATTRIBUTES, RasterFixtures.NO_ATTRIBUTES};
+
             RasterFixtures.triangle(vertices, 0, WIDTH, HEIGHT,
                 new float[] {-100.0f, -100.0f, 400.0f, -100.0f, -100.0f, 400.0f}, 1.0f,
                 attributes);
+
             final Rasterizer rasterizer = new Rasterizer(0, 4, 1, Rasterizer.CullMode.NONE);
+
             rasterizer.beginFrame(target);
+
             rasterizer.setupAndBin(vertices, 1, null, new int[] {RED});
+
             rasterizer.rasterize(new SpanRenderer(SpanRenderer.ShadingMode.FLAT, 0), null);
 
             // Every visible pixel is covered, including the columns and rows
@@ -675,15 +859,23 @@ class RasterizerTest
         void shouldNotWriteThePaddingColumns()
         {
             final int width = 70;
+
             final int height = 50;
+
             final Framebuffer target = RasterFixtures.framebuffer(width, height, TILE);
+
             final int[] colors = new int[SCENE_TRIANGLES];
+
             final float[] vertices =
                 RasterFixtures.randomScene(7L, SCENE_TRIANGLES, width, height, colors);
+
             final Rasterizer rasterizer =
                 new Rasterizer(0, SCENE_TRIANGLES, 4, Rasterizer.CullMode.NONE);
+
             rasterizer.beginFrame(target);
+
             rasterizer.setupAndBin(vertices, SCENE_TRIANGLES, null, colors);
+
             rasterizer.rasterize(new SpanRenderer(SpanRenderer.ShadingMode.FLAT, 0), null);
 
             for (int y = 0; y < height; y++)
@@ -692,6 +884,7 @@ class RasterizerTest
                 {
                     assertThat(target.colorBuffer()[y * target.strideInPixels() + x])
                         .isEqualTo(CLEAR);
+
                     assertThat(target.depthBuffer()[y * target.strideInPixels() + x])
                         .isEqualTo(Framebuffer.DEPTH_CLEAR);
                 }

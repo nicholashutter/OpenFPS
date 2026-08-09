@@ -87,22 +87,28 @@ public final class MapGenConfig
         {
             throw new IllegalArgumentException("id must not be blank");
         }
+
         if (displayName == null || displayName.isBlank())
         {
             throw new IllegalArgumentException("displayName must not be blank");
         }
+
         if (textureEdge <= 0 || (textureEdge & (textureEdge - 1)) != 0)
         {
             throw new IllegalArgumentException("textureEdge must be a positive power of two: "
                 + textureEdge);
         }
+
         if (worldUnitsPerTile <= 0.0f)
         {
             throw new IllegalArgumentException("worldUnitsPerTile must be positive: "
                 + worldUnitsPerTile);
         }
+
         this.id = Objects.requireNonNull(id, "id").intern();
+
         this.displayName = Objects.requireNonNull(displayName, "displayName").intern();
+
         if (setting == null || setting.isBlank())
         {
             this.setting = null;
@@ -111,6 +117,7 @@ public final class MapGenConfig
         {
             this.setting = setting.intern();
         }
+
         if (mode == null || mode.isBlank())
         {
             this.mode = null;
@@ -119,9 +126,13 @@ public final class MapGenConfig
         {
             this.mode = mode.intern();
         }
+
         this.textureEdge = textureEdge;
+
         this.worldUnitsPerTile = worldUnitsPerTile;
+
         this.primitives = List.copyOf(Objects.requireNonNull(primitives, "primitives"));
+
         if (this.primitives.isEmpty())
         {
             throw new IllegalArgumentException("primitives must not be empty");

@@ -50,11 +50,14 @@ public final class CompositeFrameCallback implements I_FrameCallback
         {
             throw new IllegalArgumentException("first must not be null");
         }
+
         if (second == null)
         {
             throw new IllegalArgumentException("second must not be null");
         }
+
         this.first = first;
+
         this.second = second;
     }
 
@@ -62,6 +65,7 @@ public final class CompositeFrameCallback implements I_FrameCallback
     public void onSurfaceReady(final int width, final int height)
     {
         first.onSurfaceReady(width, height);
+
         second.onSurfaceReady(width, height);
     }
 
@@ -69,6 +73,7 @@ public final class CompositeFrameCallback implements I_FrameCallback
     public void onFrame(final float deltaSeconds)
     {
         first.onFrame(deltaSeconds);
+
         second.onFrame(deltaSeconds);
     }
 
@@ -76,6 +81,7 @@ public final class CompositeFrameCallback implements I_FrameCallback
     public void onResize(final int width, final int height)
     {
         first.onResize(width, height);
+
         second.onResize(width, height);
     }
 
@@ -83,6 +89,7 @@ public final class CompositeFrameCallback implements I_FrameCallback
     public void onPause()
     {
         first.onPause();
+
         second.onPause();
     }
 
@@ -90,6 +97,7 @@ public final class CompositeFrameCallback implements I_FrameCallback
     public void onResume()
     {
         first.onResume();
+
         second.onResume();
     }
 
@@ -97,6 +105,7 @@ public final class CompositeFrameCallback implements I_FrameCallback
     public void onSurfaceLost()
     {
         first.onSurfaceLost();
+
         second.onSurfaceLost();
     }
 }

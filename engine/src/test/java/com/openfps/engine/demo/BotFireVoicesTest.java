@@ -47,6 +47,7 @@ final class BotFireVoicesTest
 
             // MUTABLE local — how many of the volley were let through.
             int played = 0;
+
             for (int shot = 0; shot < Match.DEFAULT_BOT_COUNT; shot++)
             {
                 if (voices.allow(100))
@@ -56,6 +57,7 @@ final class BotFireVoicesTest
             }
 
             assertThat(played).isEqualTo(BotFireVoices.MAX_VOICES_PER_TIC);
+
             assertThat(voices.suppressedCount())
                 .isEqualTo(Match.DEFAULT_BOT_COUNT - BotFireVoices.MAX_VOICES_PER_TIC);
         }
@@ -67,6 +69,7 @@ final class BotFireVoicesTest
             // Every tic asked, which is a room firing far harder than DUMB can. The
             // answer is the rate ceiling and nothing else.
             final BotFireVoices voices = new BotFireVoices();
+
             for (int tic = 0; tic < TICS_PER_SECOND; tic++)
             {
                 voices.allow(tic);
@@ -85,7 +88,9 @@ final class BotFireVoicesTest
             // PEAK 0.45 reach 0.90, inside full scale. Three would clip and one
             // would make the room sound like a single opponent.
             assertThat(BotFireVoices.maxConcurrentVoices(TICS_PER_SECOND)).isEqualTo(2);
+
             assertThat(CarbineSound.PEAK * 2.0).isLessThan(1.0);
+
             assertThat(CarbineSound.PEAK * 3.0)
                 .as("three voices would fit, so the interval is looser than it needs to be")
                 .isGreaterThan(1.0);
@@ -132,7 +137,9 @@ final class BotFireVoicesTest
             // ever plays. That is the bug DemoGameplayPort.lastFireTic records, which
             // silenced the player's weapon for whole runs on every platform.
             assertThat(new BotFireVoices().allow(0)).isTrue();
+
             assertThat(new BotFireVoices().allow(Integer.MIN_VALUE + 1)).isTrue();
+
             assertThat(new BotFireVoices().allow(-5000)).isTrue();
         }
 
@@ -141,14 +148,17 @@ final class BotFireVoicesTest
         void clearForgetsTheLastRound()
         {
             final BotFireVoices voices = new BotFireVoices();
+
             voices.allow(500);
 
             voices.clear();
 
             assertThat(voices.lastPlayedTic()).isEqualTo(BotFireVoices.NEVER);
+
             assertThat(voices.allow(501))
                 .as("the first bot to shoot in the new round was silent")
                 .isTrue();
+
             assertThat(voices.suppressedCount()).isZero();
         }
     }
@@ -165,12 +175,17 @@ final class BotFireVoicesTest
             // gate that opened on different tics on two peers would be a divergence
             // in the one layer nobody would look in.
             final BotFireVoices first = new BotFireVoices();
+
             final BotFireVoices second = new BotFireVoices();
+
             final StringBuilder one = new StringBuilder();
+
             final StringBuilder two = new StringBuilder();
+
             for (int tic = 0; tic < 200; tic++)
             {
                 one.append(first.allow(tic));
+
                 two.append(second.allow(tic));
             }
 
@@ -186,6 +201,7 @@ final class BotFireVoicesTest
             final BotFireVoices voices = new BotFireVoices();
 
             assertThat(voices.allow(10)).isTrue();
+
             assertThat(voices.allow(10)).isFalse();
         }
     }

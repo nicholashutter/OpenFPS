@@ -228,6 +228,7 @@ public final class TouchOverlay
         {
             throw new IllegalArgumentException("touchLayout must not be null");
         }
+
         this.layout = touchLayout;
     }
 
@@ -243,14 +244,17 @@ public final class TouchOverlay
         {
             return;
         }
+
         if (batch == null)
         {
             batch = new SpriteBatch();
         }
+
         if (disc == null)
         {
             buildTextures();
         }
+
         batch.getProjectionMatrix().setToOrtho2D(0.0f, 0.0f, width, height);
     }
 
@@ -274,12 +278,16 @@ public final class TouchOverlay
         {
             return;
         }
+
         batch.begin();
+
         drawStick(input);
+
         for (int index = 0; index < buttons.length; index++)
         {
             drawButton(index, input.isHeld(buttons[index]));
         }
+
         batch.end();
     }
 
@@ -287,9 +295,11 @@ public final class TouchOverlay
     public void dispose()
     {
         disposeTextures();
+
         if (batch != null)
         {
             batch.dispose();
+
             batch = null;
         }
     }
@@ -300,14 +310,21 @@ public final class TouchOverlay
     private void buildTextures()
     {
         glyphs = new Texture[buttons.length];
+
         sources = new Pixmap[buttons.length + 2];
+
         sources[0] = buildDisc(DISC_TEXTURE_SIZE);
+
         sources[1] = buildRing(DISC_TEXTURE_SIZE, RING_THICKNESS_FRACTION);
+
         disc = managed(sources[0]);
+
         ring = managed(sources[1]);
+
         for (int index = 0; index < buttons.length; index++)
         {
             sources[index + 2] = buildGlyph(GLYPH_TEXTURE_SIZE, glyphShapeFor(buttons[index]));
+
             glyphs[index] = managed(sources[index + 2]);
         }
     }
@@ -317,7 +334,9 @@ public final class TouchOverlay
     private static Texture managed(final Pixmap pixels)
     {
         final Texture texture = new Texture(pixels);
+
         texture.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
+
         return texture;
     }
 
@@ -328,13 +347,17 @@ public final class TouchOverlay
         if (disc != null)
         {
             disc.dispose();
+
             disc = null;
         }
+
         if (ring != null)
         {
             ring.dispose();
+
             ring = null;
         }
+
         if (glyphs != null)
         {
             for (int index = 0; index < glyphs.length; index++)
@@ -344,8 +367,10 @@ public final class TouchOverlay
                     glyphs[index].dispose();
                 }
             }
+
             glyphs = null;
         }
+
         if (sources != null)
         {
             for (int index = 0; index < sources.length; index++)
@@ -355,6 +380,7 @@ public final class TouchOverlay
                     sources[index].dispose();
                 }
             }
+
             sources = null;
         }
     }
@@ -364,12 +390,19 @@ public final class TouchOverlay
     private void drawButton(final int index, final boolean pressed)
     {
         final int region = buttons[index];
+
         final float centreX = layout.buttonCentreX(region);
+
         final float centreY = layout.buttonCentreY(region);
+
         final float radius = layout.drawnRadius(region, pressed);
+
         drawSprite(disc, centreX, centreY, radius * HALO_SPREAD, HALO_TINT, HALO_ALPHA);
+
         drawSprite(disc, centreX, centreY, radius, tintFor(region), fillAlpha(pressed));
+
         drawSprite(ring, centreX, centreY, radius, RIM_TINT, rimAlpha(pressed));
+
         drawSprite(glyphs[index], centreX, centreY, radius * GLYPH_RADIUS_FRACTION,
             RIM_TINT, glyphAlpha(pressed));
     }
@@ -381,20 +414,29 @@ public final class TouchOverlay
     private void drawStick(final AndroidInputPort input)
     {
         final int pointer = input.stickPointer();
+
         if (pointer < 0)
         {
             final float homeX = layout.stickHomeX();
+
             final float homeY = layout.stickHomeY();
+
             drawStickAt(homeX, homeY, homeX, homeY, false);
+
             return;
         }
+
         // Held: the ring is at the anchor the thumb made, not at the resting
         // place, because that anchor is what deflection is measured from and a
         // ring drawn anywhere else would be a lie about the control.
         final float anchorX = input.anchorXOf(pointer);
+
         final float anchorY = input.anchorYOf(pointer);
+
         final float currentX = input.currentXOf(pointer);
+
         final float currentY = input.currentYOf(pointer);
+
         drawStickAt(anchorX, anchorY,
             layout.knobCentreX(anchorX, anchorY, currentX, currentY),
             layout.knobCentreY(anchorX, anchorY, currentX, currentY),
@@ -407,7 +449,9 @@ public final class TouchOverlay
         final float knobY, final boolean held)
     {
         final float range = layout.stickRange();
+
         drawSprite(disc, baseX, baseY, range, HALO_TINT, WELL_ALPHA);
+
         // The base ring was the one control with nothing behind its outer edge.
         // The well darkens the inside of it; outside is whatever the room
         // happens to be, and against a lit grey floor a light blue ring at 0.66
@@ -421,11 +465,15 @@ public final class TouchOverlay
         // walking into. This shadows the rim from outside only, and the well
         // already backs it from inside, so the ring is bracketed either way.
         drawSprite(ring, baseX, baseY, range * HALO_SPREAD, HALO_TINT, HALO_ALPHA);
+
         drawSprite(ring, baseX, baseY, range, STICK_TINT, rimAlpha(held));
 
         final float knobRadius = layout.stickKnobRadius();
+
         drawSprite(disc, knobX, knobY, knobRadius * HALO_SPREAD, HALO_TINT, HALO_ALPHA);
+
         drawSprite(disc, knobX, knobY, knobRadius, STICK_TINT, fillAlpha(held));
+
         drawSprite(ring, knobX, knobY, knobRadius, RIM_TINT, rimAlpha(held));
     }
 
@@ -435,8 +483,11 @@ public final class TouchOverlay
         final float radius, final Color colour, final float alpha)
     {
         tint.set(colour.r, colour.g, colour.b, alpha);
+
         batch.setColor(tint);
+
         final float worldCentreY = layout.height() - touchCentreY;
+
         batch.draw(texture, centreX - radius, worldCentreY - radius,
             radius * 2.0f, radius * 2.0f);
     }
@@ -492,6 +543,7 @@ public final class TouchOverlay
         {
             return FILL_PRESSED_ALPHA;
         }
+
         return FILL_ALPHA;
     }
 
@@ -501,6 +553,7 @@ public final class TouchOverlay
         {
             return RIM_PRESSED_ALPHA;
         }
+
         return RIM_ALPHA;
     }
 
@@ -510,6 +563,7 @@ public final class TouchOverlay
         {
             return GLYPH_PRESSED_ALPHA;
         }
+
         return GLYPH_ALPHA;
     }
 
@@ -527,22 +581,29 @@ public final class TouchOverlay
     static Pixmap buildDisc(final int size)
     {
         final Pixmap pixmap = blank(size);
+
         // Doubled coordinates, for the reason WindowIcon documents at length:
         // an even-sized image has no centre pixel, so measuring from size / 2
         // biases the disc half a pixel and leaves it visibly off-centre at
         // small sizes. Working in units of half a pixel removes the question.
         final float centre = size - 1;
+
         final float radius = size;
+
         for (int y = 0; y < size; y++)
         {
             for (int x = 0; x < size; x++)
             {
                 final float dx = (2 * x) - centre;
+
                 final float dy = (2 * y) - centre;
+
                 final float distance = (float) Math.sqrt((dx * dx) + (dy * dy));
+
                 pixmap.drawPixel(x, y, discPixel(distance, radius));
             }
         }
+
         return pixmap;
     }
 
@@ -560,22 +621,30 @@ public final class TouchOverlay
     static Pixmap buildRing(final int size, final float thicknessFraction)
     {
         final Pixmap pixmap = blank(size);
+
         final float centre = size - 1;
+
         final float radius = size;
+
         // At least four doubled units — two real pixels — of thickness, or the
         // two one-pixel antialiasing ramps meet and cancel each other into a
         // ring that fades out entirely at small sizes.
         final float inner = radius - Math.max(4.0f, thicknessFraction * radius);
+
         for (int y = 0; y < size; y++)
         {
             for (int x = 0; x < size; x++)
             {
                 final float dx = (2 * x) - centre;
+
                 final float dy = (2 * y) - centre;
+
                 final float distance = (float) Math.sqrt((dx * dx) + (dy * dy));
+
                 pixmap.drawPixel(x, y, ringPixel(distance, radius, inner));
             }
         }
+
         return pixmap;
     }
 
@@ -596,7 +665,9 @@ public final class TouchOverlay
     static Pixmap buildGlyph(final int size, final float[] segments)
     {
         final Pixmap pixmap = blank(size);
+
         final float halfStroke = GLYPH_STROKE_FRACTION * size;
+
         for (int y = 0; y < size; y++)
         {
             for (int x = 0; x < size; x++)
@@ -604,9 +675,11 @@ public final class TouchOverlay
                 // Pixel centres, not corners: sampling at the corner shifts the
                 // whole glyph half a pixel up and left of the disc behind it.
                 final float distance = nearestSegment(x + 0.5f, y + 0.5f, segments, size);
+
                 pixmap.drawPixel(x, y, strokePixel(distance, halfStroke));
             }
         }
+
         return pixmap;
     }
 
@@ -616,7 +689,9 @@ public final class TouchOverlay
     private static Pixmap blank(final int size)
     {
         final Pixmap pixmap = new Pixmap(size, size, Pixmap.Format.RGBA8888);
+
         pixmap.setBlending(Pixmap.Blending.None);
+
         return pixmap;
     }
 
@@ -627,16 +702,19 @@ public final class TouchOverlay
         // MUTABLE local: the running minimum. Starts past any distance a
         // square of this size can produce.
         float nearest = size * 2.0f;
+
         for (int index = 0; index + 3 < segments.length; index += 4)
         {
             final float distance = distanceToSegment(pointX, pointY,
                 segments[index] * size, segments[index + 1] * size,
                 segments[index + 2] * size, segments[index + 3] * size);
+
             if (distance < nearest)
             {
                 nearest = distance;
             }
         }
+
         return nearest;
     }
 
@@ -647,17 +725,23 @@ public final class TouchOverlay
         final float startX, final float startY, final float endX, final float endY)
     {
         final float runX = endX - startX;
+
         final float runY = endY - startY;
+
         final float lengthSquared = (runX * runX) + (runY * runY);
+
         if (lengthSquared <= 0.0f)
         {
             // A zero-length segment is a dot, and the projection below would be
             // a division by zero.
             return length(pointX - startX, pointY - startY);
         }
+
         final float raw = (((pointX - startX) * runX) + ((pointY - startY) * runY))
             / lengthSquared;
+
         final float along = clampUnitInterval(raw);
+
         return length(pointX - (startX + (along * runX)), pointY - (startY + (along * runY)));
     }
 
@@ -669,12 +753,16 @@ public final class TouchOverlay
         {
             return 0;
         }
+
         final float edge = radius - 2.0f;
+
         if (distance <= edge)
         {
             return 0xFFFFFFFF;
         }
+
         final float coverage = (radius - distance) / 2.0f;
+
         return whiteWithAlpha(coverage);
     }
 
@@ -686,8 +774,11 @@ public final class TouchOverlay
         {
             return 0;
         }
+
         final float outward = (radius - distance) / 2.0f;
+
         final float inward = (distance - inner) / 2.0f;
+
         return whiteWithAlpha(Math.min(outward, inward));
     }
 
@@ -704,10 +795,12 @@ public final class TouchOverlay
     private static int whiteWithAlpha(final float coverage)
     {
         final float clamped = clampUnitInterval(coverage);
+
         if (clamped <= 0.0f)
         {
             return 0;
         }
+
         return 0xFFFFFF00 | (Math.round(clamped * 255.0f) & 0xFF);
     }
 
@@ -718,10 +811,12 @@ public final class TouchOverlay
         {
             return 1.0f;
         }
+
         if (value < 0.0f)
         {
             return 0.0f;
         }
+
         return value;
     }
 

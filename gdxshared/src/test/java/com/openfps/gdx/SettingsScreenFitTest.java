@@ -92,12 +92,14 @@ class SettingsScreenFitTest
             // whole reason this method exists rather than a second constant.
             final float budget =
                 SettingsScreen.headingHeightBudget(PHONE_HEIGHT, PHONE_REACHABLE_CONTENT);
+
             final float width = SettingsScreen.headingWidthFor(PHONE_WIDTH, PHONE_HEIGHT,
                 HEADING_BLOCKS, budget);
 
             assertThat(width)
                 .as("narrower than the 38% it would have taken")
                 .isLessThan(PHONE_WIDTH * 0.38f);
+
             assertThat(width / HEADING_BLOCKS * BlockFont.GLYPH_HEIGHT)
                 .as("and the height that width implies is inside the budget")
                 .isLessThanOrEqualTo(budget + 0.01f);
@@ -139,10 +141,12 @@ class SettingsScreenFitTest
             // the screen.
             final float budget =
                 SettingsScreen.headingHeightBudget(PHONE_HEIGHT, PHONE_REACHABLE_CONTENT);
+
             final float headingHeight = Math.min(
                 SettingsScreen.headingWidthFor(PHONE_WIDTH, PHONE_HEIGHT, HEADING_BLOCKS,
                     budget) / HEADING_BLOCKS * BlockFont.GLYPH_HEIGHT,
                 budget);
+
             final float controlsTop =
                 PHONE_HEIGHT * 0.90f - headingHeight;
 
@@ -185,6 +189,7 @@ class SettingsScreenFitTest
             // a BACK button on the screen", and it is the claim the device disproved.
             final float budget =
                 SettingsScreen.headingHeightBudget(PHONE_HEIGHT, PHONE_REACHABLE_CONTENT);
+
             final float headingHeight = Math.min(
                 SettingsScreen.headingWidthFor(PHONE_WIDTH, PHONE_HEIGHT, HEADING_BLOCKS,
                     budget) / HEADING_BLOCKS * BlockFont.GLYPH_HEIGHT,
@@ -202,8 +207,10 @@ class SettingsScreenFitTest
             // 2340x1080 is not the only landscape phone, and the rule must not be
             // tuned to the single AVD it was found on.
             final float height = 900.0f;
+
             final float budget =
                 SettingsScreen.headingHeightBudget(height, PHONE_REACHABLE_CONTENT);
+
             final float headingHeight = Math.min(
                 SettingsScreen.headingWidthFor(2160.0f, height, HEADING_BLOCKS, budget)
                     / HEADING_BLOCKS * BlockFont.GLYPH_HEIGHT,
@@ -227,11 +234,13 @@ class SettingsScreenFitTest
             // the reader should be told the numbers above are stale rather than
             // discovering it from a screenshot.
             final float buttons = 62.0f * PHONE_DENSITY * 4.0f;
+
             final float hints = 14.0f * PHONE_DENSITY * 3.0f;
 
             assertThat(buttons)
                 .as("four pointer-sized buttons alone")
                 .isGreaterThan(600.0f);
+
             assertThat(buttons + hints + 24.0f * PHONE_DENSITY)
                 .as("with the hint gaps and the margin, over half the panel again")
                 .isGreaterThan(PHONE_HEIGHT * 0.65f);

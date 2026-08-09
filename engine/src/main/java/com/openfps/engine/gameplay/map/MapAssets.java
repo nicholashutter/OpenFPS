@@ -39,16 +39,21 @@ public record MapAssets(String level, String weapon, String atlas)
         {
             throw new IllegalArgumentException("level must not be null or blank");
         }
+
         if (weapon == null || weapon.isBlank())
         {
             throw new IllegalArgumentException("weapon must not be null or blank");
         }
+
         level = level.intern();
+
         weapon = weapon.intern();
+
         if (atlas != null && atlas.isBlank())
         {
             atlas = null;
         }
+
         if (atlas != null)
         {
             atlas = atlas.intern();

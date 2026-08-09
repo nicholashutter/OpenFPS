@@ -21,6 +21,7 @@ public final class HalSubsystem extends Subsystem
     public HalSubsystem(final I_InputPort inputPort)
     {
         super(SubsystemId.I_);
+
         this.inputPort = inputPort;
     }
 

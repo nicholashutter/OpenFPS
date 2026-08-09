@@ -147,17 +147,22 @@ public final class NetSession
         {
             throw new IllegalArgumentException("datagramPort must not be null");
         }
+
         if (playerId < 0)
         {
             throw new IllegalArgumentException("playerId must not be negative, got " + playerId);
         }
+
         if (ticDurationNanos <= 0)
         {
             throw new IllegalArgumentException(
                 "tic duration must be positive, got " + ticDurationNanos);
         }
+
         this.socket = datagramPort;
+
         this.localPlayerId = playerId;
+
         this.nanosPerTic = ticDurationNanos;
     }
 
@@ -170,8 +175,11 @@ public final class NetSession
     public void open(final int port)
     {
         socket.init();
+
         socket.bind(port);
+
         this.open = true;
+
         LOG.info("NetSession open: player {} on UDP {}", localPlayerId, port);
     }
 
@@ -193,19 +201,26 @@ public final class NetSession
         {
             throw new IllegalStateException("a session holds at most " + MAX_PEERS + " peers");
         }
+
         if (peerId == localPlayerId)
         {
             throw new IllegalArgumentException(
                 "peer id " + peerId + " is our own — a peer cannot be itself");
         }
+
         if (peerById(peerId) != null)
         {
             throw new IllegalArgumentException("peer " + peerId + " is already connected");
         }
+
         peers[peerCount] = new PeerConnection(peerId, address);
+
         peerCount = peerCount + 1;
+
         final int slot = peerCount;
+
         LOG.info("Peer {} at {} takes slot {}", peerId, address, slot);
+
         return slot;
     }
 
@@ -228,14 +243,17 @@ public final class NetSession
         {
             throw new IllegalArgumentException("cmd must not be null");
         }
+
         if (!commands.put(LOCAL_SLOT, cmd))
         {
             return false;
         }
+
         if (cmd.ticNumber() > latestLocalTic)
         {
             this.latestLocalTic = cmd.ticNumber();
         }
+
         return true;
     }
 
@@ -263,10 +281,12 @@ public final class NetSession
         {
             return false;
         }
+
         if (ticIndex > latestLocalTic)
         {
             this.latestLocalTic = ticIndex;
         }
+
         return true;
     }
 
@@ -288,9 +308,13 @@ public final class NetSession
         {
             return 0;
         }
+
         final int accepted = receiveAll();
+
         socket.processTic(ticIndex);
+
         sendToPeers();
+
         return accepted;
     }
 
@@ -306,9 +330,13 @@ public final class NetSession
         {
             return;
         }
+
         this.open = false;
+
         socket.close();
+
         socket.shutdown();
+
         LOG.info("NetSession closed: {}", this);
     }
 
@@ -330,6 +358,7 @@ public final class NetSession
         {
             throw new IndexOutOfBoundsException("peer " + index + " of " + peerCount);
         }
+
         return peers[index];
     }
 
@@ -414,6 +443,7 @@ public final class NetSession
                 return peers[index];
             }
         }
+
         return null;
     }
 
@@ -424,12 +454,16 @@ public final class NetSession
     private int receiveAll()
     {
         int accepted = 0;
+
         byte[] datagram = socket.receive();
+
         while (datagram != null)
         {
             accepted = accepted + applyDatagram(datagram);
+
             datagram = socket.receive();
         }
+
         return accepted;
     }
 
@@ -437,6 +471,7 @@ public final class NetSession
     private int applyDatagram(final byte[] datagram)
     {
         this.bytesReceived = bytesReceived + datagram.length;
+
         if (datagram.length < RedundantSender.HEADER_BYTES)
         {
             // Too short to name a sender, so there is nobody to blame and
@@ -444,22 +479,31 @@ public final class NetSession
             // this is what a stray scan looks like, and logging every one would
             // be a log-flooding hole.
             this.packetsMalformed = packetsMalformed + 1;
+
             return 0;
         }
+
         final int senderId = RedundantSender.readPlayerId(datagram, 0);
+
         final int index = peerIndexById(senderId);
+
         if (index < 0)
         {
             // A packet claiming to be from someone we are not playing with.
             // Dropped rather than auto-connected: adding peers from unsolicited
             // traffic is how a game becomes a reflector.
             this.packetsFromStrangers = packetsFromStrangers + 1;
+
             return 0;
         }
+
         this.packetsReceived = packetsReceived + 1;
+
         final int accepted = RedundantSender.unpack(datagram, 0, datagram.length,
             commands, index + 1, peers[index]);
+
         this.commandsAccepted = commandsAccepted + accepted;
+
         return accepted;
     }
 
@@ -472,14 +516,20 @@ public final class NetSession
         {
             return;
         }
+
         for (int index = 0; index < peerCount; index++)
         {
             final PeerConnection peer = peers[index];
+
             final int window = peer.redundancyWindow(latestLocalTic, nanosPerTic);
+
             final int length = RedundantSender.packWindow(sendBuffer, 0, peer, commands,
                 LOCAL_SLOT, localPlayerId, latestLocalTic, window);
+
             socket.send(trimmed(length), peer.address());
+
             this.packetsSent = packetsSent + 1;
+
             this.bytesSent = bytesSent + length;
         }
     }
@@ -492,7 +542,9 @@ public final class NetSession
     private byte[] trimmed(final int length)
     {
         final byte[] out = new byte[length];
+
         System.arraycopy(sendBuffer, 0, out, 0, length);
+
         return out;
     }
 
@@ -506,6 +558,7 @@ public final class NetSession
                 return index;
             }
         }
+
         return -1;
     }
 

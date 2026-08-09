@@ -42,11 +42,17 @@ public final class NullAdapterFactory implements I_AdapterFactory
     public void init()
     {
         LOG.info("Initializing null HAL adapter (headless / testing)");
+
         timePort.init();
+
         inputPort.init();
+
         datagramPort.init();
+
         systemInfo.init();
+
         userProfile.init();
+
         windowPort.init();
     }
 
@@ -54,11 +60,17 @@ public final class NullAdapterFactory implements I_AdapterFactory
     public void shutdown()
     {
         LOG.info("Shutting down null HAL adapter");
+
         windowPort.shutdown();
+
         timePort.shutdown();
+
         inputPort.shutdown();
+
         datagramPort.shutdown();
+
         systemInfo.shutdown();
+
         userProfile.shutdown();
     }
 

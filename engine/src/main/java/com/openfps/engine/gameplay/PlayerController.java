@@ -417,11 +417,17 @@ public final class PlayerController
             throw new IllegalArgumentException(
                 "collisionWorld must not be null; use PhysicsWorld.OPEN for no collision");
         }
+
         this.positionX = feetX;
+
         this.positionY = feetY;
+
         this.positionZ = feetZ;
+
         this.yawRadians = wrapYaw(spawnYawRadians);
+
         this.pitchRadians = clampPitch(spawnPitchRadians);
+
         this.world = collisionWorld;
     }
 
@@ -457,10 +463,15 @@ public final class PlayerController
         final float spawnYawRadians, final float spawnPitchRadians)
     {
         this.positionX = feetX;
+
         this.positionY = feetY;
+
         this.positionZ = feetZ;
+
         this.yawRadians = wrapYaw(spawnYawRadians);
+
         this.pitchRadians = clampPitch(spawnPitchRadians);
+
         this.velocityY = 0.0f;
     }
 
@@ -493,6 +504,7 @@ public final class PlayerController
     public void setLook(final float headingRadians, final float elevationRadians)
     {
         this.yawRadians = wrapYaw(headingRadians);
+
         this.pitchRadians = clampPitch(elevationRadians);
     }
 
@@ -516,6 +528,7 @@ public final class PlayerController
         {
             throw new IllegalArgumentException("input must not be null");
         }
+
         // Written as a negated >= so that NaN, which fails every comparison,
         // is rejected here rather than poisoning the position silently.
         if (!(deltaSeconds >= 0.0f))
@@ -525,7 +538,9 @@ public final class PlayerController
         }
 
         applyLook(input);
+
         applyMove(input, deltaSeconds);
+
         applyJumpAndGravity(input, deltaSeconds);
     }
 
@@ -565,6 +580,7 @@ public final class PlayerController
         {
             this.velocityY = JUMP_SPEED_UNITS_PER_SECOND;
         }
+
         if (isOnGround() && velocityY == 0.0f)
         {
             // Standing still on the floor. Skipping the integration keeps a
@@ -572,14 +588,18 @@ public final class PlayerController
             // a downward velocity that the landing clamp then throws away.
             return;
         }
+
         this.velocityY = velocityY - GRAVITY_UNITS_PER_SECOND_SQUARED * deltaSeconds;
+
         this.positionY = positionY + velocityY * deltaSeconds;
+
         if (positionY <= GROUND_LEVEL_UNITS)
         {
             // Landed. Snap rather than leave the player fractionally below the
             // floor: the residual would be invisible but would make isOnGround
             // false and quietly refuse the next jump.
             this.positionY = GROUND_LEVEL_UNITS;
+
             this.velocityY = 0.0f;
         }
     }
@@ -656,6 +676,7 @@ public final class PlayerController
     private void applyLook(final I_PlayerInput input)
     {
         this.yawRadians = wrapYaw(yawRadians - input.yawDelta());
+
         this.pitchRadians = clampPitch(pitchRadians + input.pitchDelta());
     }
 
@@ -698,6 +719,7 @@ public final class PlayerController
     private void applyMove(final I_PlayerInput input, final float deltaSeconds)
     {
         final float forwardAxis = clampAxis(input.forwardAxis());
+
         final float strafeAxis = clampAxis(input.strafeAxis());
 
         // Scale the step, not the axes: a partial deflection must still give a
@@ -707,7 +729,9 @@ public final class PlayerController
         // full-forward-plus-full-strafe, whose magnitude is sqrt(2), is scaled
         // back so that a diagonal is not 41% faster than a straight line.
         final float magnitudeSquared = forwardAxis * forwardAxis + strafeAxis * strafeAxis;
+
         float step = MOVE_SPEED_UNITS_PER_SECOND * deltaSeconds;
+
         if (magnitudeSquared > 1.0f)
         {
             // sqrt is correctly rounded by IEEE 754 and so is reproducible;
@@ -716,6 +740,7 @@ public final class PlayerController
             // can be a single flat rule with no exceptions to remember.
             step = step / (float) StrictMath.sqrt(magnitudeSquared);
         }
+
         if (input.sprint() && forwardAxis > 0.0f)
         {
             step = step * SPRINT_MULTIPLIER;
@@ -724,19 +749,23 @@ public final class PlayerController
         // Yaw-only basis. Pitch is deliberately absent: forward here is the
         // heading projected onto the ground plane, so looking up cannot fly.
         final float sinYaw = (float) StrictMath.sin(yawRadians);
+
         final float cosYaw = (float) StrictMath.cos(yawRadians);
 
         // groundForward = (sinYaw, 0, cosYaw); groundRight = groundForward x up.
         final float deltaX = (sinYaw * forwardAxis - cosYaw * strafeAxis) * step;
+
         final float deltaZ = (cosYaw * forwardAxis + sinYaw * strafeAxis) * step;
 
         // The one place a wall can touch this class. PhysicsWorld.OPEN returns
         // both sums unchanged, so a controller with no room behind it takes the
         // identical path and lands on the identical float.
         final float clippedX = world.slideX(positionX, positionZ, deltaX);
+
         final float clippedZ = world.slideZ(clippedX, positionZ, deltaZ);
 
         this.positionX = clippedX;
+
         this.positionZ = clippedZ;
     }
 
@@ -745,17 +774,21 @@ public final class PlayerController
     private static float wrapYaw(final float angleRadians)
     {
         final float turns = (float) StrictMath.floor(angleRadians / FULL_TURN_RADIANS);
+
         float wrapped = angleRadians - turns * FULL_TURN_RADIANS;
+
         // The subtraction above is not exact for large inputs, so the result can
         // land on or just outside either end. One nudge each way settles it.
         if (wrapped >= FULL_TURN_RADIANS)
         {
             wrapped = wrapped - FULL_TURN_RADIANS;
         }
+
         if (wrapped < 0.0f)
         {
             wrapped = wrapped + FULL_TURN_RADIANS;
         }
+
         return wrapped;
     }
 
@@ -767,10 +800,12 @@ public final class PlayerController
         {
             return MAX_PITCH_RADIANS;
         }
+
         if (angleRadians < -MAX_PITCH_RADIANS)
         {
             return -MAX_PITCH_RADIANS;
         }
+
         return angleRadians;
     }
 
@@ -782,14 +817,17 @@ public final class PlayerController
         {
             return 1.0f;
         }
+
         if (axis < -1.0f)
         {
             return -1.0f;
         }
+
         if (Float.isNaN(axis))
         {
             return 0.0f;
         }
+
         return axis;
     }
 
@@ -873,9 +911,13 @@ public final class PlayerController
     public Vec3 forwardVector()
     {
         final float cosPitch = (float) StrictMath.cos(pitchRadians);
+
         final float sinPitch = (float) StrictMath.sin(pitchRadians);
+
         final float sinYaw = (float) StrictMath.sin(yawRadians);
+
         final float cosYaw = (float) StrictMath.cos(yawRadians);
+
         return new Vec3(cosPitch * sinYaw, sinPitch, cosPitch * cosYaw);
     }
 
@@ -888,7 +930,9 @@ public final class PlayerController
     public Vec3 groundForwardVector()
     {
         final float sinYaw = (float) StrictMath.sin(yawRadians);
+
         final float cosYaw = (float) StrictMath.cos(yawRadians);
+
         return new Vec3(sinYaw, 0.0f, cosYaw);
     }
 

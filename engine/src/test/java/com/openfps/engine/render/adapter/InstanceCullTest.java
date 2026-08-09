@@ -84,7 +84,9 @@ final class InstanceCullTest
     private static boolean culled(final Mat4 placement, final float[] modelBox)
     {
         final float[] transform = new float[Camera.WORLD_TO_CLIP_FLOATS];
+
         camera().packModelToClip(placement, transform, 0);
+
         return InstanceCull.isOutsideFrustum(transform, 0, NEAR, modelBox, 0);
     }
 
@@ -147,7 +149,9 @@ final class InstanceCullTest
         void thePlacementDecides()
         {
             final float[] atOrigin = box(0.0f, 0.0f, 0.0f, HALF);
+
             assertThat(culled(Mat4.translation(0.0f, 0.0f, -5.0f), atOrigin)).isTrue();
+
             assertThat(culled(Mat4.translation(0.0f, 0.0f, 5.0f), atOrigin)).isFalse();
         }
     }
@@ -220,6 +224,7 @@ final class InstanceCullTest
             // jointly rather than one at a time would drop this and take a wall
             // with it.
             final float[] wall = {-50.0f, -1.0f, 4.0f, 50.0f, 1.0f, 5.0f};
+
             assertThat(culled(wall)).isFalse();
         }
 
@@ -233,6 +238,7 @@ final class InstanceCullTest
             // culls something visible. This box reaches into the frustum at
             // x = 0, z = 5 and must survive.
             final float[] inverted = {20.0f, 0.0f, 5.0f, -20.0f, 0.0f, 5.0f};
+
             assertThat(culled(inverted)).isFalse();
         }
     }

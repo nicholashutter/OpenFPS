@@ -33,6 +33,7 @@ class SqliteUserProfilePortTest
     void setUp() throws SQLException
     {
         port = new SqliteUserProfilePort();
+
         // Use the test hook: an in-memory database, no file I/O
         port.initWithInMemoryDb();
     }
@@ -51,6 +52,7 @@ class SqliteUserProfilePortTest
     void shouldCreateTable()
     {
         assertThat(port.state()).isEqualTo(I_UserProfilePort.State.READY);
+
         assertThat(port.count()).isEqualTo(0);
     }
 
@@ -62,12 +64,17 @@ class SqliteUserProfilePortTest
             .withDisplayName("Alice")
             .withAudioVolume(0.42)
             .withFieldOfView(110);
+
         port.save(profile);
 
         final Optional<UserProfile> found = port.findById(profile.id());
+
         assertThat(found).isPresent();
+
         assertThat(found.get().displayName()).isEqualTo("Alice");
+
         assertThat(found.get().audioVolume()).isEqualTo(0.42);
+
         assertThat(found.get().fieldOfView()).isEqualTo(110);
     }
 
@@ -76,11 +83,15 @@ class SqliteUserProfilePortTest
     void shouldUpsertOnConflict()
     {
         final UserProfile original = UserProfile.newDefault();
+
         port.save(original);
+
         final UserProfile updated = original.withDisplayName("Bob");
+
         port.save(updated);
 
         assertThat(port.count()).isEqualTo(1);
+
         assertThat(port.findById(original.id()).get().displayName()).isEqualTo("Bob");
     }
 
@@ -89,8 +100,11 @@ class SqliteUserProfilePortTest
     void shouldReturnAllProfiles()
     {
         port.save(UserProfile.newDefault());
+
         port.save(UserProfile.newDefault());
+
         port.save(UserProfile.newDefault());
+
         assertThat(port.findAll()).hasSize(3);
     }
 
@@ -99,11 +113,17 @@ class SqliteUserProfilePortTest
     void shouldDelete()
     {
         final UserProfile a = UserProfile.newDefault();
+
         final UserProfile b = UserProfile.newDefault();
+
         port.save(a);
+
         port.save(b);
+
         port.delete(a.id());
+
         assertThat(port.count()).isEqualTo(1);
+
         assertThat(port.findById(a.id())).isEmpty();
     }
 
@@ -120,9 +140,13 @@ class SqliteUserProfilePortTest
     {
         // Use a temp file (not :memory:) to test persistence across restarts.
         final java.io.File tmpFile = java.io.File.createTempFile("openfps-test-", ".db");
+
         tmpFile.deleteOnExit();
+
         final String jdbcUrl = "jdbc:sqlite:" + tmpFile.getAbsolutePath();
+
         final String userId = "fixed-id-1234";
+
         final String displayName = "PersistentAlice";
 
         // First session: write a profile
@@ -142,6 +166,7 @@ class SqliteUserProfilePortTest
                     updated_at_epoch_ms    INTEGER NOT NULL
                 )
                 """);
+
             try (final var ps = conn.prepareStatement("""
                 INSERT INTO user_profile (id, display_name, audio_volume, mouse_sensitivity,
                     field_of_view, preferred_color, last_login_at_epoch_ms,
@@ -150,15 +175,25 @@ class SqliteUserProfilePortTest
                 """))
             {
                 ps.setString(1,  userId);
+
                 ps.setString(2,  displayName);
+
                 ps.setDouble(3,  0.5);
+
                 ps.setDouble(4,  1.0);
+
                 ps.setInt(5,  95);
+
                 ps.setString(6,  "#00FF00");
+
                 ps.setLong(7,  1000L);
+
                 ps.setLong(8,  0L);
+
                 ps.setLong(9,  0L);
+
                 ps.setLong(10, 0L);
+
                 ps.executeUpdate();
             }
         }
@@ -168,9 +203,11 @@ class SqliteUserProfilePortTest
              var ps = conn.prepareStatement("SELECT * FROM user_profile WHERE id = ?"))
         {
             ps.setString(1, userId);
+
             try (var rs = ps.executeQuery())
             {
                 assertThat(rs.next()).isTrue();
+
                 assertThat(rs.getString("display_name")).isEqualTo(displayName);
             }
         }
@@ -189,8 +226,10 @@ class SqliteUserProfilePortTest
     void shouldThrowAfterShutdown()
     {
         port.shutdown();
+
         assertThatThrownBy(() -> port.save(UserProfile.newDefault()))
             .isInstanceOf(IllegalStateException.class);
+
         assertThatThrownBy(() -> port.findAll())
             .isInstanceOf(IllegalStateException.class);
     }
@@ -200,6 +239,7 @@ class SqliteUserProfilePortTest
     void shouldThrowOnInitAfterShutdown()
     {
         port.shutdown();
+
         assertThatThrownBy(() -> port.init())
             .isInstanceOf(IllegalStateException.class);
     }
@@ -224,7 +264,9 @@ class SqliteUserProfilePortTest
     void shouldReturnEmptyForNullOrBlank()
     {
         assertThat(port.findById(null)).isEmpty();
+
         assertThat(port.findById("")).isEmpty();
+
         assertThat(port.findById("   ")).isEmpty();
     }
 
@@ -233,8 +275,11 @@ class SqliteUserProfilePortTest
     void shouldGenerateUniqueIds()
     {
         final String id1 = port.generateNewId();
+
         final String id2 = port.generateNewId();
+
         assertThat(id1).isNotEqualTo(id2);
+
         assertThat(id1).matches("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$");
     }
 
@@ -243,8 +288,11 @@ class SqliteUserProfilePortTest
     void shouldIgnoreUnknownDelete()
     {
         port.delete("not-a-real-id");
+
         port.delete(null);
+
         port.delete("");
+
         assertThat(port.count()).isEqualTo(0);
     }
 }

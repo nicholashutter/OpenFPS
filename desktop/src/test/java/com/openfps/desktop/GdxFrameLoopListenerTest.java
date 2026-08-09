@@ -70,8 +70,11 @@ class GdxFrameLoopListenerTest
     void shouldForwardPause()
     {
         final RecordingFrameCallback callback = new RecordingFrameCallback();
+
         listenerFor(callback).pause();
+
         assertThat(callback.pauseCount()).isEqualTo(1);
+
         assertThat(callback.resumeCount()).isZero();
     }
 
@@ -80,8 +83,11 @@ class GdxFrameLoopListenerTest
     void shouldForwardResume()
     {
         final RecordingFrameCallback callback = new RecordingFrameCallback();
+
         listenerFor(callback).resume();
+
         assertThat(callback.resumeCount()).isEqualTo(1);
+
         assertThat(callback.pauseCount()).isZero();
     }
 
@@ -90,7 +96,9 @@ class GdxFrameLoopListenerTest
     void shouldForwardResize()
     {
         final RecordingFrameCallback callback = new RecordingFrameCallback();
+
         listenerFor(callback).resize(1024, 768);
+
         assertThat(callback.resizeCount()).isEqualTo(1);
     }
 
@@ -99,10 +107,14 @@ class GdxFrameLoopListenerTest
     void shouldAcceptAnOptionalInputPort()
     {
         final RecordingFrameCallback callback = new RecordingFrameCallback();
+
         final DefaultMenuActions actions = new DefaultMenuActions(new NullWindowPort());
+
         assertThat(new GdxFrameLoopListener(callback, actions, null, new GdxInputPort()))
             .isNotNull();
+
         assertThat(new GdxFrameLoopListener(callback, actions, null, null)).isNotNull();
+
         assertThatThrownBy(
             () -> new GdxFrameLoopListener(null, actions, null, new GdxInputPort()))
             .isInstanceOf(IllegalArgumentException.class)
@@ -114,9 +126,13 @@ class GdxFrameLoopListenerTest
     void shouldForwardDispose()
     {
         final RecordingFrameCallback callback = new RecordingFrameCallback();
+
         listenerFor(callback).dispose();
+
         assertThat(callback.surfaceLostCount()).isEqualTo(1);
+
         assertThat(callback.surfaceReadyCount()).isZero();
+
         assertThat(callback.frameCount()).isZero();
     }
 
@@ -129,8 +145,11 @@ class GdxFrameLoopListenerTest
         void shouldStartOnTheMenu()
         {
             final GdxFrameLoopListener listener = listenerFor(new RecordingFrameCallback());
+
             assertThat(listener.uiState()).isNotNull();
+
             assertThat(listener.uiState().state()).isEqualTo(UiState.MENU);
+
             assertThat(listener.isMenuActive()).isTrue();
         }
 
@@ -147,6 +166,7 @@ class GdxFrameLoopListenerTest
             listener.menuActions().onStartGame();
 
             assertThat(listener.uiState().state()).isEqualTo(UiState.PLAYING);
+
             assertThat(listener.isMenuActive()).isFalse();
         }
 
@@ -160,16 +180,21 @@ class GdxFrameLoopListenerTest
             // wiring mistake — both buttons on the same handler — from a
             // working menu, since the screen looks identical either way.
             final GdxFrameLoopListener single = listenerFor(new RecordingFrameCallback());
+
             single.menuActions().onStartGame();
 
             assertThat(single.uiState().state()).isEqualTo(UiState.PLAYING);
+
             assertThat(single.uiState().mode()).isEqualTo(MatchMode.SINGLE_PLAYER);
 
             final GdxFrameLoopListener networked = listenerFor(new RecordingFrameCallback());
+
             networked.menuActions().onMultiplayer();
 
             assertThat(networked.uiState().state()).isEqualTo(UiState.PLAYING);
+
             assertThat(networked.uiState().mode()).isEqualTo(MatchMode.MULTIPLAYER);
+
             assertThat(networked.isMenuActive()).isFalse();
         }
 
@@ -185,6 +210,7 @@ class GdxFrameLoopListenerTest
         void shouldBringTheMenuBackOnReturn()
         {
             final GdxFrameLoopListener listener = listenerFor(new RecordingFrameCallback());
+
             listener.menuActions().onStartGame();
 
             // What GdxInputPort raises when it sees the Escape key.
@@ -201,16 +227,21 @@ class GdxFrameLoopListenerTest
             // and left the UI where it was. It now owns a transition of its own,
             // wrapped here exactly as Start Game is.
             final NullWindowPort window = new NullWindowPort();
+
             window.init();
+
             final GdxFrameLoopListener listener = new GdxFrameLoopListener(
                 new RecordingFrameCallback(), new DefaultMenuActions(window));
 
             listener.menuActions().onSettings();
+
             assertThat(listener.uiState().state()).isEqualTo(UiState.SETTINGS);
+
             assertThat(listener.isMenuActive()).isFalse();
 
             // What the settings screen's Back button raises.
             listener.uiState().returnToMenu();
+
             assertThat(listener.uiState().state()).isEqualTo(UiState.MENU);
         }
 
@@ -219,12 +250,16 @@ class GdxFrameLoopListenerTest
         void shouldNotTransitionOnQuit()
         {
             final NullWindowPort window = new NullWindowPort();
+
             window.init();
+
             final GdxFrameLoopListener listener = new GdxFrameLoopListener(
                 new RecordingFrameCallback(), new DefaultMenuActions(window));
 
             listener.menuActions().onQuit();
+
             assertThat(window.isCloseRequested()).isTrue();
+
             assertThat(listener.uiState().state()).isEqualTo(UiState.MENU);
         }
 
@@ -233,20 +268,26 @@ class GdxFrameLoopListenerTest
         void shouldAlwaysHaveDebugSettings()
         {
             final NullWindowPort window = new NullWindowPort();
+
             window.init();
+
             final GdxFrameLoopListener listener = new GdxFrameLoopListener(
                 new RecordingFrameCallback(), new DefaultMenuActions(window));
 
             // A window built without one keeps a private switch, so the settings
             // screen still works and nothing outside the window is told.
             assertThat(listener.debugSettings()).isNotNull();
+
             assertThat(listener.debugSettings().isOverlayVisible()).isFalse();
+
             assertThat(listener.debugOverlay()).isNotNull();
 
             final DebugSettings shared = new DebugSettings();
+
             final GdxFrameLoopListener wired = new GdxFrameLoopListener(
                 new RecordingFrameCallback(), new DefaultMenuActions(window), null, null,
                 shared);
+
             assertThat(wired.debugSettings()).isSameAs(shared);
         }
 
@@ -262,22 +303,28 @@ class GdxFrameLoopListenerTest
             // the outline stopped answering — nothing thrown, nothing logged, and
             // no test failing unless it is an identity test.
             final NullWindowPort window = new NullWindowPort();
+
             window.init();
+
             final GdxFrameLoopListener listener = new GdxFrameLoopListener(
                 new RecordingFrameCallback(), new DefaultMenuActions(window));
 
             assertThat(listener.accessibilitySettings()).isNotNull();
+
             assertThat(listener.accessibilitySettings().isTargetOutlineVisible())
                 .as("on by default, as it is for a player")
                 .isTrue();
+
             assertThat((Object) listener.accessibilitySettings())
                 .as("and a different object from the debug switch — that is the point")
                 .isNotSameAs((Object) listener.debugSettings());
 
             final AccessibilitySettings shared = new AccessibilitySettings();
+
             final GdxFrameLoopListener wired = new GdxFrameLoopListener(
                 new RecordingFrameCallback(), new DefaultMenuActions(window), null, null,
                 new DebugSettings(), shared);
+
             assertThat(wired.accessibilitySettings()).isSameAs(shared);
         }
 
@@ -291,8 +338,11 @@ class GdxFrameLoopListenerTest
             // pass-through were dropped, everything above would still be non-null
             // and the toggle would still be dead.
             final GdxWindowPort port = new GdxWindowPort();
+
             port.init();
+
             final AccessibilitySettings shared = new AccessibilitySettings();
+
             port.attachAccessibilitySettings(shared);
 
             assertThat(port.accessibilitySettings()).isSameAs(shared);
@@ -331,11 +381,15 @@ class GdxFrameLoopListenerTest
             // ran, which is the only way to observe an ordering from outside.
             final GdxFrameLoopListener listener =
                 listenerFor(new RecordingFrameCallback());
+
             final UiStateMachine machine = listener.uiState();
+
             final UiState[] seenByTheRestore = new UiState[1];
+
             listener.attachMatchRestart(() -> seenByTheRestore[0] = machine.state());
 
             machine.startGame();
+
             machine.endMatch(new MatchSummary(MatchState.WON, 7, 1, 7, 21, 13, 44, 56));
 
             // The listener's own Play Again path — exactly what the button runs.
@@ -344,6 +398,7 @@ class GdxFrameLoopListenerTest
             assertThat(seenByTheRestore[0])
                 .as("the UI had already entered the world before the world was restored")
                 .isEqualTo(UiState.GAME_OVER);
+
             assertThat(machine.state()).isEqualTo(UiState.PLAYING);
         }
 
@@ -358,15 +413,21 @@ class GdxFrameLoopListenerTest
             // been restarted, which is the trap the latch existed to prevent.
             final GdxFrameLoopListener listener =
                 listenerFor(new RecordingFrameCallback());
+
             final UiStateMachine machine = listener.uiState();
+
             listener.attachMatchRestart(() -> { });
 
             machine.startGame();
+
             for (int round = 0; round < 3; round++)
             {
                 machine.endMatch(new MatchSummary(MatchState.WON, 7, round, 7, 21, 13, 44, 56));
+
                 assertThat(machine.state()).isEqualTo(UiState.GAME_OVER);
+
                 listener.restartMatch();
+
                 assertThat(machine.state()).isEqualTo(UiState.PLAYING);
             }
         }
@@ -380,8 +441,11 @@ class GdxFrameLoopListenerTest
             // rather than a UI that claims to be in a world it never restored.
             final GdxFrameLoopListener listener =
                 listenerFor(new RecordingFrameCallback());
+
             final UiStateMachine machine = listener.uiState();
+
             machine.startGame();
+
             machine.endMatch(new MatchSummary(MatchState.WON, 7, 1, 7, 21, 13, 44, 56));
 
             listener.restartMatch();
@@ -398,7 +462,9 @@ class GdxFrameLoopListenerTest
             // menu sits exactly where a crosshair would be.
             assertThat(DesktopLauncher.startInGameArg(
                 new String[] {"--fps=60", "--start-in-game"})).isTrue();
+
             assertThat(DesktopLauncher.startInGameArg(new String[] {"--fps=60"})).isFalse();
+
             assertThat(DesktopLauncher.startInGameArg(null)).isFalse();
         }
 
@@ -409,6 +475,7 @@ class GdxFrameLoopListenerTest
             // Two copies of "is the game running" is how the old build ended up
             // capturing the cursor while the menu was still on screen.
             final GdxInputPort input = new GdxInputPort();
+
             final GdxFrameLoopListener listener = new GdxFrameLoopListener(
                 new RecordingFrameCallback(), new DefaultMenuActions(new NullWindowPort()),
                 null, input);
@@ -416,8 +483,11 @@ class GdxFrameLoopListenerTest
             assertThat(input.uiState()).isSameAs(listener.uiState());
 
             listener.menuActions().onStartGame();
+
             assertThat(input.uiState().isPlaying()).isTrue();
+
             input.pollDevice();
+
             assertThat(input.isCursorCaptureWanted()).isTrue();
         }
     }

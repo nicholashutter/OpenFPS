@@ -52,7 +52,9 @@ public final class ParallelJobException extends RuntimeException
                                 final Throwable firstFailure)
     {
         super(failureCount + " of " + jobCount + " parallel jobs failed", firstFailure);
+
         this.failureCount = failureCount;
+
         this.jobCount = jobCount;
     }
 

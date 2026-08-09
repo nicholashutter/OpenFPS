@@ -55,6 +55,7 @@ public final class PlayerInputView implements I_PlayerInput
         {
             throw new IllegalArgumentException("state must not be null");
         }
+
         this.source = state;
     }
 

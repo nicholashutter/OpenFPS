@@ -62,6 +62,7 @@ class RenderModeTest
             // 1066.67, and the nearest whole pixel is where the entire rounding
             // error is deliberately concentrated.
             assertThat(RenderMode.P480.widthFor(PHONE_WIDTH, PHONE_HEIGHT)).isEqualTo(1067);
+
             assertThat(RenderMode.P480.heightFor(PHONE_WIDTH, PHONE_HEIGHT)).isEqualTo(480);
         }
 
@@ -70,8 +71,10 @@ class RenderModeTest
         void shouldCutThePixelCount()
         {
             final long before = (long) PHONE_WIDTH * PHONE_HEIGHT;
+
             final long after = (long) RenderMode.P480.widthFor(PHONE_WIDTH, PHONE_HEIGHT)
                 * RenderMode.P480.heightFor(PHONE_WIDTH, PHONE_HEIGHT);
+
             assertThat((double) before / (double) after).isGreaterThan(5.0);
         }
 
@@ -80,6 +83,7 @@ class RenderModeTest
         void shouldScaleThePhoneTo720()
         {
             assertThat(RenderMode.P720.widthFor(PHONE_WIDTH, PHONE_HEIGHT)).isEqualTo(1600);
+
             assertThat(RenderMode.P720.heightFor(PHONE_WIDTH, PHONE_HEIGHT)).isEqualTo(720);
         }
 
@@ -88,6 +92,7 @@ class RenderModeTest
         void shouldScaleTheDesktopWindow()
         {
             assertThat(RenderMode.P480.widthFor(DESKTOP_WIDTH, DESKTOP_HEIGHT)).isEqualTo(853);
+
             assertThat(RenderMode.P480.heightFor(DESKTOP_WIDTH, DESKTOP_HEIGHT)).isEqualTo(480);
         }
 
@@ -99,6 +104,7 @@ class RenderModeTest
             // height IS the mode pays nothing at all for the feature.
             assertThat(RenderMode.P720.widthFor(DESKTOP_WIDTH, DESKTOP_HEIGHT))
                 .isEqualTo(DESKTOP_WIDTH);
+
             assertThat(RenderMode.P720.heightFor(DESKTOP_WIDTH, DESKTOP_HEIGHT))
                 .isEqualTo(DESKTOP_HEIGHT);
         }
@@ -151,6 +157,7 @@ class RenderModeTest
             // reproduce whatever shape it is handed rather than snapping to one
             // it recognises.
             assertAspectSurvives(RenderMode.P480, 1367, 769);
+
             assertThat(RenderMode.P480.heightFor(1367, 769)).isEqualTo(480);
         }
 
@@ -162,9 +169,13 @@ class RenderModeTest
             final int surfaceHeight)
         {
             final int renderWidth = mode.widthFor(surfaceWidth, surfaceHeight);
+
             final int renderHeight = mode.heightFor(surfaceWidth, surfaceHeight);
+
             final double surfaceAspect = (double) surfaceWidth / (double) surfaceHeight;
+
             final double renderAspect = (double) renderWidth / (double) renderHeight;
+
             assertThat(renderAspect / surfaceAspect).isCloseTo(1.0, within(ASPECT_TOLERANCE));
         }
     }
@@ -191,8 +202,10 @@ class RenderModeTest
             // AND blurrier, which is the worst of both.
             assertThat(RenderMode.P480.widthFor(surfaceWidth, surfaceHeight))
                 .isEqualTo(surfaceWidth);
+
             assertThat(RenderMode.P480.heightFor(surfaceWidth, surfaceHeight))
                 .isEqualTo(surfaceHeight);
+
             assertThat(RenderMode.P480.isNativeFor(surfaceWidth, surfaceHeight)).isTrue();
         }
 
@@ -206,6 +219,7 @@ class RenderModeTest
                 for (int height = 1; height <= 4000; height += 191)
                 {
                     assertThat(mode.widthFor(width, height)).isLessThanOrEqualTo(width);
+
                     assertThat(mode.heightFor(width, height)).isLessThanOrEqualTo(height);
                 }
             }
@@ -226,12 +240,15 @@ class RenderModeTest
             // that get there — a 4000x3 letterbox, a 3x4000 column — are exactly
             // the ones nobody tries by hand.
             final int[] widths = {1, 2, 3, 17, 479, 480, 481, 1080, 2400, 4000, 7680};
+
             final int[] heights = {1, 2, 3, 17, 479, 480, 481, 1080, 2400, 4000, 7680};
+
             for (final int width : widths)
             {
                 for (final int height : heights)
                 {
                     assertThat(mode.widthFor(width, height)).isGreaterThan(0);
+
                     assertThat(mode.heightFor(width, height)).isGreaterThan(0);
                 }
             }
@@ -246,6 +263,7 @@ class RenderModeTest
             // the interesting part: the rule that protects small windows is the
             // same one that protects absurd aspects.
             assertThat(RenderMode.P480.widthFor(4000, 3)).isEqualTo(4000);
+
             assertThat(RenderMode.P480.heightFor(4000, 3)).isEqualTo(3);
         }
 
@@ -257,6 +275,7 @@ class RenderModeTest
             // edge lands at 9600. Nothing here rounds to nothing, but the floor
             // exists so that a future ceiling smaller than 480 could not.
             assertThat(RenderMode.P480.heightFor(20000, 1000)).isEqualTo(480);
+
             assertThat(RenderMode.P480.widthFor(20000, 1000)).isEqualTo(9600);
         }
 
@@ -269,7 +288,9 @@ class RenderModeTest
             // invented a size for them would hide that guard rather than rely
             // on it.
             assertThat(mode.widthFor(0, 0)).isZero();
+
             assertThat(mode.heightFor(0, 0)).isZero();
+
             assertThat(mode.widthFor(-4, 900)).isEqualTo(-4);
         }
     }
@@ -293,8 +314,10 @@ class RenderModeTest
             // and rounding, so no odd size can drift by a pixel.
             assertThat(RenderMode.NATIVE.widthFor(surfaceWidth, surfaceHeight))
                 .isEqualTo(surfaceWidth);
+
             assertThat(RenderMode.NATIVE.heightFor(surfaceWidth, surfaceHeight))
                 .isEqualTo(surfaceHeight);
+
             assertThat(RenderMode.NATIVE.isNativeFor(surfaceWidth, surfaceHeight)).isTrue();
         }
 
@@ -322,7 +345,9 @@ class RenderModeTest
         void shouldCycle()
         {
             assertThat(RenderMode.P480.next()).isEqualTo(RenderMode.P720);
+
             assertThat(RenderMode.P720.next()).isEqualTo(RenderMode.NATIVE);
+
             assertThat(RenderMode.NATIVE.next()).isEqualTo(RenderMode.P480);
         }
 
@@ -331,7 +356,9 @@ class RenderModeTest
         void shouldCarryLabels()
         {
             assertThat(RenderMode.P480.label()).isEqualTo("480P");
+
             assertThat(RenderMode.P720.label()).isEqualTo("720P");
+
             assertThat(RenderMode.NATIVE.label()).isEqualTo("NATIVE");
         }
 
@@ -344,6 +371,7 @@ class RenderModeTest
             // meant "the long edge" would render a phone held upright at four
             // times the pixels of the same phone held sideways.
             assertThat(RenderMode.P480.widthFor(1080, 2400)).isEqualTo(480);
+
             assertThat(RenderMode.P480.heightFor(1080, 2400)).isEqualTo(1067);
         }
 
@@ -352,6 +380,7 @@ class RenderModeTest
         void shouldHandleASquare()
         {
             assertThat(RenderMode.P480.widthFor(1000, 1000)).isEqualTo(480);
+
             assertThat(RenderMode.P480.heightFor(1000, 1000)).isEqualTo(480);
         }
     }
@@ -371,6 +400,7 @@ class RenderModeTest
         void shouldDefaultWithNoProperty()
         {
             System.clearProperty(RenderMode.MODE_PROPERTY);
+
             assertThat(RenderMode.configured()).isEqualTo(RenderMode.P480);
         }
 
@@ -381,10 +411,15 @@ class RenderModeTest
             // The property and the button have to agree, or the flag that
             // reproduces what a player did would not reproduce it.
             System.setProperty(RenderMode.MODE_PROPERTY, "native");
+
             assertThat(RenderMode.configured()).isEqualTo(RenderMode.NATIVE);
+
             System.setProperty(RenderMode.MODE_PROPERTY, "720P");
+
             assertThat(RenderMode.configured()).isEqualTo(RenderMode.P720);
+
             System.setProperty(RenderMode.MODE_PROPERTY, "  480p  ");
+
             assertThat(RenderMode.configured()).isEqualTo(RenderMode.P480);
         }
 
@@ -394,6 +429,7 @@ class RenderModeTest
         {
             // A bad diagnostic flag must not stop a window opening.
             System.setProperty(RenderMode.MODE_PROPERTY, "1080p");
+
             assertThat(RenderMode.configured()).isEqualTo(RenderMode.DEFAULT);
         }
     }

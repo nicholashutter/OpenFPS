@@ -70,23 +70,35 @@ class CompositeFrameCallbackTest
         void shouldForwardEveryEventToBoth()
         {
             final RecordingFrameCallback engine = new RecordingFrameCallback();
+
             final RecordingFrameCallback menu = new RecordingFrameCallback();
+
             final CompositeFrameCallback composite = new CompositeFrameCallback(engine, menu);
 
             composite.onSurfaceReady(WIDTH, HEIGHT);
+
             composite.onFrame(0.016f);
+
             composite.onResize(HEIGHT, WIDTH);
+
             composite.onPause();
+
             composite.onResume();
+
             composite.onSurfaceLost();
 
             for (final RecordingFrameCallback recorder : List.of(engine, menu))
             {
                 assertThat(recorder.surfaceReadyCount()).isEqualTo(1);
+
                 assertThat(recorder.frameCount()).isEqualTo(1);
+
                 assertThat(recorder.resizeCount()).isEqualTo(1);
+
                 assertThat(recorder.pauseCount()).isEqualTo(1);
+
                 assertThat(recorder.resumeCount()).isEqualTo(1);
+
                 assertThat(recorder.surfaceLostCount()).isEqualTo(1);
             }
         }
@@ -96,17 +108,25 @@ class CompositeFrameCallbackTest
         void shouldForwardArgumentsUnchanged()
         {
             final RecordingFrameCallback engine = new RecordingFrameCallback();
+
             final RecordingFrameCallback menu = new RecordingFrameCallback();
+
             final CompositeFrameCallback composite = new CompositeFrameCallback(engine, menu);
 
             composite.onSurfaceReady(WIDTH, HEIGHT);
+
             composite.onFrame(0.032f);
 
             assertThat(engine.lastWidth()).isEqualTo(WIDTH);
+
             assertThat(engine.lastHeight()).isEqualTo(HEIGHT);
+
             assertThat(menu.lastWidth()).isEqualTo(WIDTH);
+
             assertThat(menu.lastHeight()).isEqualTo(HEIGHT);
+
             assertThat(engine.lastDeltaSeconds()).isCloseTo(0.032f, within(EPSILON));
+
             assertThat(menu.lastDeltaSeconds()).isCloseTo(0.032f, within(EPSILON));
         }
     }
@@ -124,15 +144,21 @@ class CompositeFrameCallbackTest
             // surface is gone before the menu releases the GL resources it was
             // drawing with. Swapping the constructor arguments must break this.
             final List<String> log = new ArrayList<>();
+
             final CompositeFrameCallback composite = new CompositeFrameCallback(
                 new RecordingFrameCallback("engine", log),
                 new RecordingFrameCallback("menu", log));
 
             composite.onSurfaceReady(WIDTH, HEIGHT);
+
             composite.onFrame(0.016f);
+
             composite.onResize(HEIGHT, WIDTH);
+
             composite.onPause();
+
             composite.onResume();
+
             composite.onSurfaceLost();
 
             assertThat(log).containsExactly(
@@ -154,12 +180,14 @@ class CompositeFrameCallbackTest
         void shouldPropagateFailureFromTheFirstCallback()
         {
             final RecordingFrameCallback menu = new RecordingFrameCallback();
+
             final CompositeFrameCallback composite =
                 new CompositeFrameCallback(new ExplodingFrameCallback(), menu);
 
             assertThatThrownBy(() -> composite.onFrame(0.016f))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("boom");
+
             // And the second callback is not run behind a broken first one,
             // which would leave the two halves of the frame disagreeing.
             assertThat(menu.frameCount()).isZero();

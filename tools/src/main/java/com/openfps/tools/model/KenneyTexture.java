@@ -148,12 +148,15 @@ public final class KenneyTexture
             throw new IllegalArgumentException(
                 "swatchCol out of range: " + swatchCol);
         }
+
         if (swatchRow < 0 || swatchRow >= SWATCHES_PER_ROW)
         {
             throw new IllegalArgumentException(
                 "swatchRow out of range: " + swatchRow);
         }
+
         final BufferedImage atlas;
+
         try
         {
             atlas = ImageIO.read(Files.newInputStream(atlasPath));
@@ -162,32 +165,41 @@ public final class KenneyTexture
         {
             throw new UncheckedIOException("could not read Kenney atlas: " + atlasPath, e);
         }
+
         if (atlas == null)
         {
             throw new IllegalStateException("Kenney atlas did not decode: " + atlasPath);
         }
+
         if (atlas.getWidth() != ATLAS_EDGE || atlas.getHeight() != ATLAS_EDGE)
         {
             throw new IllegalStateException("Kenney atlas is not " + ATLAS_EDGE + "x" + ATLAS_EDGE
                 + " (got " + atlas.getWidth() + "x" + atlas.getHeight() + "): " + atlasPath);
         }
+
         final int swatchX = swatchCol * SWATCH_EDGE;
+
         final int swatchY = swatchRow * SWATCH_EDGE;
+
         // Nearest-neighbour upsample: 32x32 -> 64x64. The whole swatch is
         // a single solid colour, so the upsample preserves the colour
         // exactly; doing it this way keeps the engine's TILE_EDGE
         // contract without committing to a smoothing filter that would
         // pretend the swatch is more than it is.
         final int[] tile = new int[TILE_EDGE * TILE_EDGE];
+
         for (int y = 0; y < TILE_EDGE; y++)
         {
             final int srcY = swatchY + (y * SWATCH_EDGE / TILE_EDGE);
+
             for (int x = 0; x < TILE_EDGE; x++)
             {
                 final int srcX = swatchX + (x * SWATCH_EDGE / TILE_EDGE);
+
                 tile[y * TILE_EDGE + x] = atlas.getRGB(srcX, srcY);
             }
         }
+
         return tile;
     }
 
@@ -331,6 +343,7 @@ public final class KenneyTexture
                 texels[index] = texels[index] | 0x000000FF;
             }
         }
+
         return texels;
     }
 

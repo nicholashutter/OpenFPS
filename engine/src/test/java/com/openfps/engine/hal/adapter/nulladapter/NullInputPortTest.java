@@ -26,14 +26,19 @@ class NullInputPortTest
     void shouldStayNeutralAcrossTics()
     {
         final NullInputPort port = new NullInputPort();
+
         // Before any lifecycle: still neutral.
         assertThat(port.currentInput()).isSameAs(InputState.NEUTRAL);
+
         port.init();
+
         for (int tic = 0; tic < 8; tic++)
         {
             port.sampleInput(tic);
+
             assertThat(port.currentInput()).isEqualTo(InputState.NEUTRAL);
         }
+
         port.shutdown();
     }
 
@@ -42,11 +47,17 @@ class NullInputPortTest
     void shouldNotRequestShutdownByDefault()
     {
         final NullInputPort port = new NullInputPort();
+
         port.init();
+
         assertThat(port.isShutdownRequested()).isFalse();
+
         port.requestShutdown();
+
         assertThat(port.isShutdownRequested()).isTrue();
+
         port.init();
+
         assertThat(port.isShutdownRequested()).isFalse();
     }
 }

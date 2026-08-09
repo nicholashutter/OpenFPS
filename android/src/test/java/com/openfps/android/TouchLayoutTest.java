@@ -39,7 +39,9 @@ class TouchLayoutTest
     private static TouchLayout sized()
     {
         final TouchLayout layout = new TouchLayout(DENSITY);
+
         layout.resize(WIDTH, HEIGHT);
+
         return layout;
     }
 
@@ -47,7 +49,9 @@ class TouchLayoutTest
     private static TouchLayout smallPhone()
     {
         final TouchLayout layout = new TouchLayout(2.0f);
+
         layout.resize(1280, 720);
+
         return layout;
     }
 
@@ -61,10 +65,13 @@ class TouchLayoutTest
         {
             assertThatThrownBy(() -> new TouchLayout(0.0f))
                 .isInstanceOf(IllegalArgumentException.class);
+
             assertThatThrownBy(() -> new TouchLayout(-1.0f))
                 .isInstanceOf(IllegalArgumentException.class);
+
             assertThatThrownBy(() -> new TouchLayout(Float.NaN))
                 .isInstanceOf(IllegalArgumentException.class);
+
             assertThatThrownBy(() -> new TouchLayout(Float.POSITIVE_INFINITY))
                 .isInstanceOf(IllegalArgumentException.class);
         }
@@ -82,6 +89,7 @@ class TouchLayoutTest
             layout.resize(0, 0);
 
             assertThat(layout.width()).isEqualTo(WIDTH);
+
             assertThat(layout.height()).isEqualTo(HEIGHT);
         }
 
@@ -113,6 +121,7 @@ class TouchLayoutTest
 
             assertThat(layout.regionAt(10.0f, HEIGHT - 10.0f))
                 .isEqualTo(TouchLayout.REGION_MOVE_STICK);
+
             assertThat(layout.regionAt(WIDTH * 0.25f, HEIGHT * 0.5f))
                 .isEqualTo(TouchLayout.REGION_MOVE_STICK);
         }
@@ -133,8 +142,10 @@ class TouchLayoutTest
 
             assertThat(layout.regionAt(layout.fireCentreX(), layout.fireCentreY()))
                 .isEqualTo(TouchLayout.REGION_FIRE);
+
             assertThat(layout.regionAt(layout.jumpCentreX(), layout.jumpCentreY()))
                 .isEqualTo(TouchLayout.REGION_JUMP);
+
             assertThat(layout.regionAt(layout.leaveCentreX(), layout.leaveCentreY()))
                 .isEqualTo(TouchLayout.REGION_LEAVE);
         }
@@ -150,6 +161,7 @@ class TouchLayoutTest
             final TouchLayout layout = sized();
 
             assertThat(layout.fireCentreX()).isGreaterThan(WIDTH * TouchLayout.MOVE_HALF_FRACTION);
+
             assertThat(layout.regionAt(layout.fireCentreX(), layout.fireCentreY()))
                 .isEqualTo(TouchLayout.REGION_FIRE);
         }
@@ -159,6 +171,7 @@ class TouchLayoutTest
         void shouldNotHitOutsideTheRim()
         {
             final TouchLayout layout = sized();
+
             final float justOutside = layout.fireCentreX() - layout.fireRadius() - 1.0f;
 
             assertThat(layout.regionAt(justOutside, layout.fireCentreY()))
@@ -177,6 +190,7 @@ class TouchLayoutTest
             assertThat(distance(layout.fireCentreX(), layout.fireCentreY(),
                 layout.jumpCentreX(), layout.jumpCentreY()))
                 .isGreaterThan(layout.fireRadius() + layout.jumpRadius());
+
             assertThat(distance(layout.fireCentreX(), layout.fireCentreY(),
                 layout.leaveCentreX(), layout.leaveCentreY()))
                 .isGreaterThan(layout.fireRadius() + layout.leaveRadius());
@@ -187,10 +201,13 @@ class TouchLayoutTest
         void shouldMeetTheMinimumTouchTarget()
         {
             final TouchLayout layout = sized();
+
             final float minimum = layout.pixels(48.0f);
 
             assertThat(layout.fireRadius() * 2.0f).isGreaterThanOrEqualTo(minimum);
+
             assertThat(layout.jumpRadius() * 2.0f).isGreaterThanOrEqualTo(minimum);
+
             assertThat(layout.leaveRadius() * 2.0f).isGreaterThanOrEqualTo(minimum);
         }
 
@@ -226,7 +243,9 @@ class TouchLayoutTest
             for (final int region : TouchLayout.buttonRegions())
             {
                 assertThat(layout.buttonRadius(region)).isPositive();
+
                 assertThat(layout.buttonCentreX(region)).isPositive();
+
                 assertThat(layout.buttonCentreY(region)).isPositive();
             }
         }
@@ -236,6 +255,7 @@ class TouchLayoutTest
         void shouldNotLeakTheControlScheme()
         {
             final int[] first = TouchLayout.buttonRegions();
+
             first[0] = TouchLayout.REGION_LOOK;
 
             assertThat(TouchLayout.buttonRegions()).isNotEqualTo(first);
@@ -263,8 +283,11 @@ class TouchLayoutTest
             final TouchLayout layout = sized();
 
             assertThat(layout.buttonRadius(TouchLayout.REGION_MOVE_STICK)).isZero();
+
             assertThat(layout.buttonRadius(TouchLayout.REGION_LOOK)).isZero();
+
             assertThat(layout.buttonCentreX(TouchLayout.REGION_NONE)).isZero();
+
             assertThat(layout.buttonCentreY(TouchLayout.REGION_NONE)).isZero();
         }
 
@@ -280,6 +303,7 @@ class TouchLayoutTest
             {
                 assertThat(layout.drawnRadius(region, true))
                     .isGreaterThan(layout.drawnRadius(region, false));
+
                 assertThat(layout.drawnRadius(region, false))
                     .isEqualTo(layout.buttonRadius(region));
             }
@@ -293,10 +317,13 @@ class TouchLayoutTest
             // the hit area grew too, a thumb resting on fire would start
             // swallowing the jump button from the other thumb reaching for it.
             final TouchLayout layout = sized();
+
             final float grown = layout.drawnRadius(TouchLayout.REGION_FIRE, true);
+
             final float justOutsideTheRim = layout.fireCentreX() + layout.fireRadius() + 1.0f;
 
             assertThat(grown).isGreaterThan(layout.fireRadius());
+
             assertThat(layout.regionAt(justOutsideTheRim, layout.fireCentreY()))
                 .isEqualTo(TouchLayout.REGION_LOOK);
         }
@@ -310,6 +337,7 @@ class TouchLayoutTest
             // artwork touches read as one wide control, and the player aims at
             // the seam.
             final TouchLayout layout = sized();
+
             final int[] regions = TouchLayout.buttonRegions();
 
             for (int first = 0; first < regions.length; first++)
@@ -339,11 +367,14 @@ class TouchLayoutTest
             // DOWNWARD, so forward is the negative direction and the
             // subtraction runs the other way round from the strafe axis.
             final TouchLayout layout = sized();
+
             final float anchorX = 300.0f;
+
             final float anchorY = 800.0f;
 
             assertThat(layout.stickForward(anchorX, anchorY, anchorX,
                 anchorY - layout.stickRange())).isEqualTo(1.0f);
+
             assertThat(layout.stickForward(anchorX, anchorY, anchorX,
                 anchorY + layout.stickRange())).isEqualTo(-1.0f);
         }
@@ -353,11 +384,14 @@ class TouchLayoutTest
         void shouldStrafeRightWhenPushedRight()
         {
             final TouchLayout layout = sized();
+
             final float anchorX = 300.0f;
+
             final float anchorY = 800.0f;
 
             assertThat(layout.stickStrafe(anchorX, anchorY,
                 anchorX + layout.stickRange(), anchorY)).isEqualTo(1.0f);
+
             assertThat(layout.stickStrafe(anchorX, anchorY,
                 anchorX - layout.stickRange(), anchorY)).isEqualTo(-1.0f);
         }
@@ -367,6 +401,7 @@ class TouchLayoutTest
         void shouldBeLinearInsideItsRange()
         {
             final TouchLayout layout = sized();
+
             final float anchorY = 800.0f;
 
             assertThat(layout.stickForward(300.0f, anchorY, 300.0f,
@@ -380,6 +415,7 @@ class TouchLayoutTest
             final TouchLayout layout = sized();
 
             assertThat(layout.stickForward(300.0f, 800.0f, 300.0f, -5000.0f)).isEqualTo(1.0f);
+
             assertThat(layout.stickStrafe(300.0f, 800.0f, 99000.0f, 800.0f)).isEqualTo(1.0f);
         }
 
@@ -391,12 +427,16 @@ class TouchLayoutTest
             // pixel or two forever: the player is never quite still, aiming
             // drifts, and a networked match sends a nonzero axis every tic.
             final TouchLayout layout = sized();
+
             final float anchorX = 300.0f;
+
             final float anchorY = 800.0f;
+
             final float jitter = layout.stickDeadZone() * 0.5f;
 
             assertThat(layout.stickForward(anchorX, anchorY, anchorX + jitter, anchorY))
                 .isZero();
+
             assertThat(layout.stickStrafe(anchorX, anchorY, anchorX, anchorY + jitter))
                 .isZero();
         }
@@ -409,8 +449,11 @@ class TouchLayoutTest
             // alone would call that "inside the dead zone on both" and let a
             // diagonal drift through as movement on neither.
             final TouchLayout layout = sized();
+
             final float anchorX = 300.0f;
+
             final float anchorY = 800.0f;
+
             final float justOverRadially = layout.stickDeadZone() * 0.8f;
 
             assertThat(layout.stickForward(anchorX, anchorY,
@@ -422,13 +465,17 @@ class TouchLayoutTest
         void shouldClampTheKnobToTheRing()
         {
             final TouchLayout layout = sized();
+
             final float anchorX = 300.0f;
+
             final float anchorY = 800.0f;
 
             final float offsetX = layout.knobOffset(anchorX, 9000.0f, anchorY, anchorY);
+
             final float offsetY = layout.knobOffset(anchorY, anchorY, anchorX, 9000.0f);
 
             assertThat(offsetX).isCloseTo(layout.stickRange(), within(0.01f));
+
             assertThat(offsetY).isZero();
         }
 
@@ -455,6 +502,7 @@ class TouchLayoutTest
             final TouchLayout layout = sized();
 
             assertThat(layout.knobCentreX(300.0f, 800.0f, 340.0f, 780.0f)).isEqualTo(340.0f);
+
             assertThat(layout.knobCentreY(300.0f, 800.0f, 340.0f, 780.0f)).isEqualTo(780.0f);
         }
 
@@ -466,10 +514,13 @@ class TouchLayoutTest
             // thumb ON the ring: a knob drawn out in the scenery is not a
             // control any more, it is a bug the player watches happen.
             final TouchLayout layout = sized();
+
             final float anchorX = 300.0f;
+
             final float anchorY = 800.0f;
 
             final float knobX = layout.knobCentreX(anchorX, anchorY, 9000.0f, -4000.0f);
+
             final float knobY = layout.knobCentreY(anchorX, anchorY, 9000.0f, -4000.0f);
 
             assertThat(distance(anchorX, anchorY, knobX, knobY))
@@ -498,6 +549,7 @@ class TouchLayoutTest
 
             assertThat(layout.stickHomeX() + layout.stickRange())
                 .isLessThan(layout.width() * TouchLayout.MOVE_HALF_FRACTION);
+
             assertThat(layout.regionAt(layout.stickHomeX(), layout.stickHomeY()))
                 .isEqualTo(TouchLayout.REGION_MOVE_STICK);
         }
@@ -509,8 +561,10 @@ class TouchLayoutTest
             final TouchLayout layout = smallPhone();
 
             assertThat(layout.stickHomeX() - layout.stickRange()).isPositive();
+
             assertThat(layout.stickHomeY() + layout.stickRange())
                 .isLessThan(layout.height());
+
             assertThat(layout.stickHomeY() - layout.stickRange()).isPositive();
         }
 
@@ -537,7 +591,9 @@ class TouchLayoutTest
         final float bx, final float by)
     {
         final float dx = ax - bx;
+
         final float dy = ay - by;
+
         return (float) Math.sqrt((dx * dx) + (dy * dy));
     }
 }

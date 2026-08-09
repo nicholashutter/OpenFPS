@@ -23,14 +23,22 @@ final class MapGenConfigTest
     {
         final Primitive box = new Box(0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f,
             Box.SUBMESH_WALL, "wall", 8.0f);
+
         final MapGenConfig config = new MapGenConfig("test-id", "Test", "URBAN_WARZONE", "TDM",
             64, 8.0f, List.of(box));
+
         assertThat(config.id()).isEqualTo("test-id");
+
         assertThat(config.displayName()).isEqualTo("Test");
+
         assertThat(config.setting()).isEqualTo("URBAN_WARZONE");
+
         assertThat(config.mode()).isEqualTo("TDM");
+
         assertThat(config.textureEdge()).isEqualTo(64);
+
         assertThat(config.worldUnitsPerTile()).isEqualTo(8.0f);
+
         assertThat(config.primitives()).hasSize(1);
     }
 
@@ -39,9 +47,12 @@ final class MapGenConfigTest
     {
         final Primitive box = new Box(0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f,
             Box.SUBMESH_WALL, "wall", 8.0f);
+
         final MapGenConfig config = new MapGenConfig("test-id", "Test", null, null, 64, 8.0f,
             List.of(box));
+
         assertThat(config.setting()).isNull();
+
         assertThat(config.mode()).isNull();
     }
 
@@ -50,9 +61,12 @@ final class MapGenConfigTest
     {
         final Primitive box = new Box(0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f,
             Box.SUBMESH_WALL, "wall", 8.0f);
+
         final MapGenConfig config = new MapGenConfig("test-id", "Test", "", " ", 64, 8.0f,
             List.of(box));
+
         assertThat(config.setting()).isNull();
+
         assertThat(config.mode()).isNull();
     }
 
@@ -61,6 +75,7 @@ final class MapGenConfigTest
     {
         final Primitive box = new Box(0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f,
             Box.SUBMESH_WALL, "wall", 8.0f);
+
         assertThatThrownBy(() -> new MapGenConfig("", "Test", null, null, 64, 8.0f, List.of(box)))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("id");
@@ -71,6 +86,7 @@ final class MapGenConfigTest
     {
         final Primitive box = new Box(0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f,
             Box.SUBMESH_WALL, "wall", 8.0f);
+
         assertThatThrownBy(() -> new MapGenConfig("id", " ", null, null, 64, 8.0f, List.of(box)))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("displayName");
@@ -81,6 +97,7 @@ final class MapGenConfigTest
     {
         final Primitive box = new Box(0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f,
             Box.SUBMESH_WALL, "wall", 8.0f);
+
         assertThatThrownBy(() -> new MapGenConfig("id", "Test", null, null, 63, 8.0f, List.of(box)))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("textureEdge");
@@ -91,6 +108,7 @@ final class MapGenConfigTest
     {
         final Primitive box = new Box(0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f,
             Box.SUBMESH_WALL, "wall", 8.0f);
+
         assertThatThrownBy(() -> new MapGenConfig("id", "Test", null, null, 64, 0.0f, List.of(box)))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("worldUnitsPerTile");
@@ -110,8 +128,10 @@ final class MapGenConfigTest
     {
         final Primitive box = new Box(0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f,
             Box.SUBMESH_WALL, "wall", 8.0f);
+
         final MapGenConfig config = new MapGenConfig("id", "Test", null, null, 64, 8.0f,
             List.of(box));
+
         assertThatThrownBy(() -> config.primitives().add(box))
             .isInstanceOf(UnsupportedOperationException.class);
     }

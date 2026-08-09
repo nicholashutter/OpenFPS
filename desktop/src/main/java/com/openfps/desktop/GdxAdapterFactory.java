@@ -102,11 +102,14 @@ public final class GdxAdapterFactory implements I_AdapterFactory
         {
             throw new IllegalArgumentException("delegate must not be null");
         }
+
         if (windowPort == null)
         {
             throw new IllegalArgumentException("windowPort must not be null");
         }
+
         this.delegate = delegate;
+
         this.windowPort = windowPort;
     }
 
@@ -114,11 +117,15 @@ public final class GdxAdapterFactory implements I_AdapterFactory
     public void init()
     {
         LOG.info("Initializing windowed desktop HAL (libGDX LWJGL3 window and input)");
+
         delegate.init();
+
         windowPort.init();
+
         windowPort.create(GdxWindowPort.DEFAULT_WIDTH,
             GdxWindowPort.DEFAULT_HEIGHT,
             GdxWindowPort.DEFAULT_TITLE);
+
         // Must precede runFrameLoop: the listener that polls the device is
         // built inside it, from whatever is attached at that moment.
         windowPort.attachInput(inputPort);
@@ -128,7 +135,9 @@ public final class GdxAdapterFactory implements I_AdapterFactory
     public void shutdown()
     {
         windowPort.shutdown();
+
         delegate.shutdown();
+
         LOG.info("Windowed desktop HAL shut down");
     }
 

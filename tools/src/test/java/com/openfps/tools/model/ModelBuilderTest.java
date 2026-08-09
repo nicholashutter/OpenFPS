@@ -37,21 +37,33 @@ class ModelBuilderTest
         void shouldRoundTripGeometry()
         {
             final ModelBuilder builder = new ModelBuilder("quad.glb");
+
             builder.beginSubmesh(ModelFormat.NO_TEXTURE);
+
             builder.addVertex(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, Rgba.pack(255, 0, 0, 255));
+
             builder.addVertex(2.0f, 0.0f, 0.0f, 1.0f, 0.0f, Rgba.pack(0, 255, 0, 255));
+
             builder.addVertex(2.0f, 3.0f, -1.0f, 1.0f, 1.0f, Rgba.pack(0, 0, 255, 255));
+
             builder.addTriangle(0, 1, 2);
+
             builder.endSubmesh();
 
             final ModelFormat model = ModelFormat.read(builder.toBytes());
 
             assertThat(model.vertexCount()).isEqualTo(3);
+
             assertThat(model.triangleCount()).isEqualTo(1);
+
             assertThat(model.indices()).containsExactly(0, 1, 2);
+
             assertThat(model.positionX(1)).isEqualTo(2.0f);
+
             assertThat(model.positionZ(2)).isEqualTo(-1.0f);
+
             assertThat(model.texCoordV(2)).isEqualTo(1.0f);
+
             assertThat(model.colour(0)).isEqualTo(Rgba.pack(255, 0, 0, 255));
         }
 
@@ -60,20 +72,31 @@ class ModelBuilderTest
         void shouldComputeBounds()
         {
             final ModelBuilder builder = new ModelBuilder("bounds.glb");
+
             builder.beginSubmesh(ModelFormat.NO_TEXTURE);
+
             builder.addVertex(-4.0f, 1.0f, 0.5f, 0.0f, 0.0f, 0);
+
             builder.addVertex(2.0f, -7.0f, 9.0f, 0.0f, 0.0f, 0);
+
             builder.addVertex(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0);
+
             builder.addTriangle(0, 1, 2);
+
             builder.endSubmesh();
 
             final ModelFormat model = ModelFormat.read(builder.toBytes());
 
             assertThat(model.minX()).isEqualTo(-4.0f);
+
             assertThat(model.minY()).isEqualTo(-7.0f);
+
             assertThat(model.minZ()).isEqualTo(0.0f);
+
             assertThat(model.maxX()).isEqualTo(2.0f);
+
             assertThat(model.maxY()).isEqualTo(1.0f);
+
             assertThat(model.maxZ()).isEqualTo(9.0f);
         }
 
@@ -84,7 +107,9 @@ class ModelBuilderTest
             final byte[] image = new ModelBuilder("empty.glb").toBytes();
 
             assertThat(image).hasSize(ModelFormat.HEADER_SIZE);
+
             assertThat(ModelFormat.read(image).vertexCount()).isZero();
+
             assertThat(ModelFormat.read(image).minX()).isEqualTo(0.0f);
         }
 
@@ -93,18 +118,26 @@ class ModelBuilderTest
         void shouldRoundTripSubmeshes()
         {
             final ModelBuilder builder = new ModelBuilder("two.glb");
+
             final int texture = builder.addTexture("atlas", 2, 2,
                 MipGenerator.generate(2, 2, new int[4]));
+
             addTriangle(builder, texture);
+
             addTriangle(builder, ModelFormat.NO_TEXTURE);
 
             final ModelFormat model = ModelFormat.read(builder.toBytes());
 
             assertThat(model.submeshCount()).isEqualTo(2);
+
             assertThat(model.submeshFirstIndex(0)).isZero();
+
             assertThat(model.submeshIndexCount(0)).isEqualTo(3);
+
             assertThat(model.submeshTextureIndex(0)).isEqualTo(texture);
+
             assertThat(model.submeshFirstIndex(1)).isEqualTo(3);
+
             assertThat(model.submeshTextureIndex(1)).isEqualTo(ModelFormat.NO_TEXTURE);
         }
 
@@ -113,8 +146,11 @@ class ModelBuilderTest
         void shouldDropEmptySubmesh()
         {
             final ModelBuilder builder = new ModelBuilder("gap.glb");
+
             builder.beginSubmesh(ModelFormat.NO_TEXTURE);
+
             builder.endSubmesh();
+
             addTriangle(builder, ModelFormat.NO_TEXTURE);
 
             assertThat(ModelFormat.read(builder.toBytes()).submeshCount()).isEqualTo(1);
@@ -129,15 +165,21 @@ class ModelBuilderTest
                 Rgba.pack(255, 0, 0, 255), Rgba.pack(255, 0, 0, 255),
                 Rgba.pack(255, 0, 0, 255), Rgba.pack(255, 0, 0, 255),
             };
+
             final ModelBuilder builder = new ModelBuilder("tex.glb");
+
             builder.addTexture("albedo", 2, 2, MipGenerator.generate(2, 2, level0));
 
             final ModelFormat model = ModelFormat.read(builder.toBytes());
 
             assertThat(model.textureCount()).isEqualTo(1);
+
             assertThat(model.textureWidth(0)).isEqualTo(2);
+
             assertThat(model.textureLevelCount(0)).isEqualTo(2);
+
             assertThat(model.mipChain(0).texel(0, 1, 1)).isEqualTo(Rgba.pack(255, 0, 0, 255));
+
             assertThat(model.mipChain(0).texel(1, 0, 0)).isEqualTo(Rgba.pack(255, 0, 0, 255));
         }
 
@@ -146,18 +188,25 @@ class ModelBuilderTest
         void shouldRoundTripSeveralTextures()
         {
             final int[] red = new int[16];
+
             Arrays.fill(red, Rgba.pack(255, 0, 0, 255));
+
             final int[] blue = new int[4];
+
             Arrays.fill(blue, Rgba.pack(0, 0, 255, 255));
 
             final ModelBuilder builder = new ModelBuilder("multi.glb");
+
             builder.addTexture("red", 4, 4, MipGenerator.generate(4, 4, red));
+
             builder.addTexture("blue", 2, 2, MipGenerator.generate(2, 2, blue));
 
             final ModelFormat model = ModelFormat.read(builder.toBytes());
 
             assertThat(model.textureCount()).isEqualTo(2);
+
             assertThat(model.mipChain(0).texel(2, 0, 0)).isEqualTo(Rgba.pack(255, 0, 0, 255));
+
             assertThat(model.mipChain(1).texel(1, 0, 0)).isEqualTo(Rgba.pack(0, 0, 255, 255));
         }
 
@@ -166,14 +215,20 @@ class ModelBuilderTest
         void shouldAcceptModelAtTheBudget()
         {
             final ModelBuilder builder = new ModelBuilder("dense.glb");
+
             builder.beginSubmesh(ModelFormat.NO_TEXTURE);
+
             builder.addVertex(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0);
+
             builder.addVertex(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0);
+
             builder.addVertex(0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0);
+
             for (int i = 0; i < ModelFormat.MAX_TRIANGLES_PER_MODEL; i++)
             {
                 builder.addTriangle(0, 1, 2);
             }
+
             builder.endSubmesh();
 
             assertThat(ModelFormat.read(builder.toBytes()).triangleCount())
@@ -190,14 +245,20 @@ class ModelBuilderTest
         void shouldRejectTooManyTriangles()
         {
             final ModelBuilder builder = new ModelBuilder("overbudget.glb");
+
             builder.beginSubmesh(ModelFormat.NO_TEXTURE);
+
             builder.addVertex(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0);
+
             builder.addVertex(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0);
+
             builder.addVertex(0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0);
+
             for (int i = 0; i <= ModelFormat.MAX_TRIANGLES_PER_MODEL; i++)
             {
                 builder.addTriangle(0, 1, 2);
             }
+
             builder.endSubmesh();
 
             assertThatThrownBy(builder::toBytes)
@@ -212,6 +273,7 @@ class ModelBuilderTest
         void shouldRejectOversizedTexture()
         {
             final int edge = ModelFormat.MAX_TEXTURE_DIMENSION * 2;
+
             final ModelBuilder builder = new ModelBuilder("huge.glb");
 
             assertThatThrownBy(() -> builder.checkTextureDimensions("colormap", edge, edge))
@@ -227,6 +289,7 @@ class ModelBuilderTest
         void shouldAcceptTextureAtTheBudget()
         {
             final ModelBuilder builder = new ModelBuilder("atbudget.glb");
+
             final int edge = ModelFormat.MAX_TEXTURE_DIMENSION;
 
             builder.checkTextureDimensions("colormap", edge, edge);
@@ -263,6 +326,7 @@ class ModelBuilderTest
         void shouldRejectWrongSizedLevel()
         {
             final ModelBuilder builder = new ModelBuilder("bad.glb");
+
             final int[][] levels = {new int[4], new int[4]};
 
             assertThatThrownBy(() -> builder.addTexture("albedo", 2, 2, levels))
@@ -275,11 +339,17 @@ class ModelBuilderTest
     private static void addTriangle(final ModelBuilder builder, final int texture)
     {
         final int base = builder.vertexCount();
+
         builder.beginSubmesh(texture);
+
         builder.addVertex(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0);
+
         builder.addVertex(1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0);
+
         builder.addVertex(0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0);
+
         builder.addTriangle(base, base + 1, base + 2);
+
         builder.endSubmesh();
     }
 }

@@ -52,6 +52,7 @@ class MipChainTest
         {
             assertThatThrownBy(() -> TextureFixtures.single(0, 4, new int[0]))
                 .isInstanceOf(IllegalArgumentException.class);
+
             assertThatThrownBy(() -> TextureFixtures.single(4, -4, new int[16]))
                 .isInstanceOf(IllegalArgumentException.class);
         }
@@ -63,6 +64,7 @@ class MipChainTest
             assertThatThrownBy(() -> TextureFixtures.chain(4, 4, new int[0][]))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("at least one level");
+
             assertThatThrownBy(() -> TextureFixtures.chain(4, 4, null))
                 .isInstanceOf(IllegalArgumentException.class);
         }
@@ -119,7 +121,9 @@ class MipChainTest
             final MipChain chain = TextureFixtures.single(1, 1, new int[] {0x11223344});
 
             assertThat(chain.levelCount()).isEqualTo(1);
+
             assertThat(chain.width(0)).isEqualTo(1);
+
             assertThat(chain.texel(0, 0, 0)).isEqualTo(0x11223344);
         }
 
@@ -128,6 +132,7 @@ class MipChainTest
         void shouldCopyLevelData()
         {
             final int[] base = {1, 2, 3, 4};
+
             final MipChain chain = TextureFixtures.single(2, 2, base);
 
             base[0] = 0xDEADBEEF;
@@ -147,9 +152,13 @@ class MipChainTest
             final MipChain chain = TextureFixtures.solid(8, 8, 4, 0);
 
             assertThat(chain.width(0)).isEqualTo(8);
+
             assertThat(chain.width(1)).isEqualTo(4);
+
             assertThat(chain.width(2)).isEqualTo(2);
+
             assertThat(chain.width(3)).isEqualTo(1);
+
             assertThat(chain.height(3)).isEqualTo(1);
         }
 
@@ -160,12 +169,19 @@ class MipChainTest
             final MipChain chain = TextureFixtures.solid(8, 2, 4, 0);
 
             assertThat(chain.width(0)).isEqualTo(8);
+
             assertThat(chain.height(0)).isEqualTo(2);
+
             assertThat(chain.width(1)).isEqualTo(4);
+
             assertThat(chain.height(1)).isEqualTo(1);
+
             assertThat(chain.width(2)).isEqualTo(2);
+
             assertThat(chain.height(2)).isEqualTo(1);
+
             assertThat(chain.width(3)).isEqualTo(1);
+
             assertThat(chain.height(3)).isEqualTo(1);
         }
     }
@@ -182,6 +198,7 @@ class MipChainTest
                 TextureFixtures.coordinateTexels(4, 2));
 
             assertThat(TextureSampler.red(chain.texel(0, 3, 1))).isEqualTo(3);
+
             assertThat(TextureSampler.green(chain.texel(0, 3, 1))).isEqualTo(1);
         }
 
@@ -193,6 +210,7 @@ class MipChainTest
                 TextureFixtures.coordinateTexels(4, 4));
 
             assertThat(chain.texel(0, 4, 2)).isEqualTo(chain.texel(0, 0, 2));
+
             assertThat(chain.texel(0, 5, 2)).isEqualTo(chain.texel(0, 1, 2));
         }
 
@@ -204,6 +222,7 @@ class MipChainTest
                 TextureFixtures.coordinateTexels(4, 4));
 
             assertThat(chain.texel(0, 1, 4)).isEqualTo(chain.texel(0, 1, 0));
+
             assertThat(chain.texel(0, 1, 7)).isEqualTo(chain.texel(0, 1, 3));
         }
 
@@ -215,7 +234,9 @@ class MipChainTest
                 TextureFixtures.coordinateTexels(4, 4));
 
             assertThat(chain.texel(0, -1, 0)).isEqualTo(chain.texel(0, 3, 0));
+
             assertThat(chain.texel(0, 0, -1)).isEqualTo(chain.texel(0, 0, 3));
+
             assertThat(chain.texel(0, -5, -5)).isEqualTo(chain.texel(0, 3, 3));
         }
 
@@ -224,9 +245,11 @@ class MipChainTest
         void shouldRepeatOneByOne()
         {
             final MipChain chain = TextureFixtures.solid(8, 8, 4, 0x00000000);
+
             final MipChain single = TextureFixtures.single(1, 1, new int[] {0x0A0B0C0D});
 
             assertThat(single.texel(0, 17, -3)).isEqualTo(0x0A0B0C0D);
+
             assertThat(chain.texel(3, 100, 100)).isZero();
         }
 
@@ -239,11 +262,15 @@ class MipChainTest
                 new int[] {10, 11, 12, 13},
                 new int[] {99},
             };
+
             final MipChain chain = TextureFixtures.chain(4, 4, levels);
 
             assertThat(chain.texel(1, 0, 0)).isEqualTo(10);
+
             assertThat(chain.texel(1, 1, 1)).isEqualTo(13);
+
             assertThat(chain.texel(2, 0, 0)).isEqualTo(99);
+
             assertThat(chain.texel(2, 5, 5)).isEqualTo(99);
         }
     }

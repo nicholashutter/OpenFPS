@@ -58,6 +58,7 @@ final class DemoModelFixture
         {
             Files.createDirectories(path.getParent());
         }
+
         Files.write(path, quad());
     }
 
@@ -75,9 +76,13 @@ final class DemoModelFixture
             bits(1.0f), bits(0.0f), bits(1.0f), bits(1.0f), bits(1.0f), COLOUR,
             bits(0.0f), bits(0.0f), bits(1.0f), bits(0.0f), bits(1.0f), COLOUR,
         };
+
         final int[] indices = {0, 1, 2, 0, 2, 3};
+
         final int[] submeshes = {0, indices.length, NO_TEXTURE, 0};
+
         final float[] bounds = {0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f};
+
         return build(vertices, indices, submeshes, bounds);
     }
 
@@ -86,35 +91,58 @@ final class DemoModelFixture
         final int[] submeshes, final float[] bounds)
     {
         final int vertexOffset = HEADER_BYTES;
+
         final int indexOffset = vertexOffset + (vertices.length * Integer.BYTES);
+
         final int submeshOffset = indexOffset + (indices.length * Integer.BYTES);
+
         final int textureOffset = submeshOffset + (submeshes.length * Integer.BYTES);
+
         final int fileSize = textureOffset;
 
         final ByteBuffer out = ByteBuffer.allocate(fileSize).order(ByteOrder.LITTLE_ENDIAN);
+
         out.putInt(0, MAGIC);
+
         out.putShort(4, (short) 1);
+
         out.putShort(6, (short) 0);
+
         out.putInt(8, HEADER_BYTES);
+
         out.putInt(12, fileSize);
+
         out.putInt(16, vertices.length / VERTEX_INTS);
+
         out.putInt(20, vertexOffset);
+
         out.putInt(24, indices.length);
+
         out.putInt(28, indexOffset);
+
         out.putInt(32, submeshes.length / 4);
+
         out.putInt(36, submeshOffset);
+
         out.putInt(40, 0);
+
         out.putInt(44, textureOffset);
+
         out.putInt(48, 0);
+
         out.putInt(52, textureOffset);
+
         for (int i = 0; i < bounds.length; i++)
         {
             out.putFloat(56 + (i * Float.BYTES), bounds[i]);
         }
 
         putSection(out, vertexOffset, vertices);
+
         putSection(out, indexOffset, indices);
+
         putSection(out, submeshOffset, submeshes);
+
         return out.array();
     }
 

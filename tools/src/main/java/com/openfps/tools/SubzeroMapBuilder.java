@@ -98,14 +98,19 @@ public final class SubzeroMapBuilder
     public static void main(final String[] args)
     {
         final String out = option(args, "--out=");
+
         if (out == null)
         {
             LOG.error("usage: SubzeroMapBuilder --out=<directory>"
                 + " [--atlas=<colormap.png>]");
+
             return;
         }
+
         final String atlasOption = option(args, "--atlas=");
+
         final Path atlasPath;
+
         if (atlasOption == null)
         {
             atlasPath = null;
@@ -114,7 +119,9 @@ public final class SubzeroMapBuilder
         {
             atlasPath = Path.of(atlasOption);
         }
+
         final Path outDir = Path.of(out);
+
         try
         {
             Files.createDirectories(outDir);
@@ -123,8 +130,11 @@ public final class SubzeroMapBuilder
         {
             throw new UncheckedIOException("could not create output directory: " + outDir, e);
         }
+
         final byte[] bytes = build(atlasPath);
+
         final Path outFile = outDir.resolve(FILE_NAME);
+
         try
         {
             Files.write(outFile, bytes);
@@ -133,7 +143,9 @@ public final class SubzeroMapBuilder
         {
             throw new UncheckedIOException("could not write " + outFile, e);
         }
+
         final ModelFormat parsed = ModelFormat.read(bytes);
+
         LOG.info("Wrote {} ({} triangles, {} vertices, {} textures)",
             outFile, parsed.indexCount() / 3, parsed.vertexCount(), parsed.textureCount());
     }
@@ -167,7 +179,9 @@ public final class SubzeroMapBuilder
     public static byte[] build(final Path atlasPath)
     {
         final ModelBuilder builder = new ModelBuilder(MODEL_NAME);
+
         final int[] floorTexels;
+
         if (atlasPath != null)
         {
             floorTexels = KenneyTexture.forceOpaque(KenneyTexture.floor(atlasPath));
@@ -176,7 +190,9 @@ public final class SubzeroMapBuilder
         {
             floorTexels = floorTexels();
         }
+
         final int[] wallTexels;
+
         if (atlasPath != null)
         {
             wallTexels = KenneyTexture.forceOpaque(KenneyTexture.wall(atlasPath));
@@ -185,29 +201,44 @@ public final class SubzeroMapBuilder
         {
             wallTexels = wallTexels();
         }
+
         final int[] accentTexels = accentTexels();
+
         final int floorTexture = builder.addTexture("subzero-floor", TEXTURE_EDGE,
             TEXTURE_EDGE, MipGenerator.generate(TEXTURE_EDGE, TEXTURE_EDGE, floorTexels));
+
         final int wallTexture = builder.addTexture("subzero-wall", TEXTURE_EDGE,
             TEXTURE_EDGE, MipGenerator.generate(TEXTURE_EDGE, TEXTURE_EDGE, wallTexels));
+
         final int accentTexture = builder.addTexture("subzero-accent", TEXTURE_EDGE,
             TEXTURE_EDGE, MipGenerator.generate(TEXTURE_EDGE, TEXTURE_EDGE, accentTexels));
 
         builder.beginSubmesh(floorTexture);
+
         addGroundSlab(builder);
+
         builder.endSubmesh();
 
         builder.beginSubmesh(wallTexture);
+
         addPerimeterWalls(builder);
+
         addGeneratorShed(builder);
+
         addOperationsTrailer(builder);
+
         addFuelDepot(builder);
+
         addWTrenchWalls(builder);
+
         addETrenchWalls(builder);
+
         builder.endSubmesh();
 
         builder.beginSubmesh(accentTexture);
+
         addAccentGeometry(builder);
+
         builder.endSubmesh();
 
         return builder.toBytes();
@@ -248,9 +279,13 @@ public final class SubzeroMapBuilder
     private static void addPerimeterWalls(final ModelBuilder builder)
     {
         final float e = HALF_EXTENT;
+
         addBox(builder, -e, 0.0f, -e - WALL_THICKNESS, e, PERIMETER_WALL_HEIGHT, -e);
+
         addBox(builder, -e, 0.0f, e, e, PERIMETER_WALL_HEIGHT, e + WALL_THICKNESS);
+
         addBox(builder, -e - WALL_THICKNESS, 0.0f, -e, -e, PERIMETER_WALL_HEIGHT, e);
+
         addBox(builder, e, 0.0f, -e, e + WALL_THICKNESS, PERIMETER_WALL_HEIGHT, e);
     }
 
@@ -298,48 +333,64 @@ public final class SubzeroMapBuilder
         final float maxX, final float maxZ, final String doorFace)
     {
         final float yMax = BUILDING_HEIGHT;
+
         // South wall (the +z face) — doorway centred on x
         if ("south".equals(doorFace))
         {
             final float doorMin = (minX + maxX) / 2.0f - 8.0f;
+
             final float doorMax = (minX + maxX) / 2.0f + 8.0f;
+
             addBox(builder, minX, 0.0f, maxZ, doorMin, yMax, maxZ + WALL_THICKNESS);
+
             addBox(builder, doorMax, 0.0f, maxZ, maxX, yMax, maxZ + WALL_THICKNESS);
         }
         else
         {
             addBox(builder, minX, 0.0f, maxZ, maxX, yMax, maxZ + WALL_THICKNESS);
         }
+
         // North wall (the -z face) — doorway centred on x
         if ("north".equals(doorFace))
         {
             final float doorMin = (minX + maxX) / 2.0f - 8.0f;
+
             final float doorMax = (minX + maxX) / 2.0f + 8.0f;
+
             addBox(builder, minX, 0.0f, minZ - WALL_THICKNESS, doorMin, yMax, minZ);
+
             addBox(builder, doorMax, 0.0f, minZ - WALL_THICKNESS, maxX, yMax, minZ);
         }
         else
         {
             addBox(builder, minX, 0.0f, minZ - WALL_THICKNESS, maxX, yMax, minZ);
         }
+
         // East wall (the +x face) — doorway centred on z
         if ("east".equals(doorFace))
         {
             final float doorMin = (minZ + maxZ) / 2.0f - 8.0f;
+
             final float doorMax = (minZ + maxZ) / 2.0f + 8.0f;
+
             addBox(builder, maxX, 0.0f, minZ, maxX + WALL_THICKNESS, yMax, doorMin);
+
             addBox(builder, maxX, 0.0f, doorMax, maxX + WALL_THICKNESS, yMax, maxZ);
         }
         else
         {
             addBox(builder, maxX, 0.0f, minZ, maxX + WALL_THICKNESS, yMax, maxZ);
         }
+
         // West wall (the -x face) — doorway centred on z
         if ("west".equals(doorFace))
         {
             final float doorMin = (minZ + maxZ) / 2.0f - 8.0f;
+
             final float doorMax = (minZ + maxZ) / 2.0f + 8.0f;
+
             addBox(builder, minX - WALL_THICKNESS, 0.0f, minZ, minX, yMax, doorMin);
+
             addBox(builder, minX - WALL_THICKNESS, 0.0f, doorMax, minX, yMax, maxZ);
         }
         else
@@ -358,6 +409,7 @@ public final class SubzeroMapBuilder
     {
         // West wall (x=0..4, z=64..192) — the outside wall
         addBox(builder, 0.0f, 0.0f, 64.0f, 4.0f, SNOW_WALL_HEIGHT, 192.0f);
+
         // East wall (x=4..8, z=64..192) — the inside wall
         addBox(builder, 4.0f, 0.0f, 64.0f, 8.0f, SNOW_WALL_HEIGHT, 192.0f);
     }
@@ -372,6 +424,7 @@ public final class SubzeroMapBuilder
     {
         // West wall (x=0..4, z=128..256)
         addBox(builder, 0.0f, 0.0f, 128.0f, 4.0f, SNOW_WALL_HEIGHT, 256.0f);
+
         // East wall (x=4..8, z=128..256)
         addBox(builder, 4.0f, 0.0f, 128.0f, 8.0f, SNOW_WALL_HEIGHT, 256.0f);
     }
@@ -385,6 +438,7 @@ public final class SubzeroMapBuilder
     {
         // Mast column
         addBox(builder, 94.0f, 0.0f, 158.0f, 98.0f, 32.0f, 162.0f);
+
         // Dish
         addBox(builder, 86.0f, 24.0f, 156.0f, 106.0f, 32.0f, 164.0f);
     }
@@ -396,10 +450,15 @@ public final class SubzeroMapBuilder
         final float minZ, final float maxX, final float maxY, final float maxZ)
     {
         addFace(builder, maxX, minY, maxZ, maxX, maxY, maxZ, maxX, maxY, minZ, maxX, minY, minZ);
+
         addFace(builder, minX, minY, minZ, minX, maxY, minZ, minX, maxY, maxZ, minX, minY, maxZ);
+
         addFace(builder, minX, maxY, maxZ, maxX, maxY, maxZ, maxX, maxY, minZ, minX, maxY, minZ);
+
         addFace(builder, minX, minY, minZ, maxX, minY, minZ, maxX, minY, maxZ, minX, minY, maxZ);
+
         addFace(builder, minX, minY, maxZ, minX, maxY, maxZ, maxX, maxY, maxZ, maxX, minY, maxZ);
+
         addFace(builder, maxX, minY, minZ, maxX, maxY, minZ, minX, maxY, minZ, minX, minY, minZ);
     }
 
@@ -408,15 +467,21 @@ public final class SubzeroMapBuilder
         final float cy, final float cz, final float dx, final float dy, final float dz)
     {
         final float uScale = 1.0f / WORLD_UNITS_PER_TILE;
+
         final int a = builder.addVertex(ax, ay, az, ax * uScale, az * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         final int b = builder.addVertex(bx, by, bz, bx * uScale, bz * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         final int c = builder.addVertex(cx, cy, cz, cx * uScale, cz * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         final int d = builder.addVertex(dx, dy, dz, dx * uScale, dz * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         builder.addTriangle(a, b, c);
+
         builder.addTriangle(a, c, d);
     }
 
@@ -427,64 +492,86 @@ public final class SubzeroMapBuilder
     private static int[] floorTexels()
     {
         final int base = Rgba.pack(232, 240, 248, 255);
+
         final int shade = Rgba.pack(208, 222, 236, 255);
+
         final int drift = Rgba.pack(190, 210, 228, 255);
+
         final int[] out = new int[TEXTURE_EDGE * TEXTURE_EDGE];
+
         for (int y = 0; y < TEXTURE_EDGE; y++)
         {
             for (int x = 0; x < TEXTURE_EDGE; x++)
             {
                 int colour = base;
+
                 if ((y / 8) % 2 == 0)
                 {
                     colour = shade;
                 }
+
                 if (x % 16 == 0)
                 {
                     colour = drift;
                 }
+
                 out[y * TEXTURE_EDGE + x] = colour;
             }
         }
+
         return out;
     }
 
     private static int[] wallTexels()
     {
         final int base = Rgba.pack(200, 212, 224, 255);
+
         final int shade = Rgba.pack(168, 184, 200, 255);
+
         final int rib = Rgba.pack(140, 156, 172, 255);
+
         final int bandHeight = TEXTURE_EDGE / 8;
+
         final int[] out = new int[TEXTURE_EDGE * TEXTURE_EDGE];
+
         for (int y = 0; y < TEXTURE_EDGE; y++)
         {
             final int band = y / bandHeight;
+
             final boolean isRib = (y % bandHeight) == 0;
+
             for (int x = 0; x < TEXTURE_EDGE; x++)
             {
                 int colour = base;
+
                 if ((band % 2) != 0)
                 {
                     colour = shade;
                 }
+
                 if (isRib)
                 {
                     colour = rib;
                 }
+
                 out[y * TEXTURE_EDGE + x] = colour;
             }
         }
+
         return out;
     }
 
     private static int[] accentTexels()
     {
         final int colour = Rgba.pack(192, 80, 80, 255);
+
         final int[] out = new int[TEXTURE_EDGE * TEXTURE_EDGE];
+
         for (int index = 0; index < out.length; index++)
         {
             out[index] = colour;
         }
+
         return out;
     }
 
@@ -497,6 +584,7 @@ public final class SubzeroMapBuilder
                 return arg.substring(prefix.length());
             }
         }
+
         return null;
     }
 }

@@ -42,7 +42,9 @@ public final class AdapterFactorySelector
         {
             throw new IllegalArgumentException("backend must not be null");
         }
+
         LOG.info("AdapterFactorySelector: selecting {} HAL backend", backend);
+
         switch (backend)
         {
             case NULL:

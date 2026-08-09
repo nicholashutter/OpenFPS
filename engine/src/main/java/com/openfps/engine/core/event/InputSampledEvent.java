@@ -23,8 +23,11 @@ public final class InputSampledEvent implements I_EngineEvent
                              final int ticNumber, final byte[] inputBytes)
     {
         this.sequenceNumber = sequenceNumber;
+
         this.timestampNanos = timestampNanos;
+
         this.ticNumber = ticNumber;
+
         this.inputBytes = inputBytes;
     }
 
@@ -60,10 +63,12 @@ public final class InputSampledEvent implements I_EngineEvent
     public String toString()
     {
         int byteCount = 0;
+
         if (inputBytes != null)
         {
             byteCount = inputBytes.length;
         }
+
         return "InputSampledEvent{seq=" + sequenceNumber + ", tic=" + ticNumber
             + ", bytes=" + byteCount + "}";
     }

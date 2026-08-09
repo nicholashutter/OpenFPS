@@ -35,6 +35,7 @@ class TicCmdBufferTest
     void isSizedFromTheSharedConstants()
     {
         assertThat(buffer.depth()).isEqualTo(Constants.TIC_BUFFER_SIZE);
+
         assertThat(buffer.playerCount()).isEqualTo(Constants.MAX_PLAYERS);
     }
 
@@ -45,6 +46,7 @@ class TicCmdBufferTest
         for (int slot = 0; slot < Constants.MAX_PLAYERS; slot++)
         {
             assertThat(buffer.latestTic(slot)).isEqualTo(TicCmdBuffer.EMPTY_TIC);
+
             assertThat(buffer.has(slot, 0)).isFalse();
         }
     }
@@ -59,12 +61,19 @@ class TicCmdBufferTest
         assertThat(buffer.put(SLOT, cmd)).isTrue();
 
         assertThat(buffer.has(SLOT, 11)).isTrue();
+
         assertThat(buffer.forward(SLOT, 11)).isEqualTo(TicCmd.MIN_AXIS);
+
         assertThat(buffer.strafe(SLOT, 11)).isEqualTo(TicCmd.MAX_AXIS);
+
         assertThat(buffer.angle(SLOT, 11)).isEqualTo(TicCmd.MAX_ANGLE);
+
         assertThat(buffer.pitch(SLOT, 11)).isEqualTo(TicCmd.MIN_PITCH);
+
         assertThat(buffer.buttons(SLOT, 11)).isEqualTo(TicCmd.ALL_BUTTONS);
+
         assertThat(buffer.get(SLOT, 11)).isEqualTo(cmd);
+
         assertThat(buffer.latestTic(SLOT)).isEqualTo(11);
     }
 
@@ -88,13 +97,17 @@ class TicCmdBufferTest
     void wrapsAroundTheRing()
     {
         final int depth = Constants.TIC_BUFFER_SIZE;
+
         buffer.put(SLOT, new TicCmd(0, 111, 0, 0, 0, 0));
+
         assertThat(buffer.has(SLOT, 0)).isTrue();
 
         assertThat(buffer.put(SLOT, new TicCmd(depth, 222, 0, 0, 0, 0))).isTrue();
 
         assertThat(buffer.has(SLOT, depth)).isTrue();
+
         assertThat(buffer.forward(SLOT, depth)).isEqualTo(222);
+
         assertThat(buffer.has(SLOT, 0)).isFalse();
     }
 
@@ -103,11 +116,13 @@ class TicCmdBufferTest
     void rejectsAStaleTicInAnOccupiedSlot()
     {
         final int depth = Constants.TIC_BUFFER_SIZE;
+
         buffer.put(SLOT, new TicCmd(depth, 222, 0, 0, 0, 0));
 
         assertThat(buffer.put(SLOT, new TicCmd(0, 111, 0, 0, 0, 0))).isFalse();
 
         assertThat(buffer.forward(SLOT, depth)).isEqualTo(222);
+
         assertThat(buffer.latestTic(SLOT)).isEqualTo(depth);
     }
 
@@ -119,10 +134,13 @@ class TicCmdBufferTest
         final TicCmd cmd = new TicCmd(7, 42, -42, 1000, 5, 3);
 
         assertThat(buffer.put(SLOT, cmd)).isTrue();
+
         assertThat(buffer.put(SLOT, cmd)).isTrue();
+
         assertThat(buffer.put(SLOT, cmd)).isTrue();
 
         assertThat(buffer.get(SLOT, 7)).isEqualTo(cmd);
+
         assertThat(buffer.latestTic(SLOT)).isEqualTo(7);
     }
 
@@ -131,14 +149,21 @@ class TicCmdBufferTest
     void acceptsOutOfOrderArrival()
     {
         buffer.put(SLOT, new TicCmd(5, 5, 0, 0, 0, 0));
+
         buffer.put(SLOT, new TicCmd(2, 2, 0, 0, 0, 0));
+
         buffer.put(SLOT, new TicCmd(4, 4, 0, 0, 0, 0));
+
         buffer.put(SLOT, new TicCmd(3, 3, 0, 0, 0, 0));
 
         assertThat(buffer.forward(SLOT, 2)).isEqualTo(2);
+
         assertThat(buffer.forward(SLOT, 3)).isEqualTo(3);
+
         assertThat(buffer.forward(SLOT, 4)).isEqualTo(4);
+
         assertThat(buffer.forward(SLOT, 5)).isEqualTo(5);
+
         assertThat(buffer.latestTic(SLOT)).isEqualTo(5);
     }
 
@@ -147,6 +172,7 @@ class TicCmdBufferTest
     void latestTicNeverGoesBackwards()
     {
         buffer.put(SLOT, new TicCmd(9, 0, 0, 0, 0, 0));
+
         buffer.put(SLOT, new TicCmd(4, 0, 0, 0, 0, 0));
 
         assertThat(buffer.latestTic(SLOT)).isEqualTo(9);
@@ -157,6 +183,7 @@ class TicCmdBufferTest
     void holdsExactlyOneRingDepth()
     {
         final int depth = Constants.TIC_BUFFER_SIZE;
+
         for (int tic = 0; tic < depth * 2; tic++)
         {
             buffer.put(SLOT, new TicCmd(tic, tic, 0, 0, 0, 0));
@@ -165,8 +192,10 @@ class TicCmdBufferTest
         for (int tic = depth; tic < depth * 2; tic++)
         {
             assertThat(buffer.has(SLOT, tic)).isTrue();
+
             assertThat(buffer.forward(SLOT, tic)).isEqualTo(tic);
         }
+
         for (int tic = 0; tic < depth; tic++)
         {
             assertThat(buffer.has(SLOT, tic)).isFalse();
@@ -178,7 +207,9 @@ class TicCmdBufferTest
     void storesFromTheWireForm()
     {
         final byte[] wire = new byte[TicCmd.BYTES];
+
         final TicCmd cmd = new TicCmd(31, -7, 7, 4242, -9, 9);
+
         cmd.encode(wire, 0);
 
         assertThat(buffer.putEncoded(SLOT, wire, 0)).isTrue();
@@ -192,13 +223,17 @@ class TicCmdBufferTest
     {
         final TicCmd cmd = new TicCmd(15, TicCmd.MIN_AXIS, TicCmd.MAX_AXIS,
             TicCmd.MAX_ANGLE, TicCmd.MIN_PITCH, TicCmd.ALL_BUTTONS);
+
         buffer.put(SLOT, cmd);
 
         final byte[] direct = new byte[TicCmd.BYTES];
+
         final byte[] fromRing = new byte[TicCmd.BYTES];
+
         cmd.encode(direct, 0);
 
         assertThat(buffer.encodeInto(fromRing, 0, SLOT, 15)).isEqualTo(TicCmd.BYTES);
+
         assertThat(fromRing).isEqualTo(direct);
     }
 
@@ -209,7 +244,9 @@ class TicCmdBufferTest
         final byte[] wire = new byte[TicCmd.BYTES];
 
         assertThat(buffer.encodeInto(wire, 0, SLOT, 99)).isZero();
+
         assertThat(wire).containsOnly((byte) 0);
+
         assertThat(buffer.get(SLOT, 99)).isNull();
     }
 
@@ -218,12 +255,15 @@ class TicCmdBufferTest
     void clearsOnePlayerOnly()
     {
         buffer.put(0, new TicCmd(1, 1, 0, 0, 0, 0));
+
         buffer.put(1, new TicCmd(1, 2, 0, 0, 0, 0));
 
         buffer.clear(0);
 
         assertThat(buffer.has(0, 1)).isFalse();
+
         assertThat(buffer.latestTic(0)).isEqualTo(TicCmdBuffer.EMPTY_TIC);
+
         assertThat(buffer.has(1, 1)).isTrue();
     }
 
@@ -232,11 +272,13 @@ class TicCmdBufferTest
     void resetsEveryLane()
     {
         buffer.put(0, new TicCmd(1, 1, 0, 0, 0, 0));
+
         buffer.put(1, new TicCmd(1, 2, 0, 0, 0, 0));
 
         buffer.reset();
 
         assertThat(buffer.has(0, 1)).isFalse();
+
         assertThat(buffer.has(1, 1)).isFalse();
     }
 
@@ -246,8 +288,10 @@ class TicCmdBufferTest
     {
         assertThatThrownBy(() -> buffer.put(-1, new TicCmd(0, 0, 0, 0, 0, 0)))
             .isInstanceOf(IllegalArgumentException.class);
+
         assertThatThrownBy(() -> buffer.put(Constants.MAX_PLAYERS, new TicCmd(0, 0, 0, 0, 0, 0)))
             .isInstanceOf(IllegalArgumentException.class);
+
         assertThatThrownBy(() -> buffer.latestTic(Constants.MAX_PLAYERS))
             .isInstanceOf(IllegalArgumentException.class);
     }
@@ -258,6 +302,7 @@ class TicCmdBufferTest
     {
         assertThatThrownBy(() -> buffer.put(SLOT, -1, 0, 0, 0, 0, 0))
             .isInstanceOf(IllegalArgumentException.class);
+
         assertThat(buffer.has(SLOT, -1)).isFalse();
     }
 
@@ -268,12 +313,16 @@ class TicCmdBufferTest
         assertThatThrownBy(() -> buffer.forward(SLOT, 5))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("tic 5");
+
         assertThatThrownBy(() -> buffer.strafe(SLOT, 5))
             .isInstanceOf(IllegalArgumentException.class);
+
         assertThatThrownBy(() -> buffer.angle(SLOT, 5))
             .isInstanceOf(IllegalArgumentException.class);
+
         assertThatThrownBy(() -> buffer.pitch(SLOT, 5))
             .isInstanceOf(IllegalArgumentException.class);
+
         assertThatThrownBy(() -> buffer.buttons(SLOT, 5))
             .isInstanceOf(IllegalArgumentException.class);
     }

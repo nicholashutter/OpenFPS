@@ -72,6 +72,7 @@ final class WadBuilder
     WadBuilder magic(final String value)
     {
         this.magic = value;
+
         return this;
     }
 
@@ -79,7 +80,9 @@ final class WadBuilder
     WadBuilder lump(final String name, final byte[] payload)
     {
         names.add(name);
+
         payloads.add(payload);
+
         return this;
     }
 
@@ -93,6 +96,7 @@ final class WadBuilder
     WadBuilder declaredLumpCount(final int value)
     {
         this.declaredLumpCount = value;
+
         return this;
     }
 
@@ -100,6 +104,7 @@ final class WadBuilder
     WadBuilder declaredDirectoryOffset(final int value)
     {
         this.declaredDirectoryOffset = value;
+
         return this;
     }
 
@@ -107,30 +112,42 @@ final class WadBuilder
     byte[] build()
     {
         int dataSize = 0;
+
         for (final byte[] payload : payloads)
         {
             dataSize += payload.length;
         }
+
         final int directoryStart = HEADER_SIZE + dataSize;
+
         final int total = directoryStart + (payloads.size() * ENTRY_SIZE);
+
         final ByteBuffer buf = ByteBuffer.allocate(total).order(ByteOrder.LITTLE_ENDIAN);
 
         buf.put(padded(magic, MAGIC_LENGTH));
+
         buf.putInt(headerLumpCount());
+
         buf.putInt(headerDirectoryOffset(directoryStart));
 
         final int[] offsets = new int[payloads.size()];
+
         for (int i = 0; i < payloads.size(); i++)
         {
             offsets[i] = buf.position();
+
             buf.put(payloads.get(i));
         }
+
         for (int i = 0; i < payloads.size(); i++)
         {
             buf.putInt(offsets[i]);
+
             buf.putInt(payloads.get(i).length);
+
             buf.put(padded(names.get(i), NAME_LENGTH));
         }
+
         return buf.array();
     }
 
@@ -139,10 +156,12 @@ final class WadBuilder
     {
         final ByteBuffer buf = ByteBuffer.allocate(values.length * 2)
             .order(ByteOrder.LITTLE_ENDIAN);
+
         for (final int value : values)
         {
             buf.putShort((short) value);
         }
+
         return buf.array();
     }
 
@@ -150,10 +169,12 @@ final class WadBuilder
     static byte[] bytes(final int... values)
     {
         final byte[] out = new byte[values.length];
+
         for (int i = 0; i < values.length; i++)
         {
             out[i] = (byte) (values[i] & BYTE_MASK);
         }
+
         return out;
     }
 
@@ -161,17 +182,23 @@ final class WadBuilder
     static byte[] concat(final byte[]... blocks)
     {
         int total = 0;
+
         for (final byte[] block : blocks)
         {
             total += block.length;
         }
+
         final byte[] out = new byte[total];
+
         int cursor = 0;
+
         for (final byte[] block : blocks)
         {
             System.arraycopy(block, 0, out, cursor, block.length);
+
             cursor += block.length;
         }
+
         return out;
     }
 
@@ -179,13 +206,18 @@ final class WadBuilder
     static byte[] padded(final String text, final int width)
     {
         final byte[] out = new byte[width];
+
         final byte[] raw = text.getBytes(StandardCharsets.US_ASCII);
+
         int length = raw.length;
+
         if (length > width)
         {
             length = width;
         }
+
         System.arraycopy(raw, 0, out, 0, length);
+
         return out;
     }
 
@@ -195,6 +227,7 @@ final class WadBuilder
         {
             return declaredLumpCount;
         }
+
         return payloads.size();
     }
 
@@ -204,6 +237,7 @@ final class WadBuilder
         {
             return declaredDirectoryOffset;
         }
+
         return realOffset;
     }
 }

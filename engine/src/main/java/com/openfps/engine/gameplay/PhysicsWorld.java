@@ -197,6 +197,7 @@ public final class PhysicsWorld
         {
             throw new IllegalArgumentException("solidBoxes must not be null");
         }
+
         // Negated >= so NaN is rejected here rather than making every
         // comparison in slideX silently false and the world silently permeable.
         if (!(bodyHalfWidth >= 0.0f) || Float.isInfinite(bodyHalfWidth))
@@ -204,17 +205,22 @@ public final class PhysicsWorld
             throw new IllegalArgumentException(
                 "bodyHalfWidth must be finite and non-negative, got " + bodyHalfWidth);
         }
+
         if (solidBoxes.length % SOLID_STRIDE != 0)
         {
             throw new IllegalArgumentException("solidBoxes must be a whole number of "
                 + SOLID_STRIDE + "-float boxes, got " + solidBoxes.length + " floats");
         }
+
         for (int base = 0; base < solidBoxes.length; base += SOLID_STRIDE)
         {
             requireOrdered(solidBoxes[base], solidBoxes[base + 2], base, "x");
+
             requireOrdered(solidBoxes[base + 1], solidBoxes[base + 3], base, "z");
         }
+
         this.halfWidth = bodyHalfWidth;
+
         this.solids = solidBoxes.clone();
     }
 
@@ -269,7 +275,9 @@ public final class PhysicsWorld
             // still, which is what makes a repeated no-op update idempotent.
             return feetX;
         }
+
         float permitted = feetX + deltaX;
+
         for (int base = 0; base < solids.length; base += SOLID_STRIDE)
         {
             // The solid only matters if the body is beside it on the other
@@ -278,9 +286,11 @@ public final class PhysicsWorld
             {
                 continue;
             }
+
             if (deltaX > 0.0f)
             {
                 final float contact = solids[base] - halfWidth;
+
                 // feetX <= contact is the "started outside" guard: a body
                 // already past this face is inside the solid, and shoving it
                 // back to the face would teleport it. Let it walk out instead.
@@ -292,12 +302,14 @@ public final class PhysicsWorld
             else
             {
                 final float contact = solids[base + 2] + halfWidth;
+
                 if (feetX >= contact && permitted < contact)
                 {
                     permitted = contact;
                 }
             }
         }
+
         return permitted;
     }
 
@@ -323,16 +335,20 @@ public final class PhysicsWorld
         {
             return feetZ;
         }
+
         float permitted = feetZ + deltaZ;
+
         for (int base = 0; base < solids.length; base += SOLID_STRIDE)
         {
             if (!overlaps(feetX, solids[base], solids[base + 2]))
             {
                 continue;
             }
+
             if (deltaZ > 0.0f)
             {
                 final float contact = solids[base + 1] - halfWidth;
+
                 if (feetZ <= contact && permitted > contact)
                 {
                     permitted = contact;
@@ -341,12 +357,14 @@ public final class PhysicsWorld
             else
             {
                 final float contact = solids[base + 3] + halfWidth;
+
                 if (feetZ >= contact && permitted < contact)
                 {
                     permitted = contact;
                 }
             }
         }
+
         return permitted;
     }
 
@@ -373,6 +391,7 @@ public final class PhysicsWorld
                 return true;
             }
         }
+
         return false;
     }
 
@@ -419,7 +438,9 @@ public final class PhysicsWorld
         {
             throw new IndexOutOfBoundsException("no solid " + index + " of " + solidCount());
         }
+
         final int base = index * SOLID_STRIDE;
+
         return new float[]
         {
             solids[base], solids[base + 1], solids[base + 2], solids[base + 3],
@@ -480,14 +501,22 @@ public final class PhysicsWorld
             if (used == boxes.length)
             {
                 final float[] grown = new float[boxes.length * 2];
+
                 System.arraycopy(boxes, 0, grown, 0, used);
+
                 this.boxes = grown;
             }
+
             boxes[used] = minX;
+
             boxes[used + 1] = minZ;
+
             boxes[used + 2] = maxX;
+
             boxes[used + 3] = maxZ;
+
             this.used = used + SOLID_STRIDE;
+
             return this;
         }
 
@@ -521,7 +550,9 @@ public final class PhysicsWorld
         public PhysicsWorld build()
         {
             final float[] exact = new float[used];
+
             System.arraycopy(boxes, 0, exact, 0, used);
+
             return new PhysicsWorld(halfWidth, exact);
         }
     }

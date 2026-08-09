@@ -57,13 +57,18 @@ final class TextureFixtures
         final int colour)
     {
         final int[][] levels = new int[levelCount][];
+
         for (int level = 0; level < levelCount; level++)
         {
             final int levelWidth = Math.max(1, width >> level);
+
             final int levelHeight = Math.max(1, height >> level);
+
             levels[level] = new int[levelWidth * levelHeight];
+
             Arrays.fill(levels[level], colour);
         }
+
         return new MipChain(width, height, levels);
     }
 
@@ -75,6 +80,7 @@ final class TextureFixtures
     static int[] coordinateTexels(final int width, final int height)
     {
         final int[] texels = new int[width * height];
+
         for (int y = 0; y < height; y++)
         {
             for (int x = 0; x < width; x++)
@@ -82,6 +88,7 @@ final class TextureFixtures
                 texels[y * width + x] = rgba(x, y, 0x40, 0x80);
             }
         }
+
         return texels;
     }
 
@@ -89,13 +96,17 @@ final class TextureFixtures
     static int[] pseudoRandomTexels(final int width, final int height, final long seed)
     {
         final int[] texels = new int[width * height];
+
         // MUTABLE local — LCG state.
         long state = seed;
+
         for (int i = 0; i < texels.length; i++)
         {
             state = (state * LCG_MULTIPLIER + LCG_INCREMENT) % LCG_MODULUS;
+
             texels[i] = (int) state;
         }
+
         return texels;
     }
 
@@ -106,13 +117,17 @@ final class TextureFixtures
     static MipChain pyramid(final int width, final int height, final int[] base)
     {
         final int levelCount = log2(Math.max(width, height)) + 1;
+
         final int[][] levels = new int[levelCount][];
+
         levels[0] = base.clone();
+
         for (int level = 1; level < levelCount; level++)
         {
             levels[level] = halve(levels[level - 1],
                 Math.max(1, width >> (level - 1)), Math.max(1, height >> (level - 1)));
         }
+
         return new MipChain(width, height, levels);
     }
 
@@ -120,21 +135,29 @@ final class TextureFixtures
     private static int[] halve(final int[] src, final int srcWidth, final int srcHeight)
     {
         final int dstWidth = Math.max(1, srcWidth >> 1);
+
         final int dstHeight = Math.max(1, srcHeight >> 1);
+
         final int[] dst = new int[dstWidth * dstHeight];
+
         for (int y = 0; y < dstHeight; y++)
         {
             for (int x = 0; x < dstWidth; x++)
             {
                 final int x0 = Math.min(srcWidth - 1, x * 2);
+
                 final int x1 = Math.min(srcWidth - 1, x * 2 + 1);
+
                 final int y0 = Math.min(srcHeight - 1, y * 2);
+
                 final int y1 = Math.min(srcHeight - 1, y * 2 + 1);
+
                 dst[y * dstWidth + x] = average(
                     src[y0 * srcWidth + x0], src[y0 * srcWidth + x1],
                     src[y1 * srcWidth + x0], src[y1 * srcWidth + x1]);
             }
         }
+
         return dst;
     }
 
@@ -143,12 +166,16 @@ final class TextureFixtures
     {
         final int red = (TextureSampler.red(a) + TextureSampler.red(b)
             + TextureSampler.red(c) + TextureSampler.red(d)) / 4;
+
         final int green = (TextureSampler.green(a) + TextureSampler.green(b)
             + TextureSampler.green(c) + TextureSampler.green(d)) / 4;
+
         final int blue = (TextureSampler.blue(a) + TextureSampler.blue(b)
             + TextureSampler.blue(c) + TextureSampler.blue(d)) / 4;
+
         final int alpha = (TextureSampler.alpha(a) + TextureSampler.alpha(b)
             + TextureSampler.alpha(c) + TextureSampler.alpha(d)) / 4;
+
         return rgba(red, green, blue, alpha);
     }
 

@@ -45,6 +45,7 @@ class PresentationWiringTest
         void shouldRememberTheAttachedRenderer()
         {
             final GdxWindowPort port = new GdxWindowPort();
+
             final SoftwareRenderPort renderer = newRenderer();
 
             port.attachRenderer(renderer);
@@ -69,11 +70,15 @@ class PresentationWiringTest
             // needs a package-private seam to force the state, which is a
             // production change and a separate decision.
             final GdxWindowPort port = new GdxWindowPort();
+
             port.init();
+
             port.create(320, 240, "test");
 
             assertThat(port.state()).isEqualTo(GdxWindowPort.State.CREATED);
+
             port.attachRenderer(null);
+
             assertThat(port.renderer()).isNull();
         }
 
@@ -103,6 +108,7 @@ class PresentationWiringTest
         void shouldReturnNullWhenNoModelIsNamed()
         {
             assertThat(DesktopLauncher.modelArg(new String[] {"--fps=60"})).isNull();
+
             assertThat(DesktopLauncher.modelArg(null)).isNull();
         }
     }
@@ -127,7 +133,9 @@ class PresentationWiringTest
             // demo looks somewhere the asset pipeline never writes.
             assertThat(DesktopLauncher.assetsArg(new String[] {"--fps=60"}))
                 .isEqualTo("assets/models");
+
             assertThat(DesktopLauncher.assetsArg(null)).isEqualTo("assets/models");
+
             assertThat(DesktopLauncher.assetsArg(new String[] {"--assets="}))
                 .isEqualTo("assets/models");
         }
@@ -142,6 +150,7 @@ class PresentationWiringTest
         void shouldBeDisabledWithoutAPath()
         {
             assertThat(new GdxScreenshot(null, 1, false).isEnabled()).isFalse();
+
             assertThat(new GdxScreenshot("", 1, false).isEnabled()).isFalse();
         }
 
@@ -150,10 +159,13 @@ class PresentationWiringTest
         void shouldDoNothingWhenDisabled()
         {
             final GdxScreenshot shot = new GdxScreenshot(null, 1, false);
+
             // Gdx.graphics is null in a headless test, so this would throw
             // immediately if the disabled path reached the readback at all.
             shot.afterFrame();
+
             shot.afterFrame();
+
             assertThat(shot.isEnabled()).isFalse();
         }
 
@@ -162,10 +174,13 @@ class PresentationWiringTest
         void shouldWaitForTheTargetFrame()
         {
             final GdxScreenshot shot = new GdxScreenshot("ignored.png", 3, false);
+
             assertThat(shot.isEnabled()).isTrue();
+
             // Frames 1 and 2 must not attempt the readback; reaching it without
             // a context throws, so surviving these two calls is the assertion.
             shot.afterFrame();
+
             shot.afterFrame();
         }
     }
@@ -175,7 +190,9 @@ class PresentationWiringTest
     private static SoftwareRenderPort newRenderer()
     {
         final I_TimePort time = new NullTimePort();
+
         time.init();
+
         return new SoftwareRenderPort(null, time);
     }
 }

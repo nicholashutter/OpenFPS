@@ -36,9 +36,13 @@ final class ModelFormatGeometryTest
     private static int[] triangleVertices()
     {
         final int[] vertices = new int[3 * ModelFormat.VERTEX_STRIDE_INTS];
+
         ModelFormat.writeVertex(vertices, 0, -1.0f, -2.0f, -3.0f, 0.0f, 0.0f, COLOUR);
+
         ModelFormat.writeVertex(vertices, 1, 4.0f, -2.0f, -3.0f, 1.0f, 0.0f, OTHER_COLOUR);
+
         ModelFormat.writeVertex(vertices, 2, 4.0f, 5.0f, 6.0f, 1.0f, 1.0f, COLOUR);
+
         return vertices;
     }
 
@@ -58,7 +62,9 @@ final class ModelFormatGeometryTest
             final ModelFormat model = triangle();
 
             assertThat(model.vertexCount()).isEqualTo(3);
+
             assertThat(model.indexCount()).isEqualTo(3);
+
             assertThat(model.triangleCount()).isEqualTo(1);
         }
 
@@ -72,11 +78,17 @@ final class ModelFormatGeometryTest
             // bits and reinterprets them, so anything but equality would mean a
             // slot had been transposed rather than that arithmetic had drifted.
             assertThat(model.positionX(0)).isEqualTo(-1.0f);
+
             assertThat(model.positionY(0)).isEqualTo(-2.0f);
+
             assertThat(model.positionZ(0)).isEqualTo(-3.0f);
+
             assertThat(model.texCoordU(1)).isEqualTo(1.0f);
+
             assertThat(model.texCoordV(2)).isEqualTo(1.0f);
+
             assertThat(model.colour(0)).isEqualTo(COLOUR);
+
             assertThat(model.colour(1))
                 .as("a per-vertex colour must not be flattened to the first one")
                 .isEqualTo(OTHER_COLOUR);
@@ -89,10 +101,15 @@ final class ModelFormatGeometryTest
             final ModelFormat model = triangle();
 
             assertThat(model.minX()).isEqualTo(-1.0f);
+
             assertThat(model.minY()).isEqualTo(-2.0f);
+
             assertThat(model.minZ()).isEqualTo(-3.0f);
+
             assertThat(model.maxX()).isEqualTo(4.0f);
+
             assertThat(model.maxY()).isEqualTo(5.0f);
+
             assertThat(model.maxZ()).isEqualTo(6.0f);
         }
 
@@ -106,6 +123,7 @@ final class ModelFormatGeometryTest
             // NO_MATERIAL, which is the pre-existing path that shades from the
             // baked vertex colour. See the factory's Javadoc.
             assertThat(model.submeshCount()).isZero();
+
             assertThat(model.textureCount()).isZero();
         }
 
@@ -116,6 +134,7 @@ final class ModelFormatGeometryTest
             final ModelFormat model = triangle();
 
             assertThat(model.versionMajor()).isEqualTo(ModelFormat.VERSION_MAJOR);
+
             assertThat(model.versionMinor()).isEqualTo(ModelFormat.VERSION_MINOR);
         }
 
@@ -124,15 +143,19 @@ final class ModelFormatGeometryTest
         void arraysAreCopied()
         {
             final int[] vertices = triangleVertices();
+
             final int[] indices = {0, 1, 2};
+
             final ModelFormat model = ModelFormat.ofGeometry(vertices, indices);
 
             vertices[ModelFormat.VERTEX_COLOUR] = 0;
+
             indices[0] = 2;
 
             assertThat(model.colour(0))
                 .as("the model must not alias the caller's vertex block")
                 .isEqualTo(COLOUR);
+
             assertThat(model.indices()[0])
                 .as("nor its index array")
                 .isZero();
@@ -145,7 +168,9 @@ final class ModelFormatGeometryTest
             final ModelFormat model = ModelFormat.ofGeometry(new int[0], new int[0]);
 
             assertThat(model.vertexCount()).isZero();
+
             assertThat(model.triangleCount()).isZero();
+
             // The orbit camera subtracts min from max; the empty-box infinities
             // would make that NaN. Scene refuses a model with no triangles, so
             // this box is never actually framed — but it must not be poison.
@@ -164,6 +189,7 @@ final class ModelFormatGeometryTest
             assertThatThrownBy(() -> ModelFormat.ofGeometry(null, new int[0]))
                 .isInstanceOf(ModelFormatException.class)
                 .hasMessageContaining("vertexSlots");
+
             assertThatThrownBy(() -> ModelFormat.ofGeometry(new int[0], null))
                 .isInstanceOf(ModelFormatException.class)
                 .hasMessageContaining("triangleIndices");
@@ -241,18 +267,25 @@ final class ModelFormatGeometryTest
         void bothPathsAgree()
         {
             final int[] vertices = triangleVertices();
+
             final int[] indices = {0, 1, 2};
+
             final ModelFormat built = ModelFormat.ofGeometry(vertices, indices);
+
             final ModelFormat parsed = ModelFormat.read(ModelFileFixture.build(vertices, indices,
                 new int[0], new int[0], new int[0],
                 new float[] {-1.0f, -2.0f, -3.0f, 4.0f, 5.0f, 6.0f}));
 
             assertThat(built.vertexData()).containsExactly(parsed.vertexData());
+
             assertThat(built.indices()).containsExactly(parsed.indices());
+
             assertThat(built.triangleCount()).isEqualTo(parsed.triangleCount());
+
             // The bounds are declared on one path and computed on the other,
             // which is exactly the pair worth comparing.
             assertThat(built.minZ()).isEqualTo(parsed.minZ());
+
             assertThat(built.maxZ()).isEqualTo(parsed.maxZ());
         }
     }

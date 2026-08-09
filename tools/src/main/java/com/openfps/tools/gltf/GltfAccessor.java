@@ -135,7 +135,9 @@ public final class GltfAccessor
         final int components)
     {
         final JsonObject accessor = asset.item("accessors", accessorIndex);
+
         final int actual = componentCount(accessor.get("type").getAsString());
+
         if (actual != components)
         {
             throw new GltfException(asset.name() + ": accessor " + accessorIndex + " is "
@@ -143,11 +145,15 @@ public final class GltfAccessor
         }
 
         final int componentType = accessor.get("componentType").getAsInt();
+
         final boolean normalized = GltfAsset.optionalBoolean(accessor, "normalized", false);
+
         final int elements = accessor.get("count").getAsInt();
+
         final float[] out = new float[Math.multiplyExact(elements, components)];
 
         final Reader reader = readerFor(asset, accessorIndex, accessor, components);
+
         for (int element = 0; element < elements; element++)
         {
             for (int component = 0; component < components; component++)
@@ -156,6 +162,7 @@ public final class GltfAccessor
                     reader.raw(element, component), componentType, normalized);
             }
         }
+
         return out;
     }
 
@@ -171,6 +178,7 @@ public final class GltfAccessor
     public static int[] readScalarInts(final GltfAsset asset, final int accessorIndex)
     {
         final JsonObject accessor = asset.item("accessors", accessorIndex);
+
         if (componentCount(accessor.get("type").getAsString()) != 1)
         {
             throw new GltfException(asset.name() + ": accessor " + accessorIndex + " is "
@@ -178,12 +186,16 @@ public final class GltfAccessor
         }
 
         final int elements = accessor.get("count").getAsInt();
+
         final int[] out = new int[elements];
+
         final Reader reader = readerFor(asset, accessorIndex, accessor, 1);
+
         for (int element = 0; element < elements; element++)
         {
             out[element] = (int) reader.raw(element, 0);
         }
+
         return out;
     }
 
@@ -201,8 +213,11 @@ public final class GltfAccessor
         }
 
         final int componentType = accessor.get("componentType").getAsInt();
+
         final int componentBytes = componentSize(componentType);
+
         final int elements = accessor.get("count").getAsInt();
+
         final int elementBytes = componentBytes * components;
 
         if (!accessor.has("bufferView"))
@@ -213,20 +228,27 @@ public final class GltfAccessor
         }
 
         final JsonObject view = asset.item("bufferViews", accessor.get("bufferView").getAsInt());
+
         final byte[] data = asset.buffer(view.get("buffer").getAsInt());
+
         final int viewOffset = GltfAsset.optionalInt(view, "byteOffset", 0);
+
         final int declaredStride = GltfAsset.optionalInt(view, "byteStride", 0);
+
         final int accessorOffset = GltfAsset.optionalInt(accessor, "byteOffset", 0);
 
         // MUTABLE local — a stride of zero or absent means tightly packed.
         int stride = declaredStride;
+
         if (stride == 0)
         {
             stride = elementBytes;
         }
 
         final long start = (long) viewOffset + accessorOffset;
+
         final long end = start + ((long) (elements - 1) * stride) + elementBytes;
+
         if (elements > 0 && (start < 0 || end > data.length))
         {
             throw new GltfException(asset.name() + ": accessor " + accessorIndex + " reads to byte "
@@ -267,10 +289,12 @@ public final class GltfAccessor
         {
             return Float.intBitsToFloat((int) raw);
         }
+
         if (!normalized)
         {
             return raw;
         }
+
         switch (componentType)
         {
             case COMPONENT_BYTE:
@@ -325,10 +349,15 @@ public final class GltfAccessor
             final int stride, final int componentBytes, final boolean zeroFilled)
         {
             this.data = data;
+
             this.componentType = componentType;
+
             this.start = start;
+
             this.stride = stride;
+
             this.componentBytes = componentBytes;
+
             this.zeroFilled = zeroFilled;
         }
 
@@ -339,6 +368,7 @@ public final class GltfAccessor
             {
                 return 0L;
             }
+
             return rawAt(data, componentType,
                 start + (element * stride) + (component * componentBytes));
         }

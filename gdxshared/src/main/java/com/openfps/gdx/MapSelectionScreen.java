@@ -89,11 +89,14 @@ public final class MapSelectionScreen
             {
                 throw new IllegalArgumentException("id must not be blank");
             }
+
             if (displayName == null || displayName.isBlank())
             {
                 throw new IllegalArgumentException("displayName must not be blank");
             }
+
             this.id = id;
+
             this.displayName = displayName;
         }
 
@@ -208,24 +211,35 @@ public final class MapSelectionScreen
         {
             throw new IllegalArgumentException("selection must not be null");
         }
+
         if (entries == null || entries.isEmpty())
         {
             throw new IllegalArgumentException("entries must not be null or empty");
         }
+
         if (onBack == null)
         {
             throw new IllegalArgumentException("onBack must not be null");
         }
+
         this.selection = selection;
+
         this.entries = List.copyOf(entries);
+
         this.rowCount = this.entries.size();
+
         this.white = whitePixelTexture();
+
         final TextureRegion pixel = new TextureRegion(white);
+
         this.font = new BitmapFont();
+
         this.stage = new Stage(new ScreenViewport());
 
         this.background = new MenuBackground(pixel);
+
         this.heading = new BlockTitle(TITLE_TEXT, pixel, MenuPalette.NEUTRAL_FACE);
+
         this.subtitle = label(SUBTITLE_TEXT, MenuPalette.HINT, SUBTITLE_FONT_SCALE);
 
         // One button per row; the current selection is given a different face
@@ -233,26 +247,36 @@ public final class MapSelectionScreen
         // before clicking. The label includes the SELECTED_PREFIX on the
         // current row, refreshed every click.
         this.rowButtons = new BlockButton[rowCount];
+
         for (int row = 0; row < rowCount; row++)
         {
             final Entry entry = this.entries.get(row);
+
             final int captured = row;
+
             this.rowButtons[row] = new BlockButton(rowLabel(entry.id(), selection),
                 rowColor(entry.id(), selection), rowShade(entry.id(), selection),
                 pixel, font, BUTTON_FONT_SCALE, () -> pickRow(captured));
         }
+
         this.backButton = new BlockButton("BACK", MenuPalette.NEUTRAL_FACE,
             MenuPalette.NEUTRAL_SHADE, pixel, font, BUTTON_FONT_SCALE, onBack);
 
         stage.addActor(background);
+
         stage.addActor(heading);
+
         stage.addActor(subtitle);
+
         for (final BlockButton button : rowButtons)
         {
             button.setSize(BUTTON_WIDTH, BUTTON_HEIGHT);
+
             stage.addActor(button);
         }
+
         backButton.setSize(BUTTON_WIDTH, BUTTON_HEIGHT);
+
         stage.addActor(backButton);
     }
 
@@ -277,6 +301,7 @@ public final class MapSelectionScreen
     public void resize(final int width, final int height)
     {
         stage.getViewport().update(width, height, true);
+
         layoutFor(width, height);
     }
 
@@ -289,7 +314,9 @@ public final class MapSelectionScreen
     public void render(final float deltaSeconds)
     {
         ScreenUtils.clear(MenuPalette.BACKDROP);
+
         stage.act(deltaSeconds);
+
         stage.draw();
     }
 
@@ -302,6 +329,7 @@ public final class MapSelectionScreen
         {
             return;
         }
+
         Gdx.input.setInputProcessor(stage);
     }
 
@@ -320,6 +348,7 @@ public final class MapSelectionScreen
         {
             return;
         }
+
         Gdx.input.setInputProcessor(null);
     }
 
@@ -329,7 +358,9 @@ public final class MapSelectionScreen
     public void dispose()
     {
         stage.dispose();
+
         white.dispose();
+
         font.dispose();
     }
 
@@ -353,15 +384,19 @@ public final class MapSelectionScreen
         {
             throw new IllegalArgumentException("rowId must not be null");
         }
+
         if (selection == null)
         {
             throw new IllegalArgumentException("selection must not be null");
         }
+
         final String displayName = displayNameFor(rowId);
+
         if (rowId.equals(selection.currentMapId()))
         {
             return SELECTED_PREFIX + displayName;
         }
+
         return displayName;
     }
 
@@ -384,10 +419,12 @@ public final class MapSelectionScreen
         {
             throw new IllegalArgumentException("label must not be null");
         }
+
         if (label.startsWith(SELECTED_PREFIX))
         {
             return label.substring(SELECTED_PREFIX.length());
         }
+
         return label;
     }
 
@@ -405,6 +442,7 @@ public final class MapSelectionScreen
                 return entry.displayName();
             }
         }
+
         return rowId;
     }
 
@@ -416,8 +454,11 @@ public final class MapSelectionScreen
         {
             return;
         }
+
         final Entry picked = entries.get(rowIndex);
+
         selection.setCurrentMapId(picked.id());
+
         relabelRows();
     }
 
@@ -431,6 +472,7 @@ public final class MapSelectionScreen
         for (int row = 0; row < rowCount; row++)
         {
             final Entry entry = entries.get(row);
+
             rowButtons[row].setLabel(rowLabel(entry.id(), selection));
         }
     }
@@ -444,6 +486,7 @@ public final class MapSelectionScreen
         {
             return MenuPalette.PLAY_FACE;
         }
+
         return MenuPalette.NEUTRAL_FACE;
     }
 
@@ -455,6 +498,7 @@ public final class MapSelectionScreen
         {
             return MenuPalette.PLAY_SHADE;
         }
+
         return MenuPalette.NEUTRAL_SHADE;
     }
 
@@ -467,14 +511,20 @@ public final class MapSelectionScreen
         background.setBounds(0.0f, 0.0f, width, height);
 
         final float headingWidth = width * TITLE_WIDTH_FRACTION;
+
         final float cell = heading.cellSizeFor(headingWidth);
+
         final float headingHeight = cell * BlockFont.GLYPH_HEIGHT;
+
         final float headingTop = height * (1.0f - TITLE_TOP_FRACTION);
+
         heading.setBounds((width - headingWidth) * 0.5f, headingTop - headingHeight,
             headingWidth, headingHeight);
 
         subtitle.pack();
+
         final float subtitleTop = headingTop - headingHeight - SUBTITLE_GAP;
+
         subtitle.setPosition((width - subtitle.getWidth()) * 0.5f,
             subtitleTop - subtitle.getHeight());
 
@@ -483,29 +533,39 @@ public final class MapSelectionScreen
         // so the selected row's green face lines up with the green play
         // button on the menu.
         float nextTop = subtitleTop - subtitle.getHeight() - LIST_GAP;
+
         for (int row = 0; row < rowCount; row++)
         {
             rowButtons[row].setPosition((width - BUTTON_WIDTH) * 0.5f,
                 nextTop - BUTTON_HEIGHT);
+
             nextTop = nextTop - BUTTON_HEIGHT - ROW_GAP;
         }
+
         backButton.setPosition((width - BUTTON_WIDTH) * 0.5f, BOTTOM_MARGIN);
     }
 
     private static Texture whitePixelTexture()
     {
         final Pixmap pixmap = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
+
         pixmap.setColor(Color.WHITE);
+
         pixmap.fill();
+
         final Texture texture = new Texture(pixmap);
+
         pixmap.dispose();
+
         return texture;
     }
 
     private Label label(final String text, final Color colour, final float scale)
     {
         final Label built = new Label(text, new Label.LabelStyle(font, colour));
+
         built.setFontScale(scale);
+
         return built;
     }
 }

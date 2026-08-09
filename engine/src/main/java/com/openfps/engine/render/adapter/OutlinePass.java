@@ -444,8 +444,11 @@ public final class OutlinePass
             throw new IllegalArgumentException("outline thickness must be > 0, got "
                 + outlineThickness);
         }
+
         this.thickness = outlineThickness;
+
         this.outlineColor = rgba;
+
         this.keylineColor = keylineRgba;
     }
 
@@ -497,30 +500,42 @@ public final class OutlinePass
         {
             throw new IllegalArgumentException("framebuffer must not be null");
         }
+
         if (target.state() != Framebuffer.State.READY)
         {
             throw new IllegalStateException("Framebuffer is " + target.state() + ", not READY");
         }
+
         // After the validation, so a refused call leaves the pass exactly as it
         // was rather than half-rebound to a frame it never drew.
         this.subject = subjectEntityId;
+
         this.framebuffer = target;
+
         this.ids = target.entityIdBuffer();
+
         this.depths = target.depthBuffer();
+
         this.color = target.colorBuffer();
+
         this.width = target.width();
+
         this.height = target.height();
+
         this.strideInPixels = target.strideInPixels();
 
         final int tiles = target.tileCount();
+
         if (pool == null)
         {
             for (int tile = 0; tile < tiles; tile++)
             {
                 runTile(tile);
             }
+
             return;
         }
+
         pool.submitParallel(tileJob, tiles);
     }
 
@@ -576,17 +591,29 @@ public final class OutlinePass
     private void runTile(final int tile)
     {
         final Framebuffer target = framebuffer;
+
         final int[] idBuffer = ids;
+
         final float[] depthBuffer = depths;
+
         final int[] colorBuffer = color;
+
         final int stride = strideInPixels;
+
         final int minX = target.tileMinX(tile);
+
         final int minY = target.tileMinY(tile);
+
         final int maxX = target.tileMaxX(tile);
+
         final int maxY = target.tileMaxY(tile);
+
         final int paint = outlineColor;
+
         final int key = keylineColor;
+
         final int marked = subject;
+
         // Hoisted, so the per-pixel test is one integer compare in both modes
         // rather than a compare against a sentinel plus a compare against an id.
         final boolean everything = marked == EVERY_TAGGED_ENTITY;
@@ -594,13 +621,16 @@ public final class OutlinePass
         for (int py = minY; py <= maxY; py++)
         {
             final int rowBase = py * stride;
+
             for (int px = minX; px <= maxX; px++)
             {
                 final int id = idBuffer[rowBase + px];
+
                 if (id == Scene.UNTAGGED)
                 {
                     continue;
                 }
+
                 if (!everything && id != marked)
                 {
                     // Someone else's body. It still counts as "different" to
@@ -609,6 +639,7 @@ public final class OutlinePass
                     // drawn on the subject's side of the boundary only.
                     continue;
                 }
+
                 if (onEdge(idBuffer, depthBuffer, px, py, id, depthBuffer[rowBase + px]))
                 {
                     colorBuffer[rowBase + px] = paint;
@@ -658,11 +689,14 @@ public final class OutlinePass
         {
             return false;
         }
+
         final int at = y * strideInPixels + x;
+
         if (idBuffer[at] != id)
         {
             return false;
         }
+
         return onEdge(idBuffer, depthBuffer, x, y, id, depthBuffer[at]);
     }
 
@@ -691,11 +725,13 @@ public final class OutlinePass
             {
                 return true;
             }
+
             if (differs(idBuffer, px, py - step, id) || differs(idBuffer, px, py + step, id))
             {
                 return true;
             }
         }
+
         return false;
     }
 
@@ -727,12 +763,16 @@ public final class OutlinePass
         {
             return false;
         }
+
         final int at = y * strideInPixels + x;
+
         if (idBuffer[at] != id)
         {
             return false;
         }
+
         final float neighbour = depthBuffer[at];
+
         // Greater 1/w is nearer, so the larger of the two is the near surface —
         // and the near one is the right denominator: it is the surface the
         // crease belongs to, and using the far one would make the same physical
@@ -751,6 +791,7 @@ public final class OutlinePass
         {
             return false;
         }
+
         return idBuffer[y * strideInPixels + x] != id;
     }
 }

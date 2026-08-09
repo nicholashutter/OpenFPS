@@ -73,6 +73,7 @@ final class RecordingFrameCallback implements I_FrameCallback
     RecordingFrameCallback(final String name, final List<String> events)
     {
         this.name = name;
+
         this.events = events;
     }
 
@@ -80,8 +81,11 @@ final class RecordingFrameCallback implements I_FrameCallback
     public void onSurfaceReady(final int width, final int height)
     {
         surfaceReadyCount++;
+
         lastWidth = width;
+
         lastHeight = height;
+
         events.add(name + ":onSurfaceReady");
     }
 
@@ -89,7 +93,9 @@ final class RecordingFrameCallback implements I_FrameCallback
     public void onFrame(final float deltaSeconds)
     {
         frameCount++;
+
         lastDeltaSeconds = deltaSeconds;
+
         events.add(name + ":onFrame");
     }
 
@@ -97,8 +103,11 @@ final class RecordingFrameCallback implements I_FrameCallback
     public void onResize(final int width, final int height)
     {
         resizeCount++;
+
         lastWidth = width;
+
         lastHeight = height;
+
         events.add(name + ":onResize");
     }
 
@@ -106,6 +115,7 @@ final class RecordingFrameCallback implements I_FrameCallback
     public void onPause()
     {
         pauseCount++;
+
         events.add(name + ":onPause");
     }
 
@@ -113,6 +123,7 @@ final class RecordingFrameCallback implements I_FrameCallback
     public void onResume()
     {
         resumeCount++;
+
         events.add(name + ":onResume");
     }
 
@@ -120,6 +131,7 @@ final class RecordingFrameCallback implements I_FrameCallback
     public void onSurfaceLost()
     {
         surfaceLostCount++;
+
         events.add(name + ":onSurfaceLost");
     }
 

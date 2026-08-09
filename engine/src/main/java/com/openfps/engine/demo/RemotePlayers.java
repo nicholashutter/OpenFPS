@@ -162,13 +162,21 @@ public final class RemotePlayers
         final float feetZ)
     {
         this.bodyInstance = bodyIndices;
+
         this.weaponInstance = weaponIndices;
+
         this.controller = controllers;
+
         this.baseSpawnX = feetX;
+
         this.baseSpawnY = feetY;
+
         this.baseSpawnZ = feetZ;
+
         this.nextTic = new int[controllers.length];
+
         this.ticsApplied = new long[controllers.length];
+
         for (int body = 0; body < nextTic.length; body++)
         {
             nextTic[body] = NO_TIC;
@@ -211,14 +219,17 @@ public final class RemotePlayers
         {
             throw new IllegalArgumentException("builder must not be null");
         }
+
         if (models == null)
         {
             throw new IllegalArgumentException("models must not be null");
         }
+
         if (physics == null)
         {
             throw new IllegalArgumentException("physics must not be null");
         }
+
         if (!models.hasCharacters())
         {
             // The same degraded-but-not-broken case addBots has: no character
@@ -227,34 +238,47 @@ public final class RemotePlayers
             // nobody, which is at least the same answer the single-player demo
             // gives.
             LOG.info("Remote player bodies: none placed — no character art is staged");
+
             return new RemotePlayers(new int[0], new int[0], new PlayerController[0],
                 spawnFeetX, spawnFeetY, spawnFeetZ);
         }
 
         final ModelFormat[] people = models.characters();
+
         final ModelFormat blaster = models.botWeapon();
+
         final int[] bodies = new int[MAX_BODIES];
+
         final int[] weapons = new int[MAX_BODIES];
+
         final PlayerController[] controllers = new PlayerController[MAX_BODIES];
+
         for (int body = 0; body < MAX_BODIES; body++)
         {
             final int entityId = Match.FIRST_REMOTE_ENTITY_ID + body;
+
             // Counted backwards through the staged models so a two-player match
             // does not put the peer in the same shirt as bot zero. Cosmetic, and
             // the only reason it is worth a line: telling a player from a bot at
             // a glance is most of what makes a networked room readable.
             final ModelFormat model = people[(people.length - 1 - body % people.length)];
+
             bodies[body] = builder.worldInstanceCount();
+
             builder.addWorldInstance(model, DemoScene.placement(spawnFeetX, spawnFeetY,
                 spawnFeetZ, spawnYawRadians, DemoScene.CHARACTER_WORLD_SCALE), entityId);
+
             weapons[body] = addWeapon(builder, blaster, entityId, spawnFeetX, spawnFeetY,
                 spawnFeetZ, spawnYawRadians);
+
             controllers[body] = new PlayerController(spawnFeetX, spawnFeetY, spawnFeetZ,
                 spawnYawRadians, 0.0f, physics);
         }
+
         LOG.info("Remote player bodies: {} placed from {} model(s), ids {}..{}, armed: {}",
             MAX_BODIES, people.length, Match.FIRST_REMOTE_ENTITY_ID,
             Match.FIRST_REMOTE_ENTITY_ID + MAX_BODIES - 1, blaster != null);
+
         return new RemotePlayers(bodies, weapons, controllers, spawnFeetX, spawnFeetY,
             spawnFeetZ);
     }
@@ -270,9 +294,12 @@ public final class RemotePlayers
         {
             return DemoScene.NO_INSTANCE;
         }
+
         final int at = builder.worldInstanceCount();
+
         builder.addWorldInstance(blaster, DemoScene.heldWeaponPlacement(feetX, feetY, feetZ,
             yawRadians), entityId);
+
         return at;
     }
 
@@ -308,9 +335,13 @@ public final class RemotePlayers
         {
             return 0;
         }
+
         final TicCmdBuffer ring = session.commands();
+
         final int peers = session.peerCount();
+
         int applied = 0;
+
         for (int peer = 0; peer < peers && peer < controller.length; peer++)
         {
             // Slot is peer index + 1: NetSession.LOCAL_SLOT is 0 and peers take
@@ -320,6 +351,7 @@ public final class RemotePlayers
             applied = applied + advanceBody(peer, ring, peer + 1,
                 session.peer(peer).peerId(), deltaSeconds);
         }
+
         return applied;
     }
 
@@ -328,6 +360,7 @@ public final class RemotePlayers
         final int peerId, final float deltaSeconds)
     {
         int cursor = nextTic[body];
+
         if (cursor == NO_TIC)
         {
             // The peer's first packet decides where its body starts in time.
@@ -336,11 +369,14 @@ public final class RemotePlayers
             // body replay a history the ring no longer holds, find every tic
             // missing, and never move at all.
             final int latest = ring.latestTic(slot);
+
             if (latest == TicCmdBuffer.EMPTY_TIC)
             {
                 return 0;
             }
+
             cursor = oldestHeldTic(ring, slot, latest);
+
             // Onto the spawn belonging to THIS PEER'S player id, before its first
             // input is applied. The pool was placed on the canonical spawn because
             // that is all a Scene.Builder could know; the peer's own spawn depends
@@ -352,20 +388,29 @@ public final class RemotePlayers
             // nobody moving showed two empty rooms, which is indistinguishable
             // from a session that never connected.
             placeOnSpawn(body, peerId);
+
             this.liveCount = liveCount + 1;
+
             LOG.info("Remote body {} is live — player {} first input at tic {}, spawned at"
                 + " ({}, {})", body, peerId, cursor, controller[body].positionX(),
                 controller[body].positionZ());
         }
+
         int applied = 0;
+
         while (ring.has(slot, cursor))
         {
             apply(body, ring, slot, cursor, deltaSeconds);
+
             cursor = cursor + 1;
+
             applied = applied + 1;
         }
+
         nextTic[body] = cursor;
+
         ticsApplied[body] = ticsApplied[body] + applied;
+
         return applied;
     }
 
@@ -376,6 +421,7 @@ public final class RemotePlayers
     private void placeOnSpawn(final int body, final int peerId)
     {
         final float radius = spawnRadius();
+
         controller[body].respawnAt(DemoScene.spawnXFor(peerId, radius), baseSpawnY,
             DemoScene.spawnZFor(peerId, radius), DemoScene.spawnYawFor(peerId), 0.0f);
     }
@@ -404,10 +450,12 @@ public final class RemotePlayers
     private static int oldestHeldTic(final TicCmdBuffer ring, final int slot, final int latest)
     {
         int floor = latest - ring.depth() + 1;
+
         if (floor < 0)
         {
             floor = 0;
         }
+
         for (int tic = floor; tic <= latest; tic++)
         {
             if (ring.has(slot, tic))
@@ -415,6 +463,7 @@ public final class RemotePlayers
                 return tic;
             }
         }
+
         // Unreachable in practice — the caller has already established that the
         // slot holds `latest`. Returning it is the answer that keeps the cursor
         // sane rather than one that would replay the whole ring.
@@ -432,13 +481,17 @@ public final class RemotePlayers
         final int tic, final float deltaSeconds)
     {
         final PlayerController peer = controller[body];
+
         peer.setLook(TicCmdEncoder.decodeAngle(ring.angle(slot, tic)),
             TicCmdEncoder.decodePitch(ring.pitch(slot, tic)));
+
         final int buttons = ring.buttons(slot, tic);
+
         wireInput.set(TicCmdEncoder.decodeAxis(ring.forward(slot, tic)),
             TicCmdEncoder.decodeAxis(ring.strafe(slot, tic)),
             TicCmdEncoder.isDown(buttons, TicCmdEncoder.BUTTON_JUMP),
             TicCmdEncoder.isDown(buttons, TicCmdEncoder.BUTTON_SPRINT));
+
         peer.update(wireInput, deltaSeconds);
     }
 
@@ -464,17 +517,21 @@ public final class RemotePlayers
         {
             throw new IllegalArgumentException("renderer must not be null");
         }
+
         if (controller.length == 0)
         {
             return;
         }
+
         if (!hidden)
         {
             // Before anything else, and exactly once: the pool entered the scene
             // visible because the builder rejects the degenerate transform.
             hideEverything(renderer);
+
             this.hidden = true;
         }
+
         for (int body = 0; body < controller.length; body++)
         {
             if (nextTic[body] == NO_TIC)
@@ -484,10 +541,13 @@ public final class RemotePlayers
                 // the same way DemoEffects skips a slot it hid last tic.
                 continue;
             }
+
             final PlayerController peer = controller[body];
+
             renderer.setWorldTransform(bodyInstance[body], DemoScene.placement(
                 peer.positionX(), peer.positionY(), peer.positionZ(), peer.yawRadians(),
                 DemoScene.CHARACTER_WORLD_SCALE));
+
             publishWeapon(renderer, body, peer);
         }
     }
@@ -500,10 +560,12 @@ public final class RemotePlayers
         final PlayerController peer)
     {
         final int instance = weaponInstance[body];
+
         if (instance == DemoScene.NO_INSTANCE)
         {
             return;
         }
+
         renderer.setWorldTransform(instance, DemoScene.heldWeaponPlacement(
             peer.positionX(), peer.positionY(), peer.positionZ(), peer.yawRadians()));
     }
@@ -515,6 +577,7 @@ public final class RemotePlayers
         {
             renderer.setWorldTransform(instance, DemoEffects.HIDDEN);
         }
+
         for (final int instance : weaponInstance)
         {
             if (instance != DemoScene.NO_INSTANCE)
@@ -543,9 +606,12 @@ public final class RemotePlayers
         {
             controller[body].respawnAt(spawnFeetX, spawnFeetY, spawnFeetZ, spawnYawRadians,
                 0.0f);
+
             nextTic[body] = NO_TIC;
         }
+
         this.liveCount = 0;
+
         // Forces the next publish to hide the pool again, which is what makes a
         // rematch start with nobody visible rather than with the previous
         // round's bodies frozen where they stopped.
@@ -623,21 +689,26 @@ public final class RemotePlayers
     public String toString()
     {
         final StringBuilder text = new StringBuilder(64);
+
         text.append("RemotePlayers{bodies=").append(controller.length)
             .append(", live=").append(liveCount);
+
         for (int body = 0; body < controller.length; body++)
         {
             if (nextTic[body] == NO_TIC)
             {
                 continue;
             }
+
             final PlayerController peer = controller[body];
+
             text.append(", [").append(body).append("] tics=").append(ticsApplied[body])
                 .append(" nextTic=").append(nextTic[body])
                 .append(" at (").append(peer.positionX()).append(", ")
                 .append(peer.positionY()).append(", ").append(peer.positionZ())
                 .append(") yaw=").append(peer.yawRadians());
         }
+
         return text.append('}').toString();
     }
 
@@ -670,8 +741,11 @@ public final class RemotePlayers
             final boolean sprintHeld)
         {
             this.forward = forwardAxis;
+
             this.strafe = strafeAxis;
+
             this.jumping = jumpHeld;
+
             this.sprinting = sprintHeld;
         }
 

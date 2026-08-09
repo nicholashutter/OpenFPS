@@ -69,6 +69,7 @@ public final class JvmMemoryPort implements I_MemoryPort
             throw new MemoryException("init() called from state " + state
                 + " — only valid from UNINITIALIZED");
         }
+
         if (heapSizeBytes <= 0)
         {
             throw new MemoryException("init() heapSizeBytes must be > 0, got "
@@ -76,11 +77,17 @@ public final class JvmMemoryPort implements I_MemoryPort
         }
 
         this.totalBytes = heapSizeBytes;
+
         final int initialCapacity = 64;
+
         this.slots = new byte[initialCapacity][];
+
         this.sizes = new int[initialCapacity];
+
         this.tags  = new int[initialCapacity];
+
         this.liveCount = 0;
+
         this.state = State.READY;
 
         LOG.info("JvmMemoryPort initialized: capacity={} bytes, slot table={} entries",
@@ -94,6 +101,7 @@ public final class JvmMemoryPort implements I_MemoryPort
         {
             throw new MemoryException("shutdown() called from state SHUTDOWN — already terminal");
         }
+
         // Release all live allocations back to the GC
         if (slots != null)
         {
@@ -102,8 +110,11 @@ public final class JvmMemoryPort implements I_MemoryPort
                 slots[i] = null;
             }
         }
+
         liveCount = 0;
+
         state = State.SHUTDOWN;
+
         LOG.info("JvmMemoryPort shut down");
     }
 
@@ -115,17 +126,23 @@ public final class JvmMemoryPort implements I_MemoryPort
             throw new MemoryException("reset() called from state " + state
                 + " — only valid from READY or ACTIVE");
         }
+
         if (slots != null)
         {
             for (int i = 0; i < slots.length; i++)
             {
                 slots[i] = null;
+
                 sizes[i] = 0;
+
                 tags[i] = 0;
             }
         }
+
         liveCount = 0;
+
         state = State.READY;
+
         LOG.info("JvmMemoryPort reset (all allocations cleared)");
     }
 
@@ -143,10 +160,12 @@ public final class JvmMemoryPort implements I_MemoryPort
             throw new MemoryException("allocate() called from state " + state
                 + " — only valid from READY or ACTIVE");
         }
+
         if (sizeBytes < 0)
         {
             throw new MemoryException("allocate() sizeBytes must be >= 0, got " + sizeBytes);
         }
+
         if (tag < 0 || tag > 255)
         {
             throw new MemoryException("allocate() tag must be in [0, 255], got " + tag);
@@ -154,15 +173,18 @@ public final class JvmMemoryPort implements I_MemoryPort
 
         // Bound check: would this push us over the configured capacity?
         final int currentAllocated = allocatedBytes();
+
         if (currentAllocated + sizeBytes > totalBytes)
         {
             LOG.error("JvmMemoryPort OOM: requested {} bytes, would exceed capacity {} (currently {} used)",
                 sizeBytes, totalBytes, currentAllocated);
+
             return NULL_HANDLE;
         }
 
         // Find or grow a slot
         int handle = findFreeSlot();
+
         if (handle < 0)
         {
             // No free slot — grow
@@ -170,8 +192,11 @@ public final class JvmMemoryPort implements I_MemoryPort
         }
 
         slots[handle] = new byte[sizeBytes];
+
         sizes[handle] = sizeBytes;
+
         tags[handle]  = tag;
+
         liveCount++;
 
         // First allocation flips us into ACTIVE
@@ -179,6 +204,7 @@ public final class JvmMemoryPort implements I_MemoryPort
         {
             state = State.ACTIVE;
         }
+
         return handle;
     }
 
@@ -190,18 +216,23 @@ public final class JvmMemoryPort implements I_MemoryPort
             throw new MemoryException("free() called from state " + state
                 + " — only valid from ACTIVE");
         }
+
         if (handle < 0 || handle >= slots.length)
         {
             throw new MemoryException("free() handle out of range: " + handle);
         }
+
         if (slots[handle] == null)
         {
             throw new MemoryException("free() handle " + handle + " is not currently allocated");
         }
 
         slots[handle] = null;
+
         sizes[handle] = 0;
+
         tags[handle]  = 0;
+
         liveCount--;
     }
 
@@ -213,24 +244,32 @@ public final class JvmMemoryPort implements I_MemoryPort
             throw new MemoryException("freeByTag() called from state " + state
                 + " — only valid from READY or ACTIVE");
         }
+
         if (tag < 0 || tag > 255)
         {
             throw new MemoryException("freeByTag() tag must be in [0, 255], got " + tag);
         }
 
         int freed = 0;
+
         for (int i = 0; i < slots.length; i++)
         {
             if (slots[i] != null && tags[i] == tag)
             {
                 slots[i] = null;
+
                 sizes[i] = 0;
+
                 tags[i]  = 0;
+
                 liveCount--;
+
                 freed++;
             }
         }
+
         LOG.debug("JvmMemoryPort freeByTag({}) freed {} allocations", tag, freed);
+
         return freed;
     }
 
@@ -247,7 +286,9 @@ public final class JvmMemoryPort implements I_MemoryPort
         {
             return 0;
         }
+
         int sum = 0;
+
         for (int i = 0; i < slots.length; i++)
         {
             if (slots[i] != null)
@@ -255,6 +296,7 @@ public final class JvmMemoryPort implements I_MemoryPort
                 sum += sizes[i];
             }
         }
+
         return sum;
     }
 
@@ -284,6 +326,7 @@ public final class JvmMemoryPort implements I_MemoryPort
         {
             return 0;
         }
+
         return sizes[handle];
     }
 
@@ -296,6 +339,7 @@ public final class JvmMemoryPort implements I_MemoryPort
         {
             return -1;
         }
+
         for (int i = 0; i < slots.length; i++)
         {
             if (slots[i] == null)
@@ -303,6 +347,7 @@ public final class JvmMemoryPort implements I_MemoryPort
                 return i;
             }
         }
+
         return -1;
     }
 
@@ -310,16 +355,27 @@ public final class JvmMemoryPort implements I_MemoryPort
     private int growSlots()
     {
         final int oldLen = slots.length;
+
         final int newLen = oldLen * 2;
+
         final byte[][] newSlots = new byte[newLen][];
+
         final int[] newSizes = new int[newLen];
+
         final int[] newTags  = new int[newLen];
+
         System.arraycopy(slots, 0, newSlots, 0, oldLen);
+
         System.arraycopy(sizes, 0, newSizes, 0, oldLen);
+
         System.arraycopy(tags,  0, newTags,  0, oldLen);
+
         slots = newSlots;
+
         sizes = newSizes;
+
         tags  = newTags;
+
         return oldLen;
     }
 }

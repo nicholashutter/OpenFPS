@@ -49,7 +49,9 @@ class DebugSettingsTest
         void shouldStartOff()
         {
             final DebugSettings settings = new DebugSettings();
+
             assertThat(settings.isOverlayVisible()).isFalse();
+
             assertThat(settings.overlayLabel()).isEqualTo("OFF");
         }
 
@@ -58,7 +60,9 @@ class DebugSettingsTest
         void shouldReturnTheNewValueFromToggle()
         {
             final DebugSettings settings = new DebugSettings();
+
             assertThat(settings.toggleOverlay()).isTrue();
+
             assertThat(settings.toggleOverlay()).isFalse();
         }
 
@@ -70,9 +74,13 @@ class DebugSettingsTest
             // its action makes the reader invert it to work out where they are,
             // and they get it wrong about half the time.
             final DebugSettings settings = new DebugSettings();
+
             settings.setOverlayVisible(true);
+
             assertThat(settings.overlayLabel()).isEqualTo("ON");
+
             settings.setOverlayVisible(false);
+
             assertThat(settings.overlayLabel()).isEqualTo("OFF");
         }
     }
@@ -89,7 +97,9 @@ class DebugSettingsTest
             // outline defaults; this must not override one it knows nothing
             // about, merely by being wired up.
             final DebugSettings settings = new DebugSettings();
+
             final Recorder recorder = new Recorder();
+
             settings.onChange(recorder);
 
             assertThat(recorder.seen).isEmpty();
@@ -100,11 +110,15 @@ class DebugSettingsTest
         void shouldReportEveryChange()
         {
             final DebugSettings settings = new DebugSettings();
+
             final Recorder recorder = new Recorder();
+
             settings.onChange(recorder);
 
             settings.toggleOverlay();
+
             settings.toggleOverlay();
+
             settings.setOverlayVisible(true);
 
             assertThat(recorder.seen).containsExactly(Boolean.TRUE, Boolean.FALSE,
@@ -116,14 +130,19 @@ class DebugSettingsTest
         void shouldIgnoreANoOpSet()
         {
             final DebugSettings settings = new DebugSettings();
+
             final Recorder recorder = new Recorder();
+
             settings.onChange(recorder);
 
             settings.setOverlayVisible(false);
+
             assertThat(recorder.seen).isEmpty();
 
             settings.setOverlayVisible(true);
+
             settings.setOverlayVisible(true);
+
             assertThat(recorder.seen).containsExactly(Boolean.TRUE);
         }
 
@@ -132,14 +151,19 @@ class DebugSettingsTest
         void shouldStopReportingWhenDetached()
         {
             final DebugSettings settings = new DebugSettings();
+
             final Recorder recorder = new Recorder();
+
             settings.onChange(recorder);
+
             settings.toggleOverlay();
 
             settings.onChange(null);
+
             settings.toggleOverlay();
 
             assertThat(recorder.seen).containsExactly(Boolean.TRUE);
+
             assertThat(settings.isOverlayVisible()).isFalse();
         }
 
@@ -148,7 +172,9 @@ class DebugSettingsTest
         void shouldWorkWithNoObserver()
         {
             final DebugSettings settings = new DebugSettings();
+
             settings.toggleOverlay();
+
             assertThat(settings.isOverlayVisible()).isTrue();
         }
     }

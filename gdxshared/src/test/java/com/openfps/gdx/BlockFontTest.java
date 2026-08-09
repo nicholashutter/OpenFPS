@@ -31,7 +31,9 @@ class BlockFontTest
     private static List<String> cellsOf(final String text)
     {
         final List<String> cells = new ArrayList<>();
+
         BlockFont.forEachBlock(text, (column, row, glyph) -> cells.add(column + "," + row));
+
         return cells;
     }
 
@@ -39,6 +41,7 @@ class BlockFontTest
     private static int rightmostColumn(final String text)
     {
         final int[] rightmost = { -1 };
+
         BlockFont.forEachBlock(text, (column, row, glyph) ->
         {
             if (column > rightmost[0])
@@ -46,6 +49,7 @@ class BlockFontTest
                 rightmost[0] = column;
             }
         });
+
         return rightmost[0];
     }
 
@@ -62,6 +66,7 @@ class BlockFontTest
                 assertThat(BlockFont.isSupported(letter))
                     .as("no glyph for '%s'", letter).isTrue();
             }
+
             for (char digit = '0'; digit <= '9'; digit++)
             {
                 assertThat(BlockFont.isSupported(digit))
@@ -74,6 +79,7 @@ class BlockFontTest
         void shouldFoldLowerCaseWhenLookingUpAGlyph()
         {
             assertThat(BlockFont.isSupported('a')).isTrue();
+
             assertThat(cellsOf("a")).isEqualTo(cellsOf("A"));
         }
 
@@ -87,9 +93,11 @@ class BlockFontTest
             for (char letter = 'A'; letter <= 'Z'; letter++)
             {
                 final String single = String.valueOf(letter);
+
                 BlockFont.forEachBlock(single, (column, row, glyph) ->
                 {
                     assertThat(column).isBetween(0, BlockFont.GLYPH_WIDTH - 1);
+
                     assertThat(row).isBetween(0, BlockFont.GLYPH_HEIGHT - 1);
                 });
             }
@@ -114,6 +122,7 @@ class BlockFontTest
         void shouldDrawNothingForASpace()
         {
             assertThat(cellsOf(" ")).isEmpty();
+
             assertThat(BlockFont.widthInBlocks(" ")).isEqualTo(BlockFont.GLYPH_WIDTH);
         }
     }
@@ -138,6 +147,7 @@ class BlockFontTest
         {
             assertThat(BlockFont.widthInBlocks("AB"))
                 .isEqualTo(BlockFont.GLYPH_WIDTH * 2 + BlockFont.GLYPH_SPACING);
+
             assertThat(BlockFont.widthInBlocks("ABC"))
                 .isEqualTo(BlockFont.GLYPH_WIDTH * 3 + BlockFont.GLYPH_SPACING * 2);
         }
@@ -147,6 +157,7 @@ class BlockFontTest
         void shouldMeasureAnEmptyStringAsZero()
         {
             assertThat(BlockFont.widthInBlocks("")).isZero();
+
             assertThat(cellsOf("")).isEmpty();
         }
 
@@ -158,6 +169,7 @@ class BlockFontTest
             // not bound the cells clips the last letter or leaves a gap, and the
             // two are computed in different methods.
             final String word = "OPENFPS";
+
             assertThat(rightmostColumn(word))
                 .isEqualTo(BlockFont.widthInBlocks(word) - 1);
         }
@@ -167,6 +179,7 @@ class BlockFontTest
         void shouldBoundTheTitleWhenMeasuringIt()
         {
             final String title = MainMenuScreen.TITLE_TEXT;
+
             final int width = BlockFont.widthInBlocks(title);
 
             BlockFont.forEachBlock(title, (column, row, glyph) ->
@@ -187,6 +200,7 @@ class BlockFontTest
             BlockFont.forEachBlock("OPENFPS", (column, row, glyph) ->
             {
                 final int slotStart = glyph * BlockFont.GLYPH_ADVANCE;
+
                 assertThat(column)
                     .as("glyph %d put a cell at column %d, outside its slot", glyph, column)
                     .isBetween(slotStart, slotStart + BlockFont.GLYPH_WIDTH - 1);
@@ -200,11 +214,15 @@ class BlockFontTest
             // The title colours per letter, so the index has to be right or the
             // cycle travels through the word in the wrong shape.
             final List<Integer> indices = new ArrayList<>();
+
             BlockFont.forEachBlock("ABC", (column, row, glyph) -> indices.add(glyph));
 
             assertThat(indices).isNotEmpty();
+
             assertThat(indices).allSatisfy(index -> assertThat(index).isBetween(0, 2));
+
             assertThat(indices.get(0)).isZero();
+
             assertThat(indices.get(indices.size() - 1)).isEqualTo(2);
         }
 
@@ -218,7 +236,9 @@ class BlockFontTest
             final List<String> cells = cellsOf("T");
 
             assertThat(cells).contains("0,0", "1,0", "2,0", "3,0", "4,0");
+
             assertThat(cells).contains("2,6");
+
             assertThat(cells).doesNotContain("0,6");
         }
     }
@@ -236,6 +256,7 @@ class BlockFontTest
             assertThatThrownBy(() -> BlockFont.widthInBlocks("HELLO?"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("?");
+
             assertThatThrownBy(() -> BlockFont.forEachBlock("A@B", (c, r, g) -> { }))
                 .isInstanceOf(IllegalArgumentException.class);
         }
@@ -246,6 +267,7 @@ class BlockFontTest
         {
             assertThatThrownBy(() -> BlockFont.widthInBlocks(null))
                 .isInstanceOf(IllegalArgumentException.class);
+
             assertThatThrownBy(() -> BlockFont.forEachBlock("A", null))
                 .isInstanceOf(IllegalArgumentException.class);
         }

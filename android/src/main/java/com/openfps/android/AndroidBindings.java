@@ -109,6 +109,7 @@ public final class AndroidBindings
     public static ActionBindings defaults()
     {
         final InputBinding stick = InputBinding.touchRegion(TouchLayout.REGION_MOVE_STICK);
+
         // The pad's movement stick, named for the same reason the touch stick is:
         // the four directions are one control read four ways, and the geometry
         // that decides how far it is pushed lives where it can be tested. The
@@ -117,6 +118,7 @@ public final class AndroidBindings
         // a direction, so "is it held" has no answer.
         final InputBinding padStick = InputBinding.gamepadAxis(
             AndroidInputPort.AXIS_LEFT_STICK);
+
         return new ActionBindings()
             .bind(GameAction.MOVE_FORWARD, stick, padStick)
             .bind(GameAction.MOVE_BACKWARD, stick, padStick)

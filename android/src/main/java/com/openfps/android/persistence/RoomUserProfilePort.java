@@ -76,6 +76,7 @@ public final class RoomUserProfilePort implements I_UserProfilePort
         {
             throw new IllegalArgumentException("context must not be null");
         }
+
         this.context = context.getApplicationContext();
     }
 
@@ -87,10 +88,13 @@ public final class RoomUserProfilePort implements I_UserProfilePort
             throw new IllegalStateException(
                 "init() called from state " + state + " — only valid from UNINITIALIZED");
         }
+
         database = Room.databaseBuilder(context, OpenFpsDatabase.class, OpenFpsDatabase.DB_NAME)
             .allowMainThreadQueries()
             .build();
+
         dao = database.userProfileDao();
+
         state = State.READY;
     }
 
@@ -101,12 +105,16 @@ public final class RoomUserProfilePort implements I_UserProfilePort
         {
             throw new IllegalStateException("shutdown() called from state SHUTDOWN — already terminal");
         }
+
         if (database != null)
         {
             database.close();
+
             database = null;
         }
+
         dao = null;
+
         state = State.SHUTDOWN;
     }
 
@@ -120,15 +128,19 @@ public final class RoomUserProfilePort implements I_UserProfilePort
     public Optional<UserProfile> findById(final String id)
     {
         requireReady("findById");
+
         if (id == null || id.isBlank())
         {
             return Optional.empty();
         }
+
         final UserProfileEntity row = dao.findById(id);
+
         if (row == null)
         {
             return Optional.empty();
         }
+
         return Optional.of(row.toDomain());
     }
 
@@ -136,12 +148,16 @@ public final class RoomUserProfilePort implements I_UserProfilePort
     public List<UserProfile> findAll()
     {
         requireReady("findAll");
+
         final List<UserProfileEntity> rows = dao.findAll();
+
         final List<UserProfile> out = new ArrayList<>(rows.size());
+
         for (final UserProfileEntity row : rows)
         {
             out.add(row.toDomain());
         }
+
         return out;
     }
 
@@ -149,10 +165,12 @@ public final class RoomUserProfilePort implements I_UserProfilePort
     public void save(final UserProfile profile)
     {
         requireReady("save");
+
         if (profile == null)
         {
             throw new IllegalArgumentException("profile must not be null");
         }
+
         dao.upsert(UserProfileEntity.fromDomain(profile));
     }
 
@@ -160,10 +178,12 @@ public final class RoomUserProfilePort implements I_UserProfilePort
     public void delete(final String id)
     {
         requireReady("delete");
+
         if (id == null || id.isBlank())
         {
             return;
         }
+
         dao.deleteById(id);
     }
 
@@ -171,6 +191,7 @@ public final class RoomUserProfilePort implements I_UserProfilePort
     public int count()
     {
         requireReady("count");
+
         return dao.count();
     }
 

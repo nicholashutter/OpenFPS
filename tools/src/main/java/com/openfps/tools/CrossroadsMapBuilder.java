@@ -100,14 +100,19 @@ public final class CrossroadsMapBuilder
     public static void main(final String[] args)
     {
         final String out = option(args, "--out=");
+
         if (out == null)
         {
             LOG.error("usage: CrossroadsMapBuilder --out=<directory>"
                 + " [--atlas=<colormap.png>]");
+
             return;
         }
+
         final String atlasOption = option(args, "--atlas=");
+
         final Path atlasPath;
+
         if (atlasOption == null)
         {
             atlasPath = null;
@@ -116,7 +121,9 @@ public final class CrossroadsMapBuilder
         {
             atlasPath = Path.of(atlasOption);
         }
+
         final Path outDir = Path.of(out);
+
         try
         {
             Files.createDirectories(outDir);
@@ -125,8 +132,11 @@ public final class CrossroadsMapBuilder
         {
             throw new UncheckedIOException("could not create output directory: " + outDir, e);
         }
+
         final byte[] bytes = build(atlasPath);
+
         final Path outFile = outDir.resolve(FILE_NAME);
+
         try
         {
             Files.write(outFile, bytes);
@@ -135,7 +145,9 @@ public final class CrossroadsMapBuilder
         {
             throw new UncheckedIOException("could not write " + outFile, e);
         }
+
         final ModelFormat parsed = ModelFormat.read(bytes);
+
         LOG.info("Wrote {} ({} triangles, {} vertices, {} textures)",
             outFile, parsed.indexCount() / 3, parsed.vertexCount(), parsed.textureCount());
     }
@@ -173,7 +185,9 @@ public final class CrossroadsMapBuilder
     public static byte[] build(final Path atlasPath)
     {
         final ModelBuilder builder = new ModelBuilder(MODEL_NAME);
+
         final int[] floorTexels;
+
         if (atlasPath != null)
         {
             floorTexels = KenneyTexture.forceOpaque(KenneyTexture.floor(atlasPath));
@@ -182,7 +196,9 @@ public final class CrossroadsMapBuilder
         {
             floorTexels = floorTexels();
         }
+
         final int[] wallTexels;
+
         if (atlasPath != null)
         {
             wallTexels = KenneyTexture.forceOpaque(KenneyTexture.wall(atlasPath));
@@ -191,26 +207,40 @@ public final class CrossroadsMapBuilder
         {
             wallTexels = wallTexels();
         }
+
         final int floorTexture = builder.addTexture("crossroads-floor", TEXTURE_EDGE,
             TEXTURE_EDGE, MipGenerator.generate(TEXTURE_EDGE, TEXTURE_EDGE, floorTexels));
+
         final int wallTexture = builder.addTexture("crossroads-wall", TEXTURE_EDGE,
             TEXTURE_EDGE, MipGenerator.generate(TEXTURE_EDGE, TEXTURE_EDGE, wallTexels));
 
         builder.beginSubmesh(floorTexture);
+
         // Floor slab: 320x320, 4 units thick, centred on origin.
         addBox(builder, -HALF_EXTENT, -4.0f, -HALF_EXTENT, HALF_EXTENT, 0.0f, HALF_EXTENT);
+
         builder.endSubmesh();
 
         builder.beginSubmesh(wallTexture);
+
         addPerimeterWalls(builder);
+
         addNorthShacks(builder);
+
         addPlaza(builder);
+
         addSouthWarehouses(builder);
+
         addCacti(builder);
+
         addRocks(builder);
+
         addWellsAndPumps(builder);
+
         addWashChannels(builder);
+
         addProps(builder);
+
         builder.endSubmesh();
 
         return builder.toBytes();
@@ -238,9 +268,13 @@ public final class CrossroadsMapBuilder
     private static void addPerimeterWalls(final ModelBuilder builder)
     {
         final float e = HALF_EXTENT;
+
         addBox(builder, -e, 0.0f, -e - WALL_THICKNESS, e, BUILDING_HEIGHT, -e);
+
         addBox(builder, -e, 0.0f, e, e, BUILDING_HEIGHT, e + WALL_THICKNESS);
+
         addBox(builder, -e - WALL_THICKNESS, 0.0f, -e, -e, BUILDING_HEIGHT, e);
+
         addBox(builder, e, 0.0f, -e, e + WALL_THICKNESS, BUILDING_HEIGHT, e);
     }
 
@@ -257,6 +291,7 @@ public final class CrossroadsMapBuilder
         for (int i = 0; i < 4; i++)
         {
             final float x = -112.0f + i * 80.0f;
+
             addBox(builder, x - 16.0f, 0.0f, 8.0f, x + 16.0f, BUILDING_HEIGHT, 40.0f);
         }
     }
@@ -273,14 +308,20 @@ public final class CrossroadsMapBuilder
         // Four corner walls, leaving cut-throughs on the four sides
         // of the plaza. The cut-throughs are 24 units wide.
         final float plazaMin = -64.0f;
+
         final float plazaMax = 64.0f;
+
         final float wallY = PLAZA_WALL_HEIGHT;
+
         // NW corner: blocks (plazaMin, plazaMin) to (-40, 32)
         addBox(builder, plazaMin, 0.0f, plazaMin, plazaMin + 24.0f, wallY, plazaMin + 96.0f);
+
         // NE corner
         addBox(builder, plazaMax - 24.0f, 0.0f, plazaMin, plazaMax, wallY, plazaMin + 96.0f);
+
         // SW corner
         addBox(builder, plazaMin, 0.0f, plazaMax - 96.0f, plazaMin + 24.0f, wallY, plazaMax);
+
         // SE corner
         addBox(builder, plazaMax - 24.0f, 0.0f, plazaMax - 96.0f, plazaMax, wallY, plazaMax);
     }
@@ -297,6 +338,7 @@ public final class CrossroadsMapBuilder
         for (int i = 0; i < 4; i++)
         {
             final float x = -112.0f + i * 80.0f;
+
             addBox(builder, x - 24.0f, 0.0f, 272.0f, x + 24.0f, BUILDING_HEIGHT + 16.0f, 320.0f);
         }
     }
@@ -311,10 +353,15 @@ public final class CrossroadsMapBuilder
     private static void addCacti(final ModelBuilder builder)
     {
         addCactusAt(builder, -100.0f, 80.0f);
+
         addCactusAt(builder, -40.0f, 200.0f);
+
         addCactusAt(builder, 40.0f, 80.0f);
+
         addCactusAt(builder, 100.0f, 200.0f);
+
         addCactusAt(builder, -100.0f, 240.0f);
+
         addCactusAt(builder, 100.0f, 240.0f);
     }
 
@@ -329,8 +376,11 @@ public final class CrossroadsMapBuilder
     private static void addRocks(final ModelBuilder builder)
     {
         addBox(builder, -84.0f, 0.0f, 80.0f, -68.0f, 16.0f, 96.0f);
+
         addBox(builder, 68.0f, 0.0f, 80.0f, 84.0f, 16.0f, 96.0f);
+
         addBox(builder, -84.0f, 0.0f, 224.0f, -68.0f, 16.0f, 240.0f);
+
         addBox(builder, 68.0f, 0.0f, 224.0f, 84.0f, 16.0f, 240.0f);
     }
 
@@ -340,6 +390,7 @@ public final class CrossroadsMapBuilder
     private static void addWellsAndPumps(final ModelBuilder builder)
     {
         addBox(builder, -20.0f, 0.0f, 140.0f, -12.0f, 24.0f, 148.0f);
+
         addBox(builder, 12.0f, 0.0f, 172.0f, 20.0f, 24.0f, 180.0f);
     }
 
@@ -352,9 +403,12 @@ public final class CrossroadsMapBuilder
     {
         // Two channels in the north half, two in the south half
         addBox(builder, -HALF_EXTENT + 6.0f, 0.0f, 70.0f, HALF_EXTENT - 6.0f, 8.0f, 76.0f);
+
         addBox(builder, -HALF_EXTENT + 6.0f, 0.0f, 250.0f, HALF_EXTENT - 6.0f, 8.0f, 256.0f);
+
         // Two short north-south walls at the edges
         addBox(builder, -140.0f, 0.0f, 100.0f, -134.0f, 16.0f, 220.0f);
+
         addBox(builder, 134.0f, 0.0f, 100.0f, 140.0f, 16.0f, 220.0f);
     }
 
@@ -365,8 +419,11 @@ public final class CrossroadsMapBuilder
     private static void addProps(final ModelBuilder builder)
     {
         addBox(builder, -120.0f, 0.0f, 60.0f, -112.0f, 24.0f, 68.0f);
+
         addBox(builder, 112.0f, 0.0f, 60.0f, 120.0f, 24.0f, 68.0f);
+
         addBox(builder, -120.0f, 0.0f, 260.0f, -112.0f, 24.0f, 268.0f);
+
         addBox(builder, 112.0f, 0.0f, 260.0f, 120.0f, 24.0f, 268.0f);
     }
 
@@ -377,10 +434,15 @@ public final class CrossroadsMapBuilder
         final float minZ, final float maxX, final float maxY, final float maxZ)
     {
         addFace(builder, maxX, minY, maxZ, maxX, maxY, maxZ, maxX, maxY, minZ, maxX, minY, minZ);
+
         addFace(builder, minX, minY, minZ, minX, maxY, minZ, minX, maxY, maxZ, minX, minY, maxZ);
+
         addFace(builder, minX, maxY, maxZ, maxX, maxY, maxZ, maxX, maxY, minZ, minX, maxY, minZ);
+
         addFace(builder, minX, minY, minZ, maxX, minY, minZ, maxX, minY, maxZ, minX, minY, maxZ);
+
         addFace(builder, minX, minY, maxZ, minX, maxY, maxZ, maxX, maxY, maxZ, maxX, minY, maxZ);
+
         addFace(builder, maxX, minY, minZ, maxX, maxY, minZ, minX, maxY, minZ, minX, minY, minZ);
     }
 
@@ -389,15 +451,21 @@ public final class CrossroadsMapBuilder
         final float cy, final float cz, final float dx, final float dy, final float dz)
     {
         final float uScale = 1.0f / WORLD_UNITS_PER_TILE;
+
         final int a = builder.addVertex(ax, ay, az, ax * uScale, az * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         final int b = builder.addVertex(bx, by, bz, bx * uScale, bz * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         final int c = builder.addVertex(cx, cy, cz, cx * uScale, cz * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         final int d = builder.addVertex(dx, dy, dz, dx * uScale, dz * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         builder.addTriangle(a, b, c);
+
         builder.addTriangle(a, c, d);
     }
 
@@ -409,27 +477,35 @@ public final class CrossroadsMapBuilder
     private static int[] floorTexels()
     {
         final int base = Rgba.pack(218, 198, 158, 255);
+
         final int shade = Rgba.pack(196, 174, 130, 255);
+
         final int line = Rgba.pack(170, 144, 96, 255);
+
         final int[] out = new int[TEXTURE_EDGE * TEXTURE_EDGE];
+
         for (int y = 0; y < TEXTURE_EDGE; y++)
         {
             for (int x = 0; x < TEXTURE_EDGE; x++)
             {
                 int colour = base;
+
                 // Horizontal "dune" bands every 16 texels, alternating
                 if ((y / 8) % 2 == 0)
                 {
                     colour = shade;
                 }
+
                 // Sparse darker streaks (paths/footprints)
                 if (x % 16 == 0)
                 {
                     colour = line;
                 }
+
                 out[y * TEXTURE_EDGE + x] = colour;
             }
         }
+
         return out;
     }
 
@@ -437,21 +513,30 @@ public final class CrossroadsMapBuilder
     private static int[] wallTexels()
     {
         final int base = Rgba.pack(216, 188, 142, 255);
+
         final int shade = Rgba.pack(192, 162, 116, 255);
+
         final int mortar = Rgba.pack(150, 122, 82, 255);
+
         final int bandHeight = TEXTURE_EDGE / 8;
+
         final int[] out = new int[TEXTURE_EDGE * TEXTURE_EDGE];
+
         for (int y = 0; y < TEXTURE_EDGE; y++)
         {
             final int band = y / bandHeight;
+
             final boolean isMortar = (y % bandHeight) == 0;
+
             for (int x = 0; x < TEXTURE_EDGE; x++)
             {
                 int colour = base;
+
                 if ((band % 2) != 0)
                 {
                     colour = shade;
                 }
+
                 if (isMortar)
                 {
                     colour = mortar;
@@ -460,9 +545,11 @@ public final class CrossroadsMapBuilder
                 {
                     colour = mortar;
                 }
+
                 out[y * TEXTURE_EDGE + x] = colour;
             }
         }
+
         return out;
     }
 
@@ -479,6 +566,7 @@ public final class CrossroadsMapBuilder
                 return arg.substring(prefix.length());
             }
         }
+
         return null;
     }
 }

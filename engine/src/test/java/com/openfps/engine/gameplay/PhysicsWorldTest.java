@@ -84,6 +84,7 @@ class PhysicsWorldTest
         private Input(final float forwardAxis, final float strafeAxis)
         {
             this.forward = forwardAxis;
+
             this.strafe = strafeAxis;
         }
 
@@ -169,6 +170,7 @@ class PhysicsWorldTest
             final PhysicsWorld world = oneBox();
 
             assertThat(world.slideZ(150.0f, 0.0f, 500.0f)).isEqualTo(100.0f - HALF);
+
             assertThat(world.slideZ(150.0f, 500.0f, -500.0f)).isEqualTo(200.0f + HALF);
         }
 
@@ -206,6 +208,7 @@ class PhysicsWorldTest
         void shouldKeepMovingAlongAWallItIsTouching()
         {
             final PhysicsWorld world = oneBox();
+
             final float resting = 100.0f - HALF;
 
             // Pinned against the west face, now walking north along it. Nothing
@@ -224,9 +227,11 @@ class PhysicsWorldTest
             // east component is blocked at 84; the north component is free, and
             // it is that survival which is the whole of "slide".
             final float permittedX = world.slideX(0.0f, 150.0f, 500.0f);
+
             final float permittedZ = world.slideZ(permittedX, 150.0f, 30.0f);
 
             assertThat(permittedX).isEqualTo(100.0f - HALF);
+
             assertThat(permittedZ)
                 .as("the component parallel to the wall must survive")
                 .isEqualTo(180.0f);
@@ -241,6 +246,7 @@ class PhysicsWorldTest
             // the whole blocked move would leave x exactly where it started.
             final PlayerController player =
                 new PlayerController(0.0f, 0.0f, WALL_STOP, 0.0f, 0.0f, ROOM);
+
             final float startX = player.positionX();
 
             for (int tic = 0; tic < 60; tic++)
@@ -251,6 +257,7 @@ class PhysicsWorldTest
             assertThat(player.positionZ())
                 .as("pinned against the wall")
                 .isCloseTo(WALL_STOP, within(EPSILON));
+
             assertThat(player.positionX())
                 .as("but still travelling along it")
                 .isLessThan(startX - 100.0f);
@@ -273,14 +280,19 @@ class PhysicsWorldTest
                 .addBox(100.0f, -100.0f, 300.0f, 100.0f)
                 .addBox(-100.0f, 100.0f, 100.0f, 300.0f)
                 .build();
+
             final float restX = 100.0f - HALF;
+
             final float restZ = 100.0f - HALF;
 
             final float permittedX = corner.slideX(restX, restZ, 50.0f);
+
             final float permittedZ = corner.slideZ(permittedX, restZ, 50.0f);
 
             assertThat(permittedX).isEqualTo(restX);
+
             assertThat(permittedZ).isEqualTo(restZ);
+
             assertThat(corner.isBlocked(permittedX, permittedZ)).isFalse();
         }
 
@@ -300,14 +312,17 @@ class PhysicsWorldTest
             {
                 0.125f, 0.375f, 0.625f, 0.875f,
             };
+
             final float[] towardX =
             {
                 1.0f, 1.0f, -1.0f, -1.0f,
             };
+
             final float[] towardZ =
             {
                 1.0f, -1.0f, -1.0f, 1.0f,
             };
+
             // Clear of every crate: the furthest prop reaches 256 once widened
             // by the body, and the corner itself is at 297.6.
             final float approach = 280.0f;
@@ -315,8 +330,11 @@ class PhysicsWorldTest
             for (int index = 0; index < cornerYawTurns.length; index++)
             {
                 final float yaw = cornerYawTurns[index] * PlayerController.FULL_TURN_RADIANS;
+
                 final float startX = approach * towardX[index];
+
                 final float startZ = approach * towardZ[index];
+
                 final PlayerController player =
                     new PlayerController(startX, 0.0f, startZ, yaw, 0.0f, ROOM);
 
@@ -328,9 +346,11 @@ class PhysicsWorldTest
                 assertThat(player.positionX())
                     .as("corner %s, x", Integer.valueOf(index))
                     .isCloseTo(WALL_STOP * towardX[index], within(EPSILON));
+
                 assertThat(player.positionZ())
                     .as("corner %s, z", Integer.valueOf(index))
                     .isCloseTo(WALL_STOP * towardZ[index], within(EPSILON));
+
                 assertThat(ROOM.isBlocked(player.positionX(), player.positionZ()))
                     .as("corner %s left the body inside the wall", Integer.valueOf(index))
                     .isFalse();
@@ -370,6 +390,7 @@ class PhysicsWorldTest
             // went to the trouble of modelling.
             final float middle =
                 (DemoScene.DOORWAY_MIN_X_UNITS + DemoScene.DOORWAY_MAX_X_UNITS) * 0.5f;
+
             final PlayerController player =
                 new PlayerController(middle, 0.0f, 0.0f, 0.0f, 0.0f, ROOM);
 
@@ -391,11 +412,13 @@ class PhysicsWorldTest
             // The opening is 64 wide and the body 32, so the window a centre may
             // pass through runs from doorMinX + 16 to doorMaxX - 16.
             final float overlappingTheJamb = DemoScene.DOORWAY_MIN_X_UNITS + HALF - 1.0f;
+
             final float clearOfTheJamb = DemoScene.DOORWAY_MIN_X_UNITS + HALF + 1.0f;
 
             assertThat(ROOM.slideZ(overlappingTheJamb, 0.0f, 500.0f))
                 .as("a body overlapping the jamb must be stopped by the wall")
                 .isCloseTo(WALL_STOP, within(EPSILON));
+
             assertThat(ROOM.slideZ(clearOfTheJamb, 0.0f, 500.0f))
                 .as("a body clear of the jamb must pass")
                 .isEqualTo(500.0f);
@@ -411,6 +434,7 @@ class PhysicsWorldTest
             assertThat(ROOM.slideX(-300.0f, -128.0f, 400.0f))
                 .as("the south-west column")
                 .isLessThan(-128.0f);
+
             assertThat(ROOM.slideX(-300.0f, 0.0f, 400.0f))
                 .as("the crate at x -192")
                 .isLessThan(-192.0f);
@@ -423,7 +447,9 @@ class PhysicsWorldTest
             // Five wall slabs, four columns, seven floor-standing crates. The
             // eighth crate is stacked on the third and adds no footprint.
             assertThat(ROOM.solidCount()).isEqualTo(16);
+
             assertThat(ROOM.halfWidth()).isEqualTo(PhysicsWorld.PLAYER_HALF_WIDTH_UNITS);
+
             assertThat(ROOM.isBlocked(0.0f, -192.0f))
                 .as("the demo spawns the player at (0, -192)")
                 .isFalse();
@@ -448,6 +474,7 @@ class PhysicsWorldTest
             // closed box - ProceduralRoom models no doorway - so here sealing
             // the player in is the correct answer rather than a shortcut.
             final PhysicsWorld fallback = DemoScene.fallbackRoomPhysics();
+
             final PlayerController player =
                 new PlayerController(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, fallback);
 
@@ -457,6 +484,7 @@ class PhysicsWorldTest
             }
 
             assertThat(fallback.solidCount()).isEqualTo(4);
+
             assertThat(player.positionZ()).isLessThan(256.0f);
         }
     }
@@ -477,13 +505,17 @@ class PhysicsWorldTest
                 for (int step = -40; step <= 40; step += 5)
                 {
                     final float from = start;
+
                     final float delta = step;
+
                     final float permittedX = ROOM.slideX(from, from, delta);
+
                     final float permittedZ = ROOM.slideZ(from, from, delta);
 
                     assertThat(Math.abs(permittedX - from))
                         .as("x from %s by %s", Float.valueOf(from), Float.valueOf(delta))
                         .isLessThanOrEqualTo(Math.abs(delta));
+
                     assertThat(Math.abs(permittedZ - from))
                         .as("z from %s by %s", Float.valueOf(from), Float.valueOf(delta))
                         .isLessThanOrEqualTo(Math.abs(delta));
@@ -500,7 +532,9 @@ class PhysicsWorldTest
                 for (int step = -30; step <= 30; step += 3)
                 {
                     final float from = start;
+
                     final float delta = step;
+
                     if (ROOM.isBlocked(from, from))
                     {
                         // The invariant is that a LEGAL position stays legal.
@@ -509,7 +543,9 @@ class PhysicsWorldTest
                         // nothing to say here.
                         continue;
                     }
+
                     final float permittedX = ROOM.slideX(from, from, delta);
+
                     final float permittedZ = ROOM.slideZ(permittedX, from, delta);
 
                     assertThat(ROOM.isBlocked(permittedX, permittedZ))
@@ -526,11 +562,14 @@ class PhysicsWorldTest
         {
             final PlayerController player =
                 new PlayerController(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, ROOM);
+
             for (int tic = 0; tic < 300; tic++)
             {
                 player.update(new Input(1.0f, 0.0f), TIC_60HZ);
             }
+
             final int settledX = Float.floatToRawIntBits(player.positionX());
+
             final int settledZ = Float.floatToRawIntBits(player.positionZ());
 
             for (int tic = 0; tic < 120; tic++)
@@ -543,6 +582,7 @@ class PhysicsWorldTest
             // by the end of a match, and a tolerance is exactly what would hide
             // it.
             assertThat(Float.floatToRawIntBits(player.positionX())).isEqualTo(settledX);
+
             assertThat(Float.floatToRawIntBits(player.positionZ())).isEqualTo(settledZ);
         }
 
@@ -551,6 +591,7 @@ class PhysicsWorldTest
         void shouldReturnThePositionUnchangedWhenNothingIsAsked()
         {
             assertThat(ROOM.slideX(123.5f, -45.25f, 0.0f)).isEqualTo(123.5f);
+
             assertThat(ROOM.slideZ(123.5f, -45.25f, 0.0f)).isEqualTo(-45.25f);
         }
 
@@ -565,6 +606,7 @@ class PhysicsWorldTest
             // must stay open: resolving it would teleport the body to a face,
             // and choosing the wrong face would put it outside the level.
             assertThat(world.slideX(150.0f, 150.0f, 10.0f)).isEqualTo(160.0f);
+
             assertThat(world.slideX(150.0f, 150.0f, -10.0f)).isEqualTo(140.0f);
         }
 
@@ -573,8 +615,11 @@ class PhysicsWorldTest
         void shouldPermitEveryMoveWhenTheWorldIsOpen()
         {
             assertThat(PhysicsWorld.OPEN.slideX(1.0f, 2.0f, 1.0e6f)).isEqualTo(1.0f + 1.0e6f);
+
             assertThat(PhysicsWorld.OPEN.slideZ(1.0f, 2.0f, -1.0e6f)).isEqualTo(2.0f - 1.0e6f);
+
             assertThat(PhysicsWorld.OPEN.isBlocked(0.0f, 0.0f)).isFalse();
+
             assertThat(PhysicsWorld.OPEN.solidCount()).isZero();
         }
 
@@ -583,17 +628,20 @@ class PhysicsWorldTest
         void shouldMatchTheUnclippedControllerWhenNoWorldIsGiven()
         {
             final PlayerController open = new PlayerController(0.0f, 0.0f, 0.0f, 0.3f, 0.0f);
+
             final PlayerController explicit =
                 new PlayerController(0.0f, 0.0f, 0.0f, 0.3f, 0.0f, PhysicsWorld.OPEN);
 
             for (int tic = 0; tic < 200; tic++)
             {
                 open.update(new Input(1.0f, -0.5f), TIC_60HZ);
+
                 explicit.update(new Input(1.0f, -0.5f), TIC_60HZ);
             }
 
             assertThat(Float.floatToRawIntBits(explicit.positionX()))
                 .isEqualTo(Float.floatToRawIntBits(open.positionX()));
+
             assertThat(Float.floatToRawIntBits(explicit.positionZ()))
                 .isEqualTo(Float.floatToRawIntBits(open.positionZ()));
         }
@@ -616,6 +664,7 @@ class PhysicsWorldTest
             }
 
             assertThat(player.positionY()).isEqualTo(PlayerController.GROUND_LEVEL_UNITS);
+
             assertThat(player.isOnGround()).isTrue();
         }
     }
@@ -680,6 +729,7 @@ class PhysicsWorldTest
         void shouldGrowWhenMoreBoxesAreAddedThanItStartedWith()
         {
             final PhysicsWorld.Builder builder = PhysicsWorld.builder(HALF);
+
             for (int index = 0; index < 40; index++)
             {
                 builder.addBoxAt(index * 100.0f, 0.0f, 10.0f, 10.0f);
@@ -696,6 +746,7 @@ class PhysicsWorldTest
                 PhysicsWorld.builder(HALF).addBoxAt(50.0f, -50.0f, 10.0f, 20.0f).build();
 
             assertThat(world.solid(0)).containsExactly(40.0f, -70.0f, 60.0f, -30.0f);
+
             assertThatThrownBy(() -> world.solid(1))
                 .isInstanceOf(IndexOutOfBoundsException.class);
         }
@@ -711,19 +762,24 @@ class PhysicsWorldTest
         {
             final PlayerController peerA =
                 new PlayerController(0.0f, 0.0f, -192.0f, 0.4f, 0.0f, ROOM);
+
             final PlayerController peerB =
                 new PlayerController(0.0f, 0.0f, -192.0f, 0.4f, 0.0f, ROOM);
 
             for (int tic = 0; tic < 1000; tic++)
             {
                 final float forward = (float) ((tic % 7) - 3) / 3.0f;
+
                 final float strafe = (float) ((tic % 5) - 2) / 2.0f;
+
                 peerA.update(new Input(forward, strafe), TIC_60HZ);
+
                 peerB.update(new Input(forward, strafe), TIC_60HZ);
             }
 
             assertThat(Float.floatToRawIntBits(peerB.positionX()))
                 .isEqualTo(Float.floatToRawIntBits(peerA.positionX()));
+
             assertThat(Float.floatToRawIntBits(peerB.positionZ()))
                 .isEqualTo(Float.floatToRawIntBits(peerA.positionZ()));
         }
@@ -749,12 +805,14 @@ class PhysicsWorldTest
     private static String constantPoolOf(final Class<?> type)
     {
         final String resource = type.getName().replace('.', '/') + ".class";
+
         try (InputStream in = type.getClassLoader().getResourceAsStream(resource))
         {
             if (in == null)
             {
                 throw new IllegalStateException("could not read " + resource);
             }
+
             return new String(in.readAllBytes(), StandardCharsets.ISO_8859_1);
         }
         catch (final IOException e)

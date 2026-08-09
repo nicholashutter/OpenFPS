@@ -116,12 +116,16 @@ public final class BlockTitle extends Actor
         {
             throw new IllegalArgumentException("whitePixel must not be null");
         }
+
         // Measuring here rather than at draw time is what makes an unsupported
         // character a construction failure instead of a word with a hole in it
         // sixty times a second.
         this.widthInBlocks = BlockFont.widthInBlocks(word);
+
         this.text = word;
+
         this.pixel = whitePixel;
+
         if (colour == null)
         {
             this.fixedColour = null;
@@ -156,6 +160,7 @@ public final class BlockTitle extends Actor
         {
             return 0.0f;
         }
+
         return availableWidth / widthInBlocks;
     }
 
@@ -163,6 +168,7 @@ public final class BlockTitle extends Actor
     public void act(final float deltaSeconds)
     {
         super.act(deltaSeconds);
+
         this.elapsedSeconds = elapsedSeconds + deltaSeconds;
     }
 
@@ -170,11 +176,17 @@ public final class BlockTitle extends Actor
     public void draw(final Batch batch, final float parentAlpha)
     {
         final float cell = getWidth() / widthInBlocks;
+
         final float inset = cell * CELL_GAP_FRACTION;
+
         final float block = cell - inset * 2.0f;
+
         final float shadow = cell * SHADOW_OFFSET_FRACTION;
+
         final float left = getX();
+
         final float top = getY() + getHeight();
+
         final Color previous = batch.getColor();
 
         // Every shadow first, then every face. Two passes rather than
@@ -184,15 +196,19 @@ public final class BlockTitle extends Actor
         BlockFont.forEachBlock(text, (column, row, glyph) ->
         {
             batch.setColor(MenuPalette.TITLE_SHADOW);
+
             batch.draw(pixel, left + column * cell + inset + shadow,
                 top - (row + 1) * cell + inset - shadow, block, block);
         });
+
         BlockFont.forEachBlock(text, (column, row, glyph) ->
         {
             batch.setColor(colourFor(glyph));
+
             batch.draw(pixel, left + column * cell + inset,
                 top - (row + 1) * cell + inset, block, block);
         });
+
         batch.setColor(previous);
     }
 
@@ -213,16 +229,21 @@ public final class BlockTitle extends Actor
         {
             return fixedColour;
         }
+
         final int cycle = MenuPalette.TITLE_CYCLE.length;
+
         // floorMod, written out: the index must stay in range for a negative
         // glyph index as readily as a positive one, and % keeps the dividend's
         // sign.
         int slot = (glyphIndex + (int) (elapsedSeconds * CYCLE_PER_SECOND)) % cycle;
+
         if (slot < 0)
         {
             slot = slot + cycle;
         }
+
         scratch.set(MenuPalette.TITLE_CYCLE[slot]);
+
         return scratch;
     }
 

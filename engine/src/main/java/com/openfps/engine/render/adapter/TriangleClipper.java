@@ -145,8 +145,11 @@ public final class TriangleClipper
             throw new IllegalArgumentException(
                 "attributeCount must not be negative, got " + attributeCount);
         }
+
         this.attributeCount = attributeCount;
+
         this.stride = POSITION_FLOATS + attributeCount;
+
         this.polygon = new float[MAX_CLIPPED_VERTICES * stride];
     }
 
@@ -185,8 +188,11 @@ public final class TriangleClipper
         assert near > 0.0f : "near must be positive";
 
         final int s = stride;
+
         final float w0 = in[inOffset + OFFSET_W];
+
         final float w1 = in[inOffset + s + OFFSET_W];
+
         final float w2 = in[inOffset + 2 * s + OFFSET_W];
 
         // Fast path: wholly in front. This is the overwhelming majority of
@@ -194,6 +200,7 @@ public final class TriangleClipper
         if (w0 > near && w1 > near && w2 > near)
         {
             System.arraycopy(in, inOffset, out, outOffset, TRIANGLE_VERTICES * s);
+
             return 1;
         }
 
@@ -207,10 +214,12 @@ public final class TriangleClipper
         }
 
         final int vertexCount = clipAgainstNear(near, in, inOffset);
+
         if (vertexCount < TRIANGLE_VERTICES)
         {
             return 0;
         }
+
         return fanTriangulate(vertexCount, out, outOffset);
     }
 
@@ -219,21 +228,30 @@ public final class TriangleClipper
     private int clipAgainstNear(final float near, final float[] in, final int inOffset)
     {
         final int s = stride;
+
         // MUTABLE local — the emit cursor into the scratch polygon.
         int count = 0;
+
         for (int edge = 0; edge < TRIANGLE_VERTICES; edge++)
         {
             // MUTABLE local — index of the edge's second endpoint, wrapping.
             int nextIndex = edge + 1;
+
             if (nextIndex == TRIANGLE_VERTICES)
             {
                 nextIndex = 0;
             }
+
             final int aOffset = inOffset + edge * s;
+
             final int bOffset = inOffset + nextIndex * s;
+
             final float aw = in[aOffset + OFFSET_W];
+
             final float bw = in[bOffset + OFFSET_W];
+
             final boolean aInside = aw > near;
+
             final boolean bInside = bw > near;
 
             if (aInside != bInside)
@@ -242,17 +260,24 @@ public final class TriangleClipper
                 // greater than near and the other is not, so bw - aw is
                 // strictly non-zero and this division cannot blow up.
                 final float t = (near - aw) / (bw - aw);
+
                 lerpVertex(in, aOffset, bOffset, t, count * s);
+
                 polygon[count * s + OFFSET_W] = near;
+
                 count++;
             }
+
             if (bInside)
             {
                 System.arraycopy(in, bOffset, polygon, count * s, s);
+
                 count++;
             }
         }
+
         assert count <= MAX_CLIPPED_VERTICES : "one plane cannot produce more than a quad";
+
         return count;
     }
 
@@ -264,6 +289,7 @@ public final class TriangleClipper
         for (int k = 0; k < stride; k++)
         {
             final float a = in[aOffset + k];
+
             polygon[destOffset + k] = a + t * (in[bOffset + k] - a);
         }
     }
@@ -273,15 +299,22 @@ public final class TriangleClipper
     private int fanTriangulate(final int vertexCount, final float[] out, final int outOffset)
     {
         final int s = stride;
+
         System.arraycopy(polygon, 0, out, outOffset, TRIANGLE_VERTICES * s);
+
         if (vertexCount == TRIANGLE_VERTICES)
         {
             return 1;
         }
+
         final int second = outOffset + TRIANGLE_VERTICES * s;
+
         System.arraycopy(polygon, 0, out, second, s);
+
         System.arraycopy(polygon, 2 * s, out, second + s, s);
+
         System.arraycopy(polygon, 3 * s, out, second + 2 * s, s);
+
         return 2;
     }
 

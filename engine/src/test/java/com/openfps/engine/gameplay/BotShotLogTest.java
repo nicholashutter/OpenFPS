@@ -45,11 +45,17 @@ final class BotShotLogTest
             log.record(7, 1.0f, 2.0f, 3.0f, 0.0f, 0.0f, 1.0f, 250.0f);
 
             assertThat(log.count()).isEqualTo(1);
+
             assertThat(log.shooterId(0)).isEqualTo(7);
+
             assertThat(log.originX(0)).isEqualTo(1.0f);
+
             assertThat(log.originY(0)).isEqualTo(2.0f);
+
             assertThat(log.originZ(0)).isEqualTo(3.0f);
+
             assertThat(log.directionZ(0)).isEqualTo(1.0f);
+
             assertThat(log.rangeUnits(0)).isEqualTo(250.0f);
         }
 
@@ -58,11 +64,13 @@ final class BotShotLogTest
         void clearsToEmpty()
         {
             final BotShotLog log = new BotShotLog(3);
+
             log.record(7, 1.0f, 2.0f, 3.0f, 0.0f, 0.0f, 1.0f, 250.0f);
 
             log.clear();
 
             assertThat(log.count()).isZero();
+
             assertThatThrownBy(() -> log.shooterId(0))
                 .as("last tic's shot is still readable, so a tracer would respawn at a "
                     + "stale muzzle")
@@ -79,9 +87,11 @@ final class BotShotLogTest
             final BotShotLog log = new BotShotLog(1);
 
             log.record(2, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 10.0f);
+
             log.record(3, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 10.0f);
 
             assertThat(log.count()).isEqualTo(1);
+
             assertThat(log.shooterId(0)).isEqualTo(2);
         }
 
@@ -92,6 +102,7 @@ final class BotShotLogTest
             final BotShotLog log = new BotShotLog(0);
 
             assertThat(log.capacity()).isZero();
+
             assertThat(log.count()).isZero();
         }
     }
@@ -106,6 +117,7 @@ final class BotShotLogTest
         {
             final Bot lone = new Bot(Match.FIRST_BOT_ENTITY_ID, 0.0f, 0.0f, 200.0f,
                 BotPattern.SENTRY, 0.0f, 300, 0);
+
             return new Match(new Bot[] {lone}, new BotRng(SEED), skill, Match.UNLIMITED_DEATHS);
         }
 
@@ -117,11 +129,13 @@ final class BotShotLogTest
             for (int tic = 0; tic < limit; tic++)
             {
                 match.tick(tic, 0.0f, 0.0f, 0.0f);
+
                 if (match.shotsThisTic().count() > 0)
                 {
                     return tic;
                 }
             }
+
             return -1;
         }
 
@@ -132,7 +146,9 @@ final class BotShotLogTest
             final Match match = roomOfOne(BotSkill.MARKSMAN);
 
             assertThat(ticUntilShot(match, 200)).isNotNegative();
+
             assertThat(match.shotsThisTic().count()).isEqualTo(1);
+
             assertThat(match.shotsThisTic().shooterId(0))
                 .isEqualTo(Match.FIRST_BOT_ENTITY_ID);
         }
@@ -146,12 +162,17 @@ final class BotShotLogTest
             // and the only way to know it is the real one is to re-fire it and get
             // the same answer the match got.
             final Match match = roomOfOne(BotSkill.DUMB);
+
             final int tic = ticUntilShot(match, 5000);
+
             assertThat(tic).as("the bot never fired at all").isNotNegative();
 
             final BotShotLog log = match.shotsThisTic();
+
             final float dirX = log.directionX(0);
+
             final float dirY = log.directionY(0);
+
             final float dirZ = log.directionZ(0);
 
             assertThat(dirX * dirX + dirY * dirY + dirZ * dirZ)
@@ -162,7 +183,9 @@ final class BotShotLogTest
             // agree with what the match decided, because it is the same ray.
             final Target player = Target.aroundFeet(Match.PLAYER_ENTITY_ID, 0.0f, 0.0f, 0.0f,
                 Bot.RADIUS_UNITS, Bot.HEIGHT_UNITS);
+
             final HitResult result = new HitResult();
+
             final boolean struck = Hitscan.fire(log.originX(0), log.originY(0), log.originZ(0),
                 dirX, dirY, dirZ, new Target[] {player}, 1, result);
 
@@ -174,6 +197,7 @@ final class BotShotLogTest
         void recordsTheRange()
         {
             final Match match = roomOfOne(BotSkill.MARKSMAN);
+
             assertThat(ticUntilShot(match, 200)).isNotNegative();
 
             // The bot is 200 units down +z and the player is at the origin, so the
@@ -190,13 +214,16 @@ final class BotShotLogTest
             // the same bolts every tic until the next shot — a strobing line of
             // fire out of a bot that had fired once.
             final Match match = roomOfOne(BotSkill.MARKSMAN);
+
             final int tic = ticUntilShot(match, 200);
+
             assertThat(tic).isNotNegative();
 
             // MARKSMAN's cooldown is one tic and its fire chance is certain, so
             // step far enough that this is a tic the bot could not fire on: a dead
             // bot fires nothing at all.
             match.byId(Match.FIRST_BOT_ENTITY_ID).damage(Bot.MAX_HEALTH);
+
             match.tick(tic + 1, 0.0f, 0.0f, 0.0f);
 
             assertThat(match.shotsThisTic().count()).isZero();
@@ -207,17 +234,20 @@ final class BotShotLogTest
         void capacityIsTheRoster()
         {
             final Bot[] roster = new Bot[Match.DEFAULT_BOT_COUNT];
+
             for (int index = 0; index < roster.length; index++)
             {
                 roster[index] = new Bot(Match.FIRST_BOT_ENTITY_ID + index, index * 20.0f, 0.0f,
                     150.0f, BotPattern.SENTRY, 0.0f, 300, 0);
             }
+
             final Match match = new Match(roster, new BotRng(SEED), BotSkill.MARKSMAN,
                 Match.UNLIMITED_DEATHS);
 
             match.tick(0, 0.0f, 0.0f, 0.0f);
 
             assertThat(match.shotsThisTic().capacity()).isEqualTo(Match.DEFAULT_BOT_COUNT);
+
             assertThat(match.shotsThisTic().count())
                 .isLessThanOrEqualTo(match.shotsThisTic().capacity());
         }

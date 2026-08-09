@@ -60,12 +60,19 @@ public final class DocPage
         final String label, final String title, final String summary, final List<String> lines)
     {
         this.source = source;
+
         this.key = key;
+
         this.output = output;
+
         this.section = section;
+
         this.label = label;
+
         this.title = title;
+
         this.summary = summary;
+
         this.lines = List.copyOf(lines);
     }
 
@@ -157,10 +164,12 @@ public final class DocPage
     public String directory()
     {
         final int cut = key.lastIndexOf('/');
+
         if (cut < 0)
         {
             return "";
         }
+
         return key.substring(0, cut + 1);
     }
 
@@ -172,6 +181,7 @@ public final class DocPage
     public int readingMinutes()
     {
         int words = 0;
+
         for (final String line : lines)
         {
             if (!line.isBlank())
@@ -179,6 +189,7 @@ public final class DocPage
                 words += line.strip().split("\\s+").length;
             }
         }
+
         return Math.max(1, (words + READING_RATE / 2) / READING_RATE);
     }
 }

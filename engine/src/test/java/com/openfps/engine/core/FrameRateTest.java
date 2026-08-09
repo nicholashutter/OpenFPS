@@ -21,7 +21,9 @@ class FrameRateTest
     void shouldProduceCorrectBudgetFor30()
     {
         assertThat(FrameRate.FPS_30.fps()).isEqualTo(30);
+
         assertThat(FrameRate.FPS_30.nanosPerFrame()).isEqualTo(33_333_333L);
+
         assertThat(FrameRate.FPS_30.microsPerFrame()).isEqualTo(33_333L);
     }
 
@@ -30,7 +32,9 @@ class FrameRateTest
     void shouldProduceCorrectBudgetFor60()
     {
         assertThat(FrameRate.FPS_60.fps()).isEqualTo(60);
+
         assertThat(FrameRate.FPS_60.nanosPerFrame()).isEqualTo(16_666_666L);
+
         assertThat(FrameRate.FPS_60.microsPerFrame()).isEqualTo(16_666L);
     }
 
@@ -39,7 +43,9 @@ class FrameRateTest
     void shouldProduceCorrectBudgetFor120()
     {
         assertThat(FrameRate.FPS_120.fps()).isEqualTo(120);
+
         assertThat(FrameRate.FPS_120.nanosPerFrame()).isEqualTo(8_333_333L);
+
         assertThat(FrameRate.FPS_120.microsPerFrame()).isEqualTo(8_333L);
     }
 
@@ -48,7 +54,9 @@ class FrameRateTest
     void shouldParseNumericStrings()
     {
         assertThat(FrameRate.fromString("30")).isEqualTo(FrameRate.FPS_30);
+
         assertThat(FrameRate.fromString("60")).isEqualTo(FrameRate.FPS_60);
+
         assertThat(FrameRate.fromString("120")).isEqualTo(FrameRate.FPS_120);
     }
 
@@ -57,7 +65,9 @@ class FrameRateTest
     void shouldParseEnumNameStrings()
     {
         assertThat(FrameRate.fromString("FPS_30")).isEqualTo(FrameRate.FPS_30);
+
         assertThat(FrameRate.fromString("FPS_60")).isEqualTo(FrameRate.FPS_60);
+
         assertThat(FrameRate.fromString("FPS_120")).isEqualTo(FrameRate.FPS_120);
     }
 
@@ -66,7 +76,9 @@ class FrameRateTest
     void shouldBeCaseInsensitive()
     {
         assertThat(FrameRate.fromString("fps_60")).isEqualTo(FrameRate.FPS_60);
+
         assertThat(FrameRate.fromString("  60  ")).isEqualTo(FrameRate.FPS_60);
+
         assertThat(FrameRate.fromString("FPS_120")).isEqualTo(FrameRate.FPS_120);
     }
 
@@ -77,10 +89,13 @@ class FrameRateTest
         assertThatThrownBy(() -> FrameRate.fromString("144"))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("144");
+
         assertThatThrownBy(() -> FrameRate.fromString("240"))
             .isInstanceOf(IllegalArgumentException.class);
+
         assertThatThrownBy(() -> FrameRate.fromString("0"))
             .isInstanceOf(IllegalArgumentException.class);
+
         assertThatThrownBy(() -> FrameRate.fromString("-1"))
             .isInstanceOf(IllegalArgumentException.class);
     }
@@ -91,10 +106,13 @@ class FrameRateTest
     {
         assertThatThrownBy(() -> FrameRate.fromString("abc"))
             .isInstanceOf(IllegalArgumentException.class);
+
         assertThatThrownBy(() -> FrameRate.fromString(""))
             .isInstanceOf(IllegalArgumentException.class);
+
         assertThatThrownBy(() -> FrameRate.fromString("FPS_999"))
             .isInstanceOf(IllegalArgumentException.class);
+
         assertThatThrownBy(() -> FrameRate.fromString(null))
             .isInstanceOf(IllegalArgumentException.class);
     }

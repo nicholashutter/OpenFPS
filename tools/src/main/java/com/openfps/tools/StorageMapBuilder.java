@@ -81,12 +81,16 @@ public final class StorageMapBuilder
     public static void main(final String[] args)
     {
         final String out = option(args, "--out=");
+
         if (out == null)
         {
             LOG.error("usage: StorageMapBuilder --out=<directory>");
+
             return;
         }
+
         final Path outDir = Path.of(out);
+
         try
         {
             Files.createDirectories(outDir);
@@ -95,8 +99,11 @@ public final class StorageMapBuilder
         {
             throw new UncheckedIOException("could not create output directory: " + outDir, e);
         }
+
         final byte[] bytes = build();
+
         final Path outFile = outDir.resolve(FILE_NAME);
+
         try
         {
             Files.write(outFile, bytes);
@@ -105,7 +112,9 @@ public final class StorageMapBuilder
         {
             throw new UncheckedIOException("could not write " + outFile, e);
         }
+
         final ModelFormat parsed = ModelFormat.read(bytes);
+
         LOG.info("Wrote {} ({} triangles, {} vertices, {} textures)",
             outFile, parsed.indexCount() / 3, parsed.vertexCount(), parsed.textureCount());
     }
@@ -121,22 +130,31 @@ public final class StorageMapBuilder
     public static byte[] build()
     {
         final ModelBuilder builder = new ModelBuilder(MODEL_NAME);
+
         final int floorTexture = builder.addTexture("storage-floor", TEXTURE_EDGE,
             TEXTURE_EDGE, MipGenerator.generate(TEXTURE_EDGE, TEXTURE_EDGE,
                 floorTexels()));
+
         final int wallTexture = builder.addTexture("storage-wall", TEXTURE_EDGE,
             TEXTURE_EDGE, MipGenerator.generate(TEXTURE_EDGE, TEXTURE_EDGE,
                 wallTexels()));
 
         builder.beginSubmesh(floorTexture);
+
         addGroundSlab(builder);
+
         builder.endSubmesh();
 
         builder.beginSubmesh(wallTexture);
+
         addPerimeterWalls(builder);
+
         addWarehouses(builder);
+
         addStorageTanks(builder);
+
         addCatwalk(builder);
+
         builder.endSubmesh();
 
         return builder.toBytes();
@@ -167,9 +185,13 @@ public final class StorageMapBuilder
     private static void addPerimeterWalls(final ModelBuilder builder)
     {
         final float e = HALF_EXTENT;
+
         addBox(builder, -e, 0.0f, -e - WALL_THICKNESS, e, WALL_HEIGHT, -e);
+
         addBox(builder, -e, 0.0f, e, e, WALL_HEIGHT, e + WALL_THICKNESS);
+
         addBox(builder, -e - WALL_THICKNESS, 0.0f, -e, -e, WALL_HEIGHT, e);
+
         addBox(builder, e, 0.0f, -e, e + WALL_THICKNESS, WALL_HEIGHT, e);
     }
 
@@ -183,6 +205,7 @@ public final class StorageMapBuilder
     {
         // RED warehouse (south-west)
         addBox(builder, 0.0f, 0.0f, 0.0f, 64.0f, WAREHOUSE_HEIGHT, 64.0f);
+
         // BLUE warehouse (north-east)
         addBox(builder, 256.0f, 0.0f, 256.0f, 320.0f, WAREHOUSE_HEIGHT, 320.0f);
     }
@@ -198,12 +221,15 @@ public final class StorageMapBuilder
         for (int i = 0; i < 4; i++)
         {
             final float x = -100.0f + i * 64.0f;
+
             addBox(builder, x - TANK_RADIUS, 0.0f, 120.0f, x + TANK_RADIUS, TANK_HEIGHT, 152.0f);
         }
+
         // South row (z=168..200) at the same x positions
         for (int i = 0; i < 4; i++)
         {
             final float x = -100.0f + i * 64.0f;
+
             addBox(builder, x - TANK_RADIUS, 0.0f, 168.0f, x + TANK_RADIUS, TANK_HEIGHT, 200.0f);
         }
     }
@@ -225,10 +251,15 @@ public final class StorageMapBuilder
         final float minZ, final float maxX, final float maxY, final float maxZ)
     {
         addFace(builder, maxX, minY, maxZ, maxX, maxY, maxZ, maxX, maxY, minZ, maxX, minY, minZ);
+
         addFace(builder, minX, minY, minZ, minX, maxY, minZ, minX, maxY, maxZ, minX, minY, maxZ);
+
         addFace(builder, minX, maxY, maxZ, maxX, maxY, maxZ, maxX, maxY, minZ, minX, maxY, minZ);
+
         addFace(builder, minX, minY, minZ, maxX, minY, minZ, maxX, minY, maxZ, minX, minY, maxZ);
+
         addFace(builder, minX, minY, maxZ, minX, maxY, maxZ, maxX, maxY, maxZ, maxX, minY, maxZ);
+
         addFace(builder, maxX, minY, minZ, maxX, maxY, minZ, minX, maxY, minZ, minX, minY, minZ);
     }
 
@@ -237,15 +268,21 @@ public final class StorageMapBuilder
         final float cy, final float cz, final float dx, final float dy, final float dz)
     {
         final float uScale = 1.0f / WORLD_UNITS_PER_TILE;
+
         final int a = builder.addVertex(ax, ay, az, ax * uScale, az * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         final int b = builder.addVertex(bx, by, bz, bx * uScale, bz * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         final int c = builder.addVertex(cx, cy, cz, cx * uScale, cz * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         final int d = builder.addVertex(dx, dy, dz, dx * uScale, dz * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         builder.addTriangle(a, b, c);
+
         builder.addTriangle(a, c, d);
     }
 
@@ -256,47 +293,63 @@ public final class StorageMapBuilder
     private static int[] floorTexels()
     {
         final int base = Rgba.pack(86, 88, 92, 255);
+
         final int line = Rgba.pack(140, 144, 152, 255);
+
         final int[] out = new int[TEXTURE_EDGE * TEXTURE_EDGE];
+
         for (int y = 0; y < TEXTURE_EDGE; y++)
         {
             for (int x = 0; x < TEXTURE_EDGE; x++)
             {
                 int colour = base;
+
                 if (x == 0 || y == 0 || x == TEXTURE_EDGE - 1 || y == TEXTURE_EDGE - 1)
                 {
                     colour = line;
                 }
+
                 out[y * TEXTURE_EDGE + x] = colour;
             }
         }
+
         return out;
     }
 
     private static int[] wallTexels()
     {
         final int base = Rgba.pack(120, 124, 132, 255);
+
         final int rib = Rgba.pack(96, 100, 108, 255);
+
         final int bandHeight = TEXTURE_EDGE / 8;
+
         final int[] out = new int[TEXTURE_EDGE * TEXTURE_EDGE];
+
         for (int y = 0; y < TEXTURE_EDGE; y++)
         {
             final int band = y / bandHeight;
+
             final boolean isRib = (y % bandHeight) == 0;
+
             for (int x = 0; x < TEXTURE_EDGE; x++)
             {
                 int colour = base;
+
                 if ((band % 2) != 0)
                 {
                     colour = rib;
                 }
+
                 if (isRib)
                 {
                     colour = rib;
                 }
+
                 out[y * TEXTURE_EDGE + x] = colour;
             }
         }
+
         return out;
     }
 
@@ -313,6 +366,7 @@ public final class StorageMapBuilder
                 return arg.substring(prefix.length());
             }
         }
+
         return null;
     }
 }

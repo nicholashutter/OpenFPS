@@ -49,6 +49,7 @@ class DesktopBindingsTest
         private HeldControls press(final InputBinding binding)
         {
             down.add(binding);
+
             return this;
         }
 
@@ -134,6 +135,7 @@ class DesktopBindingsTest
         void shouldBindMovementToWasdAndArrowsWhenUsingDefaults()
         {
             final ActionBindings bindings = DesktopBindings.defaults();
+
             // All four name the SAME stick, which on a stick is the literal
             // truth: the four directions are one control read four ways.
             final InputBinding stick =
@@ -142,12 +144,15 @@ class DesktopBindingsTest
             assertThat(bindings.bindingsFor(GameAction.MOVE_FORWARD))
                 .startsWith(InputBinding.key(Input.Keys.W), InputBinding.key(Input.Keys.UP))
                 .contains(stick);
+
             assertThat(bindings.bindingsFor(GameAction.MOVE_BACKWARD))
                 .startsWith(InputBinding.key(Input.Keys.S), InputBinding.key(Input.Keys.DOWN))
                 .contains(stick);
+
             assertThat(bindings.bindingsFor(GameAction.STRAFE_LEFT))
                 .startsWith(InputBinding.key(Input.Keys.A), InputBinding.key(Input.Keys.LEFT))
                 .contains(stick);
+
             assertThat(bindings.bindingsFor(GameAction.STRAFE_RIGHT))
                 .startsWith(InputBinding.key(Input.Keys.D), InputBinding.key(Input.Keys.RIGHT))
                 .contains(stick);
@@ -170,6 +175,7 @@ class DesktopBindingsTest
             // exactly how a row quietly overflows. bind() throws, so this would
             // fail loudly — but it would fail at startup rather than in review.
             final ActionBindings bindings = DesktopBindings.defaults();
+
             for (final GameAction action : GameAction.values())
             {
                 assertThat(bindings.bindingsFor(action))
@@ -183,6 +189,7 @@ class DesktopBindingsTest
         void shouldReturnAFreshTableWhenCalledTwice()
         {
             final ActionBindings first = DesktopBindings.defaults();
+
             final ActionBindings second = DesktopBindings.defaults();
 
             first.bind(GameAction.JUMP, InputBinding.key(Input.Keys.J));
@@ -204,12 +211,14 @@ class DesktopBindingsTest
 
             final HeldControls mouseOnly =
                 new HeldControls().press(InputBinding.mouseButton(Input.Buttons.LEFT));
+
             final HeldControls keyOnly =
                 new HeldControls().press(InputBinding.key(Input.Keys.CONTROL_LEFT));
 
             // Alternates, not a chord. Requiring both would turn the trackpad
             // fallback into a way of stopping the mouse working.
             assertThat(GdxInputPort.isAnyActive(bindings, GameAction.FIRE, mouseOnly)).isTrue();
+
             assertThat(GdxInputPort.isAnyActive(bindings, GameAction.FIRE, keyOnly)).isTrue();
         }
 
@@ -233,6 +242,7 @@ class DesktopBindingsTest
         {
             final ActionBindings cleared =
                 DesktopBindings.defaults().bind(GameAction.SPRINT);
+
             final HeldControls everything =
                 new HeldControls().press(InputBinding.key(Input.Keys.SHIFT_LEFT));
 
@@ -250,9 +260,11 @@ class DesktopBindingsTest
 
             final HeldControls oldKey =
                 new HeldControls().press(InputBinding.key(Input.Keys.SPACE));
+
             final HeldControls newKey = new HeldControls().press(InputBinding.key(Input.Keys.J));
 
             assertThat(GdxInputPort.isAnyActive(rebound, GameAction.JUMP, newKey)).isTrue();
+
             assertThat(GdxInputPort.isAnyActive(rebound, GameAction.JUMP, oldKey)).isFalse();
         }
 
@@ -264,6 +276,7 @@ class DesktopBindingsTest
             // probe answers false for a source it cannot query.
             final ActionBindings mixed = DesktopBindings.defaults()
                 .bind(GameAction.FIRE, InputBinding.touchRegion(1));
+
             final HeldControls nothingRelevant =
                 new HeldControls().press(InputBinding.mouseButton(Input.Buttons.LEFT));
 
@@ -287,6 +300,7 @@ class DesktopBindingsTest
         void shouldAdoptANewSchemeWhenRebound()
         {
             final GdxInputPort port = new GdxInputPort();
+
             final ActionBindings custom = new ActionBindings()
                 .bind(GameAction.FIRE, InputBinding.key(Input.Keys.Z));
 

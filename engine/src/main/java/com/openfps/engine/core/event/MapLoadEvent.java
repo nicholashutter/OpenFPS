@@ -26,7 +26,9 @@ public final class MapLoadEvent implements I_EngineEvent
                         final String mapName)
     {
         this.sequenceNumber = sequenceNumber;
+
         this.timestampNanos = timestampNanos;
+
         this.mapName = mapName;
     }
 

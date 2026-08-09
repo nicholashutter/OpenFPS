@@ -99,7 +99,9 @@ public final class ModelBuilder
     public ModelBuilder(final String source)
     {
         this.source = source;
+
         Arrays.fill(bounds, 0, 3, Float.POSITIVE_INFINITY);
+
         Arrays.fill(bounds, 3, BOUNDS_FLOATS, Float.NEGATIVE_INFINITY);
     }
 
@@ -118,15 +120,23 @@ public final class ModelBuilder
         final float v, final int colour)
     {
         vertexData = grow(vertexData, vertexSlots + ModelFormat.VERTEX_STRIDE_INTS);
+
         vertexData[vertexSlots + ModelFormat.VERTEX_POSITION_X] = Float.floatToRawIntBits(x);
+
         vertexData[vertexSlots + ModelFormat.VERTEX_POSITION_Y] = Float.floatToRawIntBits(y);
+
         vertexData[vertexSlots + ModelFormat.VERTEX_POSITION_Z] = Float.floatToRawIntBits(z);
+
         vertexData[vertexSlots + ModelFormat.VERTEX_TEXCOORD_U] = Float.floatToRawIntBits(u);
+
         vertexData[vertexSlots + ModelFormat.VERTEX_TEXCOORD_V] = Float.floatToRawIntBits(v);
+
         vertexData[vertexSlots + ModelFormat.VERTEX_COLOUR] = colour;
+
         vertexSlots += ModelFormat.VERTEX_STRIDE_INTS;
 
         widenBounds(x, y, z);
+
         return (vertexSlots / ModelFormat.VERTEX_STRIDE_INTS) - 1;
     }
 
@@ -140,9 +150,13 @@ public final class ModelBuilder
     public void addTriangle(final int a, final int b, final int c)
     {
         indices = grow(indices, indexSlots + ModelFormat.INDICES_PER_TRIANGLE);
+
         indices[indexSlots] = a;
+
         indices[indexSlots + 1] = b;
+
         indices[indexSlots + 2] = c;
+
         indexSlots += ModelFormat.INDICES_PER_TRIANGLE;
     }
 
@@ -154,6 +168,7 @@ public final class ModelBuilder
     public void beginSubmesh(final int textureIndex)
     {
         openSubmeshFirstIndex = indexSlots;
+
         openSubmeshTexture = textureIndex;
     }
 
@@ -167,17 +182,26 @@ public final class ModelBuilder
         {
             return;
         }
+
         final int span = indexSlots - openSubmeshFirstIndex;
+
         if (span > 0)
         {
             submeshes = grow(submeshes, submeshSlots + ModelFormat.SUBMESH_STRIDE_INTS);
+
             submeshes[submeshSlots] = openSubmeshFirstIndex;
+
             submeshes[submeshSlots + 1] = span;
+
             submeshes[submeshSlots + 2] = openSubmeshTexture;
+
             submeshes[submeshSlots + 3] = 0;
+
             submeshSlots += ModelFormat.SUBMESH_STRIDE_INTS;
         }
+
         openSubmeshFirstIndex = -1;
+
         openSubmeshTexture = ModelFormat.NO_TEXTURE;
     }
 
@@ -197,21 +221,30 @@ public final class ModelBuilder
         final int[][] levels)
     {
         checkTextureDimensions(name, width, height);
+
         checkLevels(name, width, height, levels);
 
         textures = grow(textures, textureSlots + ModelFormat.TEXTURE_STRIDE_INTS);
+
         textures[textureSlots] = width;
+
         textures[textureSlots + 1] = height;
+
         textures[textureSlots + 2] = levels.length;
+
         textures[textureSlots + 3] = texelSlots;
+
         textureSlots += ModelFormat.TEXTURE_STRIDE_INTS;
 
         for (final int[] level : levels)
         {
             texels = grow(texels, texelSlots + level.length);
+
             System.arraycopy(level, 0, texels, texelSlots, level.length);
+
             texelSlots += level.length;
         }
+
         return (textureSlots / ModelFormat.TEXTURE_STRIDE_INTS) - 1;
     }
 
@@ -251,35 +284,61 @@ public final class ModelBuilder
         checkTriangleBudget();
 
         final int vertexOffset = ModelFormat.HEADER_SIZE;
+
         final int indexOffset = vertexOffset + (vertexSlots * Integer.BYTES);
+
         final int submeshOffset = indexOffset + (indexSlots * Integer.BYTES);
+
         final int textureOffset = submeshOffset + (submeshSlots * Integer.BYTES);
+
         final int texelOffset = textureOffset + (textureSlots * Integer.BYTES);
+
         final int fileSize = texelOffset + (texelSlots * Integer.BYTES);
 
         final ByteBuffer out = ByteBuffer.allocate(fileSize).order(ByteOrder.LITTLE_ENDIAN);
+
         out.putInt(ModelFormat.MAGIC);
+
         out.putShort((short) ModelFormat.VERSION_MAJOR);
+
         out.putShort((short) ModelFormat.VERSION_MINOR);
+
         out.putInt(ModelFormat.HEADER_SIZE);
+
         out.putInt(fileSize);
+
         out.putInt(vertexCount());
+
         out.putInt(vertexOffset);
+
         out.putInt(indexSlots);
+
         out.putInt(indexOffset);
+
         out.putInt(submeshSlots / ModelFormat.SUBMESH_STRIDE_INTS);
+
         out.putInt(submeshOffset);
+
         out.putInt(textureCount());
+
         out.putInt(textureOffset);
+
         out.putInt(texelSlots);
+
         out.putInt(texelOffset);
+
         putBounds(out);
 
         writeSection(out, vertexOffset, vertexData, vertexSlots);
+
         writeSection(out, indexOffset, indices, indexSlots);
+
         writeSection(out, submeshOffset, submeshes, submeshSlots);
+
         writeSection(out, textureOffset, textures, textureSlots);
+
         writeSection(out, texelOffset, texels, texelSlots);
+
         return out.array();
     }
 
@@ -292,8 +351,10 @@ public final class ModelBuilder
             {
                 out.putFloat(0.0f);
             }
+
             return;
         }
+
         for (int i = 0; i < BOUNDS_FLOATS; i++)
         {
             out.putFloat(bounds[i]);
@@ -305,6 +366,7 @@ public final class ModelBuilder
         final int length)
     {
         out.position(offset);
+
         out.asIntBuffer().put(data, 0, length);
     }
 
@@ -312,10 +374,15 @@ public final class ModelBuilder
     private void widenBounds(final float x, final float y, final float z)
     {
         bounds[0] = Math.min(bounds[0], x);
+
         bounds[1] = Math.min(bounds[1], y);
+
         bounds[2] = Math.min(bounds[2], z);
+
         bounds[3] = Math.max(bounds[3], x);
+
         bounds[4] = Math.max(bounds[4], y);
+
         bounds[5] = Math.max(bounds[5], z);
     }
 
@@ -323,6 +390,7 @@ public final class ModelBuilder
     private void checkTriangleBudget()
     {
         final int triangles = triangleCount();
+
         if (triangles > ModelFormat.MAX_TRIANGLES_PER_MODEL)
         {
             throw new AssetBudgetException(source + ": " + triangles
@@ -333,6 +401,7 @@ public final class ModelBuilder
                 + " Decimate it upstream or choose a lower-poly source asset;"
                 + " the converter will not silently reduce it.");
         }
+
         if (vertexCount() > ModelFormat.MAX_VERTEX_COUNT)
         {
             throw new AssetBudgetException(source + ": " + vertexCount()
@@ -366,7 +435,9 @@ public final class ModelBuilder
                 + " Cache locality dominates the span loop, which is what that cap protects."
                 + " Downsample the source image; the converter will not do it silently.");
         }
+
         requirePowerOfTwo(name, width, "width");
+
         requirePowerOfTwo(name, height, "height");
     }
 
@@ -380,9 +451,11 @@ public final class ModelBuilder
                 + "' has no mip levels. Mipmaps are required, not optional"
                 + " (docs/ASSETS.md section 5).");
         }
+
         for (int level = 0; level < levels.length; level++)
         {
             final int expected = Math.max(1, width >> level) * Math.max(1, height >> level);
+
             if (levels[level] == null || levels[level].length != expected)
             {
                 throw new AssetBudgetException(source + ": texture '" + name + "' mip level "
@@ -410,6 +483,7 @@ public final class ModelBuilder
         {
             return array;
         }
+
         return Arrays.copyOf(array, Math.max(array.length * 2, needed));
     }
 }

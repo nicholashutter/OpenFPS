@@ -39,10 +39,15 @@ class PeerConnectionTest
     void exposesItsIdentity()
     {
         assertThat(peer.peerId()).isEqualTo(1);
+
         assertThat(peer.address()).isEqualTo(ADDRESS);
+
         assertThat(peer.ackWindow()).isNotNull();
+
         assertThat(peer.packetsReceived()).isZero();
+
         assertThat(peer.hasRttSample()).isFalse();
+
         assertThat(peer.smoothedRttNanos()).isEqualTo(PeerConnection.NO_RTT);
     }
 
@@ -53,6 +58,7 @@ class PeerConnectionTest
         peer.recordRttSample(RTT_100MS);
 
         assertThat(peer.hasRttSample()).isTrue();
+
         assertThat(peer.smoothedRttNanos()).isEqualTo(RTT_100MS);
     }
 
@@ -78,9 +84,11 @@ class PeerConnectionTest
     void convergesTowardsASteadyRoundTrip()
     {
         peer.recordRttSample(0L);
+
         for (int i = 0; i < 100; i++)
         {
             peer.recordRttSample(RTT_100MS);
+
             assertThat(peer.smoothedRttNanos()).isLessThanOrEqualTo(RTT_100MS);
         }
 
@@ -93,11 +101,13 @@ class PeerConnectionTest
     void isDeterministicAcrossRuns()
     {
         final PeerConnection other = new PeerConnection(2, ADDRESS);
+
         final long[] samples = {5_000_000L, 90_000_000L, 12_000_000L, 40_000_000L, 7_000_000L};
 
         for (final long sample : samples)
         {
             peer.recordRttSample(sample);
+
             other.recordRttSample(sample);
         }
 
@@ -110,11 +120,15 @@ class PeerConnectionTest
     void countsPacketsSeparatelyFromTics()
     {
         peer.recordReceivedPacket();
+
         peer.recordReceivedTic(0);
+
         peer.recordReceivedTic(1);
+
         peer.recordReceivedTic(2);
 
         assertThat(peer.packetsReceived()).isEqualTo(1);
+
         assertThat(peer.ackWindow().highestContiguousTic()).isEqualTo(2);
     }
 
@@ -141,14 +155,19 @@ class PeerConnectionTest
         assertThat(peer.remoteAckedTic()).isEqualTo(-1);
 
         assertThat(peer.recordRemoteAck(10, 0b1011L)).isTrue();
+
         assertThat(peer.remoteAckedTic()).isEqualTo(10);
+
         assertThat(peer.remoteAckBitfield()).isEqualTo(0b1011L);
 
         assertThat(peer.recordRemoteAck(4, 0L)).isFalse();
+
         assertThat(peer.remoteAckedTic()).isEqualTo(10);
+
         assertThat(peer.remoteAckBitfield()).isEqualTo(0b1011L);
 
         assertThat(peer.recordRemoteAck(10, 0L)).isFalse();
+
         assertThat(peer.remoteAckedTic()).isEqualTo(10);
     }
 
@@ -157,6 +176,7 @@ class PeerConnectionTest
     void sizesTheWindowFromTheRoundTrip()
     {
         peer.recordRttSample(130_000_000L);
+
         peer.recordRemoteAck(59, 0L);
 
         // ceil(130ms / 16.667ms) = 8, plus the 2-tic safety margin
@@ -169,6 +189,7 @@ class PeerConnectionTest
     void widensTheWindowWhenThePeerIsFurtherBehind()
     {
         peer.recordRttSample(1_000_000L);
+
         peer.recordRemoteAck(10, 0L);
 
         assertThat(peer.redundancyWindow(40, NANOS_PER_TIC_60HZ)).isEqualTo(30);
@@ -203,6 +224,7 @@ class PeerConnectionTest
         }
 
         assertThat(peer.isStalling(10 + Constants.MAX_LATENCY_TICS)).isFalse();
+
         assertThat(peer.isStalling(10 + Constants.MAX_LATENCY_TICS + 1)).isTrue();
     }
 
@@ -213,7 +235,9 @@ class PeerConnectionTest
         final PeerConnection late = new PeerConnection(2, ADDRESS, 500);
 
         assertThat(late.remoteAckedTic()).isEqualTo(499);
+
         assertThat(late.ackWindow().highestContiguousTic()).isEqualTo(499);
+
         assertThat(late.isStalling(500)).isFalse();
     }
 
@@ -223,14 +247,19 @@ class PeerConnectionTest
     {
         assertThatThrownBy(() -> new PeerConnection(-1, ADDRESS))
             .isInstanceOf(IllegalArgumentException.class);
+
         assertThatThrownBy(() -> new PeerConnection(Constants.MAX_PLAYERS, ADDRESS))
             .isInstanceOf(IllegalArgumentException.class);
+
         assertThatThrownBy(() -> new PeerConnection(0, null))
             .isInstanceOf(IllegalArgumentException.class);
+
         assertThatThrownBy(() -> new PeerConnection(0, ""))
             .isInstanceOf(IllegalArgumentException.class);
+
         assertThatThrownBy(() -> peer.recordRttSample(-1L))
             .isInstanceOf(IllegalArgumentException.class);
+
         assertThatThrownBy(() -> peer.redundancyWindow(0, 0L))
             .isInstanceOf(IllegalArgumentException.class);
     }

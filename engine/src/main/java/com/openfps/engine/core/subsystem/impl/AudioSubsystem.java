@@ -22,6 +22,7 @@ public final class AudioSubsystem extends Subsystem
     public AudioSubsystem(final I_AudioPort port)
     {
         super(SubsystemId.S_);
+
         this.port = port;
     }
 

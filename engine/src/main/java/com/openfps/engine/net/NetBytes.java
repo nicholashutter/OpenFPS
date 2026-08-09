@@ -36,8 +36,11 @@ final class NetBytes
     static void writeInt(final byte[] dst, final int offset, final int value)
     {
         dst[offset] = (byte) (value >>> (BITS_PER_BYTE * 3));
+
         dst[offset + 1] = (byte) (value >>> (BITS_PER_BYTE * 2));
+
         dst[offset + 2] = (byte) (value >>> BITS_PER_BYTE);
+
         dst[offset + 3] = (byte) value;
     }
 
@@ -66,6 +69,7 @@ final class NetBytes
     static void writeShort(final byte[] dst, final int offset, final int value)
     {
         dst[offset] = (byte) (value >>> BITS_PER_BYTE);
+
         dst[offset + 1] = (byte) value;
     }
 
@@ -103,6 +107,7 @@ final class NetBytes
     static void writeLong(final byte[] dst, final int offset, final long value)
     {
         writeInt(dst, offset, (int) (value >>> Integer.SIZE));
+
         writeInt(dst, offset + Integer.BYTES, (int) value);
     }
 
@@ -116,7 +121,9 @@ final class NetBytes
     static long readLong(final byte[] src, final int offset)
     {
         final long high = readInt(src, offset) & INT_MASK;
+
         final long low = readInt(src, offset + Integer.BYTES) & INT_MASK;
+
         return (high << Integer.SIZE) | low;
     }
 }

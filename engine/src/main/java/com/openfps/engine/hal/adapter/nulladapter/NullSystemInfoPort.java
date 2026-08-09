@@ -80,7 +80,9 @@ public final class NullSystemInfoPort implements I_SystemInfoPort
         {
             throw new IllegalStateException("init() called from state SHUTDOWN");
         }
+
         state = State.READY;
+
         LOG.info("NullSystemInfoPort initialized: cores={}, os={}, java={}",
             logicalProcessorCount(), osName(), javaVersion());
     }

@@ -71,8 +71,11 @@ final class GdxAudioPortTest
             assertThatCode(() ->
             {
                 port.init();
+
                 port.play(SoundId.WEAPON_FIRE);
+
                 port.stopAll();
+
                 port.shutdown();
             }).doesNotThrowAnyException();
         }
@@ -86,10 +89,13 @@ final class GdxAudioPortTest
             // this, and without it a muted mixer and a broken backend look
             // identical.
             final I_AudioPort port = new GdxAudioPort(cache.toFile());
+
             port.init();
+
             port.play(SoundId.WEAPON_FIRE);
 
             assertThat(port.isAudible()).isFalse();
+
             port.shutdown();
         }
 
@@ -103,6 +109,7 @@ final class GdxAudioPortTest
             // for its entire run, which is the same permanent-silent-failure bug
             // the lazy load exists to avoid. Repeated plays must stay harmless.
             final I_AudioPort port = new GdxAudioPort(cache.toFile());
+
             port.init();
 
             assertThatCode(() ->
@@ -112,6 +119,7 @@ final class GdxAudioPortTest
                     port.play(SoundId.WEAPON_FIRE);
                 }
             }).doesNotThrowAnyException();
+
             port.shutdown();
         }
 
@@ -127,9 +135,13 @@ final class GdxAudioPortTest
             assertThatCode(() ->
             {
                 port.play(SoundId.WEAPON_FIRE);
+
                 port.init();
+
                 port.shutdown();
+
                 port.play(SoundId.WEAPON_FIRE);
+
                 port.shutdown();
             }).doesNotThrowAnyException();
         }
@@ -151,15 +163,20 @@ final class GdxAudioPortTest
             // an idempotent backstop, so it has to be as survivable as play() is
             // and must leave the port willing to try again.
             final I_AudioPort port = new GdxAudioPort(cache.toFile());
+
             port.init();
 
             assertThatCode(() ->
             {
                 port.preload();
+
                 port.preload();
+
                 port.play(SoundId.WEAPON_FIRE);
             }).doesNotThrowAnyException();
+
             assertThat(port.isAudible()).isFalse();
+
             port.shutdown();
         }
 
@@ -175,10 +192,14 @@ final class GdxAudioPortTest
             assertThatCode(() ->
             {
                 port.preload();
+
                 port.init();
+
                 port.shutdown();
+
                 port.preload();
             }).doesNotThrowAnyException();
+
             assertThat(port.isAudible()).isFalse();
         }
 
@@ -187,9 +208,11 @@ final class GdxAudioPortTest
         void shouldSurvivePreloadWithNoCacheDirectory()
         {
             final I_AudioPort port = new GdxAudioPort(null);
+
             port.init();
 
             assertThatCode(port::preload).doesNotThrowAnyException();
+
             port.shutdown();
         }
     }
@@ -208,9 +231,12 @@ final class GdxAudioPortTest
             assertThatCode(() ->
             {
                 port.init();
+
                 port.play(SoundId.WEAPON_FIRE);
+
                 port.shutdown();
             }).doesNotThrowAnyException();
+
             assertThat(port.isAudible()).isFalse();
         }
 
@@ -221,12 +247,15 @@ final class GdxAudioPortTest
             // A file where the directory should be: mkdirs fails, the stream
             // cannot open, and the port has to swallow it.
             final File notADirectory = cache.resolve("occupied").toFile();
+
             final I_AudioPort port = new GdxAudioPort(new File(notADirectory, "sub"));
 
             assertThatCode(() ->
             {
                 port.init();
+
                 port.play(SoundId.WEAPON_FIRE);
+
                 port.shutdown();
             }).doesNotThrowAnyException();
         }
@@ -248,15 +277,19 @@ final class GdxAudioPortTest
             assertThat(port.masterVolume()).isEqualTo(AudioVolume.FULL);
 
             port.setMasterVolume(2.0f);
+
             assertThat(port.masterVolume()).isEqualTo(AudioVolume.FULL);
 
             port.setMasterVolume(-1.0f);
+
             assertThat(port.masterVolume()).isEqualTo(AudioVolume.SILENT);
 
             port.setMasterVolume(Float.NaN);
+
             assertThat(port.masterVolume()).isEqualTo(AudioVolume.SILENT);
 
             port.setMasterVolume(0.3f);
+
             assertThat(port.masterVolume()).isEqualTo(0.3f);
         }
     }

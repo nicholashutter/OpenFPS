@@ -176,6 +176,7 @@ public final class DebugOverlay
     public void sample(final long platformFrameNanos, final long rendererFrameNanos)
     {
         platform.sample(platformFrameNanos);
+
         renderer.sample(rendererFrameNanos);
     }
 
@@ -201,31 +202,47 @@ public final class DebugOverlay
         {
             return;
         }
+
         this.renderWidth = positiveOr(frameWidth, surfaceWidth);
+
         this.renderHeight = positiveOr(frameHeight, surfaceHeight);
+
         ensureResources();
+
         refreshLines();
 
         final float cellGap = CELL_PIXELS * CELL_GAP_FRACTION;
+
         final float lineHeight = (BlockFont.GLYPH_HEIGHT + LINE_SPACING_CELLS) * CELL_PIXELS;
+
         final float textWidth = widestLinePixels();
+
         final float panelWidth = textWidth + PADDING_PIXELS * 2.0f;
+
         final float panelHeight = lineHeight * LINE_COUNT - LINE_SPACING_CELLS * CELL_PIXELS
             + PADDING_PIXELS * 2.0f;
+
         final float panelTop = surfaceHeight - MARGIN_PIXELS;
 
         batch.getProjectionMatrix().setToOrtho2D(0.0f, 0.0f, surfaceWidth, surfaceHeight);
+
         batch.begin();
+
         batch.setColor(PANEL);
+
         batch.draw(pixel, MARGIN_PIXELS, panelTop - panelHeight, panelWidth, panelHeight);
 
         float lineTop = panelTop - PADDING_PIXELS;
+
         for (int index = 0; index < LINE_COUNT; index++)
         {
             batch.setColor(colourFor(index));
+
             drawLine(lines[index], MARGIN_PIXELS + PADDING_PIXELS, lineTop, cellGap);
+
             lineTop = lineTop - lineHeight;
         }
+
         batch.end();
     }
 
@@ -236,6 +253,7 @@ public final class DebugOverlay
         {
             return reported;
         }
+
         return fallback;
     }
 
@@ -246,6 +264,7 @@ public final class DebugOverlay
         {
             return FPS_COLOUR;
         }
+
         return TIMING_COLOUR;
     }
 
@@ -258,6 +277,7 @@ public final class DebugOverlay
         final float gap)
     {
         final float size = CELL_PIXELS - gap;
+
         BlockFont.forEachBlock(text, (column, row, glyph) ->
             batch.draw(pixel, left + column * CELL_PIXELS,
                 top - (row + 1) * CELL_PIXELS, size, size));
@@ -267,14 +287,17 @@ public final class DebugOverlay
     private float widestLinePixels()
     {
         int widest = 0;
+
         for (int index = 0; index < LINE_COUNT; index++)
         {
             final int cells = BlockFont.widthInBlocks(lines[index]);
+
             if (cells > widest)
             {
                 widest = cells;
             }
         }
+
         return widest * CELL_PIXELS;
     }
 
@@ -283,27 +306,38 @@ public final class DebugOverlay
     private void refreshLines()
     {
         final int fps = Math.round(platform.fps());
+
         if (fps != shownFps)
         {
             shownFps = fps;
+
             lines[0] = "FPS " + fps;
         }
+
         final int frameTenths = Math.round(platform.frameMillis() * TENTHS);
+
         if (frameTenths != shownFrameTenths)
         {
             shownFrameTenths = frameTenths;
+
             lines[1] = "FRAME " + oneDecimal(platform.frameMillis()) + " MS";
         }
+
         final int renderTenths = Math.round(renderer.frameMillis() * TENTHS);
+
         if (renderTenths != shownRenderTenths)
         {
             shownRenderTenths = renderTenths;
+
             lines[2] = "RENDER " + oneDecimal(renderer.frameMillis()) + " MS";
         }
+
         if (renderWidth != shownRenderWidth || renderHeight != shownRenderHeight)
         {
             shownRenderWidth = renderWidth;
+
             shownRenderHeight = renderHeight;
+
             // Changes only when the mode does, so this allocates once a run in
             // practice — the same caching rule as the three lines above, applied
             // to a figure that happens to be even more stable than they are.
@@ -325,12 +359,19 @@ public final class DebugOverlay
         {
             return;
         }
+
         batch = new SpriteBatch();
+
         final Pixmap pixmap = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
+
         pixmap.setColor(Color.WHITE);
+
         pixmap.fill();
+
         white = new Texture(pixmap);
+
         pixmap.dispose();
+
         pixel = new TextureRegion(white);
     }
 
@@ -340,13 +381,17 @@ public final class DebugOverlay
         if (batch != null)
         {
             batch.dispose();
+
             batch = null;
         }
+
         if (white != null)
         {
             white.dispose();
+
             white = null;
         }
+
         pixel = null;
     }
 

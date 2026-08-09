@@ -45,11 +45,14 @@ public final class MemoryUserProfilePort implements I_UserProfilePort
         {
             throw new IllegalStateException("init() called from state SHUTDOWN");
         }
+
         if (state == State.READY)
         {
             throw new IllegalStateException("init() called from state READY — already initialized");
         }
+
         state = State.READY;
+
         LOG.info("MemoryUserProfilePort initialized (in-memory)");
     }
 
@@ -60,8 +63,11 @@ public final class MemoryUserProfilePort implements I_UserProfilePort
         {
             throw new IllegalStateException("shutdown() called from state SHUTDOWN");
         }
+
         profiles.clear();
+
         state = State.SHUTDOWN;
+
         LOG.info("MemoryUserProfilePort shut down");
     }
 
@@ -75,6 +81,7 @@ public final class MemoryUserProfilePort implements I_UserProfilePort
     public Optional<UserProfile> findById(final String id)
     {
         requireReady();
+
         return Optional.ofNullable(profiles.get(id));
     }
 
@@ -82,6 +89,7 @@ public final class MemoryUserProfilePort implements I_UserProfilePort
     public List<UserProfile> findAll()
     {
         requireReady();
+
         return new ArrayList<>(profiles.values());
     }
 
@@ -89,10 +97,12 @@ public final class MemoryUserProfilePort implements I_UserProfilePort
     public void save(final UserProfile profile)
     {
         requireReady();
+
         if (profile == null)
         {
             throw new IllegalArgumentException("profile must not be null");
         }
+
         profiles.put(profile.id(), profile);
     }
 
@@ -100,6 +110,7 @@ public final class MemoryUserProfilePort implements I_UserProfilePort
     public void delete(final String id)
     {
         requireReady();
+
         if (id != null)
         {
             profiles.remove(id);
@@ -110,6 +121,7 @@ public final class MemoryUserProfilePort implements I_UserProfilePort
     public int count()
     {
         requireReady();
+
         return profiles.size();
     }
 

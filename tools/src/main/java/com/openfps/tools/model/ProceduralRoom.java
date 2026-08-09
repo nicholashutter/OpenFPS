@@ -158,27 +158,37 @@ public final class ProceduralRoom
     public static byte[] build()
     {
         final ModelBuilder builder = new ModelBuilder("generated-room");
+
         final int floorTexture = builder.addTexture("room-floor", TEXTURE_EDGE, TEXTURE_EDGE,
             MipGenerator.generate(TEXTURE_EDGE, TEXTURE_EDGE,
                 gridTexels(FLOOR_BASE, FLOOR_SHADE, FLOOR_LINE)));
+
         final int wallTexture = builder.addTexture("room-wall", TEXTURE_EDGE, TEXTURE_EDGE,
             MipGenerator.generate(TEXTURE_EDGE, TEXTURE_EDGE,
                 gridTexels(WALL_BASE, WALL_SHADE, WALL_LINE)));
 
         final float inner = INTERIOR_HALF_EXTENT;
+
         final float outer = INTERIOR_HALF_EXTENT + SLAB_THICKNESS;
 
         builder.beginSubmesh(floorTexture);
+
         addBox(builder, -inner, -SLAB_THICKNESS, -inner, inner, 0.0f, inner);
+
         builder.endSubmesh();
 
         // The two z walls run the full outer span and the two x walls fill
         // between them, so the four meet with no gap at the corners.
         builder.beginSubmesh(wallTexture);
+
         addBox(builder, -outer, 0.0f, -outer, outer, WALL_HEIGHT, -inner);
+
         addBox(builder, -outer, 0.0f, inner, outer, WALL_HEIGHT, outer);
+
         addBox(builder, -outer, 0.0f, -inner, -inner, WALL_HEIGHT, inner);
+
         addBox(builder, inner, 0.0f, -inner, outer, WALL_HEIGHT, inner);
+
         builder.endSubmesh();
 
         return builder.toBytes();
@@ -204,7 +214,9 @@ public final class ProceduralRoom
         final float minZ, final float maxX, final float maxY, final float maxZ)
     {
         final float[] min = {minX, minY, minZ};
+
         final float[] max = {maxX, maxY, maxZ};
+
         for (int face = 0; face < FACE_COUNT; face++)
         {
             addFace(builder, face, min, max);
@@ -216,19 +228,23 @@ public final class ProceduralRoom
         final float[] max)
     {
         final int uAxis = FACE_UV_AXES[face * 2];
+
         final int vAxis = FACE_UV_AXES[(face * 2) + 1];
 
         // MUTABLE locals — the corner being built and the index of the first
         // one, which the two triangles below both fan from.
         final float[] corner = new float[AXES];
+
         int first = 0;
 
         for (int index = 0; index < FACE_CORNERS; index++)
         {
             final int at = (((face * FACE_CORNERS) + index) * AXES);
+
             for (int axis = 0; axis < AXES; axis++)
             {
                 corner[axis] = min[axis];
+
                 if (FACE_CORNER_SELECTORS[at + axis] != 0)
                 {
                     corner[axis] = max[axis];
@@ -238,6 +254,7 @@ public final class ProceduralRoom
             final int vertex = builder.addVertex(corner[0], corner[1], corner[2],
                 corner[uAxis] / WORLD_UNITS_PER_TILE, corner[vAxis] / WORLD_UNITS_PER_TILE,
                 SURFACE_COLOUR);
+
             if (index == 0)
             {
                 first = vertex;
@@ -245,6 +262,7 @@ public final class ProceduralRoom
         }
 
         builder.addTriangle(first, first + 1, first + 2);
+
         builder.addTriangle(first, first + 2, first + 3);
     }
 
@@ -254,6 +272,7 @@ public final class ProceduralRoom
     private static int[] gridTexels(final int base, final int shade, final int line)
     {
         final int[] texels = new int[TEXTURE_EDGE * TEXTURE_EDGE];
+
         for (int y = 0; y < TEXTURE_EDGE; y++)
         {
             for (int x = 0; x < TEXTURE_EDGE; x++)
@@ -261,6 +280,7 @@ public final class ProceduralRoom
                 texels[(y * TEXTURE_EDGE) + x] = texelAt(x, y, base, shade, line);
             }
         }
+
         return texels;
     }
 
@@ -272,10 +292,12 @@ public final class ProceduralRoom
         {
             return line;
         }
+
         if (((x / CHECKER) + (y / CHECKER)) % 2 == 0)
         {
             return base;
         }
+
         return shade;
     }
 }

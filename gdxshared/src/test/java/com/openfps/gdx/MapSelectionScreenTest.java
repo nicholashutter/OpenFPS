@@ -40,6 +40,7 @@ class MapSelectionScreenTest
             // would use, not the words a developer would.
             assertThat(MapSelectionScreen.TITLE_TEXT)
                 .isEqualTo("SELECT MAP");
+
             assertThat(MapSelectionScreen.SUBTITLE_TEXT)
                 .contains("Click a map")
                 .contains("BACK");
@@ -113,6 +114,7 @@ class MapSelectionScreenTest
             assertThatThrownBy(() -> new MapSelectionScreen.Entry("", "Cornerstone"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("id");
+
             assertThatThrownBy(() -> new MapSelectionScreen.Entry("   ", "Cornerstone"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("id");
@@ -144,6 +146,7 @@ class MapSelectionScreenTest
                 new MapSelectionScreen.Entry("cornerstone", "Cornerstone");
 
             assertThat(entry.id()).isEqualTo("cornerstone");
+
             assertThat(entry.displayName()).isEqualTo("Cornerstone");
         }
 
@@ -161,9 +164,13 @@ class MapSelectionScreenTest
                 new MapSelectionScreen.Entry("tripoint", "Tripoint"));
 
             assertThat(entries).hasSize(3);
+
             assertThat(entries.get(0).id()).isEqualTo("cornerstone");
+
             assertThat(entries.get(0).displayName()).isEqualTo("Cornerstone");
+
             assertThat(entries.get(2).id()).isEqualTo("tripoint");
+
             assertThat(entries.get(2).displayName()).isEqualTo("Tripoint");
         }
     }

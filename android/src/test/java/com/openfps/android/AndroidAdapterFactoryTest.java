@@ -105,15 +105,22 @@ class AndroidAdapterFactoryTest
         void shouldDelegateTheUnopinionatedPorts()
         {
             final I_AdapterFactory delegate = new NullAdapterFactory();
+
             final AndroidAdapterFactory factory = new AndroidAdapterFactory(
                 delegate, newWindowPort(), new MemoryUserProfilePort());
+
             factory.init();
+
             try
             {
                 assertThat(factory.getTimePort()).isSameAs(delegate.getTimePort());
+
                 assertThat(factory.getInputPort()).isSameAs(delegate.getInputPort());
+
                 assertThat(factory.getDatagramPort()).isSameAs(delegate.getDatagramPort());
+
                 assertThat(factory.getFilePort()).isSameAs(delegate.getFilePort());
+
                 assertThat(factory.getSystemInfoPort()).isSameAs(delegate.getSystemInfoPort());
             }
             finally
@@ -127,14 +134,20 @@ class AndroidAdapterFactoryTest
         void shouldSupplyTheAndroidWindow()
         {
             final I_AdapterFactory delegate = new NullAdapterFactory();
+
             final AndroidWindowPort window = newWindowPort();
+
             final AndroidAdapterFactory factory = new AndroidAdapterFactory(
                 delegate, window, new MemoryUserProfilePort());
+
             factory.init();
+
             try
             {
                 assertThat(factory.getWindowPort()).isSameAs(window);
+
                 assertThat(factory.getWindowPort()).isNotSameAs(delegate.getWindowPort());
+
                 assertThat(factory.getWindowPort().isRealWindow()).isTrue();
             }
             finally
@@ -151,13 +164,18 @@ class AndroidAdapterFactoryTest
             // with NoClassDefFoundError because sqlite-jdbc is excluded from
             // this module. Persistence has to come from the override.
             final I_AdapterFactory delegate = new NullAdapterFactory();
+
             final I_UserProfilePort profile = new MemoryUserProfilePort();
+
             final AndroidAdapterFactory factory = new AndroidAdapterFactory(
                 delegate, newWindowPort(), profile);
+
             factory.init();
+
             try
             {
                 assertThat(factory.getUserProfilePort()).isSameAs(profile);
+
                 assertThat(factory.getUserProfilePort()).isNotSameAs(delegate.getUserProfilePort());
             }
             finally
@@ -176,13 +194,16 @@ class AndroidAdapterFactoryTest
         void shouldOpenTheProfileStoreOnInit()
         {
             final I_UserProfilePort profile = new MemoryUserProfilePort();
+
             final AndroidAdapterFactory factory = new AndroidAdapterFactory(
                 new NullAdapterFactory(), newWindowPort(), profile);
+
             assertThat(profile.state()).isEqualTo(I_UserProfilePort.State.UNINITIALIZED);
 
             factory.init();
 
             assertThat(profile.state()).isEqualTo(I_UserProfilePort.State.READY);
+
             factory.shutdown();
         }
 
@@ -195,15 +216,19 @@ class AndroidAdapterFactoryTest
             // started it, the frame loop would already be claimed by the time
             // the launcher asked.
             final FakeAndroidApplication application = new FakeAndroidApplication();
+
             final AndroidWindowPort window = new AndroidWindowPort(application);
+
             final AndroidAdapterFactory factory = new AndroidAdapterFactory(
                 new NullAdapterFactory(), window, new MemoryUserProfilePort());
 
             factory.init();
 
             assertThat(application.initializeCount()).isZero();
+
             assertThatCode(() -> window.runFrameLoop(new RecordingFrameCallback()))
                 .doesNotThrowAnyException();
+
             factory.shutdown();
         }
 
@@ -212,8 +237,10 @@ class AndroidAdapterFactoryTest
         void shouldCloseTheProfileStoreOnShutdown()
         {
             final I_UserProfilePort profile = new MemoryUserProfilePort();
+
             final AndroidAdapterFactory factory = new AndroidAdapterFactory(
                 new NullAdapterFactory(), newWindowPort(), profile);
+
             factory.init();
 
             factory.shutdown();
@@ -229,13 +256,16 @@ class AndroidAdapterFactoryTest
             // then calls hal.shutdown(). Closing the database on the way past
             // anything else that might still be writing would lose that save.
             final List<String> log = new ArrayList<>();
+
             final AndroidAdapterFactory factory = new AndroidAdapterFactory(
                 new LoggingAdapterFactory(new NullAdapterFactory(), log),
                 newWindowPort(),
                 new LoggingUserProfilePort(new MemoryUserProfilePort(), log));
 
             factory.init();
+
             log.clear();
+
             factory.shutdown();
 
             assertThat(log).containsExactly("profile:shutdown", "delegate:shutdown");
@@ -246,9 +276,12 @@ class AndroidAdapterFactoryTest
         void shouldLeaveTheWindowToTheActivity()
         {
             final AndroidWindowPort window = newWindowPort();
+
             final AndroidAdapterFactory factory = new AndroidAdapterFactory(
                 new NullAdapterFactory(), window, new MemoryUserProfilePort());
+
             factory.init();
+
             window.requestClose();
 
             factory.shutdown();
@@ -272,6 +305,7 @@ class AndroidAdapterFactoryTest
         LoggingAdapterFactory(final I_AdapterFactory delegate, final List<String> log)
         {
             this.delegate = delegate;
+
             this.log = log;
         }
 
@@ -279,6 +313,7 @@ class AndroidAdapterFactoryTest
         public void init()
         {
             log.add("delegate:init");
+
             delegate.init();
         }
 
@@ -286,6 +321,7 @@ class AndroidAdapterFactoryTest
         public void shutdown()
         {
             log.add("delegate:shutdown");
+
             delegate.shutdown();
         }
 
@@ -350,6 +386,7 @@ class AndroidAdapterFactoryTest
         LoggingUserProfilePort(final I_UserProfilePort delegate, final List<String> log)
         {
             this.delegate = delegate;
+
             this.log = log;
         }
 
@@ -357,6 +394,7 @@ class AndroidAdapterFactoryTest
         public void init()
         {
             log.add("profile:init");
+
             delegate.init();
         }
 
@@ -364,6 +402,7 @@ class AndroidAdapterFactoryTest
         public void shutdown()
         {
             log.add("profile:shutdown");
+
             delegate.shutdown();
         }
 

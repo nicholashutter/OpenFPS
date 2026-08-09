@@ -75,6 +75,7 @@ public final class ZoneMemoryPort implements I_MemoryPort
             throw new MemoryException("init() called from state " + state
                 + " — only valid from UNINITIALIZED");
         }
+
         if (heapSizeBytes < HEADER_SIZE * 4)
         {
             throw new MemoryException("init() heapSizeBytes must be at least "
@@ -82,11 +83,17 @@ public final class ZoneMemoryPort implements I_MemoryPort
         }
 
         this.heap = new byte[heapSizeBytes];
+
         this.heapSize = heapSizeBytes;
+
         this.used = 0;
+
         this.liveCount = 0;
+
         this.maxSlots = heapSizeBytes / HEADER_SIZE;
+
         this.live = new boolean[maxSlots];
+
         this.state = State.READY;
 
         LOG.info("ZoneMemoryPort initialized: heap={} bytes, slots={}",
@@ -100,11 +107,17 @@ public final class ZoneMemoryPort implements I_MemoryPort
         {
             throw new MemoryException("shutdown() called from state SHUTDOWN — already terminal");
         }
+
         heap = null;
+
         live = null;
+
         used = 0;
+
         liveCount = 0;
+
         state = State.SHUTDOWN;
+
         LOG.info("ZoneMemoryPort shut down");
     }
 
@@ -116,16 +129,23 @@ public final class ZoneMemoryPort implements I_MemoryPort
             throw new MemoryException("reset() called from state " + state
                 + " — only valid from READY or ACTIVE");
         }
+
         if (heap == null)
         {
             throw new MemoryException("reset() called with null heap — was init() ever called?");
         }
+
         // Wipe all memory and reset the bump pointer
         Arrays.fill(heap, (byte) 0);
+
         Arrays.fill(live, false);
+
         used = 0;
+
         liveCount = 0;
+
         state = State.READY;
+
         LOG.info("ZoneMemoryPort reset (all allocations cleared)");
     }
 
@@ -143,38 +163,47 @@ public final class ZoneMemoryPort implements I_MemoryPort
             throw new MemoryException("allocate() called from state " + state
                 + " — only valid from READY or ACTIVE");
         }
+
         if (sizeBytes < 0)
         {
             throw new MemoryException("allocate() sizeBytes must be >= 0, got " + sizeBytes);
         }
+
         if (tag < 0 || tag > 255)
         {
             throw new MemoryException("allocate() tag must be in [0, 255], got " + tag);
         }
 
         final int alignedPayload = align(sizeBytes);
+
         final int totalNeeded    = HEADER_SIZE + alignedPayload;
+
         if (used + totalNeeded > heapSize)
         {
             LOG.error("ZoneMemoryPort OOM: requested {} bytes, would exceed heap {} (currently {} used)",
                 totalNeeded, heapSize, used);
+
             return NULL_HANDLE;
         }
 
         final int headerOffset = used;
+
         final int slot = headerOffset / HEADER_SIZE;
 
         // Write header
         writeHeader(headerOffset, sizeBytes, tag);
 
         used += totalNeeded;
+
         live[slot] = true;
+
         liveCount++;
 
         if (state == State.READY)
         {
             state = State.ACTIVE;
         }
+
         return headerOffset;
     }
 
@@ -186,21 +215,27 @@ public final class ZoneMemoryPort implements I_MemoryPort
             throw new MemoryException("free() called from state " + state
                 + " — only valid from ACTIVE");
         }
+
         if (handle < 0 || handle >= used)
         {
             throw new MemoryException("free() handle out of range: " + handle);
         }
+
         if (handle % HEADER_SIZE != 0)
         {
             throw new MemoryException("free() handle " + handle + " is not aligned to HEADER_SIZE");
         }
+
         final int slot = handle / HEADER_SIZE;
+
         if (slot >= maxSlots || !live[slot])
         {
             throw new MemoryException("free() handle " + handle + " is not currently allocated");
         }
+
         // Mark slot free. We don't reclaim the bytes — bulk-free only.
         live[slot] = false;
+
         liveCount--;
     }
 
@@ -212,35 +247,48 @@ public final class ZoneMemoryPort implements I_MemoryPort
             throw new MemoryException("freeByTag() called from state " + state
                 + " — only valid from READY or ACTIVE");
         }
+
         if (tag < 0 || tag > 255)
         {
             throw new MemoryException("freeByTag() tag must be in [0, 255], got " + tag);
         }
+
         if (heap == null)
         {
             return 0;
         }
 
         int freed = 0;
+
         int offset = 0;
+
         while (offset < used)
         {
             final int blockSize = readSize(offset);
+
             final int blockTag  = readTag(offset);
+
             final int alignedPayload = align(blockSize);
+
             final int totalBlock = HEADER_SIZE + alignedPayload;
+
             final int slot = offset / HEADER_SIZE;
 
             if (slot < maxSlots && live[slot] && blockTag == tag)
             {
                 live[slot] = false;
+
                 liveCount--;
+
                 freed++;
             }
+
             offset += totalBlock;
         }
+
         LOG.debug("ZoneMemoryPort freeByTag({}) freed {} allocations (full reclaim on reset)",
             tag, freed);
+
         return freed;
     }
 
@@ -270,11 +318,14 @@ public final class ZoneMemoryPort implements I_MemoryPort
         // of zero and (free bytes - header size). If free space is less
         // than a header, no payload can fit.
         final int free = heapSize - used;
+
         final int maxPayload = free - HEADER_SIZE;
+
         if (maxPayload < 0)
         {
             return 0;
         }
+
         return maxPayload;
     }
 
@@ -291,15 +342,19 @@ public final class ZoneMemoryPort implements I_MemoryPort
         {
             return 0;
         }
+
         if (handle % HEADER_SIZE != 0)
         {
             return 0;
         }
+
         final int slot = handle / HEADER_SIZE;
+
         if (slot >= maxSlots || !live[slot])
         {
             return 0;
         }
+
         return readSize(handle);
     }
 
@@ -309,11 +364,16 @@ public final class ZoneMemoryPort implements I_MemoryPort
     {
         // size as big-endian int32 at offset+0
         heap[offset]     = (byte) ((size >>> 24) & 0xFF);
+
         heap[offset + 1] = (byte) ((size >>> 16) & 0xFF);
+
         heap[offset + 2] = (byte) ((size >>>  8) & 0xFF);
+
         heap[offset + 3] = (byte) (size & 0xFF);
+
         // tag as big-endian int16 at offset+4
         heap[offset + 4] = (byte) ((tag >>> 8) & 0xFF);
+
         heap[offset + 5] = (byte) (tag & 0xFF);
         // padding at offset+6/+7 (already zero from reset or default)
     }

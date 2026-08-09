@@ -93,9 +93,13 @@ public final class AckWindow
         {
             throw new IllegalArgumentException("baseTic must not be negative: " + baseTic);
         }
+
         this.baseTic = baseTic;
+
         this.highestTic = NO_TIC;
+
         this.bitfield = 0L;
+
         this.highestContiguousTic = baseTic - 1;
     }
 
@@ -114,6 +118,7 @@ public final class AckWindow
         {
             throw new IllegalArgumentException("ticNumber must not be negative: " + ticNumber);
         }
+
         if (isAcked(ticNumber))
         {
             return false;
@@ -122,18 +127,24 @@ public final class AckWindow
         if (ticNumber > highestTic)
         {
             advanceHighest(ticNumber);
+
             advanceContiguous();
+
             return true;
         }
 
         final int back = highestTic - ticNumber;
+
         if (back > WIDTH)
         {
             // Its bit shifted out of the window; too old to be useful.
             return false;
         }
+
         bitfield |= 1L << (back - 1);
+
         advanceContiguous();
+
         return true;
     }
 
@@ -149,19 +160,24 @@ public final class AckWindow
         {
             return false;
         }
+
         if (ticNumber == highestTic)
         {
             return true;
         }
+
         if (ticNumber <= highestContiguousTic)
         {
             return true;
         }
+
         final int back = highestTic - ticNumber;
+
         if (back > WIDTH)
         {
             return false;
         }
+
         return (bitfield & (1L << (back - 1))) != 0L;
     }
 
@@ -198,6 +214,7 @@ public final class AckWindow
         {
             return 0;
         }
+
         return Math.min(WIDTH, highestTic - baseTic);
     }
 
@@ -205,10 +222,12 @@ public final class AckWindow
     public int receivedInWindow()
     {
         final int bits = windowBits();
+
         if (bits == 0)
         {
             return 0;
         }
+
         return Long.bitCount(bitfield & mask(bits));
     }
 
@@ -221,10 +240,12 @@ public final class AckWindow
     public int lossPercent()
     {
         final int bits = windowBits();
+
         if (bits == 0)
         {
             return 0;
         }
+
         return (bits - receivedInWindow()) * PERCENT / bits;
     }
 
@@ -255,10 +276,12 @@ public final class AckWindow
         {
             return 1;
         }
+
         if (rawCount > WIDTH)
         {
             return WIDTH;
         }
+
         return rawCount;
     }
 
@@ -268,7 +291,9 @@ public final class AckWindow
     public void reset()
     {
         highestTic = NO_TIC;
+
         bitfield = 0L;
+
         highestContiguousTic = baseTic - 1;
     }
 
@@ -278,9 +303,12 @@ public final class AckWindow
         if (highestTic == NO_TIC)
         {
             highestTic = ticNumber;
+
             return;
         }
+
         final int delta = ticNumber - highestTic;
+
         if (delta >= WIDTH)
         {
             // Everything the bitfield described has shifted out. A long shift
@@ -291,6 +319,7 @@ public final class AckWindow
         {
             bitfield = (bitfield << delta) | (1L << (delta - 1));
         }
+
         highestTic = ticNumber;
     }
 
@@ -301,7 +330,9 @@ public final class AckWindow
         {
             highestContiguousTic++;
         }
+
         final int floor = highestTic - WIDTH;
+
         if (highestContiguousTic < floor)
         {
             highestContiguousTic = floor;
@@ -315,6 +346,7 @@ public final class AckWindow
         {
             return -1L;
         }
+
         return (1L << bits) - 1L;
     }
 }

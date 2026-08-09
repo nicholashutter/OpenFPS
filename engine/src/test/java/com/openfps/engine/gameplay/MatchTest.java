@@ -132,11 +132,13 @@ class MatchTest
     private static Match firingRange(final int count)
     {
         final Bot[] roster = new Bot[count];
+
         for (int index = 0; index < roster.length; index++)
         {
             roster[index] = sentryAt(Match.FIRST_BOT_ENTITY_ID + index,
                 OUT_OF_REACH_UNITS + index * RANGE_SPACING_UNITS);
         }
+
         return new Match(roster);
     }
 
@@ -146,12 +148,15 @@ class MatchTest
     private static int killNearest(final Match match)
     {
         final int killsBefore = match.botsKilled();
+
         final int shotsBefore = match.playerShotsFired();
+
         while (match.botsKilled() == killsBefore
             && match.playerShotsFired() - shotsBefore < 4)
         {
             shootAhead(match);
         }
+
         return match.playerShotsFired() - shotsBefore;
     }
 
@@ -176,6 +181,7 @@ class MatchTest
             final Match match = new Match(new Bot[] { sentryAt(2, 200.0f) });
 
             assertThat(shootAhead(match)).isEqualTo(2);
+
             assertThat(match.playerShotsHit()).isEqualTo(1);
         }
 
@@ -186,11 +192,15 @@ class MatchTest
             final Match match = new Match(new Bot[] { sentryAt(2, 200.0f) });
 
             shootAhead(match);
+
             shootAhead(match);
+
             assertThat(match.botsKilled()).as("still standing after two").isEqualTo(0);
+
             shootAhead(match);
 
             assertThat(match.botsKilled()).isEqualTo(1);
+
             assertThat(match.byId(2).isAlive()).isFalse();
         }
 
@@ -218,7 +228,9 @@ class MatchTest
                 match.firePlayerShot(PLAYER_X, PLAYER_EYE_Y, PLAYER_Z, 0.0f, 1.0f, 0.0f);
 
             assertThat(struck).isEqualTo(Match.NO_HIT);
+
             assertThat(match.playerShotsFired()).isEqualTo(1);
+
             assertThat(match.playerShotsHit()).isEqualTo(0);
         }
 
@@ -233,8 +245,11 @@ class MatchTest
             });
 
             shootAhead(match);
+
             shootAhead(match);
+
             shootAhead(match);
+
             assertThat(match.byId(3).isAlive()).isFalse();
 
             // A corpse that still blocked would give the player cover they
@@ -252,9 +267,13 @@ class MatchTest
             // a body nobody can see would count as a hit, bump the accuracy
             // figure, and be completely unexplainable.
             final Match match = new Match(new Bot[] { sentryAt(2, 200.0f) });
+
             shootAhead(match);
+
             shootAhead(match);
+
             shootAhead(match);
+
             assertThat(match.byId(2).isAlive()).isFalse();
 
             final int hitsBefore = match.playerShotsHit();
@@ -262,9 +281,11 @@ class MatchTest
             assertThat(shootAhead(match))
                 .as("the corpse is not a target")
                 .isEqualTo(Match.NO_HIT);
+
             assertThat(match.playerShotsHit())
                 .as("and a shot at it does not count as a hit")
                 .isEqualTo(hitsBefore);
+
             assertThat(match.botsKilled())
                 .as("nor as a second kill")
                 .isEqualTo(1);
@@ -279,11 +300,15 @@ class MatchTest
             // forever — harmless to look at and wrong in the logs.
             final Bot bot = new Bot(2, 0.0f, 0.0f, 200.0f, BotPattern.PACE_X,
                 64.0f, 60, 0);
+
             final Match match = new Match(new Bot[] { bot });
+
             tick(match, 5);
+
             final float restingX = bot.positionX();
 
             bot.damage(Bot.MAX_HEALTH);
+
             for (int tic = 6; tic < 40; tic++)
             {
                 tick(match, tic);
@@ -297,8 +322,11 @@ class MatchTest
         void shouldReportAMissWhenNoBotsAreLeft()
         {
             final Match match = new Match(new Bot[] { sentryAt(2, 200.0f) });
+
             shootAhead(match);
+
             shootAhead(match);
+
             shootAhead(match);
 
             assertThat(shootAhead(match)).isEqualTo(Match.NO_HIT);
@@ -318,9 +346,12 @@ class MatchTest
             final int damage = tick(match, 0);
 
             assertThat(damage).isEqualTo(Match.BOT_SHOT_DAMAGE);
+
             assertThat(match.playerHealth())
                 .isEqualTo(Match.PLAYER_MAX_HEALTH - Match.BOT_SHOT_DAMAGE);
+
             assertThat(match.botShotsLanded()).isEqualTo(1);
+
             assertThat(match.botShotsFired()).isEqualTo(1);
         }
 
@@ -331,11 +362,14 @@ class MatchTest
             final Match match = marksmanMatch(sentryAt(2, Match.BOT_RANGE_UNITS + 100.0f));
 
             assertThat(tick(match, 0)).isEqualTo(0);
+
             assertThat(match.playerHealth()).isEqualTo(Match.PLAYER_MAX_HEALTH);
+
             // It pulled the trigger and the shot went nowhere, which is the
             // distinction botShotsFired exists to record: a bot out of range still
             // spends its cooldown.
             assertThat(match.botShotsFired()).isEqualTo(1);
+
             assertThat(match.botShotsLanded()).isEqualTo(0);
         }
 
@@ -353,6 +387,7 @@ class MatchTest
             tick(match, 0);
 
             assertThat(match.botShotsFired()).isEqualTo(2);
+
             assertThat(match.botShotsLanded())
                 .as("the shot from behind the blocker must not have reached the player")
                 .isEqualTo(1);
@@ -372,6 +407,7 @@ class MatchTest
             // With friendly fire the room would clear itself while the player
             // watched, and the blocker would be the first to go.
             assertThat(match.byId(3).health()).isEqualTo(Bot.MAX_HEALTH);
+
             assertThat(match.livingBots()).isEqualTo(2);
         }
 
@@ -397,9 +433,13 @@ class MatchTest
         void shouldStopFiringWhenKilled()
         {
             final Match match = marksmanMatch(sentryAt(2, 200.0f));
+
             shootAhead(match);
+
             shootAhead(match);
+
             shootAhead(match);
+
             final int shotsBefore = match.botShotsFired();
 
             for (int tic = 0; tic < 100; tic++)
@@ -408,6 +448,7 @@ class MatchTest
             }
 
             assertThat(match.botShotsFired()).isEqualTo(shotsBefore);
+
             assertThat(match.playerHealth()).isEqualTo(Match.PLAYER_MAX_HEALTH);
         }
 
@@ -420,8 +461,10 @@ class MatchTest
             // though the home point is not. If the shot were resolved before the
             // move it would come from the home point and land.
             final float reach = Match.BOT_RANGE_UNITS - 50.0f;
+
             final Bot pacer = new Bot(2, 0.0f, 0.0f, reach, BotPattern.PACE_X,
                 400.0f, 4, 0);
+
             final Match match = marksmanMatch(pacer);
 
             // At its home point — where the constructor placed it, and where it
@@ -433,6 +476,7 @@ class MatchTest
             tick(match, 1);
 
             assertThat(pacer.positionX()).isGreaterThan(300.0f);
+
             // So a shot resolved from the PRE-move position would have landed.
             // Return fire coming from where a body used to be is exactly the
             // sort of discrepancy a player notices and cannot explain.
@@ -448,9 +492,11 @@ class MatchTest
             // origin, which in the demo room is the middle of the floor — seven
             // bodies firing into it for the first half-second of every match.
             final Bot fresh = sentryAt(2, 200.0f);
+
             final Match match = marksmanMatch(fresh);
 
             assertThat(fresh.hasSeenPlayer()).isFalse();
+
             // One tic is enough for the observation to happen, so the shot lands;
             // the assertion that matters is that the bot knew first.
             tick(match, 0);
@@ -470,7 +516,9 @@ class MatchTest
             final Match match = new Match(new Bot[] { sentryAt(2, 200.0f) });
 
             assertThat(match.state()).isEqualTo(MatchState.IN_PROGRESS);
+
             assertThat(match.state().isOver()).isFalse();
+
             assertThat(match.playerHealth()).isEqualTo(Match.PLAYER_MAX_HEALTH);
         }
 
@@ -481,11 +529,15 @@ class MatchTest
             final Match match = new Match(new Bot[] { sentryAt(2, 200.0f) });
 
             shootAhead(match);
+
             shootAhead(match);
+
             assertThat(match.state()).isEqualTo(MatchState.IN_PROGRESS);
+
             shootAhead(match);
 
             assertThat(match.state()).isEqualTo(MatchState.WON);
+
             assertThat(match.state().isOver()).isTrue();
         }
 
@@ -505,6 +557,7 @@ class MatchTest
             }
 
             assertThat(match.playerDeaths()).as("nobody was killed at all").isGreaterThan(0);
+
             assertThat(match.state())
                 .as("a death ended the round, which is the behaviour this replaced")
                 .isEqualTo(MatchState.IN_PROGRESS);
@@ -515,18 +568,24 @@ class MatchTest
         void shouldSurviveTheExpectedNumberOfHitsWhenUnderFire()
         {
             final Match match = marksmanMatch(sentryAt(2, 200.0f));
+
             final int hitsToKill = Match.PLAYER_MAX_HEALTH / Match.BOT_SHOT_DAMAGE;
 
             for (int tic = 0; tic < hitsToKill - 1; tic++)
             {
                 tick(match, tic);
             }
+
             assertThat(match.isPlayerDown()).as("one hit short").isFalse();
+
             assertThat(match.playerDeaths()).isEqualTo(0);
+
             tick(match, hitsToKill - 1);
 
             assertThat(match.isPlayerDown()).isTrue();
+
             assertThat(match.playerDeaths()).isEqualTo(1);
+
             assertThat(match.playerHealth()).isEqualTo(0);
         }
 
@@ -540,18 +599,23 @@ class MatchTest
             // somebody who has just spent their last life is funny exactly once.
             final Match match = new Match(new Bot[] { sentryAt(2, 200.0f) },
                 new BotRng(), BotSkill.MARKSMAN, 1);
+
             for (int tic = 0; tic < 500 && match.playerDeaths() == 0; tic++)
             {
                 tick(match, tic);
             }
+
             assertThat(match.playerDeaths()).isEqualTo(1);
 
             // Now clear the room from beyond the grave.
             shootAhead(match);
+
             shootAhead(match);
+
             shootAhead(match);
 
             assertThat(match.livingBots()).isEqualTo(0);
+
             assertThat(match.state()).isEqualTo(MatchState.LOST);
         }
 
@@ -560,12 +624,17 @@ class MatchTest
         void shouldStopTickingWhenTheMatchIsDecided()
         {
             final Match match = marksmanMatch(sentryAt(2, 200.0f));
+
             shootAhead(match);
+
             shootAhead(match);
+
             shootAhead(match);
+
             assertThat(match.state()).isEqualTo(MatchState.WON);
 
             assertThat(tick(match, 0)).isEqualTo(0);
+
             assertThat(match.playerHealth()).isEqualTo(Match.PLAYER_MAX_HEALTH);
         }
 
@@ -618,6 +687,7 @@ class MatchTest
         {
             assertThatThrownBy(() -> new Match(null))
                 .isInstanceOf(IllegalArgumentException.class);
+
             assertThatThrownBy(() -> new Match(new Bot[] { null }))
                 .isInstanceOf(IllegalArgumentException.class);
         }
@@ -627,12 +697,15 @@ class MatchTest
         void shouldCopyTheRosterWhenConstructed()
         {
             final Bot[] roster = { sentryAt(2, 200.0f) };
+
             final Match match = new Match(roster);
 
             roster[0] = sentryAt(9, 50.0f);
 
             assertThat(match.byId(2)).isNotNull();
+
             assertThat(match.byId(9)).isNull();
+
             assertThat(match.bots()).hasSize(1);
         }
 
@@ -641,7 +714,9 @@ class MatchTest
         void shouldReserveThePlayerIdBelowTheBotRange()
         {
             assertThat(Match.FIRST_BOT_ENTITY_ID).isGreaterThan(Match.PLAYER_ENTITY_ID);
+
             assertThat(Match.PLAYER_ENTITY_ID).isGreaterThanOrEqualTo(Target.MIN_ENTITY_ID);
+
             // NO_HIT must not collide with Scene.UNTAGGED (0) or any real id.
             assertThat(Match.NO_HIT).isLessThan(Target.MIN_ENTITY_ID);
         }
@@ -658,6 +733,7 @@ class MatchTest
             assertThat(Match.DEFAULT_BOT_COUNT).isEqualTo(7);
 
             final Bot[] roster = new Bot[Match.DEFAULT_BOT_COUNT];
+
             for (int index = 0; index < roster.length; index++)
             {
                 // Stacked along +z so a single bearing reaches all of them in
@@ -665,17 +741,21 @@ class MatchTest
                 roster[index] = sentryAt(Match.FIRST_BOT_ENTITY_ID + index,
                     100.0f + index * 50.0f);
             }
+
             final Match match = new Match(roster);
 
             final int shotsToKill =
                 (Bot.MAX_HEALTH + Match.PLAYER_SHOT_DAMAGE - 1) / Match.PLAYER_SHOT_DAMAGE;
+
             for (int shot = 0; shot < shotsToKill * Match.DEFAULT_BOT_COUNT; shot++)
             {
                 shootAhead(match);
             }
 
             assertThat(match.state()).isEqualTo(MatchState.WON);
+
             assertThat(match.botsKilled()).isEqualTo(Match.DEFAULT_BOT_COUNT);
+
             assertThat(match.playerShotsFired()).isEqualTo(21);
         }
     }
@@ -692,12 +772,16 @@ class MatchTest
             // of the round: seven marksmen emptying magazines into a corpse would
             // run the death counter away before the body stood up.
             final Match match = marksmanMatch(sentryAt(2, 200.0f));
+
             final int hitsToKill = Match.PLAYER_MAX_HEALTH / Match.BOT_SHOT_DAMAGE;
+
             for (int tic = 0; tic < hitsToKill; tic++)
             {
                 tick(match, tic);
             }
+
             assertThat(match.isPlayerDown()).isTrue();
+
             final int shotsAtDeath = match.botShotsFired();
 
             for (int tic = hitsToKill; tic < hitsToKill + Match.RESPAWN_DELAY_TICS - 1; tic++)
@@ -706,6 +790,7 @@ class MatchTest
             }
 
             assertThat(match.botShotsFired()).isEqualTo(shotsAtDeath);
+
             assertThat(match.playerDeaths()).isEqualTo(1);
         }
 
@@ -714,11 +799,14 @@ class MatchTest
         void shouldRespawnAfterTheDelay()
         {
             final Match match = marksmanMatch(sentryAt(2, 200.0f));
+
             final int hitsToKill = Match.PLAYER_MAX_HEALTH / Match.BOT_SHOT_DAMAGE;
+
             for (int tic = 0; tic < hitsToKill; tic++)
             {
                 tick(match, tic);
             }
+
             final int deathTic = hitsToKill - 1;
 
             // One tic short.
@@ -726,12 +814,15 @@ class MatchTest
             {
                 tick(match, tic);
             }
+
             assertThat(match.isPlayerDown()).as("stood up early").isTrue();
+
             assertThat(match.playerHealth()).isEqualTo(0);
 
             tick(match, deathTic + Match.RESPAWN_DELAY_TICS);
 
             assertThat(match.isPlayerDown()).isFalse();
+
             assertThat(match.playerHealth()).isEqualTo(Match.PLAYER_MAX_HEALTH);
         }
 
@@ -742,18 +833,23 @@ class MatchTest
             // A consuming read: the caller has to teleport a body, and moving it
             // twice would be harmless only by luck.
             final Match match = marksmanMatch(sentryAt(2, 200.0f));
+
             final int hitsToKill = Match.PLAYER_MAX_HEALTH / Match.BOT_SHOT_DAMAGE;
+
             for (int tic = 0; tic < hitsToKill + Match.RESPAWN_DELAY_TICS; tic++)
             {
                 tick(match, tic);
+
                 if (match.consumePlayerRespawned())
                 {
                     assertThat(match.consumePlayerRespawned())
                         .as("the same respawn was reported twice")
                         .isFalse();
+
                     return;
                 }
             }
+
             assertThat(false).as("no respawn was ever reported").isTrue();
         }
 
@@ -765,17 +861,22 @@ class MatchTest
             // from a hung game, which is the whole reason the notice shows a
             // number at all.
             final Match match = marksmanMatch(sentryAt(2, 200.0f));
+
             final int hitsToKill = Match.PLAYER_MAX_HEALTH / Match.BOT_SHOT_DAMAGE;
+
             for (int tic = 0; tic < hitsToKill; tic++)
             {
                 tick(match, tic);
             }
 
             final int first = match.respawnTicsRemaining(hitsToKill);
+
             final int later = match.respawnTicsRemaining(hitsToKill + 30);
 
             assertThat(first).isGreaterThan(0);
+
             assertThat(later).isLessThan(first);
+
             assertThat(match.respawnTicsRemaining(hitsToKill + Match.RESPAWN_DELAY_TICS))
                 .isEqualTo(0);
         }
@@ -794,35 +895,54 @@ class MatchTest
             // counter added to Match later and not zeroed in reset() fails HERE
             // rather than shipping as a summary that is the sum of two rounds.
             final Match fresh = marksmanMatch(sentryAt(2, 200.0f), sentryAt(3, 260.0f));
+
             final Match used = marksmanMatch(sentryAt(2, 200.0f), sentryAt(3, 260.0f));
 
             // Play a whole round out: kill one bot, take fire, die, respawn.
             shootAhead(used);
+
             shootAhead(used);
+
             shootAhead(used);
+
             for (int tic = 0; tic < 400; tic++)
             {
                 tick(used, tic);
             }
+
             assertThat(used.botsKilled()).isEqualTo(1);
+
             assertThat(used.playerDeaths()).isGreaterThan(0);
 
             used.reset();
 
             assertThat(used.playerHealth()).isEqualTo(fresh.playerHealth());
+
             assertThat(used.botsKilled()).isEqualTo(fresh.botsKilled());
+
             assertThat(used.playerDeaths()).isEqualTo(fresh.playerDeaths());
+
             assertThat(used.playerShotsFired()).isEqualTo(fresh.playerShotsFired());
+
             assertThat(used.playerShotsHit()).isEqualTo(fresh.playerShotsHit());
+
             assertThat(used.botShotsFired()).isEqualTo(fresh.botShotsFired());
+
             assertThat(used.botShotsLanded()).isEqualTo(fresh.botShotsLanded());
+
             assertThat(used.livingBots()).isEqualTo(fresh.livingBots());
+
             assertThat(used.isPlayerDown()).isEqualTo(fresh.isPlayerDown());
+
             assertThat(used.state()).isEqualTo(fresh.state());
+
             assertThat(used.killStreak()).isEqualTo(fresh.killStreak());
+
             assertThat(used.isSuperBlaster()).isEqualTo(fresh.isSuperBlaster());
+
             assertThat(used.superBlasterTicsRemaining())
                 .isEqualTo(fresh.superBlasterTicsRemaining());
+
             assertThat(used.playerShotDamage()).isEqualTo(fresh.playerShotDamage());
         }
 
@@ -835,15 +955,21 @@ class MatchTest
             // corpses would report IN_PROGRESS for a round already over, or WON
             // for one that had not started.
             final Match match = marksmanMatch(sentryAt(2, 200.0f));
+
             shootAhead(match);
+
             shootAhead(match);
+
             shootAhead(match);
+
             assertThat(match.state()).isEqualTo(MatchState.WON);
 
             match.reset();
 
             assertThat(match.livingBots()).isEqualTo(1);
+
             assertThat(match.state()).isEqualTo(MatchState.IN_PROGRESS);
+
             assertThat(shootAhead(match))
                 .as("the revived bot is not a target again")
                 .isEqualTo(2);
@@ -859,13 +985,16 @@ class MatchTest
             // a bot whose cooldown or memory survived the reset — either would
             // shift the second round's return fire.
             final Match match = marksmanMatch(sentryAt(2, 200.0f), sentryAt(3, 260.0f));
+
             for (int tic = 0; tic < 300; tic++)
             {
                 tick(match, tic);
             }
+
             final String firstRound = match.toString();
 
             match.reset();
+
             for (int tic = 0; tic < 300; tic++)
             {
                 tick(match, tic);
@@ -901,10 +1030,13 @@ class MatchTest
             assertThat(match.botShotsFired())
                 .as("nothing was fired at all over %d tics", BALANCE_RUN_TICS)
                 .isGreaterThan(5);
+
             assertThat(match.botShotsLanded())
                 .as("no shot ever landed — that is scenery, not an opponent")
                 .isGreaterThan(0);
+
             final int landedPercent = match.botShotsLanded() * 100 / match.botShotsFired();
+
             assertThat(landedPercent)
                 .as("%d%% of shots landed, which is not 'most shots miss'", landedPercent)
                 .isLessThan(50);
@@ -920,11 +1052,13 @@ class MatchTest
             // matters without anything modelling it. A dice roll against the
             // outcome would give the same hit rate across the whole room.
             final int closeHits = landedOver(80.0f);
+
             final int distantHits = landedOver(460.0f);
 
             assertThat(closeHits)
                 .as("a bot at arm's length never hit anything")
                 .isGreaterThan(0);
+
             assertThat(distantHits)
                 .as("a bot at 460 units hit %d times against %d at 80 — range does not matter",
                     distantHits, closeHits)
@@ -936,10 +1070,12 @@ class MatchTest
         {
             final Match match = new Match(new Bot[] { sentryAt(2, distance) },
                 new BotRng(), BotSkill.DUMB, Match.UNLIMITED_DEATHS);
+
             for (int tic = 0; tic < BALANCE_RUN_TICS; tic++)
             {
                 tick(match, tic);
             }
+
             return match.botShotsLanded();
         }
 
@@ -956,6 +1092,7 @@ class MatchTest
             assertThat(roundUnderSeed(1234L))
                 .as("the same seed must replay exactly")
                 .isEqualTo(underOneSeed);
+
             assertThat(roundUnderSeed(9876L))
                 .as("a different seed must produce a different round")
                 .isNotEqualTo(underOneSeed);
@@ -968,10 +1105,12 @@ class MatchTest
             final Match match = new Match(
                 new Bot[] { sentryAt(2, 150.0f), sentryAt(3, 300.0f), sentryAt(4, 420.0f) },
                 new BotRng(seed), BotSkill.DUMB, Match.UNLIMITED_DEATHS);
+
             for (int tic = 0; tic < BALANCE_RUN_TICS; tic++)
             {
                 tick(match, tic);
             }
+
             return match.toString();
         }
     }
@@ -995,18 +1134,22 @@ class MatchTest
             // between 100 and 400 units, all in line of sight, player motionless
             // in the open. That is the worst case a player can put themselves in.
             final Bot[] roster = new Bot[Match.DEFAULT_BOT_COUNT];
+
             for (int index = 0; index < roster.length; index++)
             {
                 roster[index] = sentryAt(Match.FIRST_BOT_ENTITY_ID + index,
                     100.0f + index * 50.0f);
             }
+
             final Match match = new Match(roster, new BotRng(), BotSkill.DUMB,
                 Match.UNLIMITED_DEATHS);
 
             int ticsToFirstDeath = -1;
+
             for (int tic = 0; tic < BALANCE_RUN_TICS * 4; tic++)
             {
                 tick(match, tic);
+
                 if (ticsToFirstDeath < 0 && match.playerDeaths() > 0)
                 {
                     ticsToFirstDeath = tic;
@@ -1016,6 +1159,7 @@ class MatchTest
             assertThat(ticsToFirstDeath)
                 .as("the player never died at all — the opponents are scenery")
                 .isGreaterThan(0);
+
             // Between ten and sixty seconds at 60 Hz. Wide bounds because this is
             // a random process; the point is that standing still is punished on a
             // timescale a player experiences as pressure, and that it is nowhere
@@ -1036,23 +1180,28 @@ class MatchTest
             // The old cadence produced a shot somewhere in the room every 21 tics;
             // BotSkill.DUMB is tuned to land near that.
             final Bot[] roster = new Bot[Match.DEFAULT_BOT_COUNT];
+
             for (int index = 0; index < roster.length; index++)
             {
                 roster[index] = sentryAt(Match.FIRST_BOT_ENTITY_ID + index, 200.0f);
             }
+
             // A death limit of one, so the run is not interrupted by respawns —
             // the moment the player goes down the room stops firing, which would
             // make the measurement about the respawn delay instead.
             final Match match = new Match(roster, new BotRng(), BotSkill.DUMB, 1);
 
             int tics = 0;
+
             while (tics < BALANCE_RUN_TICS && match.playerDeaths() == 0)
             {
                 tick(match, tics);
+
                 tics++;
             }
 
             final int ticsPerShot = tics / Math.max(1, match.botShotsFired());
+
             assertThat(ticsPerShot)
                 .as("the room fired once every %d tics against the old cadence's 21",
                     ticsPerShot)
@@ -1071,16 +1220,21 @@ class MatchTest
             final Match match = firingRange(5);
 
             killNearest(match);
+
             killNearest(match);
 
             assertThat(match.killStreak()).isEqualTo(2);
+
             assertThat(match.isSuperBlaster()).as("armed early").isFalse();
+
             assertThat(match.playerShotDamage()).isEqualTo(Match.PLAYER_SHOT_DAMAGE);
 
             killNearest(match);
 
             assertThat(match.isSuperBlaster()).isTrue();
+
             assertThat(match.superBlasterTicsRemaining()).isEqualTo(Match.SUPER_BLASTER_TICS);
+
             assertThat(match.killStreak())
                 .as("the award has to spend the streak, or the next single kill re-arms it")
                 .isZero();
@@ -1096,6 +1250,7 @@ class MatchTest
             final Match match = firingRange(3);
 
             assertThat(shootAhead(match)).isNotEqualTo(Match.NO_HIT);
+
             assertThat(shootAhead(match)).isNotEqualTo(Match.NO_HIT);
 
             assertThat(match.killStreak()).isZero();
@@ -1109,10 +1264,12 @@ class MatchTest
             // re-balance away from a reward that has quietly stopped being double
             // anything, and a wrong number here looks exactly like a right one.
             assertThat(Match.SUPER_BLASTER_DAMAGE_MULTIPLIER).isEqualTo(2);
+
             assertThat(Match.SUPER_BLASTER_SHOT_DAMAGE)
                 .isEqualTo(Match.PLAYER_SHOT_DAMAGE * 2);
 
             final Match match = firingRange(5);
+
             assertThat(match.playerShotDamage()).isEqualTo(Match.PLAYER_SHOT_DAMAGE);
 
             earnTheSuperBlaster(match);
@@ -1134,6 +1291,7 @@ class MatchTest
             assertThat(match.playerShotsFired())
                 .as("three ordinary kills should be nine shots")
                 .isEqualTo(9);
+
             assertThat(killNearest(match))
                 .as("the super blaster did not shorten the kill")
                 .isEqualTo(2);
@@ -1144,6 +1302,7 @@ class MatchTest
         void shouldExpireAfterTheFullWindow()
         {
             final Match match = firingRange(6);
+
             earnTheSuperBlaster(match);
 
             // One tic short of the window.
@@ -1151,17 +1310,23 @@ class MatchTest
             {
                 tick(match, tic);
             }
+
             assertThat(match.isSuperBlaster()).as("expired early").isTrue();
+
             assertThat(match.superBlasterTicsRemaining()).isEqualTo(1);
 
             tick(match, Match.SUPER_BLASTER_TICS - 1);
 
             assertThat(match.isSuperBlaster()).isFalse();
+
             assertThat(match.superBlasterTicsRemaining()).isZero();
+
             assertThat(match.playerShotDamage()).isEqualTo(Match.PLAYER_SHOT_DAMAGE);
+
             assertThat(match.consumeSuperBlasterExpired())
                 .as("the player was never told it had stopped")
                 .isTrue();
+
             assertThat(match.consumeSuperBlasterExpired())
                 .as("the same expiry was announced twice")
                 .isFalse();
@@ -1175,7 +1340,9 @@ class MatchTest
             // does not move is indistinguishable from a badge somebody forgot to
             // take away.
             final Match match = firingRange(6);
+
             earnTheSuperBlaster(match);
+
             final int atAward = match.superBlasterTicsRemaining();
 
             for (int tic = 0; tic < 30; tic++)
@@ -1195,14 +1362,17 @@ class MatchTest
             final Match match = firingRange(5);
 
             killNearest(match);
+
             assertThat(match.consumeSuperBlasterAwarded())
                 .as("an ordinary kill announced an award")
                 .isFalse();
 
             killNearest(match);
+
             killNearest(match);
 
             assertThat(match.consumeSuperBlasterAwarded()).isTrue();
+
             assertThat(match.consumeSuperBlasterAwarded())
                 .as("the same award was announced twice")
                 .isFalse();
@@ -1217,19 +1387,26 @@ class MatchTest
             // more double damage — and in a seven-bot room the loop has nothing to
             // stop it, so the reward would end the round instead of punctuating it.
             final Match match = firingRange(Match.DEFAULT_BOT_COUNT);
+
             earnTheSuperBlaster(match);
+
             for (int tic = 0; tic < 60; tic++)
             {
                 tick(match, tic);
             }
+
             final int aged = Match.SUPER_BLASTER_TICS - 60;
+
             assertThat(match.superBlasterTicsRemaining()).isEqualTo(aged);
 
             killNearest(match);
+
             assertThat(match.superBlasterTicsRemaining())
                 .as("kill four refreshed the timer")
                 .isEqualTo(aged);
+
             killNearest(match);
+
             assertThat(match.superBlasterTicsRemaining())
                 .as("kill five refreshed the timer")
                 .isEqualTo(aged);
@@ -1239,6 +1416,7 @@ class MatchTest
             killNearest(match);
 
             assertThat(match.superBlasterTicsRemaining()).isEqualTo(Match.SUPER_BLASTER_TICS);
+
             assertThat(match.consumeSuperBlasterAwarded()).isTrue();
         }
 
@@ -1251,25 +1429,34 @@ class MatchTest
             // for why the gun had changed.
             final Match match = marksmanMatch(sentryAt(2, 200.0f), sentryAt(3, 260.0f),
                 sentryAt(4, 320.0f), sentryAt(5, 380.0f));
+
             killNearest(match);
+
             killNearest(match);
+
             assertThat(match.killStreak()).isEqualTo(2);
 
             final int hitsToKill = Match.PLAYER_MAX_HEALTH / Match.BOT_SHOT_DAMAGE;
+
             for (int tic = 0; tic < hitsToKill; tic++)
             {
                 tick(match, tic);
             }
+
             assertThat(match.isPlayerDown()).isTrue();
+
             assertThat(match.killStreak()).isZero();
 
             // Stand up, and take a third kill. Under a running total this would be
             // the one that armed it.
             tick(match, hitsToKill + Match.RESPAWN_DELAY_TICS);
+
             assertThat(match.isPlayerDown()).isFalse();
+
             killNearest(match);
 
             assertThat(match.killStreak()).isEqualTo(1);
+
             assertThat(match.isSuperBlaster()).isFalse();
         }
 
@@ -1284,20 +1471,28 @@ class MatchTest
             // rules said otherwise.
             final Match match = marksmanMatch(sentryAt(2, 200.0f), sentryAt(3, 260.0f),
                 sentryAt(4, 320.0f), sentryAt(5, 380.0f));
+
             earnTheSuperBlaster(match);
+
             assertThat(match.isSuperBlaster()).isTrue();
+
             match.consumeSuperBlasterAwarded();
 
             final int hitsToKill = Match.PLAYER_MAX_HEALTH / Match.BOT_SHOT_DAMAGE;
+
             for (int tic = 0; tic < hitsToKill; tic++)
             {
                 tick(match, tic);
             }
 
             assertThat(match.isPlayerDown()).isTrue();
+
             assertThat(match.isSuperBlaster()).isFalse();
+
             assertThat(match.superBlasterTicsRemaining()).isZero();
+
             assertThat(match.playerShotDamage()).isEqualTo(Match.PLAYER_SHOT_DAMAGE);
+
             assertThat(match.consumeSuperBlasterExpired())
                 .as("the buff vanished silently, which is indistinguishable from a bug")
                 .isTrue();
@@ -1311,24 +1506,34 @@ class MatchTest
             // is exactly the class of bug this reset already shipped once, when
             // reviving the bots left them invisible.
             final Match match = firingRange(6);
+
             earnTheSuperBlaster(match);
+
             killNearest(match);
+
             for (int tic = 0; tic < 30; tic++)
             {
                 tick(match, tic);
             }
+
             assertThat(match.isSuperBlaster()).isTrue();
+
             assertThat(match.killStreak()).isEqualTo(1);
 
             match.reset();
 
             assertThat(match.killStreak()).isZero();
+
             assertThat(match.isSuperBlaster()).isFalse();
+
             assertThat(match.superBlasterTicsRemaining()).isZero();
+
             assertThat(match.playerShotDamage()).isEqualTo(Match.PLAYER_SHOT_DAMAGE);
+
             assertThat(match.consumeSuperBlasterAwarded())
                 .as("a rematch opened by announcing last round's award")
                 .isFalse();
+
             assertThat(match.consumeSuperBlasterExpired()).isFalse();
         }
 
@@ -1342,8 +1547,11 @@ class MatchTest
             // doing 68 damage on one and 34 on the other — the same class of desync
             // BotRng exists to prevent, arriving by a different door.
             final Match slow = firingRange(6);
+
             final Match fast = firingRange(6);
+
             earnTheSuperBlaster(slow);
+
             earnTheSuperBlaster(fast);
 
             // The same tics, driven at whatever rate two different machines happen
@@ -1353,12 +1561,14 @@ class MatchTest
             {
                 tick(slow, tic);
             }
+
             for (int tic = 0; tic < Match.SUPER_BLASTER_TICS; tic++)
             {
                 tick(fast, tic * 3);
             }
 
             assertThat(slow.isSuperBlaster()).isFalse();
+
             assertThat(fast.isSuperBlaster())
                 .as("a caller that skipped tic indices got a different answer")
                 .isFalse();

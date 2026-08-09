@@ -223,16 +223,22 @@ public final class BlockCarbine
     public static ModelFormat model()
     {
         final int parts = partCount();
+
         final int[] vertices = new int[parts * BOX_VERTICES * ModelFormat.VERTEX_STRIDE_INTS];
+
         final int[] indices =
             new int[parts * BOX_TRIANGLES * ModelFormat.INDICES_PER_TRIANGLE];
+
         // MUTABLE local — where the next box's indices are written.
         int at = 0;
+
         for (int part = 0; part < parts; part++)
         {
             writeBox(vertices, part, COLOURS[part]);
+
             at = writeBoxIndices(indices, at, part * BOX_VERTICES);
         }
+
         return ModelFormat.ofGeometry(vertices, indices);
     }
 
@@ -241,20 +247,35 @@ public final class BlockCarbine
     private static void writeBox(final int[] vertices, final int part, final int colour)
     {
         final int base = part * PART_STRIDE;
+
         final float lowX = PARTS[base];
+
         final float lowY = PARTS[base + 1];
+
         final float lowZ = PARTS[base + 2];
+
         final float highX = PARTS[base + AXES];
+
         final float highY = PARTS[base + AXES + 1];
+
         final float highZ = PARTS[base + AXES + 2];
+
         final int first = part * BOX_VERTICES;
+
         ModelFormat.writeVertex(vertices, first, lowX, lowY, lowZ, 0.0f, 0.0f, colour);
+
         ModelFormat.writeVertex(vertices, first + 1, highX, lowY, lowZ, 0.0f, 0.0f, colour);
+
         ModelFormat.writeVertex(vertices, first + 2, highX, highY, lowZ, 0.0f, 0.0f, colour);
+
         ModelFormat.writeVertex(vertices, first + 3, lowX, highY, lowZ, 0.0f, 0.0f, colour);
+
         ModelFormat.writeVertex(vertices, first + 4, lowX, lowY, highZ, 0.0f, 0.0f, colour);
+
         ModelFormat.writeVertex(vertices, first + 5, highX, lowY, highZ, 0.0f, 0.0f, colour);
+
         ModelFormat.writeVertex(vertices, first + 6, highX, highY, highZ, 0.0f, 0.0f, colour);
+
         ModelFormat.writeVertex(vertices, first + 7, lowX, highY, highZ, 0.0f, 0.0f, colour);
     }
 
@@ -274,10 +295,12 @@ public final class BlockCarbine
             7, 6, 2, 7, 2, 3,
             0, 1, 5, 0, 5, 4,
         };
+
         for (int slot = 0; slot < winding.length; slot++)
         {
             indices[at + slot] = first + winding[slot];
         }
+
         return at + winding.length;
     }
 }

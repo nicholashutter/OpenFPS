@@ -104,14 +104,19 @@ public final class MesaMapBuilder
     public static void main(final String[] args)
     {
         final String out = option(args, "--out=");
+
         if (out == null)
         {
             LOG.error("usage: MesaMapBuilder --out=<directory>"
                 + " [--atlas=<colormap.png>]");
+
             return;
         }
+
         final String atlasOption = option(args, "--atlas=");
+
         final Path atlasPath;
+
         if (atlasOption == null)
         {
             atlasPath = null;
@@ -120,7 +125,9 @@ public final class MesaMapBuilder
         {
             atlasPath = Path.of(atlasOption);
         }
+
         final Path outDir = Path.of(out);
+
         try
         {
             Files.createDirectories(outDir);
@@ -129,8 +136,11 @@ public final class MesaMapBuilder
         {
             throw new UncheckedIOException("could not create output directory: " + outDir, e);
         }
+
         final byte[] bytes = build(atlasPath);
+
         final Path outFile = outDir.resolve(FILE_NAME);
+
         try
         {
             Files.write(outFile, bytes);
@@ -139,7 +149,9 @@ public final class MesaMapBuilder
         {
             throw new UncheckedIOException("could not write " + outFile, e);
         }
+
         final ModelFormat parsed = ModelFormat.read(bytes);
+
         LOG.info("Wrote {} ({} triangles, {} vertices, {} textures)",
             outFile, parsed.indexCount() / 3, parsed.vertexCount(), parsed.textureCount());
     }
@@ -172,7 +184,9 @@ public final class MesaMapBuilder
     public static byte[] build(final Path atlasPath)
     {
         final ModelBuilder builder = new ModelBuilder(MODEL_NAME);
+
         final int[] floorTexels;
+
         if (atlasPath != null)
         {
             floorTexels = KenneyTexture.forceOpaque(KenneyTexture.floor(atlasPath));
@@ -181,7 +195,9 @@ public final class MesaMapBuilder
         {
             floorTexels = floorTexels();
         }
+
         final int[] wallTexels;
+
         if (atlasPath != null)
         {
             wallTexels = KenneyTexture.forceOpaque(KenneyTexture.wall(atlasPath));
@@ -190,34 +206,54 @@ public final class MesaMapBuilder
         {
             wallTexels = wallTexels();
         }
+
         final int[] accentTexels = accentTexels();
+
         final int floorTexture = builder.addTexture("mesa-floor", TEXTURE_EDGE,
             TEXTURE_EDGE, MipGenerator.generate(TEXTURE_EDGE, TEXTURE_EDGE, floorTexels));
+
         final int wallTexture = builder.addTexture("mesa-wall", TEXTURE_EDGE,
             TEXTURE_EDGE, MipGenerator.generate(TEXTURE_EDGE, TEXTURE_EDGE, wallTexels));
+
         final int accentTexture = builder.addTexture("mesa-accent", TEXTURE_EDGE,
             TEXTURE_EDGE, MipGenerator.generate(TEXTURE_EDGE, TEXTURE_EDGE, accentTexels));
 
         builder.beginSubmesh(floorTexture);
+
         addGroundSlab(builder);
+
         addMesaTop(builder);
+
         addCaveFloor(builder);
+
         builder.endSubmesh();
 
         builder.beginSubmesh(wallTexture);
+
         addPerimeterWalls(builder);
+
         addMesaSides(builder);
+
         addCave(builder);
+
         addSouthRamp(builder);
+
         addNorthSwitchback(builder);
+
         addMesaRim(builder);
+
         addCacti(builder);
+
         addRocks(builder);
+
         addWashChannels(builder);
+
         builder.endSubmesh();
 
         builder.beginSubmesh(accentTexture);
+
         addAccentGeometry(builder);
+
         builder.endSubmesh();
 
         return builder.toBytes();
@@ -282,9 +318,13 @@ public final class MesaMapBuilder
     private static void addPerimeterWalls(final ModelBuilder builder)
     {
         final float e = HALF_EXTENT;
+
         addBox(builder, -e, 0.0f, -e - WALL_THICKNESS, e, PERIMETER_WALL_HEIGHT, -e);
+
         addBox(builder, -e, 0.0f, e, e, PERIMETER_WALL_HEIGHT, e + WALL_THICKNESS);
+
         addBox(builder, -e - WALL_THICKNESS, 0.0f, -e, -e, PERIMETER_WALL_HEIGHT, e);
+
         addBox(builder, e, 0.0f, -e, e + WALL_THICKNESS, PERIMETER_WALL_HEIGHT, e);
     }
 
@@ -298,13 +338,17 @@ public final class MesaMapBuilder
     {
         // North side: full
         addBox(builder, 80.0f, 0.0f, 60.0f, 240.0f, MESA_HEIGHT, 64.0f);
+
         // South side: split by the south ramp (x=24..40) and the
         // rim gap (x=156..164). Two pieces: west (x=80..152) and
         // east (x=168..240).
         addBox(builder, 80.0f, 0.0f, 192.0f, 152.0f, MESA_HEIGHT, 196.0f);
+
         addBox(builder, 168.0f, 0.0f, 192.0f, 240.0f, MESA_HEIGHT, 196.0f);
+
         // East side: full
         addBox(builder, 240.0f, 0.0f, 64.0f, 244.0f, MESA_HEIGHT, 192.0f);
+
         // West side: split by the rim gap (x=156..164)
         addBox(builder, 76.0f, 0.0f, 64.0f, 80.0f, MESA_HEIGHT, 192.0f);
     }
@@ -318,11 +362,15 @@ public final class MesaMapBuilder
     {
         // North wall
         addBox(builder, 96.0f, 0.0f, 244.0f, 224.0f, CAVE_HEIGHT, 248.0f);
+
         // South wall (the +z face), with a 64-unit opening at x=128..192
         addBox(builder, 96.0f, 0.0f, 304.0f, 128.0f, CAVE_HEIGHT, 308.0f);
+
         addBox(builder, 192.0f, 0.0f, 304.0f, 224.0f, CAVE_HEIGHT, 308.0f);
+
         // East wall
         addBox(builder, 224.0f, 0.0f, 248.0f, 228.0f, CAVE_HEIGHT, 304.0f);
+
         // West wall
         addBox(builder, 92.0f, 0.0f, 248.0f, 96.0f, CAVE_HEIGHT, 304.0f);
     }
@@ -338,9 +386,13 @@ public final class MesaMapBuilder
         for (int i = 0; i < 8; i++)
         {
             final float yMin = i * 4.0f;
+
             final float yMax = (i + 1) * 4.0f;
+
             final float zMin = 256.0f - i * 8.0f;
+
             final float zMax = zMin + 8.0f;
+
             addBox(builder, 24.0f, yMin, zMin, 40.0f, yMax, zMax);
         }
     }
@@ -355,13 +407,20 @@ public final class MesaMapBuilder
     {
         // 4 ascending treads alternating between x=-16 and x=+16
         addBox(builder, -20.0f, 0.0f, 92.0f, -12.0f, 8.0f, 100.0f);
+
         addBox(builder, 12.0f, 8.0f, 92.0f, 20.0f, 16.0f, 100.0f);
+
         addBox(builder, -20.0f, 16.0f, 92.0f, -12.0f, 24.0f, 100.0f);
+
         addBox(builder, 12.0f, 24.0f, 92.0f, 20.0f, 32.0f, 100.0f);
+
         // 4 descending treads, mirrored, climbing back up to the rim
         addBox(builder, 12.0f, 0.0f, 60.0f, 20.0f, 8.0f, 68.0f);
+
         addBox(builder, -20.0f, 8.0f, 60.0f, -12.0f, 16.0f, 68.0f);
+
         addBox(builder, 12.0f, 16.0f, 60.0f, 20.0f, 24.0f, 68.0f);
+
         addBox(builder, -20.0f, 24.0f, 60.0f, -12.0f, 32.0f, 68.0f);
     }
 
@@ -375,18 +434,26 @@ public final class MesaMapBuilder
     private static void addMesaRim(final ModelBuilder builder)
     {
         final float yRim = MESA_HEIGHT;
+
         final float yRimTop = yRim + RIM_HEIGHT;
+
         // North rim: full
         addBox(builder, 80.0f, yRim, 60.0f, 240.0f, yRimTop, 64.0f);
+
         // South rim: split by the south ramp landing (x=24..40) and
         // the rim gap (x=156..164)
         addBox(builder, 40.0f, yRim, 192.0f, 152.0f, yRimTop, 196.0f);
+
         addBox(builder, 168.0f, yRim, 192.0f, 240.0f, yRimTop, 196.0f);
+
         // East rim: split by the rim gap (x=156..164)
         addBox(builder, 240.0f, yRim, 64.0f, 244.0f, yRimTop, 152.0f);
+
         addBox(builder, 240.0f, yRim, 168.0f, 244.0f, yRimTop, 192.0f);
+
         // West rim: split by the rim gap (x=156..164)
         addBox(builder, 76.0f, yRim, 64.0f, 80.0f, yRimTop, 152.0f);
+
         addBox(builder, 76.0f, yRim, 168.0f, 80.0f, yRimTop, 192.0f);
     }
 
@@ -397,8 +464,11 @@ public final class MesaMapBuilder
     private static void addCacti(final ModelBuilder builder)
     {
         addCactusAt(builder, -100.0f, 120.0f);
+
         addCactusAt(builder, 100.0f, 120.0f);
+
         addCactusAt(builder, -100.0f, 200.0f);
+
         addCactusAt(builder, 100.0f, 200.0f);
     }
 
@@ -414,8 +484,11 @@ public final class MesaMapBuilder
     private static void addRocks(final ModelBuilder builder)
     {
         addBox(builder, -100.0f, 0.0f, 16.0f, -84.0f, 12.0f, 32.0f);
+
         addBox(builder, 84.0f, 0.0f, 16.0f, 100.0f, 12.0f, 32.0f);
+
         addBox(builder, -100.0f, 0.0f, 232.0f, -84.0f, 12.0f, 248.0f);
+
         addBox(builder, 84.0f, 0.0f, 232.0f, 100.0f, 12.0f, 248.0f);
     }
 
@@ -428,9 +501,12 @@ public final class MesaMapBuilder
     {
         // Two channels in the north half, two in the south half
         addBox(builder, -HALF_EXTENT + 6.0f, 0.0f, 40.0f, HALF_EXTENT - 6.0f, 8.0f, 46.0f);
+
         addBox(builder, -HALF_EXTENT + 6.0f, 0.0f, 220.0f, HALF_EXTENT - 6.0f, 8.0f, 226.0f);
+
         // Two short north-south walls at the edges
         addBox(builder, -140.0f, 0.0f, 100.0f, -134.0f, 16.0f, 220.0f);
+
         addBox(builder, 134.0f, 0.0f, 100.0f, 140.0f, 16.0f, 220.0f);
     }
 
@@ -442,8 +518,11 @@ public final class MesaMapBuilder
     private static void addAccentGeometry(final ModelBuilder builder)
     {
         addBox(builder, 28.0f, 0.0f, 252.0f, 32.0f, 32.0f, 256.0f);
+
         addBox(builder, 32.0f, 0.0f, 92.0f, 36.0f, 32.0f, 96.0f);
+
         addBox(builder, -100.0f, 0.0f, 64.0f, -96.0f, 32.0f, 68.0f);
+
         addBox(builder, 100.0f, 0.0f, 232.0f, 104.0f, 32.0f, 236.0f);
     }
 
@@ -454,10 +533,15 @@ public final class MesaMapBuilder
         final float minZ, final float maxX, final float maxY, final float maxZ)
     {
         addFace(builder, maxX, minY, maxZ, maxX, maxY, maxZ, maxX, maxY, minZ, maxX, minY, minZ);
+
         addFace(builder, minX, minY, minZ, minX, maxY, minZ, minX, maxY, maxZ, minX, minY, maxZ);
+
         addFace(builder, minX, maxY, maxZ, maxX, maxY, maxZ, maxX, maxY, minZ, minX, maxY, minZ);
+
         addFace(builder, minX, minY, minZ, maxX, minY, minZ, maxX, minY, maxZ, minX, minY, maxZ);
+
         addFace(builder, minX, minY, maxZ, minX, maxY, maxZ, maxX, maxY, maxZ, maxX, minY, maxZ);
+
         addFace(builder, maxX, minY, minZ, maxX, maxY, minZ, minX, maxY, minZ, minX, minY, minZ);
     }
 
@@ -466,15 +550,21 @@ public final class MesaMapBuilder
         final float cy, final float cz, final float dx, final float dy, final float dz)
     {
         final float uScale = 1.0f / WORLD_UNITS_PER_TILE;
+
         final int a = builder.addVertex(ax, ay, az, ax * uScale, az * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         final int b = builder.addVertex(bx, by, bz, bx * uScale, bz * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         final int c = builder.addVertex(cx, cy, cz, cx * uScale, cz * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         final int d = builder.addVertex(dx, dy, dz, dx * uScale, dz * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         builder.addTriangle(a, b, c);
+
         builder.addTriangle(a, c, d);
     }
 
@@ -485,64 +575,86 @@ public final class MesaMapBuilder
     private static int[] floorTexels()
     {
         final int base = Rgba.pack(212, 188, 144, 255);
+
         final int shade = Rgba.pack(188, 162, 116, 255);
+
         final int line = Rgba.pack(160, 132, 88, 255);
+
         final int[] out = new int[TEXTURE_EDGE * TEXTURE_EDGE];
+
         for (int y = 0; y < TEXTURE_EDGE; y++)
         {
             for (int x = 0; x < TEXTURE_EDGE; x++)
             {
                 int colour = base;
+
                 if ((y / 8) % 2 == 0)
                 {
                     colour = shade;
                 }
+
                 if (x % 16 == 0)
                 {
                     colour = line;
                 }
+
                 out[y * TEXTURE_EDGE + x] = colour;
             }
         }
+
         return out;
     }
 
     private static int[] wallTexels()
     {
         final int base = Rgba.pack(208, 176, 124, 255);
+
         final int shade = Rgba.pack(180, 148, 96, 255);
+
         final int mortar = Rgba.pack(140, 108, 64, 255);
+
         final int bandHeight = TEXTURE_EDGE / 8;
+
         final int[] out = new int[TEXTURE_EDGE * TEXTURE_EDGE];
+
         for (int y = 0; y < TEXTURE_EDGE; y++)
         {
             final int band = y / bandHeight;
+
             final boolean isMortar = (y % bandHeight) == 0;
+
             for (int x = 0; x < TEXTURE_EDGE; x++)
             {
                 int colour = base;
+
                 if ((band % 2) != 0)
                 {
                     colour = shade;
                 }
+
                 if (isMortar)
                 {
                     colour = mortar;
                 }
+
                 out[y * TEXTURE_EDGE + x] = colour;
             }
         }
+
         return out;
     }
 
     private static int[] accentTexels()
     {
         final int colour = Rgba.pack(192, 96, 48, 255);
+
         final int[] out = new int[TEXTURE_EDGE * TEXTURE_EDGE];
+
         for (int index = 0; index < out.length; index++)
         {
             out[index] = colour;
         }
+
         return out;
     }
 
@@ -555,6 +667,7 @@ public final class MesaMapBuilder
                 return arg.substring(prefix.length());
             }
         }
+
         return null;
     }
 }

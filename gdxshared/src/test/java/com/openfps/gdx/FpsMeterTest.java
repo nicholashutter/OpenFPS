@@ -40,10 +40,12 @@ class FpsMeterTest
     private static FpsMeter settledAt(final long frameNanos, final int frames)
     {
         final FpsMeter meter = new FpsMeter();
+
         for (int index = 0; index < frames; index++)
         {
             meter.sample(frameNanos);
         }
+
         return meter;
     }
 
@@ -56,9 +58,13 @@ class FpsMeterTest
         void shouldReportNothingBeforeAnySample()
         {
             final FpsMeter meter = new FpsMeter();
+
             assertThat(meter.hasReading()).isFalse();
+
             assertThat(meter.samples()).isZero();
+
             assertThat(meter.frameMillis()).isZero();
+
             assertThat(meter.fps()).isZero();
         }
 
@@ -70,10 +76,13 @@ class FpsMeterTest
             // counter climb toward the truth over the first second of every run
             // and every unpause, which reads as a stall that is not there.
             final FpsMeter meter = new FpsMeter();
+
             meter.sample(20L * MILLI);
 
             assertThat(meter.frameMillis()).isEqualTo(20.0f, within(MILLI_EPSILON));
+
             assertThat(meter.fps()).isEqualTo(50.0f, within(0.01f));
+
             assertThat(meter.samples()).isEqualTo(1L);
         }
 
@@ -94,6 +103,7 @@ class FpsMeterTest
         void shouldSettleOnAConstantFrameTime()
         {
             final FpsMeter meter = settledAt(SIXTY_HZ_NANOS, 200);
+
             assertThat(meter.frameMillis()).isEqualTo(16.667f, within(0.01f));
         }
 
@@ -102,6 +112,7 @@ class FpsMeterTest
         void shouldReportSixtyForASixtyHertzFrame()
         {
             final FpsMeter meter = settledAt(SIXTY_HZ_NANOS, 200);
+
             assertThat(meter.fps()).isEqualTo(60.0f, within(0.05f));
         }
 
@@ -124,7 +135,9 @@ class FpsMeterTest
             // The arithmetic written out: seeded at 10, fed 20, weight 0.25,
             // so the average moves a quarter of the 10 ms gap to 12.5.
             final FpsMeter meter = new FpsMeter(0.25f);
+
             meter.sample(10L * MILLI);
+
             meter.sample(20L * MILLI);
 
             assertThat(meter.frameMillis()).isEqualTo(12.5f, within(MILLI_EPSILON));
@@ -135,7 +148,9 @@ class FpsMeterTest
         void shouldFollowExactlyAtWeightOne()
         {
             final FpsMeter meter = new FpsMeter(1.0f);
+
             meter.sample(10L * MILLI);
+
             meter.sample(40L * MILLI);
 
             assertThat(meter.frameMillis()).isEqualTo(40.0f, within(MILLI_EPSILON));
@@ -149,10 +164,13 @@ class FpsMeterTest
             // show 5 fps for one frame and 60 again the next, which is a
             // flicker rather than a measurement.
             final FpsMeter meter = settledAt(SIXTY_HZ_NANOS, 200);
+
             final float before = meter.frameMillis();
+
             meter.sample(200L * MILLI);
 
             assertThat(meter.frameMillis()).isLessThan(before + 20.0f);
+
             assertThat(meter.fps()).isGreaterThan(25.0f);
         }
 
@@ -164,10 +182,12 @@ class FpsMeterTest
             // ignoring a real collapse. Ten frames is the documented time
             // constant, so thirty gets most of the way there.
             final FpsMeter meter = settledAt(SIXTY_HZ_NANOS, 200);
+
             for (int index = 0; index < 30; index++)
             {
                 meter.sample(33L * MILLI);
             }
+
             assertThat(meter.fps()).isBetween(30.0f, 36.0f);
         }
     }
@@ -192,10 +212,12 @@ class FpsMeterTest
             // display. That is the version that flatters a stuttering machine,
             // and it is the easy mistake to make here.
             final FpsMeter meter = new FpsMeter(0.5f);
+
             for (int index = 0; index < 19; index++)
             {
                 meter.sample(10L * MILLI);
             }
+
             meter.sample(210L * MILLI);
 
             assertThat(meter.fps()).isLessThan(20.0f);
@@ -214,9 +236,11 @@ class FpsMeterTest
             // a frame. Folded in as "a frame that took no time" it would spike
             // the reported rate to something impossible.
             final FpsMeter meter = new FpsMeter();
+
             meter.sample(0L);
 
             assertThat(meter.hasReading()).isFalse();
+
             assertThat(meter.samples()).isZero();
         }
 
@@ -225,10 +249,13 @@ class FpsMeterTest
         void shouldIgnoreNegativeDurations()
         {
             final FpsMeter meter = settledAt(SIXTY_HZ_NANOS, 50);
+
             final float before = meter.frameMillis();
+
             meter.sample(-1L);
 
             assertThat(meter.frameMillis()).isEqualTo(before);
+
             assertThat(meter.samples()).isEqualTo(50L);
         }
 
@@ -239,10 +266,13 @@ class FpsMeterTest
             assertThatThrownBy(() -> new FpsMeter(0.0f))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("sampleWeight");
+
             assertThatThrownBy(() -> new FpsMeter(1.5f))
                 .isInstanceOf(IllegalArgumentException.class);
+
             assertThatThrownBy(() -> new FpsMeter(-0.2f))
                 .isInstanceOf(IllegalArgumentException.class);
+
             assertThatThrownBy(() -> new FpsMeter(Float.NaN))
                 .isInstanceOf(IllegalArgumentException.class);
         }
@@ -257,11 +287,15 @@ class FpsMeterTest
         void shouldForgetEverything()
         {
             final FpsMeter meter = settledAt(SIXTY_HZ_NANOS, 100);
+
             meter.reset();
 
             assertThat(meter.hasReading()).isFalse();
+
             assertThat(meter.frameMillis()).isZero();
+
             assertThat(meter.fps()).isZero();
+
             assertThat(meter.samples()).isZero();
         }
 
@@ -270,7 +304,9 @@ class FpsMeterTest
         void shouldReseedAfterReset()
         {
             final FpsMeter meter = settledAt(SIXTY_HZ_NANOS, 100);
+
             meter.reset();
+
             meter.sample(40L * MILLI);
 
             assertThat(meter.frameMillis()).isEqualTo(40.0f, within(MILLI_EPSILON));

@@ -63,6 +63,7 @@ public final class NetArgs
         Peer(final int peerId, final String peerAddress)
         {
             this.id = peerId;
+
             this.address = peerAddress;
         }
 
@@ -88,7 +89,9 @@ public final class NetArgs
     private NetArgs(final int localPlayerId, final int localPort, final List<Peer> connectTo)
     {
         this.playerId = localPlayerId;
+
         this.port = localPort;
+
         this.peers = connectTo;
     }
 
@@ -104,7 +107,9 @@ public final class NetArgs
     public static NetArgs parse(final String[] args)
     {
         final String net = valueOf(args, DesktopLauncher.NET_ARG);
+
         final List<Peer> peers = parsePeers(args);
+
         if (net == null)
         {
             if (!peers.isEmpty())
@@ -115,26 +120,33 @@ public final class NetArgs
                 throw new IllegalArgumentException(DesktopLauncher.PEER_ARG
                     + " needs " + DesktopLauncher.NET_ARG + "<playerId>:<port> as well");
             }
+
             return new NetArgs(-1, -1, peers);
         }
 
         final int split = net.indexOf(NET_SEPARATOR);
+
         if (split < 0)
         {
             throw new IllegalArgumentException(DesktopLauncher.NET_ARG
                 + "<playerId>" + NET_SEPARATOR + "<port>, got '" + net + "'");
         }
+
         final int localId = parseNumber(net.substring(0, split), "player id", net);
+
         final int localPort = parseNumber(net.substring(split + 1), "port", net);
+
         if (localId < 0)
         {
             throw new IllegalArgumentException("player id must not be negative, got " + localId);
         }
+
         if (localPort < 0 || localPort > 65535)
         {
             throw new IllegalArgumentException(
                 "port must be 0..65535, got " + localPort + " — 0 asks the OS for a free one");
         }
+
         for (final Peer peer : peers)
         {
             if (peer.id() == localId)
@@ -143,6 +155,7 @@ public final class NetArgs
                     + " uses our own player id — a peer cannot be us");
             }
         }
+
         return new NetArgs(localId, localPort, peers);
     }
 
@@ -176,6 +189,7 @@ public final class NetArgs
         {
             return 0;
         }
+
         return playerId;
     }
 
@@ -199,6 +213,7 @@ public final class NetArgs
         {
             return "NetArgs{local match}";
         }
+
         return "NetArgs{player=" + playerId + ", port=" + port + ", peers=" + peers + "}";
     }
 
@@ -206,18 +221,22 @@ public final class NetArgs
     private static List<Peer> parsePeers(final String[] args)
     {
         final List<Peer> found = new ArrayList<>();
+
         if (args == null)
         {
             return found;
         }
+
         for (final String arg : args)
         {
             if (arg == null || !arg.startsWith(DesktopLauncher.PEER_ARG))
             {
                 continue;
             }
+
             found.add(parsePeer(arg.substring(DesktopLauncher.PEER_ARG.length())));
         }
+
         for (int index = 0; index < found.size(); index++)
         {
             for (int other = 0; other < index; other++)
@@ -232,6 +251,7 @@ public final class NetArgs
                 }
             }
         }
+
         return found;
     }
 
@@ -239,21 +259,27 @@ public final class NetArgs
     private static Peer parsePeer(final String value)
     {
         final int split = value.indexOf(PEER_SEPARATOR);
+
         if (split < 0)
         {
             throw new IllegalArgumentException(DesktopLauncher.PEER_ARG
                 + "<playerId>" + PEER_SEPARATOR + "<host>:<port>, got '" + value + "'");
         }
+
         final int id = parseNumber(value.substring(0, split), "peer id", value);
+
         if (id < 0)
         {
             throw new IllegalArgumentException("peer id must not be negative, got " + id);
         }
+
         final String address = value.substring(split + 1);
+
         if (address.isEmpty())
         {
             throw new IllegalArgumentException("peer " + id + " has no address");
         }
+
         return new Peer(id, address);
     }
 
@@ -279,6 +305,7 @@ public final class NetArgs
         {
             return null;
         }
+
         for (final String arg : args)
         {
             if (arg != null && arg.startsWith(prefix))
@@ -286,6 +313,7 @@ public final class NetArgs
                 return arg.substring(prefix.length());
             }
         }
+
         return null;
     }
 }

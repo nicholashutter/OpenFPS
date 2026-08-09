@@ -36,6 +36,7 @@ class MatchStatusTest
     {
         final Bot sentry = new Bot(Match.FIRST_BOT_ENTITY_ID, 0.0f, 0.0f, 200.0f,
             BotPattern.SENTRY, 0.0f, PERIOD, 0);
+
         return new Match(new Bot[] {sentry}, new BotRng(), BotSkill.MARKSMAN,
             Match.UNLIMITED_DEATHS);
     }
@@ -56,11 +57,17 @@ class MatchStatusTest
             final MatchStatus status = MatchStatus.of(match, 0);
 
             assertThat(status.botCount()).isEqualTo(1);
+
             assertThat(status.botsAlive()).isEqualTo(1);
+
             assertThat(status.botsKilled()).isZero();
+
             assertThat(status.playerDeaths()).isZero();
+
             assertThat(status.playerHealth()).isEqualTo(Match.PLAYER_MAX_HEALTH);
+
             assertThat(status.isPlayerDown()).isFalse();
+
             assertThat(status.respawnTicsRemaining()).isZero();
         }
 
@@ -72,17 +79,22 @@ class MatchStatusTest
             // reference could show a health bar from one tic beside a kill count
             // from another.
             final Match match = matchWithOneMarksman();
+
             final MatchStatus taken = MatchStatus.of(match, 0);
 
             match.firePlayerShot(0.0f, PlayerController.EYE_HEIGHT_UNITS, 0.0f,
                 0.0f, 0.0f, 1.0f);
+
             match.firePlayerShot(0.0f, PlayerController.EYE_HEIGHT_UNITS, 0.0f,
                 0.0f, 0.0f, 1.0f);
+
             match.firePlayerShot(0.0f, PlayerController.EYE_HEIGHT_UNITS, 0.0f,
                 0.0f, 0.0f, 1.0f);
+
             assertThat(match.botsKilled()).isEqualTo(1);
 
             assertThat(taken.botsKilled()).isZero();
+
             assertThat(taken.botsAlive()).isEqualTo(1);
         }
 
@@ -91,18 +103,24 @@ class MatchStatusTest
         void shouldReportADownPlayer()
         {
             final Match match = matchWithOneMarksman();
+
             final int hitsToKill = Match.PLAYER_MAX_HEALTH / Match.BOT_SHOT_DAMAGE;
+
             for (int tic = 0; tic < hitsToKill; tic++)
             {
                 match.tick(tic, 0.0f, 0.0f, 0.0f);
             }
+
             final int deathTic = hitsToKill - 1;
 
             final MatchStatus status = MatchStatus.of(match, deathTic);
 
             assertThat(status.isPlayerDown()).isTrue();
+
             assertThat(status.playerHealth()).isZero();
+
             assertThat(status.playerDeaths()).isEqualTo(1);
+
             assertThat(status.respawnTicsRemaining()).isEqualTo(Match.RESPAWN_DELAY_TICS);
         }
 
@@ -128,9 +146,13 @@ class MatchStatusTest
             // show "0" for the last full second of every respawn, which reads as a
             // hang — precisely the impression the countdown exists to dispel.
             assertThat(status(1).respawnSecondsRemaining(TICS_PER_SECOND)).isEqualTo(1);
+
             assertThat(status(59).respawnSecondsRemaining(TICS_PER_SECOND)).isEqualTo(1);
+
             assertThat(status(60).respawnSecondsRemaining(TICS_PER_SECOND)).isEqualTo(1);
+
             assertThat(status(61).respawnSecondsRemaining(TICS_PER_SECOND)).isEqualTo(2);
+
             assertThat(status(120).respawnSecondsRemaining(TICS_PER_SECOND)).isEqualTo(2);
         }
 
@@ -149,6 +171,7 @@ class MatchStatusTest
             // window whose status arrived before its rate did would divide by zero
             // on its first frame.
             assertThat(status(90).respawnSecondsRemaining(0)).isZero();
+
             assertThat(status(90).respawnSecondsRemaining(-1)).isZero();
         }
 
@@ -172,17 +195,22 @@ class MatchStatusTest
             // Before this it was not, and a buff nobody can see is indistinguishable
             // from no buff at all.
             final Match match = matchWithOneMarksman();
+
             match.firePlayerShot(0.0f, PlayerController.EYE_HEIGHT_UNITS, 0.0f,
                 0.0f, 0.0f, 1.0f);
+
             match.firePlayerShot(0.0f, PlayerController.EYE_HEIGHT_UNITS, 0.0f,
                 0.0f, 0.0f, 1.0f);
+
             match.firePlayerShot(0.0f, PlayerController.EYE_HEIGHT_UNITS, 0.0f,
                 0.0f, 0.0f, 1.0f);
 
             final MatchStatus status = MatchStatus.of(match, 0);
 
             assertThat(status.killStreak()).isEqualTo(1);
+
             assertThat(status.isSuperBlaster()).isFalse();
+
             assertThat(status.superBlasterTicsRemaining()).isZero();
         }
 
@@ -203,10 +231,13 @@ class MatchStatusTest
         {
             assertThat(superStatus(1).superBlasterSecondsRemaining(TICS_PER_SECOND))
                 .isEqualTo(1);
+
             assertThat(superStatus(60).superBlasterSecondsRemaining(TICS_PER_SECOND))
                 .isEqualTo(1);
+
             assertThat(superStatus(61).superBlasterSecondsRemaining(TICS_PER_SECOND))
                 .isEqualTo(2);
+
             assertThat(superStatus(Match.SUPER_BLASTER_TICS)
                 .superBlasterSecondsRemaining(TICS_PER_SECOND)).isEqualTo(4);
         }
@@ -216,6 +247,7 @@ class MatchStatusTest
         void shouldBeQuietWhenOrdinary()
         {
             assertThat(superStatus(0).isSuperBlaster()).isFalse();
+
             assertThat(superStatus(0).superBlasterSecondsRemaining(TICS_PER_SECOND)).isZero();
         }
 
@@ -224,6 +256,7 @@ class MatchStatusTest
         void shouldNotDivideByAZeroRate()
         {
             assertThat(superStatus(120).superBlasterSecondsRemaining(0)).isZero();
+
             assertThat(superStatus(120).superBlasterSecondsRemaining(-1)).isZero();
         }
 
@@ -244,12 +277,16 @@ class MatchStatusTest
         {
             assertThatThrownBy(() -> new MatchStatus(-1, 7, 7, 0, 100, false, 0))
                 .isInstanceOf(IllegalArgumentException.class);
+
             assertThatThrownBy(() -> new MatchStatus(0, 7, 7, -1, 100, false, 0))
                 .isInstanceOf(IllegalArgumentException.class);
+
             assertThatThrownBy(() -> new MatchStatus(0, 7, 7, 0, 100, false, -1))
                 .isInstanceOf(IllegalArgumentException.class);
+
             assertThatThrownBy(() -> new MatchStatus(0, 7, 7, 0, 100, false, 0, -1, 0))
                 .isInstanceOf(IllegalArgumentException.class);
+
             assertThatThrownBy(() -> new MatchStatus(0, 7, 7, 0, 100, false, 0, 0, -1))
                 .isInstanceOf(IllegalArgumentException.class);
         }
@@ -263,7 +300,9 @@ class MatchStatusTest
             final MatchStatus plain = new MatchStatus(3, 7, 4, 1, 60, false, 0);
 
             assertThat(plain.killStreak()).isZero();
+
             assertThat(plain.isSuperBlaster()).isFalse();
+
             assertThat(plain.superBlasterTicsRemaining()).isZero();
         }
 

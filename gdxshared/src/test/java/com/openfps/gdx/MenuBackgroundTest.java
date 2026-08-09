@@ -52,12 +52,17 @@ class MenuBackgroundTest
             // Compared as copies: cellColour returns a reused scratch instance,
             // which is what stops it allocating a Color per cell per frame.
             final Color origin = new Color(grid.cellColour(base, 0));
+
             final Color right = new Color(grid.cellColour(base + 1, 0));
+
             final Color up = new Color(grid.cellColour(base, 1));
+
             final Color diagonal = new Color(grid.cellColour(base + 1, 1));
 
             assertThat(right).isNotEqualTo(origin);
+
             assertThat(up).isNotEqualTo(origin);
+
             assertThat(diagonal).isEqualTo(origin);
         }
 
@@ -70,9 +75,11 @@ class MenuBackgroundTest
             // the two are blended toward the pulse. A band that replaced the
             // checker outright would erase the pattern as it passed.
             final MenuBackground grid = background();
+
             final Color banded = new Color(grid.cellColour(0, 0));
 
             assertThat(grid.bandStrengthAt(0, 0)).isGreaterThan(0.0f);
+
             assertThat(banded).isNotIn(MenuPalette.GRID_LIGHT, MenuPalette.GRID_DARK,
                 MenuPalette.GRID_PULSE);
         }
@@ -103,6 +110,7 @@ class MenuBackgroundTest
             // the buttons every few seconds. The cap is the difference between
             // a sheen and a strobe.
             final MenuBackground grid = background();
+
             for (int column = 0; column < 60; column++)
             {
                 for (int row = 0; row < 40; row++)
@@ -123,6 +131,7 @@ class MenuBackgroundTest
             final MenuBackground grid = background();
 
             assertThat(grid.bandStrengthAt(4, 2)).isEqualTo(grid.bandStrengthAt(2, 4));
+
             assertThat(grid.bandStrengthAt(0, 6)).isEqualTo(grid.bandStrengthAt(6, 0));
         }
 
@@ -131,11 +140,13 @@ class MenuBackgroundTest
         void shouldMoveWhenTimeAdvances()
         {
             final MenuBackground grid = background();
+
             final float before = grid.bandStrengthAt(3, 0);
 
             grid.act(1.0f);
 
             assertThat(grid.elapsedSeconds()).isEqualTo(1.0f);
+
             assertThat(grid.bandStrengthAt(3, 0))
                 .as("a band that does not move is a texture")
                 .isNotEqualTo(before);
@@ -149,6 +160,7 @@ class MenuBackgroundTest
             // the seam instead of vanishing at one edge and reappearing at the
             // other. Stepping a full period must land back on the same value.
             final MenuBackground grid = background();
+
             final float start = grid.bandStrengthAt(0, 0);
 
             grid.act(46.0f / MenuBackground.BAND_CELLS_PER_SECOND);
@@ -183,8 +195,11 @@ class MenuBackgroundTest
             // the wrong way round makes the button look like it is glowing from
             // underneath.
             assertShadeIsDarker(MenuPalette.PLAY_FACE, MenuPalette.PLAY_SHADE);
+
             assertShadeIsDarker(MenuPalette.NET_FACE, MenuPalette.NET_SHADE);
+
             assertShadeIsDarker(MenuPalette.NEUTRAL_FACE, MenuPalette.NEUTRAL_SHADE);
+
             assertShadeIsDarker(MenuPalette.QUIT_FACE, MenuPalette.QUIT_SHADE);
         }
 
@@ -234,6 +249,7 @@ class MenuBackgroundTest
                 return column;
             }
         }
+
         throw new IllegalStateException("the band covers the whole grid, which is not a band");
     }
 }

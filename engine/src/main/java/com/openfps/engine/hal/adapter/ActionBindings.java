@@ -79,6 +79,7 @@ public final class ActionBindings
     public ActionBindings()
     {
         this.rows = new InputBinding[GameAction.values().length][];
+
         Arrays.fill(rows, NONE);
     }
 
@@ -104,15 +105,18 @@ public final class ActionBindings
         {
             throw new IllegalArgumentException("action must not be null");
         }
+
         if (bindings == null)
         {
             throw new IllegalArgumentException("bindings must not be null");
         }
+
         if (bindings.length > MAX_BINDINGS_PER_ACTION)
         {
             throw new IllegalArgumentException("at most " + MAX_BINDINGS_PER_ACTION
                 + " bindings per action, got " + bindings.length + " for " + action);
         }
+
         for (int index = 0; index < bindings.length; index++)
         {
             if (bindings[index] == null)
@@ -121,14 +125,18 @@ public final class ActionBindings
                     "binding " + index + " for " + action + " must not be null");
             }
         }
+
         // Copy before publishing: the caller keeps its varargs array and could
         // otherwise mutate the live scheme from under a poll in progress.
         if (bindings.length == 0)
         {
             rows[action.ordinal()] = NONE;
+
             return this;
         }
+
         rows[action.ordinal()] = bindings.clone();
+
         return this;
     }
 
@@ -151,6 +159,7 @@ public final class ActionBindings
         {
             throw new IllegalArgumentException("action must not be null");
         }
+
         return rows[action.ordinal()];
     }
 
@@ -184,6 +193,7 @@ public final class ActionBindings
                 return false;
             }
         }
+
         return true;
     }
 
@@ -202,6 +212,7 @@ public final class ActionBindings
                 return action;
             }
         }
+
         return null;
     }
 
@@ -210,21 +221,28 @@ public final class ActionBindings
     public String toString()
     {
         final StringBuilder text = new StringBuilder("ActionBindings{");
+
         boolean first = true;
+
         for (final GameAction action : GameAction.values())
         {
             final InputBinding[] row = bindingsFor(action);
+
             if (row.length == 0)
             {
                 continue;
             }
+
             if (!first)
             {
                 text.append(", ");
             }
+
             first = false;
+
             text.append(action).append('=').append(Arrays.toString(row));
         }
+
         return text.append('}').toString();
     }
 }

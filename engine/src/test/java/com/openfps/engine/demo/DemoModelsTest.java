@@ -73,20 +73,31 @@ final class DemoModelsTest
         void loadsTheKit(@TempDir final Path root) throws IOException
         {
             writeKit(root);
+
             writeWeapon(root);
 
             final DemoModels models = DemoModels.load(root);
 
             assertThat(models.source()).isEqualTo(DemoModels.Source.KENNEY_KIT);
+
             assertThat(models.isRealArt()).isTrue();
+
             assertThat(models.floor()).isNotNull();
+
             assertThat(models.wall()).isNotNull();
+
             assertThat(models.doorway()).isNotNull();
+
             assertThat(models.column()).isNotNull();
+
             assertThat(models.crate()).isNotNull();
+
             assertThat(models.stairs()).isNotNull();
+
             assertThat(models.slope()).isNotNull();
+
             assertThat(models.weapon()).isNotNull();
+
             // The fallback is not loaded when it is not needed.
             assertThat(models.room()).isNull();
         }
@@ -100,6 +111,7 @@ final class DemoModelsTest
             final DemoModels models = DemoModels.load(root);
 
             assertThat(models.source()).isEqualTo(DemoModels.Source.KENNEY_KIT);
+
             assertThat(models.weapon()).isNull();
         }
     }
@@ -117,16 +129,25 @@ final class DemoModelsTest
             final DemoModels models = DemoModels.load(root);
 
             assertThat(models.source()).isEqualTo(DemoModels.Source.GENERATED_ROOM);
+
             assertThat(models.isRealArt()).isFalse();
+
             assertThat(models.room()).isNotNull();
+
             // Every kit accessor is null, so nothing can mistake the greybox
             // room for a piece of the real set.
             assertThat(models.floor()).isNull();
+
             assertThat(models.wall()).isNull();
+
             assertThat(models.doorway()).isNull();
+
             assertThat(models.column()).isNull();
+
             assertThat(models.crate()).isNull();
+
             assertThat(models.stairs()).isNull();
+
             assertThat(models.slope()).isNull();
         }
 
@@ -135,7 +156,9 @@ final class DemoModelsTest
         void partialKitIsNotUsed(@TempDir final Path root) throws IOException
         {
             writeKit(root);
+
             Files.delete(root.resolve(DemoModels.LEVEL_DIRECTORY).resolve("wall.ofm"));
+
             writeFallback(root);
 
             final DemoModels models = DemoModels.load(root);
@@ -191,7 +214,9 @@ final class DemoModelsTest
         void doesNotDowngradeToFallback(@TempDir final Path root) throws IOException
         {
             writeKit(root);
+
             writeFallback(root);
+
             // Present, the right name, the right extension — and not a model.
             Files.write(root.resolve(DemoModels.LEVEL_DIRECTORY).resolve("crate.ofm"),
                 "this is not a model".getBytes(java.nio.charset.StandardCharsets.UTF_8));
@@ -223,6 +248,7 @@ final class DemoModelsTest
         InMemorySource put(final String path)
         {
             entries.put(path, DemoModelFixture.quad());
+
             return this;
         }
 
@@ -230,6 +256,7 @@ final class DemoModelsTest
         InMemorySource putRaw(final String path, final byte[] bytes)
         {
             entries.put(path, bytes);
+
             return this;
         }
 
@@ -243,6 +270,7 @@ final class DemoModelsTest
         public boolean has(final String relativePath)
         {
             asked.add(relativePath);
+
             return entries.containsKey(relativePath);
         }
 
@@ -250,10 +278,12 @@ final class DemoModelsTest
         public byte[] read(final String relativePath) throws IOException
         {
             final byte[] bytes = entries.get(relativePath);
+
             if (bytes == null)
             {
                 throw new IOException("no entry " + relativePath);
             }
+
             return bytes;
         }
 
@@ -274,10 +304,12 @@ final class DemoModelsTest
     private static InMemorySource sourceWithKit()
     {
         final InMemorySource source = new InMemorySource();
+
         for (final String piece : KIT)
         {
             source.put(DemoModels.LEVEL_DIRECTORY + "/" + piece);
         }
+
         return source;
     }
 
@@ -294,8 +326,11 @@ final class DemoModelsTest
                 .put(DemoModels.CHARACTER_DIRECTORY + "/character-a.ofm"));
 
             assertThat(models.source()).isEqualTo(DemoModels.Source.KENNEY_KIT);
+
             assertThat(models.floor()).isNotNull();
+
             assertThat(models.weapon()).isNotNull();
+
             assertThat(models.characters()).hasSize(1);
         }
 
@@ -356,10 +391,13 @@ final class DemoModelsTest
         void resolvesSlashSeparatedPaths(@TempDir final Path root) throws IOException
         {
             DemoModelFixture.write(root.resolve("level").resolve("wall.ofm"));
+
             final DirectoryModelSource source = new DirectoryModelSource(root);
 
             assertThat(source.has("level/wall.ofm")).isTrue();
+
             assertThat(source.read("level/wall.ofm")).isNotEmpty();
+
             assertThat(source.has("level/missing.ofm")).isFalse();
         }
 
@@ -371,6 +409,7 @@ final class DemoModelsTest
 
             assertThat(source.describe("level/wall.ofm"))
                 .isEqualTo(root.resolve("level").resolve("wall.ofm").toAbsolutePath().toString());
+
             assertThat(source.describeRoot()).isEqualTo(root.toAbsolutePath().toString());
         }
 
@@ -385,6 +424,7 @@ final class DemoModelsTest
                 new DirectoryModelSource(root.resolve("does-not-exist"));
 
             assertThat(source.has("level/wall.ofm")).isFalse();
+
             assertThatThrownBy(() -> DemoModels.load(source))
                 .isInstanceOf(DemoAssetException.class)
                 .hasMessageContaining(DemoModels.REGENERATE_COMMAND);

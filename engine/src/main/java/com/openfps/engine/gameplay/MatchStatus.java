@@ -121,19 +121,29 @@ public final class MatchStatus
         {
             throw new IllegalArgumentException("match counters must not be negative");
         }
+
         if (alive > opponents)
         {
             throw new IllegalArgumentException(
                 "more bots alive than the round started with: " + alive + " of " + opponents);
         }
+
         this.botsKilled = kills;
+
         this.botCount = opponents;
+
         this.botsAlive = alive;
+
         this.playerDeaths = deaths;
+
         this.playerHealth = health;
+
         this.playerDown = down;
+
         this.respawnTicsRemaining = respawnTics;
+
         this.killStreak = streak;
+
         this.superBlasterTicsRemaining = superTics;
     }
 
@@ -153,6 +163,7 @@ public final class MatchStatus
         {
             throw new IllegalArgumentException("match must not be null");
         }
+
         return new MatchStatus(match.botsKilled(), match.botCount(), match.livingBots(),
             match.playerDeaths(), match.playerHealth(), match.isPlayerDown(),
             match.respawnTicsRemaining(ticIndex), match.killStreak(),
@@ -220,6 +231,7 @@ public final class MatchStatus
         {
             return 0;
         }
+
         return (respawnTicsRemaining + ticsPerSecond - 1) / ticsPerSecond;
     }
 
@@ -283,6 +295,7 @@ public final class MatchStatus
         {
             return 0;
         }
+
         return (superBlasterTicsRemaining + ticsPerSecond - 1) / ticsPerSecond;
     }
 

@@ -75,6 +75,7 @@ class AccessibilitySettingsTest
             final AccessibilitySettings settings = new AccessibilitySettings();
 
             assertThat(settings.targetOutlineLabel()).isEqualTo("ON");
+
             assertThat(settings.isTargetOutlineVisible()).isTrue();
         }
 
@@ -102,6 +103,7 @@ class AccessibilitySettingsTest
             final AccessibilitySettings settings = new AccessibilitySettings();
 
             assertThat(settings.toggleTargetOutline()).isFalse();
+
             assertThat(settings.toggleTargetOutline()).isTrue();
         }
 
@@ -115,8 +117,11 @@ class AccessibilitySettingsTest
             final AccessibilitySettings settings = new AccessibilitySettings();
 
             settings.setTargetOutlineVisible(false);
+
             assertThat(settings.targetOutlineLabel()).isEqualTo("OFF");
+
             settings.setTargetOutlineVisible(true);
+
             assertThat(settings.targetOutlineLabel()).isEqualTo("ON");
         }
 
@@ -144,7 +149,9 @@ class AccessibilitySettingsTest
             // is what makes the coincidence a documented one rather than a
             // surprise.
             final AccessibilitySettings settings = new AccessibilitySettings();
+
             final Recorder recorder = new Recorder();
+
             settings.onChange(recorder);
 
             assertThat(recorder.seen).isEmpty();
@@ -155,11 +162,15 @@ class AccessibilitySettingsTest
         void shouldReportEveryChange()
         {
             final AccessibilitySettings settings = new AccessibilitySettings();
+
             final Recorder recorder = new Recorder();
+
             settings.onChange(recorder);
 
             settings.toggleTargetOutline();
+
             settings.toggleTargetOutline();
+
             settings.setTargetOutlineVisible(false);
 
             assertThat(recorder.seen).containsExactly(Boolean.FALSE, Boolean.TRUE,
@@ -174,14 +185,19 @@ class AccessibilitySettingsTest
             // this is not a hypothetical caller: it is the one that fixed the
             // label. It has to be free.
             final AccessibilitySettings settings = new AccessibilitySettings();
+
             final Recorder recorder = new Recorder();
+
             settings.onChange(recorder);
 
             settings.setTargetOutlineVisible(true);
+
             assertThat(recorder.seen).isEmpty();
 
             settings.setTargetOutlineVisible(false);
+
             settings.setTargetOutlineVisible(false);
+
             assertThat(recorder.seen).containsExactly(Boolean.FALSE);
         }
 
@@ -190,14 +206,19 @@ class AccessibilitySettingsTest
         void shouldStopReportingWhenDetached()
         {
             final AccessibilitySettings settings = new AccessibilitySettings();
+
             final Recorder recorder = new Recorder();
+
             settings.onChange(recorder);
+
             settings.toggleTargetOutline();
 
             settings.onChange(null);
+
             settings.toggleTargetOutline();
 
             assertThat(recorder.seen).containsExactly(Boolean.FALSE);
+
             assertThat(settings.isTargetOutlineVisible()).isTrue();
         }
 

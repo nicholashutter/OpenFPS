@@ -141,16 +141,21 @@ public final class WorkerPool implements I_ThreadPoolPort
         {
             throw new IllegalArgumentException("bus must not be null");
         }
+
         if (registry == null)
         {
             throw new IllegalArgumentException("registry must not be null");
         }
+
         this.bus = bus;
+
         this.registry = registry;
+
         for (int i = 0; i < batches.length; i++)
         {
             batches[i] = new ParallelBatch();
         }
+
         this.state = State.UNINITIALIZED;
     }
 
@@ -162,12 +167,16 @@ public final class WorkerPool implements I_ThreadPoolPort
             throw new IllegalStateException("init() called from state " + state
                 + " — only valid from UNINITIALIZED");
         }
+
         if (workerCount < 1)
         {
             throw new IllegalArgumentException("workerCount must be >= 1, got " + workerCount);
         }
+
         this.workerCount = workerCount;
+
         this.state = State.READY;
+
         LOG.info("WorkerPool initialized: {} workers", workerCount);
     }
 
@@ -183,14 +192,22 @@ public final class WorkerPool implements I_ThreadPoolPort
         for (int i = 0; i < workerCount; i++)
         {
             final WorkerThread w = new WorkerThread(i, bus, registry);
+
             workers.add(w);
+
             activeWorkers.incrementAndGet();
+
             final Thread t = new Thread(w, "openfps-worker-" + i);
+
             t.setDaemon(true);
+
             w.setThread(t);
+
             t.start();
         }
+
         state = State.RUNNING;
+
         LOG.info("WorkerPool started: {} hot workers", workerCount);
     }
 
@@ -201,11 +218,13 @@ public final class WorkerPool implements I_ThreadPoolPort
         {
             throw new IllegalStateException("shutdown() called from state SHUTDOWN — already terminal");
         }
+
         if (state == State.DRAINING)
         {
             throw new IllegalStateException(
                 "shutdown() called from state DRAINING — shutdown is already in progress");
         }
+
         // Tell the bus to drain; workers will see null from take() once empty
         try
         {
@@ -215,20 +234,25 @@ public final class WorkerPool implements I_ThreadPoolPort
         {
             LOG.warn("bus.drain() threw during shutdown", e);
         }
+
         // DRAINING, not SHUTDOWN. The workers below are still alive and still
         // dispatching whatever the bus had queued, and a subsystem handling one
         // of those events may fan out through submitParallel. Declaring the
         // pool terminal here is what made every clean exit throw.
         state = State.DRAINING;
+
         // Stop all workers — request stop AND interrupt so blocked take() calls wake up
         for (final WorkerThread w : workers)
         {
             w.requestStop();
+
             w.interruptThread();
         }
+
         // Followers park on our own condition, so they are woken without
         // relying on the interrupt above.
         signalAllIdleWorkers();
+
         // Deliberately NOT advancing to SHUTDOWN here even when every worker
         // has already exited. An earlier revision did, and it made the state
         // immediately after shutdown() depend on whether the workers happened
@@ -247,18 +271,23 @@ public final class WorkerPool implements I_ThreadPoolPort
             throw new IllegalStateException("awaitTermination() called from state " + state
                 + " — only valid from DRAINING or SHUTDOWN");
         }
+
         final long deadline = System.nanoTime() + timeoutMillis * 1_000_000L;
+
         while (activeWorkers.get() > 0 && System.nanoTime() < deadline)
         {
             Thread.sleep(10);
         }
+
         final boolean allExited = activeWorkers.get() == 0;
+
         if (allExited)
         {
             // The drain window is over: no worker can dispatch another event,
             // so no further submitParallel can legitimately arrive.
             state = State.SHUTDOWN;
         }
+
         return allExited;
     }
 
@@ -269,10 +298,12 @@ public final class WorkerPool implements I_ThreadPoolPort
         {
             throw new IllegalArgumentException("job must not be null");
         }
+
         if (jobCount < 0)
         {
             throw new IllegalArgumentException("jobCount must be >= 0, got " + jobCount);
         }
+
         // DRAINING is permitted deliberately: the bus drain still delivers
         // queued events, and a subsystem handling one may fan out. The workers
         // are alive and the batch machinery is intact, so the work is safe to
@@ -283,12 +314,14 @@ public final class WorkerPool implements I_ThreadPoolPort
             throw new IllegalStateException("submitParallel() called from state " + state
                 + " — only valid from RUNNING or DRAINING");
         }
+
         if (jobCount == 0)
         {
             return;
         }
 
         final ParallelBatch batch = claimBatch();
+
         if (batch == null)
         {
             // Every slot is in flight. Running the whole range on this thread
@@ -297,21 +330,28 @@ public final class WorkerPool implements I_ThreadPoolPort
             // of a slot.
             LOG.debug("All {} parallel batch slots in flight — running {} jobs inline",
                 MAX_CONCURRENT_BATCHES, jobCount);
+
             runInline(job, jobCount);
+
             return;
         }
 
         batch.open(job, jobCount);
+
         batchEpoch.incrementAndGet();
+
         signalAllIdleWorkers();
 
         // Caller participation. This thread drains the claim counter itself,
         // so the batch completes even if no worker ever helps.
         batch.runAvailable();
+
         batch.awaitCompletion(jobCount);
 
         final Throwable firstFailure = batch.firstFailure();
+
         final int failures = batch.failureCount();
+
         batch.close();
 
         if (firstFailure != null)
@@ -342,6 +382,7 @@ public final class WorkerPool implements I_ThreadPoolPort
                 return candidate;
             }
         }
+
         return null;
     }
 
@@ -351,7 +392,9 @@ public final class WorkerPool implements I_ThreadPoolPort
     {
         // MUTABLE: accumulated across the range
         Throwable firstFailure = null;
+
         int failures = 0;
+
         for (int i = 0; i < jobCount; i++)
         {
             try
@@ -361,6 +404,7 @@ public final class WorkerPool implements I_ThreadPoolPort
             catch (final Throwable t)
             {
                 failures++;
+
                 if (firstFailure == null)
                 {
                     firstFailure = t;
@@ -371,6 +415,7 @@ public final class WorkerPool implements I_ThreadPoolPort
                 }
             }
         }
+
         if (firstFailure != null)
         {
             throw new ParallelJobException(failures, jobCount, firstFailure);
@@ -391,6 +436,7 @@ public final class WorkerPool implements I_ThreadPoolPort
     private void signalAllIdleWorkers()
     {
         idleLock.lock();
+
         try
         {
             idleCondition.signalAll();
@@ -405,6 +451,7 @@ public final class WorkerPool implements I_ThreadPoolPort
     private void signalOneIdleWorker()
     {
         idleLock.lock();
+
         try
         {
             idleCondition.signal();
@@ -431,7 +478,9 @@ public final class WorkerPool implements I_ThreadPoolPort
                      final SubsystemRegistry registryRef)
         {
             this.id = id;
+
             this.busRef = busRef;
+
             this.registryRef = registryRef;
         }
 
@@ -448,6 +497,7 @@ public final class WorkerPool implements I_ThreadPoolPort
         void interruptThread()
         {
             final Thread t = this.thread;
+
             if (t != null)
             {
                 t.interrupt();
@@ -458,6 +508,7 @@ public final class WorkerPool implements I_ThreadPoolPort
         public void run()
         {
             LOG.debug("Worker {} started", id);
+
             try
             {
                 while (!stopRequested)
@@ -465,28 +516,37 @@ public final class WorkerPool implements I_ThreadPoolPort
                     // Read the epoch BEFORE looking for work, so a batch
                     // published while we are looking is detected below.
                     final long seenEpoch = batchEpoch.get();
+
                     helpWithParallelWork();
+
                     if (stopRequested)
                     {
                         break;
                     }
+
                     if (!leaderPresent.compareAndSet(false, true))
                     {
                         awaitWork(seenEpoch);
+
                         continue;
                     }
+
                     final I_EngineEvent event = takeAsLeader();
+
                     if (event == null)
                     {
                         LOG.debug("Worker {} exiting (drained or interrupted)", id);
+
                         break;
                     }
+
                     dispatch(event);
                 }
             }
             finally
             {
                 activeWorkers.decrementAndGet();
+
                 LOG.debug("Worker {} exited (active={})", id, activeWorkers.get());
             }
         }
@@ -502,12 +562,15 @@ public final class WorkerPool implements I_ThreadPoolPort
             catch (final InterruptedException e)
             {
                 LOG.debug("Worker {} interrupted — exiting", id);
+
                 Thread.currentThread().interrupt();
+
                 return null;
             }
             finally
             {
                 leaderPresent.set(false);
+
                 signalOneIdleWorker();
             }
         }
@@ -531,17 +594,20 @@ public final class WorkerPool implements I_ThreadPoolPort
         private void awaitWork(final long seenEpoch)
         {
             idleLock.lock();
+
             try
             {
                 if (stopRequested || !leaderPresent.get() || batchEpoch.get() != seenEpoch)
                 {
                     return;
                 }
+
                 idleCondition.await(IDLE_PARK_MILLIS, TimeUnit.MILLISECONDS);
             }
             catch (final InterruptedException e)
             {
                 LOG.debug("Worker {} interrupted while idle", id);
+
                 Thread.currentThread().interrupt();
             }
             finally
@@ -592,11 +658,17 @@ public final class WorkerPool implements I_ThreadPoolPort
         private void open(final I_ParallelJob newJob, final int newJobCount)
         {
             completed.set(0);
+
             failures.set(0);
+
             firstFailure.set(null);
+
             final long nextGeneration = (claimState.get() >>> 32) + 1L;
+
             claimState.set(nextGeneration << 32);
+
             this.job = newJob;
+
             this.jobCount = newJobCount;
         }
 
@@ -607,13 +679,18 @@ public final class WorkerPool implements I_ThreadPoolPort
             while (true)
             {
                 final long snapshot = claimState.get();
+
                 final int index = (int) (snapshot & 0xFFFFFFFFL);
+
                 final int count = jobCount;
+
                 final I_ParallelJob current = job;
+
                 if (current == null || index >= count)
                 {
                     return;
                 }
+
                 if (claimState.compareAndSet(snapshot, snapshot + 1L))
                 {
                     runOne(current, index);
@@ -632,6 +709,7 @@ public final class WorkerPool implements I_ThreadPoolPort
             catch (final Throwable t)
             {
                 failures.incrementAndGet();
+
                 if (!firstFailure.compareAndSet(null, t))
                 {
                     // The first failure is rethrown to the submitter; the rest
@@ -658,7 +736,9 @@ public final class WorkerPool implements I_ThreadPoolPort
         {
             // MUTABLE: backoff budget, and whether we swallowed an interrupt
             int waits = 0;
+
             boolean interrupted = false;
+
             while (completed.get() < target)
             {
                 if (waits < JOIN_SPIN_LIMIT)
@@ -678,8 +758,10 @@ public final class WorkerPool implements I_ThreadPoolPort
                     {
                         interrupted = true;
                     }
+
                     LockSupport.parkNanos(JOIN_PARK_NANOS);
                 }
+
                 // Saturating, not wrapping: a join that parked two billion
                 // times would otherwise wrap negative and fall back to spinning
                 // on a core it has already decided not to burn.
@@ -688,6 +770,7 @@ public final class WorkerPool implements I_ThreadPoolPort
                     waits++;
                 }
             }
+
             if (interrupted)
             {
                 Thread.currentThread().interrupt();
@@ -709,9 +792,13 @@ public final class WorkerPool implements I_ThreadPoolPort
         private void close()
         {
             this.job = null;
+
             this.jobCount = 0;
+
             firstFailure.set(null);
+
             failures.set(0);
+
             inUse.set(false);
         }
     }

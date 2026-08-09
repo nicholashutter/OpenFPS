@@ -289,6 +289,7 @@ public final class ModelFormat
         {
             throw new ModelFormatException("model data is null");
         }
+
         return new ModelFormat(data);
     }
 
@@ -343,31 +344,38 @@ public final class ModelFormat
         {
             throw new ModelFormatException("vertexSlots must not be null");
         }
+
         if (triangleIndices == null)
         {
             throw new ModelFormatException("triangleIndices must not be null");
         }
+
         if (vertexSlots.length % VERTEX_STRIDE_INTS != 0)
         {
             throw new ModelFormatException("vertex block is " + vertexSlots.length
                 + " slots, not a multiple of the " + VERTEX_STRIDE_INTS + "-slot vertex stride");
         }
+
         final int vertexCount = vertexSlots.length / VERTEX_STRIDE_INTS;
+
         if (vertexCount > MAX_VERTEX_COUNT)
         {
             throw new ModelFormatException("vertexCount " + vertexCount
                 + " is outside [0, " + MAX_VERTEX_COUNT + "]");
         }
+
         if (triangleIndices.length % INDICES_PER_TRIANGLE != 0)
         {
             throw new ModelFormatException("indexCount must be a multiple of "
                 + INDICES_PER_TRIANGLE + ", got " + triangleIndices.length);
         }
+
         if (triangleIndices.length > MAX_INDEX_COUNT)
         {
             throw new ModelFormatException("indexCount " + triangleIndices.length
                 + " is outside [0, " + MAX_INDEX_COUNT + "]");
         }
+
         return new ModelFormat(vertexSlots.clone(), triangleIndices.clone(), vertexCount);
     }
 
@@ -393,11 +401,17 @@ public final class ModelFormat
         final float y, final float z, final float u, final float v, final int colour)
     {
         final int base = vertex * VERTEX_STRIDE_INTS;
+
         slots[base + VERTEX_POSITION_X] = Float.floatToRawIntBits(x);
+
         slots[base + VERTEX_POSITION_Y] = Float.floatToRawIntBits(y);
+
         slots[base + VERTEX_POSITION_Z] = Float.floatToRawIntBits(z);
+
         slots[base + VERTEX_TEXCOORD_U] = Float.floatToRawIntBits(u);
+
         slots[base + VERTEX_TEXCOORD_V] = Float.floatToRawIntBits(v);
+
         slots[base + VERTEX_COLOUR] = colour;
     }
 
@@ -407,17 +421,24 @@ public final class ModelFormat
     private ModelFormat(final int[] slots, final int[] triangleIndices, final int vertexCount)
     {
         this.versionMajor = VERSION_MAJOR;
+
         this.versionMinor = VERSION_MINOR;
+
         this.vertexData = slots;
+
         this.indices = triangleIndices;
+
         // Empty rather than absent: submeshCount() and textureCount() are
         // derived from these lengths, so an empty table IS "no submeshes" and
         // needs no null check anywhere downstream.
         this.submeshes = new int[0];
+
         this.textures = new int[0];
+
         this.mipChains = new MipChain[0];
 
         checkIndices(indices, vertexCount);
+
         this.bounds = boundsOf(slots, vertexCount);
     }
 
@@ -432,27 +453,36 @@ public final class ModelFormat
     private static float[] boundsOf(final int[] slots, final int vertexCount)
     {
         final float[] box = new float[BOUNDS_FLOATS];
+
         if (vertexCount == 0)
         {
             return box;
         }
+
         // `axis` is also the slot offset: VERTEX_POSITION_X, _Y and _Z are 0, 1
         // and 2, which is what lets one loop cover all three.
         for (int axis = 0; axis < BOUNDS_HALF; axis++)
         {
             // MUTABLE locals — the running extremes along one axis.
             float low = Float.intBitsToFloat(slots[axis]);
+
             float high = low;
+
             for (int vertex = 1; vertex < vertexCount; vertex++)
             {
                 final float value =
                     Float.intBitsToFloat(slots[(vertex * VERTEX_STRIDE_INTS) + axis]);
+
                 low = Math.min(low, value);
+
                 high = Math.max(high, value);
             }
+
             box[axis] = low;
+
             box[axis + BOUNDS_HALF] = high;
         }
+
         return box;
     }
 
@@ -460,17 +490,25 @@ public final class ModelFormat
     private ModelFormat(final byte[] data)
     {
         final ByteBuffer buffer = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
+
         checkHeader(buffer, data.length);
 
         this.versionMajor = buffer.getShort(OFF_VERSION_MAJOR) & U16_MASK;
+
         this.versionMinor = buffer.getShort(OFF_VERSION_MINOR) & U16_MASK;
 
         final int fileSize = data.length;
+
         final int headerSize = buffer.getInt(OFF_HEADER_SIZE);
+
         final int vertexCount = count(buffer, OFF_VERTEX_COUNT, MAX_VERTEX_COUNT, "vertexCount");
+
         final int indexCount = count(buffer, OFF_INDEX_COUNT, MAX_INDEX_COUNT, "indexCount");
+
         final int submeshCount = count(buffer, OFF_SUBMESH_COUNT, MAX_SUBMESH_COUNT, "submeshCount");
+
         final int textureCount = count(buffer, OFF_TEXTURE_COUNT, MAX_TEXTURE_COUNT, "textureCount");
+
         final int texelCount = count(buffer, OFF_TEXEL_COUNT, MAX_TEXEL_COUNT, "texelCount");
 
         if (indexCount % INDICES_PER_TRIANGLE != 0)
@@ -481,10 +519,13 @@ public final class ModelFormat
 
         this.vertexData = readInts(buffer, OFF_VERTEX_OFFSET,
             (long) vertexCount * VERTEX_STRIDE_INTS, headerSize, fileSize, "vertex");
+
         this.indices = readInts(buffer, OFF_INDEX_OFFSET,
             indexCount, headerSize, fileSize, "index");
+
         this.submeshes = readInts(buffer, OFF_SUBMESH_OFFSET,
             (long) submeshCount * SUBMESH_STRIDE_INTS, headerSize, fileSize, "submesh");
+
         this.textures = readInts(buffer, OFF_TEXTURE_OFFSET,
             (long) textureCount * TEXTURE_STRIDE_INTS, headerSize, fileSize, "texture");
 
@@ -492,13 +533,16 @@ public final class ModelFormat
             texelCount, headerSize, fileSize, "texel");
 
         this.bounds = new float[BOUNDS_FLOATS];
+
         for (int i = 0; i < BOUNDS_FLOATS; i++)
         {
             bounds[i] = buffer.getFloat(OFF_BOUNDS + (i * Float.BYTES));
         }
 
         checkIndices(indices, vertexCount);
+
         checkSubmeshes(submeshes, indexCount, textureCount);
+
         this.mipChains = buildMipChains(textures, texels);
     }
 
@@ -514,6 +558,7 @@ public final class ModelFormat
         }
 
         final int magic = buffer.getInt(OFF_MAGIC);
+
         if (magic != MAGIC)
         {
             throw new ModelFormatException("not a model file: magic 0x"
@@ -521,7 +566,9 @@ public final class ModelFormat
         }
 
         final int major = buffer.getShort(OFF_VERSION_MAJOR) & U16_MASK;
+
         final int minor = buffer.getShort(OFF_VERSION_MINOR) & U16_MASK;
+
         if (major != VERSION_MAJOR)
         {
             throw new ModelFormatException("unsupported model format version " + major + "."
@@ -529,6 +576,7 @@ public final class ModelFormat
         }
 
         final int headerSize = buffer.getInt(OFF_HEADER_SIZE);
+
         if (headerSize < HEADER_SIZE || headerSize > length)
         {
             throw new ModelFormatException("headerSize " + headerSize + " is outside ["
@@ -536,6 +584,7 @@ public final class ModelFormat
         }
 
         final int declaredSize = buffer.getInt(OFF_FILE_SIZE);
+
         if (declaredSize != length)
         {
             throw new ModelFormatException("model file declares " + declaredSize
@@ -548,11 +597,13 @@ public final class ModelFormat
         final String name)
     {
         final int value = buffer.getInt(fieldOffset);
+
         if (value < 0 || value > max)
         {
             throw new ModelFormatException(name + " " + Integer.toUnsignedString(value)
                 + " is outside [0, " + max + "]");
         }
+
         return value;
     }
 
@@ -563,11 +614,13 @@ public final class ModelFormat
         final long elementCount, final int headerSize, final int fileSize, final String name)
     {
         final int offset = buffer.getInt(offsetField);
+
         if (offset < headerSize || offset > fileSize)
         {
             throw new ModelFormatException(name + " section offset " + Integer.toUnsignedString(offset)
                 + " is outside [" + headerSize + ", " + fileSize + "]");
         }
+
         if (offset % Integer.BYTES != 0)
         {
             throw new ModelFormatException(name + " section offset " + offset
@@ -575,6 +628,7 @@ public final class ModelFormat
         }
 
         final long end = offset + (elementCount * Integer.BYTES);
+
         if (end > fileSize)
         {
             throw new ModelFormatException(name + " section runs to byte " + end
@@ -582,8 +636,11 @@ public final class ModelFormat
         }
 
         final int[] out = new int[(int) elementCount];
+
         buffer.position(offset);
+
         buffer.asIntBuffer().get(out);
+
         return out;
     }
 
@@ -608,8 +665,11 @@ public final class ModelFormat
         for (int base = 0; base < table.length; base += SUBMESH_STRIDE_INTS)
         {
             final int submesh = base / SUBMESH_STRIDE_INTS;
+
             final int first = table[base + SUBMESH_FIRST_INDEX];
+
             final int span = table[base + SUBMESH_INDEX_COUNT];
+
             final int texture = table[base + SUBMESH_TEXTURE_INDEX];
 
             if (first < 0 || span < 0 || (long) first + span > indexCount)
@@ -618,11 +678,13 @@ public final class ModelFormat
                     + Integer.toUnsignedString(first) + ", +" + Integer.toUnsignedString(span)
                     + ") outside the " + indexCount + " indices present");
             }
+
             if (span % INDICES_PER_TRIANGLE != 0)
             {
                 throw new ModelFormatException("submesh " + submesh + " has " + span
                     + " indices, not a multiple of " + INDICES_PER_TRIANGLE);
             }
+
             if (texture != NO_TEXTURE && (texture < 0 || texture >= textureCount))
             {
                 throw new ModelFormatException("submesh " + submesh + " names texture " + texture
@@ -635,18 +697,25 @@ public final class ModelFormat
     private static MipChain[] buildMipChains(final int[] table, final int[] texels)
     {
         final MipChain[] chains = new MipChain[table.length / TEXTURE_STRIDE_INTS];
+
         for (int texture = 0; texture < chains.length; texture++)
         {
             final int base = texture * TEXTURE_STRIDE_INTS;
+
             final int width = table[base + TEXTURE_WIDTH];
+
             final int height = table[base + TEXTURE_HEIGHT];
+
             final int levelCount = table[base + TEXTURE_LEVEL_COUNT];
+
             final int firstTexel = table[base + TEXTURE_FIRST_TEXEL];
 
             checkTextureRecord(texture, width, height, levelCount, firstTexel);
+
             chains[texture] = new MipChain(width, height,
                 sliceLevels(texture, width, height, levelCount, firstTexel, texels));
         }
+
         return chains;
     }
 
@@ -655,14 +724,17 @@ public final class ModelFormat
         final int levelCount, final int firstTexel)
     {
         requirePowerOfTwo(texture, width, "width");
+
         requirePowerOfTwo(texture, height, "height");
 
         final int maxLevels = Integer.numberOfTrailingZeros(Math.max(width, height)) + 1;
+
         if (levelCount < 1 || levelCount > maxLevels)
         {
             throw new ModelFormatException("texture " + texture + " declares " + levelCount
                 + " mip levels; " + width + "x" + height + " permits 1 to " + maxLevels);
         }
+
         if (firstTexel < 0)
         {
             throw new ModelFormatException("texture " + texture + " starts at texel "
@@ -675,12 +747,16 @@ public final class ModelFormat
         final int levelCount, final int firstTexel, final int[] texels)
     {
         final int[][] levels = new int[levelCount][];
+
         // MUTABLE local — running texel cursor within the shared blob.
         int cursor = firstTexel;
+
         for (int level = 0; level < levelCount; level++)
         {
             final int levelWidth = Math.max(1, width >> level);
+
             final int levelHeight = Math.max(1, height >> level);
+
             final int size = levelWidth * levelHeight;
 
             if ((long) cursor + size > texels.length)
@@ -691,9 +767,12 @@ public final class ModelFormat
             }
 
             levels[level] = new int[size];
+
             System.arraycopy(texels, cursor, levels[level], 0, size);
+
             cursor += size;
         }
+
         return levels;
     }
 

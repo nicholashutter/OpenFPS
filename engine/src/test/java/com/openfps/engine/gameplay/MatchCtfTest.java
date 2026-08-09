@@ -70,10 +70,15 @@ class MatchCtfTest
         void shouldStartWithFlagsAtHome()
         {
             final Match match = ctfMatch(List.of(redBotAt(1000.0f, 1000.0f, 0)));
+
             assertThat(match.ctfRedFlagCarrier()).isNull();
+
             assertThat(match.ctfBlueFlagCarrier()).isNull();
+
             assertThat(match.ctfRedCaptures()).isZero();
+
             assertThat(match.ctfBlueCaptures()).isZero();
+
             assertThat(match.teamScores()).containsExactly(0, 0);
         }
     }
@@ -87,10 +92,14 @@ class MatchCtfTest
         void shouldPickUpForRed()
         {
             final Match match = ctfMatch(List.of(redBotAt(1000.0f, 1000.0f, 0)));
+
             match.setPlayerTeam(Team.RED);
+
             // Player at BLUE's flag (200, 0, 0); flag is at home.
             match.tick(0, 200.0f, 0.0f, 0.0f);
+
             assertThat(match.ctfBlueFlagCarrier()).isEqualTo(Team.RED);
+
             assertThat(match.ctfRedFlagCarrier()).isNull();
         }
 
@@ -99,10 +108,14 @@ class MatchCtfTest
         void shouldPickUpForBlue()
         {
             final Match match = ctfMatch(List.of(redBotAt(1000.0f, 1000.0f, 0)));
+
             match.setPlayerTeam(Team.BLUE);
+
             // Player at RED's flag (0, 0, 0); RED's flag is at home.
             match.tick(0, 0.0f, 0.0f, 0.0f);
+
             assertThat(match.ctfRedFlagCarrier()).isEqualTo(Team.BLUE);
+
             assertThat(match.ctfBlueFlagCarrier()).isNull();
         }
 
@@ -111,10 +124,13 @@ class MatchCtfTest
         void shouldNotPickUpForNeutral()
         {
             final Match match = ctfMatch(List.of(redBotAt(1000.0f, 1000.0f, 0)));
+
             // playerTeam defaults to NEUTRAL.
             // Player at BLUE's flag; nothing should happen.
             match.tick(0, 200.0f, 0.0f, 0.0f);
+
             assertThat(match.ctfBlueFlagCarrier()).isNull();
+
             assertThat(match.ctfRedFlagCarrier()).isNull();
         }
 
@@ -123,13 +139,17 @@ class MatchCtfTest
         void shouldNotPickUpOwnFlag()
         {
             final Match match = ctfMatch(List.of(redBotAt(1000.0f, 1000.0f, 0)));
+
             match.setPlayerTeam(Team.RED);
+
             // Player at RED's own flag (0, 0, 0). RED's flag is at home.
             // The pickup check looks at the ENEMY flag only, so this is
             // a no-op even though the player is inside the home base
             // radius.
             match.tick(0, 0.0f, 0.0f, 0.0f);
+
             assertThat(match.ctfRedFlagCarrier()).isNull();
+
             assertThat(match.ctfBlueFlagCarrier()).isNull();
         }
 
@@ -138,13 +158,18 @@ class MatchCtfTest
         void shouldNotDoublePickup()
         {
             final Match match = ctfMatch(List.of(redBotAt(1000.0f, 1000.0f, 0)));
+
             match.setPlayerTeam(Team.RED);
+
             // Tic 0: pickup.
             match.tick(0, 200.0f, 0.0f, 0.0f);
+
             assertThat(match.ctfBlueFlagCarrier()).isEqualTo(Team.RED);
+
             // Tic 1: still on BLUE's flag, already carrying. The pickup
             // check sees the slot is non-null and skips.
             match.tick(1, 200.0f, 0.0f, 0.0f);
+
             assertThat(match.ctfBlueFlagCarrier()).isEqualTo(Team.RED);
         }
     }
@@ -163,21 +188,31 @@ class MatchCtfTest
             // different spot to test the save-only path.
             final MapMarkers.Base redBaseNoCapture = new MapMarkers.Base(Team.RED,
                 0.0f, 0.0f, 500.0f, 500.0f, 32.0f);
+
             final MapMarkers.Base blueBase = new MapMarkers.Base(Team.BLUE,
                 200.0f, 0.0f, 200.0f, 0.0f, 32.0f);
+
             final MatchSpecHolder holder = ctfMatchWithBases(redBaseNoCapture, blueBase,
                 List.of(redBotAt(1000.0f, 1000.0f, 0)));
+
             final Match match = holder.match;
+
             match.setPlayerTeam(Team.RED);
+
             // Tic 0: pickup.
             match.tick(0, 200.0f, 0.0f, 0.0f);
+
             assertThat(match.ctfBlueFlagCarrier()).isEqualTo(Team.RED);
+
             // Tic 1: on RED's home flag, NOT on the capture point
             // (which is at (500, 0)). The save fires: both flags
             // return home, no score.
             match.tick(1, 0.0f, 0.0f, 0.0f);
+
             assertThat(match.ctfBlueFlagCarrier()).isNull();
+
             assertThat(match.ctfRedFlagCarrier()).isNull();
+
             assertThat(match.teamScores()).containsExactly(0, 0);
         }
 
@@ -186,14 +221,20 @@ class MatchCtfTest
         void shouldCaptureOnCapturePoint()
         {
             final Match match = ctfMatch(List.of(redBotAt(1000.0f, 1000.0f, 0)));
+
             match.setPlayerTeam(Team.RED);
+
             // Tic 0: pickup.
             match.tick(0, 200.0f, 0.0f, 0.0f);
+
             // Tic 1: on RED's capture point (which is at the home
             // flag). Capture fires: RED +1, both flags return.
             match.tick(1, 0.0f, 0.0f, 0.0f);
+
             assertThat(match.ctfRedFlagCarrier()).isNull();
+
             assertThat(match.ctfBlueFlagCarrier()).isNull();
+
             assertThat(match.teamScores()).containsExactly(1, 0);
         }
 
@@ -205,15 +246,21 @@ class MatchCtfTest
             // the carrier is at (100, 0, 0) — in neither base
             // radius.
             final Match match = ctfMatch(List.of(redBotAt(1000.0f, 1000.0f, 0)));
+
             match.setPlayerTeam(Team.RED);
+
             // Tic 0: pickup at (200, 0, 0).
             match.tick(0, 200.0f, 0.0f, 0.0f);
+
             assertThat(match.ctfBlueFlagCarrier()).isEqualTo(Team.RED);
+
             // Tic 1: at (100, 0, 0). Not in RED's flag radius (100
             // units > 32) and not in RED's capture radius (also
             // 100 > 32). No save, no capture.
             match.tick(1, 100.0f, 0.0f, 0.0f);
+
             assertThat(match.ctfBlueFlagCarrier()).isEqualTo(Team.RED);
+
             assertThat(match.teamScores()).containsExactly(0, 0);
         }
     }
@@ -231,11 +278,15 @@ class MatchCtfTest
             // player loses 20 HP per tic.
             final Match match = ctfMatchWithInRangeBot(
                 List.of(redBotAt(0.0f, 300.0f, 0)));
+
             match.setPlayerTeam(Team.RED);
+
             // Tic 0: pickup at BLUE's flag. Player takes 20 damage
             // (HP = 80).
             match.tick(0, 200.0f, 0.0f, 0.0f);
+
             assertThat(match.ctfBlueFlagCarrier()).isEqualTo(Team.RED);
+
             // Tics 1-3: still at (200, 0, 0). The carrier is in
             // BLUE's base radius, but the pickup check sees the
             // slot is non-null. The carrier check sees the player
@@ -245,13 +296,18 @@ class MatchCtfTest
             {
                 match.tick(tic, 200.0f, 0.0f, 0.0f);
             }
+
             assertThat(match.ctfBlueFlagCarrier()).isEqualTo(Team.RED);
+
             assertThat(match.playerHealth()).isEqualTo(20);
+
             // Tic 4: the bot's shot drops the player to 0 HP, the
             // player is killed, then updateCtf runs and sees
             // playerDown = true — both flags return home.
             match.tick(4, 200.0f, 0.0f, 0.0f);
+
             assertThat(match.ctfBlueFlagCarrier()).isNull();
+
             assertThat(match.ctfRedFlagCarrier()).isNull();
         }
     }
@@ -265,7 +321,9 @@ class MatchCtfTest
         void shouldAccumulateCaptures()
         {
             final Match match = ctfMatch(List.of(redBotAt(1000.0f, 1000.0f, 0)));
+
             match.setPlayerTeam(Team.RED);
+
             for (int tic = 0; tic < 6; tic++)
             {
                 if (tic % 2 == 0)
@@ -279,6 +337,7 @@ class MatchCtfTest
                     match.tick(tic, 0.0f, 0.0f, 0.0f);
                 }
             }
+
             assertThat(match.teamScores()).containsExactly(3, 0);
         }
 
@@ -287,10 +346,12 @@ class MatchCtfTest
         void shouldScorePerTeam()
         {
             final Match match = ctfMatch(List.of(redBotAt(1000.0f, 1000.0f, 0)));
+
             // Two RED captures, then switch sides and one BLUE
             // capture. The match's playerTeam is the player's
             // team, so we change it between sequences.
             match.setPlayerTeam(Team.RED);
+
             // 2 RED captures (4 tics: pickup, capture, pickup, capture).
             for (int tic = 0; tic < 4; tic++)
             {
@@ -303,11 +364,16 @@ class MatchCtfTest
                     match.tick(tic, 0.0f, 0.0f, 0.0f);
                 }
             }
+
             assertThat(match.teamScores()).containsExactly(2, 0);
+
             // Switch to BLUE and capture once.
             match.setPlayerTeam(Team.BLUE);
+
             match.tick(4, 0.0f, 0.0f, 0.0f);   // pickup RED's flag
+
             match.tick(5, 200.0f, 0.0f, 0.0f); // capture at BLUE's base
+
             assertThat(match.teamScores()).containsExactly(2, 1);
         }
     }
@@ -321,7 +387,9 @@ class MatchCtfTest
         void shouldReturnPerTeamCaptures()
         {
             final Match match = ctfMatch(List.of(redBotAt(1000.0f, 1000.0f, 0)));
+
             match.setPlayerTeam(Team.RED);
+
             for (int tic = 0; tic < 4; tic++)
             {
                 if (tic % 2 == 0)
@@ -333,9 +401,13 @@ class MatchCtfTest
                     match.tick(tic, 0.0f, 0.0f, 0.0f);
                 }
             }
+
             final int[] scores = match.teamScores();
+
             assertThat(scores).hasSize(2);
+
             assertThat(scores[0]).isEqualTo(2);
+
             assertThat(scores[1]).isZero();
         }
     }
@@ -349,7 +421,9 @@ class MatchCtfTest
         void shouldStillBeInProgressAtFourCaptures()
         {
             final Match match = ctfMatch(List.of(redBotAt(1000.0f, 1000.0f, 0)));
+
             match.setPlayerTeam(Team.RED);
+
             for (int tic = 0; tic < 8; tic++)
             {
                 if (tic % 2 == 0)
@@ -361,7 +435,9 @@ class MatchCtfTest
                     match.tick(tic, 0.0f, 0.0f, 0.0f);
                 }
             }
+
             assertThat(match.ctfRedCaptures()).isEqualTo(4);
+
             assertThat(match.state()).isEqualTo(MatchState.IN_PROGRESS);
         }
 
@@ -370,7 +446,9 @@ class MatchCtfTest
         void shouldBeWonAtFiveCaptures()
         {
             final Match match = ctfMatch(List.of(redBotAt(1000.0f, 1000.0f, 0)));
+
             match.setPlayerTeam(Team.RED);
+
             for (int tic = 0; tic < 10; tic++)
             {
                 if (tic % 2 == 0)
@@ -382,7 +460,9 @@ class MatchCtfTest
                     match.tick(tic, 0.0f, 0.0f, 0.0f);
                 }
             }
+
             assertThat(match.ctfRedCaptures()).isEqualTo(5);
+
             assertThat(match.state()).isEqualTo(MatchState.WON);
         }
     }
@@ -396,7 +476,9 @@ class MatchCtfTest
         void shouldResetCtfState()
         {
             final Match match = ctfMatch(List.of(redBotAt(1000.0f, 1000.0f, 0)));
+
             match.setPlayerTeam(Team.RED);
+
             // Drive 2 captures.
             for (int tic = 0; tic < 4; tic++)
             {
@@ -409,17 +491,27 @@ class MatchCtfTest
                     match.tick(tic, 0.0f, 0.0f, 0.0f);
                 }
             }
+
             assertThat(match.ctfRedCaptures()).isEqualTo(2);
+
             assertThat(match.ctfBlueFlagCarrier()).isNull();
+
             // Now drive a pickup, then reset, then verify the pickup
             // is gone (the rematch opens with both flags at home).
             match.tick(4, 200.0f, 0.0f, 0.0f);
+
             assertThat(match.ctfBlueFlagCarrier()).isEqualTo(Team.RED);
+
             match.reset();
+
             assertThat(match.ctfRedFlagCarrier()).isNull();
+
             assertThat(match.ctfBlueFlagCarrier()).isNull();
+
             assertThat(match.ctfRedCaptures()).isZero();
+
             assertThat(match.ctfBlueCaptures()).isZero();
+
             // The player's team is a rematch input, not output.
             assertThat(match.playerTeam()).isEqualTo(Team.RED);
         }
@@ -439,6 +531,7 @@ class MatchCtfTest
         MatchSpecHolder(final Match match, final MapSpec spec)
         {
             this.match = match;
+
             this.spec = spec;
         }
     }
@@ -468,8 +561,10 @@ class MatchCtfTest
             threeLanes(), threeSpawns(), List.of(),
             new MapMarkers.CaptureTheFlag(redBase, blueBase),
             new MapAssets("a/level.ofm", "a/weapon.ofm", null));
+
         final Match match = new Match(roster.toArray(new Bot[0]), new BotRng(), BotSkill.MARKSMAN,
             Match.UNLIMITED_DEATHS, spec);
+
         return new MatchSpecHolder(match, spec);
     }
 

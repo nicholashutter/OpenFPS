@@ -284,6 +284,7 @@ public final class ScoreOverlay
         {
             throw new IllegalArgumentException("status must not be null");
         }
+
         return new String[]
         {
             "KILLS " + status.botsKilled() + "/" + status.botCount(),
@@ -312,10 +313,12 @@ public final class ScoreOverlay
         {
             throw new IllegalArgumentException("status must not be null");
         }
+
         if (status.isSuperBlaster())
         {
             return SUPER_STREAK_LINE;
         }
+
         return STREAK_LABEL + status.killStreak() + "/" + status.killStreakTarget();
     }
 
@@ -339,6 +342,7 @@ public final class ScoreOverlay
         {
             throw new IllegalArgumentException("status must not be null");
         }
+
         return SUPER_COUNTDOWN + status.superBlasterSecondsRemaining(ticsPerSecond)
             + SUPER_SUFFIX;
     }
@@ -362,6 +366,7 @@ public final class ScoreOverlay
         {
             throw new IllegalArgumentException("status must not be null");
         }
+
         return NOTICE_COUNTDOWN + status.respawnSecondsRemaining(ticsPerSecond);
     }
 
@@ -384,16 +389,22 @@ public final class ScoreOverlay
         {
             return;
         }
+
         ensureResources();
+
         refreshLines(status, ticsPerSecond);
 
         batch.getProjectionMatrix().setToOrtho2D(0.0f, 0.0f, surfaceWidth, surfaceHeight);
+
         batch.begin();
+
         drawScorePanel(status, surfaceWidth, surfaceHeight);
+
         if (status.isPlayerDown())
         {
             drawDeathNotice(surfaceWidth, surfaceHeight);
         }
+
         // No else. The two cannot both be true — Match cancels the reward on the
         // death that would show the notice — and writing that as an else would
         // hide a broken cancellation behind a layout rule instead of showing it as
@@ -402,6 +413,7 @@ public final class ScoreOverlay
         {
             drawSuperNotice(surfaceWidth, surfaceHeight);
         }
+
         batch.end();
     }
 
@@ -412,22 +424,32 @@ public final class ScoreOverlay
         final int surfaceHeight)
     {
         final float cellGap = CELL_PIXELS * CELL_GAP_FRACTION;
+
         final float lineHeight = (BlockFont.GLYPH_HEIGHT + LINE_SPACING_CELLS) * CELL_PIXELS;
+
         final float textWidth = widestLinePixels();
+
         final float panelWidth = textWidth + PADDING_PIXELS * 2.0f;
+
         final float panelHeight = lineHeight * LINE_COUNT - LINE_SPACING_CELLS * CELL_PIXELS
             + PADDING_PIXELS * 2.0f;
+
         final float panelLeft = surfaceWidth - MARGIN_PIXELS - panelWidth;
+
         final float panelTop = surfaceHeight - MARGIN_PIXELS;
 
         batch.setColor(PANEL);
+
         batch.draw(pixel, panelLeft, panelTop - panelHeight, panelWidth, panelHeight);
 
         float lineTop = panelTop - PADDING_PIXELS;
+
         for (int index = 0; index < LINE_COUNT; index++)
         {
             batch.setColor(colourFor(index, status));
+
             drawLine(lines[index], panelLeft + PADDING_PIXELS, lineTop, CELL_PIXELS, cellGap);
+
             lineTop = lineTop - lineHeight;
         }
     }
@@ -437,24 +459,35 @@ public final class ScoreOverlay
     private void drawDeathNotice(final int surfaceWidth, final int surfaceHeight)
     {
         final float cell = NOTICE_CELL_PIXELS;
+
         final float cellGap = cell * CELL_GAP_FRACTION;
+
         final float lineHeight = (BlockFont.GLYPH_HEIGHT + LINE_SPACING_CELLS) * cell;
+
         final float headingWidth = BlockFont.widthInBlocks(NOTICE_TEXT) * cell;
+
         final float countdownWidth = BlockFont.widthInBlocks(countdown) * cell;
+
         final float bandHeight = lineHeight * 2.0f - LINE_SPACING_CELLS * cell
             + PADDING_PIXELS * 4.0f;
+
         final float bandTop = surfaceHeight * NOTICE_HEIGHT_FRACTION + bandHeight * 0.5f;
 
         // The band spans the full width rather than boxing the text. A centred
         // box reads as a dialogue the player is expected to dismiss; a band reads
         // as a state they are in, which is what this is.
         batch.setColor(NOTICE_PANEL);
+
         batch.draw(pixel, 0.0f, bandTop - bandHeight, surfaceWidth, bandHeight);
 
         final float headingTop = bandTop - PADDING_PIXELS * 2.0f;
+
         batch.setColor(ALARM_COLOUR);
+
         drawLine(NOTICE_TEXT, (surfaceWidth - headingWidth) * 0.5f, headingTop, cell, cellGap);
+
         batch.setColor(QUIET_COLOUR);
+
         drawLine(countdown, (surfaceWidth - countdownWidth) * 0.5f, headingTop - lineHeight,
             cell, cellGap);
     }
@@ -467,26 +500,38 @@ public final class ScoreOverlay
     private void drawSuperNotice(final int surfaceWidth, final int surfaceHeight)
     {
         final float cell = SUPER_CELL_PIXELS;
+
         final float cellGap = cell * CELL_GAP_FRACTION;
+
         final float lineHeight = (BlockFont.GLYPH_HEIGHT + LINE_SPACING_CELLS) * cell;
+
         final float headingWidth = BlockFont.widthInBlocks(SUPER_TEXT) * cell;
+
         final float countdownWidth = BlockFont.widthInBlocks(superCountdown) * cell;
+
         final float boxWidth = Math.max(headingWidth, countdownWidth) + PADDING_PIXELS * 4.0f;
+
         final float boxHeight = lineHeight * 2.0f - LINE_SPACING_CELLS * cell
             + PADDING_PIXELS * 3.0f;
+
         final float boxTop = surfaceHeight * SUPER_HEIGHT_FRACTION + boxHeight * 0.5f;
 
         batch.setColor(SUPER_PANEL);
+
         batch.draw(pixel, (surfaceWidth - boxWidth) * 0.5f, boxTop - boxHeight,
             boxWidth, boxHeight);
 
         final float headingTop = boxTop - PADDING_PIXELS * 1.5f;
+
         batch.setColor(SUPER_COLOUR);
+
         drawLine(SUPER_TEXT, (surfaceWidth - headingWidth) * 0.5f, headingTop, cell, cellGap);
+
         // The countdown in the quiet colour rather than in amber: the heading is
         // what has to be seen, and two lines in one bright colour would make the
         // plaque a block rather than a sentence with a number in it.
         batch.setColor(QUIET_COLOUR);
+
         drawLine(superCountdown, (surfaceWidth - countdownWidth) * 0.5f,
             headingTop - lineHeight, cell, cellGap);
     }
@@ -498,6 +543,7 @@ public final class ScoreOverlay
         {
             return KILLS_COLOUR;
         }
+
         if (lineIndex == LINE_STREAK && status.isSuperBlaster())
         {
             // The second piece of colour that carries information: the panel's own
@@ -505,6 +551,7 @@ public final class ScoreOverlay
             // screen cannot disagree about whether the reward is live.
             return SUPER_COLOUR;
         }
+
         if (lineIndex == LINE_HEALTH && status.playerHealth() <= LOW_HEALTH)
         {
             // The one piece of colour in this panel that carries information
@@ -512,6 +559,7 @@ public final class ScoreOverlay
             // number going down and turning red is not.
             return ALARM_COLOUR;
         }
+
         return QUIET_COLOUR;
     }
 
@@ -524,6 +572,7 @@ public final class ScoreOverlay
         final float cell, final float gap)
     {
         final float size = cell - gap;
+
         BlockFont.forEachBlock(text, (column, row, glyph) ->
             batch.draw(pixel, left + column * cell, top - (row + 1) * cell, size, size));
     }
@@ -532,14 +581,17 @@ public final class ScoreOverlay
     private float widestLinePixels()
     {
         int widest = 0;
+
         for (int index = 0; index < LINE_COUNT; index++)
         {
             final int cells = BlockFont.widthInBlocks(lines[index]);
+
             if (cells > widest)
             {
                 widest = cells;
             }
         }
+
         return widest * CELL_PIXELS;
     }
 
@@ -550,39 +602,53 @@ public final class ScoreOverlay
         if (status.botsKilled() != shownKills || status.botCount() != shownBotCount)
         {
             shownKills = status.botsKilled();
+
             shownBotCount = status.botCount();
+
             lines[LINE_KILLS] = scoreText(status)[LINE_KILLS];
         }
+
         if (status.playerDeaths() != shownDeaths)
         {
             shownDeaths = status.playerDeaths();
+
             lines[LINE_DEATHS] = scoreText(status)[LINE_DEATHS];
         }
+
         if (status.playerHealth() != shownHealth)
         {
             shownHealth = status.playerHealth();
+
             lines[LINE_HEALTH] = scoreText(status)[LINE_HEALTH];
         }
+
         final int seconds = status.respawnSecondsRemaining(ticsPerSecond);
+
         if (seconds != shownSeconds)
         {
             shownSeconds = seconds;
+
             countdown = countdownText(status, ticsPerSecond);
         }
+
         // Keyed on the streak AND on the reward's seconds, because the line's text
         // depends on both: it swaps from a count to a label the moment the reward
         // starts, and back when it ends. Keyed on the streak alone it would still
         // read "STREAK 0/3" through a whole live buff, since the award leaves the
         // count where a cache would find it unchanged.
         final int superSeconds = status.superBlasterSecondsRemaining(ticsPerSecond);
+
         if (status.killStreak() != shownStreak || superSeconds != shownSuperSeconds)
         {
             shownStreak = status.killStreak();
+
             lines[LINE_STREAK] = streakText(status);
         }
+
         if (superSeconds != shownSuperSeconds)
         {
             shownSuperSeconds = superSeconds;
+
             superCountdown = superCountdownText(status, ticsPerSecond);
         }
     }
@@ -594,12 +660,19 @@ public final class ScoreOverlay
         {
             return;
         }
+
         batch = new SpriteBatch();
+
         final Pixmap pixmap = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
+
         pixmap.setColor(Color.WHITE);
+
         pixmap.fill();
+
         white = new Texture(pixmap);
+
         pixmap.dispose();
+
         pixel = new TextureRegion(white);
     }
 
@@ -609,13 +682,17 @@ public final class ScoreOverlay
         if (batch != null)
         {
             batch.dispose();
+
             batch = null;
         }
+
         if (white != null)
         {
             white.dispose();
+
             white = null;
         }
+
         pixel = null;
     }
 

@@ -221,6 +221,7 @@ public final class BotRng
         {
             throw new IllegalArgumentException("bound must be positive, got " + bound);
         }
+
         // Shifted right by one first, so the value is non-negative before the
         // remainder: %, unlike floorMod, keeps the sign of the dividend, and a
         // negative result here would be a very confusing crash a long way away.
@@ -275,8 +276,11 @@ public final class BotRng
     private long draw(final int ticIndex, final int entityId, final int channel)
     {
         long counter = seed + GOLDEN_GAMMA * ticIndex;
+
         counter = mix(counter) + GOLDEN_GAMMA * entityId;
+
         counter = mix(counter) + GOLDEN_GAMMA * channel;
+
         return mix(counter);
     }
 
@@ -287,8 +291,11 @@ public final class BotRng
     private static long mix(final long value)
     {
         long folded = value;
+
         folded = (folded ^ (folded >>> SHIFT_A)) * MIX_A;
+
         folded = (folded ^ (folded >>> SHIFT_B)) * MIX_B;
+
         return folded ^ (folded >>> SHIFT_C);
     }
 

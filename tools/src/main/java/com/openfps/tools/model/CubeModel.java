@@ -118,14 +118,19 @@ public final class CubeModel
     public static byte[] build()
     {
         final ModelBuilder builder = new ModelBuilder("cube");
+
         for (int face = 0; face < FACE_COUNT; face++)
         {
             final int texture = builder.addTexture("cube-face-" + face, TEXTURE_EDGE,
                 TEXTURE_EDGE, MipGenerator.generate(TEXTURE_EDGE, TEXTURE_EDGE, faceTexels(face)));
+
             builder.beginSubmesh(texture);
+
             addFace(builder, face);
+
             builder.endSubmesh();
         }
+
         return builder.toBytes();
     }
 
@@ -134,20 +139,26 @@ public final class CubeModel
     private static void addFace(final ModelBuilder builder, final int face)
     {
         final int base = face * FACE_CORNERS * 3;
+
         // MUTABLE local — the index of this face's first vertex.
         int first = 0;
+
         for (int corner = 0; corner < FACE_CORNERS; corner++)
         {
             final int at = base + corner * 3;
+
             final int index = builder.addVertex(
                 FACES[at] * HALF_EDGE, FACES[at + 1] * HALF_EDGE, FACES[at + 2] * HALF_EDGE,
                 FACE_UV[corner * 2], FACE_UV[corner * 2 + 1], FACE_LIGHT[face]);
+
             if (corner == 0)
             {
                 first = index;
             }
         }
+
         builder.addTriangle(first, first + 1, first + 2);
+
         builder.addTriangle(first, first + 2, first + 3);
     }
 
@@ -166,8 +177,11 @@ public final class CubeModel
     public static int[] faceTexels(final int face)
     {
         final int light = FACE_LIGHT[face];
+
         final int dark = darken(light);
+
         final int[] texels = new int[TEXTURE_EDGE * TEXTURE_EDGE];
+
         for (int y = 0; y < TEXTURE_EDGE; y++)
         {
             for (int x = 0; x < TEXTURE_EDGE; x++)
@@ -175,6 +189,7 @@ public final class CubeModel
                 texels[y * TEXTURE_EDGE + x] = texelAt(x, y, light, dark);
             }
         }
+
         return texels;
     }
 
@@ -184,10 +199,12 @@ public final class CubeModel
         {
             return MARKER_COLOR;
         }
+
         if (((x / CHECKER) + (y / CHECKER)) % 2 == 0)
         {
             return light;
         }
+
         return dark;
     }
 

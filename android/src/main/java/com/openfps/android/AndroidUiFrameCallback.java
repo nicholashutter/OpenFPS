@@ -292,19 +292,27 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
         {
             throw new IllegalArgumentException("menuActions must not be null");
         }
+
         if (debugSettings == null)
         {
             throw new IllegalArgumentException("debugSettings must not be null");
         }
+
         if (accessibilitySettings == null)
         {
             throw new IllegalArgumentException("accessibilitySettings must not be null");
         }
+
         this.debug = debugSettings;
+
         this.accessibility = accessibilitySettings;
+
         this.menu = new MainMenuFrameCallback(new StartGameTransition(menuActions, uiState));
+
         this.presenter = framePresenter;
+
         this.input = touchInput;
+
         if (touchInput == null)
         {
             this.overlay = null;
@@ -312,6 +320,7 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
         else
         {
             this.overlay = new TouchOverlay(touchInput.layout());
+
             touchInput.bindUiState(uiState);
         }
     }
@@ -351,6 +360,7 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
     public void attachMatchGate(final Consumer<Boolean> gate)
     {
         this.matchGate = gate;
+
         notifyMatchGate();
     }
 
@@ -398,6 +408,7 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
         final int simulationTicsPerSecond)
     {
         this.matchStatus = status;
+
         this.ticsPerSecond = simulationTicsPerSecond;
     }
 
@@ -445,17 +456,24 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
     public void onSurfaceReady(final int width, final int height)
     {
         Log.i(TAG, "Android UI surface ready: " + width + "x" + height);
+
         menu.onSurfaceReady(width, height);
+
         // Laid out at the screen's density, so a button stays the same physical
         // size on a 160 dpi tablet and a 560 dpi handset — the same rule
         // MainMenuFrameCallback applies, and the reason these screens take a
         // scale at all.
         settings = new SettingsScreen(accessibility, debug, renderSettings(),
             uiState::returnToMenu, density());
+
         settings.resize(width, height);
+
         resizeWorld(width, height);
+
         appliedState = uiState.state();
+
         applyState(appliedState);
+
         // Last, and while the menu is still what is on screen. See
         // attachAudioWarmup for why this is not left to the match gate.
         if (audioWarmup != null)
@@ -468,10 +486,13 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
     public void onFrame(final float deltaSeconds)
     {
         consumeLeaveRequest();
+
         // Before the state sync, so a round decided on this frame is shown on
         // this frame rather than the next one.
         checkMatchResult();
+
         syncUiState();
+
         draw(deltaSeconds);
     }
 
@@ -479,14 +500,17 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
     public void onResize(final int width, final int height)
     {
         menu.onResize(width, height);
+
         if (settings != null)
         {
             settings.resize(width, height);
         }
+
         if (gameOver != null)
         {
             gameOver.resize(width, height);
         }
+
         resizeWorld(width, height);
     }
 
@@ -498,6 +522,7 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
         {
             return 1.0f;
         }
+
         return Gdx.graphics.getDensity();
     }
 
@@ -509,16 +534,23 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
         {
             return;
         }
+
         final MatchSummary summary = matchResult.get();
+
         if (summary == null)
         {
             return;
         }
+
         resultShown = true;
+
         gameOver = new GameOverScreen(summary, this::restartMatch, uiState::returnToMenu,
             density());
+
         gameOver.resize(surfaceWidth, surfaceHeight);
+
         Log.i(TAG, "Match decided: " + summary);
+
         uiState.endMatch(summary);
     }
 
@@ -532,8 +564,11 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
         {
             return;
         }
+
         matchRestart.run();
+
         resultShown = false;
+
         uiState.restartMatch();
     }
 
@@ -541,6 +576,7 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
     public void onPause()
     {
         menu.onPause();
+
         if (input != null)
         {
             // Android delivers no touch-up when the app goes to the background,
@@ -563,24 +599,34 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
         {
             overlay.dispose();
         }
+
         fpsCounter.dispose();
+
         score.dispose();
+
         if (settings != null)
         {
             settings.detachInputProcessor();
+
             settings.dispose();
+
             settings = null;
         }
+
         if (gameOver != null)
         {
             gameOver.detachInputProcessor();
+
             gameOver.dispose();
+
             gameOver = null;
         }
+
         if (presenter != null)
         {
             presenter.dispose();
         }
+
         menu.onSurfaceLost();
     }
 
@@ -588,11 +634,14 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
     private void draw(final float deltaSeconds)
     {
         final UiState current = uiState.state();
+
         if (current.drawsMenu())
         {
             menu.onFrame(deltaSeconds);
+
             return;
         }
+
         if (Gdx.gl == null)
         {
             // No context, so nothing to draw into. The state reconciliation
@@ -601,16 +650,21 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
             // decision must not depend on there being a surface.
             return;
         }
+
         if (settings != null && current.drawsSettings())
         {
             settings.render(deltaSeconds);
+
             return;
         }
+
         if (gameOver != null && current.drawsGameOver())
         {
             gameOver.render(deltaSeconds);
+
             return;
         }
+
         drawGame(deltaSeconds);
     }
 
@@ -624,15 +678,19 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
             // to own the clear or the screen shows the driver's leftovers.
             ScreenUtils.clear(0.0f, 0.0f, 0.0f, 1.0f);
         }
+
         if (overlay != null)
         {
             overlay.render(input);
         }
+
         // Over the touch controls but under the frame counter, and unconditional —
         // there is no setting behind it. A player has to be able to see that they
         // died without having found a debug menu first, which is what this is for.
         drawScore();
+
         sampleFpsCounter(deltaSeconds);
+
         if (debug.isOverlayVisible())
         {
             // Last, so it sits over the world and the touch controls rather
@@ -654,6 +712,7 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
         {
             return;
         }
+
         score.render(matchStatus.get(), surfaceWidth, surfaceHeight, ticsPerSecond);
     }
 
@@ -666,6 +725,7 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
         {
             return 0;
         }
+
         return presenter.renderWidth();
     }
 
@@ -676,6 +736,7 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
         {
             return 0;
         }
+
         return presenter.renderHeight();
     }
 
@@ -688,6 +749,7 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
         {
             return new RenderSettings();
         }
+
         return presenter.renderSettings();
     }
 
@@ -696,10 +758,12 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
     private void sampleFpsCounter(final float deltaSeconds)
     {
         long rendererNanos = 0L;
+
         if (presenter != null)
         {
             rendererNanos = presenter.lastRenderNanos();
         }
+
         fpsCounter.sample((long) (deltaSeconds * NANOS_PER_SECOND), rendererNanos);
     }
 
@@ -708,15 +772,19 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
     private void resizeWorld(final int width, final int height)
     {
         this.surfaceWidth = width;
+
         this.surfaceHeight = height;
+
         if (presenter != null)
         {
             presenter.resize(width, height);
         }
+
         if (input != null)
         {
             input.resize(width, height);
         }
+
         if (overlay != null)
         {
             overlay.resize(width, height);
@@ -727,12 +795,16 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
     private void syncUiState()
     {
         final UiState current = uiState.state();
+
         if (current == appliedState)
         {
             return;
         }
+
         appliedState = current;
+
         applyState(current);
+
         notifyMatchGate();
     }
 
@@ -750,26 +822,34 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
         // only while playing, which left back on the settings and end screens
         // falling through to Android and finishing the Activity.
         catchBackKey(state.backReturnsToMenu());
+
         if (state.usesPointer())
         {
             attachPointerScreen(state);
+
             if (input != null)
             {
                 // A finger held at the moment of leaving must not still be held
                 // when the player comes back.
                 input.forgetEverything();
             }
+
             releaseFinishedResult(state);
+
             return;
         }
+
         menu.detachInputProcessor();
+
         if (settings != null)
         {
             settings.detachInputProcessor();
         }
+
         if (input != null)
         {
             input.forgetEverything();
+
             if (Gdx.input != null)
             {
                 Gdx.input.setInputProcessor(input);
@@ -794,6 +874,7 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
         {
             menu.attachInputProcessor();
         }
+
         keepBackKey(state);
     }
 
@@ -833,11 +914,14 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
         {
             return;
         }
+
         final InputProcessor screen = Gdx.input.getInputProcessor();
+
         if (screen == null)
         {
             return;
         }
+
         Gdx.input.setInputProcessor(new InputMultiplexer(screen, input));
     }
 
@@ -851,7 +935,9 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
         {
             return;
         }
+
         gameOver.dispose();
+
         gameOver = null;
     }
 
@@ -864,6 +950,7 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
         {
             return;
         }
+
         if (input.isLeaveKey(Input.Keys.BACK))
         {
             Gdx.input.setCatchKey(Input.Keys.BACK, caught);
@@ -884,12 +971,16 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
         {
             return;
         }
+
         final UiState current = uiState.state();
+
         if (!current.backReturnsToMenu())
         {
             return;
         }
+
         Log.i(TAG, "Leaving " + current + " — back to the menu");
+
         uiState.returnToMenu();
     }
 
@@ -901,6 +992,7 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
         {
             return;
         }
+
         matchGate.accept(Boolean.valueOf(uiState.isPlaying()));
     }
 
@@ -929,6 +1021,7 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
         StartGameTransition(final MenuActions target, final UiStateMachine uiStateMachine)
         {
             this.delegate = target;
+
             this.machine = uiStateMachine;
         }
 
@@ -936,6 +1029,7 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
         public void onStartGame()
         {
             delegate.onStartGame();
+
             machine.startGame(MatchMode.SINGLE_PLAYER);
         }
 
@@ -943,6 +1037,7 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
         public void onMultiplayer()
         {
             delegate.onMultiplayer();
+
             machine.startGame(MatchMode.MULTIPLAYER);
         }
 
@@ -950,6 +1045,7 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
         public void onSettings()
         {
             delegate.onSettings();
+
             machine.openSettings();
         }
 
@@ -957,6 +1053,7 @@ public final class AndroidUiFrameCallback implements I_FrameCallback
         public void onMapSelection()
         {
             delegate.onMapSelection();
+
             machine.openMapSelect();
         }
 

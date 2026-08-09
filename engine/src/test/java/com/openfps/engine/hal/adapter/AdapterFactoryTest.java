@@ -50,6 +50,7 @@ class AdapterFactoryTest
     static void redirectDatabaseToTempDir()
     {
         previousDbPath = System.getProperty(PROP_DB_PATH);
+
         System.setProperty(PROP_DB_PATH, tempDir.resolve("adapter-factory-test.db").toString());
     }
 
@@ -85,16 +86,25 @@ class AdapterFactoryTest
     void shouldReturnAllPortsWhenInitialized(final HeadlessBackend backend)
     {
         final I_AdapterFactory factory = create(backend);
+
         factory.init();
+
         try
         {
             assertThat(factory.getTimePort()).isNotNull();
+
             assertThat(factory.getInputPort()).isNotNull();
+
             assertThat(factory.getDatagramPort()).isNotNull();
+
             assertThat(factory.getFilePort()).isNotNull();
+
             assertThat(factory.getSystemInfoPort()).isNotNull();
+
             assertThat(factory.getUserProfilePort()).isNotNull();
+
             assertThat(factory.getWindowPort()).isNotNull();
+
             assertThat(factory.getAudioPort()).isNotNull();
         }
         finally
@@ -114,10 +124,13 @@ class AdapterFactoryTest
         // reached only by decorating one of them from a platform module —
         // GdxAdapterFactory in :desktop, AndroidAdapterFactory in :android.
         final I_AdapterFactory factory = create(backend);
+
         factory.init();
+
         try
         {
             assertThat(factory.getAudioPort().isAudible()).isFalse();
+
             assertThat(factory.getAudioPort().masterVolume()).isEqualTo(1.0f);
         }
         finally
@@ -132,11 +145,15 @@ class AdapterFactoryTest
     void shouldDriveUserProfileLifecycle(final HeadlessBackend backend)
     {
         final I_AdapterFactory factory = create(backend);
+
         factory.init();
+
         final I_UserProfilePort profiles = factory.getUserProfilePort();
+
         assertThat(profiles.state()).isEqualTo(I_UserProfilePort.State.READY);
 
         factory.shutdown();
+
         assertThat(profiles.state()).isEqualTo(I_UserProfilePort.State.SHUTDOWN);
     }
 
@@ -146,10 +163,13 @@ class AdapterFactoryTest
     void shouldNotReportRealWindowWhenHeadless(final HeadlessBackend backend)
     {
         final I_AdapterFactory factory = create(backend);
+
         factory.init();
+
         try
         {
             assertThat(factory.getWindowPort().isRealWindow()).isFalse();
+
             assertThat(factory.getWindowPort().isCloseRequested()).isFalse();
         }
         finally

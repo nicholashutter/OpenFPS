@@ -67,12 +67,19 @@ class MapSceneTest
         void shouldBuildSceneForRegisteredMap()
         {
             final MapSpec spec = MapLibrary.get("cornerstone");
+
             assertThat(spec).isNotNull();
+
             final MapScene mapScene = MapScene.build(spec);
+
             assertThat(mapScene.spec()).isSameAs(spec);
+
             assertThat(mapScene.scene()).isNotNull();
+
             assertThat(mapScene.scene()).isNotSameAs(Scene.EMPTY);
+
             assertThat(mapScene.scene().worldInstanceCount()).isEqualTo(1);
+
             assertThat(mapScene.scene().worldTriangleCount()).isPositive();
         }
 
@@ -86,7 +93,9 @@ class MapSceneTest
                 MapMarkers.TeamDeathmatch.INSTANCE,
                 new MapAssets("engine/src/main/resources/maps/does-not-exist/level.ofm",
                     "a/weapon.ofm", null));
+
             final MapScene mapScene = MapScene.build(spec);
+
             assertThat(mapScene.scene()).isSameAs(Scene.EMPTY);
         }
 
@@ -108,9 +117,13 @@ class MapSceneTest
         void shouldEqualBySpecId()
         {
             final MapSpec spec = MapLibrary.get("cornerstone");
+
             final MapScene a = MapScene.build(spec);
+
             final MapScene b = MapScene.build(spec);
+
             assertThat(a).isEqualTo(b);
+
             assertThat(a.hashCode()).isEqualTo(b.hashCode());
         }
 
@@ -119,11 +132,15 @@ class MapSceneTest
         void shouldNotEqualAcrossSpecs()
         {
             final MapSpec cornerstone = MapLibrary.get("cornerstone");
+
             final MapSpec overpass = MapLibrary.get("overpass");
+
             // Only build one of them to keep the test cheap; the
             // other side is the no-arg fallback.
             final MapScene a = MapScene.build(cornerstone);
+
             final MapScene b = MapScene.build(overpass);
+
             assertThat(a).isNotEqualTo(b);
         }
     }
@@ -143,13 +160,18 @@ class MapSceneTest
             // also committed and follow the same pattern, but they
             // are not the focus of Pass 2.
             final String[] ids = {"cornerstone", "overpass", "tripoint", "extraction"};
+
             for (final String id : ids)
             {
                 final MapSpec spec = MapLibrary.get(id);
+
                 assertThat(spec).as("MapLibrary must know %s", id).isNotNull();
+
                 final MapScene mapScene = MapScene.build(spec);
+
                 assertThat(mapScene.scene().worldInstanceCount())
                     .as("%s should build a non-empty scene", id).isEqualTo(1);
+
                 assertThat(mapScene.scene().worldTriangleCount())
                     .as("%s should have triangles", id).isPositive();
             }

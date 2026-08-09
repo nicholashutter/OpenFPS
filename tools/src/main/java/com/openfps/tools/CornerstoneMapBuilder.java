@@ -113,14 +113,19 @@ public final class CornerstoneMapBuilder
     public static void main(final String[] args)
     {
         final String out = option(args, "--out=");
+
         if (out == null)
         {
             LOG.error("usage: CornerstoneMapBuilder --out=<directory>"
                 + " [--atlas=<colormap.png>]");
+
             return;
         }
+
         final String atlasOption = option(args, "--atlas=");
+
         final Path atlasPath;
+
         if (atlasOption == null)
         {
             atlasPath = null;
@@ -129,7 +134,9 @@ public final class CornerstoneMapBuilder
         {
             atlasPath = Path.of(atlasOption);
         }
+
         final Path outDir = Path.of(out);
+
         try
         {
             Files.createDirectories(outDir);
@@ -138,8 +145,11 @@ public final class CornerstoneMapBuilder
         {
             throw new UncheckedIOException("could not create output directory: " + outDir, e);
         }
+
         final byte[] bytes = build(atlasPath);
+
         final Path outFile = outDir.resolve(FILE_NAME);
+
         try
         {
             Files.write(outFile, bytes);
@@ -148,9 +158,11 @@ public final class CornerstoneMapBuilder
         {
             throw new UncheckedIOException("could not write " + outFile, e);
         }
+
         // Read it back through the runtime's reader to make sure the bytes
         // are valid. This is the same defensive check DemoAssetsMain runs.
         final ModelFormat parsed = ModelFormat.read(bytes);
+
         LOG.info("Wrote {} ({} triangles, {} vertices, {} textures)",
             outFile, parsed.indexCount() / 3, parsed.vertexCount(), parsed.textureCount());
     }
@@ -193,7 +205,9 @@ public final class CornerstoneMapBuilder
     public static byte[] build(final Path atlasPath)
     {
         final ModelBuilder builder = new ModelBuilder(MODEL_NAME);
+
         final int[] floorTexels;
+
         if (atlasPath != null)
         {
             floorTexels = KenneyTexture.forceOpaque(KenneyTexture.floor(atlasPath));
@@ -202,7 +216,9 @@ public final class CornerstoneMapBuilder
         {
             floorTexels = floorTexels();
         }
+
         final int[] wallTexels;
+
         if (atlasPath != null)
         {
             wallTexels = KenneyTexture.forceOpaque(KenneyTexture.wall(atlasPath));
@@ -211,28 +227,41 @@ public final class CornerstoneMapBuilder
         {
             wallTexels = wallTexels();
         }
+
         final int[] accentTexels = accentTexels();
+
         final int floorTexture = builder.addTexture("cornerstone-floor", TEXTURE_EDGE,
             TEXTURE_EDGE, MipGenerator.generate(TEXTURE_EDGE, TEXTURE_EDGE, floorTexels));
+
         final int wallTexture = builder.addTexture("cornerstone-wall", TEXTURE_EDGE,
             TEXTURE_EDGE, MipGenerator.generate(TEXTURE_EDGE, TEXTURE_EDGE, wallTexels));
+
         final int accentTexture = builder.addTexture("cornerstone-accent", TEXTURE_EDGE,
             TEXTURE_EDGE, MipGenerator.generate(TEXTURE_EDGE, TEXTURE_EDGE, accentTexels));
 
         builder.beginSubmesh(floorTexture);
+
         // Floor slab: 320x320, 4 units thick, centered on origin.
         addBox(builder, -HALF_EXTENT, -4.0f, -HALF_EXTENT, HALF_EXTENT, 0.0f, HALF_EXTENT);
+
         builder.endSubmesh();
 
         builder.beginSubmesh(wallTexture);
+
         addPerimeterWalls(builder);
+
         addInternalWalls(builder);
+
         addLandmarkBuildings(builder);
+
         addCrateRow(builder);
+
         builder.endSubmesh();
 
         builder.beginSubmesh(accentTexture);
+
         addAccentGeometry(builder);
+
         builder.endSubmesh();
 
         return builder.toBytes();
@@ -256,18 +285,24 @@ public final class CornerstoneMapBuilder
         for (int i = 0; i < 4; i++)
         {
             final float z = 48.0f + i * 48.0f;
+
             // West side
             addBox(builder, -150.0f, 0.0f, z, -142.0f, 32.0f, z + 8.0f);
+
             // East side
             addBox(builder, 142.0f, 0.0f, z, 150.0f, 32.0f, z + 8.0f);
         }
+
         // 4 corner trim pieces, one on each landmark building's roof
         // corner — a small visible band that reads as architecture.
         // Cafe (west lane A)
         addBox(builder, 48.0f, BUILDING_HEIGHT - 8.0f, 8.0f, 80.0f, BUILDING_HEIGHT, 12.0f);
+
         addBox(builder, 76.0f, BUILDING_HEIGHT - 8.0f, 8.0f, 80.0f, BUILDING_HEIGHT, 40.0f);
+
         // Library (east lane A)
         addBox(builder, 176.0f, BUILDING_HEIGHT - 8.0f, 8.0f, 208.0f, BUILDING_HEIGHT, 12.0f);
+
         addBox(builder, 176.0f, BUILDING_HEIGHT - 8.0f, 36.0f, 180.0f, BUILDING_HEIGHT, 40.0f);
     }
 
@@ -302,12 +337,16 @@ public final class CornerstoneMapBuilder
     private static void addPerimeterWalls(final ModelBuilder builder)
     {
         final float e = HALF_EXTENT;
+
         // South wall (z = -e)
         addBox(builder, -e, 0.0f, -e - WALL_THICKNESS, e, WALL_HEIGHT, -e);
+
         // North wall (z = e)
         addBox(builder, -e, 0.0f, e, e, WALL_HEIGHT, e + WALL_THICKNESS);
+
         // West wall (x = -e), between south and north walls
         addBox(builder, -e - WALL_THICKNESS, 0.0f, -e, -e, WALL_HEIGHT, e);
+
         // East wall (x = e)
         addBox(builder, e, 0.0f, -e, e + WALL_THICKNESS, WALL_HEIGHT, e);
     }
@@ -325,21 +364,29 @@ public final class CornerstoneMapBuilder
     private static void addInternalWalls(final ModelBuilder builder)
     {
         final float wallY = WALL_HEIGHT;
+
         final float southEdge = 100.0f - WALL_THICKNESS / 2.0f;
+
         final float northEdge = 100.0f + WALL_THICKNESS / 2.0f;
+
         // z = 100 wall, three pieces around two gaps.
         // Left piece: x in [-160, 96 - 6]
         addBox(builder, -160.0f, 0.0f, southEdge, 90.0f, wallY, northEdge);
+
         // Middle piece: x in [96 + 6, 224 - 6] (a long central piece)
         addBox(builder, 102.0f, 0.0f, southEdge, 218.0f, wallY, northEdge);
+
         // Right piece: x in [224 + 6, 160]
         addBox(builder, 230.0f, 0.0f, southEdge, 160.0f, wallY, northEdge);
 
         // z = 220 wall, two pieces around one gap.
         final float cSouth = 220.0f - WALL_THICKNESS / 2.0f;
+
         final float cNorth = 220.0f + WALL_THICKNESS / 2.0f;
+
         // Left piece: x in [-160, 160 - 6]
         addBox(builder, -160.0f, 0.0f, cSouth, 154.0f, wallY, cNorth);
+
         // Right piece: x in [160 + 6, 160]
         addBox(builder, 166.0f, 0.0f, cSouth, 160.0f, wallY, cNorth);
     }
@@ -355,10 +402,13 @@ public final class CornerstoneMapBuilder
     {
         // "Cafe" at (64, 0, 24) — west end of lane A
         addBox(builder, 48.0f, 0.0f, 8.0f, 80.0f, BUILDING_HEIGHT, 40.0f);
+
         // "Library" at (192, 0, 24) — east end of lane A
         addBox(builder, 176.0f, 0.0f, 8.0f, 208.0f, BUILDING_HEIGHT, 40.0f);
+
         // "Atrium" at (256, 0, 160) — east end of lane B
         addBox(builder, 240.0f, 0.0f, 144.0f, 272.0f, BUILDING_HEIGHT, 176.0f);
+
         // "Storefront" at (64, 0, 296) — west end of lane C
         addBox(builder, 48.0f, 0.0f, 280.0f, 80.0f, BUILDING_HEIGHT, 312.0f);
     }
@@ -376,8 +426,10 @@ public final class CornerstoneMapBuilder
         for (int row = 0; row < 4; row++)
         {
             final float z = 128.0f + row * 16.0f;
+
             // West stack
             addBox(builder, 72.0f, 0.0f, z, 88.0f, CRATE_HEIGHT, z + 16.0f);
+
             // East stack
             addBox(builder, 232.0f, 0.0f, z, 248.0f, CRATE_HEIGHT, z + 16.0f);
         }
@@ -396,14 +448,19 @@ public final class CornerstoneMapBuilder
     {
         // +x face
         addFace(builder, maxX, minY, maxZ, maxX, maxY, maxZ, maxX, maxY, minZ, maxX, minY, minZ);
+
         // -x face
         addFace(builder, minX, minY, minZ, minX, maxY, minZ, minX, maxY, maxZ, minX, minY, maxZ);
+
         // +y face
         addFace(builder, minX, maxY, maxZ, maxX, maxY, maxZ, maxX, maxY, minZ, minX, maxY, minZ);
+
         // -y face
         addFace(builder, minX, minY, minZ, maxX, minY, minZ, maxX, minY, maxZ, minX, minY, maxZ);
+
         // +z face
         addFace(builder, minX, minY, maxZ, minX, maxY, maxZ, maxX, maxY, maxZ, maxX, minY, maxZ);
+
         // -z face
         addFace(builder, maxX, minY, minZ, maxX, maxY, minZ, minX, maxY, minZ, minX, minY, minZ);
     }
@@ -422,16 +479,22 @@ public final class CornerstoneMapBuilder
         final float cy, final float cz, final float dx, final float dy, final float dz)
     {
         final float uScale = 1.0f / WORLD_UNITS_PER_TILE;
+
         // Two triangles (a, b, c) and (a, c, d), UVs scaled to the tile.
         final int a = builder.addVertex(ax, ay, az, ax * uScale, az * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         final int b = builder.addVertex(bx, by, bz, bx * uScale, bz * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         final int c = builder.addVertex(cx, cy, cz, cx * uScale, cz * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         final int d = builder.addVertex(dx, dy, dz, dx * uScale, dz * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         builder.addTriangle(a, b, c);
+
         builder.addTriangle(a, c, d);
     }
 
@@ -443,15 +506,21 @@ public final class CornerstoneMapBuilder
     private static int[] floorTexels()
     {
         final int base = Rgba.pack(82, 84, 88, 255);
+
         final int shade = Rgba.pack(64, 66, 70, 255);
+
         final int line = Rgba.pack(126, 130, 138, 255);
+
         final int half = TEXTURE_EDGE / 2;
+
         final int[] out = new int[TEXTURE_EDGE * TEXTURE_EDGE];
+
         for (int y = 0; y < TEXTURE_EDGE; y++)
         {
             for (int x = 0; x < TEXTURE_EDGE; x++)
             {
                 int colour = base;
+
                 if (x < half)
                 {
                     if (y < half)
@@ -474,15 +543,18 @@ public final class CornerstoneMapBuilder
                         colour = base;
                     }
                 }
+
                 // Grid line at the boundaries
                 if (x == 0 || y == 0 || x == TEXTURE_EDGE - 1 || y == TEXTURE_EDGE - 1
                     || x == half || y == half)
                 {
                     colour = line;
                 }
+
                 out[y * TEXTURE_EDGE + x] = colour;
             }
         }
+
         return out;
     }
 
@@ -490,21 +562,30 @@ public final class CornerstoneMapBuilder
     private static int[] wallTexels()
     {
         final int base = Rgba.pack(126, 100, 84, 255);
+
         final int shade = Rgba.pack(94, 72, 60, 255);
+
         final int mortar = Rgba.pack(60, 50, 44, 255);
+
         final int[] out = new int[TEXTURE_EDGE * TEXTURE_EDGE];
+
         final int bandHeight = TEXTURE_EDGE / 8;
+
         for (int y = 0; y < TEXTURE_EDGE; y++)
         {
             final int band = y / bandHeight;
+
             final boolean isMortar = (y % bandHeight) == 0;
+
             for (int x = 0; x < TEXTURE_EDGE; x++)
             {
                 int colour = base;
+
                 if (band % 2 != 0)
                 {
                     colour = shade;
                 }
+
                 if (isMortar)
                 {
                     colour = mortar;
@@ -514,9 +595,11 @@ public final class CornerstoneMapBuilder
                 {
                     colour = mortar;
                 }
+
                 out[y * TEXTURE_EDGE + x] = colour;
             }
         }
+
         return out;
     }
 
@@ -537,11 +620,14 @@ public final class CornerstoneMapBuilder
     private static int[] accentTexels()
     {
         final int colour = Rgba.pack(192, 64, 48, 255);
+
         final int[] out = new int[TEXTURE_EDGE * TEXTURE_EDGE];
+
         for (int index = 0; index < out.length; index++)
         {
             out[index] = colour;
         }
+
         return out;
     }
 
@@ -558,6 +644,7 @@ public final class CornerstoneMapBuilder
                 return arg.substring(prefix.length());
             }
         }
+
         return null;
     }
 
@@ -571,6 +658,7 @@ public final class CornerstoneMapBuilder
                 return true;
             }
         }
+
         return false;
     }
 }

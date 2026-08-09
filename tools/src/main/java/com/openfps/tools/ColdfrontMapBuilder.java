@@ -86,12 +86,16 @@ public final class ColdfrontMapBuilder
     public static void main(final String[] args)
     {
         final String out = option(args, "--out=");
+
         if (out == null)
         {
             LOG.error("usage: ColdfrontMapBuilder --out=<directory>");
+
             return;
         }
+
         final Path outDir = Path.of(out);
+
         try
         {
             Files.createDirectories(outDir);
@@ -100,8 +104,11 @@ public final class ColdfrontMapBuilder
         {
             throw new UncheckedIOException("could not create output directory: " + outDir, e);
         }
+
         final byte[] bytes = build();
+
         final Path outFile = outDir.resolve(FILE_NAME);
+
         try
         {
             Files.write(outFile, bytes);
@@ -110,7 +117,9 @@ public final class ColdfrontMapBuilder
         {
             throw new UncheckedIOException("could not write " + outFile, e);
         }
+
         final ModelFormat parsed = ModelFormat.read(bytes);
+
         LOG.info("Wrote {} ({} triangles, {} vertices, {} textures)",
             outFile, parsed.indexCount() / 3, parsed.vertexCount(), parsed.textureCount());
     }
@@ -126,22 +135,31 @@ public final class ColdfrontMapBuilder
     public static byte[] build()
     {
         final ModelBuilder builder = new ModelBuilder(MODEL_NAME);
+
         final int floorTexture = builder.addTexture("coldfront-floor", TEXTURE_EDGE,
             TEXTURE_EDGE, MipGenerator.generate(TEXTURE_EDGE, TEXTURE_EDGE,
                 floorTexels()));
+
         final int wallTexture = builder.addTexture("coldfront-wall", TEXTURE_EDGE,
             TEXTURE_EDGE, MipGenerator.generate(TEXTURE_EDGE, TEXTURE_EDGE,
                 wallTexels()));
 
         builder.beginSubmesh(floorTexture);
+
         addGroundSlab(builder);
+
         builder.endSubmesh();
 
         builder.beginSubmesh(wallTexture);
+
         addPerimeterWalls(builder);
+
         addMainHuts(builder);
+
         addWatchtowers(builder);
+
         addServiceSheds(builder);
+
         builder.endSubmesh();
 
         return builder.toBytes();
@@ -172,9 +190,13 @@ public final class ColdfrontMapBuilder
     private static void addPerimeterWalls(final ModelBuilder builder)
     {
         final float e = HALF_EXTENT;
+
         addBox(builder, -e, 0.0f, -e - WALL_THICKNESS, e, WALL_HEIGHT, -e);
+
         addBox(builder, -e, 0.0f, e, e, WALL_HEIGHT, e + WALL_THICKNESS);
+
         addBox(builder, -e - WALL_THICKNESS, 0.0f, -e, -e, WALL_HEIGHT, e);
+
         addBox(builder, e, 0.0f, -e, e + WALL_THICKNESS, WALL_HEIGHT, e);
     }
 
@@ -188,6 +210,7 @@ public final class ColdfrontMapBuilder
         // RED main hut (west bank, at the flag position (-128, 160))
         addBox(builder, -128.0f - HUT_EDGE / 2.0f, 0.0f, 160.0f - HUT_EDGE / 2.0f,
             -128.0f + HUT_EDGE / 2.0f, HUT_HEIGHT, 160.0f + HUT_EDGE / 2.0f);
+
         // BLUE main hut (east bank, at the flag position (128, 160))
         addBox(builder, 128.0f - HUT_EDGE / 2.0f, 0.0f, 160.0f - HUT_EDGE / 2.0f,
             128.0f + HUT_EDGE / 2.0f, HUT_HEIGHT, 160.0f + HUT_EDGE / 2.0f);
@@ -203,6 +226,7 @@ public final class ColdfrontMapBuilder
         // RED watchtower
         addBox(builder, -32.0f - TOWER_EDGE / 2.0f, 0.0f, 160.0f - TOWER_EDGE / 2.0f,
             -32.0f + TOWER_EDGE / 2.0f, TOWER_HEIGHT, 160.0f + TOWER_EDGE / 2.0f);
+
         // BLUE watchtower
         addBox(builder, 32.0f - TOWER_EDGE / 2.0f, 0.0f, 160.0f - TOWER_EDGE / 2.0f,
             32.0f + TOWER_EDGE / 2.0f, TOWER_HEIGHT, 160.0f + TOWER_EDGE / 2.0f);
@@ -217,6 +241,7 @@ public final class ColdfrontMapBuilder
         // RED service shed
         addBox(builder, -64.0f - SHED_EDGE / 2.0f, 0.0f, 120.0f - SHED_EDGE / 2.0f,
             -64.0f + SHED_EDGE / 2.0f, SHED_HEIGHT, 120.0f + SHED_EDGE / 2.0f);
+
         // BLUE service shed
         addBox(builder, 64.0f - SHED_EDGE / 2.0f, 0.0f, 120.0f - SHED_EDGE / 2.0f,
             64.0f + SHED_EDGE / 2.0f, SHED_HEIGHT, 120.0f + SHED_EDGE / 2.0f);
@@ -229,10 +254,15 @@ public final class ColdfrontMapBuilder
         final float minZ, final float maxX, final float maxY, final float maxZ)
     {
         addFace(builder, maxX, minY, maxZ, maxX, maxY, maxZ, maxX, maxY, minZ, maxX, minY, minZ);
+
         addFace(builder, minX, minY, minZ, minX, maxY, minZ, minX, maxY, maxZ, minX, minY, maxZ);
+
         addFace(builder, minX, maxY, maxZ, maxX, maxY, maxZ, maxX, maxY, minZ, minX, maxY, minZ);
+
         addFace(builder, minX, minY, minZ, maxX, minY, minZ, maxX, minY, maxZ, minX, minY, maxZ);
+
         addFace(builder, minX, minY, maxZ, minX, maxY, maxZ, maxX, maxY, maxZ, maxX, minY, maxZ);
+
         addFace(builder, maxX, minY, minZ, maxX, maxY, minZ, minX, maxY, minZ, minX, minY, minZ);
     }
 
@@ -241,15 +271,21 @@ public final class ColdfrontMapBuilder
         final float cy, final float cz, final float dx, final float dy, final float dz)
     {
         final float uScale = 1.0f / WORLD_UNITS_PER_TILE;
+
         final int a = builder.addVertex(ax, ay, az, ax * uScale, az * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         final int b = builder.addVertex(bx, by, bz, bx * uScale, bz * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         final int c = builder.addVertex(cx, cy, cz, cx * uScale, cz * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         final int d = builder.addVertex(dx, dy, dz, dx * uScale, dz * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         builder.addTriangle(a, b, c);
+
         builder.addTriangle(a, c, d);
     }
 
@@ -260,53 +296,72 @@ public final class ColdfrontMapBuilder
     private static int[] floorTexels()
     {
         final int base = Rgba.pack(232, 240, 248, 255);
+
         final int shade = Rgba.pack(208, 222, 236, 255);
+
         final int drift = Rgba.pack(190, 210, 228, 255);
+
         final int[] out = new int[TEXTURE_EDGE * TEXTURE_EDGE];
+
         for (int y = 0; y < TEXTURE_EDGE; y++)
         {
             for (int x = 0; x < TEXTURE_EDGE; x++)
             {
                 int colour = base;
+
                 if ((y / 8) % 2 == 0)
                 {
                     colour = shade;
                 }
+
                 if (x % 16 == 0)
                 {
                     colour = drift;
                 }
+
                 out[y * TEXTURE_EDGE + x] = colour;
             }
         }
+
         return out;
     }
 
     private static int[] wallTexels()
     {
         final int base = Rgba.pack(196, 208, 220, 255);
+
         final int shade = Rgba.pack(168, 184, 200, 255);
+
         final int rib = Rgba.pack(140, 156, 172, 255);
+
         final int bandHeight = TEXTURE_EDGE / 8;
+
         final int[] out = new int[TEXTURE_EDGE * TEXTURE_EDGE];
+
         for (int y = 0; y < TEXTURE_EDGE; y++)
         {
             final int band = y / bandHeight;
+
             final boolean isRib = (y % bandHeight) == 0;
+
             for (int x = 0; x < TEXTURE_EDGE; x++)
             {
                 int colour = base;
+
                 if ((band % 2) != 0)
                 {
                     colour = shade;
                 }
+
                 if (isRib)
                 {
                     colour = rib;
                 }
+
                 out[y * TEXTURE_EDGE + x] = colour;
             }
         }
+
         return out;
     }
 
@@ -323,6 +378,7 @@ public final class ColdfrontMapBuilder
                 return arg.substring(prefix.length());
             }
         }
+
         return null;
     }
 }

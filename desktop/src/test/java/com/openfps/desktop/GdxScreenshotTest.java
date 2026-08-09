@@ -30,6 +30,7 @@ final class GdxScreenshotTest
         // different file appear because a count was added.
         assertThat(GdxScreenshot.fileFor("C:\\tmp\\frame.png", 1, 1))
             .isEqualTo("C:\\tmp\\frame.png");
+
         assertThat(GdxScreenshot.fileFor("C:\\tmp\\frame.png", 0, 1))
             .isEqualTo("C:\\tmp\\frame.png");
     }
@@ -40,8 +41,10 @@ final class GdxScreenshotTest
     {
         assertThat(GdxScreenshot.fileFor("C:\\tmp\\frame.png", 12, 1))
             .isEqualTo("C:\\tmp\\frame-0001.png");
+
         assertThat(GdxScreenshot.fileFor("C:\\tmp\\frame.png", 12, 12))
             .isEqualTo("C:\\tmp\\frame-0012.png");
+
         // Padded, so a plain lexical sort of a directory listing is capture
         // order. Without it frame-10 sorts before frame-2 and a "sequence" is
         // silently shuffled.
@@ -58,6 +61,7 @@ final class GdxScreenshotTest
         // directory entirely.
         assertThat(GdxScreenshot.fileFor("C:\\my.shots\\frame", 4, 3))
             .isEqualTo("C:\\my.shots\\frame-0003");
+
         assertThat(GdxScreenshot.fileFor("/var/tmp.d/frame", 4, 3))
             .isEqualTo("/var/tmp.d/frame-0003");
     }
@@ -67,7 +71,9 @@ final class GdxScreenshotTest
     void noPathNoCapture()
     {
         assertThat(new GdxScreenshot(null, 1, 4, true).isEnabled()).isFalse();
+
         assertThat(new GdxScreenshot("", 1, 4, true).isEnabled()).isFalse();
+
         assertThat(new GdxScreenshot("frame.png", 1, 4, true).isEnabled()).isTrue();
     }
 
@@ -77,6 +83,7 @@ final class GdxScreenshotTest
     {
         // A diagnostic switch must not be able to fail a run.
         assertThat(new GdxScreenshot("frame.png", 1, -3, false).capturesWritten()).isZero();
+
         assertThat(GdxScreenshot.fileFor("frame.png", -3, 1)).isEqualTo("frame.png");
     }
 }

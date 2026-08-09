@@ -28,6 +28,7 @@ class MemoryUserProfilePortTest
     void setUp()
     {
         port = new MemoryUserProfilePort();
+
         port.init();
     }
 
@@ -36,7 +37,9 @@ class MemoryUserProfilePortTest
     void shouldStartEmpty()
     {
         assertThat(port.state()).isEqualTo(I_UserProfilePort.State.READY);
+
         assertThat(port.count()).isEqualTo(0);
+
         assertThat(port.findAll()).isEmpty();
     }
 
@@ -45,10 +48,13 @@ class MemoryUserProfilePortTest
     void shouldSaveAndFind()
     {
         final UserProfile profile = UserProfile.newDefault();
+
         port.save(profile);
 
         final Optional<UserProfile> found = port.findById(profile.id());
+
         assertThat(found).isPresent();
+
         assertThat(found.get()).isEqualTo(profile);
     }
 
@@ -57,7 +63,9 @@ class MemoryUserProfilePortTest
     void shouldReturnEmptyForUnknownId()
     {
         assertThat(port.findById("not-a-uuid")).isEmpty();
+
         assertThat(port.findById(null)).isEmpty();
+
         assertThat(port.findById("")).isEmpty();
     }
 
@@ -66,12 +74,15 @@ class MemoryUserProfilePortTest
     void shouldUpsertOnSameId()
     {
         final UserProfile original = UserProfile.newDefault();
+
         port.save(original);
 
         final UserProfile updated = original.withDisplayName("UpdatedName");
+
         port.save(updated);
 
         assertThat(port.count()).isEqualTo(1);
+
         assertThat(port.findById(original.id()).get().displayName())
             .isEqualTo("UpdatedName");
     }
@@ -81,14 +92,21 @@ class MemoryUserProfilePortTest
     void shouldFindAll()
     {
         final UserProfile a = UserProfile.newDefault();
+
         final UserProfile b = UserProfile.newDefault();
+
         final UserProfile c = UserProfile.newDefault();
+
         port.save(a);
+
         port.save(b);
+
         port.save(c);
 
         final List<UserProfile> all = port.findAll();
+
         assertThat(all).hasSize(3);
+
         assertThat(all).extracting(UserProfile::id)
             .containsExactly(a.id(), b.id(), c.id());
     }
@@ -98,14 +116,19 @@ class MemoryUserProfilePortTest
     void shouldDelete()
     {
         final UserProfile a = UserProfile.newDefault();
+
         final UserProfile b = UserProfile.newDefault();
+
         port.save(a);
+
         port.save(b);
 
         port.delete(a.id());
 
         assertThat(port.count()).isEqualTo(1);
+
         assertThat(port.findById(a.id())).isEmpty();
+
         assertThat(port.findById(b.id())).isPresent();
     }
 
@@ -114,8 +137,11 @@ class MemoryUserProfilePortTest
     void shouldIgnoreUnknownDelete()
     {
         port.delete("not-a-uuid");
+
         port.delete(null);
+
         port.delete("");
+
         assertThat(port.count()).isEqualTo(0);
     }
 
@@ -124,9 +150,13 @@ class MemoryUserProfilePortTest
     void shouldCount()
     {
         assertThat(port.count()).isEqualTo(0);
+
         port.save(UserProfile.newDefault());
+
         assertThat(port.count()).isEqualTo(1);
+
         port.save(UserProfile.newDefault());
+
         assertThat(port.count()).isEqualTo(2);
     }
 
@@ -135,8 +165,11 @@ class MemoryUserProfilePortTest
     void shouldGenerateUuids()
     {
         final String id1 = port.generateNewId();
+
         final String id2 = port.generateNewId();
+
         assertThat(id1).isNotEqualTo(id2);
+
         assertThat(id1).matches("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$");
     }
 
@@ -145,15 +178,21 @@ class MemoryUserProfilePortTest
     void shouldThrowBeforeInit()
     {
         final MemoryUserProfilePort fresh = new MemoryUserProfilePort();
+
         assertThat(fresh.state()).isEqualTo(I_UserProfilePort.State.UNINITIALIZED);
+
         assertThatThrownBy(() -> fresh.findById("anything"))
             .isInstanceOf(IllegalStateException.class);
+
         assertThatThrownBy(() -> fresh.save(UserProfile.newDefault()))
             .isInstanceOf(IllegalStateException.class);
+
         assertThatThrownBy(() -> fresh.findAll())
             .isInstanceOf(IllegalStateException.class);
+
         assertThatThrownBy(() -> fresh.delete("x"))
             .isInstanceOf(IllegalStateException.class);
+
         assertThatThrownBy(() -> fresh.count())
             .isInstanceOf(IllegalStateException.class);
     }
@@ -171,6 +210,7 @@ class MemoryUserProfilePortTest
     void shouldThrowOnDoubleShutdown()
     {
         port.shutdown();
+
         assertThatThrownBy(() -> port.shutdown())
             .isInstanceOf(IllegalStateException.class);
     }
@@ -180,6 +220,7 @@ class MemoryUserProfilePortTest
     void shouldThrowAfterShutdown()
     {
         port.shutdown();
+
         assertThatThrownBy(() -> port.save(UserProfile.newDefault()))
             .isInstanceOf(IllegalStateException.class);
     }
@@ -189,6 +230,7 @@ class MemoryUserProfilePortTest
     void shouldThrowOnInitAfterShutdown()
     {
         port.shutdown();
+
         assertThatThrownBy(() -> port.init())
             .isInstanceOf(IllegalStateException.class);
     }

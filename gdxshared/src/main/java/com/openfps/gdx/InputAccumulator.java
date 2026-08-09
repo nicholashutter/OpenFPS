@@ -316,6 +316,7 @@ public final class InputAccumulator
             throw new IllegalArgumentException(
                 "sensitivity must be finite and positive, got " + sensitivityRadiansPerPixel);
         }
+
         this.radiansPerPixel = sensitivityRadiansPerPixel;
     }
 
@@ -337,6 +338,7 @@ public final class InputAccumulator
     public void accumulateLook(final int deltaXPixels, final int deltaYPixels)
     {
         addClamped(yawPixels, clampPoll(deltaXPixels));
+
         addClamped(pitchPixels, clampPoll(deltaYPixels));
     }
 
@@ -351,6 +353,7 @@ public final class InputAccumulator
     public void resetLook()
     {
         yawPixels.set(0);
+
         pitchPixels.set(0);
     }
 
@@ -390,6 +393,7 @@ public final class InputAccumulator
     public void setMovementAxes(final float forward, final float strafe)
     {
         forwardAxis = forward;
+
         strafeAxis = strafe;
     }
 
@@ -406,16 +410,21 @@ public final class InputAccumulator
     public void setActionKeys(final boolean fire, final boolean jump, final boolean sprint)
     {
         fireHeld = fire;
+
         jumpHeld = jump;
+
         sprintHeld = sprint;
+
         if (fire)
         {
             fireSeen.set(true);
         }
+
         if (jump)
         {
             jumpSeen.set(true);
         }
+
         if (sprint)
         {
             sprintSeen.set(true);
@@ -445,7 +454,9 @@ public final class InputAccumulator
     {
         final float scale =
             AnalogStick.responseScale(rawForward, rawStrafe, AnalogStick.MOVE_EXPONENT);
+
         padForwardAxis = rawForward * scale;
+
         padStrafeAxis = rawStrafe * scale;
     }
 
@@ -476,7 +487,9 @@ public final class InputAccumulator
     {
         final float scale =
             AnalogStick.responseScale(rawYaw, rawPitch, AnalogStick.LOOK_EXPONENT);
+
         padYawAxis = rawYaw * scale;
+
         padPitchAxis = rawPitch * scale;
     }
 
@@ -496,16 +509,21 @@ public final class InputAccumulator
         final boolean sprint)
     {
         padFireHeld = fire;
+
         padJumpHeld = jump;
+
         padSprintHeld = sprint;
+
         if (fire)
         {
             fireSeen.set(true);
         }
+
         if (jump)
         {
             jumpSeen.set(true);
         }
+
         if (sprint)
         {
             sprintSeen.set(true);
@@ -539,11 +557,17 @@ public final class InputAccumulator
     public void clearGamepad()
     {
         padForwardAxis = 0.0f;
+
         padStrafeAxis = 0.0f;
+
         padYawAxis = 0.0f;
+
         padPitchAxis = 0.0f;
+
         padFireHeld = false;
+
         padJumpHeld = false;
+
         padSprintHeld = false;
     }
 
@@ -560,13 +584,21 @@ public final class InputAccumulator
     public void clearAll()
     {
         resetLook();
+
         setMovementKeys(false, false, false, false);
+
         fireHeld = false;
+
         jumpHeld = false;
+
         sprintHeld = false;
+
         fireSeen.set(false);
+
         jumpSeen.set(false);
+
         sprintSeen.set(false);
+
         clearGamepad();
     }
 
@@ -612,7 +644,9 @@ public final class InputAccumulator
     public InputState latch()
     {
         final int rawYaw = yawPixels.getAndSet(0);
+
         final int rawPitch = pitchPixels.getAndSet(0);
+
         // The whole rate-versus-displacement conversion, in one expression and
         // one place. The mouse term consumes an integral of pixels; the stick
         // term integrates a held rate over the tic that is ending. Both come out
@@ -623,7 +657,9 @@ public final class InputAccumulator
         // all. Doubling the poll rate doubles how often padYawAxis is
         // overwritten with the same value and changes nothing here.
         final float radiansPerFullDeflection = GAMEPAD_LOOK_RADIANS_PER_SECOND * ticSeconds;
+
         final float yaw = rawYaw * radiansPerPixel + padYawAxis * radiansPerFullDeflection;
+
         // One negation for both devices — the screen-to-view sign flip the
         // method contract documents — and therefore one invert preference.
         //
@@ -638,11 +674,14 @@ public final class InputAccumulator
         // multiply, where -0 is 0.
         final float pitchScreen =
             rawPitch * radiansPerPixel + padPitchAxis * radiansPerFullDeflection;
+
         float pitch = 0.0f - pitchScreen;
+
         if (invertPitch)
         {
             pitch = 0.0f - pitch;
         }
+
         return InputState.of(
             forwardAxis + padForwardAxis,
             strafeAxis + padStrafeAxis,
@@ -726,6 +765,7 @@ public final class InputAccumulator
             throw new IllegalArgumentException(
                 "tic duration must be finite and positive, got " + seconds);
         }
+
         this.ticSeconds = seconds;
     }
 
@@ -810,10 +850,12 @@ public final class InputAccumulator
         {
             return 0.0f;
         }
+
         if (positive)
         {
             return 1.0f;
         }
+
         return -1.0f;
     }
 
@@ -824,10 +866,12 @@ public final class InputAccumulator
         {
             return MAX_PIXELS_PER_POLL;
         }
+
         if (delta < -MAX_PIXELS_PER_POLL)
         {
             return -MAX_PIXELS_PER_POLL;
         }
+
         return delta;
     }
 
@@ -837,10 +881,13 @@ public final class InputAccumulator
     private static void addClamped(final AtomicInteger target, final int delta)
     {
         boolean stored = false;
+
         while (!stored)
         {
             final int current = target.get();
+
             final long sum = (long) current + (long) delta;
+
             stored = target.compareAndSet(current, saturate(sum));
         }
     }
@@ -852,10 +899,12 @@ public final class InputAccumulator
         {
             return MAX_ACCUMULATED_PIXELS;
         }
+
         if (sum < -MAX_ACCUMULATED_PIXELS)
         {
             return -MAX_ACCUMULATED_PIXELS;
         }
+
         return (int) sum;
     }
 }

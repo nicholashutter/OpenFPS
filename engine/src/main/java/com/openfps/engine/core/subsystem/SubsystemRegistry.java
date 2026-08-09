@@ -31,11 +31,14 @@ public final class SubsystemRegistry
         {
             throw new SubsystemException("Cannot register null subsystem");
         }
+
         if (subsystems.containsKey(subsystem.id()))
         {
             throw new SubsystemException("Subsystem " + subsystem.id() + " already registered");
         }
+
         subsystems.put(subsystem.id(), subsystem);
+
         LOG.debug("Registered subsystem: {}", subsystem.id());
     }
 
@@ -84,11 +87,14 @@ public final class SubsystemRegistry
     public void dispatch(final I_EngineEvent event)
     {
         final ISubsystem target = subsystems.get(event.targetSubsystem());
+
         if (target == null)
         {
             LOG.warn("No subsystem registered for event {} — dropping", event);
+
             return;
         }
+
         target.processEvent(event);
     }
 
@@ -102,6 +108,7 @@ public final class SubsystemRegistry
                 return false;
             }
         }
+
         return true;
     }
 

@@ -177,6 +177,7 @@ public final class AndroidLauncher extends AndroidApplication
     protected void onCreate(final Bundle savedInstanceState)
     {
         super.onCreate(savedInstanceState);
+
         Log.i(TAG, "AndroidLauncher starting");
 
         // FIRST, before anything that reads a system property is constructed —
@@ -185,24 +186,33 @@ public final class AndroidLauncher extends AndroidApplication
         applyLaunchProperties();
 
         windowPort = new AndroidWindowPort(this);
+
         windowPort.init();
+
         windowPort.create(NOMINAL_WIDTH, NOMINAL_HEIGHT, TITLE);
 
         final DemoScene demo = buildDemo();
+
         // The platform's own density, not Gdx.graphics.getDensity(): there is
         // no libGDX graphics object until initialize() runs, and the control
         // layout has to exist before the engine is handed the input port.
         final AndroidInputPort input =
             new AndroidInputPort(getResources().getDisplayMetrics().density);
+
         inputPort = input;
+
         final RendererHolder holder = new RendererHolder();
+
         final GameConfig config = GameConfig.unbounded(EngineMain.parseFpsArg(null));
+
         // A gamepad's look stick reports a RATE, and a rate is not an angle until
         // something supplies the duration. This Activity is the only object that
         // knows the configured frame rate. Nothing else in the input path cares:
         // a drag is a displacement that has already happened.
         input.setTicRate(config.rate().fps());
+
         registerControllerWatch(input);
+
         // MUTABLE: assigned once on this thread by the factory below, before
         // the frame loop that reads it starts. There is no race — the engine
         // bootstrap has returned by then.
@@ -218,33 +228,43 @@ public final class AndroidLauncher extends AndroidApplication
             inputPort ->
             {
                 final I_GameplayPort port = gameplayPort(inputPort, holder, demo, config);
+
                 if (port instanceof DemoGameplayPort)
                 {
                     gameplay[0] = (DemoGameplayPort) port;
                 }
+
                 return port;
             });
 
         final SoftwareRenderPort renderer = holder.renderer();
+
         bindWorld(renderer, demo);
 
         // Built here rather than inside the UI, because this Activity is the
         // only object that can see both the settings screen's switch and the
         // renderer it also drives. That is the composition root's job.
         final DebugSettings debug = new DebugSettings();
+
         // Separate from the debug switch, and separately defaulted — the target
         // outline is a standard feature for players who need it and starts on,
         // while the frame counter is a diagnostic and starts off. One boolean
         // could not be both, which is how the toggle came to disagree with the
         // game. See AccessibilitySettings.
         final AccessibilitySettings access = new AccessibilitySettings();
+
         final AndroidUiFrameCallback ui = new AndroidUiFrameCallback(
             new DefaultMenuActions(windowPort), new FramebufferPresenter(renderer), input,
             debug, access);
+
         attachMatchGate(ui, gameplay[0], hal.getAudioPort());
+
         attachMatchResult(ui, gameplay[0]);
+
         attachMatchRestart(ui, gameplay[0]);
+
         attachMatchStatus(ui, gameplay[0], config);
+
         // Loosely, on purpose: AccessibilitySettings does not import the renderer
         // and the renderer has never heard of a settings screen.
         //
@@ -258,7 +278,9 @@ public final class AndroidLauncher extends AndroidApplication
         // the same pair of lines DesktopLauncher.attachAccessibilitySettings has,
         // and they have to stay the same pair.
         renderer.setOutlineEnabled(access.isTargetOutlineVisible());
+
         access.onChange(on -> renderer.setOutlineEnabled(on.booleanValue()));
+
         // The weapon's noise. Nothing is opened yet — there is no Gdx.audio
         // until initialize() has run, which runFrameLoop below is what does, so
         // the port bakes its sound on the first shot instead.
@@ -284,6 +306,7 @@ public final class AndroidLauncher extends AndroidApplication
         // reference to this Activity, so leaving it registered leaks the whole
         // Activity — and its renderer, and its scene — on every rotation.
         unregisterControllerWatch();
+
         inputPort = null;
 
         // Then the engine: stop() halts the game loop, joins it, drains the
@@ -293,13 +316,17 @@ public final class AndroidLauncher extends AndroidApplication
         if (session != null)
         {
             session.stop();
+
             session = null;
         }
+
         if (windowPort != null)
         {
             windowPort.shutdown();
+
             windowPort = null;
         }
+
         Log.i(TAG, "AndroidLauncher destroyed");
     }
 
@@ -321,18 +348,23 @@ public final class AndroidLauncher extends AndroidApplication
     private void applyLaunchProperties()
     {
         final Intent intent = getIntent();
+
         if (intent == null)
         {
             return;
         }
+
         for (final String name : LAUNCH_PROPERTIES)
         {
             final String value = intent.getStringExtra(name);
+
             if (value == null || value.isEmpty())
             {
                 continue;
             }
+
             System.setProperty(name, value);
+
             Log.i(TAG, "Launch extra: " + name + "=" + value);
         }
     }
@@ -380,6 +412,7 @@ public final class AndroidLauncher extends AndroidApplication
                 event.getAxisValue(MotionEvent.AXIS_RZ),
                 event.getAxisValue(MotionEvent.AXIS_RTRIGGER));
         }
+
         return super.dispatchGenericMotionEvent(event);
     }
 
@@ -398,6 +431,7 @@ public final class AndroidLauncher extends AndroidApplication
     private static boolean isFromJoystick(final MotionEvent event)
     {
         final int source = event.getSource();
+
         return (source & InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK
             || (source & InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD;
     }
@@ -422,13 +456,17 @@ public final class AndroidLauncher extends AndroidApplication
     private void registerControllerWatch(final AndroidInputPort input)
     {
         final Object service = getSystemService(INPUT_SERVICE);
+
         if (!(service instanceof InputManager))
         {
             Log.w(TAG, "No InputManager — a controller that disconnects cannot be"
                 + " noticed, so gamepad input will not be offered");
+
             return;
         }
+
         inputManager = (InputManager) service;
+
         deviceListener = new InputManager.InputDeviceListener()
         {
             @Override
@@ -447,6 +485,7 @@ public final class AndroidLauncher extends AndroidApplication
                 // on its very next event — microseconds later. The cost of being
                 // too clever is the bug this exists to prevent.
                 Log.i(TAG, "Input device removed: " + deviceId);
+
                 input.onGamepadDisconnected();
             }
 
@@ -458,6 +497,7 @@ public final class AndroidLauncher extends AndroidApplication
                 input.onGamepadDisconnected();
             }
         };
+
         inputManager.registerInputDeviceListener(deviceListener, null);
     }
 
@@ -469,7 +509,9 @@ public final class AndroidLauncher extends AndroidApplication
         {
             inputManager.unregisterInputDeviceListener(deviceListener);
         }
+
         inputManager = null;
+
         deviceListener = null;
     }
 
@@ -480,13 +522,16 @@ public final class AndroidLauncher extends AndroidApplication
         {
             final DemoScene demo =
                 DemoScene.build(DemoModels.load(new ApkModelSource(getAssets())));
+
             Log.i(TAG, "First-person demo ready: " + demo);
+
             return demo;
         }
         catch (final DemoAssetException e)
         {
             Log.e(TAG, "No world in this APK: " + e.getMessage()
                 + " — the menu will come up with nothing behind it");
+
             return null;
         }
     }
@@ -502,6 +547,7 @@ public final class AndroidLauncher extends AndroidApplication
         {
             return new NullGameplayPort();
         }
+
         // The match holds the OTHER bodies. The local player is deliberately
         // absent from it: Hitscan treats a ray origin inside a box as a hit at
         // distance zero, so a shooter listed among its own targets would shoot
@@ -516,10 +562,12 @@ public final class AndroidLauncher extends AndroidApplication
     private static int[] botInstanceIndices(final DemoScene demo)
     {
         final int[] indices = new int[demo.botCount()];
+
         for (int index = 0; index < indices.length; index++)
         {
             indices[index] = demo.botInstanceIndex(index);
         }
+
         return indices;
     }
 
@@ -527,10 +575,12 @@ public final class AndroidLauncher extends AndroidApplication
     private static int[] botWeaponInstanceIndices(final DemoScene demo)
     {
         final int[] indices = new int[demo.botCount()];
+
         for (int index = 0; index < indices.length; index++)
         {
             indices[index] = demo.botWeaponInstanceIndex(index);
         }
+
         return indices;
     }
 
@@ -544,7 +594,9 @@ public final class AndroidLauncher extends AndroidApplication
         {
             return;
         }
+
         renderer.setScene(demo.scene());
+
         // Furniture of a first-person game, so the first-person game asks for
         // it. Off by default so the render tests can assert exact pixels
         // without a reticle through the middle of every frame.
@@ -591,13 +643,16 @@ public final class AndroidLauncher extends AndroidApplication
         // edge, so the lead time this seam was supposed to provide is zero and the
         // first bot shot logged "not READY". See attachAudioWarmup.
         ui.attachAudioWarmup(audio::preload);
+
         if (gameplay == null)
         {
             return;
         }
+
         ui.attachMatchGate(live ->
         {
             gameplay.setMatchLive(live.booleanValue());
+
             if (live.booleanValue())
             {
                 // Idempotent, so a second match costs one map lookup. Attaching
@@ -626,6 +681,7 @@ public final class AndroidLauncher extends AndroidApplication
         {
             return;
         }
+
         ui.attachMatchResult(() -> finishedMatch(gameplay));
     }
 
@@ -647,6 +703,7 @@ public final class AndroidLauncher extends AndroidApplication
         {
             return;
         }
+
         ui.attachMatchRestart(gameplay::restartMatch);
     }
 
@@ -669,6 +726,7 @@ public final class AndroidLauncher extends AndroidApplication
         {
             return;
         }
+
         ui.attachMatchStatus(gameplay::status, config.rate().fps());
     }
 
@@ -688,10 +746,12 @@ public final class AndroidLauncher extends AndroidApplication
     private static MatchSummary finishedMatch(final DemoGameplayPort gameplay)
     {
         final Match round = gameplay.match();
+
         if (round == null || !round.state().isOver())
         {
             return null;
         }
+
         return MatchSummary.of(round);
     }
 
@@ -714,6 +774,7 @@ public final class AndroidLauncher extends AndroidApplication
         {
             return;
         }
+
         gameplay.attachAudio(hal.getAudioPort());
     }
 
@@ -735,6 +796,7 @@ public final class AndroidLauncher extends AndroidApplication
         public I_RenderPort createRenderPort(final I_ThreadPoolPort pool, final I_TimePort time)
         {
             built = new SoftwareRenderPort(pool, time);
+
             return built;
         }
 

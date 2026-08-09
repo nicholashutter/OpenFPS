@@ -105,14 +105,19 @@ public final class ArcticStationMapBuilder
     public static void main(final String[] args)
     {
         final String out = option(args, "--out=");
+
         if (out == null)
         {
             LOG.error("usage: ArcticStationMapBuilder --out=<directory>"
                 + " [--atlas=<colormap.png>]");
+
             return;
         }
+
         final String atlasOption = option(args, "--atlas=");
+
         final Path atlasPath;
+
         if (atlasOption == null)
         {
             atlasPath = null;
@@ -121,7 +126,9 @@ public final class ArcticStationMapBuilder
         {
             atlasPath = Path.of(atlasOption);
         }
+
         final Path outDir = Path.of(out);
+
         try
         {
             Files.createDirectories(outDir);
@@ -130,8 +137,11 @@ public final class ArcticStationMapBuilder
         {
             throw new UncheckedIOException("could not create output directory: " + outDir, e);
         }
+
         final byte[] bytes = build(atlasPath);
+
         final Path outFile = outDir.resolve(FILE_NAME);
+
         try
         {
             Files.write(outFile, bytes);
@@ -140,7 +150,9 @@ public final class ArcticStationMapBuilder
         {
             throw new UncheckedIOException("could not write " + outFile, e);
         }
+
         final ModelFormat parsed = ModelFormat.read(bytes);
+
         LOG.info("Wrote {} ({} triangles, {} vertices, {} textures)",
             outFile, parsed.indexCount() / 3, parsed.vertexCount(), parsed.textureCount());
     }
@@ -178,7 +190,9 @@ public final class ArcticStationMapBuilder
     public static byte[] build(final Path atlasPath)
     {
         final ModelBuilder builder = new ModelBuilder(MODEL_NAME);
+
         final int[] floorTexels;
+
         if (atlasPath != null)
         {
             floorTexels = KenneyTexture.forceOpaque(KenneyTexture.floor(atlasPath));
@@ -187,7 +201,9 @@ public final class ArcticStationMapBuilder
         {
             floorTexels = floorTexels();
         }
+
         final int[] wallTexels;
+
         if (atlasPath != null)
         {
             wallTexels = KenneyTexture.forceOpaque(KenneyTexture.wall(atlasPath));
@@ -196,27 +212,41 @@ public final class ArcticStationMapBuilder
         {
             wallTexels = wallTexels();
         }
+
         final int floorTexture = builder.addTexture("arctic-station-floor", TEXTURE_EDGE,
             TEXTURE_EDGE, MipGenerator.generate(TEXTURE_EDGE, TEXTURE_EDGE, floorTexels));
+
         final int wallTexture = builder.addTexture("arctic-station-wall", TEXTURE_EDGE,
             TEXTURE_EDGE, MipGenerator.generate(TEXTURE_EDGE, TEXTURE_EDGE, wallTexels));
 
         builder.beginSubmesh(floorTexture);
+
         // Floor slab: 320x320, 8 units thick (with the ravine carved
         // out as a depression), centred on origin.
         addBox(builder, -HALF_EXTENT, -8.0f, -HALF_EXTENT, HALF_EXTENT, 0.0f, HALF_EXTENT);
+
         builder.endSubmesh();
 
         builder.beginSubmesh(wallTexture);
+
         addPerimeterWalls(builder);
+
         addNorthBridge(builder);
+
         addSouthBridge(builder);
+
         addFuelDepots(builder);
+
         addServiceBuilding(builder);
+
         addServiceBuildingCanopy(builder);
+
         addSnowdrifts(builder);
+
         addBridgeSupports(builder);
+
         addRocks(builder);
+
         builder.endSubmesh();
 
         return builder.toBytes();
@@ -244,9 +274,13 @@ public final class ArcticStationMapBuilder
     private static void addPerimeterWalls(final ModelBuilder builder)
     {
         final float e = HALF_EXTENT;
+
         addBox(builder, -e, 0.0f, -e - WALL_THICKNESS, e, BRIDGE_HEIGHT, -e);
+
         addBox(builder, -e, 0.0f, e, e, BRIDGE_HEIGHT, e + WALL_THICKNESS);
+
         addBox(builder, -e - WALL_THICKNESS, 0.0f, -e, -e, BRIDGE_HEIGHT, e);
+
         addBox(builder, e, 0.0f, -e, e + WALL_THICKNESS, BRIDGE_HEIGHT, e);
     }
 
@@ -260,6 +294,7 @@ public final class ArcticStationMapBuilder
         // Deck: 320 long, 32 wide (z=24..56), 4 units thick (y=28..32).
         addBox(builder, -HALF_EXTENT, BRIDGE_HEIGHT - 4.0f, 24.0f, HALF_EXTENT,
             BRIDGE_HEIGHT, 56.0f);
+
         // Underside: 320 long, 32 wide, 4 units thick (y=24..28).
         addBox(builder, -HALF_EXTENT, BRIDGE_HEIGHT - 8.0f, 24.0f, HALF_EXTENT,
             BRIDGE_HEIGHT - 4.0f, 56.0f);
@@ -272,6 +307,7 @@ public final class ArcticStationMapBuilder
     {
         addBox(builder, -HALF_EXTENT, BRIDGE_HEIGHT - 4.0f, 200.0f, HALF_EXTENT,
             BRIDGE_HEIGHT, 232.0f);
+
         addBox(builder, -HALF_EXTENT, BRIDGE_HEIGHT - 8.0f, 200.0f, HALF_EXTENT,
             BRIDGE_HEIGHT - 4.0f, 232.0f);
     }
@@ -285,6 +321,7 @@ public final class ArcticStationMapBuilder
         // West fuel depot on North Bridge, at x=-128, on top of the deck.
         addBox(builder, -144.0f, BRIDGE_HEIGHT, 28.0f, -112.0f, BRIDGE_HEIGHT + FUEL_HEIGHT,
             52.0f);
+
         // East fuel depot on North Bridge, at x=128.
         addBox(builder, 112.0f, BRIDGE_HEIGHT, 28.0f, 144.0f, BRIDGE_HEIGHT + FUEL_HEIGHT,
             52.0f);
@@ -319,10 +356,13 @@ public final class ArcticStationMapBuilder
     {
         addBox(builder, -HALF_EXTENT + 8.0f, 0.0f, 80.0f, HALF_EXTENT - 8.0f,
             SNOWDRIFT_HEIGHT, 96.0f);
+
         addBox(builder, -HALF_EXTENT + 8.0f, 0.0f, 184.0f, HALF_EXTENT - 8.0f,
             SNOWDRIFT_HEIGHT, 200.0f);
+
         // Two short north-south walls at the edges
         addBox(builder, -140.0f, 0.0f, 100.0f, -132.0f, SNOWDRIFT_HEIGHT, 180.0f);
+
         addBox(builder, 132.0f, 0.0f, 100.0f, 140.0f, SNOWDRIFT_HEIGHT, 180.0f);
     }
 
@@ -336,9 +376,12 @@ public final class ArcticStationMapBuilder
     {
         // North Bridge supports: at the four corners.
         addBox(builder, -140.0f, 0.0f, 24.0f, -132.0f, BRIDGE_HEIGHT - 8.0f, 32.0f);
+
         addBox(builder, 132.0f, 0.0f, 24.0f, 140.0f, BRIDGE_HEIGHT - 8.0f, 32.0f);
+
         // South Bridge supports
         addBox(builder, -140.0f, 0.0f, 200.0f, -132.0f, BRIDGE_HEIGHT - 8.0f, 208.0f);
+
         addBox(builder, 132.0f, 0.0f, 200.0f, 140.0f, BRIDGE_HEIGHT - 8.0f, 208.0f);
     }
 
@@ -351,8 +394,11 @@ public final class ArcticStationMapBuilder
     private static void addRocks(final ModelBuilder builder)
     {
         addBox(builder, -100.0f, 0.0f, 110.0f, -84.0f, 12.0f, 126.0f);
+
         addBox(builder, 84.0f, 0.0f, 110.0f, 100.0f, 12.0f, 126.0f);
+
         addBox(builder, -100.0f, 0.0f, 162.0f, -84.0f, 12.0f, 178.0f);
+
         addBox(builder, 84.0f, 0.0f, 162.0f, 100.0f, 12.0f, 178.0f);
     }
 
@@ -363,10 +409,15 @@ public final class ArcticStationMapBuilder
         final float minZ, final float maxX, final float maxY, final float maxZ)
     {
         addFace(builder, maxX, minY, maxZ, maxX, maxY, maxZ, maxX, maxY, minZ, maxX, minY, minZ);
+
         addFace(builder, minX, minY, minZ, minX, maxY, minZ, minX, maxY, maxZ, minX, minY, maxZ);
+
         addFace(builder, minX, maxY, maxZ, maxX, maxY, maxZ, maxX, maxY, minZ, minX, maxY, minZ);
+
         addFace(builder, minX, minY, minZ, maxX, minY, minZ, maxX, minY, maxZ, minX, minY, maxZ);
+
         addFace(builder, minX, minY, maxZ, minX, maxY, maxZ, maxX, maxY, maxZ, maxX, minY, maxZ);
+
         addFace(builder, maxX, minY, minZ, maxX, maxY, minZ, minX, maxY, minZ, minX, minY, minZ);
     }
 
@@ -375,15 +426,21 @@ public final class ArcticStationMapBuilder
         final float cy, final float cz, final float dx, final float dy, final float dz)
     {
         final float uScale = 1.0f / WORLD_UNITS_PER_TILE;
+
         final int a = builder.addVertex(ax, ay, az, ax * uScale, az * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         final int b = builder.addVertex(bx, by, bz, bx * uScale, bz * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         final int c = builder.addVertex(cx, cy, cz, cx * uScale, cz * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         final int d = builder.addVertex(dx, dy, dz, dx * uScale, dz * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         builder.addTriangle(a, b, c);
+
         builder.addTriangle(a, c, d);
     }
 
@@ -395,27 +452,35 @@ public final class ArcticStationMapBuilder
     private static int[] floorTexels()
     {
         final int base = Rgba.pack(232, 240, 248, 255);
+
         final int shade = Rgba.pack(208, 222, 236, 255);
+
         final int drift = Rgba.pack(190, 210, 228, 255);
+
         final int[] out = new int[TEXTURE_EDGE * TEXTURE_EDGE];
+
         for (int y = 0; y < TEXTURE_EDGE; y++)
         {
             for (int x = 0; x < TEXTURE_EDGE; x++)
             {
                 int colour = base;
+
                 // Subtle horizontal "drift" bands every 8 texels
                 if ((y / 8) % 2 == 0)
                 {
                     colour = shade;
                 }
+
                 // Sparse darker drift streaks (footprints / paths)
                 if (x % 16 == 0)
                 {
                     colour = drift;
                 }
+
                 out[y * TEXTURE_EDGE + x] = colour;
             }
         }
+
         return out;
     }
 
@@ -423,21 +488,30 @@ public final class ArcticStationMapBuilder
     private static int[] wallTexels()
     {
         final int base = Rgba.pack(196, 208, 220, 255);
+
         final int shade = Rgba.pack(168, 184, 200, 255);
+
         final int rib = Rgba.pack(140, 156, 172, 255);
+
         final int bandHeight = TEXTURE_EDGE / 8;
+
         final int[] out = new int[TEXTURE_EDGE * TEXTURE_EDGE];
+
         for (int y = 0; y < TEXTURE_EDGE; y++)
         {
             final int band = y / bandHeight;
+
             final boolean isRib = (y % bandHeight) == 0;
+
             for (int x = 0; x < TEXTURE_EDGE; x++)
             {
                 int colour = base;
+
                 if ((band % 2) != 0)
                 {
                     colour = shade;
                 }
+
                 if (isRib)
                 {
                     colour = rib;
@@ -446,9 +520,11 @@ public final class ArcticStationMapBuilder
                 {
                     colour = rib;
                 }
+
                 out[y * TEXTURE_EDGE + x] = colour;
             }
         }
+
         return out;
     }
 
@@ -465,6 +541,7 @@ public final class ArcticStationMapBuilder
                 return arg.substring(prefix.length());
             }
         }
+
         return null;
     }
 }

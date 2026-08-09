@@ -94,7 +94,9 @@ public final class Rgba
     public static int srcOver(final int src, final int dst, final int coverage)
     {
         final int a = coverage & CHANNEL_MASK;
+
         final int inverse = CHANNEL_MASK - a;
+
         return pack(
             div255(red(src) * a + red(dst) * inverse),
             div255(green(src) * a + green(dst) * inverse),
@@ -107,6 +109,7 @@ public final class Rgba
     private static int div255(final int value)
     {
         final int biased = value + 127;
+
         return (biased + (biased >> 8)) >> 8;
     }
 

@@ -60,7 +60,9 @@ class RoomUserProfilePortTest
     void shouldStartUninitialized()
     {
         final RoomUserProfilePort port = new RoomUserProfilePort(newContext());
+
         assertThat(port).isInstanceOf(I_UserProfilePort.class);
+
         assertThat(port.state()).isEqualTo(I_UserProfilePort.State.UNINITIALIZED);
     }
 
@@ -73,6 +75,7 @@ class RoomUserProfilePortTest
         void shouldRejectFindById()
         {
             final RoomUserProfilePort port = new RoomUserProfilePort(newContext());
+
             assertThatThrownBy(() -> port.findById("id-1"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("findById")
@@ -84,6 +87,7 @@ class RoomUserProfilePortTest
         void shouldRejectFindAll()
         {
             final RoomUserProfilePort port = new RoomUserProfilePort(newContext());
+
             assertThatThrownBy(port::findAll)
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("findAll")
@@ -95,6 +99,7 @@ class RoomUserProfilePortTest
         void shouldRejectSave()
         {
             final RoomUserProfilePort port = new RoomUserProfilePort(newContext());
+
             assertThatThrownBy(() -> port.save(PROFILE))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("save")
@@ -106,6 +111,7 @@ class RoomUserProfilePortTest
         void shouldRejectDelete()
         {
             final RoomUserProfilePort port = new RoomUserProfilePort(newContext());
+
             assertThatThrownBy(() -> port.delete("id-1"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("delete")
@@ -117,6 +123,7 @@ class RoomUserProfilePortTest
         void shouldRejectCount()
         {
             final RoomUserProfilePort port = new RoomUserProfilePort(newContext());
+
             assertThatThrownBy(port::count)
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("count")
@@ -146,11 +153,13 @@ class RoomUserProfilePortTest
         void shouldRejectQueriesNamingShutdown()
         {
             final RoomUserProfilePort port = new RoomUserProfilePort(newContext());
+
             port.shutdown();
 
             assertThatThrownBy(port::findAll)
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("SHUTDOWN");
+
             assertThatThrownBy(() -> port.save(PROFILE))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("SHUTDOWN");
@@ -161,6 +170,7 @@ class RoomUserProfilePortTest
         void shouldRejectASecondShutdown()
         {
             final RoomUserProfilePort port = new RoomUserProfilePort(newContext());
+
             port.shutdown();
 
             assertThatThrownBy(port::shutdown)
@@ -173,6 +183,7 @@ class RoomUserProfilePortTest
         void shouldRejectReinitialisation()
         {
             final RoomUserProfilePort port = new RoomUserProfilePort(newContext());
+
             port.shutdown();
 
             assertThatThrownBy(port::init)
@@ -193,6 +204,7 @@ class RoomUserProfilePortTest
             // other operation: the engine mints an ID for a brand-new profile
             // and only then has something to persist.
             final RoomUserProfilePort port = new RoomUserProfilePort(newContext());
+
             assertThat(port.state()).isEqualTo(I_UserProfilePort.State.UNINITIALIZED);
 
             assertThat(UUID.fromString(port.generateNewId())).isNotNull();

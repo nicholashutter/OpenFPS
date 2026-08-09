@@ -53,10 +53,15 @@ class AndroidInputPortTest
     private static AndroidInputPort playing()
     {
         final AndroidInputPort port = new AndroidInputPort(DENSITY);
+
         port.resize(WIDTH, HEIGHT);
+
         final UiStateMachine ui = new UiStateMachine();
+
         ui.startGame();
+
         port.bindUiState(ui);
+
         return port;
     }
 
@@ -70,10 +75,13 @@ class AndroidInputPortTest
         {
             assertThatThrownBy(() -> new AndroidInputPort(null, new InputAccumulator()))
                 .isInstanceOf(IllegalArgumentException.class);
+
             assertThatThrownBy(() -> new AndroidInputPort(new TouchLayout(2.0f), null))
                 .isInstanceOf(IllegalArgumentException.class);
+
             assertThatThrownBy(() -> playing().bindActions(null))
                 .isInstanceOf(IllegalArgumentException.class);
+
             assertThatThrownBy(() -> playing().bindUiState(null))
                 .isInstanceOf(IllegalArgumentException.class);
         }
@@ -87,6 +95,7 @@ class AndroidInputPortTest
             // 400 px on one phone and 1100 on another — so radians-per-PIXEL
             // would make the game turn nearly three times faster on the second.
             final AndroidInputPort coarse = new AndroidInputPort(2.0f);
+
             final AndroidInputPort fine = new AndroidInputPort(4.0f);
 
             assertThat(coarse.accumulator().radiansPerPixel())
@@ -100,8 +109,11 @@ class AndroidInputPortTest
             final ActionBindings bindings = AndroidBindings.defaults();
 
             assertThat(bindings.bindingsFor(GameAction.FIRE)).isNotEmpty();
+
             assertThat(bindings.bindingsFor(GameAction.JUMP)).isNotEmpty();
+
             assertThat(bindings.bindingsFor(GameAction.MOVE_FORWARD)).isNotEmpty();
+
             // At least two, so leaving is always reachable. It is four now that a
             // controller's Start and Select are in the table as well — see
             // GamepadBindings for the exact row.
@@ -122,7 +134,9 @@ class AndroidInputPortTest
             assertThat(bindings.bindingsFor(GameAction.LEAVE_MATCH))
                 .contains(InputBinding.key(Input.Keys.BACK))
                 .contains(InputBinding.touchRegion(TouchLayout.REGION_LEAVE));
+
             assertThat(playing().isLeaveKey(Input.Keys.BACK)).isTrue();
+
             assertThat(playing().isLeaveKey(Input.Keys.A)).isFalse();
         }
     }
@@ -136,16 +150,23 @@ class AndroidInputPortTest
         void shouldWalkWithTheStick()
         {
             final AndroidInputPort port = playing();
+
             final float anchorX = 300.0f;
+
             final float anchorY = 800.0f;
 
             port.touchDown((int) anchorX, (int) anchorY, 0, 0);
+
             port.touchDragged((int) anchorX, (int) (anchorY - port.layout().stickRange()), 0);
+
             port.sampleInput(0);
+
             assertThat(port.currentInput().forwardAxis()).isCloseTo(1.0f, within(0.001f));
 
             port.touchUp((int) anchorX, (int) anchorY, 0, 0);
+
             port.sampleInput(1);
+
             assertThat(port.currentInput().forwardAxis()).isZero();
         }
 
@@ -156,7 +177,9 @@ class AndroidInputPortTest
             final AndroidInputPort port = playing();
 
             port.touchDown(1600, 500, 0, 0);
+
             port.touchDragged(1700, 500, 0);
+
             port.sampleInput(0);
 
             // Positive yaw turns right, which is what dragging right must do.
@@ -174,7 +197,9 @@ class AndroidInputPortTest
             final AndroidInputPort port = playing();
 
             port.touchDown(1600, 500, 0, 0);
+
             port.touchDragged(1600, 400, 0);
+
             port.sampleInput(0);
 
             assertThat(port.currentInput().pitchDelta()).isGreaterThan(0.0f);
@@ -190,13 +215,19 @@ class AndroidInputPortTest
             final AndroidInputPort port = playing();
 
             port.touchDown(300, 800, 0, 0);
+
             port.touchDown(1600, 500, 1, 0);
+
             port.touchDragged(300, 800 - (int) port.layout().stickRange(), 0);
+
             port.touchDragged(1750, 500, 1);
+
             port.sampleInput(0);
 
             final InputState state = port.currentInput();
+
             assertThat(state.forwardAxis()).isCloseTo(1.0f, within(0.001f));
+
             assertThat(state.yawDelta()).isGreaterThan(0.0f);
         }
 
@@ -208,15 +239,20 @@ class AndroidInputPortTest
 
             port.touchDown((int) port.layout().fireCentreX(),
                 (int) port.layout().fireCentreY(), 0, 0);
+
             port.sampleInput(0);
+
             assertThat(port.currentInput().fire()).isTrue();
 
             port.sampleInput(1);
+
             assertThat(port.currentInput().fire())
                 .as("a held trigger stays held across tics").isTrue();
 
             port.touchUp(0, 0, 0, 0);
+
             port.sampleInput(2);
+
             assertThat(port.currentInput().fire()).isFalse();
         }
 
@@ -231,7 +267,9 @@ class AndroidInputPortTest
 
             port.touchDown((int) port.layout().fireCentreX(),
                 (int) port.layout().fireCentreY(), 0, 0);
+
             port.touchUp(0, 0, 0, 0);
+
             port.sampleInput(0);
 
             assertThat(port.currentInput().fire()).isTrue();
@@ -245,9 +283,11 @@ class AndroidInputPortTest
 
             port.touchDown((int) port.layout().jumpCentreX(),
                 (int) port.layout().jumpCentreY(), 0, 0);
+
             port.sampleInput(0);
 
             assertThat(port.currentInput().jump()).isTrue();
+
             assertThat(port.currentInput().fire()).isFalse();
         }
 
@@ -261,11 +301,14 @@ class AndroidInputPortTest
             final AndroidInputPort port = playing();
 
             port.touchDown(1600, 500, 0, 0);
+
             port.touchDragged((int) port.layout().fireCentreX(),
                 (int) port.layout().fireCentreY(), 0);
+
             port.sampleInput(0);
 
             assertThat(port.currentInput().fire()).isFalse();
+
             assertThat(port.regionOf(0)).isEqualTo(TouchLayout.REGION_LOOK);
         }
 
@@ -279,6 +322,7 @@ class AndroidInputPortTest
                 (int) port.layout().leaveCentreY(), 0, 0);
 
             assertThat(port.consumeLeaveRequest()).isTrue();
+
             assertThat(port.consumeLeaveRequest())
                 .as("edge-triggered, or a held control bounces the player straight back out")
                 .isFalse();
@@ -294,6 +338,7 @@ class AndroidInputPortTest
             // held is a button that gives the player no feedback at all, and on
             // a screen with no click that is indistinguishable from a miss.
             final AndroidInputPort port = playing();
+
             final TouchLayout layout = port.layout();
 
             for (final int region : TouchLayout.buttonRegions())
@@ -327,6 +372,7 @@ class AndroidInputPortTest
             final AndroidInputPort port = playing();
 
             assertThat(port.keyDown(Input.Keys.BACK)).isTrue();
+
             assertThat(port.consumeLeaveRequest()).isTrue();
         }
 
@@ -337,6 +383,7 @@ class AndroidInputPortTest
             final AndroidInputPort port = playing();
 
             assertThat(port.keyDown(Input.Keys.VOLUME_UP)).isFalse();
+
             assertThat(port.consumeLeaveRequest()).isFalse();
         }
 
@@ -351,8 +398,11 @@ class AndroidInputPortTest
             final AndroidInputPort port = playing();
 
             port.touchDown(300, 800, 0, 0);
+
             port.touchDragged(300, 800 - (int) port.layout().stickRange(), 0);
+
             port.touchCancelled(300, 700, 0, 0);
+
             port.sampleInput(0);
 
             assertThat(port.currentInput().forwardAxis()).isZero();
@@ -365,7 +415,9 @@ class AndroidInputPortTest
             final AndroidInputPort port = playing();
 
             assertThat(port.touchDown(300, 800, AndroidInputPort.MAX_POINTERS, 0)).isFalse();
+
             assertThat(port.touchDown(300, 800, -1, 0)).isFalse();
+
             assertThat(port.regionOf(-1)).isEqualTo(TouchLayout.REGION_NONE);
         }
     }
@@ -383,10 +435,13 @@ class AndroidInputPortTest
             // installed" should cost nothing rather than walk the player into
             // a wall behind the buttons.
             final AndroidInputPort port = new AndroidInputPort(DENSITY);
+
             port.resize(WIDTH, HEIGHT);
 
             assertThat(port.touchDown(300, 800, 0, 0)).isFalse();
+
             port.sampleInput(0);
+
             assertThat(port.currentInput().isNeutral()).isTrue();
         }
     }
@@ -402,13 +457,16 @@ class AndroidInputPortTest
             // A rotation moves the fire button somewhere else, so a finger that
             // went down on it is holding a control that is no longer there.
             final AndroidInputPort port = playing();
+
             port.touchDown((int) port.layout().fireCentreX(),
                 (int) port.layout().fireCentreY(), 0, 0);
 
             port.resize(HEIGHT, WIDTH);
+
             port.sampleInput(0);
 
             assertThat(port.currentInput().fire()).isFalse();
+
             assertThat(port.regionOf(0)).isEqualTo(TouchLayout.REGION_NONE);
         }
 
@@ -417,15 +475,20 @@ class AndroidInputPortTest
         void shouldForgetEverything()
         {
             final AndroidInputPort port = playing();
+
             port.touchDown(300, 800, 0, 0);
+
             port.touchDragged(300, 700, 0);
+
             port.touchDown((int) port.layout().fireCentreX(),
                 (int) port.layout().fireCentreY(), 1, 0);
 
             port.forgetEverything();
+
             port.sampleInput(0);
 
             assertThat(port.currentInput().isNeutral()).isTrue();
+
             assertThat(port.stickPointer()).isEqualTo(-1);
         }
 
@@ -434,7 +497,9 @@ class AndroidInputPortTest
         void shouldNeutraliseOnShutdown()
         {
             final AndroidInputPort port = playing();
+
             port.touchDown(300, 800, 0, 0);
+
             port.touchDragged(300, 700, 0);
 
             port.shutdown();
@@ -460,7 +525,9 @@ class AndroidInputPortTest
         private static AndroidInputPort padPlaying()
         {
             final AndroidInputPort port = playing();
+
             port.setTicRate(TIC_RATE);
+
             return port;
         }
 
@@ -472,8 +539,11 @@ class AndroidInputPortTest
             // as NEGATIVE y while forward is positive in InputState. Backwards,
             // and pushing the stick away walks you backwards.
             final AndroidInputPort port = padPlaying();
+
             port.onGamepadAxes(0.0f, -1.0f, 0.0f, 0.0f, 0.0f);
+
             port.sampleInput(0);
+
             assertThat(port.currentInput().forwardAxis()).isCloseTo(1.0f, within(EPSILON));
         }
 
@@ -486,12 +556,17 @@ class AndroidInputPortTest
             // second negation in this port is what "the mouse is still inverted"
             // was last time.
             final AndroidInputPort port = padPlaying();
+
             port.onGamepadAxes(0.0f, 0.0f, 0.0f, -1.0f, 0.0f);
+
             port.sampleInput(0);
+
             assertThat(port.currentInput().pitchDelta()).isPositive();
 
             port.onGamepadAxes(0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+
             port.sampleInput(1);
+
             assertThat(port.currentInput().pitchDelta()).isNegative();
         }
 
@@ -500,9 +575,12 @@ class AndroidInputPortTest
         void shouldBeNeutralAtRest()
         {
             final AndroidInputPort port = padPlaying();
+
             // Resting noise, which is what a real pad reports.
             port.onGamepadAxes(0.05f, -0.04f, -0.03f, 0.06f, 0.0f);
+
             port.sampleInput(0);
+
             assertThat(port.currentInput().isNeutral()).isTrue();
         }
 
@@ -515,14 +593,18 @@ class AndroidInputPortTest
             // summed rather than overwritten, a pad reporting at 250 Hz would
             // turn several times faster than one reporting at 60.
             final AndroidInputPort once = padPlaying();
+
             once.onGamepadAxes(0.0f, 0.0f, 1.0f, 0.0f, 0.0f);
+
             once.sampleInput(0);
 
             final AndroidInputPort many = padPlaying();
+
             for (int event = 0; event < 12; event++)
             {
                 many.onGamepadAxes(0.0f, 0.0f, 1.0f, 0.0f, 0.0f);
             }
+
             many.sampleInput(0);
 
             assertThat(many.currentInput().yawDelta())
@@ -537,13 +619,18 @@ class AndroidInputPortTest
             // The requirement: an ADDITIONAL path. A phone with a pad clipped to
             // it still has a touchscreen, and the two must not fight.
             final AndroidInputPort port = padPlaying();
+
             port.onGamepadAxes(0.0f, -1.0f, 0.0f, 0.0f, 0.0f);
+
             port.touchDown((int) port.layout().fireCentreX(),
                 (int) port.layout().fireCentreY(), 0, 0);
+
             port.sampleInput(0);
 
             final InputState snapshot = port.currentInput();
+
             assertThat(snapshot.forwardAxis()).as("stick walks").isCloseTo(1.0f, within(EPSILON));
+
             assertThat(snapshot.fire()).as("thumb fires").isTrue();
         }
 
@@ -554,13 +641,17 @@ class AndroidInputPortTest
             final AndroidInputPort port = padPlaying();
 
             assertThat(port.keyDown(Input.Keys.BUTTON_R1)).isTrue();
+
             port.sampleInput(0);
+
             assertThat(port.currentInput().fire()).isTrue();
 
             // A pad button is a LEVEL, unlike the back key. Without keyUp the
             // weapon fires for the rest of the match.
             assertThat(port.keyUp(Input.Keys.BUTTON_R1)).isTrue();
+
             port.sampleInput(1);
+
             assertThat(port.currentInput().fire()).isFalse();
         }
 
@@ -573,15 +664,21 @@ class AndroidInputPortTest
             // Below the threshold: a resting or barely-brushed trigger must not
             // fire the weapon.
             port.onGamepadAxes(0.0f, 0.0f, 0.0f, 0.0f, 0.2f);
+
             port.sampleInput(0);
+
             assertThat(port.currentInput().fire()).as("barely touched").isFalse();
 
             port.onGamepadAxes(0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
+
             port.sampleInput(1);
+
             assertThat(port.currentInput().fire()).as("pulled").isTrue();
 
             port.onGamepadAxes(0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+
             port.sampleInput(2);
+
             assertThat(port.currentInput().fire()).as("released").isFalse();
         }
 
@@ -590,11 +687,15 @@ class AndroidInputPortTest
         void shouldJumpAndSprintFromThePad()
         {
             final AndroidInputPort port = padPlaying();
+
             port.keyDown(Input.Keys.BUTTON_A);
+
             port.keyDown(Input.Keys.BUTTON_L1);
+
             port.sampleInput(0);
 
             assertThat(port.currentInput().jump()).isTrue();
+
             assertThat(port.currentInput().sprint())
                 .as("a shoulder costs no screen area, which is the whole objection"
                     + " a touch sprint button could not answer")
@@ -606,15 +707,20 @@ class AndroidInputPortTest
         void shouldLeaveTheMatchFromThePad()
         {
             final AndroidInputPort start = padPlaying();
+
             assertThat(start.keyDown(Input.Keys.BUTTON_START)).isTrue();
+
             assertThat(start.consumeLeaveRequest()).isTrue();
+
             assertThat(start.consumeLeaveRequest())
                 .as("consumed exactly once, or a held button bounces the player"
                     + " straight back out of the menu")
                 .isFalse();
 
             final AndroidInputPort select = padPlaying();
+
             assertThat(select.keyDown(Input.Keys.BUTTON_SELECT)).isTrue();
+
             assertThat(select.consumeLeaveRequest()).isTrue();
         }
 
@@ -625,7 +731,9 @@ class AndroidInputPortTest
             // Returning true for everything would eat volume keys and any other
             // key the platform needs.
             final AndroidInputPort port = padPlaying();
+
             assertThat(port.keyDown(Input.Keys.VOLUME_UP)).isFalse();
+
             assertThat(port.keyUp(Input.Keys.VOLUME_UP)).isFalse();
         }
 
@@ -636,12 +744,17 @@ class AndroidInputPortTest
             // Same rule as a touch. A pad left leaning on a table while the
             // player reads the menu is not a request to walk.
             final AndroidInputPort port = new AndroidInputPort(DENSITY);
+
             port.resize(WIDTH, HEIGHT);
+
             port.setTicRate(TIC_RATE);
+
             port.bindUiState(new UiStateMachine());
 
             port.onGamepadAxes(1.0f, -1.0f, 1.0f, 1.0f, 1.0f);
+
             port.keyDown(Input.Keys.BUTTON_R1);
+
             port.sampleInput(0);
 
             assertThat(port.currentInput()).isEqualTo(InputState.NEUTRAL);
@@ -656,9 +769,13 @@ class AndroidInputPortTest
             // battery down sends NO final event. The last stick position it
             // reported is a level and would sit in the accumulator forever.
             final AndroidInputPort port = padPlaying();
+
             port.onGamepadAxes(0.0f, -1.0f, 1.0f, 0.0f, 1.0f);
+
             port.keyDown(Input.Keys.BUTTON_A);
+
             port.sampleInput(0);
+
             assertThat(port.currentInput().isNeutral()).isFalse();
 
             port.onGamepadDisconnected();
@@ -666,6 +783,7 @@ class AndroidInputPortTest
             for (int tic = 1; tic < 120; tic++)
             {
                 port.sampleInput(tic);
+
                 assertThat(port.currentInput().isNeutral())
                     .as("tic %d after the pad went away", Integer.valueOf(tic))
                     .isTrue();
@@ -680,16 +798,20 @@ class AndroidInputPortTest
             // has a touchscreen, and clearing a finger that is on the stick right
             // now would be a second bug.
             final AndroidInputPort port = padPlaying();
+
             port.onGamepadAxes(1.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+
             port.touchDown((int) port.layout().fireCentreX(),
                 (int) port.layout().fireCentreY(), 0, 0);
 
             port.onGamepadDisconnected();
+
             port.sampleInput(0);
 
             assertThat(port.currentInput().fire())
                 .as("the thumb is still on the fire button")
                 .isTrue();
+
             assertThat(port.currentInput().strafeAxis())
                 .as("but the stick is gone")
                 .isZero();
@@ -700,11 +822,15 @@ class AndroidInputPortTest
         void shouldRecoverAfterReconnect()
         {
             final AndroidInputPort port = padPlaying();
+
             port.onGamepadAxes(0.0f, -1.0f, 0.0f, 0.0f, 0.0f);
+
             port.onGamepadDisconnected();
 
             port.onGamepadAxes(0.0f, -1.0f, 0.0f, 0.0f, 0.0f);
+
             port.sampleInput(0);
+
             assertThat(port.currentInput().forwardAxis()).isCloseTo(1.0f, within(EPSILON));
         }
 
@@ -716,9 +842,13 @@ class AndroidInputPortTest
             // then would still be held on the way back — the player returns
             // already firing. forgetEverything is the edge the UI calls.
             final AndroidInputPort port = padPlaying();
+
             port.keyDown(Input.Keys.BUTTON_R1);
+
             port.forgetEverything();
+
             port.sampleInput(0);
+
             assertThat(port.currentInput()).isEqualTo(InputState.NEUTRAL);
         }
 
@@ -745,6 +875,7 @@ class AndroidInputPortTest
             // costs no screen area, so the objection does not apply and the
             // action becomes reachable — with a controller, and only with one.
             final ActionBindings table = AndroidBindings.defaults();
+
             assertThat(table.bindingsFor(GameAction.SPRINT))
                 .containsExactly(InputBinding.gamepadButton(Input.Keys.BUTTON_L1));
 
@@ -773,11 +904,13 @@ class AndroidInputPortTest
         void shouldBindMovementToBothSticks()
         {
             final ActionBindings table = AndroidBindings.defaults();
+
             final GameAction[] movement =
             {
                 GameAction.MOVE_FORWARD, GameAction.MOVE_BACKWARD,
                 GameAction.STRAFE_LEFT, GameAction.STRAFE_RIGHT,
             };
+
             for (final GameAction action : movement)
             {
                 assertThat(table.bindingsFor(action))
@@ -807,6 +940,7 @@ class AndroidInputPortTest
         void shouldStayWithinTheBindingCap()
         {
             final ActionBindings table = AndroidBindings.defaults();
+
             for (final GameAction action : GameAction.values())
             {
                 assertThat(table.bindingsFor(action))
@@ -824,6 +958,7 @@ class AndroidInputPortTest
             // what a loader checks before trusting a saved scheme.
             assertThat(AndroidBindings.defaults().bindingsFor(GameAction.JUMP))
                 .contains(InputBinding.gamepadButton(Input.Keys.BUTTON_A));
+
             assertThat(Input.Keys.BUTTON_A).isNotZero();
         }
     }

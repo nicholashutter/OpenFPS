@@ -49,6 +49,7 @@ public final class DefaultMenuActions implements MenuActions
         {
             throw new IllegalArgumentException("window must not be null");
         }
+
         this.window = window;
     }
 
@@ -86,6 +87,7 @@ public final class DefaultMenuActions implements MenuActions
     public void onQuit()
     {
         LOG.info("Menu: Quit selected — closing window");
+
         window.requestClose();
     }
 }

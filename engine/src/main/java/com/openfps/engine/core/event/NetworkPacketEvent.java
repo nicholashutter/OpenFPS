@@ -23,8 +23,11 @@ public final class NetworkPacketEvent implements I_EngineEvent
                               final String peerAddress, final byte[] payload)
     {
         this.sequenceNumber = sequenceNumber;
+
         this.timestampNanos = timestampNanos;
+
         this.peerAddress = peerAddress;
+
         this.payload = payload;
     }
 
@@ -60,10 +63,12 @@ public final class NetworkPacketEvent implements I_EngineEvent
     public String toString()
     {
         int byteCount = 0;
+
         if (payload != null)
         {
             byteCount = payload.length;
         }
+
         return "NetworkPacketEvent{seq=" + sequenceNumber + ", from='" + peerAddress
             + "', bytes=" + byteCount + "}";
     }

@@ -44,20 +44,25 @@ public record Lane(String id, LaneAxis axis, List<Chokepoint> chokepoints)
         {
             throw new IllegalArgumentException("id must not be null or blank");
         }
+
         if (axis == null)
         {
             throw new IllegalArgumentException("axis must not be null");
         }
+
         if (chokepoints == null)
         {
             throw new IllegalArgumentException("chokepoints must not be null");
         }
+
         if (chokepoints.size() < 2)
         {
             throw new IllegalArgumentException(
                 "a lane must have at least two chokepoints, got " + chokepoints.size());
         }
+
         id = id.intern();
+
         // Defensive copy so a caller cannot mutate the list after the fact.
         chokepoints = List.copyOf(chokepoints);
     }

@@ -46,7 +46,9 @@ class LumpCacheTest
     private static byte[] filled(final int fillValue)
     {
         final byte[] out = new byte[LUMP_BYTES];
+
         java.util.Arrays.fill(out, (byte) fillValue);
+
         return out;
     }
 
@@ -60,9 +62,13 @@ class LumpCacheTest
             .lump("LUMPD", filled(0xD4))
             .marker("MARKER")
             .build();
+
         reader = WadReader.fromBytes(image);
+
         memory = MemoryPortFactory.createJvm(HEAP);
+
         memory.init(HEAP);
+
         cache = new LumpCache(reader, memory, BUDGET);
     }
 
@@ -75,8 +81,11 @@ class LumpCacheTest
     void shouldStartEmpty()
     {
         assertThat(cache.residentCount()).isZero();
+
         assertThat(cache.residentBytes()).isZero();
+
         assertThat(cache.isResident(0)).isFalse();
+
         assertThat(memory.allocatedBytes()).isZero();
     }
 
@@ -87,10 +96,15 @@ class LumpCacheTest
         final byte[] payload = cache.load(0);
 
         assertThat(payload).hasSize(LUMP_BYTES);
+
         assertThat(cache.isResident(0)).isTrue();
+
         assertThat(cache.residentBytes()).isEqualTo(LUMP_BYTES);
+
         assertThat(cache.residentCount()).isEqualTo(1);
+
         assertThat(memory.allocatedBytes()).isEqualTo(LUMP_BYTES);
+
         assertThat(memory.handleCount()).isEqualTo(1);
     }
 
@@ -99,10 +113,13 @@ class LumpCacheTest
     void shouldServeRepeatedReadFromCache()
     {
         final byte[] first = cache.load(0);
+
         final byte[] second = cache.load(0);
 
         assertThat(second).isSameAs(first);
+
         assertThat(cache.residentCount()).isEqualTo(1);
+
         assertThat(memory.handleCount()).isEqualTo(1);
     }
 
@@ -122,8 +139,11 @@ class LumpCacheTest
         final byte[] payload = cache.load(4);
 
         assertThat(payload).isEmpty();
+
         assertThat(cache.isResident(4)).isTrue();
+
         assertThat(cache.residentBytes()).isZero();
+
         assertThat(cache.residentCount()).isEqualTo(1);
     }
 
@@ -136,6 +156,7 @@ class LumpCacheTest
     void shouldCountReferences()
     {
         cache.acquire(0);
+
         cache.acquire(0);
 
         assertThat(cache.refCount(0)).isEqualTo(2);
@@ -143,6 +164,7 @@ class LumpCacheTest
         cache.release(0);
 
         assertThat(cache.refCount(0)).isEqualTo(1);
+
         assertThat(cache.isResident(0)).isTrue();
     }
 
@@ -151,12 +173,17 @@ class LumpCacheTest
     void shouldEvictOnFinalRelease()
     {
         cache.acquire(0);
+
         cache.release(0);
 
         assertThat(cache.isResident(0)).isFalse();
+
         assertThat(cache.residentBytes()).isZero();
+
         assertThat(cache.residentCount()).isZero();
+
         assertThat(memory.handleCount()).isZero();
+
         assertThat(memory.allocatedBytes()).isZero();
     }
 
@@ -165,9 +192,11 @@ class LumpCacheTest
     void shouldIgnoreReleaseWithoutAcquire()
     {
         cache.load(0);
+
         cache.release(0);
 
         assertThat(cache.isResident(0)).isTrue();
+
         assertThat(cache.refCount(0)).isZero();
     }
 
@@ -185,10 +214,13 @@ class LumpCacheTest
     void shouldReloadAfterEviction()
     {
         final byte[] first = cache.acquire(0);
+
         cache.release(0);
+
         final byte[] second = cache.acquire(0);
 
         assertThat(second).isNotSameAs(first).containsExactly(first);
+
         assertThat(cache.refCount(0)).isEqualTo(1);
     }
 
@@ -201,12 +233,17 @@ class LumpCacheTest
     void shouldStayWithinBudget()
     {
         cache.load(0);
+
         cache.load(1);
+
         cache.load(2);
+
         cache.load(3);
 
         assertThat(cache.residentBytes()).isLessThanOrEqualTo(BUDGET);
+
         assertThat(cache.residentCount()).isEqualTo(2);
+
         assertThat(memory.allocatedBytes()).isEqualTo(cache.residentBytes());
     }
 
@@ -215,12 +252,17 @@ class LumpCacheTest
     void shouldEvictLeastRecentlyUsed()
     {
         cache.load(0);
+
         cache.load(1);
+
         cache.load(0);   // lump 0 is now more recent than lump 1
+
         cache.load(2);
 
         assertThat(cache.isResident(1)).isFalse();
+
         assertThat(cache.isResident(0)).isTrue();
+
         assertThat(cache.isResident(2)).isTrue();
     }
 
@@ -229,12 +271,17 @@ class LumpCacheTest
     void shouldNeverEvictPinnedLump()
     {
         cache.acquire(0);
+
         cache.load(1);
+
         cache.load(2);
+
         cache.load(3);
 
         assertThat(cache.isResident(0)).isTrue();
+
         assertThat(cache.refCount(0)).isEqualTo(1);
+
         assertThat(cache.residentCount()).isEqualTo(2);
     }
 
@@ -243,6 +290,7 @@ class LumpCacheTest
     void shouldFailWhenAllResidentLumpsArePinned()
     {
         cache.acquire(0);
+
         cache.acquire(1);
 
         assertThatThrownBy(() -> cache.acquire(2))
@@ -257,6 +305,7 @@ class LumpCacheTest
         final byte[] image = WadBuilder.iwad()
             .lump("HUGE", new byte[BUDGET + 1])
             .build();
+
         final LumpCache tinyCache = new LumpCache(WadReader.fromBytes(image), memory, BUDGET);
 
         assertThatThrownBy(() -> tinyCache.load(0))
@@ -269,10 +318,13 @@ class LumpCacheTest
     void shouldKeepHandedOutBufferValidAfterEviction()
     {
         final byte[] held = cache.load(0);
+
         cache.load(1);
+
         cache.load(2);
 
         assertThat(cache.isResident(0)).isFalse();
+
         assertThat(held).hasSize(LUMP_BYTES).containsOnly((byte) 0xA1);
     }
 
@@ -285,14 +337,19 @@ class LumpCacheTest
     void shouldFlushEverything()
     {
         cache.acquire(0);
+
         cache.load(1);
 
         cache.flush();
 
         assertThat(cache.residentCount()).isZero();
+
         assertThat(cache.residentBytes()).isZero();
+
         assertThat(cache.refCount(0)).isZero();
+
         assertThat(memory.handleCount()).isZero();
+
         assertThat(memory.allocatedBytes()).isZero();
     }
 
@@ -316,6 +373,7 @@ class LumpCacheTest
         assertThatThrownBy(() -> cache.load(99))
             .isInstanceOf(WadException.class)
             .hasMessageContaining("out of range");
+
         assertThatThrownBy(() -> cache.release(-1))
             .isInstanceOf(WadException.class)
             .hasMessageContaining("out of range");
@@ -327,8 +385,10 @@ class LumpCacheTest
     {
         assertThatThrownBy(() -> new LumpCache(null, memory, BUDGET))
             .isInstanceOf(WadException.class);
+
         assertThatThrownBy(() -> new LumpCache(reader, null, BUDGET))
             .isInstanceOf(WadException.class);
+
         assertThatThrownBy(() -> new LumpCache(reader, memory, 0))
             .isInstanceOf(WadException.class);
     }
@@ -338,7 +398,9 @@ class LumpCacheTest
     void shouldSurfaceMemoryPortRefusal()
     {
         final I_MemoryPort tinyHeap = MemoryPortFactory.createJvm(LUMP_BYTES / 2);
+
         tinyHeap.init(LUMP_BYTES / 2);
+
         final LumpCache starved = new LumpCache(reader, tinyHeap, BUDGET);
 
         assertThatThrownBy(() -> starved.load(0))

@@ -89,8 +89,10 @@ final class DemoSceneTest
         {
             DemoModelFixture.write(root.resolve(DemoModels.LEVEL_DIRECTORY).resolve(piece));
         }
+
         DemoModelFixture.write(root.resolve(DemoModels.WEAPON_DIRECTORY)
             .resolve(DemoModels.WEAPON_MODEL));
+
         return DemoModels.load(root);
     }
 
@@ -116,11 +118,14 @@ final class DemoSceneTest
     private static Target[] hitboxesOf(final DemoScene demo)
     {
         final Bot[] roster = demo.bots();
+
         final Target[] boxes = new Target[roster.length];
+
         for (int index = 0; index < roster.length; index++)
         {
             boxes[index] = roster[index].hitbox();
         }
+
         return boxes;
     }
 
@@ -138,8 +143,11 @@ final class DemoSceneTest
     private static float angularHalfWidth(final DemoScene demo, final Bot bot)
     {
         final float toX = bot.positionX() - demo.spawnX();
+
         final float toZ = bot.positionZ() - demo.spawnZ();
+
         final float distance = (float) StrictMath.sqrt(toX * toX + toZ * toZ);
+
         return DemoScene.PLAYER_RADIUS_UNITS / distance;
     }
 
@@ -165,6 +173,7 @@ final class DemoSceneTest
             DemoModelFixture.write(root.resolve(DemoModels.CHARACTER_DIRECTORY)
                 .resolve(person));
         }
+
         return kit(root);
     }
 
@@ -173,6 +182,7 @@ final class DemoSceneTest
     {
         DemoModelFixture.write(root.resolve(DemoModels.WEAPON_DIRECTORY)
             .resolve(DemoModels.BOT_WEAPON_MODEL));
+
         return kitWithCharacters(root);
     }
 
@@ -200,6 +210,7 @@ final class DemoSceneTest
             assertThat(DemoScene.PLAYER_HEIGHT_UNITS)
                 .isCloseTo((float) Constants.PLAYER_HEIGHT / (float) Constants.MAP_SCALE,
                     within(EPSILON));
+
             assertThat(DemoScene.PLAYER_RADIUS_UNITS)
                 .isCloseTo(PLAYER_RADIUS_UNITS, within(EPSILON));
         }
@@ -215,6 +226,7 @@ final class DemoSceneTest
             assertThat(PlayerController.EYE_HEIGHT_UNITS)
                 .as("the eye is inside the head, not above it")
                 .isLessThan(DemoScene.PLAYER_HEIGHT_UNITS);
+
             assertThat(DemoScene.PLAYER_RADIUS_UNITS * 2.0f)
                 .as("a player fits through a one-cell doorway with clearance")
                 .isLessThan(DemoScene.KIT_WORLD_SCALE);
@@ -232,21 +244,28 @@ final class DemoSceneTest
             // together. If they drift you see a target, shoot it, and nothing
             // happens.
             final DemoScene demo = DemoScene.build(kitWithCharacters(root));
+
             final PlayerController player = demo.spawnController();
+
             final Vec3 eye = player.eyePosition();
+
             final Vec3 aim = player.forwardVector();
 
             final Target[] boxes = hitboxesOf(demo);
+
             final HitResult result = new HitResult();
+
             final boolean connected = Hitscan.fire(eye.x(), eye.y(), eye.z(),
                 aim.x(), aim.y(), aim.z(), boxes, boxes.length, result);
 
             assertThat(connected)
                 .as("the spawn faces +z down the room, and a bot is placed on that bearing")
                 .isTrue();
+
             assertThat(result.entityId())
                 .as("the nearest bot on the spawn bearing is the first one placed")
                 .isEqualTo(Match.FIRST_BOT_ENTITY_ID);
+
             assertThat(result.distance())
                 .as("hit somewhere in front of the shooter, not behind or at zero")
                 .isGreaterThan(0.0f);
@@ -265,16 +284,20 @@ final class DemoSceneTest
             // Bots MOVE, so it is not enough that the spawn is clear at tic 0.
             // A full circuit of the longest route is swept below.
             final DemoScene demo = DemoScene.build(kitWithCharacters(root));
+
             for (int tic = 0; tic <= LONGEST_ROUTE_TICS; tic++)
             {
                 for (final Bot bot : demo.bots())
                 {
                     bot.moveTo(tic);
+
                     final Target box = bot.hitbox();
+
                     final boolean spawnInside = demo.spawnX() >= box.minX()
                         && demo.spawnX() <= box.maxX()
                         && demo.spawnZ() >= box.minZ()
                         && demo.spawnZ() <= box.maxZ();
+
                     assertThat(spawnInside)
                         .as("bot %d walked over the spawn point at tic %d", box.entityId(), tic)
                         .isFalse();
@@ -287,9 +310,11 @@ final class DemoSceneTest
         void shouldTagOnlyTheCharacters(@TempDir final Path root) throws IOException
         {
             final DemoScene demo = DemoScene.build(kitWithCharacters(root));
+
             final Scene scene = demo.scene();
 
             int tagged = 0;
+
             for (int index = 0; index < scene.worldInstanceCount(); index++)
             {
                 if (scene.worldEntityId(index) != Scene.UNTAGGED)
@@ -297,6 +322,7 @@ final class DemoSceneTest
                     tagged++;
                 }
             }
+
             // TWO per bot, and the second one is deliberate: a bot's carbine
             // carries its HOLDER's id rather than being left untagged, so the
             // outline pass draws one silhouette round the body and what it is
@@ -312,6 +338,7 @@ final class DemoSceneTest
             // render-time override and does not untag anything, which is the
             // distinction this assertion is really pinning down.
             final int expected = demo.botCount() * 2 + demo.remotePlayers().bodyCount() * 2;
+
             assertThat(tagged)
                 .as("a body and a carbine per bot and per peer — the outline and the"
                     + " shot agree on count")
@@ -328,9 +355,11 @@ final class DemoSceneTest
             final DemoScene demo = DemoScene.build(kit(root));
 
             assertThat(demo.botCount()).isZero();
+
             assertThat(demo.scene().hasTaggedEntities())
                 .as("an untagged scene skips the outline pass entirely")
                 .isFalse();
+
             assertThat(demo.newMatch().state())
                 .as("a room with nobody in it is won, not unwinnable")
                 .isEqualTo(MatchState.WON);
@@ -352,7 +381,9 @@ final class DemoSceneTest
             // placement, and a spawn ring that quietly moved it would be a
             // gratuitous change to the single-player game.
             assertThat(demo.spawnXFor(0)).isEqualTo(demo.spawnX());
+
             assertThat(demo.spawnZFor(0)).isEqualTo(demo.spawnZ());
+
             assertThat(DemoScene.spawnYawFor(0)).isEqualTo(0.0f);
         }
 
@@ -361,6 +392,7 @@ final class DemoSceneTest
         void shouldFaceTheTwoPeerCaseTogether(@TempDir final Path root) throws IOException
         {
             final DemoScene demo = DemoScene.build(kitWithCharacters(root));
+
             final float radius = demo.spawnRadius();
 
             // These are the two ids a two-peer match uses, so this is the
@@ -369,13 +401,18 @@ final class DemoSceneTest
             // outside each other's 60-degree view and a working session looks
             // exactly like a broken one.
             assertThat(demo.spawnXFor(1)).isEqualTo(-radius);
+
             assertThat(demo.spawnXFor(2)).isEqualTo(radius);
+
             assertThat(demo.spawnZFor(1)).isEqualTo(0.0f);
+
             assertThat(demo.spawnZFor(2)).isEqualTo(0.0f);
 
             // Yaw sweeps from +z toward +x, so +pi/2 faces +x and -pi/2 faces -x.
             final float quarter = (float) (StrictMath.PI / 2.0);
+
             assertThat(DemoScene.spawnYawFor(1)).isCloseTo(quarter, within(1.0e-6f));
+
             assertThat(DemoScene.spawnYawFor(2)).isCloseTo(-quarter, within(1.0e-6f));
         }
 
@@ -384,12 +421,15 @@ final class DemoSceneTest
         void shouldPlaceEveryoneInsideLookingIn(@TempDir final Path root) throws IOException
         {
             final DemoScene demo = DemoScene.build(kitWithCharacters(root));
+
             final float radius = demo.spawnRadius();
 
             for (int id = 0; id < DemoScene.spawnPointCount(); id++)
             {
                 final float x = demo.spawnXFor(id);
+
                 final float z = demo.spawnZFor(id);
+
                 // On the ring, so nobody is closer to a wall than the canonical
                 // spawn already is.
                 assertThat((float) StrictMath.hypot(x, z))
@@ -400,8 +440,11 @@ final class DemoSceneTest
                 // must point back at the origin. A spawn looking outward would put
                 // a player's first frame into a wall.
                 final float yaw = DemoScene.spawnYawFor(id);
+
                 final float forwardX = (float) StrictMath.sin(yaw);
+
                 final float forwardZ = (float) StrictMath.cos(yaw);
+
                 assertThat(forwardX * x + forwardZ * z)
                     .as("spawn %d looks toward the centre, not away from it", id)
                     .isLessThan(0.0f);
@@ -413,6 +456,7 @@ final class DemoSceneTest
         void shouldFoldStrayIds(@TempDir final Path root) throws IOException
         {
             final DemoScene demo = DemoScene.build(kitWithCharacters(root));
+
             final int count = DemoScene.spawnPointCount();
 
             // A player id arrives from outside the process, so an id past the
@@ -420,6 +464,7 @@ final class DemoSceneTest
             // against. Sharing a spawn is a survivable answer; an exception on the
             // bootstrap path is not.
             assertThat(demo.spawnXFor(count)).isEqualTo(demo.spawnXFor(0));
+
             assertThat(demo.spawnXFor(-1)).isEqualTo(demo.spawnXFor(count - 1));
         }
     }
@@ -436,6 +481,7 @@ final class DemoSceneTest
             final DemoScene demo = DemoScene.build(kitWithCharacters(root));
 
             assertThat(demo.botCount()).isEqualTo(Match.DEFAULT_BOT_COUNT);
+
             assertThat(demo.newMatch().state()).isEqualTo(MatchState.IN_PROGRESS);
         }
 
@@ -445,6 +491,7 @@ final class DemoSceneTest
             throws IOException
         {
             final DemoScene demo = DemoScene.build(kitWithCharacters(root));
+
             final Bot[] roster = demo.bots();
 
             for (int index = 0; index < roster.length; index++)
@@ -452,11 +499,13 @@ final class DemoSceneTest
                 assertThat(roster[index].entityId())
                     .as("no bot may hold the reserved player id")
                     .isNotEqualTo(Match.PLAYER_ENTITY_ID);
+
                 for (int other = 0; other < index; other++)
                 {
                     assertThat(roster[index].entityId()).isNotEqualTo(roster[other].entityId());
                 }
             }
+
             // Match's own constructor enforces this; that it accepts the roster
             // is the end-to-end statement.
             assertThat(demo.newMatch().botCount()).isEqualTo(roster.length);
@@ -471,7 +520,9 @@ final class DemoSceneTest
             // wall is at half the room span and a body is one radius wide, so
             // this is the exact limit rather than a comfortable margin.
             final DemoScene demo = DemoScene.build(kitWithCharacters(root));
+
             final float wall = DemoScene.ROOM_TILES * DemoScene.KIT_WORLD_SCALE * 0.5f;
+
             final float limit = wall - DemoScene.PLAYER_RADIUS_UNITS;
 
             for (int tic = 0; tic <= LONGEST_ROUTE_TICS; tic++)
@@ -479,9 +530,11 @@ final class DemoSceneTest
                 for (final Bot bot : demo.bots())
                 {
                     bot.moveTo(tic);
+
                     assertThat(StrictMath.abs(bot.positionX()))
                         .as("bot %d left the room on x at tic %d", bot.entityId(), tic)
                         .isLessThanOrEqualTo(limit);
+
                     assertThat(StrictMath.abs(bot.positionZ()))
                         .as("bot %d left the room on z at tic %d", bot.entityId(), tic)
                         .isLessThanOrEqualTo(limit);
@@ -501,13 +554,17 @@ final class DemoSceneTest
             // so this asserts the property the player experiences instead of the
             // mechanism that used to produce it.
             final DemoScene demo = DemoScene.build(kitWithCharacters(root));
+
             final Bot[] roster = demo.bots();
+
             final BotRng rng = new BotRng();
 
             int busiestTic = 0;
+
             for (int tic = 0; tic < VOLLEY_SAMPLE_TICS; tic++)
             {
                 int firing = 0;
+
                 for (final Bot bot : roster)
                 {
                     if (bot.wantsToFire(tic, rng, BotSkill.DUMB))
@@ -515,8 +572,10 @@ final class DemoSceneTest
                         firing++;
                     }
                 }
+
                 busiestTic = Math.max(busiestTic, firing);
             }
+
             assertThat(busiestTic)
                 .as("%d of %d bots fired on one tic — that is a broadside",
                     busiestTic, roster.length)
@@ -533,6 +592,7 @@ final class DemoSceneTest
             // while the hitboxes stay where they should be — so shots would
             // connect with thin air next to a visible bot.
             final DemoScene demo = DemoScene.build(kitWithCharacters(root));
+
             final Scene scene = demo.scene();
 
             for (int index = 0; index < demo.botCount(); index++)
@@ -553,15 +613,19 @@ final class DemoSceneTest
             // SENTRIES: two moving bodies that happen to overlap on one frame
             // prove nothing repeatable.
             final DemoScene demo = DemoScene.build(kitWithCharacters(root));
+
             final Bot[] roster = demo.bots();
 
             assertThat(roster[1].pattern().moves()).isFalse();
+
             assertThat(roster[2].pattern().moves())
                 .as("the second of the overlapping pair must also hold still")
                 .isFalse();
 
             final float bearingOne = bearingFromSpawn(demo, roster[1]);
+
             final float bearingTwo = bearingFromSpawn(demo, roster[2]);
+
             final float separation = StrictMath.abs(bearingOne - bearingTwo);
 
             // Overlap is a comparison of angles, not a guess at pixels: two
@@ -570,11 +634,14 @@ final class DemoSceneTest
             // threshold rather than picking one means it stays correct if the
             // placements or the player radius move.
             final float halfWidthOne = angularHalfWidth(demo, roster[1]);
+
             final float halfWidthTwo = angularHalfWidth(demo, roster[2]);
+
             assertThat(separation)
                 .as("bots 1 and 2 must overlap from the spawn: %f apart, %f + %f wide",
                     separation, halfWidthOne, halfWidthTwo)
                 .isLessThan(halfWidthOne + halfWidthTwo);
+
             // But not so completely that the far one is hidden — a fully
             // occluded body tests nothing about telling two outlines apart.
             assertThat(separation).isGreaterThan(0.0f);
@@ -590,14 +657,17 @@ final class DemoSceneTest
         void shouldStandALiveBot(@TempDir final Path root) throws IOException
         {
             final DemoScene demo = DemoScene.build(kitWithCharacters(root));
+
             final Bot bot = demo.bots()[0];
 
             final Mat4 standing = DemoScene.botPlacement(bot);
 
             assertThat(standing.get(1, 1)).as("model up is world up, at the character scale")
                 .isCloseTo(DemoScene.CHARACTER_WORLD_SCALE, within(EPSILON));
+
             assertThat(standing.get(0, 3)).as("placed at its own x")
                 .isCloseTo(bot.positionX(), within(EPSILON));
+
             assertThat(standing.get(2, 3)).as("placed at its own z")
                 .isCloseTo(bot.positionZ(), within(EPSILON));
         }
@@ -607,6 +677,7 @@ final class DemoSceneTest
         void shouldHideAKilledBot(@TempDir final Path root) throws IOException
         {
             final DemoScene demo = DemoScene.build(kitWithCharacters(root));
+
             final Bot victim = demo.bots()[0];
 
             victim.damage(Bot.MAX_HEALTH);
@@ -626,10 +697,13 @@ final class DemoSceneTest
             // no entity id. That last one is what stops a corpse turning the
             // crosshair red.
             final DemoScene demo = DemoScene.build(kitWithCharacters(root));
+
             final Bot victim = demo.bots()[0];
+
             victim.damage(Bot.MAX_HEALTH);
 
             final Mat4 hidden = DemoScene.botPlacement(victim);
+
             for (int row = 0; row < 3; row++)
             {
                 for (int column = 0; column < 4; column++)
@@ -639,6 +713,7 @@ final class DemoSceneTest
                         .isZero();
                 }
             }
+
             assertThat(determinantOf(hidden))
                 .as("a collapsed basis has no volume at all")
                 .isZero();
@@ -651,12 +726,15 @@ final class DemoSceneTest
             // The gate is death, not damage. A bot two hits down must still be
             // in the room, or the third hit has nothing to land on.
             final DemoScene demo = DemoScene.build(kitWithCharacters(root));
+
             final Bot victim = demo.bots()[0];
 
             victim.damage(Bot.MAX_HEALTH - 1);
 
             assertThat(victim.isAlive()).isTrue();
+
             assertThat(DemoScene.botPlacement(victim)).isNotSameAs(DemoEffects.HIDDEN);
+
             assertThat(DemoScene.botPlacement(victim).get(1, 1))
                 .isCloseTo(DemoScene.CHARACTER_WORLD_SCALE, within(EPSILON));
         }
@@ -673,6 +751,7 @@ final class DemoSceneTest
             final float ceiling = DemoScene.KIT_WORLD_SCALE * DemoScene.WALL_COURSES;
 
             assertThat(ceiling).isEqualTo(128.0f);
+
             // 41 of 128. A human eye is about 1.7 m in a 5.3 m room, which is
             // the same fraction; one 64-unit course would be 64% and would read
             // as a crawlspace.
@@ -688,6 +767,7 @@ final class DemoSceneTest
             // so unscaled it would be 1/41 of the eye height — ankle-high.
             assertThat(1.0f * DemoScene.KIT_WORLD_SCALE)
                 .isGreaterThan(PlayerController.EYE_HEIGHT_UNITS);
+
             // And a doorway one tile wide must admit a player, with clearance.
             assertThat(DemoScene.KIT_WORLD_SCALE)
                 .isGreaterThan(2.0f * PLAYER_RADIUS_UNITS);
@@ -703,6 +783,7 @@ final class DemoSceneTest
             // units, and it was written long before this demo existed. Two
             // Kenney courses at KIT_WORLD_SCALE land on it exactly.
             final float ceiling = DemoScene.KIT_WORLD_SCALE * DemoScene.WALL_COURSES;
+
             final float maxOpen =
                 (float) Constants.MAX_OPEN_HEIGHT / (float) Constants.MAP_SCALE;
 
@@ -735,11 +816,15 @@ final class DemoSceneTest
             // wrong wall.
             final Mat4 turned = DemoScene.placement(0.0f, 0.0f, 0.0f,
                 (float) (Math.PI * 0.5), 1.0f);
+
             final float[] out = new float[4];
+
             turned.transformPoint(0.0f, 0.0f, 1.0f, out, 0);
 
             assertThat(out[0]).isCloseTo(1.0f, within(EPSILON));
+
             assertThat(out[1]).isCloseTo(0.0f, within(EPSILON));
+
             assertThat(out[2]).isCloseTo(0.0f, within(EPSILON));
         }
 
@@ -751,6 +836,7 @@ final class DemoSceneTest
             {
                 final Mat4 placed = DemoScene.placement(1.0f, 2.0f, 3.0f,
                     (float) Math.toRadians(degrees), 64.0f);
+
                 assertThat(determinant(placed))
                     .as("yaw %d degrees", degrees)
                     .isCloseTo(64.0f * 64.0f * 64.0f, within(1.0f));
@@ -763,6 +849,7 @@ final class DemoSceneTest
         {
             assertThatThrownBy(() -> DemoScene.placement(0.0f, 0.0f, 0.0f, 0.0f, -1.0f))
                 .isInstanceOf(IllegalArgumentException.class);
+
             assertThatThrownBy(() -> DemoScene.placement(0.0f, 0.0f, 0.0f, 0.0f, 0.0f))
                 .isInstanceOf(IllegalArgumentException.class);
         }
@@ -772,11 +859,14 @@ final class DemoSceneTest
         void invertedPlacementIsAHalfTurn()
         {
             final Mat4 flipped = DemoScene.invertedPlacement(0.0f, 128.0f, 0.0f, 64.0f);
+
             final float[] out = new float[4];
+
             flipped.transformPoint(0.0f, 1.0f, 0.0f, out, 0);
 
             // Model +y ends up pointing down: the tile faces the floor.
             assertThat(out[1]).isLessThan(128.0f);
+
             // And it is still a rotation, not a reflection — scale(1,-1,1)
             // would have determinant -s^3 and Scene would refuse it.
             assertThat(determinant(flipped)).isGreaterThan(0.0f);
@@ -792,7 +882,9 @@ final class DemoSceneTest
         void neverPokesThroughTheNearPlane()
         {
             final Mat4 transform = DemoScene.weaponTransform();
+
             final float[] out = new float[4];
+
             // MUTABLE local — the nearest view-space z any corner reaches.
             float nearest = Float.MAX_VALUE;
 
@@ -800,6 +892,7 @@ final class DemoSceneTest
             {
                 transform.transformPoint(axis(corner, 0), axis(corner, 1), axis(corner, 2),
                     out, 0);
+
                 nearest = Math.min(nearest, out[2]);
             }
 
@@ -813,13 +906,16 @@ final class DemoSceneTest
         void muzzlePointsAwayFromTheEye()
         {
             final Mat4 transform = DemoScene.weaponTransform();
+
             final float[] muzzle = new float[4];
+
             final float[] grip = new float[4];
 
             // The blaster's muzzle is at model -z and its grip end at +z,
             // established by rendering it. After the transform the muzzle must
             // be the FARTHER of the two, or the player is holding it backwards.
             transform.transformPoint(0.0f, 0.0f, BLASTER_BOUNDS[4], muzzle, 0);
+
             transform.transformPoint(0.0f, 0.0f, BLASTER_BOUNDS[5], grip, 0);
 
             assertThat(muzzle[2]).isGreaterThan(grip[2]);
@@ -830,10 +926,13 @@ final class DemoSceneTest
         void isHeldLowerRight()
         {
             final Mat4 transform = DemoScene.weaponTransform();
+
             final float[] out = new float[4];
+
             transform.transformPoint(0.0f, 0.0f, 0.0f, out, 0);
 
             assertThat(out[0]).isGreaterThan(0.0f);
+
             assertThat(out[1]).isLessThan(0.0f);
         }
 
@@ -842,9 +941,13 @@ final class DemoSceneTest
         void toesIn()
         {
             final Mat4 transform = DemoScene.weaponTransform();
+
             final float[] muzzle = new float[4];
+
             final float[] grip = new float[4];
+
             transform.transformPoint(0.0f, 0.0f, BLASTER_BOUNDS[4], muzzle, 0);
+
             transform.transformPoint(0.0f, 0.0f, BLASTER_BOUNDS[5], grip, 0);
 
             // The far end is closer to the screen's centre line than the near
@@ -862,10 +965,13 @@ final class DemoSceneTest
         void hasEveryPart(@TempDir final Path root) throws IOException
         {
             final DemoScene demo = DemoScene.build(kit(root));
+
             final Scene scene = demo.scene();
 
             final int tiles = DemoScene.ROOM_TILES * DemoScene.ROOM_TILES;
+
             final int walls = DemoScene.ROOM_TILES * DemoScene.WALL_COURSES * 4;
+
             final int props = 4 + 8 + 1 + 1;
 
             // Floor and ceiling are the same grid twice, plus the tracer and
@@ -874,6 +980,7 @@ final class DemoSceneTest
             // was staged.
             assertThat(scene.worldInstanceCount())
                 .isEqualTo(2 * tiles + walls + props + demo.effects().instanceCount() + 1);
+
             assertThat(scene.viewInstanceCount()).isEqualTo(1);
         }
 
@@ -882,12 +989,16 @@ final class DemoSceneTest
         void spawnIsInside(@TempDir final Path root) throws IOException
         {
             final DemoScene demo = DemoScene.build(kit(root));
+
             final float half = DemoScene.ROOM_TILES * DemoScene.KIT_WORLD_SCALE * 0.5f;
 
             assertThat(Math.abs(demo.spawnX())).isLessThan(half);
+
             assertThat(Math.abs(demo.spawnZ())).isLessThan(half);
+
             // Feet on the floor plane, which is where the floor tiles are.
             assertThat(demo.spawnY()).isEqualTo(0.0f);
+
             // And far enough from the wall behind to be able to turn round
             // without the wall filling the whole frame.
             assertThat(half - Math.abs(demo.spawnZ()))
@@ -899,10 +1010,13 @@ final class DemoSceneTest
         void spawnControllerAgrees(@TempDir final Path root) throws IOException
         {
             final DemoScene demo = DemoScene.build(kit(root));
+
             final PlayerController controller = demo.spawnController();
 
             assertThat(controller.positionX()).isEqualTo(demo.spawnX());
+
             assertThat(controller.positionZ()).isEqualTo(demo.spawnZ());
+
             // The eye is above the feet by the controller's own constant, so
             // the camera is at eye height and not on the floor.
             assertThat(controller.eyePosition().y())
@@ -918,6 +1032,7 @@ final class DemoSceneTest
             final DemoScene demo = DemoScene.build(DemoModels.load(root));
 
             assertThat(demo.source()).isEqualTo(DemoModels.Source.GENERATED_ROOM);
+
             // The room, plus the effect pool — generated geometry, present
             // even when no art at all was staged — plus the local player's
             // arms. The fallback is the only scene with no character art
@@ -925,6 +1040,7 @@ final class DemoSceneTest
             // arms are still placed because they are procedural.
             assertThat(demo.scene().worldInstanceCount())
                 .isEqualTo(1 + demo.effects().instanceCount() + 1);
+
             assertThat(demo.scene().viewInstanceCount()).isZero();
         }
 
@@ -944,6 +1060,7 @@ final class DemoSceneTest
             // bottom row, so a clean build IS the assertion — but say so, or a
             // later reader will delete this as an empty test.
             final DemoModels models = kit(root);
+
             assertThatCode(() -> DemoScene.build(models)).doesNotThrowAnyException();
         }
     }
@@ -955,6 +1072,7 @@ final class DemoSceneTest
         {
             return BLASTER_BOUNDS[index * 2];
         }
+
         return BLASTER_BOUNDS[index * 2 + 1];
     }
 
@@ -998,14 +1116,19 @@ final class DemoSceneTest
             // pass draws one silhouette round a body and what it is holding, and
             // the crosshair does not go dead when it crosses the gun.
             final DemoScene demo = DemoScene.build(kitWithArmedCharacters(root));
+
             final Scene scene = demo.scene();
+
             assertThat(demo.hasBotWeapons()).isTrue();
 
             for (int index = 0; index < demo.botCount(); index++)
             {
                 final int instance = demo.botWeaponInstanceIndex(index);
+
                 assertThat(instance).isNotEqualTo(DemoScene.NO_INSTANCE);
+
                 assertThat(instance).isNotEqualTo(demo.botInstanceIndex(index));
+
                 assertThat(scene.worldEntityId(instance))
                     .as("weapon instance %d must carry bot %d's id", instance, index)
                     .isEqualTo(demo.bots()[index].entityId());
@@ -1022,6 +1145,7 @@ final class DemoSceneTest
             // rendering fault rather than as a kill.
             final Bot victim = new Bot(2, 40.0f, 0.0f, 120.0f, BotPattern.SENTRY,
                 0.0f, 300, 0);
+
             assertThat(DemoScene.botWeaponPlacement(victim)).isNotSameAs(DemoEffects.HIDDEN);
 
             victim.damage(Bot.MAX_HEALTH);
@@ -1029,6 +1153,7 @@ final class DemoSceneTest
             assertThat(DemoScene.botWeaponPlacement(victim))
                 .as("the weapon is still drawn after its holder died")
                 .isSameAs(DemoEffects.HIDDEN);
+
             assertThat(DemoScene.botPlacement(victim)).isSameAs(DemoEffects.HIDDEN);
         }
 
@@ -1064,14 +1189,18 @@ final class DemoSceneTest
             // length can answer that. An assertion that the yaw differed from the
             // bot's would have passed at one degree of difference.
             final Bot bot = new Bot(2, 0.0f, 0.0f, 200.0f, BotPattern.SENTRY, 0.0f, 300, 0);
+
             bot.observePlayer(0, 0.0f, 0.0f, BotSkill.MARKSMAN);
+
             bot.faceRemembered();
 
             final Mat4 held = DemoScene.botWeaponPlacement(bot);
+
             // Column 2 is the image of the model's +z axis — the weapon's own long
             // axis — scaled by BOT_WEAPON_WORLD_SCALE. The viewer is at the origin
             // looking up +z, so what they see across the screen is the x component.
             final float acrossScreen = StrictMath.abs(held.get(0, 2)) * BOT_BLASTER_LENGTH;
+
             final float alongTheView = StrictMath.abs(held.get(2, 2)) * BOT_BLASTER_LENGTH;
 
             assertThat(acrossScreen)
@@ -1099,6 +1228,7 @@ final class DemoSceneTest
         {
             final Bot walker = new Bot(2, 0.0f, 0.0f, 200.0f, BotPattern.PACE_X,
                 80.0f, 300, 0);
+
             final float atSpawn = DemoScene.botWeaponPlacement(walker).get(0, 3);
 
             walker.moveTo(75);
@@ -1116,7 +1246,9 @@ final class DemoSceneTest
             // instance render inside-out, so a mirrored transform here is a build
             // failure at scene-build time rather than something to look at.
             final Bot bot = new Bot(2, 30.0f, 0.0f, 90.0f, BotPattern.SENTRY, 0.0f, 300, 0);
+
             bot.observePlayer(0, -100.0f, 0.0f, BotSkill.MARKSMAN);
+
             bot.faceRemembered();
 
             assertThat(determinant(DemoScene.botWeaponPlacement(bot))).isPositive();
@@ -1135,6 +1267,7 @@ final class DemoSceneTest
             final DemoScene demo = DemoScene.build(kitWithCharacters(root));
 
             assertThat(demo.hasBotWeapons()).isTrue();
+
             for (int index = 0; index < demo.botCount(); index++)
             {
                 assertThat(demo.botWeaponInstanceIndex(index))

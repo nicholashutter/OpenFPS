@@ -50,7 +50,9 @@ class UiStateMachineTest
         void shouldStartInTheMenu()
         {
             final UiStateMachine machine = new UiStateMachine();
+
             assertThat(machine.state()).isEqualTo(UiState.MENU);
+
             assertThat(machine.isPlaying()).isFalse();
         }
 
@@ -59,8 +61,11 @@ class UiStateMachineTest
         void shouldEnterPlayingFromTheMenu()
         {
             final UiStateMachine machine = new UiStateMachine();
+
             machine.startGame();
+
             assertThat(machine.state()).isEqualTo(UiState.PLAYING);
+
             assertThat(machine.isPlaying()).isTrue();
         }
 
@@ -69,9 +74,13 @@ class UiStateMachineTest
         void shouldReturnToTheMenuFromPlaying()
         {
             final UiStateMachine machine = new UiStateMachine();
+
             machine.startGame();
+
             machine.returnToMenu();
+
             assertThat(machine.state()).isEqualTo(UiState.MENU);
+
             assertThat(machine.isPlaying()).isFalse();
         }
 
@@ -80,11 +89,15 @@ class UiStateMachineTest
         void shouldCycle()
         {
             final UiStateMachine machine = new UiStateMachine();
+
             for (int i = 0; i < 5; i++)
             {
                 machine.startGame();
+
                 assertThat(machine.state()).isEqualTo(UiState.PLAYING);
+
                 machine.returnToMenu();
+
                 assertThat(machine.state()).isEqualTo(UiState.MENU);
             }
         }
@@ -94,11 +107,15 @@ class UiStateMachineTest
         void shouldEnterAndLeaveSettings()
         {
             final UiStateMachine machine = new UiStateMachine();
+
             machine.openSettings();
+
             assertThat(machine.state()).isEqualTo(UiState.SETTINGS);
+
             assertThat(machine.isPlaying()).isFalse();
 
             machine.returnToMenu();
+
             assertThat(machine.state()).isEqualTo(UiState.MENU);
         }
 
@@ -107,12 +124,17 @@ class UiStateMachineTest
         void shouldEnterAndLeaveTheEndScreen()
         {
             final UiStateMachine machine = new UiStateMachine();
+
             machine.startGame();
+
             machine.endMatch(won());
+
             assertThat(machine.state()).isEqualTo(UiState.GAME_OVER);
+
             assertThat(machine.isPlaying()).isFalse();
 
             machine.returnToMenu();
+
             assertThat(machine.state()).isEqualTo(UiState.MENU);
         }
 
@@ -121,17 +143,24 @@ class UiStateMachineTest
         void shouldPermitExactlyTheDocumentedEdges()
         {
             assertThat(UiState.MENU.canTransitionTo(UiState.PLAYING)).isTrue();
+
             assertThat(UiState.MENU.canTransitionTo(UiState.SETTINGS)).isTrue();
+
             assertThat(UiState.PLAYING.canTransitionTo(UiState.MENU)).isTrue();
+
             assertThat(UiState.PLAYING.canTransitionTo(UiState.GAME_OVER)).isTrue();
+
             assertThat(UiState.SETTINGS.canTransitionTo(UiState.MENU)).isTrue();
+
             assertThat(UiState.GAME_OVER.canTransitionTo(UiState.MENU)).isTrue();
 
             // Settings is reachable only from the menu. Mid-match it would be a
             // pause screen, and this game has no pause — the loop keeps ticking
             // and the bots would keep shooting a player who is reading a menu.
             assertThat(UiState.PLAYING.canTransitionTo(UiState.SETTINGS)).isFalse();
+
             assertThat(UiState.SETTINGS.canTransitionTo(UiState.PLAYING)).isFalse();
+
             assertThat(UiState.SETTINGS.canTransitionTo(UiState.GAME_OVER)).isFalse();
 
             // The rematch edge, which was refused for as long as it would have
@@ -139,6 +168,7 @@ class UiStateMachineTest
             // so an edge back into the world led into a room already cleared.
             // Match.reset() is what earned this line — see UiState's Javadoc.
             assertThat(UiState.GAME_OVER.canTransitionTo(UiState.PLAYING)).isTrue();
+
             // Settings from the end screen stays refused, for the same reason it
             // is refused mid-match: it would be a pause screen, and this game has
             // no pause.
@@ -153,12 +183,15 @@ class UiStateMachineTest
         void shouldRestartFromTheEndScreen()
         {
             final UiStateMachine machine = new UiStateMachine();
+
             machine.startGame();
+
             machine.endMatch(won());
 
             machine.restartMatch();
 
             assertThat(machine.state()).isEqualTo(UiState.PLAYING);
+
             assertThat(machine.isPlaying()).isTrue();
         }
 
@@ -172,12 +205,17 @@ class UiStateMachineTest
             // — the guard that stopped the end screen re-firing was latched for
             // the life of the process.
             final UiStateMachine machine = new UiStateMachine();
+
             machine.startGame();
+
             for (int round = 0; round < 5; round++)
             {
                 machine.endMatch(won());
+
                 assertThat(machine.state()).isEqualTo(UiState.GAME_OVER);
+
                 machine.restartMatch();
+
                 assertThat(machine.state()).isEqualTo(UiState.PLAYING);
             }
         }
@@ -196,6 +234,7 @@ class UiStateMachineTest
             // out of GAME_OVER, and the honest statement of its precondition is
             // the transition table, not a second copy of it here.
             final UiStateMachine machine = new UiStateMachine();
+
             machine.startGame();
 
             assertThatThrownBy(machine::restartMatch)
@@ -213,6 +252,7 @@ class UiStateMachineTest
             {
                 assertThat(state.canTransitionTo(state))
                     .as("%s may re-enter itself", state).isFalse();
+
                 assertThat(state.canTransitionTo(null))
                     .as("%s accepts a null target", state).isFalse();
             }
@@ -232,6 +272,7 @@ class UiStateMachineTest
             // the first. Silently ignoring it turns a wiring bug into an
             // intermittent input glitch nobody can reproduce.
             final UiStateMachine machine = new UiStateMachine();
+
             machine.startGame();
 
             assertThatThrownBy(machine::startGame)
@@ -260,9 +301,11 @@ class UiStateMachineTest
         void shouldRejectNullTargets()
         {
             final UiStateMachine machine = new UiStateMachine();
+
             assertThatThrownBy(() -> machine.transitionTo(null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("target");
+
             assertThat(machine.state()).isEqualTo(UiState.MENU);
         }
 
@@ -271,6 +314,7 @@ class UiStateMachineTest
         void shouldRefuseSettingsOutsideTheMenu()
         {
             final UiStateMachine machine = new UiStateMachine();
+
             machine.startGame();
 
             assertThatThrownBy(machine::openSettings)
@@ -298,7 +342,9 @@ class UiStateMachineTest
         void shouldRefuseASecondEnd()
         {
             final UiStateMachine machine = new UiStateMachine();
+
             machine.startGame();
+
             machine.endMatch(won());
 
             assertThatThrownBy(() -> machine.endMatch(lost()))
@@ -311,6 +357,7 @@ class UiStateMachineTest
         void shouldRejectANullSummary()
         {
             final UiStateMachine machine = new UiStateMachine();
+
             machine.startGame();
 
             assertThatThrownBy(() -> machine.endMatch(null))
@@ -320,6 +367,7 @@ class UiStateMachineTest
             // Refused before anything moved: an end screen with no result to
             // draw is worse than no end screen.
             assertThat(machine.state()).isEqualTo(UiState.PLAYING);
+
             assertThat(machine.result()).isNull();
         }
     }
@@ -333,8 +381,11 @@ class UiStateMachineTest
         void shouldStartWithNoResult()
         {
             final UiStateMachine machine = new UiStateMachine();
+
             assertThat(machine.result()).isNull();
+
             machine.startGame();
+
             assertThat(machine.result()).isNull();
         }
 
@@ -343,8 +394,11 @@ class UiStateMachineTest
         void shouldHoldTheSummary()
         {
             final UiStateMachine machine = new UiStateMachine();
+
             final MatchSummary summary = won();
+
             machine.startGame();
+
             machine.endMatch(summary);
 
             assertThat(machine.result()).isSameAs(summary);
@@ -357,11 +411,15 @@ class UiStateMachineTest
             // Not cleared on the way out, because the end screen is still
             // drawing from it while that transition is being applied.
             final UiStateMachine machine = new UiStateMachine();
+
             machine.startGame();
+
             machine.endMatch(lost());
+
             machine.returnToMenu();
 
             assertThat(machine.result()).isNotNull();
+
             assertThat(machine.result().isWin()).isFalse();
         }
     }
@@ -375,11 +433,14 @@ class UiStateMachineTest
         void shouldDrawTheMenuOnlyInMenu()
         {
             assertThat(UiState.MENU.drawsMenu()).isTrue();
+
             assertThat(UiState.PLAYING.drawsMenu()).isFalse();
+
             // The sharp part: the other two states also put a stage on the
             // glass, and it is not this one. A consumer that conflated them
             // would draw the main menu over the settings screen.
             assertThat(UiState.SETTINGS.drawsMenu()).isFalse();
+
             assertThat(UiState.GAME_OVER.drawsMenu()).isFalse();
         }
 
@@ -390,22 +451,28 @@ class UiStateMachineTest
             for (final UiState state : UiState.values())
             {
                 int claims = 0;
+
                 if (state.drawsMenu())
                 {
                     claims++;
                 }
+
                 if (state.drawsSettings())
                 {
                     claims++;
                 }
+
                 if (state.drawsGameOver())
                 {
                     claims++;
                 }
+
                 assertThat(claims).as("%s is drawn by %s screens", state, claims)
                     .isLessThanOrEqualTo(1);
             }
+
             assertThat(UiState.SETTINGS.drawsSettings()).isTrue();
+
             assertThat(UiState.GAME_OVER.drawsGameOver()).isTrue();
         }
 
@@ -417,10 +484,13 @@ class UiStateMachineTest
             // reporting relative motion at the screen edge and the view would
             // stop turning. So this predicate decides whether mouse-look works.
             assertThat(UiState.PLAYING.capturesCursor()).isTrue();
+
             assertThat(UiState.MENU.capturesCursor()).isFalse();
+
             // Both new screens have buttons on them, so neither may take the
             // pointer away from the player.
             assertThat(UiState.SETTINGS.capturesCursor()).isFalse();
+
             assertThat(UiState.GAME_OVER.capturesCursor()).isFalse();
         }
 
@@ -443,7 +513,9 @@ class UiStateMachineTest
             for (final UiState state : UiState.values())
             {
                 assertThat(state.drawsMenu() && state.capturesCursor()).isFalse();
+
                 assertThat(state.drawsSettings() && state.capturesCursor()).isFalse();
+
                 assertThat(state.drawsGameOver() && state.capturesCursor()).isFalse();
             }
         }
@@ -460,12 +532,15 @@ class UiStateMachineTest
             assertThat(UiState.SETTINGS.backReturnsToMenu())
                 .as("a settings screen is left, not quit from")
                 .isTrue();
+
             assertThat(UiState.GAME_OVER.backReturnsToMenu())
                 .as("and so is an end screen")
                 .isTrue();
+
             assertThat(UiState.PLAYING.backReturnsToMenu())
                 .as("back has always left a match")
                 .isTrue();
+
             assertThat(UiState.MENU.backReturnsToMenu())
                 .as("but back from the front screen leaves the app, per Android")
                 .isFalse();
@@ -496,8 +571,11 @@ class UiStateMachineTest
         void shouldDescribeItself()
         {
             final UiStateMachine machine = new UiStateMachine();
+
             assertThat(machine.toString()).contains("MENU");
+
             machine.startGame();
+
             assertThat(machine.toString()).contains("PLAYING");
         }
     }

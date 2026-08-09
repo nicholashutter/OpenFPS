@@ -65,11 +65,17 @@ public final class DesktopAdapterFactory implements I_AdapterFactory
     public void init()
     {
         LOG.info("Initializing desktop HAL adapter (JDK time + UDP, SQLite profile)");
+
         timePort.init();
+
         inputPort.init();
+
         datagramPort.init();
+
         systemInfo.init();
+
         userProfile.init();
+
         windowPort.init();
     }
 
@@ -77,11 +83,17 @@ public final class DesktopAdapterFactory implements I_AdapterFactory
     public void shutdown()
     {
         LOG.info("Shutting down desktop HAL adapter");
+
         windowPort.shutdown();
+
         userProfile.shutdown();
+
         systemInfo.shutdown();
+
         datagramPort.shutdown();
+
         inputPort.shutdown();
+
         timePort.shutdown();
     }
 

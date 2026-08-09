@@ -99,21 +99,32 @@ public final class MapLumpParser
     public static Things parseThings(final byte[] lump)
     {
         final int count = entryCount(lump, THING_SIZE, "THINGS");
+
         final int[] x = new int[count];
+
         final int[] y = new int[count];
+
         final int[] angle = new int[count];
+
         final int[] type = new int[count];
+
         final int[] flags = new int[count];
 
         for (int i = 0; i < count; i++)
         {
             final int base = i * THING_SIZE;
+
             x[i] = LittleEndian.int16(lump, base + THING_X);
+
             y[i] = LittleEndian.int16(lump, base + THING_Y);
+
             angle[i] = LittleEndian.int16(lump, base + THING_ANGLE);
+
             type[i] = LittleEndian.int16(lump, base + THING_TYPE);
+
             flags[i] = LittleEndian.int16(lump, base + THING_FLAGS);
         }
+
         return new Things(count, x, y, angle, type, flags);
     }
 
@@ -127,25 +138,40 @@ public final class MapLumpParser
     public static Linedefs parseLinedefs(final byte[] lump)
     {
         final int count = entryCount(lump, LINEDEF_SIZE, "LINEDEFS");
+
         final int[] startVertex = new int[count];
+
         final int[] endVertex = new int[count];
+
         final int[] flags = new int[count];
+
         final int[] special = new int[count];
+
         final int[] tag = new int[count];
+
         final int[] rightSide = new int[count];
+
         final int[] leftSide = new int[count];
 
         for (int i = 0; i < count; i++)
         {
             final int base = i * LINEDEF_SIZE;
+
             startVertex[i] = LittleEndian.uint16(lump, base + LINEDEF_START_VERTEX);
+
             endVertex[i] = LittleEndian.uint16(lump, base + LINEDEF_END_VERTEX);
+
             flags[i] = LittleEndian.int16(lump, base + LINEDEF_FLAGS);
+
             special[i] = LittleEndian.int16(lump, base + LINEDEF_SPECIAL);
+
             tag[i] = LittleEndian.int16(lump, base + LINEDEF_TAG);
+
             rightSide[i] = LittleEndian.uint16(lump, base + LINEDEF_RIGHT_SIDE);
+
             leftSide[i] = LittleEndian.uint16(lump, base + LINEDEF_LEFT_SIDE);
         }
+
         return new Linedefs(count, startVertex, endVertex, flags, special, tag,
             rightSide, leftSide);
     }
@@ -160,27 +186,42 @@ public final class MapLumpParser
     public static Sectors parseSectors(final byte[] lump)
     {
         final int count = entryCount(lump, SECTOR_SIZE, "SECTORS");
+
         final int[] floorHeight = new int[count];
+
         final int[] ceilingHeight = new int[count];
+
         final String[] floorTexture = new String[count];
+
         final String[] ceilingTexture = new String[count];
+
         final int[] light = new int[count];
+
         final int[] special = new int[count];
+
         final int[] tag = new int[count];
 
         for (int i = 0; i < count; i++)
         {
             final int base = i * SECTOR_SIZE;
+
             floorHeight[i] = LittleEndian.int16(lump, base + SECTOR_FLOOR_HEIGHT);
+
             ceilingHeight[i] = LittleEndian.int16(lump, base + SECTOR_CEILING_HEIGHT);
+
             floorTexture[i] = LittleEndian.ascii(
                 lump, base + SECTOR_FLOOR_TEXTURE, TEXTURE_NAME_LENGTH);
+
             ceilingTexture[i] = LittleEndian.ascii(
                 lump, base + SECTOR_CEILING_TEXTURE, TEXTURE_NAME_LENGTH);
+
             light[i] = LittleEndian.int16(lump, base + SECTOR_LIGHT);
+
             special[i] = LittleEndian.int16(lump, base + SECTOR_SPECIAL);
+
             tag[i] = LittleEndian.int16(lump, base + SECTOR_TAG);
         }
+
         return new Sectors(count, floorHeight, ceilingHeight, floorTexture,
             ceilingTexture, light, special, tag);
     }
@@ -195,15 +236,20 @@ public final class MapLumpParser
     public static Vertexes parseVertexes(final byte[] lump)
     {
         final int count = entryCount(lump, VERTEX_SIZE, "VERTEXES");
+
         final int[] x = new int[count];
+
         final int[] y = new int[count];
 
         for (int i = 0; i < count; i++)
         {
             final int base = i * VERTEX_SIZE;
+
             x[i] = LittleEndian.int16(lump, base + VERTEX_X);
+
             y[i] = LittleEndian.int16(lump, base + VERTEX_Y);
         }
+
         return new Vertexes(count, x, y);
     }
 
@@ -214,11 +260,13 @@ public final class MapLumpParser
         {
             throw new WadException(lumpName + " lump is null");
         }
+
         if (lump.length % entrySize != 0)
         {
             throw new WadException(lumpName + " lump is " + lump.length
                 + " bytes, not a multiple of the " + entrySize + "-byte record size");
         }
+
         return lump.length / entrySize;
     }
 
@@ -242,10 +290,15 @@ public final class MapLumpParser
             final int[] type, final int[] flags)
         {
             this.count = count;
+
             this.x = x;
+
             this.y = y;
+
             this.angle = angle;
+
             this.type = type;
+
             this.flags = flags;
         }
 
@@ -330,12 +383,19 @@ public final class MapLumpParser
             final int[] rightSide, final int[] leftSide)
         {
             this.count = count;
+
             this.startVertex = startVertex;
+
             this.endVertex = endVertex;
+
             this.flags = flags;
+
             this.special = special;
+
             this.tag = tag;
+
             this.rightSide = rightSide;
+
             this.leftSide = leftSide;
         }
 
@@ -454,12 +514,19 @@ public final class MapLumpParser
             final int[] light, final int[] special, final int[] tag)
         {
             this.count = count;
+
             this.floorHeight = floorHeight;
+
             this.ceilingHeight = ceilingHeight;
+
             this.floorTexture = floorTexture;
+
             this.ceilingTexture = ceilingTexture;
+
             this.light = light;
+
             this.special = special;
+
             this.tag = tag;
         }
 
@@ -559,7 +626,9 @@ public final class MapLumpParser
         private Vertexes(final int count, final int[] x, final int[] y)
         {
             this.count = count;
+
             this.x = x;
+
             this.y = y;
         }
 

@@ -109,38 +109,64 @@ final class ModelFileFixture
         final int[] textures, final int[] texels, final float[] bounds)
     {
         final int vertexOffset = HEADER_BYTES;
+
         final int indexOffset = vertexOffset + (vertices.length * Integer.BYTES);
+
         final int submeshOffset = indexOffset + (indices.length * Integer.BYTES);
+
         final int textureOffset = submeshOffset + (submeshes.length * Integer.BYTES);
+
         final int texelOffset = textureOffset + (textures.length * Integer.BYTES);
+
         final int fileSize = texelOffset + (texels.length * Integer.BYTES);
 
         final ByteBuffer out = ByteBuffer.allocate(fileSize).order(ByteOrder.LITTLE_ENDIAN);
+
         out.putInt(AT_MAGIC, MAGIC);
+
         out.putShort(AT_VERSION_MAJOR, (short) 1);
+
         out.putShort(AT_VERSION_MINOR, (short) 0);
+
         out.putInt(AT_HEADER_SIZE, HEADER_BYTES);
+
         out.putInt(AT_FILE_SIZE, fileSize);
+
         out.putInt(AT_VERTEX_COUNT, vertices.length / 6);
+
         out.putInt(AT_VERTEX_OFFSET, vertexOffset);
+
         out.putInt(AT_INDEX_COUNT, indices.length);
+
         out.putInt(AT_INDEX_OFFSET, indexOffset);
+
         out.putInt(AT_SUBMESH_COUNT, submeshes.length / 4);
+
         out.putInt(AT_SUBMESH_OFFSET, submeshOffset);
+
         out.putInt(AT_TEXTURE_COUNT, textures.length / 4);
+
         out.putInt(AT_TEXTURE_OFFSET, textureOffset);
+
         out.putInt(AT_TEXEL_COUNT, texels.length);
+
         out.putInt(AT_TEXEL_OFFSET, texelOffset);
+
         for (int i = 0; i < 6; i++)
         {
             out.putFloat(AT_BOUNDS + (i * Float.BYTES), bounds[i]);
         }
 
         putSection(out, vertexOffset, vertices);
+
         putSection(out, indexOffset, indices);
+
         putSection(out, submeshOffset, submeshes);
+
         putSection(out, textureOffset, textures);
+
         putSection(out, texelOffset, texels);
+
         return out.array();
     }
 

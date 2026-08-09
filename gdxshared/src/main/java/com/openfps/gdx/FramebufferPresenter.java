@@ -302,10 +302,15 @@ public final class FramebufferPresenter
         {
             throw new IllegalArgumentException("port must not be null");
         }
+
         this.renderPort = port;
+
         this.fpsIntervalNanos = Math.max(0L, (long) logIntervalSeconds * NANOS_PER_SECOND);
+
         this.upscaleFilter = configuredFilter();
+
         this.renderSettings = new RenderSettings(initialMode);
+
         // Listening to our own switch rather than exposing a setter is what
         // keeps the settings screen from needing a presenter: it cycles a small
         // object, and the object tells whoever can act on it. Attaching does not
@@ -319,10 +324,12 @@ public final class FramebufferPresenter
     private static Texture.TextureFilter configuredFilter()
     {
         final String configured = System.getProperty(UPSCALE_FILTER_PROPERTY);
+
         if (configured != null && FILTER_NEAREST.equalsIgnoreCase(configured.trim()))
         {
             return Texture.TextureFilter.Nearest;
         }
+
         return Texture.TextureFilter.Linear;
     }
 
@@ -331,10 +338,12 @@ public final class FramebufferPresenter
     private static int logIntervalSeconds()
     {
         final String configured = System.getProperty(FPS_LOG_PROPERTY);
+
         if (configured == null || configured.isEmpty())
         {
             return 0;
         }
+
         try
         {
             return Integer.parseInt(configured.trim());
@@ -343,6 +352,7 @@ public final class FramebufferPresenter
         {
             LOG.warn("Ignoring -D{}={}: not a whole number of seconds",
                 FPS_LOG_PROPERTY, configured);
+
             return 0;
         }
     }
@@ -366,8 +376,11 @@ public final class FramebufferPresenter
         {
             return;
         }
+
         width = newWidth;
+
         height = newHeight;
+
         sizeForSurface();
     }
 
@@ -381,7 +394,9 @@ public final class FramebufferPresenter
         {
             return;
         }
+
         LOG.info("Render mode: {}", changed.label());
+
         sizeForSurface();
     }
 
@@ -396,32 +411,47 @@ public final class FramebufferPresenter
     private void sizeForSurface()
     {
         final RenderMode mode = renderSettings.mode();
+
         final int wantWidth = mode.widthFor(width, height);
+
         final int wantHeight = mode.heightFor(width, height);
+
         renderPort.resize(wantWidth, wantHeight);
+
         if (batch == null)
         {
             batch = new SpriteBatch();
+
             // The world quad is opaque and covers every pixel, so blending is
             // pure cost. It is also a hazard: the colour buffer's alpha is
             // whatever R_ wrote, and a frame is not a sprite.
             batch.disableBlending();
         }
+
         if (wantWidth != renderWidth || wantHeight != renderHeight)
         {
             releaseSurface();
+
             renderWidth = wantWidth;
+
             renderHeight = wantHeight;
+
             scratch = new int[renderWidth * renderHeight];
+
             pixmap = new Pixmap(renderWidth, renderHeight, Pixmap.Format.RGBA8888);
+
             texture = new Texture(pixmap);
+
             final Texture.TextureFilter filter = filterFor(mode);
+
             texture.setFilter(filter, filter);
+
             LOG.info("Presenter surface {}x{}, render {}x{} ({}), blit filter {}",
                 Integer.valueOf(width), Integer.valueOf(height),
                 Integer.valueOf(renderWidth), Integer.valueOf(renderHeight),
                 mode.label(), filter);
         }
+
         // The projection is the SURFACE, always. It is what makes the quad
         // fullscreen whatever the texture measures, and it is why nothing else
         // drawn over the world had to change.
@@ -437,6 +467,7 @@ public final class FramebufferPresenter
         {
             return Texture.TextureFilter.Nearest;
         }
+
         return upscaleFilter;
     }
 
@@ -473,23 +504,32 @@ public final class FramebufferPresenter
             || !renderPort.copyColorInto(scratch))
         {
             sampleFrameRate(false);
+
             return false;
         }
+
         final ByteBuffer pixels = pixmap.getPixels();
+
         pixels.clear();
+
         // One bulk copy of RGBA8888 ints into a big-endian byte buffer — the
         // path PixmapByteOrderTest asserts byte for byte.
         pixels.asIntBuffer().put(scratch, 0, renderWidth * renderHeight);
+
         texture.draw(pixmap, 0, 0);
 
         batch.begin();
+
         // A renderWidth x renderHeight texture drawn over the whole SURFACE.
         // The GPU does the upscale, and the orientation argument in the class
         // Javadoc is untouched by it: draw() maps t = 0 to the top of the
         // rectangle whatever the two sizes are.
         batch.draw(texture, 0.0f, 0.0f, width, height);
+
         batch.end();
+
         sampleFrameRate(true);
+
         return true;
     }
 
@@ -501,23 +541,32 @@ public final class FramebufferPresenter
         {
             return;
         }
+
         final long now = TimeUtils.nanoTime();
+
         windowPlatformFrames++;
+
         if (presented)
         {
             windowPresentedFrames++;
         }
+
         if (windowStartNanos == 0L)
         {
             openWindow(now);
+
             return;
         }
+
         final long elapsed = now - windowStartNanos;
+
         if (elapsed < fpsIntervalNanos)
         {
             return;
         }
+
         final double seconds = (double) elapsed / (double) NANOS_PER_SECOND;
+
         // Both sizes, because the last-frame figure is the cost of the RENDER
         // size while the frame rate is a property of the surface being
         // presented — reading one against the other is the whole point.
@@ -529,6 +578,7 @@ public final class FramebufferPresenter
             rate(renderPort.framesRendered() - windowRenderedAtStart, seconds),
             String.format(Locale.ROOT, "%.2f", renderPort.lastFrameNanos() / NANOS_PER_MILLI),
             renderPort.lastFrameParallelPasses());
+
         openWindow(now);
     }
 
@@ -536,8 +586,11 @@ public final class FramebufferPresenter
     private void openWindow(final long now)
     {
         this.windowStartNanos = now;
+
         this.windowPlatformFrames = 0;
+
         this.windowPresentedFrames = 0;
+
         this.windowRenderedAtStart = renderPort.framesRendered();
     }
 
@@ -550,16 +603,20 @@ public final class FramebufferPresenter
     public void dispose()
     {
         releaseSurface();
+
         // Forget the size along with the resources. Android disposes on
         // onSurfaceLost and can hand the SAME dimensions back on the next
         // onSurfaceReady, and a remembered size would make that resize a no-op
         // that never rebuilds the texture it just freed — leaving present() to
         // return false for the rest of the run.
         renderWidth = 0;
+
         renderHeight = 0;
+
         if (batch != null)
         {
             batch.dispose();
+
             batch = null;
         }
     }
@@ -613,11 +670,14 @@ public final class FramebufferPresenter
         if (texture != null)
         {
             texture.dispose();
+
             texture = null;
         }
+
         if (pixmap != null)
         {
             pixmap.dispose();
+
             pixmap = null;
         }
     }

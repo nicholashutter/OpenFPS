@@ -39,8 +39,11 @@ final class SuperBlasterSoundTest
             final short[] pcm = SuperBlasterSound.samples();
 
             assertThat(pcm[0]).isZero();
+
             assertThat(pcm[pcm.length - 1]).isZero();
+
             assertThat(SuperBlasterSound.envelopeAt(0)).isZero();
+
             assertThat(SuperBlasterSound.envelopeAt(SuperBlasterSound.sampleCount() - 1))
                 .isZero();
         }
@@ -55,6 +58,7 @@ final class SuperBlasterSoundTest
             assertThat(loudestOf(SuperBlasterSound.samples()))
                 .as("the sound clips, which is a crunch rather than a weapon")
                 .isLessThan(Short.MAX_VALUE);
+
             assertThat(loudestOf(SuperBlasterSound.samples()))
                 .as("nothing was generated at all")
                 .isGreaterThan(Short.MAX_VALUE / 4);
@@ -68,6 +72,7 @@ final class SuperBlasterSoundTest
 
             assertThat(SuperBlasterSound.envelopeAt(count / 4))
                 .isLessThan(SuperBlasterSound.envelopeAt(count / 32));
+
             assertThat(SuperBlasterSound.envelopeAt(count / 2))
                 .isLessThan(SuperBlasterSound.envelopeAt(count / 4));
         }
@@ -82,12 +87,16 @@ final class SuperBlasterSoundTest
             // a sweep that sounds even has to be geometric — the midpoint is the
             // GEOMETRIC mean of the endpoints, not the arithmetic one.
             final int count = SuperBlasterSound.sampleCount();
+
             final double middle = SuperBlasterSound.frequencyAt(count / 2);
 
             assertThat(SuperBlasterSound.frequencyAt(0))
                 .isCloseTo(SuperBlasterSound.START_HZ, within(0.001));
+
             assertThat(middle).isLessThan(SuperBlasterSound.START_HZ);
+
             assertThat(middle).isGreaterThan(SuperBlasterSound.END_HZ);
+
             assertThat(middle)
                 .as("the sweep is linear, which is the wrong sound")
                 .isCloseTo(Math.sqrt(SuperBlasterSound.START_HZ * SuperBlasterSound.END_HZ),
@@ -117,6 +126,7 @@ final class SuperBlasterSoundTest
             // supposed to be a version of.
             assertThat(SuperBlasterSound.START_HZ * SuperBlasterSound.SUB_OCTAVE_DIVISOR)
                 .isCloseTo(BlasterSound.START_HZ, within(0.001));
+
             assertThat(SuperBlasterSound.END_HZ * SuperBlasterSound.SUB_OCTAVE_DIVISOR)
                 .isCloseTo(BlasterSound.END_HZ, within(0.001));
         }
@@ -133,6 +143,7 @@ final class SuperBlasterSoundTest
             // noise burst would have stopped being the player's weapon.
             final double superBlaster = crossingsPerSecond(SuperBlasterSound.samples(),
                 SuperBlasterSound.sampleRate());
+
             final double carbine = crossingsPerSecond(CarbineSound.samples(),
                 CarbineSound.sampleRate());
 
@@ -162,7 +173,9 @@ final class SuperBlasterSoundTest
             // player has just earned, and a reward quieter than the weapon it
             // replaces would be an odd sort of reward.
             assertThat(SuperBlasterSound.DURATION_MS).isGreaterThan(BlasterSound.DURATION_MS);
+
             assertThat(SuperBlasterSound.PEAK).isGreaterThan(BlasterSound.PEAK);
+
             assertThat(SuperBlasterSound.DECAY_PER_SECOND)
                 .isLessThan(BlasterSound.DECAY_PER_SECOND);
         }
@@ -172,7 +185,9 @@ final class SuperBlasterSoundTest
         void sitsAnOctaveDown()
         {
             assertThat(SuperBlasterSound.START_HZ).isLessThan(BlasterSound.START_HZ);
+
             assertThat(SuperBlasterSound.END_HZ).isLessThan(BlasterSound.END_HZ);
+
             assertThat(SuperBlasterSound.SUB_OCTAVE_DIVISOR).isEqualTo(2.0);
         }
 
@@ -190,6 +205,7 @@ final class SuperBlasterSoundTest
             assertThat(SuperBlasterSound.DURATION_MS)
                 .as("a whole second copy starts before this one has decayed at all")
                 .isLessThan((int) (cooldownMillis * 2.0));
+
             assertThat(Math.exp(-SuperBlasterSound.DECAY_PER_SECOND * cooldownMillis / 1000.0))
                 .as("the overlapping tail is still loud enough for two copies to clip")
                 .isLessThan(0.25);
@@ -201,10 +217,12 @@ final class SuperBlasterSoundTest
     {
         // MUTABLE local — the loudest sample seen.
         int loudest = 0;
+
         for (final short sample : pcm)
         {
             loudest = Math.max(loudest, Math.abs(sample));
         }
+
         return loudest;
     }
 
@@ -214,6 +232,7 @@ final class SuperBlasterSoundTest
     {
         // MUTABLE local — crossings counted so far.
         int crossings = 0;
+
         for (int index = 1; index < pcm.length; index++)
         {
             if (pcm[index - 1] < 0 && pcm[index] >= 0 || pcm[index - 1] >= 0 && pcm[index] < 0)
@@ -221,6 +240,7 @@ final class SuperBlasterSoundTest
                 crossings++;
             }
         }
+
         return crossings * (double) rate / pcm.length;
     }
 }

@@ -44,8 +44,11 @@ final class RasterFixtures
         final float screenX, final float screenY, final float w, final float[] attributes)
     {
         out[offset] = clipX(screenX, w, width);
+
         out[offset + 1] = clipY(screenY, w, height);
+
         out[offset + 2] = w;
+
         System.arraycopy(attributes, 0, out, offset + TriangleClipper.POSITION_FLOATS,
             attributes.length);
     }
@@ -66,7 +69,9 @@ final class RasterFixtures
         final int height, final float[] screen, final float w, final float[][] attributes)
     {
         final int stride = TriangleClipper.POSITION_FLOATS + attributes[0].length;
+
         final int base = triangle * TriangleClipper.TRIANGLE_VERTICES * stride;
+
         for (int v = 0; v < TriangleClipper.TRIANGLE_VERTICES; v++)
         {
             vertex(out, base + v * stride, width, height, screen[v * 2], screen[v * 2 + 1], w,
@@ -78,8 +83,11 @@ final class RasterFixtures
     static Framebuffer framebuffer(final int width, final int height, final int tileSize)
     {
         final Framebuffer target = new Framebuffer(tileSize);
+
         target.init(width, height);
+
         target.clear();
+
         return target;
     }
 
@@ -102,22 +110,32 @@ final class RasterFixtures
         final int height, final int[] colors)
     {
         final Random random = new Random(seed);
+
         final int stride = TriangleClipper.POSITION_FLOATS;
+
         final float[] out = new float[triangles * TriangleClipper.TRIANGLE_VERTICES * stride];
+
         final float[] screen = new float[6];
+
         final float[][] attributes = {NO_ATTRIBUTES, NO_ATTRIBUTES, NO_ATTRIBUTES};
+
         for (int t = 0; t < triangles; t++)
         {
             for (int k = 0; k < 3; k++)
             {
                 screen[k * 2] = random.nextFloat() * (width + 40.0f) - 20.0f;
+
                 screen[k * 2 + 1] = random.nextFloat() * (height + 40.0f) - 20.0f;
             }
+
             final float w = 0.5f + random.nextFloat() * 9.5f;
+
             triangle(out, t, width, height, screen, w, attributes);
+
             colors[t] = Rgba.pack(random.nextInt(256), random.nextInt(256),
                 random.nextInt(256), 255);
         }
+
         return out;
     }
 
@@ -125,6 +143,7 @@ final class RasterFixtures
     static boolean[] paintedMask(final Framebuffer target, final int clearColor)
     {
         final boolean[] painted = new boolean[target.width() * target.height()];
+
         for (int y = 0; y < target.height(); y++)
         {
             for (int x = 0; x < target.width(); x++)
@@ -132,6 +151,7 @@ final class RasterFixtures
                 painted[y * target.width() + x] = target.pixel(x, y) != clearColor;
             }
         }
+
         return painted;
     }
 }

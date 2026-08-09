@@ -35,6 +35,7 @@ public record Waypoint(String id, float x, float y, float z)
         {
             throw new IllegalArgumentException("id must not be null or blank");
         }
+
         id = id.intern();
     }
 }

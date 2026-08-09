@@ -42,7 +42,9 @@ public final class Vec3
     public Vec3(final float x, final float y, final float z)
     {
         this.x = x;
+
         this.y = y;
+
         this.z = z;
     }
 
@@ -150,11 +152,14 @@ public final class Vec3
     public Vec3 normalized()
     {
         final float len = length();
+
         if (len == 0.0f)
         {
             throw new IllegalArgumentException("cannot normalize a zero-length vector");
         }
+
         final float inv = 1.0f / len;
+
         return new Vec3(x * inv, y * inv, z * inv);
     }
 

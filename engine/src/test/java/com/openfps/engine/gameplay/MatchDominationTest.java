@@ -56,8 +56,11 @@ class MatchDominationTest
         void shouldStartNeutral()
         {
             final Match match = dominationMatch(List.of(redBotAt(1000.0f, 1000.0f, 0)));
+
             assertThat(match.dominationFlagOwner(0)).isEqualTo(Team.NEUTRAL);
+
             assertThat(match.dominationFlagOwner(1)).isEqualTo(Team.NEUTRAL);
+
             assertThat(match.dominationFlagOwner(2)).isEqualTo(Team.NEUTRAL);
         }
 
@@ -69,9 +72,13 @@ class MatchDominationTest
                 redBotAt(0.0f, 0.0f, 0),
                 redBotAt(1000.0f, 1000.0f, 1)
             ));
+
             match.setPlayerTeam(Team.BLUE);
+
             match.tick(0, 1000.0f, 0.0f, 0.0f);
+
             assertThat(match.dominationFlagOwner(0)).isEqualTo(Team.RED);
+
             assertThat(match.dominationFlagOwner(1)).isEqualTo(Team.NEUTRAL);
         }
 
@@ -83,9 +90,13 @@ class MatchDominationTest
                 blueBotAt(40.0f, 0.0f, 0),
                 redBotAt(1000.0f, 1000.0f, 1)
             ));
+
             match.setPlayerTeam(Team.RED);
+
             match.tick(0, 1000.0f, 0.0f, 0.0f);
+
             assertThat(match.dominationFlagOwner(0)).isEqualTo(Team.NEUTRAL);
+
             assertThat(match.dominationFlagOwner(1)).isEqualTo(Team.BLUE);
         }
 
@@ -97,9 +108,12 @@ class MatchDominationTest
                 redBotAt(0.0f, 0.0f, 0),
                 blueBotAt(0.0f, 0.0f, 1)
             ));
+
             match.setPlayerTeam(Team.NEUTRAL);
+
             // Tick once: contested, owner is still NEUTRAL.
             match.tick(0, 1000.0f, 0.0f, 0.0f);
+
             assertThat(match.dominationFlagOwner(0)).isEqualTo(Team.NEUTRAL);
         }
 
@@ -108,9 +122,12 @@ class MatchDominationTest
         void shouldStayNeutralWhenEmpty()
         {
             final Match match = dominationMatch(List.of(redBotAt(1000.0f, 1000.0f, 0)));
+
             match.setPlayerTeam(Team.RED);
+
             // No body near flag A on tic 0 — stays NEUTRAL.
             match.tick(0, 1000.0f, 0.0f, 0.0f);
+
             assertThat(match.dominationFlagOwner(0)).isEqualTo(Team.NEUTRAL);
         }
 
@@ -123,12 +140,17 @@ class MatchDominationTest
                 redBotAt(0.0f, 0.0f, 0),
                 redBotAt(1000.0f, 1000.0f, 1)
             ));
+
             match.setPlayerTeam(Team.NEUTRAL);
+
             // Tick 1: RED bot in flag A's radius — captured.
             match.tick(0, 1000.0f, 0.0f, 0.0f);
+
             assertThat(match.dominationFlagOwner(0)).isEqualTo(Team.RED);
+
             // Tick 2: same state, still RED.
             match.tick(1, 1000.0f, 0.0f, 0.0f);
+
             assertThat(match.dominationFlagOwner(0)).isEqualTo(Team.RED);
         }
 
@@ -143,8 +165,11 @@ class MatchDominationTest
                 neutralBotAt(0.0f, 0.0f, 0),
                 redBotAt(1000.0f, 1000.0f, 1)
             ));
+
             match.setPlayerTeam(Team.RED);
+
             match.tick(0, 1000.0f, 0.0f, 0.0f);
+
             assertThat(match.dominationFlagOwner(0)).isEqualTo(Team.NEUTRAL);
         }
     }
@@ -162,11 +187,14 @@ class MatchDominationTest
                 redBotAt(0.0f, 0.0f, 0),
                 redBotAt(1000.0f, 1000.0f, 1)
             ));
+
             match.setPlayerTeam(Team.NEUTRAL);
+
             for (int tic = 0; tic < 10; tic++)
             {
                 match.tick(tic, 1000.0f, 0.0f, 0.0f);
             }
+
             // Flag A held for 10 tics → red +10; flag B and C
             // never claimed → blue stays 0.
             assertThat(match.teamScores()).containsExactly(10, 0);
@@ -182,11 +210,14 @@ class MatchDominationTest
                 redBotAt(0.0f, 0.0f, 0),
                 redBotAt(1000.0f, 1000.0f, 1)
             ));
+
             match.setPlayerTeam(Team.NEUTRAL);
+
             for (int tic = 0; tic < 5; tic++)
             {
                 match.tick(tic, 1000.0f, 0.0f, 0.0f);
             }
+
             // Only flag A is held, so only red scores 5.
             assertThat(match.teamScores()).containsExactly(5, 0);
         }
@@ -201,11 +232,14 @@ class MatchDominationTest
                 redBotAt(0.0f, 0.0f, 0),
                 blueBotAt(0.0f, 0.0f, 1)
             ));
+
             match.setPlayerTeam(Team.NEUTRAL);
+
             for (int tic = 0; tic < 10; tic++)
             {
                 match.tick(tic, 1000.0f, 0.0f, 0.0f);
             }
+
             assertThat(match.teamScores()).containsExactly(0, 0);
         }
     }
@@ -222,14 +256,20 @@ class MatchDominationTest
                 redBotAt(0.0f, 0.0f, 0),
                 redBotAt(1000.0f, 1000.0f, 1)
             ));
+
             match.setPlayerTeam(Team.NEUTRAL);
+
             for (int tic = 0; tic < 7; tic++)
             {
                 match.tick(tic, 1000.0f, 0.0f, 0.0f);
             }
+
             final int[] scores = match.teamScores();
+
             assertThat(scores).hasSize(2);
+
             assertThat(scores[0]).isEqualTo(7);
+
             assertThat(scores[1]).isEqualTo(0);
         }
     }
@@ -246,20 +286,30 @@ class MatchDominationTest
                 redBotAt(0.0f, 0.0f, 0),
                 redBotAt(1000.0f, 1000.0f, 1)
             ));
+
             match.setPlayerTeam(Team.RED);
+
             for (int tic = 0; tic < 30; tic++)
             {
                 match.tick(tic, 0.0f, 0.0f, 0.0f);
             }
+
             assertThat(match.dominationFlagOwner(0)).isEqualTo(Team.RED);
+
             assertThat(match.teamScores()[0]).isGreaterThan(0);
+
             match.reset();
+
             // After reset: every flag is NEUTRAL, scores are 0. The
             // player team is preserved.
             assertThat(match.dominationFlagOwner(0)).isEqualTo(Team.NEUTRAL);
+
             assertThat(match.dominationFlagOwner(1)).isEqualTo(Team.NEUTRAL);
+
             assertThat(match.dominationFlagOwner(2)).isEqualTo(Team.NEUTRAL);
+
             assertThat(match.teamScores()).containsExactly(0, 0);
+
             assertThat(match.playerTeam()).isEqualTo(Team.RED);
         }
     }
@@ -273,8 +323,10 @@ class MatchDominationTest
         void shouldRejectBadIndex()
         {
             final Match match = dominationMatch(List.of(redBotAt(1000.0f, 1000.0f, 0)));
+
             assertThatThrownBy(() -> match.dominationFlagOwner(-1))
                 .isInstanceOf(IllegalArgumentException.class);
+
             assertThatThrownBy(() -> match.dominationFlagOwner(3))
                 .isInstanceOf(IllegalArgumentException.class);
         }
@@ -306,6 +358,7 @@ class MatchDominationTest
             MatchMode.DOMINATION, new MapDimensions(160.0f, 160.0f, 128.0f),
             threeLanes(), threeSpawns(), List.of(), new MapMarkers.Domination(FLAGS),
             new MapAssets("a/level.ofm", "a/weapon.ofm", null));
+
         return new Match(roster.toArray(new Bot[0]), new BotRng(), BotSkill.MARKSMAN,
             Match.UNLIMITED_DEATHS, spec);
     }

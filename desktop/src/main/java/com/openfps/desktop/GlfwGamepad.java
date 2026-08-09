@@ -112,16 +112,22 @@ public final class GlfwGamepad implements GamepadSource
     public void poll()
     {
         System.arraycopy(buttons, 0, previousButtons, 0, BUTTONS);
+
         final int found = findGamepadSlot();
+
         slot = found;
+
         if (found < 0)
         {
             forget();
+
             return;
         }
+
         try (MemoryStack stack = MemoryStack.stackPush())
         {
             final GLFWGamepadState state = GLFWGamepadState.malloc(stack);
+
             if (!GLFW.glfwGetGamepadState(found, state))
             {
                 // Present a moment ago, gone between the scan and the read.
@@ -129,18 +135,23 @@ public final class GlfwGamepad implements GamepadSource
                 // answer is "no controller", which forget() makes the accessors
                 // give.
                 slot = -1;
+
                 forget();
+
                 return;
             }
+
             for (int index = 0; index < BUTTONS; index++)
             {
                 buttons[index] = state.buttons(index) == GLFW.GLFW_PRESS;
             }
+
             for (int index = 0; index < AXES; index++)
             {
                 axes[index] = state.axes(index);
             }
         }
+
         padName = gamepadName(found);
     }
 
@@ -163,6 +174,7 @@ public final class GlfwGamepad implements GamepadSource
         {
             return false;
         }
+
         return buttons[buttonIndex];
     }
 
@@ -173,6 +185,7 @@ public final class GlfwGamepad implements GamepadSource
         {
             return false;
         }
+
         return buttons[buttonIndex] && !previousButtons[buttonIndex];
     }
 
@@ -183,6 +196,7 @@ public final class GlfwGamepad implements GamepadSource
         {
             return false;
         }
+
         if (axisIndex != GLFW.GLFW_GAMEPAD_AXIS_LEFT_TRIGGER
             && axisIndex != GLFW.GLFW_GAMEPAD_AXIS_RIGHT_TRIGGER)
         {
@@ -192,6 +206,7 @@ public final class GlfwGamepad implements GamepadSource
             // also reading as a held button.
             return false;
         }
+
         // GLFW rests its triggers at -1 because a trigger is a joystick axis to
         // it. AnalogStick owns the single threshold, in a normalised 0..1.
         return AnalogStick.isTriggerPulled(
@@ -253,9 +268,11 @@ public final class GlfwGamepad implements GamepadSource
             if (!warnedUnmapped)
             {
                 warnedUnmapped = true;
+
                 LOG.warn("GLFW joystick query failed ({}) — running without a controller",
                     e.toString());
             }
+
             return -1;
         }
     }
@@ -264,25 +281,31 @@ public final class GlfwGamepad implements GamepadSource
     private int scanSlots()
     {
         int unmapped = -1;
+
         for (int candidate = 0; candidate < SLOTS; candidate++)
         {
             if (!GLFW.glfwJoystickPresent(candidate))
             {
                 continue;
             }
+
             if (GLFW.glfwJoystickIsGamepad(candidate))
             {
                 return candidate;
             }
+
             unmapped = candidate;
         }
+
         if (unmapped >= 0 && !warnedUnmapped)
         {
             warnedUnmapped = true;
+
             LOG.warn("Joystick in slot {} has no GLFW gamepad mapping — ignoring it."
                 + " Without a mapping there is no way to tell which axis is which,"
                 + " and guessing walks the player sideways.", Integer.valueOf(unmapped));
         }
+
         return -1;
     }
 
@@ -291,10 +314,12 @@ public final class GlfwGamepad implements GamepadSource
     private static String gamepadName(final int candidate)
     {
         final String reported = GLFW.glfwGetGamepadName(candidate);
+
         if (reported == null)
         {
             return NO_PAD;
         }
+
         return reported;
     }
 
@@ -305,10 +330,12 @@ public final class GlfwGamepad implements GamepadSource
     private void forget()
     {
         padName = NO_PAD;
+
         for (int index = 0; index < BUTTONS; index++)
         {
             buttons[index] = false;
         }
+
         for (int index = 0; index < AXES; index++)
         {
             axes[index] = 0.0f;
@@ -322,6 +349,7 @@ public final class GlfwGamepad implements GamepadSource
         {
             return 0.0f;
         }
+
         return axes[axisIndex];
     }
 }

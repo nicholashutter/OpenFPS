@@ -35,6 +35,7 @@ class LittleEndianTest
         final byte[] src = WadBuilder.bytes(0x01, 0x02, 0x03, 0x04);
 
         assertThat(LittleEndian.int32(src, 0)).isEqualTo(0x04030201);
+
         assertThat(LittleEndian.int32(src, 0)).isNotEqualTo(0x01020304);
     }
 
@@ -63,6 +64,7 @@ class LittleEndianTest
         final byte[] src = WadBuilder.bytes(0xFF, 0xFF, 0x00, 0x80);
 
         assertThat(LittleEndian.uint16(src, 0)).isEqualTo(0xFFFF);
+
         assertThat(LittleEndian.uint16(src, 2)).isEqualTo(0x8000);
     }
 
@@ -73,10 +75,15 @@ class LittleEndianTest
         final byte[] src = WadBuilder.words(0, 1, -1, 32767, -32768, -1024);
 
         assertThat(LittleEndian.int16(src, 0)).isZero();
+
         assertThat(LittleEndian.int16(src, 2)).isEqualTo(1);
+
         assertThat(LittleEndian.int16(src, 4)).isEqualTo(-1);
+
         assertThat(LittleEndian.int16(src, 6)).isEqualTo(32767);
+
         assertThat(LittleEndian.int16(src, 8)).isEqualTo(-32768);
+
         assertThat(LittleEndian.int16(src, 10)).isEqualTo(-1024);
     }
 
@@ -116,6 +123,7 @@ class LittleEndianTest
             WadBuilder.padded("CEIL3_5", WadBuilder.NAME_LENGTH));
 
         assertThat(LittleEndian.ascii(src, 0, WadBuilder.NAME_LENGTH)).isEqualTo("FLOOR4_8");
+
         assertThat(LittleEndian.ascii(src, WadBuilder.NAME_LENGTH, WadBuilder.NAME_LENGTH))
             .isEqualTo("CEIL3_5");
     }

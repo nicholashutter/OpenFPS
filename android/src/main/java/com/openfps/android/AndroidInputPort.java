@@ -229,12 +229,16 @@ public final class AndroidInputPort implements I_InputPort, InputProcessor
         {
             throw new IllegalArgumentException("touchLayout must not be null");
         }
+
         if (inputAccumulator == null)
         {
             throw new IllegalArgumentException("inputAccumulator must not be null");
         }
+
         this.layout = touchLayout;
+
         this.accumulator = inputAccumulator;
+
         clearPointers();
     }
 
@@ -268,6 +272,7 @@ public final class AndroidInputPort implements I_InputPort, InputProcessor
         {
             throw new IllegalArgumentException("actionBindings must not be null");
         }
+
         this.bindings = actionBindings;
     }
 
@@ -286,7 +291,9 @@ public final class AndroidInputPort implements I_InputPort, InputProcessor
         {
             throw new IllegalArgumentException("machine must not be null");
         }
+
         this.uiState = machine;
+
         forgetEverything();
     }
 
@@ -309,6 +316,7 @@ public final class AndroidInputPort implements I_InputPort, InputProcessor
     public void resize(final int width, final int height)
     {
         layout.resize(width, height);
+
         forgetEverything();
     }
 
@@ -316,8 +324,11 @@ public final class AndroidInputPort implements I_InputPort, InputProcessor
     public void init()
     {
         forgetEverything();
+
         latched = InputState.NEUTRAL;
+
         final GameAction unbound = bindings.firstUnbound();
+
         if (unbound != null)
         {
             // Not fatal — the game is playable with no sprint control, which is
@@ -326,6 +337,7 @@ public final class AndroidInputPort implements I_InputPort, InputProcessor
             Log.w(TAG, "No control is bound to " + unbound + " — that action cannot be"
                 + " triggered on this device");
         }
+
         Log.i(TAG, "AndroidInputPort initialized — " + layout + ", "
             + accumulator.radiansPerPixel() + " rad/px, controls " + bindings);
     }
@@ -334,7 +346,9 @@ public final class AndroidInputPort implements I_InputPort, InputProcessor
     public void shutdown()
     {
         forgetEverything();
+
         latched = InputState.NEUTRAL;
+
         Log.i(TAG, "AndroidInputPort shut down");
     }
 
@@ -387,7 +401,9 @@ public final class AndroidInputPort implements I_InputPort, InputProcessor
     public boolean consumeLeaveRequest()
     {
         final boolean requested = leaveRequested;
+
         leaveRequested = false;
+
         return requested;
     }
 
@@ -407,11 +423,17 @@ public final class AndroidInputPort implements I_InputPort, InputProcessor
     public void forgetEverything()
     {
         clearPointers();
+
         accumulator.clearAll();
+
         leaveRequested = false;
+
         padFire = false;
+
         padJump = false;
+
         padSprint = false;
+
         padRightTrigger = 0.0f;
     }
 
@@ -423,13 +445,21 @@ public final class AndroidInputPort implements I_InputPort, InputProcessor
         {
             return false;
         }
+
         final int region = layout.regionAt(screenX, screenY);
+
         pointerRegion[pointer] = region;
+
         anchorX[pointer] = screenX;
+
         anchorY[pointer] = screenY;
+
         lastX[pointer] = screenX;
+
         lastY[pointer] = screenY;
+
         applyRegionDown(region);
+
         return true;
     }
 
@@ -440,7 +470,9 @@ public final class AndroidInputPort implements I_InputPort, InputProcessor
         {
             return false;
         }
+
         final int region = pointerRegion[pointer];
+
         if (region == TouchLayout.REGION_MOVE_STICK)
         {
             accumulator.setMovementAxes(
@@ -458,8 +490,11 @@ public final class AndroidInputPort implements I_InputPort, InputProcessor
                 Math.round(screenX - lastX[pointer]),
                 Math.round(screenY - lastY[pointer]));
         }
+
         lastX[pointer] = screenX;
+
         lastY[pointer] = screenY;
+
         return true;
     }
 
@@ -471,9 +506,13 @@ public final class AndroidInputPort implements I_InputPort, InputProcessor
         {
             return false;
         }
+
         final int region = pointerRegion[pointer];
+
         pointerRegion[pointer] = TouchLayout.REGION_NONE;
+
         applyRegionUp(region);
+
         return true;
     }
 
@@ -526,19 +565,25 @@ public final class AndroidInputPort implements I_InputPort, InputProcessor
             // Same rule as a touch: a stick leaning while the menu is up is not
             // a request to walk.
             accumulator.clearGamepad();
+
             return;
         }
+
         noteGamepad();
+
         // Forward is positive here and "pushed away" is negative on the device,
         // so the vertical axis is negated — as a pair, leaving the magnitude and
         // therefore the radial dead zone untouched.
         accumulator.setGamepadMovementAxes(0.0f - leftY, leftX);
+
         // No sign flip on the look stick. Android reports the same "+y downward"
         // the accumulator documents and the desktop mouse already speaks; a
         // second negation here is exactly what shipped an inverted camera once
         // before. See InputAccumulator.setGamepadLookAxes.
         accumulator.setGamepadLookAxes(rightX, rightY);
+
         padRightTrigger = rightTrigger;
+
         publishGamepadActions();
     }
 
@@ -563,13 +608,19 @@ public final class AndroidInputPort implements I_InputPort, InputProcessor
         if (padSeen)
         {
             padSeen = false;
+
             Log.i(TAG, "Controller disconnected — gamepad input dropped,"
                 + " touch controls unaffected");
         }
+
         padFire = false;
+
         padJump = false;
+
         padSprint = false;
+
         padRightTrigger = 0.0f;
+
         accumulator.clearGamepad();
     }
 
@@ -591,6 +642,7 @@ public final class AndroidInputPort implements I_InputPort, InputProcessor
             throw new IllegalArgumentException(
                 "tic rate must be positive, got " + ticsPerSecond);
         }
+
         accumulator.setTicDuration(1.0f / ticsPerSecond);
     }
 
@@ -614,12 +666,15 @@ public final class AndroidInputPort implements I_InputPort, InputProcessor
         if (namesControl(GameAction.LEAVE_MATCH, keycode))
         {
             leaveRequested = true;
+
             return true;
         }
+
         if (!uiState.isPlaying())
         {
             return false;
         }
+
         return applyPadButton(keycode, true);
     }
 
@@ -674,6 +729,7 @@ public final class AndroidInputPort implements I_InputPort, InputProcessor
         {
             return TouchLayout.REGION_NONE;
         }
+
         return pointerRegion[pointer];
     }
 
@@ -691,6 +747,7 @@ public final class AndroidInputPort implements I_InputPort, InputProcessor
                 return index;
             }
         }
+
         return -1;
     }
 
@@ -706,6 +763,7 @@ public final class AndroidInputPort implements I_InputPort, InputProcessor
         {
             return 0.0f;
         }
+
         return anchorX[pointer];
     }
 
@@ -721,6 +779,7 @@ public final class AndroidInputPort implements I_InputPort, InputProcessor
         {
             return 0.0f;
         }
+
         return anchorY[pointer];
     }
 
@@ -736,6 +795,7 @@ public final class AndroidInputPort implements I_InputPort, InputProcessor
         {
             return 0.0f;
         }
+
         return lastX[pointer];
     }
 
@@ -751,6 +811,7 @@ public final class AndroidInputPort implements I_InputPort, InputProcessor
         {
             return 0.0f;
         }
+
         return lastY[pointer];
     }
 
@@ -786,6 +847,7 @@ public final class AndroidInputPort implements I_InputPort, InputProcessor
             // literally would answer "yes, ten fingers are holding nothing".
             return false;
         }
+
         for (int index = 0; index < MAX_POINTERS; index++)
         {
             if (pointerRegion[index] == region)
@@ -793,6 +855,7 @@ public final class AndroidInputPort implements I_InputPort, InputProcessor
                 return true;
             }
         }
+
         return false;
     }
 
@@ -804,6 +867,7 @@ public final class AndroidInputPort implements I_InputPort, InputProcessor
         {
             return false;
         }
+
         return uiState.isPlaying();
     }
 
@@ -813,8 +877,10 @@ public final class AndroidInputPort implements I_InputPort, InputProcessor
         if (region == TouchLayout.REGION_LEAVE)
         {
             leaveRequested = true;
+
             return;
         }
+
         publishButtons();
     }
 
@@ -828,6 +894,7 @@ public final class AndroidInputPort implements I_InputPort, InputProcessor
             // after taking their thumb off.
             accumulator.setMovementAxes(0.0f, 0.0f);
         }
+
         publishButtons();
     }
 
@@ -849,6 +916,7 @@ public final class AndroidInputPort implements I_InputPort, InputProcessor
         final int code)
     {
         final InputBinding[] bound = bindings.bindingsFor(action);
+
         for (int index = 0; index < bound.length; index++)
         {
             if (bound[index].source() == source && bound[index].code() == code)
@@ -856,6 +924,7 @@ public final class AndroidInputPort implements I_InputPort, InputProcessor
                 return true;
             }
         }
+
         return false;
     }
 
@@ -876,30 +945,40 @@ public final class AndroidInputPort implements I_InputPort, InputProcessor
     private boolean applyPadButton(final int keycode, final boolean down)
     {
         boolean consumed = false;
+
         if (isAnyActive(GameAction.FIRE, InputBinding.Source.GAMEPAD_BUTTON, keycode))
         {
             padFire = down;
+
             consumed = true;
         }
+
         if (isAnyActive(GameAction.JUMP, InputBinding.Source.GAMEPAD_BUTTON, keycode))
         {
             padJump = down;
+
             consumed = true;
         }
+
         if (isAnyActive(GameAction.SPRINT, InputBinding.Source.GAMEPAD_BUTTON, keycode))
         {
             padSprint = down;
+
             consumed = true;
         }
+
         if (!consumed)
         {
             return false;
         }
+
         if (down)
         {
             noteGamepad();
         }
+
         publishGamepadActions();
+
         return true;
     }
 
@@ -913,6 +992,7 @@ public final class AndroidInputPort implements I_InputPort, InputProcessor
         final boolean triggerFires =
             isAnyActive(GameAction.FIRE, InputBinding.Source.GAMEPAD_AXIS, AXIS_RIGHT_TRIGGER)
                 && AnalogStick.isTriggerPulled(padRightTrigger);
+
         accumulator.setGamepadActions(padFire || triggerFires, padJump, padSprint);
     }
 
@@ -924,7 +1004,9 @@ public final class AndroidInputPort implements I_InputPort, InputProcessor
         {
             return;
         }
+
         padSeen = true;
+
         Log.i(TAG, "Controller in use — left stick moves, right stick looks;"
             + " the touch controls still work");
     }
@@ -935,9 +1017,13 @@ public final class AndroidInputPort implements I_InputPort, InputProcessor
         for (int index = 0; index < MAX_POINTERS; index++)
         {
             pointerRegion[index] = TouchLayout.REGION_NONE;
+
             anchorX[index] = 0.0f;
+
             anchorY[index] = 0.0f;
+
             lastX[index] = 0.0f;
+
             lastY[index] = 0.0f;
         }
     }

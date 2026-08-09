@@ -76,11 +76,15 @@ public final class MapLibrary
         {
             throw new IllegalArgumentException("spec must not be null");
         }
+
         synchronized (MapLibrary.class)
         {
             final Map<String, MapSpec> next = new LinkedHashMap<>(registry);
+
             final MapSpec previous = next.put(spec.id(), spec);
+
             registry = Collections.unmodifiableMap(next);
+
             if (previous == null)
             {
                 LOG.info("MapLibrary: registered {} ({} x {}, {}, {})", spec.id(),
@@ -108,6 +112,7 @@ public final class MapLibrary
         {
             throw new IllegalArgumentException("id must not be null");
         }
+
         return registry.get(id);
     }
 
@@ -123,6 +128,7 @@ public final class MapLibrary
         {
             throw new IllegalArgumentException("id must not be null");
         }
+
         return registry.containsKey(id);
     }
 
@@ -156,32 +162,47 @@ public final class MapLibrary
     public static void registerDefaults()
     {
         register(Maps.cornerstone());
+
         register(Maps.overpass());
+
         register(Maps.tripoint());
+
         register(Maps.extraction());
+
         register(Maps.refinery());
+
         register(Maps.crossroads());
+
         register(Maps.arcticStation());
+
         // Pass 5 — three new Hardpoint maps: foundry (Industrial
         // Complex), mesa (Desert Ravine), arctic-hp (Arctic Station).
         register(Maps.foundry());
+
         register(Maps.mesa());
+
         register(Maps.arcticHp());
+
         // Pass 6 — three new Domination maps: pipeline (Industrial
         // Complex), sandbar (Desert Ravine), arctic-dom / Frostline
         // (Arctic Station). The Domination mode logic is shipped from
         // Pass 3; these three maps add the level .ofm and the spec
         // factory methods.
         register(Maps.pipeline());
+
         register(Maps.sandbar());
+
         register(Maps.arcticDom());
+
         // Pass 7 — three new CTF maps: storage (Industrial Complex),
         // stronghold (Desert Ravine), coldfront (Arctic Station).
         // The CTF mode logic is shipped from Pass 4; these three maps
         // add the level .ofm and the spec factory methods. The grid
         // is now complete: 4 settings x 4 modes = 16 maps.
         register(Maps.storage());
+
         register(Maps.stronghold());
+
         register(Maps.coldfront());
     }
 

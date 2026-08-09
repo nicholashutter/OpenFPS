@@ -134,14 +134,19 @@ public final class ArcticDomMapBuilder
     public static void main(final String[] args)
     {
         final String out = option(args, "--out=");
+
         if (out == null)
         {
             LOG.error("usage: ArcticDomMapBuilder --out=<directory>"
                 + " [--atlas=<colormap.png>]");
+
             return;
         }
+
         final String atlasOption = option(args, "--atlas=");
+
         final Path atlasPath;
+
         if (atlasOption == null)
         {
             atlasPath = null;
@@ -150,7 +155,9 @@ public final class ArcticDomMapBuilder
         {
             atlasPath = Path.of(atlasOption);
         }
+
         final Path outDir = Path.of(out);
+
         try
         {
             Files.createDirectories(outDir);
@@ -159,8 +166,11 @@ public final class ArcticDomMapBuilder
         {
             throw new UncheckedIOException("could not create output directory: " + outDir, e);
         }
+
         final byte[] bytes = build(atlasPath);
+
         final Path outFile = outDir.resolve(FILE_NAME);
+
         try
         {
             Files.write(outFile, bytes);
@@ -169,7 +179,9 @@ public final class ArcticDomMapBuilder
         {
             throw new UncheckedIOException("could not write " + outFile, e);
         }
+
         final ModelFormat parsed = ModelFormat.read(bytes);
+
         LOG.info("Wrote {} ({} triangles, {} vertices, {} textures)",
             outFile, parsed.indexCount() / 3, parsed.vertexCount(), parsed.textureCount());
     }
@@ -201,7 +213,9 @@ public final class ArcticDomMapBuilder
     public static byte[] build(final Path atlasPath)
     {
         final ModelBuilder builder = new ModelBuilder(MODEL_NAME);
+
         final int[] floorTexels;
+
         if (atlasPath != null)
         {
             floorTexels = KenneyTexture.forceOpaque(KenneyTexture.floor(atlasPath));
@@ -210,7 +224,9 @@ public final class ArcticDomMapBuilder
         {
             floorTexels = floorTexels();
         }
+
         final int[] wallTexels;
+
         if (atlasPath != null)
         {
             wallTexels = KenneyTexture.forceOpaque(KenneyTexture.wall(atlasPath));
@@ -219,31 +235,48 @@ public final class ArcticDomMapBuilder
         {
             wallTexels = wallTexels();
         }
+
         final int[] accentTexels = accentTexels();
+
         final int floorTexture = builder.addTexture("arctic-dom-floor", TEXTURE_EDGE,
             TEXTURE_EDGE, MipGenerator.generate(TEXTURE_EDGE, TEXTURE_EDGE, floorTexels));
+
         final int wallTexture = builder.addTexture("arctic-dom-wall", TEXTURE_EDGE,
             TEXTURE_EDGE, MipGenerator.generate(TEXTURE_EDGE, TEXTURE_EDGE, wallTexels));
+
         final int accentTexture = builder.addTexture("arctic-dom-accent", TEXTURE_EDGE,
             TEXTURE_EDGE, MipGenerator.generate(TEXTURE_EDGE, TEXTURE_EDGE, accentTexels));
 
         builder.beginSubmesh(floorTexture);
+
         addGroundSlab(builder);
+
         addIceRoad(builder);
+
         builder.endSubmesh();
 
         builder.beginSubmesh(wallTexture);
+
         addPerimeterWalls(builder);
+
         addNorthSnowWall(builder);
+
         addSouthSnowWall(builder);
+
         addPlatformC(builder);
+
         addPlatformB(builder);
+
         addPlatformA(builder);
+
         addPlatformRamps(builder);
+
         builder.endSubmesh();
 
         builder.beginSubmesh(accentTexture);
+
         addAccentGeometry(builder);
+
         builder.endSubmesh();
 
         return builder.toBytes();
@@ -288,7 +321,9 @@ public final class ArcticDomMapBuilder
     private static void addIceRoad(final ModelBuilder builder)
     {
         final float xMin = ROAD_CENTRE_X - ROAD_WIDTH / 2.0f;
+
         final float xMax = ROAD_CENTRE_X + ROAD_WIDTH / 2.0f;
+
         addBox(builder, xMin, 0.0f, ROAD_MIN_Z, xMax, ROAD_HEIGHT, ROAD_MAX_Z);
     }
 
@@ -299,9 +334,13 @@ public final class ArcticDomMapBuilder
     private static void addPerimeterWalls(final ModelBuilder builder)
     {
         final float e = HALF_EXTENT;
+
         addBox(builder, -e, 0.0f, -e - WALL_THICKNESS, e, WALL_HEIGHT, -e);
+
         addBox(builder, -e, 0.0f, e, e, WALL_HEIGHT, e + WALL_THICKNESS);
+
         addBox(builder, -e - WALL_THICKNESS, 0.0f, -e, -e, WALL_HEIGHT, e);
+
         addBox(builder, e, 0.0f, -e, e + WALL_THICKNESS, WALL_HEIGHT, e);
     }
 
@@ -313,7 +352,9 @@ public final class ArcticDomMapBuilder
     private static void addNorthSnowWall(final ModelBuilder builder)
     {
         addSnowWallRun(builder, NORTH_WALL_Z, -HALF_EXTENT, -132.0f);
+
         addSnowWallRun(builder, NORTH_WALL_Z, -68.0f, 132.0f);
+
         addSnowWallRun(builder, NORTH_WALL_Z, 68.0f, HALF_EXTENT);
     }
 
@@ -324,7 +365,9 @@ public final class ArcticDomMapBuilder
     private static void addSouthSnowWall(final ModelBuilder builder)
     {
         addSnowWallRun(builder, SOUTH_WALL_Z, -HALF_EXTENT, -132.0f);
+
         addSnowWallRun(builder, SOUTH_WALL_Z, -68.0f, 132.0f);
+
         addSnowWallRun(builder, SOUTH_WALL_Z, 68.0f, HALF_EXTENT);
     }
 
@@ -373,7 +416,9 @@ public final class ArcticDomMapBuilder
     private static void addPlatformRamps(final ModelBuilder builder)
     {
         addPlatformRamp(builder, 80.0f);
+
         addPlatformRamp(builder, 160.0f);
+
         addPlatformRamp(builder, 240.0f);
     }
 
@@ -386,9 +431,13 @@ public final class ArcticDomMapBuilder
         for (int i = 0; i < 4; i++)
         {
             final float yBottom = (float) i * 4.0f;
+
             final float yTop = yBottom + 4.0f;
+
             final float zMin = platformZ - 12.0f + (float) i * 6.0f;
+
             final float zMax = zMin + 6.0f;
+
             addBox(builder, 176.0f, yBottom, zMin, 180.0f, yTop, zMax);
         }
     }
@@ -402,16 +451,21 @@ public final class ArcticDomMapBuilder
         // FLAG_C mast
         addBox(builder, 182.0f, PLATFORM_HEIGHT, 78.0f, 186.0f,
             PLATFORM_HEIGHT + MAST_HEIGHT, 82.0f);
+
         addBox(builder, 178.0f, PLATFORM_HEIGHT + MAST_HEIGHT - 8.0f, 76.0f, 190.0f,
             PLATFORM_HEIGHT + MAST_HEIGHT, 84.0f);
+
         // FLAG_B mast
         addBox(builder, 182.0f, PLATFORM_HEIGHT, 158.0f, 186.0f,
             PLATFORM_HEIGHT + MAST_HEIGHT, 162.0f);
+
         addBox(builder, 178.0f, PLATFORM_HEIGHT + MAST_HEIGHT - 8.0f, 156.0f, 190.0f,
             PLATFORM_HEIGHT + MAST_HEIGHT, 164.0f);
+
         // FLAG_A mast
         addBox(builder, 182.0f, PLATFORM_HEIGHT, 238.0f, 186.0f,
             PLATFORM_HEIGHT + MAST_HEIGHT, 242.0f);
+
         addBox(builder, 178.0f, PLATFORM_HEIGHT + MAST_HEIGHT - 8.0f, 236.0f, 190.0f,
             PLATFORM_HEIGHT + MAST_HEIGHT, 244.0f);
     }
@@ -423,10 +477,15 @@ public final class ArcticDomMapBuilder
         final float minZ, final float maxX, final float maxY, final float maxZ)
     {
         addFace(builder, maxX, minY, maxZ, maxX, maxY, maxZ, maxX, maxY, minZ, maxX, minY, minZ);
+
         addFace(builder, minX, minY, minZ, minX, maxY, minZ, minX, maxY, maxZ, minX, minY, maxZ);
+
         addFace(builder, minX, maxY, maxZ, maxX, maxY, maxZ, maxX, maxY, minZ, minX, maxY, minZ);
+
         addFace(builder, minX, minY, minZ, maxX, minY, minZ, maxX, minY, maxZ, minX, minY, maxZ);
+
         addFace(builder, minX, minY, maxZ, minX, maxY, maxZ, maxX, maxY, maxZ, maxX, minY, maxZ);
+
         addFace(builder, maxX, minY, minZ, maxX, maxY, minZ, minX, maxY, minZ, minX, minY, minZ);
     }
 
@@ -438,15 +497,21 @@ public final class ArcticDomMapBuilder
         final float cy, final float cz, final float dx, final float dy, final float dz)
     {
         final float uScale = 1.0f / WORLD_UNITS_PER_TILE;
+
         final int a = builder.addVertex(ax, ay, az, ax * uScale, az * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         final int b = builder.addVertex(bx, by, bz, bx * uScale, bz * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         final int c = builder.addVertex(cx, cy, cz, cx * uScale, cz * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         final int d = builder.addVertex(dx, dy, dz, dx * uScale, dz * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         builder.addTriangle(a, b, c);
+
         builder.addTriangle(a, c, d);
     }
 
@@ -457,64 +522,86 @@ public final class ArcticDomMapBuilder
     private static int[] floorTexels()
     {
         final int base = Rgba.pack(232, 240, 248, 255);
+
         final int shade = Rgba.pack(208, 222, 236, 255);
+
         final int drift = Rgba.pack(190, 210, 228, 255);
+
         final int[] out = new int[TEXTURE_EDGE * TEXTURE_EDGE];
+
         for (int y = 0; y < TEXTURE_EDGE; y++)
         {
             for (int x = 0; x < TEXTURE_EDGE; x++)
             {
                 int colour = base;
+
                 if ((y / 8) % 2 == 0)
                 {
                     colour = shade;
                 }
+
                 if (x % 16 == 0)
                 {
                     colour = drift;
                 }
+
                 out[y * TEXTURE_EDGE + x] = colour;
             }
         }
+
         return out;
     }
 
     private static int[] wallTexels()
     {
         final int base = Rgba.pack(200, 212, 224, 255);
+
         final int shade = Rgba.pack(168, 184, 200, 255);
+
         final int rib = Rgba.pack(140, 156, 172, 255);
+
         final int bandHeight = TEXTURE_EDGE / 8;
+
         final int[] out = new int[TEXTURE_EDGE * TEXTURE_EDGE];
+
         for (int y = 0; y < TEXTURE_EDGE; y++)
         {
             final int band = y / bandHeight;
+
             final boolean isRib = (y % bandHeight) == 0;
+
             for (int x = 0; x < TEXTURE_EDGE; x++)
             {
                 int colour = base;
+
                 if ((band % 2) != 0)
                 {
                     colour = shade;
                 }
+
                 if (isRib)
                 {
                     colour = rib;
                 }
+
                 out[y * TEXTURE_EDGE + x] = colour;
             }
         }
+
         return out;
     }
 
     private static int[] accentTexels()
     {
         final int colour = Rgba.pack(192, 80, 80, 255);
+
         final int[] out = new int[TEXTURE_EDGE * TEXTURE_EDGE];
+
         for (int index = 0; index < out.length; index++)
         {
             out[index] = colour;
         }
+
         return out;
     }
 
@@ -527,6 +614,7 @@ public final class ArcticDomMapBuilder
                 return arg.substring(prefix.length());
             }
         }
+
         return null;
     }
 }

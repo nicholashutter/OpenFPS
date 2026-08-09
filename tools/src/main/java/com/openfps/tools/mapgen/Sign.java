@@ -89,15 +89,25 @@ public final class Sign implements Primitive
         final String texture, final float worldUnitsPerTile)
     {
         this.centerX = centerX;
+
         this.centerY = centerY;
+
         this.centerZ = centerZ;
+
         this.width = width;
+
         this.height = height;
+
         this.facingYawDegrees = facingYawDegrees;
+
         this.vertical = vertical;
+
         this.submesh = submesh;
+
         this.texture = Objects.requireNonNull(texture, "texture");
+
         this.worldUnitsPerTile = worldUnitsPerTile;
+
         if (texture.isBlank())
         {
             throw new IllegalArgumentException("texture must not be blank");
@@ -122,14 +132,23 @@ public final class Sign implements Primitive
     public static Sign fromJson(final JsonObject obj, final float worldUnitsPerTile)
     {
         final float x = readFloat(obj, "x");
+
         final float y = readFloat(obj, "y");
+
         final float z = readFloat(obj, "z");
+
         final float w = readPositiveFloat(obj, "w");
+
         final float h = readPositiveFloat(obj, "h");
+
         final float yaw = readFloatOrDefault(obj, "yaw", 0.0f);
+
         final boolean vertical = readBooleanOrDefault(obj, "vertical", true);
+
         final int submesh = readIntOrDefault(obj, "submesh", SUBMESH_WALL);
+
         final String texture = readStringOrDefault(obj, "texture", "accent");
+
         return new Sign(x, y, z, w, h, yaw, vertical, submesh, texture, worldUnitsPerTile);
     }
 
@@ -207,44 +226,74 @@ public final class Sign implements Primitive
             throw new IllegalArgumentException("textureIndex must be non-negative: "
                 + textureIndex);
         }
+
         final float uScale = 1.0f / worldUnitsPerTile;
+
         final float halfW = width * 0.5f;
+
         final float halfH = height * 0.5f;
+
         // Build the four corners in the local frame: width along local x, height
         // along local y. The yaw rotates the local x about the world y.
         final float yaw = (float) StrictMath.toRadians(facingYawDegrees);
+
         final float cosYaw = (float) StrictMath.cos(yaw);
+
         final float sinYaw = (float) StrictMath.sin(yaw);
+
         // Local corners (lx, ly)
         final float lAx = -halfW;
+
         final float lAy = -halfH;
+
         final float lBx = halfW;
+
         final float lBy = -halfH;
+
         final float lCx = halfW;
+
         final float lCy = halfH;
+
         final float lDx = -halfW;
+
         final float lDy = halfH;
+
         // World-space (wx, wz) = (lx * cos - 0 * sin, lx * sin + 0 * cos) for x
         // components; the y component is the local y. Rotation about world y
         // leaves the y component untouched.
         final float wAx = centerX + lAx * cosYaw;
+
         final float wAz = centerZ + lAx * sinYaw;
+
         final float wBx = centerX + lBx * cosYaw;
+
         final float wBz = centerZ + lBx * sinYaw;
+
         final float wCx = centerX + lCx * cosYaw;
+
         final float wCz = centerZ + lCx * sinYaw;
+
         final float wDx = centerX + lDx * cosYaw;
+
         final float wDz = centerZ + lDx * sinYaw;
+
         final float aWorldY;
+
         final float bWorldY;
+
         final float cWorldY;
+
         final float dWorldY;
+
         if (vertical)
         {
             // Wall: the local y is the world y, so corners are (wx, centerY + ly, wz).
             aWorldY = centerY + lAy;
+
             bWorldY = centerY + lBy;
+
             cWorldY = centerY + lCy;
+
             dWorldY = centerY + lDy;
         }
         else
@@ -253,23 +302,34 @@ public final class Sign implements Primitive
             // (wx, centerY, wz + ly). Yaw is unused here because horizontal signs
             // lie flat.
             aWorldY = centerY;
+
             bWorldY = centerY;
+
             cWorldY = centerY;
+
             dWorldY = centerY;
         }
+
         final int a;
+
         final int b;
+
         final int c;
+
         final int d;
+
         if (vertical)
         {
             // UVs use world (x, z) so adjacent wall signs tile together.
             a = builder.addVertex(wAx, aWorldY, wAz, wAx * uScale, wAz * uScale,
                 Rgba.pack(255, 255, 255, 255));
+
             b = builder.addVertex(wBx, bWorldY, wBz, wBx * uScale, wBz * uScale,
                 Rgba.pack(255, 255, 255, 255));
+
             c = builder.addVertex(wCx, cWorldY, wCz, wCx * uScale, wCz * uScale,
                 Rgba.pack(255, 255, 255, 255));
+
             d = builder.addVertex(wDx, dWorldY, wDz, wDx * uScale, wDz * uScale,
                 Rgba.pack(255, 255, 255, 255));
         }
@@ -278,14 +338,19 @@ public final class Sign implements Primitive
             // UVs use world (x, y) so floor decals tile together.
             a = builder.addVertex(wAx, aWorldY, wAz + lAy, wAx * uScale, (wAz + lAy) * uScale,
                 Rgba.pack(255, 255, 255, 255));
+
             b = builder.addVertex(wBx, bWorldY, wBz + lBy, wBx * uScale, (wBz + lBy) * uScale,
                 Rgba.pack(255, 255, 255, 255));
+
             c = builder.addVertex(wCx, cWorldY, wCz + lCy, wCx * uScale, (wCz + lCy) * uScale,
                 Rgba.pack(255, 255, 255, 255));
+
             d = builder.addVertex(wDx, dWorldY, wDz + lDy, wDx * uScale, (wDz + lDy) * uScale,
                 Rgba.pack(255, 255, 255, 255));
         }
+
         builder.addTriangle(a, b, c);
+
         builder.addTriangle(a, c, d);
     }
 
@@ -296,14 +361,17 @@ public final class Sign implements Primitive
         {
             throw new IllegalStateException("sign width must be positive: " + width);
         }
+
         if (height <= 0.0f)
         {
             throw new IllegalStateException("sign height must be positive: " + height);
         }
+
         if (submesh < 0)
         {
             throw new IllegalStateException("submesh must be non-negative: " + submesh);
         }
+
         if (worldUnitsPerTile <= 0.0f)
         {
             throw new IllegalStateException("worldUnitsPerTile must be positive: "
@@ -319,17 +387,20 @@ public final class Sign implements Primitive
         {
             throw new IllegalArgumentException("sign requires field '" + field + "'");
         }
+
         return obj.get(field).getAsFloat();
     }
 
     private static float readPositiveFloat(final JsonObject obj, final String field)
     {
         final float value = readFloat(obj, field);
+
         if (value <= 0.0f)
         {
             throw new IllegalArgumentException("sign field '" + field + "' must be positive: "
                 + value);
         }
+
         return value;
     }
 
@@ -340,6 +411,7 @@ public final class Sign implements Primitive
         {
             return def;
         }
+
         return obj.get(field).getAsFloat();
     }
 
@@ -350,6 +422,7 @@ public final class Sign implements Primitive
         {
             return def;
         }
+
         return obj.get(field).getAsBoolean();
     }
 
@@ -359,6 +432,7 @@ public final class Sign implements Primitive
         {
             return def;
         }
+
         return obj.get(field).getAsInt();
     }
 
@@ -369,6 +443,7 @@ public final class Sign implements Primitive
         {
             return def;
         }
+
         return obj.get(field).getAsString();
     }
 }

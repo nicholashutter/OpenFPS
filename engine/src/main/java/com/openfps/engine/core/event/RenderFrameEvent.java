@@ -22,7 +22,9 @@ public final class RenderFrameEvent implements I_EngineEvent
                             final int frameNumber)
     {
         this.sequenceNumber = sequenceNumber;
+
         this.timestampNanos = timestampNanos;
+
         this.frameNumber = frameNumber;
     }
 

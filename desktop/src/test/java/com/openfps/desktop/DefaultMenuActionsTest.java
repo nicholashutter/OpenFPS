@@ -32,6 +32,7 @@ class DefaultMenuActionsTest
     void shouldRequestCloseOnGdxPort()
     {
         final GdxWindowPort window = new GdxWindowPort();
+
         window.init();
 
         new DefaultMenuActions(window).onQuit();
@@ -44,12 +45,17 @@ class DefaultMenuActionsTest
     void shouldCloseAWindowThroughTheQuitButtonWiring()
     {
         final GdxWindowPort window = new GdxWindowPort();
+
         window.init();
+
         final MenuActions actions = new DefaultMenuActions(window);
+
         final MenuButtonListener quitButton = new MenuButtonListener(actions::onQuit);
 
         assertThat(window.isCloseRequested()).isFalse();
+
         quitButton.changed(null, null);
+
         assertThat(window.isCloseRequested()).isTrue();
     }
 }

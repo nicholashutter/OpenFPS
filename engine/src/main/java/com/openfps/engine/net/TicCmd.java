@@ -98,17 +98,27 @@ public final class TicCmd
                   final int buttons)
     {
         requireRange(ticNumber, 0, Integer.MAX_VALUE, "ticNumber");
+
         requireRange(forward, MIN_AXIS, MAX_AXIS, "forward");
+
         requireRange(strafe, MIN_AXIS, MAX_AXIS, "strafe");
+
         requireRange(angle, 0, MAX_ANGLE, "angle");
+
         requireRange(pitch, MIN_PITCH, MAX_PITCH, "pitch");
+
         requireRange(buttons, 0, ALL_BUTTONS, "buttons");
 
         this.ticNumber = ticNumber;
+
         this.forward = (short) forward;
+
         this.strafe = (short) strafe;
+
         this.angle = (short) angle;
+
         this.pitch = (byte) pitch;
+
         this.buttons = (byte) buttons;
     }
 
@@ -185,11 +195,17 @@ public final class TicCmd
                                    final int buttons)
     {
         NetBytes.writeInt(dst, offset + OFFSET_TIC_NUMBER, ticNumber);
+
         NetBytes.writeShort(dst, offset + OFFSET_FORWARD, forward);
+
         NetBytes.writeShort(dst, offset + OFFSET_STRAFE, strafe);
+
         NetBytes.writeShort(dst, offset + OFFSET_ANGLE, angle);
+
         dst[offset + OFFSET_PITCH] = (byte) pitch;
+
         dst[offset + OFFSET_BUTTONS] = (byte) buttons;
+
         return BYTES;
     }
 
@@ -291,10 +307,12 @@ public final class TicCmd
         {
             return true;
         }
+
         if (!(other instanceof TicCmd that))
         {
             return false;
         }
+
         return ticNumber == that.ticNumber
             && forward == that.forward
             && strafe == that.strafe
@@ -307,11 +325,17 @@ public final class TicCmd
     public int hashCode()
     {
         int result = ticNumber;
+
         result = PRIME * result + forward;
+
         result = PRIME * result + strafe;
+
         result = PRIME * result + angle;
+
         result = PRIME * result + pitch;
+
         result = PRIME * result + buttons;
+
         return result;
     }
 

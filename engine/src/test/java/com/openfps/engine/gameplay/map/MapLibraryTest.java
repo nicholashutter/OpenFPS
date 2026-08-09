@@ -54,6 +54,7 @@ class MapLibraryTest
         void shouldRegisterCornerstone()
         {
             MapLibrary.registerDefaults();
+
             assertThat(MapLibrary.has("cornerstone")).isTrue();
         }
 
@@ -62,10 +63,15 @@ class MapLibraryTest
         void shouldDescribeCornerstone()
         {
             final MapSpec spec = MapLibrary.get("cornerstone");
+
             assertThat(spec).isNotNull();
+
             assertThat(spec.mode()).isEqualTo(MatchMode.TDM);
+
             assertThat(spec.setting()).isEqualTo(MapSetting.URBAN_WARZONE);
+
             assertThat(spec.lanes()).hasSize(3);
+
             assertThat(spec.spawnPoints()).isNotEmpty();
         }
 
@@ -74,6 +80,7 @@ class MapLibraryTest
         void shouldRegisterOverpass()
         {
             MapLibrary.registerDefaults();
+
             assertThat(MapLibrary.has("overpass")).isTrue();
         }
 
@@ -82,15 +89,25 @@ class MapLibraryTest
         void shouldDescribeOverpass()
         {
             final MapSpec spec = MapLibrary.get("overpass");
+
             assertThat(spec).isNotNull();
+
             assertThat(spec.mode()).isEqualTo(MatchMode.HARDPOINT);
+
             assertThat(spec.setting()).isEqualTo(MapSetting.URBAN_WARZONE);
+
             assertThat(spec.lanes()).hasSize(3);
+
             assertThat(spec.spawnPoints()).hasSize(6);
+
             assertThat(spec.botWaypoints()).isNotEmpty();
+
             final MapMarkers.Hardpoint hp = (MapMarkers.Hardpoint) spec.markers();
+
             assertThat(hp.zones()).hasSize(3);
+
             assertThat(hp.rotationTics()).isPositive();
+
             assertThat(hp.scorePerTick()).isPositive();
         }
 
@@ -99,6 +116,7 @@ class MapLibraryTest
         void shouldRegisterTripoint()
         {
             MapLibrary.registerDefaults();
+
             assertThat(MapLibrary.has("tripoint")).isTrue();
         }
 
@@ -107,20 +125,30 @@ class MapLibraryTest
         void shouldDescribeTripoint()
         {
             final MapSpec spec = MapLibrary.get("tripoint");
+
             assertThat(spec).isNotNull();
+
             assertThat(spec.mode()).isEqualTo(MatchMode.DOMINATION);
+
             assertThat(spec.setting()).isEqualTo(MapSetting.URBAN_WARZONE);
+
             assertThat(spec.lanes()).hasSize(3);
+
             assertThat(spec.spawnPoints()).hasSize(6);
+
             assertThat(spec.botWaypoints()).isNotEmpty();
+
             final MapMarkers.Domination dom = (MapMarkers.Domination) spec.markers();
+
             assertThat(dom.flags()).hasSize(3);
+
             // The three flag positions are distinct, by the unique
             // id the spec assigns. The Match layer relies on the
             // id being unique within a map, so a test pinning the
             // property here is a guard against a future refactor
             // that introduces an id collision.
             assertThat(dom.flags().get(0).id()).isNotEqualTo(dom.flags().get(1).id());
+
             assertThat(dom.flags().get(1).id()).isNotEqualTo(dom.flags().get(2).id());
         }
 
@@ -129,6 +157,7 @@ class MapLibraryTest
         void shouldRegisterExtraction()
         {
             MapLibrary.registerDefaults();
+
             assertThat(MapLibrary.has("extraction")).isTrue();
         }
 
@@ -137,21 +166,32 @@ class MapLibraryTest
         void shouldDescribeExtraction()
         {
             final MapSpec spec = MapLibrary.get("extraction");
+
             assertThat(spec).isNotNull();
+
             assertThat(spec.mode()).isEqualTo(MatchMode.CTF);
+
             assertThat(spec.setting()).isEqualTo(MapSetting.URBAN_WARZONE);
+
             assertThat(spec.lanes()).hasSize(3);
+
             assertThat(spec.spawnPoints()).hasSize(6);
+
             assertThat(spec.botWaypoints()).isNotEmpty();
+
             final MapMarkers.CaptureTheFlag ctf = (MapMarkers.CaptureTheFlag) spec.markers();
+
             assertThat(ctf.redBase().team()).isEqualTo(Team.RED);
+
             assertThat(ctf.blueBase().team()).isEqualTo(Team.BLUE);
+
             // Each base declares both a flag and a capture point.
             // They may sit at the same coordinates (the standard
             // CTF layout) or at distinct ones; the spec does not
             // constrain that, so the test only checks they are
             // non-zero and within the map's bounds.
             assertThat(ctf.redBase().radius()).isPositive();
+
             assertThat(ctf.blueBase().radius()).isPositive();
         }
 
@@ -160,6 +200,7 @@ class MapLibraryTest
         void shouldRegisterStorage()
         {
             MapLibrary.registerDefaults();
+
             assertThat(MapLibrary.has("storage")).isTrue();
         }
 
@@ -168,16 +209,27 @@ class MapLibraryTest
         void shouldDescribeStorage()
         {
             final MapSpec spec = MapLibrary.get("storage");
+
             assertThat(spec).isNotNull();
+
             assertThat(spec.mode()).isEqualTo(MatchMode.CTF);
+
             assertThat(spec.setting()).isEqualTo(MapSetting.INDUSTRIAL_COMPLEX);
+
             assertThat(spec.lanes()).hasSize(3);
+
             assertThat(spec.spawnPoints()).hasSize(6);
+
             assertThat(spec.botWaypoints()).isNotEmpty();
+
             final MapMarkers.CaptureTheFlag ctf = (MapMarkers.CaptureTheFlag) spec.markers();
+
             assertThat(ctf.redBase().team()).isEqualTo(Team.RED);
+
             assertThat(ctf.blueBase().team()).isEqualTo(Team.BLUE);
+
             assertThat(ctf.redBase().radius()).isPositive();
+
             assertThat(ctf.blueBase().radius()).isPositive();
         }
 
@@ -186,6 +238,7 @@ class MapLibraryTest
         void shouldRegisterStronghold()
         {
             MapLibrary.registerDefaults();
+
             assertThat(MapLibrary.has("stronghold")).isTrue();
         }
 
@@ -194,16 +247,27 @@ class MapLibraryTest
         void shouldDescribeStronghold()
         {
             final MapSpec spec = MapLibrary.get("stronghold");
+
             assertThat(spec).isNotNull();
+
             assertThat(spec.mode()).isEqualTo(MatchMode.CTF);
+
             assertThat(spec.setting()).isEqualTo(MapSetting.DESERT_RAVINE);
+
             assertThat(spec.lanes()).hasSize(3);
+
             assertThat(spec.spawnPoints()).hasSize(6);
+
             assertThat(spec.botWaypoints()).isNotEmpty();
+
             final MapMarkers.CaptureTheFlag ctf = (MapMarkers.CaptureTheFlag) spec.markers();
+
             assertThat(ctf.redBase().team()).isEqualTo(Team.RED);
+
             assertThat(ctf.blueBase().team()).isEqualTo(Team.BLUE);
+
             assertThat(ctf.redBase().radius()).isPositive();
+
             assertThat(ctf.blueBase().radius()).isPositive();
         }
 
@@ -212,6 +276,7 @@ class MapLibraryTest
         void shouldRegisterColdfront()
         {
             MapLibrary.registerDefaults();
+
             assertThat(MapLibrary.has("coldfront")).isTrue();
         }
 
@@ -220,16 +285,27 @@ class MapLibraryTest
         void shouldDescribeColdfront()
         {
             final MapSpec spec = MapLibrary.get("coldfront");
+
             assertThat(spec).isNotNull();
+
             assertThat(spec.mode()).isEqualTo(MatchMode.CTF);
+
             assertThat(spec.setting()).isEqualTo(MapSetting.ARCTIC_STATION);
+
             assertThat(spec.lanes()).hasSize(3);
+
             assertThat(spec.spawnPoints()).hasSize(6);
+
             assertThat(spec.botWaypoints()).isNotEmpty();
+
             final MapMarkers.CaptureTheFlag ctf = (MapMarkers.CaptureTheFlag) spec.markers();
+
             assertThat(ctf.redBase().team()).isEqualTo(Team.RED);
+
             assertThat(ctf.blueBase().team()).isEqualTo(Team.BLUE);
+
             assertThat(ctf.redBase().radius()).isPositive();
+
             assertThat(ctf.blueBase().radius()).isPositive();
         }
 
@@ -238,6 +314,7 @@ class MapLibraryTest
         void shouldRegisterFoundry()
         {
             MapLibrary.registerDefaults();
+
             assertThat(MapLibrary.has("foundry")).isTrue();
         }
 
@@ -246,16 +323,27 @@ class MapLibraryTest
         void shouldDescribeFoundry()
         {
             final MapSpec spec = MapLibrary.get("foundry");
+
             assertThat(spec).isNotNull();
+
             assertThat(spec.mode()).isEqualTo(MatchMode.HARDPOINT);
+
             assertThat(spec.setting()).isEqualTo(MapSetting.INDUSTRIAL_COMPLEX);
+
             assertThat(spec.lanes()).hasSize(3);
+
             assertThat(spec.spawnPoints()).hasSize(6);
+
             assertThat(spec.botWaypoints()).isNotEmpty();
+
             final MapMarkers.Hardpoint hp = (MapMarkers.Hardpoint) spec.markers();
+
             assertThat(hp.zones()).hasSize(3);
+
             assertThat(hp.rotationTics()).isPositive();
+
             assertThat(hp.scorePerTick()).isPositive();
+
             // The three zone ids must be unique within the map; the
             // match layer relies on this to disambiguate the active
             // zone from its siblings. A future refactor that
@@ -263,6 +351,7 @@ class MapLibraryTest
             // lockstep peers on the first rotation.
             assertThat(hp.zones().get(0).id())
                 .isNotEqualTo(hp.zones().get(1).id());
+
             assertThat(hp.zones().get(1).id())
                 .isNotEqualTo(hp.zones().get(2).id());
         }
@@ -272,6 +361,7 @@ class MapLibraryTest
         void shouldRegisterMesa()
         {
             MapLibrary.registerDefaults();
+
             assertThat(MapLibrary.has("mesa")).isTrue();
         }
 
@@ -280,18 +370,30 @@ class MapLibraryTest
         void shouldDescribeMesa()
         {
             final MapSpec spec = MapLibrary.get("mesa");
+
             assertThat(spec).isNotNull();
+
             assertThat(spec.mode()).isEqualTo(MatchMode.HARDPOINT);
+
             assertThat(spec.setting()).isEqualTo(MapSetting.DESERT_RAVINE);
+
             assertThat(spec.lanes()).hasSize(3);
+
             assertThat(spec.spawnPoints()).hasSize(6);
+
             assertThat(spec.botWaypoints()).isNotEmpty();
+
             final MapMarkers.Hardpoint hp = (MapMarkers.Hardpoint) spec.markers();
+
             assertThat(hp.zones()).hasSize(3);
+
             assertThat(hp.rotationTics()).isPositive();
+
             assertThat(hp.scorePerTick()).isPositive();
+
             assertThat(hp.zones().get(0).id())
                 .isNotEqualTo(hp.zones().get(1).id());
+
             assertThat(hp.zones().get(1).id())
                 .isNotEqualTo(hp.zones().get(2).id());
         }
@@ -301,6 +403,7 @@ class MapLibraryTest
         void shouldRegisterArcticHp()
         {
             MapLibrary.registerDefaults();
+
             assertThat(MapLibrary.has("arctic-hp")).isTrue();
         }
 
@@ -309,18 +412,30 @@ class MapLibraryTest
         void shouldDescribeArcticHp()
         {
             final MapSpec spec = MapLibrary.get("arctic-hp");
+
             assertThat(spec).isNotNull();
+
             assertThat(spec.mode()).isEqualTo(MatchMode.HARDPOINT);
+
             assertThat(spec.setting()).isEqualTo(MapSetting.ARCTIC_STATION);
+
             assertThat(spec.lanes()).hasSize(3);
+
             assertThat(spec.spawnPoints()).hasSize(6);
+
             assertThat(spec.botWaypoints()).isNotEmpty();
+
             final MapMarkers.Hardpoint hp = (MapMarkers.Hardpoint) spec.markers();
+
             assertThat(hp.zones()).hasSize(3);
+
             assertThat(hp.rotationTics()).isPositive();
+
             assertThat(hp.scorePerTick()).isPositive();
+
             assertThat(hp.zones().get(0).id())
                 .isNotEqualTo(hp.zones().get(1).id());
+
             assertThat(hp.zones().get(1).id())
                 .isNotEqualTo(hp.zones().get(2).id());
         }
@@ -330,6 +445,7 @@ class MapLibraryTest
         void shouldRegisterPipeline()
         {
             MapLibrary.registerDefaults();
+
             assertThat(MapLibrary.has("pipeline")).isTrue();
         }
 
@@ -338,20 +454,30 @@ class MapLibraryTest
         void shouldDescribePipeline()
         {
             final MapSpec spec = MapLibrary.get("pipeline");
+
             assertThat(spec).isNotNull();
+
             assertThat(spec.mode()).isEqualTo(MatchMode.DOMINATION);
+
             assertThat(spec.setting()).isEqualTo(MapSetting.INDUSTRIAL_COMPLEX);
+
             assertThat(spec.lanes()).hasSize(3);
+
             assertThat(spec.spawnPoints()).hasSize(6);
+
             assertThat(spec.botWaypoints()).isNotEmpty();
+
             final MapMarkers.Domination dom = (MapMarkers.Domination) spec.markers();
+
             assertThat(dom.flags()).hasSize(3);
+
             // The three flag positions are distinct, by the unique
             // id the spec assigns. The Match layer relies on the
             // id being unique within a map, so a test pinning the
             // property here is a guard against a future refactor
             // that introduces an id collision.
             assertThat(dom.flags().get(0).id()).isNotEqualTo(dom.flags().get(1).id());
+
             assertThat(dom.flags().get(1).id()).isNotEqualTo(dom.flags().get(2).id());
         }
 
@@ -360,6 +486,7 @@ class MapLibraryTest
         void shouldRegisterSandbar()
         {
             MapLibrary.registerDefaults();
+
             assertThat(MapLibrary.has("sandbar")).isTrue();
         }
 
@@ -368,15 +495,25 @@ class MapLibraryTest
         void shouldDescribeSandbar()
         {
             final MapSpec spec = MapLibrary.get("sandbar");
+
             assertThat(spec).isNotNull();
+
             assertThat(spec.mode()).isEqualTo(MatchMode.DOMINATION);
+
             assertThat(spec.setting()).isEqualTo(MapSetting.DESERT_RAVINE);
+
             assertThat(spec.lanes()).hasSize(3);
+
             assertThat(spec.spawnPoints()).hasSize(6);
+
             assertThat(spec.botWaypoints()).isNotEmpty();
+
             final MapMarkers.Domination dom = (MapMarkers.Domination) spec.markers();
+
             assertThat(dom.flags()).hasSize(3);
+
             assertThat(dom.flags().get(0).id()).isNotEqualTo(dom.flags().get(1).id());
+
             assertThat(dom.flags().get(1).id()).isNotEqualTo(dom.flags().get(2).id());
         }
 
@@ -385,6 +522,7 @@ class MapLibraryTest
         void shouldRegisterArcticDom()
         {
             MapLibrary.registerDefaults();
+
             assertThat(MapLibrary.has("arctic-dom")).isTrue();
         }
 
@@ -393,19 +531,30 @@ class MapLibraryTest
         void shouldDescribeArcticDom()
         {
             final MapSpec spec = MapLibrary.get("arctic-dom");
+
             assertThat(spec).isNotNull();
+
             assertThat(spec.mode()).isEqualTo(MatchMode.DOMINATION);
+
             assertThat(spec.setting()).isEqualTo(MapSetting.ARCTIC_STATION);
+
             assertThat(spec.lanes()).hasSize(3);
+
             assertThat(spec.spawnPoints()).hasSize(6);
+
             assertThat(spec.botWaypoints()).isNotEmpty();
+
             // The display name is the spec's "Frostline" (per the
             // design doc), not the map id. Pin the invariant here
             // so a future rename is intentional.
             assertThat(spec.displayName()).isEqualTo("Frostline");
+
             final MapMarkers.Domination dom = (MapMarkers.Domination) spec.markers();
+
             assertThat(dom.flags()).hasSize(3);
+
             assertThat(dom.flags().get(0).id()).isNotEqualTo(dom.flags().get(1).id());
+
             assertThat(dom.flags().get(1).id()).isNotEqualTo(dom.flags().get(2).id());
         }
     }
@@ -423,7 +572,9 @@ class MapLibraryTest
                 threeLanes(), List.of(spawn()), List.of(),
                 MapMarkers.TeamDeathmatch.INSTANCE,
                 new MapAssets("a/level.ofm", "a/weapon.ofm", null));
+
             MapLibrary.register(spec);
+
             assertThat(MapLibrary.get("test")).isSameAs(spec);
         }
 
@@ -436,13 +587,17 @@ class MapLibraryTest
                 threeLanes(), List.of(spawn()), List.of(),
                 MapMarkers.TeamDeathmatch.INSTANCE,
                 new MapAssets("a/level.ofm", "a/weapon.ofm", null));
+
             final MapSpec second = new MapSpec("dup", "Second", MapSetting.URBAN_WARZONE,
                 MatchMode.TDM, new MapDimensions(100.0f, 100.0f, 100.0f),
                 threeLanes(), List.of(spawn()), List.of(),
                 MapMarkers.TeamDeathmatch.INSTANCE,
                 new MapAssets("a/level.ofm", "a/weapon.ofm", null));
+
             MapLibrary.register(first);
+
             MapLibrary.register(second);
+
             assertThat(MapLibrary.get("dup")).isSameAs(second);
         }
 

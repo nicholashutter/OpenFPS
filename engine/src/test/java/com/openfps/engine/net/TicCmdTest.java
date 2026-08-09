@@ -28,10 +28,13 @@ class TicCmdTest
         assertThat(TicCmd.BYTES).isEqualTo(12);
 
         final byte[] buffer = new byte[SCRATCH_BYTES];
+
         fill(buffer);
+
         final TicCmd cmd = new TicCmd(1, 2, 3, 4, 5, 6);
 
         assertThat(cmd.encode(buffer, 0)).isEqualTo(TicCmd.BYTES);
+
         assertThat(buffer[TicCmd.BYTES]).isEqualTo((byte) SENTINEL);
     }
 
@@ -40,6 +43,7 @@ class TicCmdTest
     void roundTripsThroughTheWireFormat()
     {
         final byte[] buffer = new byte[SCRATCH_BYTES];
+
         final TicCmd cmd = new TicCmd(1234, -500, 900, 40000, -60, 0x0F);
 
         cmd.encode(buffer, 0);
@@ -52,12 +56,15 @@ class TicCmdTest
     void roundTripsAxisBoundaries()
     {
         final byte[] buffer = new byte[SCRATCH_BYTES];
+
         final TicCmd cmd = new TicCmd(0, TicCmd.MIN_AXIS, TicCmd.MAX_AXIS, 0, 0, 0);
 
         cmd.encode(buffer, 0);
+
         final TicCmd decoded = TicCmd.decode(buffer, 0);
 
         assertThat(decoded.forward()).isEqualTo(TicCmd.MIN_AXIS);
+
         assertThat(decoded.strafe()).isEqualTo(TicCmd.MAX_AXIS);
     }
 
@@ -68,13 +75,17 @@ class TicCmdTest
         final byte[] buffer = new byte[SCRATCH_BYTES];
 
         new TicCmd(0, 0, 0, 0, 0, 0).encode(buffer, 0);
+
         assertThat(TicCmd.decode(buffer, 0).angle()).isZero();
 
         new TicCmd(0, 0, 0, TicCmd.MAX_ANGLE, 0, 0).encode(buffer, 0);
+
         assertThat(TicCmd.decode(buffer, 0).angle()).isEqualTo(TicCmd.MAX_ANGLE);
 
         final int halfCircle = (TicCmd.MAX_ANGLE + 1) / 2;
+
         new TicCmd(0, 0, 0, halfCircle, 0, 0).encode(buffer, 0);
+
         assertThat(TicCmd.decode(buffer, 0).angle()).isEqualTo(halfCircle);
     }
 
@@ -85,9 +96,11 @@ class TicCmdTest
         final byte[] buffer = new byte[SCRATCH_BYTES];
 
         new TicCmd(0, 0, 0, 0, TicCmd.MIN_PITCH, 0).encode(buffer, 0);
+
         assertThat(TicCmd.decode(buffer, 0).pitch()).isEqualTo(TicCmd.MIN_PITCH);
 
         new TicCmd(0, 0, 0, 0, TicCmd.MAX_PITCH, 0).encode(buffer, 0);
+
         assertThat(TicCmd.decode(buffer, 0).pitch()).isEqualTo(TicCmd.MAX_PITCH);
     }
 
@@ -96,6 +109,7 @@ class TicCmdTest
     void roundTripsAllButtonsSet()
     {
         final byte[] buffer = new byte[SCRATCH_BYTES];
+
         new TicCmd(0, 0, 0, 0, 0, TicCmd.ALL_BUTTONS).encode(buffer, 0);
 
         assertThat(TicCmd.decode(buffer, 0).buttons()).isEqualTo(TicCmd.ALL_BUTTONS);
@@ -106,6 +120,7 @@ class TicCmdTest
     void roundTripsMaximumTicNumber()
     {
         final byte[] buffer = new byte[SCRATCH_BYTES];
+
         new TicCmd(Integer.MAX_VALUE, 0, 0, 0, 0, 0).encode(buffer, 0);
 
         assertThat(TicCmd.decode(buffer, 0).ticNumber()).isEqualTo(Integer.MAX_VALUE);
@@ -116,8 +131,11 @@ class TicCmdTest
     void writesOnlyItsOwnTwelveBytes()
     {
         final byte[] buffer = new byte[SCRATCH_BYTES];
+
         fill(buffer);
+
         final int offset = 7;
+
         final TicCmd cmd = new TicCmd(99, -1, 1, TicCmd.MAX_ANGLE, -1, 1);
 
         cmd.encode(buffer, offset);
@@ -126,10 +144,12 @@ class TicCmdTest
         {
             assertThat(buffer[i]).isEqualTo((byte) SENTINEL);
         }
+
         for (int i = offset + TicCmd.BYTES; i < buffer.length; i++)
         {
             assertThat(buffer[i]).isEqualTo((byte) SENTINEL);
         }
+
         assertThat(TicCmd.decode(buffer, offset)).isEqualTo(cmd);
     }
 
@@ -138,11 +158,15 @@ class TicCmdTest
     void writesTheTicNumberBigEndian()
     {
         final byte[] buffer = new byte[SCRATCH_BYTES];
+
         new TicCmd(0x01020304, 0, 0, 0, 0, 0).encode(buffer, 0);
 
         assertThat(buffer[0]).isEqualTo((byte) 0x01);
+
         assertThat(buffer[1]).isEqualTo((byte) 0x02);
+
         assertThat(buffer[2]).isEqualTo((byte) 0x03);
+
         assertThat(buffer[3]).isEqualTo((byte) 0x04);
     }
 
@@ -151,15 +175,22 @@ class TicCmdTest
     void fieldDecodersAgreeWithTheObjectForm()
     {
         final byte[] buffer = new byte[SCRATCH_BYTES];
+
         final TicCmd cmd = new TicCmd(77, TicCmd.MIN_AXIS, TicCmd.MAX_AXIS,
             TicCmd.MAX_ANGLE, TicCmd.MIN_PITCH, TicCmd.ALL_BUTTONS);
+
         cmd.encode(buffer, 3);
 
         assertThat(TicCmd.decodeTicNumber(buffer, 3)).isEqualTo(cmd.ticNumber());
+
         assertThat(TicCmd.decodeForward(buffer, 3)).isEqualTo(cmd.forward());
+
         assertThat(TicCmd.decodeStrafe(buffer, 3)).isEqualTo(cmd.strafe());
+
         assertThat(TicCmd.decodeAngle(buffer, 3)).isEqualTo(cmd.angle());
+
         assertThat(TicCmd.decodePitch(buffer, 3)).isEqualTo(cmd.pitch());
+
         assertThat(TicCmd.decodeButtons(buffer, 3)).isEqualTo(cmd.buttons());
     }
 
@@ -168,9 +199,11 @@ class TicCmdTest
     void looseFieldEncodingMatchesObjectEncoding()
     {
         final byte[] fromObject = new byte[TicCmd.BYTES];
+
         final byte[] fromFields = new byte[TicCmd.BYTES];
 
         new TicCmd(42, -300, 300, 65000, -100, 200).encode(fromObject, 0);
+
         TicCmd.encodeFields(fromFields, 0, 42, -300, 300, 65000, -100, 200);
 
         assertThat(fromFields).isEqualTo(fromObject);
@@ -183,18 +216,23 @@ class TicCmdTest
         assertThatThrownBy(() -> new TicCmd(-1, 0, 0, 0, 0, 0))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("ticNumber");
+
         assertThatThrownBy(() -> new TicCmd(0, TicCmd.MIN_AXIS - 1, 0, 0, 0, 0))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("forward");
+
         assertThatThrownBy(() -> new TicCmd(0, 0, TicCmd.MAX_AXIS + 1, 0, 0, 0))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("strafe");
+
         assertThatThrownBy(() -> new TicCmd(0, 0, 0, TicCmd.MAX_ANGLE + 1, 0, 0))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("angle");
+
         assertThatThrownBy(() -> new TicCmd(0, 0, 0, 0, TicCmd.MAX_PITCH + 1, 0))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("pitch");
+
         assertThatThrownBy(() -> new TicCmd(0, 0, 0, 0, 0, TicCmd.ALL_BUTTONS + 1))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("buttons");
@@ -205,12 +243,17 @@ class TicCmdTest
     void comparesByValue()
     {
         final TicCmd left = new TicCmd(5, 1, 2, 3, 4, 5);
+
         final TicCmd right = new TicCmd(5, 1, 2, 3, 4, 5);
+
         final TicCmd other = new TicCmd(6, 1, 2, 3, 4, 5);
 
         assertThat(left).isEqualTo(right).hasSameHashCodeAs(right);
+
         assertThat(left).isNotEqualTo(other);
+
         assertThat(left).isNotEqualTo("not a cmd");
+
         assertThat(left).isEqualTo(left);
     }
 

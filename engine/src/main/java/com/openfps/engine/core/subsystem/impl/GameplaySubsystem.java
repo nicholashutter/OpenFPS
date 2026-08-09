@@ -28,6 +28,7 @@ public final class GameplaySubsystem extends Subsystem
     public GameplaySubsystem(final I_GameplayPort port)
     {
         super(SubsystemId.P_);
+
         this.port = port;
     }
 
@@ -53,6 +54,7 @@ public final class GameplaySubsystem extends Subsystem
         else if (event instanceof MapLoadEvent load)
         {
             final boolean ok = port.loadMap(load.mapName());
+
             if (!ok)
             {
                 LOG.warn("Map load returned false for '{}'", load.mapName());

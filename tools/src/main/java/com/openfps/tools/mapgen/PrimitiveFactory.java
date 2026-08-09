@@ -64,11 +64,15 @@ public final class PrimitiveFactory
     public static PrimitiveFactory createDefault()
     {
         final PrimitiveFactory factory = new PrimitiveFactory();
+
         factory.registerType(TYPE_BOX, (obj, worldUnitsPerTile) -> Box.fromJson(obj,
             worldUnitsPerTile));
+
         factory.registerType(TYPE_SIGN, (obj, worldUnitsPerTile) -> Sign.fromJson(obj,
             worldUnitsPerTile));
+
         KenneySwatch.registerBuiltins(factory);
+
         return factory;
     }
 
@@ -89,6 +93,7 @@ public final class PrimitiveFactory
         {
             throw new IllegalArgumentException("type must not be blank");
         }
+
         registry.put(type, builder);
     }
 
@@ -104,6 +109,7 @@ public final class PrimitiveFactory
         {
             throw new IllegalArgumentException("swatch name must not be blank");
         }
+
         swatches.put(name, swatch);
     }
 
@@ -146,19 +152,26 @@ public final class PrimitiveFactory
         {
             throw new IllegalArgumentException("primitive JSON must not be null");
         }
+
         if (!obj.has("type") || obj.get("type").isJsonNull())
         {
             throw new IllegalArgumentException("primitive is missing 'type' field");
         }
+
         final String type = obj.get("type").getAsString();
+
         final PrimitiveBuilder builder = registry.get(type);
+
         if (builder == null)
         {
             throw new IllegalArgumentException("unknown primitive type: '" + type
                 + "' (registered: " + registry.keySet() + ")");
         }
+
         final Primitive primitive = builder.build(obj, worldUnitsPerTile);
+
         primitive.validate();
+
         return primitive;
     }
 

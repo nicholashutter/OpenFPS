@@ -93,10 +93,15 @@ class PlayerControllerTest
             final boolean jump, final boolean sprint)
         {
             this.forward = forward;
+
             this.strafe = strafe;
+
             this.yaw = yaw;
+
             this.pitch = pitch;
+
             this.jumping = jump;
+
             this.sprinting = sprint;
         }
 
@@ -165,7 +170,9 @@ class PlayerControllerTest
     private static float horizontalDistance(final PlayerController player)
     {
         final float x = player.positionX();
+
         final float z = player.positionZ();
+
         return (float) StrictMath.sqrt(x * x + z * z);
     }
 
@@ -180,10 +187,15 @@ class PlayerControllerTest
             final PlayerController player = new PlayerController();
 
             assertThat(player.positionX()).isEqualTo(0.0f);
+
             assertThat(player.positionY()).isEqualTo(0.0f);
+
             assertThat(player.positionZ()).isEqualTo(0.0f);
+
             assertThat(player.yawRadians()).isEqualTo(0.0f);
+
             assertThat(player.pitchRadians()).isEqualTo(0.0f);
+
             assertThat(player.forwardVector().z()).isCloseTo(1.0f, within(EPSILON));
         }
 
@@ -195,9 +207,13 @@ class PlayerControllerTest
                 new PlayerController(10.0f, -3.0f, 7.5f, 1.25f, 0.5f);
 
             assertThat(player.positionX()).isEqualTo(10.0f);
+
             assertThat(player.positionY()).isEqualTo(-3.0f);
+
             assertThat(player.positionZ()).isEqualTo(7.5f);
+
             assertThat(player.yawRadians()).isEqualTo(1.25f);
+
             assertThat(player.pitchRadians()).isEqualTo(0.5f);
         }
 
@@ -213,7 +229,9 @@ class PlayerControllerTest
             assertThat(player.yawRadians())
                 .isGreaterThanOrEqualTo(0.0f)
                 .isLessThan(PlayerController.FULL_TURN_RADIANS);
+
             assertThat(player.yawRadians()).isCloseTo(1.0f, within(EPSILON));
+
             assertThat(player.pitchRadians()).isEqualTo(PlayerController.MAX_PITCH_RADIANS);
         }
 
@@ -227,6 +245,7 @@ class PlayerControllerTest
                 (float) Constants.PLAYER_SPEED / (float) Constants.MAP_SCALE * 120.0f;
 
             assertThat(SPEED).isEqualTo(expected);
+
             assertThat(SPEED).isCloseTo(256.0f, within(0.1f));
         }
     }
@@ -240,6 +259,7 @@ class PlayerControllerTest
         void shouldLimitPitchToEightyNineDegreesWhenExpressedInRadians()
         {
             assertThat(PlayerController.PITCH_LIMIT_DEGREES).isEqualTo(89.0f);
+
             assertThat(PlayerController.MAX_PITCH_RADIANS)
                 .isCloseTo((float) StrictMath.toRadians(89.0), within(1.0e-6f));
         }
@@ -262,6 +282,7 @@ class PlayerControllerTest
         void shouldClampPitchAtUpperLimitWhenLookingFarUp()
         {
             final PlayerController player = new PlayerController();
+
             player.update(look(0.0f, 10.0f), TIC_60HZ);
 
             assertThat(player.pitchRadians()).isEqualTo(PlayerController.MAX_PITCH_RADIANS);
@@ -272,6 +293,7 @@ class PlayerControllerTest
         void shouldClampPitchAtLowerLimitWhenLookingFarDown()
         {
             final PlayerController player = new PlayerController();
+
             player.update(look(0.0f, -10.0f), TIC_60HZ);
 
             assertThat(player.pitchRadians()).isEqualTo(-PlayerController.MAX_PITCH_RADIANS);
@@ -282,12 +304,15 @@ class PlayerControllerTest
         void shouldNotCreepPastUpperLimitWhenLookingUpRepeatedly()
         {
             final PlayerController player = new PlayerController();
+
             for (int i = 0; i < 500; i++)
             {
                 player.update(look(0.0f, 0.05f), TIC_60HZ);
+
                 assertThat(player.pitchRadians())
                     .isLessThanOrEqualTo(PlayerController.MAX_PITCH_RADIANS);
             }
+
             assertThat(player.pitchRadians()).isEqualTo(PlayerController.MAX_PITCH_RADIANS);
         }
 
@@ -296,12 +321,15 @@ class PlayerControllerTest
         void shouldNotCreepPastLowerLimitWhenLookingDownRepeatedly()
         {
             final PlayerController player = new PlayerController();
+
             for (int i = 0; i < 500; i++)
             {
                 player.update(look(0.0f, -0.05f), TIC_60HZ);
+
                 assertThat(player.pitchRadians())
                     .isGreaterThanOrEqualTo(-PlayerController.MAX_PITCH_RADIANS);
             }
+
             assertThat(player.pitchRadians()).isEqualTo(-PlayerController.MAX_PITCH_RADIANS);
         }
 
@@ -310,7 +338,9 @@ class PlayerControllerTest
         void shouldLeaveTheClampWhenLookingBackDown()
         {
             final PlayerController player = new PlayerController();
+
             player.update(look(0.0f, 10.0f), TIC_60HZ);
+
             player.update(look(0.0f, -0.5f), TIC_60HZ);
 
             assertThat(player.pitchRadians())
@@ -322,7 +352,9 @@ class PlayerControllerTest
         void shouldApplyPitchVerbatimWhenInsideTheRange()
         {
             final PlayerController player = new PlayerController();
+
             player.update(look(0.0f, 0.25f), TIC_60HZ);
+
             player.update(look(0.0f, 0.25f), TIC_60HZ);
 
             assertThat(player.pitchRadians()).isEqualTo(0.5f);
@@ -333,11 +365,15 @@ class PlayerControllerTest
         void shouldBuildACameraWhenPitchIsAtEitherExtreme()
         {
             final PlayerController up = new PlayerController();
+
             up.update(look(0.0f, 10.0f), TIC_60HZ);
+
             final PlayerController down = new PlayerController();
+
             down.update(look(0.0f, -10.0f), TIC_60HZ);
 
             assertThat(up.camera(16.0f / 9.0f)).isNotNull();
+
             assertThat(down.camera(16.0f / 9.0f)).isNotNull();
         }
     }
@@ -365,6 +401,7 @@ class PlayerControllerTest
         void shouldFaceTheOldRightAfterAQuarterTurnRight()
         {
             final PlayerController player = facing(0.0f);
+
             final Vec3 rightBefore = player.groundRightVector();
 
             player.update(look(QUARTER_TURN, 0.0f), TIC_60HZ);
@@ -374,6 +411,7 @@ class PlayerControllerTest
             // convention needed to read this.
             assertThat(player.groundForwardVector().x())
                 .isCloseTo(rightBefore.x(), within(EPSILON));
+
             assertThat(player.groundForwardVector().z())
                 .isCloseTo(rightBefore.z(), within(EPSILON));
         }
@@ -383,10 +421,13 @@ class PlayerControllerTest
         void shouldWalkWhereStrafeWentAfterTurningRight()
         {
             final PlayerController strafed = facing(0.0f);
+
             strafed.update(move(0.0f, 1.0f), ONE_SECOND);
 
             final PlayerController turned = facing(0.0f);
+
             turned.update(look(QUARTER_TURN, 0.0f), TIC_60HZ);
+
             turned.update(move(1.0f, 0.0f), ONE_SECOND);
 
             // The two ways of getting to the same place. If look and strafe
@@ -394,6 +435,7 @@ class PlayerControllerTest
             // opposite sides of the origin — which is exactly the failure the
             // Android emulator showed as a camera that panned backwards.
             assertThat(turned.positionX()).isCloseTo(strafed.positionX(), within(EPSILON));
+
             assertThat(turned.positionZ()).isCloseTo(strafed.positionZ(), within(EPSILON));
         }
 
@@ -402,12 +444,14 @@ class PlayerControllerTest
         void shouldFaceTheOldLeftAfterAQuarterTurnLeft()
         {
             final PlayerController player = facing(0.0f);
+
             final Vec3 rightBefore = player.groundRightVector();
 
             player.update(look(-QUARTER_TURN, 0.0f), TIC_60HZ);
 
             assertThat(player.groundForwardVector().x())
                 .isCloseTo(-rightBefore.x(), within(EPSILON));
+
             assertThat(player.groundForwardVector().z())
                 .isCloseTo(-rightBefore.z(), within(EPSILON));
         }
@@ -450,7 +494,9 @@ class PlayerControllerTest
         private static Vec3 strafeRightStep(final float yaw)
         {
             final PlayerController walker = facing(yaw);
+
             walker.update(move(0.0f, 1.0f), TIC_60HZ);
+
             return walker.feetPosition();
         }
 
@@ -461,6 +507,7 @@ class PlayerControllerTest
             final Vec3 right = strafeRightStep(0.0f);
 
             final PlayerController player = facing(0.0f);
+
             player.update(look(QUARTER_TURN, 0.0f), TIC_60HZ);
 
             assertThat(player.groundForwardVector().dot(right))
@@ -475,6 +522,7 @@ class PlayerControllerTest
             final Vec3 right = strafeRightStep(0.0f);
 
             final PlayerController player = facing(0.0f);
+
             player.update(look(-QUARTER_TURN, 0.0f), TIC_60HZ);
 
             assertThat(player.groundForwardVector().dot(right)).isNegative();
@@ -490,13 +538,16 @@ class PlayerControllerTest
             // world axis leaves that axis alone. Sweeping the circle rules it
             // out at no cost.
             final Vec3 right = strafeRightStep(startYaw);
+
             final Vec3 origin = facing(startYaw).feetPosition();
 
             final PlayerController player = facing(startYaw);
+
             player.update(look(QUARTER_TURN, 0.0f), TIC_60HZ);
 
             final Vec3 rightward = new Vec3(right.x() - origin.x(), 0.0f,
                 right.z() - origin.z());
+
             assertThat(player.groundForwardVector().dot(rightward))
                 .as("starting at yaw %s", Float.valueOf(startYaw))
                 .isPositive();
@@ -511,11 +562,14 @@ class PlayerControllerTest
             // right turn, "right" is where you were facing and "forward" is
             // where right used to be. Purely positional — not one angle is read.
             final PlayerController player = new PlayerController();
+
             player.update(look((float) (Math.PI / 2.0), 0.0f), TIC_60HZ);
+
             player.update(move(1.0f, 0.0f), TIC_60HZ);
 
             // Started facing +z; a right turn faces -x, so forward walks -x.
             assertThat(player.positionX()).isNegative();
+
             assertThat(player.positionZ()).isCloseTo(0.0f, within(1.0e-4f));
         }
 
@@ -524,11 +578,15 @@ class PlayerControllerTest
         void shouldReturnToTheStartAfterAFullRightTurn()
         {
             final PlayerController player = facing(1.25f);
+
             final Vec3 before = player.groundForwardVector();
+
             player.update(look(PlayerController.FULL_TURN_RADIANS, 0.0f), TIC_60HZ);
 
             final Vec3 after = player.groundForwardVector();
+
             assertThat(after.x()).isCloseTo(before.x(), within(EPSILON));
+
             assertThat(after.z()).isCloseTo(before.z(), within(EPSILON));
         }
     }
@@ -549,12 +607,14 @@ class PlayerControllerTest
         void shouldWrapYawIntoRangeWhenTurningFarPositive()
         {
             final PlayerController player = new PlayerController();
+
             player.update(
                 look(-(PlayerController.FULL_TURN_RADIANS * 5.0f + 2.0f), 0.0f), TIC_60HZ);
 
             assertThat(player.yawRadians())
                 .isGreaterThanOrEqualTo(0.0f)
                 .isLessThan(PlayerController.FULL_TURN_RADIANS);
+
             assertThat(player.yawRadians()).isCloseTo(2.0f, within(EPSILON));
         }
 
@@ -563,12 +623,14 @@ class PlayerControllerTest
         void shouldWrapYawIntoRangeWhenTurningFarNegative()
         {
             final PlayerController player = new PlayerController();
+
             player.update(
                 look(PlayerController.FULL_TURN_RADIANS * 5.0f + 2.0f, 0.0f), TIC_60HZ);
 
             assertThat(player.yawRadians())
                 .isGreaterThanOrEqualTo(0.0f)
                 .isLessThan(PlayerController.FULL_TURN_RADIANS);
+
             assertThat(player.yawRadians())
                 .isCloseTo(PlayerController.FULL_TURN_RADIANS - 2.0f, within(EPSILON));
         }
@@ -578,11 +640,13 @@ class PlayerControllerTest
         void shouldWrapYawIntoRangeWhenTurningFarLeft()
         {
             final PlayerController player = new PlayerController();
+
             player.update(look(-PlayerController.FULL_TURN_RADIANS * 5.0f - 2.0f, 0.0f), TIC_60HZ);
 
             assertThat(player.yawRadians())
                 .isGreaterThanOrEqualTo(0.0f)
                 .isLessThan(PlayerController.FULL_TURN_RADIANS);
+
             assertThat(player.yawRadians()).isCloseTo(2.0f, within(EPSILON));
         }
 
@@ -593,6 +657,7 @@ class PlayerControllerTest
             // Leftward, because that is the direction this angle increases in.
             final PlayerController player =
                 facing(PlayerController.FULL_TURN_RADIANS - 0.1f);
+
             player.update(look(-0.2f, 0.0f), TIC_60HZ);
 
             assertThat(player.yawRadians()).isCloseTo(0.1f, within(EPSILON));
@@ -603,6 +668,7 @@ class PlayerControllerTest
         void shouldWrapAcrossLowerBoundaryWhenTurningRight()
         {
             final PlayerController player = facing(0.1f);
+
             player.update(look(0.2f, 0.0f), TIC_60HZ);
 
             assertThat(player.yawRadians())
@@ -616,13 +682,19 @@ class PlayerControllerTest
             // The one place the wrap could be observed is the direction it
             // produces. It must not be.
             final PlayerController unwrapped = facing(0.3f);
+
             final PlayerController wrapped = facing(0.3f);
+
             wrapped.update(look(PlayerController.FULL_TURN_RADIANS, 0.0f), TIC_60HZ);
 
             final Vec3 a = unwrapped.forwardVector();
+
             final Vec3 b = wrapped.forwardVector();
+
             assertThat(b.x()).isCloseTo(a.x(), within(EPSILON));
+
             assertThat(b.y()).isCloseTo(a.y(), within(EPSILON));
+
             assertThat(b.z()).isCloseTo(a.z(), within(EPSILON));
         }
 
@@ -631,13 +703,17 @@ class PlayerControllerTest
         void shouldKeepMovementDirectionUnchangedWhenYawWraps()
         {
             final PlayerController unwrapped = facing(1.1f);
+
             final PlayerController wrapped = facing(1.1f);
+
             wrapped.update(look(-PlayerController.FULL_TURN_RADIANS, 0.0f), TIC_60HZ);
 
             unwrapped.update(move(1.0f, 0.0f), ONE_SECOND);
+
             wrapped.update(move(1.0f, 0.0f), ONE_SECOND);
 
             assertThat(wrapped.positionX()).isCloseTo(unwrapped.positionX(), within(EPSILON));
+
             assertThat(wrapped.positionZ()).isCloseTo(unwrapped.positionZ(), within(EPSILON));
         }
 
@@ -646,10 +722,13 @@ class PlayerControllerTest
         void shouldAccumulateSmallTurnsWithoutDriftWhenSpinningManyRevolutions()
         {
             final PlayerController player = new PlayerController();
+
             final float stepAngle = PlayerController.FULL_TURN_RADIANS / 360.0f;
+
             for (int i = 0; i < 3600; i++)
             {
                 player.update(look(stepAngle, 0.0f), TIC_60HZ);
+
                 assertThat(player.yawRadians())
                     .isGreaterThanOrEqualTo(0.0f)
                     .isLessThan(PlayerController.FULL_TURN_RADIANS);
@@ -663,7 +742,9 @@ class PlayerControllerTest
         void shouldLeaveYawBitIdenticalWhenAlreadyInRange()
         {
             final PlayerController player = facing(4.2f);
+
             final int before = Float.floatToRawIntBits(player.yawRadians());
+
             player.update(NONE, TIC_60HZ);
 
             assertThat(Float.floatToRawIntBits(player.yawRadians())).isEqualTo(before);
@@ -679,9 +760,11 @@ class PlayerControllerTest
         void shouldWalkAlongPositiveZWhenFacingYawZero()
         {
             final PlayerController player = facing(0.0f);
+
             player.update(move(1.0f, 0.0f), ONE_SECOND);
 
             assertThat(player.positionX()).isCloseTo(0.0f, within(EPSILON));
+
             assertThat(player.positionZ()).isCloseTo(SPEED, within(EPSILON));
         }
 
@@ -690,9 +773,11 @@ class PlayerControllerTest
         void shouldWalkAlongPositiveXWhenFacingQuarterTurn()
         {
             final PlayerController player = facing(QUARTER_TURN);
+
             player.update(move(1.0f, 0.0f), ONE_SECOND);
 
             assertThat(player.positionX()).isCloseTo(SPEED, within(EPSILON));
+
             assertThat(player.positionZ()).isCloseTo(0.0f, within(EPSILON));
         }
 
@@ -701,9 +786,11 @@ class PlayerControllerTest
         void shouldWalkAlongNegativeZWhenFacingHalfTurn()
         {
             final PlayerController player = facing(HALF_TURN);
+
             player.update(move(1.0f, 0.0f), ONE_SECOND);
 
             assertThat(player.positionX()).isCloseTo(0.0f, within(EPSILON));
+
             assertThat(player.positionZ()).isCloseTo(-SPEED, within(EPSILON));
         }
 
@@ -712,9 +799,11 @@ class PlayerControllerTest
         void shouldWalkAlongNegativeXWhenFacingThreeQuarterTurn()
         {
             final PlayerController player = facing(THREE_QUARTER_TURN);
+
             player.update(move(1.0f, 0.0f), ONE_SECOND);
 
             assertThat(player.positionX()).isCloseTo(-SPEED, within(EPSILON));
+
             assertThat(player.positionZ()).isCloseTo(0.0f, within(EPSILON));
         }
 
@@ -723,9 +812,11 @@ class PlayerControllerTest
         void shouldWalkAlongNegativeZWhenMovingBackwardsAtYawZero()
         {
             final PlayerController player = facing(0.0f);
+
             player.update(move(-1.0f, 0.0f), ONE_SECOND);
 
             assertThat(player.positionX()).isCloseTo(0.0f, within(EPSILON));
+
             assertThat(player.positionZ()).isCloseTo(-SPEED, within(EPSILON));
         }
 
@@ -737,9 +828,11 @@ class PlayerControllerTest
             // hand points west, which is -x. The mirror of this convention is
             // what render/README.md § 4 was corrected twice over.
             final PlayerController player = facing(0.0f);
+
             player.update(move(0.0f, 1.0f), ONE_SECOND);
 
             assertThat(player.positionX()).isCloseTo(-SPEED, within(EPSILON));
+
             assertThat(player.positionZ()).isCloseTo(0.0f, within(EPSILON));
         }
 
@@ -748,9 +841,11 @@ class PlayerControllerTest
         void shouldStrafeAlongPositiveXWhenFacingYawZeroAndStrafingLeft()
         {
             final PlayerController player = facing(0.0f);
+
             player.update(move(0.0f, -1.0f), ONE_SECOND);
 
             assertThat(player.positionX()).isCloseTo(SPEED, within(EPSILON));
+
             assertThat(player.positionZ()).isCloseTo(0.0f, within(EPSILON));
         }
 
@@ -759,9 +854,11 @@ class PlayerControllerTest
         void shouldStrafeAlongPositiveZWhenFacingQuarterTurn()
         {
             final PlayerController player = facing(QUARTER_TURN);
+
             player.update(move(0.0f, 1.0f), ONE_SECOND);
 
             assertThat(player.positionX()).isCloseTo(0.0f, within(EPSILON));
+
             assertThat(player.positionZ()).isCloseTo(SPEED, within(EPSILON));
         }
 
@@ -770,9 +867,11 @@ class PlayerControllerTest
         void shouldStrafeAlongPositiveXWhenFacingHalfTurn()
         {
             final PlayerController player = facing(HALF_TURN);
+
             player.update(move(0.0f, 1.0f), ONE_SECOND);
 
             assertThat(player.positionX()).isCloseTo(SPEED, within(EPSILON));
+
             assertThat(player.positionZ()).isCloseTo(0.0f, within(EPSILON));
         }
 
@@ -781,9 +880,11 @@ class PlayerControllerTest
         void shouldStrafeAlongNegativeZWhenFacingThreeQuarterTurn()
         {
             final PlayerController player = facing(THREE_QUARTER_TURN);
+
             player.update(move(0.0f, 1.0f), ONE_SECOND);
 
             assertThat(player.positionX()).isCloseTo(0.0f, within(EPSILON));
+
             assertThat(player.positionZ()).isCloseTo(-SPEED, within(EPSILON));
         }
 
@@ -792,11 +893,15 @@ class PlayerControllerTest
         void shouldDeriveStrafeAxisAsForwardCrossUpWhenAtAnArbitraryYaw()
         {
             final PlayerController player = facing(1.234f);
+
             final Vec3 expected = player.groundForwardVector().cross(PlayerController.WORLD_UP);
+
             final Vec3 actual = player.groundRightVector();
 
             assertThat(actual.x()).isEqualTo(expected.x());
+
             assertThat(actual.y()).isEqualTo(expected.y());
+
             assertThat(actual.z()).isEqualTo(expected.z());
         }
 
@@ -805,6 +910,7 @@ class PlayerControllerTest
         void shouldLeaveHeightUnchangedWhenMovingOnTheGroundPlane()
         {
             final PlayerController grounded = new PlayerController(0.0f, 0.0f, 0.0f, 0.9f, 0.0f);
+
             grounded.update(move(1.0f, 1.0f), ONE_SECOND);
 
             assertThat(grounded.positionY()).isEqualTo(0.0f);
@@ -820,15 +926,18 @@ class PlayerControllerTest
             // spawn height can no longer be asserted, because falling is now
             // correct behaviour, but the two arcs must still agree exactly.
             final PlayerController walking = new PlayerController(0.0f, 200.0f, 0.0f, 0.9f, 0.0f);
+
             final PlayerController still = new PlayerController(0.0f, 200.0f, 0.0f, 0.9f, 0.0f);
 
             for (int tic = 0; tic < 30; tic++)
             {
                 walking.update(move(1.0f, 1.0f), TIC_60HZ);
+
                 still.update(NONE, TIC_60HZ);
             }
 
             assertThat(walking.positionY()).isEqualTo(still.positionY());
+
             assertThat(walking.positionY()).isLessThan(200.0f);
         }
 
@@ -837,8 +946,11 @@ class PlayerControllerTest
         void shouldAccumulateDisplacementWhenMovingOverSeveralTics()
         {
             final PlayerController player = facing(0.0f);
+
             player.update(move(1.0f, 0.0f), ONE_SECOND);
+
             player.update(move(1.0f, 0.0f), ONE_SECOND);
+
             player.update(move(1.0f, 0.0f), ONE_SECOND);
 
             assertThat(player.positionZ()).isCloseTo(SPEED * 3.0f, within(EPSILON));
@@ -854,10 +966,13 @@ class PlayerControllerTest
         void shouldNotChangeHeightWhenMovingForwardWhileLookingUp()
         {
             final PlayerController player = new PlayerController();
+
             player.update(look(0.0f, 10.0f), TIC_60HZ);
+
             player.update(move(1.0f, 0.0f), ONE_SECOND);
 
             assertThat(player.pitchRadians()).isEqualTo(PlayerController.MAX_PITCH_RADIANS);
+
             assertThat(player.positionY()).isEqualTo(0.0f);
         }
 
@@ -869,10 +984,13 @@ class PlayerControllerTest
             // the horizontal step cos(pitch) times too short. At 89 degrees
             // that is a 98% slowdown, so it cannot hide inside a tolerance.
             final PlayerController level = facing(0.0f);
+
             final PlayerController pitched = new PlayerController();
+
             pitched.update(look(0.0f, 10.0f), TIC_60HZ);
 
             level.update(move(1.0f, 0.0f), ONE_SECOND);
+
             pitched.update(move(1.0f, 0.0f), ONE_SECOND);
 
             assertThat(horizontalDistance(pitched))
@@ -884,18 +1002,27 @@ class PlayerControllerTest
         void shouldProduceIdenticalMovementWhenPitchDiffersOnly()
         {
             final PlayerController up = new PlayerController(0.0f, 0.0f, 0.0f, 0.8f, 0.0f);
+
             final PlayerController level = new PlayerController(0.0f, 0.0f, 0.0f, 0.8f, 0.0f);
+
             final PlayerController down = new PlayerController(0.0f, 0.0f, 0.0f, 0.8f, 0.0f);
+
             up.update(look(0.0f, 1.5f), TIC_60HZ);
+
             down.update(look(0.0f, -1.5f), TIC_60HZ);
 
             up.update(move(1.0f, 0.5f), ONE_SECOND);
+
             level.update(move(1.0f, 0.5f), ONE_SECOND);
+
             down.update(move(1.0f, 0.5f), ONE_SECOND);
 
             assertThat(up.positionX()).isEqualTo(level.positionX());
+
             assertThat(up.positionZ()).isEqualTo(level.positionZ());
+
             assertThat(down.positionX()).isEqualTo(level.positionX());
+
             assertThat(down.positionZ()).isEqualTo(level.positionZ());
         }
 
@@ -904,10 +1031,13 @@ class PlayerControllerTest
         void shouldHaveZeroVerticalComponentWhenPitchedAtTheLimit()
         {
             final PlayerController player = new PlayerController();
+
             player.update(look(0.0f, 10.0f), TIC_60HZ);
 
             assertThat(player.groundForwardVector().y()).isEqualTo(0.0f);
+
             assertThat(player.groundRightVector().y()).isEqualTo(0.0f);
+
             assertThat(player.forwardVector().y()).isGreaterThan(0.99f);
         }
     }
@@ -921,6 +1051,7 @@ class PlayerControllerTest
         void shouldNotExceedCardinalSpeedWhenBothAxesAreFullyDeflected()
         {
             final PlayerController diagonal = facing(0.0f);
+
             diagonal.update(move(1.0f, 1.0f), ONE_SECOND);
 
             assertThat(horizontalDistance(diagonal)).isCloseTo(SPEED, within(EPSILON));
@@ -931,10 +1062,12 @@ class PlayerControllerTest
         void shouldPreserveDirectionWhenClampingDiagonalMagnitude()
         {
             final PlayerController player = facing(0.0f);
+
             player.update(move(1.0f, 1.0f), ONE_SECOND);
 
             // Forward is +z, strafe right is -x, so an equal mix is (-k, 0, +k).
             assertThat(player.positionZ()).isCloseTo(-player.positionX(), within(EPSILON));
+
             assertThat(player.positionZ()).isGreaterThan(0.0f);
         }
 
@@ -945,7 +1078,9 @@ class PlayerControllerTest
             // If the input layer normalises, the controller must be a no-op on
             // magnitude. sqrt(0.5) each gives magnitude 1 already.
             final float component = (float) StrictMath.sqrt(0.5);
+
             final PlayerController player = facing(0.0f);
+
             player.update(move(component, component), ONE_SECOND);
 
             assertThat(horizontalDistance(player)).isCloseTo(SPEED, within(EPSILON));
@@ -958,6 +1093,7 @@ class PlayerControllerTest
             // The other half of "no double-normalisation": an analogue stick at
             // half deflection must walk, not run.
             final PlayerController player = facing(0.0f);
+
             player.update(move(0.5f, 0.0f), ONE_SECOND);
 
             assertThat(horizontalDistance(player)).isCloseTo(SPEED * 0.5f, within(EPSILON));
@@ -968,6 +1104,7 @@ class PlayerControllerTest
         void shouldLeavePartialDiagonalUnscaledWhenBelowUnitMagnitude()
         {
             final PlayerController player = facing(0.0f);
+
             player.update(move(0.3f, 0.4f), ONE_SECOND);
 
             assertThat(horizontalDistance(player)).isCloseTo(SPEED * 0.5f, within(EPSILON));
@@ -978,8 +1115,11 @@ class PlayerControllerTest
         void shouldClampAxesWhenTheInputLayerOverruns()
         {
             final PlayerController overrun = facing(0.0f);
+
             final PlayerController full = facing(0.0f);
+
             overrun.update(move(50.0f, 0.0f), ONE_SECOND);
+
             full.update(move(1.0f, 0.0f), ONE_SECOND);
 
             assertThat(overrun.positionZ()).isEqualTo(full.positionZ());
@@ -990,9 +1130,11 @@ class PlayerControllerTest
         void shouldIgnoreAxisWhenItIsNotANumber()
         {
             final PlayerController player = facing(0.0f);
+
             player.update(move(Float.NaN, 0.0f), ONE_SECOND);
 
             assertThat(player.positionX()).isEqualTo(0.0f);
+
             assertThat(player.positionZ()).isEqualTo(0.0f);
         }
     }
@@ -1008,14 +1150,19 @@ class PlayerControllerTest
             // Exact, not approximate: scaling a float by two is lossless, so a
             // controller that is truly linear in dt gives bit-identical halves.
             final float singleStep = 0.01f;
+
             final float doubleStep = singleStep * 2.0f;
 
             final PlayerController slow = facing(0.7f);
+
             final PlayerController fast = facing(0.7f);
+
             slow.update(move(1.0f, 0.3f), singleStep);
+
             fast.update(move(1.0f, 0.3f), doubleStep);
 
             assertThat(fast.positionX()).isEqualTo(slow.positionX() * 2.0f);
+
             assertThat(fast.positionZ()).isEqualTo(slow.positionZ() * 2.0f);
         }
 
@@ -1024,12 +1171,17 @@ class PlayerControllerTest
         void shouldMatchOneWholeStepWhenTakingTwoHalfSteps()
         {
             final PlayerController whole = facing(0.4f);
+
             final PlayerController halves = facing(0.4f);
+
             whole.update(move(1.0f, 0.0f), TIC_60HZ);
+
             halves.update(move(1.0f, 0.0f), TIC_60HZ * 0.5f);
+
             halves.update(move(1.0f, 0.0f), TIC_60HZ * 0.5f);
 
             assertThat(halves.positionX()).isCloseTo(whole.positionX(), within(EPSILON));
+
             assertThat(halves.positionZ()).isCloseTo(whole.positionZ(), within(EPSILON));
         }
 
@@ -1038,11 +1190,14 @@ class PlayerControllerTest
         void shouldTravelTheSameDistanceWhenTheTicRateDiffers()
         {
             final PlayerController fast = facing(0.0f);
+
             final PlayerController slow = facing(0.0f);
+
             for (int i = 0; i < 120; i++)
             {
                 fast.update(move(1.0f, 0.0f), 1.0f / 120.0f);
             }
+
             for (int i = 0; i < 30; i++)
             {
                 slow.update(move(1.0f, 0.0f), 1.0f / 30.0f);
@@ -1054,6 +1209,7 @@ class PlayerControllerTest
             // 0.02% of the distance travelled — far tighter than any real
             // frame-rate dependence, which would show up as a whole ratio.
             assertThat(fast.positionZ()).isCloseTo(slow.positionZ(), within(0.05f));
+
             assertThat(fast.positionZ()).isCloseTo(SPEED, within(0.05f));
         }
 
@@ -1065,14 +1221,18 @@ class PlayerControllerTest
             // yawDelta turns the view right and a larger stored yaw faces
             // left, so the two carry opposite signs. See applyLook.
             final PlayerController player = facing(0.0f);
+
             player.update(new Input(1.0f, 1.0f, -0.5f, 0.25f), 0.0f);
 
             assertThat(player.positionX()).isEqualTo(0.0f);
+
             assertThat(player.positionZ()).isEqualTo(0.0f);
+
             // A LEFTWARD look of 0.5 — the delta is negative — and applyLook
             // subtracts it, so the stored angle grows to +0.5 and never
             // approaches the wrap. See YawWrap for the boundary cases.
             assertThat(player.yawRadians()).isEqualTo(0.5f);
+
             assertThat(player.pitchRadians()).isEqualTo(0.25f);
         }
 
@@ -1123,10 +1283,13 @@ class PlayerControllerTest
             // asserts. The invariant this test is about is horizontal drift.
             final PlayerController player =
                 new PlayerController(13.25f, 0.0f, 91.75f, 2.345f, -0.678f);
+
             player.update(move(1.0f, 0.7f), TIC_60HZ);
+
             player.update(look(0.13f, 0.07f), TIC_60HZ);
 
             final int[] before = snapshot(player);
+
             for (int i = 0; i < 100; i++)
             {
                 player.update(NONE, TIC_60HZ);
@@ -1140,6 +1303,7 @@ class PlayerControllerTest
         void shouldLeaveDefaultStateUntouchedWhenInputIsAllZero()
         {
             final PlayerController player = new PlayerController();
+
             player.update(NONE, TIC_60HZ);
 
             assertThat(snapshot(player)).isEqualTo(snapshot(new PlayerController()));
@@ -1164,11 +1328,13 @@ class PlayerControllerTest
         void shouldLeaveTheFloorWhenJumpIsPressedOnTheGround()
         {
             final PlayerController player = new PlayerController();
+
             assertThat(player.isOnGround()).isTrue();
 
             player.update(JUMP, TIC_60HZ);
 
             assertThat(player.positionY()).isGreaterThan(0.0f);
+
             assertThat(player.isOnGround()).isFalse();
         }
 
@@ -1177,20 +1343,28 @@ class PlayerControllerTest
         void shouldReachTheDeclaredApexWhenJumping()
         {
             final PlayerController player = new PlayerController();
+
             float peak = 0.0f;
+
             for (int tic = 0; tic < LANDING_TICS; tic++)
             {
                 player.update(NONE, TIC_60HZ);
+
                 peak = StrictMath.max(peak, player.positionY());
             }
+
             // Jump on the first tic, not before the loop, so the peak search
             // sees the whole arc.
             final PlayerController jumper = new PlayerController();
+
             jumper.update(JUMP, TIC_60HZ);
+
             float jumpPeak = jumper.positionY();
+
             for (int tic = 1; tic < LANDING_TICS; tic++)
             {
                 jumper.update(NONE, TIC_60HZ);
+
                 jumpPeak = StrictMath.max(jumpPeak, jumper.positionY());
             }
 
@@ -1202,6 +1376,7 @@ class PlayerControllerTest
             // integrator's actual error budget instead of a number tuned until
             // it passed.
             final float stepError = PlayerController.JUMP_SPEED_UNITS_PER_SECOND * TIC_60HZ;
+
             assertThat(jumpPeak)
                 .isLessThanOrEqualTo(PlayerController.JUMP_APEX_UNITS)
                 .isGreaterThan(PlayerController.JUMP_APEX_UNITS - stepError);
@@ -1212,13 +1387,17 @@ class PlayerControllerTest
         void shouldNotRelaunchWhileAirborneWhenJumpIsHeld()
         {
             final PlayerController held = new PlayerController();
+
             final PlayerController tapped = new PlayerController();
 
             held.update(JUMP, TIC_60HZ);
+
             tapped.update(JUMP, TIC_60HZ);
+
             for (int tic = 1; tic < 20; tic++)
             {
                 held.update(JUMP, TIC_60HZ);
+
                 tapped.update(NONE, TIC_60HZ);
             }
 
@@ -1226,6 +1405,7 @@ class PlayerControllerTest
             // being grounded, the held player would be re-launched every tic and
             // would still be climbing.
             assertThat(held.positionY()).isEqualTo(tapped.positionY());
+
             assertThat(held.velocityY()).isEqualTo(tapped.velocityY());
         }
 
@@ -1234,7 +1414,9 @@ class PlayerControllerTest
         void shouldLandExactlyOnTheGroundWhenTheArcCompletes()
         {
             final PlayerController player = new PlayerController();
+
             player.update(JUMP, TIC_60HZ);
+
             for (int tic = 1; tic < LANDING_TICS; tic++)
             {
                 player.update(NONE, TIC_60HZ);
@@ -1244,7 +1426,9 @@ class PlayerControllerTest
             // would be invisible and would make isOnGround false, silently
             // refusing the next jump.
             assertThat(player.positionY()).isEqualTo(PlayerController.GROUND_LEVEL_UNITS);
+
             assertThat(player.velocityY()).isEqualTo(0.0f);
+
             assertThat(player.isOnGround()).isTrue();
         }
 
@@ -1261,9 +1445,11 @@ class PlayerControllerTest
             }
 
             assertThat(player.positionY()).isEqualTo(PlayerController.GROUND_LEVEL_UNITS);
+
             // Falling is vertical only — nothing about gravity moves the player
             // sideways, and a basis error here would be very hard to see.
             assertThat(player.positionX()).isEqualTo(5.0f);
+
             assertThat(player.positionZ()).isEqualTo(-9.0f);
         }
 
@@ -1272,7 +1458,9 @@ class PlayerControllerTest
         void shouldRefuseToJumpWhenAirborne()
         {
             final PlayerController player = new PlayerController();
+
             player.update(JUMP, TIC_60HZ);
+
             final float afterLaunch = player.velocityY();
 
             player.update(JUMP, TIC_60HZ);
@@ -1280,6 +1468,7 @@ class PlayerControllerTest
             // Strictly slower than the tic before: gravity applied and no second
             // launch replaced the velocity.
             assertThat(player.velocityY()).isLessThan(afterLaunch);
+
             assertThat(player.velocityY())
                 .isLessThan(PlayerController.JUMP_SPEED_UNITS_PER_SECOND);
         }
@@ -1289,11 +1478,13 @@ class PlayerControllerTest
         void shouldNotAlterHorizontalTravelWhenJumping()
         {
             final PlayerController walking = new PlayerController();
+
             final PlayerController hopping = new PlayerController();
 
             for (int tic = 0; tic < LANDING_TICS; tic++)
             {
                 walking.update(move(1.0f, 0.0f), TIC_60HZ);
+
                 hopping.update(new Input(1.0f, 0.0f, 0.0f, 0.0f, tic == 0), TIC_60HZ);
             }
 
@@ -1301,6 +1492,7 @@ class PlayerControllerTest
             // so the horizontal paths must be bit-identical. If one is ever
             // added, this is the test that will say so.
             assertThat(hopping.positionX()).isEqualTo(walking.positionX());
+
             assertThat(hopping.positionZ()).isEqualTo(walking.positionZ());
         }
 
@@ -1326,12 +1518,16 @@ class PlayerControllerTest
         private int[] jumpArc()
         {
             final PlayerController player = new PlayerController();
+
             final int[] samples = new int[LANDING_TICS];
+
             for (int tic = 0; tic < LANDING_TICS; tic++)
             {
                 player.update(new Input(0.3f, -0.7f, 0.01f, 0.002f, tic == 0), TIC_60HZ);
+
                 samples[tic] = Float.floatToRawIntBits(player.positionY());
             }
+
             return samples;
         }
     }
@@ -1345,9 +1541,11 @@ class PlayerControllerTest
         void shouldMoveFartherWhenSprintingForward()
         {
             final PlayerController walker = new PlayerController();
+
             final PlayerController sprinter = new PlayerController();
 
             walker.update(move(1.0f, 0.0f), ONE_SECOND);
+
             sprinter.update(moveSprinting(1.0f, 0.0f), ONE_SECOND);
 
             // Exact, not approximate: at yaw 0 every trig factor involved is 0
@@ -1362,13 +1560,16 @@ class PlayerControllerTest
         void shouldBoostAForwardDiagonalSprint()
         {
             final PlayerController walker = new PlayerController();
+
             final PlayerController sprinter = new PlayerController();
 
             walker.update(move(1.0f, 1.0f), ONE_SECOND);
+
             sprinter.update(moveSprinting(1.0f, 1.0f), ONE_SECOND);
 
             assertThat(sprinter.positionZ())
                 .isEqualTo(walker.positionZ() * PlayerController.SPRINT_MULTIPLIER);
+
             assertThat(sprinter.positionX())
                 .isEqualTo(walker.positionX() * PlayerController.SPRINT_MULTIPLIER);
         }
@@ -1378,12 +1579,15 @@ class PlayerControllerTest
         void shouldGiveNoBoostWhenSprintingWithoutForwardInput()
         {
             final PlayerController strafer = new PlayerController();
+
             final PlayerController sprintingStrafer = new PlayerController();
 
             strafer.update(move(0.0f, 1.0f), ONE_SECOND);
+
             sprintingStrafer.update(moveSprinting(0.0f, 1.0f), ONE_SECOND);
 
             assertThat(sprintingStrafer.positionX()).isEqualTo(strafer.positionX());
+
             assertThat(sprintingStrafer.positionZ()).isEqualTo(strafer.positionZ());
         }
 
@@ -1392,9 +1596,11 @@ class PlayerControllerTest
         void shouldGiveNoBoostWhenSprintingBackward()
         {
             final PlayerController walker = new PlayerController();
+
             final PlayerController sprinter = new PlayerController();
 
             walker.update(move(-1.0f, 0.0f), ONE_SECOND);
+
             sprinter.update(moveSprinting(-1.0f, 0.0f), ONE_SECOND);
 
             assertThat(sprinter.positionZ()).isEqualTo(walker.positionZ());
@@ -1405,12 +1611,15 @@ class PlayerControllerTest
         void shouldNotAlterTheJumpWhenSprinting()
         {
             final PlayerController jumper = new PlayerController();
+
             final PlayerController sprintingJumper = new PlayerController();
 
             jumper.update(JUMP, TIC_60HZ);
+
             sprintingJumper.update(new Input(0.0f, 0.0f, 0.0f, 0.0f, true, true), TIC_60HZ);
 
             assertThat(sprintingJumper.positionY()).isEqualTo(jumper.positionY());
+
             assertThat(sprintingJumper.velocityY()).isEqualTo(jumper.velocityY());
         }
     }
@@ -1424,11 +1633,15 @@ class PlayerControllerTest
         void shouldRaiseTheEyeAboveTheFeetWhenReadingTheEyePosition()
         {
             final PlayerController player = new PlayerController(3.0f, 20.0f, -8.0f, 0.0f, 0.0f);
+
             final Vec3 eye = player.eyePosition();
 
             assertThat(eye.x()).isEqualTo(3.0f);
+
             assertThat(eye.y()).isEqualTo(20.0f + PlayerController.EYE_HEIGHT_UNITS);
+
             assertThat(eye.z()).isEqualTo(-8.0f);
+
             assertThat(PlayerController.EYE_HEIGHT_UNITS).isGreaterThan(0.0f);
         }
 
@@ -1437,12 +1650,17 @@ class PlayerControllerTest
         void shouldTrackTheFeetWhenThePlayerMoves()
         {
             final PlayerController player = facing(0.0f);
+
             player.update(move(1.0f, 0.0f), ONE_SECOND);
+
             final Vec3 eye = player.eyePosition();
+
             final Vec3 feet = player.feetPosition();
 
             assertThat(eye.x()).isEqualTo(feet.x());
+
             assertThat(eye.z()).isEqualTo(feet.z());
+
             assertThat(eye.y() - feet.y()).isEqualTo(PlayerController.EYE_HEIGHT_UNITS);
         }
 
@@ -1451,7 +1669,9 @@ class PlayerControllerTest
         void shouldProduceAUnitForwardVectorWhenPitchedAndTurned()
         {
             final PlayerController player = new PlayerController(0.0f, 0.0f, 0.0f, 2.1f, 0.0f);
+
             player.update(look(0.0f, 1.2f), TIC_60HZ);
+
             final Vec3 forward = player.forwardVector();
 
             assertThat(forward.length()).isCloseTo(1.0f, within(1.0e-5f));
@@ -1462,6 +1682,7 @@ class PlayerControllerTest
         void shouldAimForwardUpwardWhenPitchIsPositive()
         {
             final PlayerController player = new PlayerController();
+
             player.update(look(0.0f, 0.5f), TIC_60HZ);
 
             assertThat(player.forwardVector().y()).isGreaterThan(0.0f);
@@ -1472,6 +1693,7 @@ class PlayerControllerTest
         void shouldAimForwardDownwardWhenPitchIsNegative()
         {
             final PlayerController player = new PlayerController();
+
             player.update(look(0.0f, -0.5f), TIC_60HZ);
 
             assertThat(player.forwardVector().y()).isLessThan(0.0f);
@@ -1482,11 +1704,15 @@ class PlayerControllerTest
         void shouldMatchForwardHeadingWhenPitchIsZero()
         {
             final PlayerController player = facing(1.7f);
+
             final Vec3 forward = player.forwardVector();
+
             final Vec3 ground = player.groundForwardVector();
 
             assertThat(ground.x()).isCloseTo(forward.x(), within(EPSILON));
+
             assertThat(ground.z()).isCloseTo(forward.z(), within(EPSILON));
+
             assertThat(ground.length()).isCloseTo(1.0f, within(1.0e-5f));
         }
     }
@@ -1502,10 +1728,13 @@ class PlayerControllerTest
         void shouldPlaceTheCameraAtTheEyeWhenBuilt()
         {
             final PlayerController player = new PlayerController(5.0f, 2.0f, -1.0f, 0.0f, 0.0f);
+
             final Camera camera = player.camera(ASPECT);
 
             assertThat(camera.eye().x()).isEqualTo(5.0f);
+
             assertThat(camera.eye().y()).isEqualTo(2.0f + PlayerController.EYE_HEIGHT_UNITS);
+
             assertThat(camera.eye().z()).isEqualTo(-1.0f);
         }
 
@@ -1514,12 +1743,17 @@ class PlayerControllerTest
         void shouldLookAlongTheForwardVectorWhenBuilt()
         {
             final PlayerController player = new PlayerController(0.0f, 0.0f, 0.0f, 1.1f, 0.0f);
+
             player.update(look(0.0f, 0.4f), TIC_60HZ);
+
             final Vec3 forward = player.forwardVector();
+
             final Camera camera = player.camera(ASPECT);
 
             assertThat(camera.forward().x()).isCloseTo(forward.x(), within(1.0e-5f));
+
             assertThat(camera.forward().y()).isCloseTo(forward.y(), within(1.0e-5f));
+
             assertThat(camera.forward().z()).isCloseTo(forward.z(), within(1.0e-5f));
         }
 
@@ -1531,12 +1765,17 @@ class PlayerControllerTest
             // toward the left of the screen. Asserted at yaw 0 with exact
             // expected values so the sign cannot hide.
             final PlayerController player = facing(0.0f);
+
             final Camera camera = player.camera(ASPECT);
+
             final Vec3 strafe = player.groundRightVector();
 
             assertThat(camera.right().x()).isCloseTo(-1.0f, within(EPSILON));
+
             assertThat(strafe.x()).isCloseTo(-1.0f, within(EPSILON));
+
             assertThat(camera.right().x()).isCloseTo(strafe.x(), within(EPSILON));
+
             assertThat(camera.right().z()).isCloseTo(strafe.z(), within(EPSILON));
         }
 
@@ -1547,8 +1786,11 @@ class PlayerControllerTest
             final Camera camera = new PlayerController().camera(ASPECT);
 
             assertThat(camera.aspect()).isEqualTo(ASPECT);
+
             assertThat(camera.fovY()).isEqualTo(PlayerController.DEFAULT_FOV_Y_RADIANS);
+
             assertThat(camera.near()).isEqualTo(PlayerController.DEFAULT_NEAR_PLANE_UNITS);
+
             assertThat(PlayerController.DEFAULT_NEAR_PLANE_UNITS).isGreaterThan(0.0f);
         }
 
@@ -1559,6 +1801,7 @@ class PlayerControllerTest
             final Camera camera = new PlayerController().camera(ASPECT, 1.0f, 0.5f);
 
             assertThat(camera.fovY()).isEqualTo(1.0f);
+
             assertThat(camera.near()).isEqualTo(0.5f);
         }
 
@@ -1578,13 +1821,18 @@ class PlayerControllerTest
         {
             // End-to-end: the controller's basis fed through the real camera.
             final PlayerController player = facing(0.0f);
+
             final Camera camera = player.camera(ASPECT);
+
             final float[] clip = new float[Camera.CLIP_FLOATS];
+
             camera.transformToClip(
                 0.0f, PlayerController.EYE_HEIGHT_UNITS, 100.0f, clip, 0);
 
             assertThat(clip[0]).isCloseTo(0.0f, within(EPSILON));
+
             assertThat(clip[1]).isCloseTo(0.0f, within(EPSILON));
+
             assertThat(clip[2]).isCloseTo(100.0f, within(EPSILON));
         }
     }
@@ -1598,6 +1846,7 @@ class PlayerControllerTest
         void shouldReproduceStateBitForBitWhenReplayingTheSameInputs()
         {
             final int[] first = runScript(new PlayerController(1.5f, 0.0f, -2.5f, 0.75f, 0.1f));
+
             final int[] second = runScript(new PlayerController(1.5f, 0.0f, -2.5f, 0.75f, 0.1f));
 
             assertThat(second).isEqualTo(first);
@@ -1608,14 +1857,21 @@ class PlayerControllerTest
         void shouldAgreeOnTheCameraBasisWhenTwoPeersReplayTheSameScript()
         {
             final PlayerController peerA = new PlayerController(0.0f, 0.0f, 0.0f, 0.3f, 0.0f);
+
             final PlayerController peerB = new PlayerController(0.0f, 0.0f, 0.0f, 0.3f, 0.0f);
+
             runScript(peerA);
+
             runScript(peerB);
 
             final Vec3 a = peerA.forwardVector();
+
             final Vec3 b = peerB.forwardVector();
+
             assertThat(Float.floatToRawIntBits(b.x())).isEqualTo(Float.floatToRawIntBits(a.x()));
+
             assertThat(Float.floatToRawIntBits(b.y())).isEqualTo(Float.floatToRawIntBits(a.y()));
+
             assertThat(Float.floatToRawIntBits(b.z())).isEqualTo(Float.floatToRawIntBits(a.z()));
         }
 
@@ -1647,7 +1903,9 @@ class PlayerControllerTest
             final String constantPool = constantPoolOf(PlayerController.class);
 
             assertThat(constantPool).contains("java/lang/StrictMath");
+
             assertThat(constantPool).contains("sin");
+
             assertThat(constantPool).contains("cos");
         }
 
@@ -1679,11 +1937,16 @@ class PlayerControllerTest
         for (int i = 0; i < 1000; i++)
         {
             final float forward = (float) ((i % 7) - 3) / 3.0f;
+
             final float strafe = (float) ((i % 5) - 2) / 2.0f;
+
             final float yaw = (float) ((i % 11) - 5) * 0.013f;
+
             final float pitch = (float) ((i % 13) - 6) * 0.011f;
+
             player.update(new Input(forward, strafe, yaw, pitch), TIC_60HZ);
         }
+
         return snapshot(player);
     }
 
@@ -1692,9 +1955,11 @@ class PlayerControllerTest
     private static String constantPoolOf(final Class<?> type)
     {
         final String resource = type.getSimpleName() + ".class";
+
         try (InputStream in = type.getResourceAsStream(resource))
         {
             assertThat(in).as("class file for %s must be readable", type).isNotNull();
+
             return new String(in.readAllBytes(), StandardCharsets.ISO_8859_1);
         }
         catch (final IOException e)

@@ -25,8 +25,11 @@ public final class TickEvent implements I_EngineEvent
                      final int ticNumber, final long deltaNanos)
     {
         this.sequenceNumber = sequenceNumber;
+
         this.timestampNanos = timestampNanos;
+
         this.ticNumber = ticNumber;
+
         this.deltaNanos = deltaNanos;
     }
 

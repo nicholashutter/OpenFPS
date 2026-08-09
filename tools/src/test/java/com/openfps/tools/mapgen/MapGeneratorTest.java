@@ -28,9 +28,13 @@ final class MapGeneratorTest
             + "  {\"type\":\"box\",\"x\":0,\"y\":0,\"z\":0,"
             + "   \"sx\":1,\"sy\":1,\"sz\":1,\"submesh\":1,\"texture\":\"wall\"}"
             + "]}";
+
         final byte[] bytes = generate(json);
+
         final ModelFormat model = ModelFormat.read(bytes);
+
         assertThat(model.indexCount() / 3).isEqualTo(12);
+
         // 6 faces x 4 vertices (no sharing) = 24 vertices per box.
         assertThat(model.vertexCount()).isEqualTo(24);
     }
@@ -49,10 +53,14 @@ final class MapGeneratorTest
             + "  {\"type\":\"box\",\"x\":0,\"y\":0,\"z\":0,\"sx\":1,\"sy\":1,\"sz\":1,"
             + "   \"submesh\":2,\"texture\":\"accent\"}"
             + "]}";
+
         final byte[] bytes = generate(json);
+
         final ModelFormat model = ModelFormat.read(bytes);
+
         // 3 boxes x 12 triangles = 36 triangles
         assertThat(model.indexCount() / 3).isEqualTo(36);
+
         // 3 submeshes, one per (submesh, texture) pair
         assertThat(model.submeshCount()).isEqualTo(3);
     }
@@ -71,9 +79,13 @@ final class MapGeneratorTest
             + "  {\"type\":\"box\",\"x\":5,\"y\":0,\"z\":0,\"sx\":1,\"sy\":1,\"sz\":1,"
             + "   \"submesh\":1,\"texture\":\"wall\"}"
             + "]}";
+
         final byte[] bytes = generate(json);
+
         final ModelFormat model = ModelFormat.read(bytes);
+
         assertThat(model.submeshCount()).isEqualTo(1);
+
         assertThat(model.textureCount()).isEqualTo(1);
     }
 
@@ -87,10 +99,14 @@ final class MapGeneratorTest
             + "  {\"type\":\"sign\",\"x\":0,\"y\":32,\"z\":0,\"w\":16,\"h\":8,"
             + "   \"yaw\":0,\"vertical\":true,\"submesh\":1,\"texture\":\"accent\"}"
             + "]}";
+
         final byte[] bytes = generate(json);
+
         final ModelFormat model = ModelFormat.read(bytes);
+
         // 1 sign x 2 triangles = 2 triangles
         assertThat(model.indexCount() / 3).isEqualTo(2);
+
         assertThat(model.vertexCount()).isEqualTo(4);
     }
 
@@ -103,6 +119,7 @@ final class MapGeneratorTest
             + "\"primitives\":["
             + "  {\"type\":\"unknown\",\"x\":0,\"y\":0,\"z\":0,\"sx\":1,\"sy\":1,\"sz\":1}"
             + "]}";
+
         assertThatThrownBy(() -> generate(json))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("unknown primitive type");
@@ -118,6 +135,7 @@ final class MapGeneratorTest
             + "  {\"type\":\"box\",\"x\":0,\"y\":0,\"z\":0,\"sx\":1,\"sy\":1,\"sz\":1,"
             + "   \"submesh\":1,\"texture\":\"marble\"}"
             + "]}";
+
         assertThatThrownBy(() -> generate(json))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("unknown swatch");
@@ -139,6 +157,7 @@ final class MapGeneratorTest
             + "\"primitives\":["
             + "  {\"type\":\"box\",\"x\":0,\"y\":0,\"z\":0,\"sx\":1,\"sy\":1,\"sz\":1}"
             + "]}";
+
         assertThatThrownBy(() -> generate(json))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("id");
@@ -147,9 +166,13 @@ final class MapGeneratorTest
     private static byte[] generate(final String json)
     {
         final PrimitiveFactory factory = PrimitiveFactory.createDefault();
+
         final JsonConfigParser parser = new JsonConfigParser(factory);
+
         final MapGenConfig config = parser.parseString(json);
+
         final MapGenerator generator = new MapGenerator(null, factory);
+
         return generator.generate(config);
     }
 }

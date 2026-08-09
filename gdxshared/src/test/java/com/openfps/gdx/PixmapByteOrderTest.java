@@ -63,6 +63,7 @@ final class PixmapByteOrderTest
         try
         {
             GdxNativesLoader.load();
+
             nativesReady = true;
         }
         catch (final RuntimeException | UnsatisfiedLinkError e)
@@ -70,6 +71,7 @@ final class PixmapByteOrderTest
             // Not a failure: a machine without the desktop natives should
             // still build. Recorded loudly so a skip is never silent.
             nativesReady = false;
+
             LOG.warn("gdx natives unavailable — Pixmap byte-order tests skipped", e);
         }
     }
@@ -81,9 +83,11 @@ final class PixmapByteOrderTest
         assumeThat(nativesReady).isTrue();
 
         final Pixmap pixmap = new Pixmap(2, 2, Pixmap.Format.RGBA8888);
+
         try
         {
             pixmap.drawPixel(1, 1, DISTINCT);
+
             assertThat(pixmap.getPixel(1, 1)).isEqualTo(DISTINCT);
         }
         finally
@@ -99,21 +103,26 @@ final class PixmapByteOrderTest
         assumeThat(nativesReady).isTrue();
 
         final Pixmap pixmap = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
+
         try
         {
             pixmap.drawPixel(0, 0, DISTINCT);
 
             final ByteBuffer pixels = pixmap.getPixels();
+
             final byte[] actual = new byte[Integer.BYTES];
+
             pixels.duplicate().get(actual);
 
             final byte[] expected = new byte[Integer.BYTES];
+
             Framebuffer.writeRgbaBytes(DISTINCT, expected, 0);
 
             // This is the assertion that matters: the engine's packing and
             // libGDX's storage agree byte for byte, so a frame presents with
             // no per-pixel conversion.
             assertThat(actual).isEqualTo(expected);
+
             assertThat(Framebuffer.readRgbaBytes(actual, 0)).isEqualTo(DISTINCT);
         }
         finally
@@ -132,29 +141,38 @@ final class PixmapByteOrderTest
         // finished int[] into the Pixmap. Which ByteOrder that copy uses is
         // the whole question, so it is asserted rather than assumed.
         final Framebuffer fb = new Framebuffer();
+
         fb.init(4, 4);
+
         fb.clear(Framebuffer.packRgba(0, 0, 0, 0xFF));
+
         fb.setPixel(3, 3, DISTINCT);
 
         final int[] contiguous = new int[fb.width() * fb.height()];
+
         fb.copyColorTo(contiguous);
 
         final Pixmap pixmap = new Pixmap(fb.width(), fb.height(), Pixmap.Format.RGBA8888);
+
         try
         {
             final ByteBuffer pixels = pixmap.getPixels();
+
             assertThat(pixels.order())
                 .as("libGDX hands out a big-endian pixel buffer")
                 .isEqualTo(ByteOrder.BIG_ENDIAN);
+
             pixels.asIntBuffer().put(contiguous);
 
             assertThat(pixmap.getPixel(3, 3)).isEqualTo(DISTINCT);
+
             assertThat(pixmap.getPixel(0, 0))
                 .isEqualTo(Framebuffer.packRgba(0, 0, 0, 0xFF));
         }
         finally
         {
             pixmap.dispose();
+
             fb.shutdown();
         }
     }

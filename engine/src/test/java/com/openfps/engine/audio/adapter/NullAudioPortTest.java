@@ -54,14 +54,23 @@ final class NullAudioPortTest
             assertThatCode(() ->
             {
                 port.shutdown();
+
                 port.play(SoundId.WEAPON_FIRE);
+
                 port.init();
+
                 port.init();
+
                 port.play(SoundId.WEAPON_FIRE);
+
                 port.stopAll();
+
                 port.shutdown();
+
                 port.shutdown();
+
                 port.play(SoundId.WEAPON_FIRE);
+
                 port.stopAll();
             }).doesNotThrowAnyException();
         }
@@ -79,14 +88,22 @@ final class NullAudioPortTest
             assertThatCode(() ->
             {
                 port.preload();
+
                 port.init();
+
                 port.preload();
+
                 port.preload();
+
                 port.shutdown();
+
                 port.preload();
             }).doesNotThrowAnyException();
+
             assertThat(port.playCount()).isZero();
+
             assertThat(port.lastSound()).isNull();
+
             assertThat(port.isAudible()).isFalse();
         }
 
@@ -98,10 +115,13 @@ final class NullAudioPortTest
             // noise", so the port swallows it. The count proves it was swallowed
             // rather than played.
             final NullAudioPort port = new NullAudioPort();
+
             port.init();
 
             assertThatCode(() -> port.play(null)).doesNotThrowAnyException();
+
             assertThat(port.playCount()).isZero();
+
             assertThat(port.lastSound()).isNull();
         }
 
@@ -110,6 +130,7 @@ final class NullAudioPortTest
         void shouldReportInaudible()
         {
             final I_AudioPort port = new NullAudioPort();
+
             port.init();
 
             assertThat(port.isAudible()).isFalse();
@@ -138,15 +159,19 @@ final class NullAudioPortTest
             final I_AudioPort port = new NullAudioPort();
 
             port.setMasterVolume(4.0f);
+
             assertThat(port.masterVolume()).isEqualTo(AudioVolume.FULL);
 
             port.setMasterVolume(-4.0f);
+
             assertThat(port.masterVolume()).isEqualTo(AudioVolume.SILENT);
 
             port.setMasterVolume(Float.NaN);
+
             assertThat(port.masterVolume()).isEqualTo(AudioVolume.SILENT);
 
             port.setMasterVolume(0.25f);
+
             assertThat(port.masterVolume()).isEqualTo(0.25f);
         }
 
@@ -156,12 +181,17 @@ final class NullAudioPortTest
         {
             // A UI slider does not know or care whether the subsystem is up.
             final I_AudioPort port = new NullAudioPort();
+
             port.setMasterVolume(0.5f);
+
             port.init();
+
             assertThat(port.masterVolume()).isEqualTo(0.5f);
 
             port.shutdown();
+
             port.setMasterVolume(0.75f);
+
             assertThat(port.masterVolume()).isEqualTo(0.75f);
         }
     }
@@ -175,14 +205,19 @@ final class NullAudioPortTest
         void shouldCountPlays()
         {
             final NullAudioPort port = new NullAudioPort();
+
             port.init();
 
             assertThat(port.playCount()).isZero();
+
             port.play(SoundId.WEAPON_FIRE);
+
             port.play(SoundId.WEAPON_FIRE);
+
             port.play(SoundId.WEAPON_FIRE);
 
             assertThat(port.playCount()).isEqualTo(3L);
+
             assertThat(port.lastSound()).isEqualTo(SoundId.WEAPON_FIRE);
         }
 
@@ -193,8 +228,11 @@ final class NullAudioPortTest
             // A test that asserts what a whole session played needs the counter
             // to outlive the session's own teardown.
             final NullAudioPort port = new NullAudioPort();
+
             port.init();
+
             port.play(SoundId.WEAPON_FIRE);
+
             port.shutdown();
 
             assertThat(port.playCount()).isEqualTo(1L);
@@ -210,12 +248,17 @@ final class NullAudioPortTest
             // non-atomic counter would lose increments here, and a lost
             // increment is a flaky cadence test rather than an obvious bug.
             final NullAudioPort port = new NullAudioPort();
+
             port.init();
 
             final int threads = 4;
+
             final int playsEach = 500;
+
             final CountDownLatch start = new CountDownLatch(1);
+
             final CountDownLatch done = new CountDownLatch(threads);
+
             for (int index = 0; index < threads; index++)
             {
                 final Thread worker = new Thread(() ->
@@ -223,6 +266,7 @@ final class NullAudioPortTest
                     try
                     {
                         start.await();
+
                         for (int play = 0; play < playsEach; play++)
                         {
                             port.play(SoundId.WEAPON_FIRE);
@@ -237,11 +281,14 @@ final class NullAudioPortTest
                         done.countDown();
                     }
                 }, "null-audio-test-" + index);
+
                 worker.start();
             }
+
             start.countDown();
 
             assertThat(done.await(10, TimeUnit.SECONDS)).isTrue();
+
             assertThat(port.playCount()).isEqualTo((long) threads * playsEach);
         }
     }

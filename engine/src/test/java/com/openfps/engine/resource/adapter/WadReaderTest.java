@@ -59,6 +59,7 @@ class WadReaderTest
             final WadReader reader = WadReader.fromBytes(sampleIwad());
 
             assertThat(reader.wadType()).isEqualTo(WadReader.WadType.IWAD);
+
             assertThat(reader.lumpCount()).isEqualTo(3);
         }
 
@@ -73,7 +74,9 @@ class WadReaderTest
             final WadReader reader = WadReader.fromBytes(image);
 
             assertThat(reader.wadType()).isEqualTo(WadReader.WadType.PWAD);
+
             assertThat(reader.lumpCount()).isEqualTo(1);
+
             assertThat(reader.lumpName(0)).isEqualTo("MAP01");
         }
 
@@ -84,7 +87,9 @@ class WadReaderTest
             final WadReader reader = WadReader.fromBytes(WadBuilder.iwad().build());
 
             assertThat(reader.lumpCount()).isZero();
+
             assertThat(reader.imageBytes()).isEqualTo(WadBuilder.HEADER_SIZE);
+
             assertThat(reader.findLump("ANYTHING")).isEqualTo(WadReader.LUMP_NOT_FOUND);
         }
 
@@ -225,6 +230,7 @@ class WadReaderTest
         void shouldRejectTruncatedDirectory()
         {
             final byte[] full = sampleIwad();
+
             final byte[] cut = java.util.Arrays.copyOf(full, full.length - WadBuilder.ENTRY_SIZE);
 
             assertThatThrownBy(() -> WadReader.fromBytes(cut))
@@ -248,7 +254,9 @@ class WadReaderTest
             final WadReader reader = WadReader.fromBytes(sampleIwad());
 
             assertThat(reader.lumpName(0)).isEqualTo("PLAYPAL");
+
             assertThat(reader.lumpName(1)).isEqualTo("COLORMAP");
+
             assertThat(reader.lumpName(2)).isEqualTo("E1M1");
         }
 
@@ -259,9 +267,13 @@ class WadReaderTest
             final WadReader reader = WadReader.fromBytes(sampleIwad());
 
             assertThat(reader.lumpSize(0)).isEqualTo(PLAYPAL.length);
+
             assertThat(reader.lumpSize(1)).isEqualTo(COLORMAP.length);
+
             assertThat(reader.lumpSize(2)).isZero();
+
             assertThat(reader.lumpOffset(0)).isEqualTo(WadBuilder.HEADER_SIZE);
+
             assertThat(reader.lumpOffset(1))
                 .isEqualTo(WadBuilder.HEADER_SIZE + PLAYPAL.length);
         }
@@ -273,6 +285,7 @@ class WadReaderTest
             final WadReader reader = WadReader.fromBytes(sampleIwad());
 
             assertThat(reader.sliceLump(0)).containsExactly(PLAYPAL);
+
             assertThat(reader.sliceLump(1)).containsExactly(COLORMAP);
         }
 
@@ -292,6 +305,7 @@ class WadReaderTest
             final WadReader reader = WadReader.fromBytes(sampleIwad());
 
             final byte[] first = reader.sliceLump(0);
+
             first[0] = 0x7F;
 
             assertThat(reader.sliceLump(0)).containsExactly(PLAYPAL);
@@ -304,7 +318,9 @@ class WadReaderTest
             final WadReader reader = WadReader.fromBytes(sampleIwad());
 
             assertThat(reader.findLump("PLAYPAL")).isZero();
+
             assertThat(reader.findLump("playpal")).isZero();
+
             assertThat(reader.findLump("PlayPal")).isZero();
         }
 
@@ -324,7 +340,9 @@ class WadReaderTest
             final WadReader reader = WadReader.fromBytes(sampleIwad());
 
             assertThat(reader.findLump("NOSUCH")).isEqualTo(WadReader.LUMP_NOT_FOUND);
+
             assertThat(reader.findLump("")).isEqualTo(WadReader.LUMP_NOT_FOUND);
+
             assertThat(reader.findLump(null)).isEqualTo(WadReader.LUMP_NOT_FOUND);
         }
 
@@ -340,6 +358,7 @@ class WadReaderTest
             final WadReader reader = WadReader.fromBytes(image);
 
             assertThat(reader.findLump("DUP")).isZero();
+
             assertThat(reader.sliceLump(1)).containsExactly(WadBuilder.bytes(2, 2));
         }
 
@@ -350,10 +369,13 @@ class WadReaderTest
             final WadReader reader = WadReader.fromBytes(sampleIwad());
 
             assertThat(reader.hasLump(-1)).isFalse();
+
             assertThat(reader.hasLump(3)).isFalse();
+
             assertThatThrownBy(() -> reader.sliceLump(3))
                 .isInstanceOf(WadException.class)
                 .hasMessageContaining("out of range");
+
             assertThatThrownBy(() -> reader.lumpName(-1))
                 .isInstanceOf(WadException.class)
                 .hasMessageContaining("out of range");
@@ -373,12 +395,15 @@ class WadReaderTest
         void shouldReadWadFromDisk(@TempDir final Path tempDir) throws IOException
         {
             final Path wadFile = tempDir.resolve("synth.wad");
+
             Files.write(wadFile, sampleIwad());
 
             final WadReader reader = WadReader.fromFile(wadFile.toString());
 
             assertThat(reader.wadType()).isEqualTo(WadReader.WadType.IWAD);
+
             assertThat(reader.lumpCount()).isEqualTo(3);
+
             assertThat(reader.sliceLump(0)).containsExactly(PLAYPAL);
         }
 

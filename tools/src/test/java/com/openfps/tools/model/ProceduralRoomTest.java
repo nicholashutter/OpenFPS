@@ -50,6 +50,7 @@ class ProceduralRoomTest
         void shouldWindOutward()
         {
             final ModelFormat room = ModelFormat.read(ProceduralRoom.build());
+
             assertThat(signedVolume(room)).isCloseTo(EXPECTED_VOLUME, within(VOLUME_EPSILON));
         }
 
@@ -58,8 +59,11 @@ class ProceduralRoomTest
         void shouldCountTriangles()
         {
             final ModelFormat room = ModelFormat.read(ProceduralRoom.build());
+
             assertThat(room.triangleCount()).isEqualTo(ProceduralRoom.triangleCount());
+
             assertThat(room.triangleCount()).isEqualTo(60);
+
             assertThat(room.triangleCount()).isLessThan(ModelFormat.MAX_TRIANGLES_PER_MODEL);
         }
 
@@ -68,13 +72,20 @@ class ProceduralRoomTest
         void shouldReportBounds()
         {
             final ModelFormat room = ModelFormat.read(ProceduralRoom.build());
+
             final float outer = ProceduralRoom.INTERIOR_HALF_EXTENT
                 + ProceduralRoom.SLAB_THICKNESS;
+
             assertThat(room.minX()).isEqualTo(-outer);
+
             assertThat(room.maxX()).isEqualTo(outer);
+
             assertThat(room.minZ()).isEqualTo(-outer);
+
             assertThat(room.maxZ()).isEqualTo(outer);
+
             assertThat(room.minY()).isEqualTo(-ProceduralRoom.SLAB_THICKNESS);
+
             assertThat(room.maxY()).isEqualTo(ProceduralRoom.WALL_HEIGHT);
         }
     }
@@ -88,8 +99,11 @@ class ProceduralRoomTest
         void shouldSplitByMaterial()
         {
             final ModelFormat room = ModelFormat.read(ProceduralRoom.build());
+
             assertThat(room.textureCount()).isEqualTo(2);
+
             assertThat(room.submeshCount()).isEqualTo(2);
+
             assertThat(room.submeshTextureIndex(0))
                 .isNotEqualTo(room.submeshTextureIndex(1));
         }
@@ -99,10 +113,13 @@ class ProceduralRoomTest
         void shouldCarryMips()
         {
             final ModelFormat room = ModelFormat.read(ProceduralRoom.build());
+
             for (int texture = 0; texture < room.textureCount(); texture++)
             {
                 assertThat(room.textureWidth(texture)).isEqualTo(ProceduralRoom.TEXTURE_EDGE);
+
                 assertThat(room.textureHeight(texture)).isEqualTo(ProceduralRoom.TEXTURE_EDGE);
+
                 assertThat(room.textureLevelCount(texture)).isEqualTo(
                     MipGenerator.levelCount(ProceduralRoom.TEXTURE_EDGE,
                         ProceduralRoom.TEXTURE_EDGE));
@@ -116,28 +133,40 @@ class ProceduralRoomTest
     private static float signedVolume(final ModelFormat model)
     {
         final int[] indices = model.indices();
+
         // MUTABLE local — the running sum.
         float total = 0.0f;
+
         for (int at = 0; at < indices.length; at += ModelFormat.INDICES_PER_TRIANGLE)
         {
             final int a = indices[at];
+
             final int b = indices[at + 1];
+
             final int c = indices[at + 2];
 
             final float bx = model.positionX(b);
+
             final float by = model.positionY(b);
+
             final float bz = model.positionZ(b);
+
             final float cx = model.positionX(c);
+
             final float cy = model.positionY(c);
+
             final float cz = model.positionZ(c);
 
             final float crossX = (by * cz) - (bz * cy);
+
             final float crossY = (bz * cx) - (bx * cz);
+
             final float crossZ = (bx * cy) - (by * cx);
 
             total += ((model.positionX(a) * crossX) + (model.positionY(a) * crossY)
                 + (model.positionZ(a) * crossZ)) * SIXTH;
         }
+
         return total;
     }
 }

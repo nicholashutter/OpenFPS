@@ -91,7 +91,9 @@ public final class HitResult
     public void clear()
     {
         this.entityId = NO_ENTITY;
+
         this.distance = NO_DISTANCE;
+
         this.hit = false;
     }
 
@@ -106,7 +108,9 @@ public final class HitResult
     void set(final int hitEntityId, final float hitDistance)
     {
         this.entityId = hitEntityId;
+
         this.distance = hitDistance;
+
         this.hit = true;
     }
 
@@ -148,6 +152,7 @@ public final class HitResult
         {
             return "HitResult{miss}";
         }
+
         return "HitResult{id=" + entityId + ", distance=" + distance + "}";
     }
 }

@@ -19,6 +19,7 @@ public final class NetSubsystem extends Subsystem
     public NetSubsystem(final I_NetworkPort port)
     {
         super(SubsystemId.G_);
+
         this.port = port;
     }
 

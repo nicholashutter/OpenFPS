@@ -202,14 +202,19 @@ public final class PowerChimeSound
     public static double envelopeAt(final int indexInNote)
     {
         final int count = noteSampleCount();
+
         if (indexInNote < 0 || indexInNote >= count)
         {
             return 0.0;
         }
+
         final double attack = Math.min(1.0, indexInNote / (double) ATTACK_SAMPLES);
+
         final double release =
             Math.min(1.0, (count - 1 - indexInNote) / (double) RELEASE_SAMPLES);
+
         final double decay = Math.exp(-DECAY_PER_SECOND * indexInNote / SAMPLE_RATE);
+
         return attack * decay * release;
     }
 
@@ -247,9 +252,13 @@ public final class PowerChimeSound
         final double peak)
     {
         final int perNote = noteSampleCount();
+
         final short[] pcm = new short[perNote * NOTE_COUNT];
+
         writeNote(pcm, 0, firstHz, peak);
+
         writeNote(pcm, perNote, secondHz, peak);
+
         return pcm;
     }
 
@@ -258,17 +267,22 @@ public final class PowerChimeSound
         final double peak)
     {
         final int perNote = noteSampleCount();
+
         // MUTABLE local — the accumulated phase. Accumulated rather than evaluated
         // for the reason BlasterSound documents; it matters less at a fixed pitch,
         // and doing it the same way everywhere is why nobody has to check which
         // file made the exception.
         double phase = 0.0;
+
         for (int index = 0; index < perNote; index++)
         {
             phase = phase + TWO_PI * hz / SAMPLE_RATE;
+
             final double wave = FUNDAMENTAL * Math.sin(phase)
                 + SECOND_HARMONIC * Math.sin(SECOND_HARMONIC_MULTIPLE * phase);
+
             final double value = peak * envelopeAt(index) * wave * Short.MAX_VALUE;
+
             pcm[offset + index] = (short) Math.max(Short.MIN_VALUE,
                 Math.min(Short.MAX_VALUE, Math.round(value)));
         }

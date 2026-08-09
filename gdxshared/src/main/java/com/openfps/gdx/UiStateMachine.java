@@ -179,7 +179,9 @@ public final class UiStateMachine
         {
             throw new IllegalArgumentException("matchMode must not be null");
         }
+
         this.mode = matchMode;
+
         transitionTo(UiState.PLAYING);
     }
 
@@ -240,7 +242,9 @@ public final class UiStateMachine
         {
             throw new IllegalArgumentException("summary must not be null");
         }
+
         this.result = summary;
+
         transitionTo(UiState.GAME_OVER);
     }
 
@@ -299,13 +303,17 @@ public final class UiStateMachine
         {
             throw new IllegalArgumentException("target must not be null");
         }
+
         final UiState current = state;
+
         if (!current.canTransitionTo(target))
         {
             throw new IllegalStateException(
                 "illegal UI transition " + current + " -> " + target);
         }
+
         state = target;
+
         LOG.info("UI state {} -> {}", current, target);
     }
 

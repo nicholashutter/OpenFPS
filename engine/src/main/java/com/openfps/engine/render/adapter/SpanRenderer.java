@@ -196,18 +196,23 @@ public final class SpanRenderer
         {
             throw new IllegalArgumentException("mode must not be null");
         }
+
         if (attributeCount < mode.requiredAttributes())
         {
             throw new IllegalArgumentException(mode + " needs at least "
                 + mode.requiredAttributes() + " vertex attributes, got " + attributeCount);
         }
+
         if (sourceCoverage < 0 || sourceCoverage > OPAQUE_COVERAGE)
         {
             throw new IllegalArgumentException(
                 "coverage must be 0-" + OPAQUE_COVERAGE + ", got " + sourceCoverage);
         }
+
         this.mode = mode;
+
         this.attributeCount = attributeCount;
+
         this.coverage = sourceCoverage;
     }
 
@@ -285,36 +290,49 @@ public final class SpanRenderer
         final int tileMinX, final int tileMinY, final int tileMaxX, final int tileMaxY)
     {
         final int minX = Math.max(tileMinX, (int) records[recordOffset + Rasterizer.BOUND_MIN_X]);
+
         final int maxX = Math.min(tileMaxX, (int) records[recordOffset + Rasterizer.BOUND_MAX_X]);
+
         if (minX > maxX)
         {
             return;
         }
+
         final int minY = Math.max(tileMinY, (int) records[recordOffset + Rasterizer.BOUND_MIN_Y]);
+
         final int maxY = Math.min(tileMaxY, (int) records[recordOffset + Rasterizer.BOUND_MAX_Y]);
+
         if (minY > maxY)
         {
             return;
         }
+
         final MipChain texture = textureFor(material, textures);
+
         if (texture == null)
         {
             if (mode == ShadingMode.VERTEX_COLOR)
             {
                 renderVertexColor(target, records, recordOffset, entityIds, entityId,
                     minX, minY, maxX, maxY);
+
                 return;
             }
+
             if (isBlended())
             {
                 renderFlatBlended(target, records, recordOffset, flatColor, coverage,
                     minX, minY, maxX, maxY);
+
                 return;
             }
+
             renderFlat(target, records, recordOffset, flatColor, entityIds, entityId,
                 minX, minY, maxX, maxY);
+
             return;
         }
+
         renderTextured(target, records, recordOffset, texture, entityIds, entityId,
             minX, minY, maxX, maxY);
     }
@@ -374,38 +392,57 @@ public final class SpanRenderer
         final int minY, final int maxX, final int maxY)
     {
         final int[] color = target.colorBuffer();
+
         final float[] depth = target.depthBuffer();
+
         final int stride = target.strideInPixels();
 
         final float e0dx = records[base + Rasterizer.EDGE0_DX];
+
         final float e1dx = records[base + Rasterizer.EDGE1_DX];
+
         final float e2dx = records[base + Rasterizer.EDGE2_DX];
+
         final float bias0 = records[base + Rasterizer.EDGE0_BIAS];
+
         final float bias1 = records[base + Rasterizer.EDGE1_BIAS];
+
         final float bias2 = records[base + Rasterizer.EDGE2_BIAS];
+
         final float wdx = records[base + Rasterizer.INV_W_DX];
 
         for (int py = minY; py <= maxY; py++)
         {
             final float row0 = rowConstant(records, base + Rasterizer.EDGE0_DY, py);
+
             final float row1 = rowConstant(records, base + Rasterizer.EDGE1_DY, py);
+
             final float row2 = rowConstant(records, base + Rasterizer.EDGE2_DY, py);
+
             final float rowW = rowConstant(records, base + Rasterizer.INV_W_DY, py);
+
             final int rowBase = py * stride;
+
             for (int px = minX; px <= maxX; px++)
             {
                 if (!covered(e0dx, row0, bias0, e1dx, row1, bias1, e2dx, row2, bias2, px))
                 {
                     continue;
                 }
+
                 final float invW = wdx * px + rowW;
+
                 final int index = rowBase + px;
+
                 if (!(invW > depth[index]))
                 {
                     continue;
                 }
+
                 depth[index] = invW;
+
                 color[index] = flatColor;
+
                 if (ids != null)
                 {
                     ids[index] = entityId;
@@ -464,36 +501,53 @@ public final class SpanRenderer
         final int maxX, final int maxY)
     {
         final int[] color = target.colorBuffer();
+
         final float[] depth = target.depthBuffer();
+
         final int stride = target.strideInPixels();
 
         final float e0dx = records[base + Rasterizer.EDGE0_DX];
+
         final float e1dx = records[base + Rasterizer.EDGE1_DX];
+
         final float e2dx = records[base + Rasterizer.EDGE2_DX];
+
         final float bias0 = records[base + Rasterizer.EDGE0_BIAS];
+
         final float bias1 = records[base + Rasterizer.EDGE1_BIAS];
+
         final float bias2 = records[base + Rasterizer.EDGE2_BIAS];
+
         final float wdx = records[base + Rasterizer.INV_W_DX];
 
         for (int py = minY; py <= maxY; py++)
         {
             final float row0 = rowConstant(records, base + Rasterizer.EDGE0_DY, py);
+
             final float row1 = rowConstant(records, base + Rasterizer.EDGE1_DY, py);
+
             final float row2 = rowConstant(records, base + Rasterizer.EDGE2_DY, py);
+
             final float rowW = rowConstant(records, base + Rasterizer.INV_W_DY, py);
+
             final int rowBase = py * stride;
+
             for (int px = minX; px <= maxX; px++)
             {
                 if (!covered(e0dx, row0, bias0, e1dx, row1, bias1, e2dx, row2, bias2, px))
                 {
                     continue;
                 }
+
                 final float invW = wdx * px + rowW;
+
                 final int index = rowBase + px;
+
                 if (!(invW > depth[index]))
                 {
                     continue;
                 }
+
                 color[index] = Rgba.srcOver(flatColor, color[index], coverage);
             }
         }
@@ -505,47 +559,73 @@ public final class SpanRenderer
         final int maxX, final int maxY)
     {
         final int[] color = target.colorBuffer();
+
         final float[] depth = target.depthBuffer();
+
         final int stride = target.strideInPixels();
 
         final float e0dx = records[base + Rasterizer.EDGE0_DX];
+
         final float e1dx = records[base + Rasterizer.EDGE1_DX];
+
         final float e2dx = records[base + Rasterizer.EDGE2_DX];
+
         final float bias0 = records[base + Rasterizer.EDGE0_BIAS];
+
         final float bias1 = records[base + Rasterizer.EDGE1_BIAS];
+
         final float bias2 = records[base + Rasterizer.EDGE2_BIAS];
+
         final float wdx = records[base + Rasterizer.INV_W_DX];
+
         final int redPlane = base + Rasterizer.attributePlaneOffset(0);
+
         final int greenPlane = base + Rasterizer.attributePlaneOffset(1);
+
         final int bluePlane = base + Rasterizer.attributePlaneOffset(2);
 
         for (int py = minY; py <= maxY; py++)
         {
             final float row0 = rowConstant(records, base + Rasterizer.EDGE0_DY, py);
+
             final float row1 = rowConstant(records, base + Rasterizer.EDGE1_DY, py);
+
             final float row2 = rowConstant(records, base + Rasterizer.EDGE2_DY, py);
+
             final float rowW = rowConstant(records, base + Rasterizer.INV_W_DY, py);
+
             final float rowR = rowConstant(records, redPlane + 1, py);
+
             final float rowG = rowConstant(records, greenPlane + 1, py);
+
             final float rowB = rowConstant(records, bluePlane + 1, py);
+
             final int rowBase = py * stride;
+
             for (int px = minX; px <= maxX; px++)
             {
                 if (!covered(e0dx, row0, bias0, e1dx, row1, bias1, e2dx, row2, bias2, px))
                 {
                     continue;
                 }
+
                 final float invW = wdx * px + rowW;
+
                 final int index = rowBase + px;
+
                 if (!(invW > depth[index]))
                 {
                     continue;
                 }
+
                 final float w = 1.0f / invW;
+
                 depth[index] = invW;
+
                 color[index] = Rgba.pack(channel(records[redPlane] * px + rowR, w),
                     channel(records[greenPlane] * px + rowG, w),
                     channel(records[bluePlane] * px + rowB, w), (int) CHANNEL_MAX);
+
                 if (ids != null)
                 {
                     ids[index] = entityId;
@@ -563,54 +643,83 @@ public final class SpanRenderer
         final int minY, final int maxX, final int maxY)
     {
         final int[] color = target.colorBuffer();
+
         final float[] depth = target.depthBuffer();
+
         final int stride = target.strideInPixels();
 
         final float e0dx = records[base + Rasterizer.EDGE0_DX];
+
         final float e1dx = records[base + Rasterizer.EDGE1_DX];
+
         final float e2dx = records[base + Rasterizer.EDGE2_DX];
+
         final float bias0 = records[base + Rasterizer.EDGE0_BIAS];
+
         final float bias1 = records[base + Rasterizer.EDGE1_BIAS];
+
         final float bias2 = records[base + Rasterizer.EDGE2_BIAS];
+
         final float wdx = records[base + Rasterizer.INV_W_DX];
+
         final float wdy = records[base + Rasterizer.INV_W_DY];
+
         final int uPlane = base + Rasterizer.attributePlaneOffset(0);
+
         final int vPlane = base + Rasterizer.attributePlaneOffset(1);
 
         for (int py = minY; py <= maxY; py++)
         {
             final float row0 = rowConstant(records, base + Rasterizer.EDGE0_DY, py);
+
             final float row1 = rowConstant(records, base + Rasterizer.EDGE1_DY, py);
+
             final float row2 = rowConstant(records, base + Rasterizer.EDGE2_DY, py);
+
             final float rowW = rowConstant(records, base + Rasterizer.INV_W_DY, py);
+
             final float rowU = rowConstant(records, uPlane + 1, py);
+
             final float rowV = rowConstant(records, vPlane + 1, py);
+
             final int rowBase = py * stride;
+
             // MUTABLE local — the mip level in force, re-resolved once per
             // segment. Negative means "not yet resolved on this row".
             int level = -1;
+
             for (int px = minX; px <= maxX; px++)
             {
                 if (!covered(e0dx, row0, bias0, e1dx, row1, bias1, e2dx, row2, bias2, px))
                 {
                     continue;
                 }
+
                 final float invW = wdx * px + rowW;
+
                 final int index = rowBase + px;
+
                 if (!(invW > depth[index]))
                 {
                     continue;
                 }
+
                 final float w = 1.0f / invW;
+
                 final float u = (records[uPlane] * px + rowU) * w;
+
                 final float v = (records[vPlane] * px + rowV) * w;
+
                 if (level < 0 || (px & MIP_SEGMENT_MASK) == 0)
                 {
                     level = selectLevel(texture, u, v, w, records[uPlane],
                         records[uPlane + 1], records[vPlane], records[vPlane + 1], wdx, wdy);
                 }
+
                 depth[index] = invW;
+
                 color[index] = TextureSampler.sampleLevel(texture, u, v, level);
+
                 if (ids != null)
                 {
                     ids[index] = entityId;
@@ -639,10 +748,12 @@ public final class SpanRenderer
         {
             return false;
         }
+
         if (!(e1dx * px + row1 >= bias1))
         {
             return false;
         }
+
         return e2dx * px + row2 >= bias2;
     }
 
@@ -653,9 +764,13 @@ public final class SpanRenderer
         final float wdx, final float wdy)
     {
         final float dudx = (udx - u * wdx) * w;
+
         final float dvdx = (vdx - v * wdx) * w;
+
         final float dudy = (udy - u * wdy) * w;
+
         final float dvdy = (vdy - v * wdy) * w;
+
         return TextureSampler.levelForLod(texture,
             TextureSampler.lodFromDerivatives(texture, dudx, dvdx, dudy, dvdy));
     }
@@ -665,14 +780,17 @@ public final class SpanRenderer
     private static int channel(final float overW, final float w)
     {
         final float value = overW * w;
+
         if (!(value > 0.0f))
         {
             return 0;
         }
+
         if (value >= CHANNEL_MAX)
         {
             return (int) CHANNEL_MAX;
         }
+
         return (int) value;
     }
 
@@ -683,6 +801,7 @@ public final class SpanRenderer
         {
             return null;
         }
+
         return textures[material];
     }
 

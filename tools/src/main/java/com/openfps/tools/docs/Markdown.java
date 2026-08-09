@@ -126,7 +126,9 @@ public final class Markdown
         Heading(final int level, final String id, final String text)
         {
             this.level = level;
+
             this.id = id;
+
             this.text = text;
         }
 
@@ -189,7 +191,9 @@ public final class Markdown
     public String render(final List<String> lines)
     {
         final StringBuilder out = new StringBuilder(lines.size() * 64);
+
         renderBlocks(lines, out);
+
         return out.toString();
     }
 
@@ -210,47 +214,66 @@ public final class Markdown
     private void renderBlocks(final List<String> lines, final StringBuilder out)
     {
         int index = 0;
+
         while (index < lines.size())
         {
             final String line = lines.get(index);
+
             if (line.isBlank())
             {
                 index++;
+
                 continue;
             }
+
             if (FENCE.matcher(line).matches())
             {
                 index = renderFence(lines, index, out);
+
                 continue;
             }
+
             final Matcher heading = HEADING.matcher(line);
+
             if (heading.matches())
             {
                 renderHeading(heading.group(1).length(), heading.group(2), out);
+
                 index++;
+
                 continue;
             }
+
             if (RULE.matcher(line).matches())
             {
                 out.append("<hr>\n");
+
                 index++;
+
                 continue;
             }
+
             if (isTableStart(lines, index))
             {
                 index = renderTable(lines, index, out);
+
                 continue;
             }
+
             if (line.stripLeading().startsWith(">"))
             {
                 index = renderQuote(lines, index, out);
+
                 continue;
             }
+
             if (BULLET.matcher(line).matches() || ORDERED.matcher(line).matches())
             {
                 index = renderList(lines, index, out);
+
                 continue;
             }
+
             index = renderParagraph(lines, index, out);
         }
     }
@@ -258,37 +281,54 @@ public final class Markdown
     private int renderFence(final List<String> lines, final int start, final StringBuilder out)
     {
         final Matcher open = FENCE.matcher(lines.get(start));
+
         open.matches();
+
         final String marker = open.group(1);
+
         final String language = open.group(2);
+
         final StringBuilder code = new StringBuilder();
+
         int index = start + 1;
+
         while (index < lines.size())
         {
             final Matcher close = FENCE.matcher(lines.get(index));
+
             if (close.matches() && close.group(1).length() >= marker.length()
                 && close.group(2).isEmpty())
             {
                 index++;
+
                 break;
             }
+
             code.append(escape(lines.get(index))).append('\n');
+
             index++;
         }
+
         out.append("<div class=\"code\"");
+
         if (!language.isEmpty())
         {
             out.append(" data-lang=\"").append(attribute(language)).append('"');
         }
+
         out.append("><pre><code>").append(code).append("</code></pre></div>\n");
+
         return index;
     }
 
     private void renderHeading(final int level, final String source, final StringBuilder out)
     {
         final String text = plain(source);
+
         final String id = uniqueSlug(slug(text));
+
         headings.add(new Heading(level, id, text));
+
         out.append("<h").append(level).append(" id=\"").append(attribute(id)).append("\">")
             .append(inline(source))
             .append("<a class=\"anchor\" href=\"#").append(attribute(id))
@@ -299,10 +339,13 @@ public final class Markdown
     private int renderQuote(final List<String> lines, final int start, final StringBuilder out)
     {
         final List<String> inner = new ArrayList<>();
+
         int index = start;
+
         while (index < lines.size() && lines.get(index).stripLeading().startsWith(">"))
         {
             final String stripped = lines.get(index).stripLeading().substring(1);
+
             if (stripped.startsWith(" "))
             {
                 inner.add(stripped.substring(1));
@@ -311,24 +354,34 @@ public final class Markdown
             {
                 inner.add(stripped);
             }
+
             index++;
         }
+
         out.append("<blockquote>\n");
+
         renderBlocks(inner, out);
+
         out.append("</blockquote>\n");
+
         return index;
     }
 
     private int renderParagraph(final List<String> lines, final int start, final StringBuilder out)
     {
         final StringBuilder text = new StringBuilder(lines.get(start).strip());
+
         int index = start + 1;
+
         while (index < lines.size() && !startsBlock(lines, index))
         {
             text.append('\n').append(lines.get(index).strip());
+
             index++;
         }
+
         out.append("<p>").append(inline(text.toString())).append("</p>\n");
+
         return index;
     }
 
@@ -342,45 +395,61 @@ public final class Markdown
         {
             return false;
         }
+
         final String next = lines.get(index + 1);
+
         return next.indexOf('|') >= 0 && DELIMITER.matcher(next).matches();
     }
 
     private int renderTable(final List<String> lines, final int start, final StringBuilder out)
     {
         final List<String> header = splitRow(lines.get(start));
+
         final List<String> alignments = alignmentsOf(splitRow(lines.get(start + 1)));
+
         out.append("<div class=\"tablewrap\"><table>\n<thead><tr>");
+
         for (int column = 0; column < header.size(); column++)
         {
             out.append("<th").append(alignmentAttribute(alignments, column)).append('>')
                 .append(inline(header.get(column))).append("</th>");
         }
+
         out.append("</tr></thead>\n<tbody>\n");
+
         int index = start + 2;
+
         while (index < lines.size() && !lines.get(index).isBlank()
             && lines.get(index).indexOf('|') >= 0)
         {
             final List<String> cells = splitRow(lines.get(index));
+
             out.append("<tr>");
+
             for (int column = 0; column < cells.size(); column++)
             {
                 out.append("<td").append(alignmentAttribute(alignments, column)).append('>')
                     .append(inline(cells.get(column))).append("</td>");
             }
+
             out.append("</tr>\n");
+
             index++;
         }
+
         out.append("</tbody>\n</table></div>\n");
+
         return index;
     }
 
     private static List<String> alignmentsOf(final List<String> delimiterCells)
     {
         final List<String> alignments = new ArrayList<>(delimiterCells.size());
+
         for (final String cell : delimiterCells)
         {
             final String trimmed = cell.strip();
+
             if (trimmed.startsWith(":") && trimmed.endsWith(":"))
             {
                 alignments.add("center");
@@ -394,6 +463,7 @@ public final class Markdown
                 alignments.add("");
             }
         }
+
         return alignments;
     }
 
@@ -403,6 +473,7 @@ public final class Markdown
         {
             return "";
         }
+
         return " class=\"ta-" + alignments.get(column) + "\"";
     }
 
@@ -410,36 +481,52 @@ public final class Markdown
     private static List<String> splitRow(final String line)
     {
         final List<String> cells = new ArrayList<>();
+
         final StringBuilder cell = new StringBuilder();
+
         final String trimmed = line.strip();
+
         int index = 0;
+
         if (trimmed.startsWith("|"))
         {
             index = 1;
         }
+
         while (index < trimmed.length())
         {
             final char current = trimmed.charAt(index);
+
             if (current == '\\' && index + 1 < trimmed.length() && trimmed.charAt(index + 1) == '|')
             {
                 cell.append('|');
+
                 index += 2;
+
                 continue;
             }
+
             if (current == '|')
             {
                 cells.add(cell.toString().strip());
+
                 cell.setLength(0);
+
                 index++;
+
                 continue;
             }
+
             cell.append(current);
+
             index++;
         }
+
         if (cells.isEmpty() || !cell.toString().isBlank())
         {
             cells.add(cell.toString().strip());
         }
+
         return cells;
     }
 
@@ -450,61 +537,84 @@ public final class Markdown
     private int renderList(final List<String> lines, final int start, final StringBuilder out)
     {
         final boolean ordered = ORDERED.matcher(lines.get(start)).matches();
+
         final int baseIndent = indentOf(lines.get(start));
+
         final List<List<String>> items = new ArrayList<>();
+
         boolean loose = false;
+
         int index = start;
 
         while (index < lines.size())
         {
             final Matcher marker = markerAt(lines.get(index), ordered);
+
             if (marker == null || indentOf(lines.get(index)) != baseIndent)
             {
                 break;
             }
+
             final int contentIndent = marker.start(3);
+
             final List<String> body = new ArrayList<>();
+
             body.add(marker.group(3));
+
             index++;
 
             while (index < lines.size())
             {
                 int blanks = 0;
+
                 while (index + blanks < lines.size() && lines.get(index + blanks).isBlank())
                 {
                     blanks++;
                 }
+
                 final int next = index + blanks;
+
                 if (next >= lines.size() || indentOf(lines.get(next)) < contentIndent)
                 {
                     if (blanks > 0 && next < lines.size())
                     {
                         loose = true;
                     }
+
                     index = next;
+
                     break;
                 }
+
                 if (blanks > 0)
                 {
                     loose = true;
+
                     for (int blank = 0; blank < blanks; blank++)
                     {
                         body.add("");
                     }
                 }
+
                 body.add(dedent(lines.get(next), contentIndent));
+
                 index = next + 1;
             }
+
             items.add(body);
         }
 
         final String tag = listTag(ordered);
+
         out.append('<').append(tag).append(startAttribute(lines.get(start), ordered)).append(">\n");
+
         for (final List<String> body : items)
         {
             renderListItem(body, loose, out);
         }
+
         out.append("</").append(tag).append(">\n");
+
         return index;
     }
 
@@ -512,42 +622,54 @@ public final class Markdown
         final StringBuilder out)
     {
         final List<String> content = new ArrayList<>(body);
+
         // The checkbox is a class on the <li>, not an <input> spliced into the
         // text: everything below goes through inline(), which escapes markup,
         // and a loose item would otherwise put the box on its own line above
         // the first paragraph.
         String itemClass = "";
+
         final Matcher task = TASK.matcher(content.get(0));
+
         if (task.matches())
         {
             itemClass = " class=\"task todo\"";
+
             if (!" ".equals(task.group(1)))
             {
                 itemClass = " class=\"task done\"";
             }
+
             content.set(0, task.group(2));
         }
 
         out.append("<li").append(itemClass).append('>');
+
         if (loose)
         {
             out.append('\n');
+
             renderBlocks(content, out);
         }
         else
         {
             int firstBlock = 1;
+
             while (firstBlock < content.size() && !startsBlock(content, firstBlock))
             {
                 firstBlock++;
             }
+
             out.append(inline(String.join("\n", content.subList(0, firstBlock))));
+
             if (firstBlock < content.size())
             {
                 out.append('\n');
+
                 renderBlocks(content.subList(firstBlock, content.size()), out);
             }
         }
+
         out.append("</li>\n");
     }
 
@@ -557,6 +679,7 @@ public final class Markdown
         {
             return "ol";
         }
+
         return "ul";
     }
 
@@ -566,53 +689,65 @@ public final class Markdown
         {
             return "";
         }
+
         final Matcher marker = ORDERED.matcher(firstLine);
+
         if (!marker.matches() || "1".equals(marker.group(2)))
         {
             return "";
         }
+
         return " start=\"" + marker.group(2) + "\"";
     }
 
     private static Matcher markerAt(final String line, final boolean ordered)
     {
         Matcher marker = BULLET.matcher(line);
+
         if (ordered)
         {
             marker = ORDERED.matcher(line);
         }
+
         if (marker.matches())
         {
             return marker;
         }
+
         return null;
     }
 
     private boolean startsBlock(final List<String> lines, final int index)
     {
         final String line = lines.get(index);
+
         if (line.isBlank() || FENCE.matcher(line).matches() || HEADING.matcher(line).matches())
         {
             return true;
         }
+
         if (RULE.matcher(line).matches() || line.stripLeading().startsWith(">"))
         {
             return true;
         }
+
         if (BULLET.matcher(line).matches() || ORDERED.matcher(line).matches())
         {
             return true;
         }
+
         return isTableStart(lines, index);
     }
 
     private static int indentOf(final String line)
     {
         int count = 0;
+
         while (count < line.length() && line.charAt(count) == ' ')
         {
             count++;
         }
+
         return count;
     }
 
@@ -628,12 +763,19 @@ public final class Markdown
     private String inline(final String text)
     {
         final List<String> spans = new ArrayList<>();
+
         String work = protectCode(escape(text), spans);
+
         work = renderImages(work);
+
         work = renderLinks(work);
+
         work = STRONG.matcher(work).replaceAll("<strong>$1</strong>");
+
         work = EMPHASIS.matcher(work).replaceAll("<em>$1</em>");
+
         work = STRIKE.matcher(work).replaceAll("<del>$1</del>");
+
         return restoreCode(work, spans);
     }
 
@@ -642,71 +784,99 @@ public final class Markdown
     private static String protectCode(final String text, final List<String> spans)
     {
         final Matcher matcher = CODE_SPAN.matcher(text);
+
         final StringBuilder out = new StringBuilder(text.length());
+
         while (matcher.find())
         {
             spans.add(matcher.group(1));
+
             matcher.appendReplacement(out,
                 Matcher.quoteReplacement(MARK + (spans.size() - 1) + MARK));
         }
+
         matcher.appendTail(out);
+
         return out.toString();
     }
 
     private static String restoreCode(final String text, final List<String> spans)
     {
         final Matcher matcher = PLACEHOLDER.matcher(text);
+
         final StringBuilder out = new StringBuilder(text.length());
+
         while (matcher.find())
         {
             final String code = spans.get(Integer.parseInt(matcher.group(1)));
+
             matcher.appendReplacement(out, Matcher.quoteReplacement("<code>" + code + "</code>"));
         }
+
         matcher.appendTail(out);
+
         return out.toString();
     }
 
     private String renderImages(final String text)
     {
         final Matcher matcher = IMAGE.matcher(text);
+
         final StringBuilder out = new StringBuilder(text.length());
+
         while (matcher.find())
         {
             final StringBuilder tag = new StringBuilder("<img src=\"");
+
             tag.append(attribute(resolver.resolve(matcher.group(2))))
                 .append("\" alt=\"").append(attribute(plain(matcher.group(1)))).append('"');
+
             if (matcher.group(3) != null)
             {
                 tag.append(" title=\"").append(attribute(matcher.group(3))).append('"');
             }
+
             tag.append(" loading=\"lazy\">");
+
             matcher.appendReplacement(out, Matcher.quoteReplacement(tag.toString()));
         }
+
         matcher.appendTail(out);
+
         return out.toString();
     }
 
     private String renderLinks(final String text)
     {
         final Matcher matcher = LINK.matcher(text);
+
         final StringBuilder out = new StringBuilder(text.length());
+
         while (matcher.find())
         {
             final String href = resolver.resolve(matcher.group(2));
+
             final StringBuilder tag = new StringBuilder("<a href=\"");
+
             tag.append(attribute(href)).append('"');
+
             if (matcher.group(3) != null)
             {
                 tag.append(" title=\"").append(attribute(matcher.group(3))).append('"');
             }
+
             if (isExternal(href))
             {
                 tag.append(" class=\"ext\" rel=\"noopener noreferrer\" target=\"_blank\"");
             }
+
             tag.append('>').append(matcher.group(1)).append("</a>");
+
             matcher.appendReplacement(out, Matcher.quoteReplacement(tag.toString()));
         }
+
         matcher.appendTail(out);
+
         return out.toString();
     }
 
@@ -758,9 +928,13 @@ public final class Markdown
     public static String plain(final String source)
     {
         String work = IMAGE.matcher(source).replaceAll("");
+
         work = LINK.matcher(work).replaceAll("$1");
+
         work = work.replace("**", "").replace("~~", "").replace("`", "");
+
         work = EMPHASIS.matcher(work).replaceAll("$1");
+
         return work.strip();
     }
 
@@ -773,42 +947,55 @@ public final class Markdown
     public static String summarize(final List<String> lines)
     {
         final StringBuilder text = new StringBuilder();
+
         boolean seenHeading = false;
+
         for (final String line : lines)
         {
             final String trimmed = line.strip();
+
             if (HEADING.matcher(trimmed).matches())
             {
                 if (seenHeading && text.length() > 0)
                 {
                     break;
                 }
+
                 seenHeading = true;
+
                 continue;
             }
+
             if (!seenHeading || trimmed.startsWith("[!["))
             {
                 continue;
             }
+
             if (trimmed.isEmpty())
             {
                 if (text.length() > 0)
                 {
                     break;
                 }
+
                 continue;
             }
+
             String content = trimmed;
+
             if (content.startsWith(">"))
             {
                 content = content.substring(1).strip();
             }
+
             if (text.length() > 0)
             {
                 text.append(' ');
             }
+
             text.append(content);
         }
+
         return truncate(plain(text.toString()));
     }
 
@@ -818,11 +1005,14 @@ public final class Markdown
         {
             return text;
         }
+
         final int cut = text.lastIndexOf(' ', SUMMARY_LIMIT);
+
         if (cut < 0)
         {
             return text.substring(0, SUMMARY_LIMIT) + "…";
         }
+
         return text.substring(0, cut) + "…";
     }
 
@@ -831,24 +1021,32 @@ public final class Markdown
     private static String slug(final String text)
     {
         final String lowered = text.toLowerCase(Locale.ROOT);
+
         final String kept = SLUG_STRIP.matcher(lowered).replaceAll("");
+
         final String slugged = kept.strip().replace(' ', '-');
+
         if (slugged.isEmpty())
         {
             return "section";
         }
+
         return slugged;
     }
 
     private String uniqueSlug(final String base)
     {
         final Integer seen = slugs.get(base);
+
         if (seen == null)
         {
             slugs.put(base, 1);
+
             return base;
         }
+
         slugs.put(base, seen + 1);
+
         return base + "-" + seen;
     }
 }

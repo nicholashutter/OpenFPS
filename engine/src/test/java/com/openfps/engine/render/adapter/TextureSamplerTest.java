@@ -55,6 +55,7 @@ class TextureSamplerTest
         void shouldReturnTexelUnchangedAtItsCentre()
         {
             final int size = 4;
+
             final MipChain chain = TextureFixtures.single(size, size,
                 TextureFixtures.pseudoRandomTexels(size, size, SEED));
 
@@ -63,6 +64,7 @@ class TextureSamplerTest
                 for (int x = 0; x < size; x++)
                 {
                     final float u = (x + 0.5f) / size;
+
                     final float v = (y + 0.5f) / size;
 
                     assertThat(TextureSampler.sampleLevel(chain, u, v, 0))
@@ -77,17 +79,22 @@ class TextureSamplerTest
         void shouldReproduceTextureAtUnitScale()
         {
             final int size = 8;
+
             final MipChain chain = TextureFixtures.single(size, size,
                 TextureFixtures.pseudoRandomTexels(size, size, SEED));
 
             // MUTABLE local — counts texels that came back altered.
             int altered = 0;
+
             for (int i = 0; i < size * size; i++)
             {
                 final int x = i % size;
+
                 final int y = i / size;
+
                 final int sampled = TextureSampler.sampleLevel(chain,
                     (x + 0.5f) / size, (y + 0.5f) / size, 0);
+
                 if (sampled != chain.texel(0, x, y))
                 {
                     altered++;
@@ -102,19 +109,23 @@ class TextureSamplerTest
         void shouldBlendAcrossTheWrapAtTheCorner()
         {
             final int size = 4;
+
             final int[] texels = TextureFixtures.coordinateTexels(size, size);
+
             final MipChain chain = TextureFixtures.single(size, size, texels);
 
             // u = v = 0 is the texture corner, half a texel before centre (0, 0).
             // With repeat addressing the other half of the footprint is the
             // LAST row and column, so this is a four-way blend of the corners.
             final int sampled = TextureSampler.sampleLevel(chain, 0.0f, 0.0f, 0);
+
             final int expected = TextureSampler.blend(
                 chain.texel(0, 3, 3), chain.texel(0, 0, 3),
                 chain.texel(0, 3, 0), chain.texel(0, 0, 0),
                 WEIGHT_ONE / 2, WEIGHT_ONE / 2);
 
             assertThat(sampled).isEqualTo(expected);
+
             assertThat(sampled).isNotEqualTo(chain.texel(0, 0, 0));
         }
 
@@ -123,22 +134,31 @@ class TextureSamplerTest
         void shouldAverageAtTheMidpointOfTwoCentres()
         {
             final int size = 4;
+
             final int left = TextureFixtures.rgba(10, 20, 30, 40);
+
             final int right = TextureFixtures.rgba(20, 40, 60, 80);
+
             final int[] texels = new int[size * size];
+
             for (int y = 0; y < size; y++)
             {
                 texels[y * size + 1] = left;
+
                 texels[y * size + 2] = right;
             }
+
             final MipChain chain = TextureFixtures.single(size, size, texels);
 
             // Boundary between texel 1 and texel 2 — u = 2/4.
             final int sampled = TextureSampler.sampleLevel(chain, 2.0f / size, 0.5f / size, 0);
 
             assertThat(TextureSampler.red(sampled)).isEqualTo(15);
+
             assertThat(TextureSampler.green(sampled)).isEqualTo(30);
+
             assertThat(TextureSampler.blue(sampled)).isEqualTo(45);
+
             assertThat(TextureSampler.alpha(sampled)).isEqualTo(60);
         }
 
@@ -147,10 +167,13 @@ class TextureSamplerTest
         void shouldHandleOneByOneLevel()
         {
             final int colour = TextureFixtures.rgba(9, 8, 7, 6);
+
             final MipChain chain = TextureFixtures.single(1, 1, new int[] {colour});
 
             assertThat(TextureSampler.sampleLevel(chain, 0.0f, 0.0f, 0)).isEqualTo(colour);
+
             assertThat(TextureSampler.sampleLevel(chain, 0.5f, 0.5f, 0)).isEqualTo(colour);
+
             assertThat(TextureSampler.sampleLevel(chain, 123.75f, -4.25f, 0)).isEqualTo(colour);
         }
     }
@@ -168,6 +191,7 @@ class TextureSamplerTest
 
             assertThat(TextureSampler.sampleLevel(chain, 1.0f, 0.25f, 0))
                 .isEqualTo(TextureSampler.sampleLevel(chain, 0.0f, 0.25f, 0));
+
             assertThat(TextureSampler.sampleLevel(chain, 0.25f, 1.0f, 0))
                 .isEqualTo(TextureSampler.sampleLevel(chain, 0.25f, 0.0f, 0));
         }
@@ -178,11 +202,14 @@ class TextureSamplerTest
         {
             final MipChain chain = TextureFixtures.single(8, 8,
                 TextureFixtures.pseudoRandomTexels(8, 8, SEED));
+
             final float u = 1.5f / 8.0f;
+
             final float v = 3.5f / 8.0f;
 
             assertThat(TextureSampler.sampleLevel(chain, u + 1.0f, v, 0))
                 .isEqualTo(TextureSampler.sampleLevel(chain, u, v, 0));
+
             assertThat(TextureSampler.sampleLevel(chain, u, v + 3.0f, 0))
                 .isEqualTo(TextureSampler.sampleLevel(chain, u, v, 0));
         }
@@ -196,6 +223,7 @@ class TextureSamplerTest
 
             assertThat(TextureSampler.sampleLevel(chain, -0.5f / 8.0f, 0.5f / 8.0f, 0))
                 .isEqualTo(chain.texel(0, 7, 0));
+
             assertThat(TextureSampler.sampleLevel(chain, 0.5f / 8.0f, -0.5f / 8.0f, 0))
                 .isEqualTo(chain.texel(0, 0, 7));
         }
@@ -205,18 +233,22 @@ class TextureSamplerTest
         void shouldBlendLastColumnWithFirst()
         {
             final int size = 4;
+
             final int[] texels = TextureFixtures.coordinateTexels(size, size);
+
             final MipChain chain = TextureFixtures.single(size, size, texels);
 
             // Halfway between the centre of the last column and the centre of
             // the (wrapped) first column, on the centre line of row 0.
             final int sampled = TextureSampler.sampleLevel(chain, 4.0f / size, 0.5f / size, 0);
+
             final int expected = TextureSampler.blend(
                 chain.texel(0, 3, 0), chain.texel(0, 0, 0),
                 chain.texel(0, 3, 0), chain.texel(0, 0, 0),
                 WEIGHT_ONE / 2, 0);
 
             assertThat(sampled).isEqualTo(expected);
+
             // Clamp addressing would have returned column 3 untouched.
             assertThat(sampled).isNotEqualTo(chain.texel(0, 3, 0));
         }
@@ -239,6 +271,7 @@ class TextureSamplerTest
 
             // MUTABLE local — counts disagreements so a failure reports how bad.
             int mismatches = 0;
+
             for (final int[] quad : quads)
             {
                 for (int weightX = 0; weightX <= WEIGHT_ONE; weightX++)
@@ -247,8 +280,10 @@ class TextureSamplerTest
                     {
                         final int packed = TextureSampler.blend(
                             quad[0], quad[1], quad[2], quad[3], weightX, weightY);
+
                         final int scalar = referenceBlend(
                             quad[0], quad[1], quad[2], quad[3], weightX, weightY);
+
                         if (packed != scalar)
                         {
                             mismatches++;
@@ -268,6 +303,7 @@ class TextureSamplerTest
 
             // MUTABLE local — counts disagreements.
             int mismatches = 0;
+
             for (int i = 0; i + 3 < texels.length; i += 4)
             {
                 for (int weight = 0; weight <= WEIGHT_ONE; weight += 7)
@@ -275,9 +311,11 @@ class TextureSamplerTest
                     final int packed = TextureSampler.blend(
                         texels[i], texels[i + 1], texels[i + 2], texels[i + 3],
                         weight, WEIGHT_ONE - weight);
+
                     final int scalar = referenceBlend(
                         texels[i], texels[i + 1], texels[i + 2], texels[i + 3],
                         weight, WEIGHT_ONE - weight);
+
                     if (packed != scalar)
                     {
                         mismatches++;
@@ -293,8 +331,11 @@ class TextureSamplerTest
         void shouldStayWithinOneUnitOfExactBilinear()
         {
             final int c00 = TextureFixtures.rgba(0, 255, 17, 200);
+
             final int c10 = TextureFixtures.rgba(255, 0, 240, 3);
+
             final int c01 = TextureFixtures.rgba(64, 128, 192, 255);
+
             final int c11 = TextureFixtures.rgba(200, 33, 7, 0);
 
             for (int weightX = 0; weightX <= WEIGHT_ONE; weightX += 3)
@@ -303,8 +344,11 @@ class TextureSamplerTest
                 {
                     final int packed = TextureSampler.blend(c00, c10, c01, c11,
                         weightX, weightY);
+
                     final double fx = weightX / (double) WEIGHT_ONE;
+
                     final double fy = weightY / (double) WEIGHT_ONE;
+
                     final double exact = exactChannel(
                         TextureSampler.red(c00), TextureSampler.red(c10),
                         TextureSampler.red(c01), TextureSampler.red(c11), fx, fy);
@@ -324,6 +368,7 @@ class TextureSamplerTest
 
             // MUTABLE local — counts weights that perturbed a flat colour.
             int drifted = 0;
+
             for (int weightX = 0; weightX <= WEIGHT_ONE; weightX++)
             {
                 for (int weightY = 0; weightY <= WEIGHT_ONE; weightY++)
@@ -344,14 +389,18 @@ class TextureSamplerTest
         void shouldKeepComponentsIndependent()
         {
             final int redOnly = TextureFixtures.rgba(255, 0, 0, 0);
+
             final int alphaOnly = TextureFixtures.rgba(0, 0, 0, 255);
 
             final int blended = TextureSampler.blend(redOnly, 0, 0, alphaOnly,
                 WEIGHT_ONE / 2, WEIGHT_ONE / 2);
 
             assertThat(TextureSampler.red(blended)).isEqualTo(64);
+
             assertThat(TextureSampler.green(blended)).isZero();
+
             assertThat(TextureSampler.blue(blended)).isZero();
+
             assertThat(TextureSampler.alpha(blended)).isEqualTo(64);
         }
 
@@ -361,6 +410,7 @@ class TextureSamplerTest
         {
             // MUTABLE local — counts weights producing anything but full white.
             int wrong = 0;
+
             for (int weightX = 0; weightX <= WEIGHT_ONE; weightX++)
             {
                 for (int weightY = 0; weightY <= WEIGHT_ONE; weightY++)
@@ -380,13 +430,19 @@ class TextureSamplerTest
         void shouldHonourWeightExtremes()
         {
             final int c00 = 0x11223344;
+
             final int c10 = 0x55667788;
+
             final int c01 = 0x99AABBCC;
+
             final int c11 = 0xDDEEFF00;
 
             assertThat(TextureSampler.blend(c00, c10, c01, c11, 0, 0)).isEqualTo(c00);
+
             assertThat(TextureSampler.blend(c00, c10, c01, c11, WEIGHT_ONE, 0)).isEqualTo(c10);
+
             assertThat(TextureSampler.blend(c00, c10, c01, c11, 0, WEIGHT_ONE)).isEqualTo(c01);
+
             assertThat(TextureSampler.blend(c00, c10, c01, c11, WEIGHT_ONE, WEIGHT_ONE))
                 .isEqualTo(c11);
         }
@@ -396,8 +452,11 @@ class TextureSamplerTest
         void shouldMatchFloatBilinearEndToEnd()
         {
             final int size = 8;
+
             final int[] texels = TextureFixtures.pseudoRandomTexels(size, size, SEED);
+
             final MipChain chain = TextureFixtures.single(size, size, texels);
+
             final int steps = 37;
 
             for (int i = 0; i < steps; i++)
@@ -405,8 +464,11 @@ class TextureSamplerTest
                 for (int j = 0; j < steps; j++)
                 {
                     final float u = i / (float) steps;
+
                     final float v = j / (float) steps;
+
                     final int sampled = TextureSampler.sampleLevel(chain, u, v, 0);
+
                     final double exact = exactSampleRed(chain, size, size, u, v);
 
                     // Tolerance 2: one unit from quantising both weights to
@@ -431,8 +493,10 @@ class TextureSamplerTest
 
             assertThat(TextureSampler.lodFromDerivatives(chain, 1.0f / 8.0f, 0.0f, 0.0f,
                 1.0f / 8.0f)).isZero();
+
             assertThat(TextureSampler.lodFromDerivatives(chain, 0.0f, 0.0f, 0.0f, 0.0f))
                 .isZero();
+
             assertThat(TextureSampler.lodFromDerivatives(chain, 0.001f, 0.0f, 0.0f, 0.001f))
                 .isZero();
         }
@@ -445,8 +509,10 @@ class TextureSamplerTest
 
             assertThat(TextureSampler.lodFromDerivatives(chain, 2.0f / 64.0f, 0.0f, 0.0f, 0.0f))
                 .isCloseTo(1.0f, within(1.0e-5f));
+
             assertThat(TextureSampler.lodFromDerivatives(chain, 4.0f / 64.0f, 0.0f, 0.0f, 0.0f))
                 .isCloseTo(2.0f, within(1.0e-5f));
+
             assertThat(TextureSampler.lodFromDerivatives(chain, 8.0f / 64.0f, 0.0f, 0.0f, 0.0f))
                 .isCloseTo(3.0f, within(1.0e-5f));
         }
@@ -459,10 +525,12 @@ class TextureSamplerTest
 
             final float fromX = TextureSampler.lodFromDerivatives(chain,
                 8.0f / 64.0f, 0.0f, 1.0f / 64.0f, 0.0f);
+
             final float fromY = TextureSampler.lodFromDerivatives(chain,
                 1.0f / 64.0f, 0.0f, 0.0f, 8.0f / 64.0f);
 
             assertThat(fromX).isCloseTo(3.0f, within(1.0e-5f));
+
             assertThat(fromY).isCloseTo(3.0f, within(1.0e-5f));
         }
 
@@ -484,12 +552,16 @@ class TextureSamplerTest
         void shouldScaleDerivativesByTextureSize()
         {
             final MipChain small = TextureFixtures.solid(8, 8, 4, 0);
+
             final MipChain large = TextureFixtures.solid(64, 64, 7, 0);
+
             final float derivative = 4.0f / 64.0f;
 
             assertThat(large.levelCount()).isEqualTo(7);
+
             assertThat(TextureSampler.lodFromDerivatives(large, derivative, 0.0f, 0.0f, 0.0f))
                 .isCloseTo(2.0f, within(1.0e-5f));
+
             // The same UV derivative on an 8x8 texture is only half a texel.
             assertThat(TextureSampler.lodFromDerivatives(small, derivative, 0.0f, 0.0f, 0.0f))
                 .isZero();
@@ -500,10 +572,12 @@ class TextureSamplerTest
         void shouldClampLodToPartialChain()
         {
             final int[][] levels = {new int[64 * 64], new int[32 * 32], new int[16 * 16]};
+
             final MipChain partial = TextureFixtures.chain(64, 64, levels);
 
             assertThat(TextureSampler.lodFromDerivatives(partial, 1.0f, 0.0f, 0.0f, 0.0f))
                 .isEqualTo(2.0f);
+
             assertThat(TextureSampler.levelForLod(partial, 99.0f)).isEqualTo(2);
         }
 
@@ -515,6 +589,7 @@ class TextureSamplerTest
 
             assertThat(TextureSampler.lodFromDerivatives(chain, Float.NaN, 0.0f, 0.0f, 0.0f))
                 .isZero();
+
             assertThat(TextureSampler.lodFromDerivatives(chain,
                 Float.POSITIVE_INFINITY, 0.0f, 0.0f, 0.0f)).isEqualTo(3.0f);
         }
@@ -541,16 +616,19 @@ class TextureSamplerTest
                 filled(2 * 2, TextureFixtures.rgba(0, 0, 255, 255)),
                 filled(1, TextureFixtures.rgba(255, 255, 255, 255)),
             };
+
             final MipChain chain = TextureFixtures.chain(8, 8, levels);
 
             // One texel per pixel: magnification, level 0.
             final float near = TextureSampler.lodFromDerivatives(chain,
                 1.0f / 8.0f, 0.0f, 0.0f, 1.0f / 8.0f);
+
             // Four texels per pixel: level 2.
             final float far = TextureSampler.lodFromDerivatives(chain,
                 4.0f / 8.0f, 0.0f, 0.0f, 4.0f / 8.0f);
 
             assertThat(TextureSampler.sample(chain, 0.5f, 0.5f, near)).isEqualTo(levels[0][0]);
+
             assertThat(TextureSampler.sample(chain, 0.5f, 0.5f, far)).isEqualTo(levels[2][0]);
         }
 
@@ -561,9 +639,13 @@ class TextureSamplerTest
             final MipChain chain = TextureFixtures.solid(64, 64, 7, 0);
 
             assertThat(TextureSampler.levelForLod(chain, 0.0f)).isZero();
+
             assertThat(TextureSampler.levelForLod(chain, 0.49f)).isZero();
+
             assertThat(TextureSampler.levelForLod(chain, 0.5f)).isEqualTo(1);
+
             assertThat(TextureSampler.levelForLod(chain, 1.49f)).isEqualTo(1);
+
             assertThat(TextureSampler.levelForLod(chain, 1.5f)).isEqualTo(2);
         }
 
@@ -574,8 +656,11 @@ class TextureSamplerTest
             final MipChain chain = TextureFixtures.solid(8, 8, 4, 0);
 
             assertThat(TextureSampler.levelForLod(chain, -3.0f)).isZero();
+
             assertThat(TextureSampler.levelForLod(chain, Float.NaN)).isZero();
+
             assertThat(TextureSampler.levelForLod(chain, Float.POSITIVE_INFINITY)).isEqualTo(3);
+
             assertThat(TextureSampler.levelForLod(chain, Float.NEGATIVE_INFINITY)).isZero();
         }
 
@@ -586,6 +671,7 @@ class TextureSamplerTest
             final MipChain chain = TextureFixtures.single(4, 4, new int[16]);
 
             assertThat(TextureSampler.levelForLod(chain, 7.5f)).isZero();
+
             assertThat(TextureSampler.lodFromDerivatives(chain, 1.0f, 1.0f, 1.0f, 1.0f))
                 .isZero();
         }
@@ -605,14 +691,18 @@ class TextureSamplerTest
                 filled(2 * 2, TextureFixtures.rgba(0, 0, 255, 255)),
                 filled(1, TextureFixtures.rgba(255, 255, 255, 255)),
             };
+
             final MipChain chain = TextureFixtures.chain(8, 8, levels);
 
             assertThat(TextureSampler.sample(chain, 0.3f, 0.7f, 0.0f))
                 .isEqualTo(levels[0][0]);
+
             assertThat(TextureSampler.sample(chain, 0.3f, 0.7f, 1.0f))
                 .isEqualTo(levels[1][0]);
+
             assertThat(TextureSampler.sample(chain, 0.3f, 0.7f, 2.4f))
                 .isEqualTo(levels[2][0]);
+
             assertThat(TextureSampler.sample(chain, 0.3f, 0.7f, 50.0f))
                 .isEqualTo(levels[3][0]);
         }
@@ -623,12 +713,17 @@ class TextureSamplerTest
         {
             final MipChain chain = TextureFixtures.pyramid(8, 8,
                 TextureFixtures.pseudoRandomTexels(8, 8, SEED));
+
             final int top = chain.levelCount() - 1;
+
             final int only = chain.texel(top, 0, 0);
 
             assertThat(chain.width(top)).isEqualTo(1);
+
             assertThat(TextureSampler.sampleLevel(chain, 0.0f, 0.0f, top)).isEqualTo(only);
+
             assertThat(TextureSampler.sampleLevel(chain, 0.87f, 0.13f, top)).isEqualTo(only);
+
             assertThat(TextureSampler.sample(chain, 0.87f, 0.13f, 100.0f)).isEqualTo(only);
         }
 
@@ -648,6 +743,7 @@ class TextureSamplerTest
 
                     assertThat(TextureSampler.red(sampled))
                         .describedAs("texel (%d, %d) x", x, y).isEqualTo(x);
+
                     assertThat(TextureSampler.green(sampled))
                         .describedAs("texel (%d, %d) y", x, y).isEqualTo(y);
                 }
@@ -663,12 +759,14 @@ class TextureSamplerTest
                 TextureFixtures.coordinateTexels(2, 2),
                 TextureFixtures.coordinateTexels(1, 1),
             };
+
             final MipChain chain = TextureFixtures.chain(4, 4, levels);
 
             // Centre of texel (1, 1) of level 1 is u = v = 0.75.
             final int sampled = TextureSampler.sampleLevel(chain, 0.75f, 0.75f, 1);
 
             assertThat(TextureSampler.red(sampled)).isEqualTo(1);
+
             assertThat(TextureSampler.green(sampled)).isEqualTo(1);
         }
     }
@@ -691,8 +789,11 @@ class TextureSamplerTest
             final int texel = 0xAABBCCDD;
 
             assertThat(TextureSampler.red(texel)).isEqualTo(0xAA);
+
             assertThat(TextureSampler.green(texel)).isEqualTo(0xBB);
+
             assertThat(TextureSampler.blue(texel)).isEqualTo(0xCC);
+
             assertThat(TextureSampler.alpha(texel)).isEqualTo(0xDD);
         }
 
@@ -703,8 +804,11 @@ class TextureSamplerTest
             final int texel = 0xFFFFFFFF;
 
             assertThat(TextureSampler.red(texel)).isEqualTo(255);
+
             assertThat(TextureSampler.green(texel)).isEqualTo(255);
+
             assertThat(TextureSampler.blue(texel)).isEqualTo(255);
+
             assertThat(TextureSampler.alpha(texel)).isEqualTo(255);
         }
 
@@ -714,9 +818,11 @@ class TextureSamplerTest
         {
             // MUTABLE local — counts components that failed to survive the trip.
             int broken = 0;
+
             for (int value = 0; value <= 255; value++)
             {
                 final int texel = TextureSampler.pack(value, 255 - value, value / 2, 255 - value / 2);
+
                 if (TextureSampler.red(texel) != value
                     || TextureSampler.green(texel) != 255 - value
                     || TextureSampler.blue(texel) != value / 2
@@ -740,12 +846,16 @@ class TextureSamplerTest
     {
         final int red = referenceChannel(TextureSampler.red(c00), TextureSampler.red(c10),
             TextureSampler.red(c01), TextureSampler.red(c11), weightX, weightY);
+
         final int green = referenceChannel(TextureSampler.green(c00), TextureSampler.green(c10),
             TextureSampler.green(c01), TextureSampler.green(c11), weightX, weightY);
+
         final int blue = referenceChannel(TextureSampler.blue(c00), TextureSampler.blue(c10),
             TextureSampler.blue(c01), TextureSampler.blue(c11), weightX, weightY);
+
         final int alpha = referenceChannel(TextureSampler.alpha(c00), TextureSampler.alpha(c10),
             TextureSampler.alpha(c01), TextureSampler.alpha(c11), weightX, weightY);
+
         return TextureSampler.pack(red, green, blue, alpha);
     }
 
@@ -754,9 +864,13 @@ class TextureSamplerTest
         final int a11, final int weightX, final int weightY)
     {
         final int inverseX = WEIGHT_ONE - weightX;
+
         final int inverseY = WEIGHT_ONE - weightY;
+
         final int top = (a00 * inverseX + a10 * weightX + WEIGHT_ROUND) >> WEIGHT_SHIFT;
+
         final int bottom = (a01 * inverseX + a11 * weightX + WEIGHT_ROUND) >> WEIGHT_SHIFT;
+
         return (top * inverseY + bottom * weightY + WEIGHT_ROUND) >> WEIGHT_SHIFT;
     }
 
@@ -765,7 +879,9 @@ class TextureSamplerTest
         final double a11, final double fx, final double fy)
     {
         final double top = a00 * (1.0 - fx) + a10 * fx;
+
         final double bottom = a01 * (1.0 - fx) + a11 * fx;
+
         return top * (1.0 - fy) + bottom * fy;
     }
 
@@ -776,11 +892,17 @@ class TextureSamplerTest
         final int height, final float u, final float v)
     {
         final double x = u * width - 0.5;
+
         final double y = v * height - 0.5;
+
         final int x0 = (int) Math.floor(x);
+
         final int y0 = (int) Math.floor(y);
+
         final double fx = x - x0;
+
         final double fy = y - y0;
+
         return exactChannel(
             TextureSampler.red(chain.texel(0, Math.floorMod(x0, width),
                 Math.floorMod(y0, height))),
@@ -797,10 +919,12 @@ class TextureSamplerTest
     private static int[] filled(final int length, final int colour)
     {
         final int[] level = new int[length];
+
         for (int i = 0; i < length; i++)
         {
             level[i] = colour;
         }
+
         return level;
     }
 }

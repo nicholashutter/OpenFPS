@@ -43,9 +43,12 @@ final class FirstPersonArmsTest
             final ModelFormat arms = FirstPersonArms.model();
 
             assertThat(arms.submeshCount()).isZero();
+
             assertThat(arms.textureCount()).isZero();
+
             assertThat(arms.triangleCount())
                 .isEqualTo(FirstPersonArms.partCount() * 12);
+
             assertThat(arms.triangleCount())
                 .as("a stand-in must not cost more than the model it stands in for")
                 .isLessThan(ModelFormat.MAX_TRIANGLES_PER_MODEL);
@@ -62,6 +65,7 @@ final class FirstPersonArmsTest
             // authoring. The chest piece touches z = -0.1, which is
             // the tightest gap before the model ends behind the eye.
             final ModelFormat arms = FirstPersonArms.model();
+
             for (int vertex = 0; vertex < arms.vertexCount(); vertex++)
             {
                 assertThat(arms.positionZ(vertex))
@@ -80,6 +84,7 @@ final class FirstPersonArmsTest
             // around -1.68. A model that did not reach forward enough
             // would have minZ closer to 0.
             final ModelFormat arms = FirstPersonArms.model();
+
             assertThat(arms.minZ())
                 .as("the hands must reach at least the grip end of the viewmodel")
                 .isLessThan(-1.4f);

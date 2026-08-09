@@ -156,21 +156,28 @@ public final class AnalogStick
         final float exponent)
     {
         requireFinite(rawX, "rawX");
+
         requireFinite(rawY, "rawY");
+
         if (!(exponent >= 1.0f) || Float.isInfinite(exponent))
         {
             throw new IllegalArgumentException(
                 "exponent must be finite and at least 1, got " + exponent);
         }
+
         final float magnitude = (float) Math.sqrt(rawX * rawX + rawY * rawY);
+
         if (magnitude <= DEAD_ZONE)
         {
             // Exactly zero, not merely small. See the class Javadoc: a resting
             // stick that reports 0.0001 is a player who is never neutral.
             return 0.0f;
         }
+
         final float rescaled = (magnitude - DEAD_ZONE) / (1.0f - DEAD_ZONE);
+
         final float curved = (float) Math.pow(clampUnit(rescaled), exponent);
+
         // Back from "how long should the vector be" to "what do I multiply the
         // components by". Safe: magnitude is strictly greater than DEAD_ZONE,
         // which is positive, so this cannot divide by zero.
@@ -228,6 +235,7 @@ public final class AnalogStick
         {
             return 1.0f;
         }
+
         return value;
     }
 
@@ -238,10 +246,12 @@ public final class AnalogStick
         {
             return 1.0f;
         }
+
         if (value < -1.0f)
         {
             return -1.0f;
         }
+
         return value;
     }
 

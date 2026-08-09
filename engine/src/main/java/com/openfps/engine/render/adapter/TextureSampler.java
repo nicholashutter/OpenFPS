@@ -159,17 +159,23 @@ public final class TextureSampler
         // Texel-centre space: the integer part names the lower-left texel of
         // the 2x2 footprint, the fraction is the blend weight toward the next.
         final float x = u * texture.width(level) - HALF_TEXEL;
+
         final float y = v * texture.height(level) - HALF_TEXEL;
 
         final int x0 = floorToInt(x);
+
         final int y0 = floorToInt(y);
 
         final int weightX = quantiseWeight(x - x0);
+
         final int weightY = quantiseWeight(y - y0);
 
         final int c00 = texture.texel(level, x0, y0);
+
         final int c10 = texture.texel(level, x0 + 1, y0);
+
         final int c01 = texture.texel(level, x0, y0 + 1);
+
         final int c11 = texture.texel(level, x0 + 1, y0 + 1);
 
         return blend(c00, c10, c01, c11, weightX, weightY);
@@ -195,20 +201,25 @@ public final class TextureSampler
         final int weightX, final int weightY)
     {
         final int inverseX = WEIGHT_ONE - weightX;
+
         final int inverseY = WEIGHT_ONE - weightY;
 
         // Horizontal pass. Each 16-bit lane holds at most
         // 255 * 256 + 128 = 65408, so neighbouring lanes never carry into one
         // another and the unsigned shift keeps the high lane's sign bit honest.
         final int topLow = lerpLanes(c00 & LANE_MASK, c10 & LANE_MASK, weightX, inverseX);
+
         final int topHigh = lerpLanes((c00 >>> LANE_SHIFT) & LANE_MASK,
             (c10 >>> LANE_SHIFT) & LANE_MASK, weightX, inverseX);
+
         final int bottomLow = lerpLanes(c01 & LANE_MASK, c11 & LANE_MASK, weightX, inverseX);
+
         final int bottomHigh = lerpLanes((c01 >>> LANE_SHIFT) & LANE_MASK,
             (c11 >>> LANE_SHIFT) & LANE_MASK, weightX, inverseX);
 
         // Vertical pass over the two horizontal results, already lane-packed.
         final int low = lerpLanes(topLow, bottomLow, weightY, inverseY);
+
         final int high = lerpLanes(topHigh, bottomHigh, weightY, inverseY);
 
         return low | (high << LANE_SHIFT);
@@ -239,18 +250,24 @@ public final class TextureSampler
         final float dvdx, final float dudy, final float dvdy)
     {
         final int width = texture.width(0);
+
         final int height = texture.height(0);
 
         final float texelsPerXu = dudx * width;
+
         final float texelsPerXv = dvdx * height;
+
         final float texelsPerYu = dudy * width;
+
         final float texelsPerYv = dvdy * height;
 
         final float lengthSqX = texelsPerXu * texelsPerXu + texelsPerXv * texelsPerXv;
+
         final float lengthSqY = texelsPerYu * texelsPerYu + texelsPerYv * texelsPerYv;
 
         // MUTABLE local — the longer of the two screen-axis footprints, squared.
         float rhoSq = lengthSqX;
+
         if (lengthSqY > rhoSq)
         {
             rhoSq = lengthSqY;
@@ -266,6 +283,7 @@ public final class TextureSampler
 
         // lambda = log2(rho) = log2(rhoSq) / 2, folded into one constant.
         final float lambda = (float) (Math.log(rhoSq) * HALF_INV_LN2);
+
         return clampLod(texture, lambda);
     }
 
@@ -285,17 +303,21 @@ public final class TextureSampler
     public static int levelForLod(final MipChain texture, final float lod)
     {
         final int topLevel = texture.levelCount() - 1;
+
         // Also catches NaN: every comparison against NaN is false, so the
         // negated form sends it here rather than into the cast.
         if (!(lod > 0.0f))
         {
             return 0;
         }
+
         final int level = (int) (lod + ROUND_HALF);
+
         if (level > topLevel)
         {
             return topLevel;
         }
+
         return level;
     }
 
@@ -374,10 +396,12 @@ public final class TextureSampler
     private static int floorToInt(final float value)
     {
         final int truncated = (int) value;
+
         if (value < truncated)
         {
             return truncated - 1;
         }
+
         return truncated;
     }
 
@@ -388,11 +412,14 @@ public final class TextureSampler
         {
             return 0.0f;
         }
+
         final float topLevel = texture.levelCount() - 1;
+
         if (lambda > topLevel)
         {
             return topLevel;
         }
+
         return lambda;
     }
 }

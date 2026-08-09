@@ -119,14 +119,19 @@ public final class PipelineMapBuilder
     public static void main(final String[] args)
     {
         final String out = option(args, "--out=");
+
         if (out == null)
         {
             LOG.error("usage: PipelineMapBuilder --out=<directory>"
                 + " [--atlas=<colormap.png>]");
+
             return;
         }
+
         final String atlasOption = option(args, "--atlas=");
+
         final Path atlasPath;
+
         if (atlasOption == null)
         {
             atlasPath = null;
@@ -135,7 +140,9 @@ public final class PipelineMapBuilder
         {
             atlasPath = Path.of(atlasOption);
         }
+
         final Path outDir = Path.of(out);
+
         try
         {
             Files.createDirectories(outDir);
@@ -144,8 +151,11 @@ public final class PipelineMapBuilder
         {
             throw new UncheckedIOException("could not create output directory: " + outDir, e);
         }
+
         final byte[] bytes = build(atlasPath);
+
         final Path outFile = outDir.resolve(FILE_NAME);
+
         try
         {
             Files.write(outFile, bytes);
@@ -154,7 +164,9 @@ public final class PipelineMapBuilder
         {
             throw new UncheckedIOException("could not write " + outFile, e);
         }
+
         final ModelFormat parsed = ModelFormat.read(bytes);
+
         LOG.info("Wrote {} ({} triangles, {} vertices, {} textures)",
             outFile, parsed.indexCount() / 3, parsed.vertexCount(), parsed.textureCount());
     }
@@ -186,7 +198,9 @@ public final class PipelineMapBuilder
     public static byte[] build(final Path atlasPath)
     {
         final ModelBuilder builder = new ModelBuilder(MODEL_NAME);
+
         final int[] floorTexels;
+
         if (atlasPath != null)
         {
             floorTexels = KenneyTexture.forceOpaque(KenneyTexture.floor(atlasPath));
@@ -195,7 +209,9 @@ public final class PipelineMapBuilder
         {
             floorTexels = floorTexels();
         }
+
         final int[] wallTexels;
+
         if (atlasPath != null)
         {
             wallTexels = KenneyTexture.forceOpaque(KenneyTexture.wall(atlasPath));
@@ -204,28 +220,42 @@ public final class PipelineMapBuilder
         {
             wallTexels = wallTexels();
         }
+
         final int[] accentTexels = accentTexels();
+
         final int floorTexture = builder.addTexture("pipeline-floor", TEXTURE_EDGE,
             TEXTURE_EDGE, MipGenerator.generate(TEXTURE_EDGE, TEXTURE_EDGE, floorTexels));
+
         final int wallTexture = builder.addTexture("pipeline-wall", TEXTURE_EDGE,
             TEXTURE_EDGE, MipGenerator.generate(TEXTURE_EDGE, TEXTURE_EDGE, wallTexels));
+
         final int accentTexture = builder.addTexture("pipeline-accent", TEXTURE_EDGE,
             TEXTURE_EDGE, MipGenerator.generate(TEXTURE_EDGE, TEXTURE_EDGE, accentTexels));
 
         builder.beginSubmesh(floorTexture);
+
         addGroundSlab(builder);
+
         builder.endSubmesh();
 
         builder.beginSubmesh(wallTexture);
+
         addPerimeterWalls(builder);
+
         addPipelines(builder);
+
         addControlValves(builder);
+
         addCatwalks(builder);
+
         addCrates(builder);
+
         builder.endSubmesh();
 
         builder.beginSubmesh(accentTexture);
+
         addAccentGeometry(builder);
+
         builder.endSubmesh();
 
         return builder.toBytes();
@@ -267,9 +297,13 @@ public final class PipelineMapBuilder
     private static void addPerimeterWalls(final ModelBuilder builder)
     {
         final float e = HALF_EXTENT;
+
         addBox(builder, -e, 0.0f, -e - WALL_THICKNESS, e, WALL_HEIGHT, -e);
+
         addBox(builder, -e, 0.0f, e, e, WALL_HEIGHT, e + WALL_THICKNESS);
+
         addBox(builder, -e - WALL_THICKNESS, 0.0f, -e, -e, WALL_HEIGHT, e);
+
         addBox(builder, e, 0.0f, -e, e + WALL_THICKNESS, WALL_HEIGHT, e);
     }
 
@@ -284,15 +318,23 @@ public final class PipelineMapBuilder
     {
         // North pipeline (FLAG_C, z=64): three runs around the gaps
         addPipelineRun(builder, 64.0f, -HALF_EXTENT, -100.0f);
+
         addPipelineRun(builder, 64.0f, -36.0f, 100.0f);
+
         addPipelineRun(builder, 64.0f, 164.0f, HALF_EXTENT);
+
         // Centre pipeline (FLAG_B, z=160)
         addPipelineRun(builder, 160.0f, -HALF_EXTENT, -100.0f);
+
         addPipelineRun(builder, 160.0f, -36.0f, 100.0f);
+
         addPipelineRun(builder, 160.0f, 164.0f, HALF_EXTENT);
+
         // South pipeline (FLAG_A, z=256)
         addPipelineRun(builder, 256.0f, -HALF_EXTENT, -100.0f);
+
         addPipelineRun(builder, 256.0f, -36.0f, 100.0f);
+
         addPipelineRun(builder, 256.0f, 164.0f, HALF_EXTENT);
     }
 
@@ -304,6 +346,7 @@ public final class PipelineMapBuilder
         final float minX, final float maxX)
     {
         final float halfW = PIPELINE_WIDTH / 2.0f;
+
         addBox(builder, minX, 0.0f, z - halfW, maxX, PIPELINE_HEIGHT, z + halfW);
     }
 
@@ -317,9 +360,11 @@ public final class PipelineMapBuilder
         // North valve (FLAG_C)
         addBox(builder, 144.0f, PIPELINE_HEIGHT, 48.0f, 176.0f,
             PIPELINE_HEIGHT + 16.0f, 80.0f);
+
         // Centre valve (FLAG_B)
         addBox(builder, 144.0f, PIPELINE_HEIGHT, 144.0f, 176.0f,
             PIPELINE_HEIGHT + 16.0f, 176.0f);
+
         // South valve (FLAG_A)
         addBox(builder, 144.0f, PIPELINE_HEIGHT, 240.0f, 176.0f,
             PIPELINE_HEIGHT + 16.0f, 272.0f);
@@ -335,17 +380,26 @@ public final class PipelineMapBuilder
     private static void addCatwalks(final ModelBuilder builder)
     {
         final float y0 = 64.0f;
+
         // North catwalk (alongside FLAG_C, z=-80): three runs
         addCatwalkRun(builder, -80.0f, y0, -HALF_EXTENT, -100.0f);
+
         addCatwalkRun(builder, -80.0f, y0, -36.0f, 100.0f);
+
         addCatwalkRun(builder, -80.0f, y0, 164.0f, HALF_EXTENT);
+
         // Centre catwalk (alongside FLAG_B, z=0)
         addCatwalkRun(builder, 0.0f, y0, -HALF_EXTENT, -100.0f);
+
         addCatwalkRun(builder, 0.0f, y0, -36.0f, 100.0f);
+
         addCatwalkRun(builder, 0.0f, y0, 164.0f, HALF_EXTENT);
+
         // South catwalk (alongside FLAG_A, z=80)
         addCatwalkRun(builder, 80.0f, y0, -HALF_EXTENT, -100.0f);
+
         addCatwalkRun(builder, 80.0f, y0, -36.0f, 100.0f);
+
         addCatwalkRun(builder, 80.0f, y0, 164.0f, HALF_EXTENT);
     }
 
@@ -357,6 +411,7 @@ public final class PipelineMapBuilder
         final float minX, final float maxX)
     {
         final float halfW = CATWALK_WIDTH / 2.0f;
+
         addBox(builder, minX, y0, z - halfW, maxX, y0 + CATWALK_HEIGHT, z + halfW);
     }
 
@@ -369,13 +424,20 @@ public final class PipelineMapBuilder
     {
         // Four crates between the north and centre pipelines
         addCrate(builder, -120.0f, 100.0f);
+
         addCrate(builder, -40.0f, 100.0f);
+
         addCrate(builder, 60.0f, 100.0f);
+
         addCrate(builder, 140.0f, 100.0f);
+
         // Four crates between the centre and south pipelines
         addCrate(builder, -120.0f, 200.0f);
+
         addCrate(builder, -40.0f, 200.0f);
+
         addCrate(builder, 60.0f, 200.0f);
+
         addCrate(builder, 140.0f, 200.0f);
     }
 
@@ -397,9 +459,11 @@ public final class PipelineMapBuilder
         // FLAG_C handle
         addBox(builder, 158.0f, PIPELINE_HEIGHT + 16.0f, 62.0f, 162.0f,
             PIPELINE_HEIGHT + 24.0f, 66.0f);
+
         // FLAG_B handle
         addBox(builder, 158.0f, PIPELINE_HEIGHT + 16.0f, 158.0f, 162.0f,
             PIPELINE_HEIGHT + 24.0f, 162.0f);
+
         // FLAG_A handle
         addBox(builder, 158.0f, PIPELINE_HEIGHT + 16.0f, 254.0f, 162.0f,
             PIPELINE_HEIGHT + 24.0f, 258.0f);
@@ -412,10 +476,15 @@ public final class PipelineMapBuilder
         final float minZ, final float maxX, final float maxY, final float maxZ)
     {
         addFace(builder, maxX, minY, maxZ, maxX, maxY, maxZ, maxX, maxY, minZ, maxX, minY, minZ);
+
         addFace(builder, minX, minY, minZ, minX, maxY, minZ, minX, maxY, maxZ, minX, minY, maxZ);
+
         addFace(builder, minX, maxY, maxZ, maxX, maxY, maxZ, maxX, maxY, minZ, minX, maxY, minZ);
+
         addFace(builder, minX, minY, minZ, maxX, minY, minZ, maxX, minY, maxZ, minX, minY, maxZ);
+
         addFace(builder, minX, minY, maxZ, minX, maxY, maxZ, maxX, maxY, maxZ, maxX, minY, maxZ);
+
         addFace(builder, maxX, minY, minZ, maxX, maxY, minZ, minX, maxY, minZ, minX, minY, minZ);
     }
 
@@ -427,15 +496,21 @@ public final class PipelineMapBuilder
         final float cy, final float cz, final float dx, final float dy, final float dz)
     {
         final float uScale = 1.0f / WORLD_UNITS_PER_TILE;
+
         final int a = builder.addVertex(ax, ay, az, ax * uScale, az * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         final int b = builder.addVertex(bx, by, bz, bx * uScale, bz * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         final int c = builder.addVertex(cx, cy, cz, cx * uScale, cz * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         final int d = builder.addVertex(dx, dy, dz, dx * uScale, dz * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         builder.addTriangle(a, b, c);
+
         builder.addTriangle(a, c, d);
     }
 
@@ -446,63 +521,84 @@ public final class PipelineMapBuilder
     private static int[] floorTexels()
     {
         final int base = Rgba.pack(120, 122, 128, 255);
+
         final int line = Rgba.pack(96, 98, 104, 255);
+
         final int[] out = new int[TEXTURE_EDGE * TEXTURE_EDGE];
+
         for (int y = 0; y < TEXTURE_EDGE; y++)
         {
             for (int x = 0; x < TEXTURE_EDGE; x++)
             {
                 int colour = base;
+
                 if (y == TEXTURE_EDGE / 2)
                 {
                     colour = line;
                 }
+
                 if (x == 0 || y == 0 || x == TEXTURE_EDGE - 1 || y == TEXTURE_EDGE - 1)
                 {
                     colour = line;
                 }
+
                 out[y * TEXTURE_EDGE + x] = colour;
             }
         }
+
         return out;
     }
 
     private static int[] wallTexels()
     {
         final int base = Rgba.pack(150, 152, 160, 255);
+
         final int shade = Rgba.pack(108, 110, 118, 255);
+
         final int rib = Rgba.pack(80, 82, 90, 255);
+
         final int bandHeight = TEXTURE_EDGE / 8;
+
         final int[] out = new int[TEXTURE_EDGE * TEXTURE_EDGE];
+
         for (int y = 0; y < TEXTURE_EDGE; y++)
         {
             final int band = y / bandHeight;
+
             final boolean isRib = (y % bandHeight) == 0;
+
             for (int x = 0; x < TEXTURE_EDGE; x++)
             {
                 int colour = base;
+
                 if ((band % 2) != 0)
                 {
                     colour = shade;
                 }
+
                 if (isRib)
                 {
                     colour = rib;
                 }
+
                 out[y * TEXTURE_EDGE + x] = colour;
             }
         }
+
         return out;
     }
 
     private static int[] accentTexels()
     {
         final int colour = Rgba.pack(220, 48, 48, 255);
+
         final int[] out = new int[TEXTURE_EDGE * TEXTURE_EDGE];
+
         for (int index = 0; index < out.length; index++)
         {
             out[index] = colour;
         }
+
         return out;
     }
 
@@ -515,6 +611,7 @@ public final class PipelineMapBuilder
                 return arg.substring(prefix.length());
             }
         }
+
         return null;
     }
 }

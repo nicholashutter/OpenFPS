@@ -57,12 +57,16 @@ public final class DocsSiteMain
         if (args.length != 2)
         {
             LOG.error("usage: DocsSiteMain <repositoryRoot> <outputDirectory>");
+
             System.exit(EXIT_FAILURE);
+
             return;
         }
 
         final Path root = Path.of(args[0]);
+
         final Path out = Path.of(args[1]);
+
         try
         {
             new DocsSite(root, out).build();
@@ -72,6 +76,7 @@ public final class DocsSiteMain
             // A broken cross-document link arrives here with its own listing
             // already formatted; re-wrapping it would bury the paths.
             LOG.error("Documentation site build failed: {}", e.getMessage(), e);
+
             System.exit(EXIT_FAILURE);
         }
     }

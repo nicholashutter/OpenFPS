@@ -48,11 +48,15 @@ final class LocalPlayerBodyTest
             // transform must send a view-space +X to world -X.
             final Mat4 m = LocalPlayerBody.armsTransform(0.0f, 0.0f, 0.0f,
                 0.0f, 0.0f, 0.0f);
+
             final float[] out = new float[4];
+
             m.transformPoint(1.0f, 0.0f, 0.0f, out, 0);
 
             assertThat(out[0]).isEqualTo(-1.0f, within(TOLERANCE));
+
             assertThat(out[1]).isEqualTo(0.0f, within(TOLERANCE));
+
             assertThat(out[2]).isEqualTo(0.0f, within(TOLERANCE));
         }
 
@@ -62,11 +66,15 @@ final class LocalPlayerBodyTest
         {
             final Mat4 m = LocalPlayerBody.armsTransform(0.0f, 0.0f, 0.0f,
                 0.0f, 0.0f, 0.0f);
+
             final float[] out = new float[4];
+
             m.transformPoint(0.0f, 1.0f, 0.0f, out, 0);
 
             assertThat(out[0]).isEqualTo(0.0f, within(TOLERANCE));
+
             assertThat(out[1]).isEqualTo(1.0f, within(TOLERANCE));
+
             assertThat(out[2]).isEqualTo(0.0f, within(TOLERANCE));
         }
 
@@ -80,11 +88,15 @@ final class LocalPlayerBodyTest
             // see belongs.
             final Mat4 m = LocalPlayerBody.armsTransform(0.0f, 0.0f, 0.0f,
                 0.0f, 0.0f, 0.0f);
+
             final float[] out = new float[4];
+
             m.transformPoint(0.0f, 0.0f, 1.0f, out, 0);
 
             assertThat(out[0]).isEqualTo(0.0f, within(TOLERANCE));
+
             assertThat(out[1]).isEqualTo(0.0f, within(TOLERANCE));
+
             assertThat(out[2]).isEqualTo(-1.0f, within(TOLERANCE));
         }
 
@@ -97,11 +109,15 @@ final class LocalPlayerBodyTest
             // player can see them.
             final Mat4 m = LocalPlayerBody.armsTransform(0.0f, 0.0f, 0.0f,
                 0.0f, 0.0f, 0.0f);
+
             final float[] out = new float[4];
+
             m.transformPoint(0.0f, 0.0f, -1.0f, out, 0);
 
             assertThat(out[0]).isEqualTo(0.0f, within(TOLERANCE));
+
             assertThat(out[1]).isEqualTo(0.0f, within(TOLERANCE));
+
             assertThat(out[2]).isEqualTo(1.0f, within(TOLERANCE));
         }
 
@@ -114,11 +130,15 @@ final class LocalPlayerBodyTest
             // must map to world +Z.
             final Mat4 m = LocalPlayerBody.armsTransform(0.0f, 0.0f, 0.0f,
                 (float) (Math.PI / 2.0), 0.0f, 0.0f);
+
             final float[] out = new float[4];
+
             m.transformPoint(1.0f, 0.0f, 0.0f, out, 0);
 
             assertThat(out[0]).isEqualTo(0.0f, within(TOLERANCE));
+
             assertThat(out[1]).isEqualTo(0.0f, within(TOLERANCE));
+
             assertThat(out[2]).isEqualTo(1.0f, within(TOLERANCE));
         }
 
@@ -130,13 +150,18 @@ final class LocalPlayerBodyTest
             // at yaw 0, pitch PI/4 lands at world (0, sin(PI/4), cos(PI/4))
             // = (0, 0.707, 0.707): the forward direction tilted up.
             final float pitch = (float) (Math.PI / 4.0);
+
             final Mat4 m = LocalPlayerBody.armsTransform(0.0f, 0.0f, 0.0f,
                 0.0f, pitch, 0.0f);
+
             final float[] out = new float[4];
+
             m.transformPoint(0.0f, 0.0f, -1.0f, out, 0);
 
             assertThat(out[0]).isEqualTo(0.0f, within(TOLERANCE));
+
             assertThat(out[1]).isEqualTo((float) Math.sin(pitch), within(TOLERANCE));
+
             assertThat(out[2]).isEqualTo((float) Math.cos(pitch), within(TOLERANCE));
         }
 
@@ -149,11 +174,15 @@ final class LocalPlayerBodyTest
             // are unchanged and the absolute positions move with the eye.
             final Mat4 m = LocalPlayerBody.armsTransform(100.0f, 50.0f, -200.0f,
                 0.0f, 0.0f, 0.0f);
+
             final float[] out = new float[4];
+
             m.transformPoint(0.0f, 0.0f, 0.0f, out, 0);
 
             assertThat(out[0]).isEqualTo(100.0f, within(TOLERANCE));
+
             assertThat(out[1]).isEqualTo(50.0f, within(TOLERANCE));
+
             assertThat(out[2]).isEqualTo(-200.0f, within(TOLERANCE));
         }
 
@@ -166,16 +195,23 @@ final class LocalPlayerBodyTest
             // where the player is looking.
             final Mat4 without = LocalPlayerBody.armsTransform(0.0f, 0.0f, 0.0f,
                 0.0f, 0.0f, 0.0f);
+
             final Mat4 with = LocalPlayerBody.armsTransform(0.0f, 0.0f, 0.0f,
                 0.0f, 0.0f, 10.0f);
+
             final float[] base = new float[4];
+
             final float[] bobbed = new float[4];
+
             // A point in front of the eye in view space (negative Z).
             without.transformPoint(0.5f, -0.4f, -1.5f, base, 0);
+
             with.transformPoint(0.5f, -0.4f, -1.5f, bobbed, 0);
 
             assertThat(bobbed[0]).isEqualTo(base[0], within(TOLERANCE));
+
             assertThat(bobbed[1]).isEqualTo(base[1] + 10.0f, within(TOLERANCE));
+
             assertThat(bobbed[2]).isEqualTo(base[2], within(TOLERANCE));
         }
 
@@ -191,14 +227,23 @@ final class LocalPlayerBodyTest
             // than like an error.
             final Mat4 m = LocalPlayerBody.armsTransform(0.0f, 41.0f, 0.0f,
                 1.3f, -0.2f, 0.0f);
+
             final float m00 = m.get(0, 0);
+
             final float m01 = m.get(0, 1);
+
             final float m02 = m.get(0, 2);
+
             final float m10 = m.get(1, 0);
+
             final float m11 = m.get(1, 1);
+
             final float m12 = m.get(1, 2);
+
             final float m20 = m.get(2, 0);
+
             final float m21 = m.get(2, 1);
+
             final float m22 = m.get(2, 2);
 
             // det = m00*(m11*m22 - m12*m21)

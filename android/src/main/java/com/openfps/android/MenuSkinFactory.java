@@ -104,23 +104,30 @@ public final class MenuSkinFactory
         final Skin skin = new Skin();
 
         final Pixmap pixel = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
+
         pixel.setColor(Color.WHITE);
+
         pixel.fill();
 
         // managed = true is load-bearing — see the class Javadoc.
         final Texture white = new Texture(new PixmapTextureData(pixel, null, false, false, true));
+
         final TextureRegionDrawable base = new TextureRegionDrawable(new TextureRegion(white));
 
         // Both go into the skin so one dispose() releases both, and so the
         // pixmap cannot be collected while the texture still reloads from it.
         skin.add(WHITE_SOURCE, pixel);
+
         skin.add(WHITE, white);
 
         final BitmapFont font = createFont();
+
         skin.add(FONT, font);
 
         skin.add(DEFAULT_STYLE, new Label.LabelStyle(font, Color.WHITE));
+
         skin.add(TITLE_STYLE, new Label.LabelStyle(font, Color.valueOf(ACCENT_HEX)));
+
         skin.add(DEFAULT_STYLE, buttonStyle(font, base));
 
         return skin;
@@ -132,8 +139,10 @@ public final class MenuSkinFactory
     private static BitmapFont createFont()
     {
         final BitmapFont font = new BitmapFont();
+
         font.getRegion().getTexture().setFilter(Texture.TextureFilter.Linear,
             Texture.TextureFilter.Linear);
+
         return font;
     }
 
@@ -144,16 +153,25 @@ public final class MenuSkinFactory
                                                           final TextureRegionDrawable base)
     {
         final TextButton.TextButtonStyle style = new TextButton.TextButtonStyle();
+
         style.font = font;
+
         style.up = base.tint(Color.valueOf(BUTTON_UP_HEX));
+
         style.down = base.tint(Color.valueOf(BUTTON_DOWN_HEX));
+
         // No hover on a touchscreen, but a connected mouse or a TV remote
         // still generates it, and an unset `over` draws nothing at all.
         style.over = base.tint(Color.valueOf(BUTTON_DOWN_HEX));
+
         style.disabled = base.tint(Color.valueOf(BUTTON_DISABLED_HEX));
+
         style.fontColor = Color.WHITE;
+
         style.downFontColor = Color.valueOf(ACCENT_HEX);
+
         style.disabledFontColor = Color.GRAY;
+
         return style;
     }
 }

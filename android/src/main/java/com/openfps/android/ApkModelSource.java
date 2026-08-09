@@ -95,11 +95,14 @@ public final class ApkModelSource implements ModelSource
         {
             throw new IllegalArgumentException("assetManager must not be null");
         }
+
         if (assetRoot == null || assetRoot.isEmpty())
         {
             throw new IllegalArgumentException("assetRoot must not be null or empty");
         }
+
         this.assets = assetManager;
+
         this.root = assetRoot;
     }
 
@@ -154,13 +157,18 @@ public final class ApkModelSource implements ModelSource
     private static byte[] readFully(final InputStream stream) throws IOException
     {
         final ByteArrayOutputStream out = new ByteArrayOutputStream(COPY_BUFFER_BYTES);
+
         final byte[] buffer = new byte[COPY_BUFFER_BYTES];
+
         int read = stream.read(buffer);
+
         while (read >= 0)
         {
             out.write(buffer, 0, read);
+
             read = stream.read(buffer);
         }
+
         return out.toByteArray();
     }
 

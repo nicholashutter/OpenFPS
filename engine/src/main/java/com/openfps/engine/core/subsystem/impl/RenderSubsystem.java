@@ -80,6 +80,7 @@ public final class RenderSubsystem extends Subsystem
     public RenderSubsystem(final I_RenderPort port)
     {
         super(SubsystemId.R_);
+
         this.port = port;
     }
 
@@ -123,16 +124,19 @@ public final class RenderSubsystem extends Subsystem
     private void requestFrame(final int ticIndex)
     {
         pending.set(ticIndex);
+
         for (int attempt = 0; attempt < DRAIN_ATTEMPTS; attempt++)
         {
             if (pending.get() == NO_FRAME)
             {
                 return;
             }
+
             if (!rendering.compareAndSet(false, true))
             {
                 return;
             }
+
             try
             {
                 renderNewest();
@@ -150,10 +154,12 @@ public final class RenderSubsystem extends Subsystem
     private void renderNewest()
     {
         final int ticIndex = pending.getAndSet(NO_FRAME);
+
         if (ticIndex == NO_FRAME)
         {
             return;
         }
+
         port.renderFrame(ticIndex);
     }
 }

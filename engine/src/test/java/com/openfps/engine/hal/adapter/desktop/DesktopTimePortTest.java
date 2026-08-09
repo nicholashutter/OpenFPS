@@ -43,6 +43,7 @@ class DesktopTimePortTest
     void setUp()
     {
         port = new DesktopTimePort();
+
         port.init();
     }
 
@@ -57,10 +58,13 @@ class DesktopTimePortTest
     void shouldReturnMonotonicNanos()
     {
         long previous = port.nanos();
+
         for (int i = 0; i < MONOTONIC_SAMPLE_COUNT; i++)
         {
             final long current = port.nanos();
+
             assertThat(current).isGreaterThanOrEqualTo(previous);
+
             previous = current;
         }
     }
@@ -70,10 +74,13 @@ class DesktopTimePortTest
     void shouldReturnMonotonicMillis()
     {
         long previous = port.millis();
+
         for (int i = 0; i < MONOTONIC_SAMPLE_COUNT; i++)
         {
             final long current = port.millis();
+
             assertThat(current).isGreaterThanOrEqualTo(previous);
+
             previous = current;
         }
     }
@@ -83,7 +90,9 @@ class DesktopTimePortTest
     void shouldExpressMillisInTheSameUnitsAsNanos()
     {
         final long before = port.nanos();
+
         final long millis = port.millis();
+
         final long after = port.nanos();
 
         assertThat(millis).isBetween(before / NANOS_PER_MILLI, after / NANOS_PER_MILLI);
@@ -96,6 +105,7 @@ class DesktopTimePortTest
         // The whole point of the origin: a fresh port reports a small
         // elapsed time, not the JVM-wide nanoTime value.
         assertThat(port.nanos()).isGreaterThanOrEqualTo(0L);
+
         assertThat(port.millis()).isGreaterThanOrEqualTo(0L);
     }
 
@@ -104,7 +114,9 @@ class DesktopTimePortTest
     void shouldReturnWallClockEpochMillis()
     {
         final long epoch = port.epochMillis();
+
         assertThat(epoch).isGreaterThan(YEAR_2020_EPOCH_MS);
+
         assertThat(Instant.ofEpochMilli(epoch)).isNotNull();
     }
 
@@ -116,6 +128,7 @@ class DesktopTimePortTest
         // wall-clock reading is ~1.7e12. Confusing the two is the exact
         // bug I_TimePort warns about.
         assertThat(port.epochMillis()).isNotEqualTo(port.millis());
+
         assertThat(port.epochMillis()).isGreaterThan(port.millis());
     }
 
@@ -124,12 +137,15 @@ class DesktopTimePortTest
     void shouldRestartTheOriginOnReinit()
     {
         final long beforeShutdown = port.nanos();
+
         port.shutdown();
+
         port.init();
 
         // A later origin means the elapsed reading resets rather than
         // carrying the previous run's accumulated time forward.
         assertThat(port.nanos()).isGreaterThanOrEqualTo(0L);
+
         assertThat(port.nanos()).isLessThan(beforeShutdown + ORIGIN_RESET_SLACK_NANOS);
     }
 }

@@ -40,13 +40,17 @@ class GdxWindowPortTest
         void shouldAdvanceThroughStatesInOrder()
         {
             final GdxWindowPort port = new GdxWindowPort();
+
             port.init();
+
             assertThat(port.state()).isEqualTo(GdxWindowPort.State.INITIALIZED);
 
             port.create(800, 600, "OpenFPS Test");
+
             assertThat(port.state()).isEqualTo(GdxWindowPort.State.CREATED);
 
             port.shutdown();
+
             assertThat(port.state()).isEqualTo(GdxWindowPort.State.SHUTDOWN);
         }
 
@@ -55,9 +59,11 @@ class GdxWindowPortTest
         void shouldRejectCreateBeforeInit()
         {
             final GdxWindowPort port = new GdxWindowPort();
+
             assertThatThrownBy(() -> port.create(800, 600, "OpenFPS Test"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("NEW");
+
             assertThat(port.state()).isEqualTo(GdxWindowPort.State.NEW);
         }
 
@@ -66,8 +72,11 @@ class GdxWindowPortTest
         void shouldRejectCreateAfterShutdown()
         {
             final GdxWindowPort port = new GdxWindowPort();
+
             port.init();
+
             port.create(800, 600, "OpenFPS Test");
+
             port.shutdown();
 
             assertThatThrownBy(() -> port.create(800, 600, "OpenFPS Test"))
@@ -80,12 +89,17 @@ class GdxWindowPortTest
         void shouldAllowRestartAfterShutdown()
         {
             final GdxWindowPort port = new GdxWindowPort();
+
             port.init();
+
             port.shutdown();
 
             port.init();
+
             assertThat(port.state()).isEqualTo(GdxWindowPort.State.INITIALIZED);
+
             port.create(640, 480, "Restarted");
+
             assertThat(port.state()).isEqualTo(GdxWindowPort.State.CREATED);
         }
 
@@ -94,9 +108,13 @@ class GdxWindowPortTest
         void shouldTolerateRepeatedShutdown()
         {
             final GdxWindowPort port = new GdxWindowPort();
+
             port.init();
+
             port.shutdown();
+
             port.shutdown();
+
             assertThat(port.state()).isEqualTo(GdxWindowPort.State.SHUTDOWN);
         }
     }
@@ -110,7 +128,9 @@ class GdxWindowPortTest
         void shouldRejectNonPositiveWidth()
         {
             final GdxWindowPort port = new GdxWindowPort();
+
             port.init();
+
             assertThatThrownBy(() -> port.create(0, 600, "OpenFPS Test"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("positive");
@@ -121,7 +141,9 @@ class GdxWindowPortTest
         void shouldRejectNonPositiveHeight()
         {
             final GdxWindowPort port = new GdxWindowPort();
+
             port.init();
+
             assertThatThrownBy(() -> port.create(800, -1, "OpenFPS Test"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("positive");
@@ -132,7 +154,9 @@ class GdxWindowPortTest
         void shouldRejectNullTitle()
         {
             final GdxWindowPort port = new GdxWindowPort();
+
             port.init();
+
             assertThatThrownBy(() -> port.create(800, 600, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("title");
@@ -143,9 +167,12 @@ class GdxWindowPortTest
         void shouldNotAdvanceStateOnRejectedCreate()
         {
             final GdxWindowPort port = new GdxWindowPort();
+
             port.init();
+
             assertThatThrownBy(() -> port.create(-1, -1, "OpenFPS Test"))
                 .isInstanceOf(IllegalArgumentException.class);
+
             assertThat(port.state()).isEqualTo(GdxWindowPort.State.INITIALIZED);
         }
     }
@@ -166,10 +193,13 @@ class GdxWindowPortTest
         void shouldBeCloseRequestedAfterRequestClose()
         {
             final GdxWindowPort port = new GdxWindowPort();
+
             port.init();
+
             assertThat(port.isCloseRequested()).isFalse();
 
             port.requestClose();
+
             assertThat(port.isCloseRequested()).isTrue();
         }
 
@@ -178,7 +208,9 @@ class GdxWindowPortTest
         void shouldHonourRequestCloseBeforeInit()
         {
             final GdxWindowPort port = new GdxWindowPort();
+
             port.requestClose();
+
             assertThat(port.isCloseRequested()).isTrue();
         }
 
@@ -187,8 +219,11 @@ class GdxWindowPortTest
         void shouldClearCloseFlagOnInit()
         {
             final GdxWindowPort port = new GdxWindowPort();
+
             port.requestClose();
+
             port.init();
+
             assertThat(port.isCloseRequested()).isFalse();
         }
     }
@@ -202,11 +237,15 @@ class GdxWindowPortTest
         void shouldRejectNullCallback()
         {
             final GdxWindowPort port = new GdxWindowPort();
+
             port.init();
+
             port.create(800, 600, "OpenFPS Test");
+
             assertThatThrownBy(() -> port.runFrameLoop(null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("callback");
+
             assertThat(port.state()).isEqualTo(GdxWindowPort.State.CREATED);
         }
 
@@ -215,7 +254,9 @@ class GdxWindowPortTest
         void shouldRejectFrameLoopBeforeCreate()
         {
             final GdxWindowPort port = new GdxWindowPort();
+
             port.init();
+
             assertThatThrownBy(() -> port.runFrameLoop(new RecordingFrameCallback()))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("INITIALIZED");
@@ -226,9 +267,13 @@ class GdxWindowPortTest
         void shouldRejectFrameLoopAfterShutdown()
         {
             final GdxWindowPort port = new GdxWindowPort();
+
             port.init();
+
             port.create(800, 600, "OpenFPS Test");
+
             port.shutdown();
+
             assertThatThrownBy(() -> port.runFrameLoop(new RecordingFrameCallback()))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("SHUTDOWN");
@@ -258,9 +303,13 @@ class GdxWindowPortTest
         void shouldRememberTheAttachedPort()
         {
             final GdxWindowPort port = new GdxWindowPort();
+
             final GdxInputPort input = new GdxInputPort();
+
             port.init();
+
             port.attachInput(input);
+
             assertThat(port.inputPort()).isSameAs(input);
         }
 
@@ -269,8 +318,11 @@ class GdxWindowPortTest
         void shouldAcceptNull()
         {
             final GdxWindowPort port = new GdxWindowPort();
+
             port.attachInput(new GdxInputPort());
+
             port.attachInput(null);
+
             assertThat(port.inputPort()).isNull();
         }
 
@@ -279,7 +331,9 @@ class GdxWindowPortTest
         void shouldNotAdvanceState()
         {
             final GdxWindowPort port = new GdxWindowPort();
+
             port.attachInput(new GdxInputPort());
+
             assertThat(port.state()).isEqualTo(GdxWindowPort.State.NEW);
         }
     }

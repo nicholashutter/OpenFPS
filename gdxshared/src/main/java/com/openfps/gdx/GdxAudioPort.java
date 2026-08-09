@@ -135,6 +135,7 @@ public final class GdxAudioPort implements I_AudioPort
     public void init()
     {
         this.running = true;
+
         // Nothing is opened here on purpose — see the class Javadoc. Saying so
         // in the log because "audio initialised" followed by silence for the
         // first few seconds of a run is otherwise indistinguishable from a
@@ -147,14 +148,17 @@ public final class GdxAudioPort implements I_AudioPort
     public void shutdown()
     {
         this.running = false;
+
         synchronized (bakeLock)
         {
             for (final Sound sound : loaded.values())
             {
                 disposeQuietly(sound);
             }
+
             loaded.clear();
         }
+
         LOG.info("Audio shut down");
     }
 
@@ -165,11 +169,14 @@ public final class GdxAudioPort implements I_AudioPort
         {
             return;
         }
+
         final Sound voice = bake(sound);
+
         if (voice == null)
         {
             return;
         }
+
         try
         {
             // Outside the lock: a shot must not wait behind a file write, and
@@ -194,6 +201,7 @@ public final class GdxAudioPort implements I_AudioPort
         {
             return;
         }
+
         // Every sound, not a named one: a second SoundId should be warmed by
         // existing at all rather than by someone remembering to add it here.
         // bake() is the same call play() makes, so a device that is still
@@ -262,10 +270,12 @@ public final class GdxAudioPort implements I_AudioPort
         synchronized (bakeLock)
         {
             final Sound existing = loaded.get(sound);
+
             if (existing != null)
             {
                 return existing;
             }
+
             // NOT latched as "attempted". Gdx.audio being null means the frame
             // loop has not started, which is temporary; latching would turn a
             // timing condition into a permanent mute.
@@ -274,23 +284,31 @@ public final class GdxAudioPort implements I_AudioPort
                 if (!deviceWarned)
                 {
                     this.deviceWarned = true;
+
                     LOG.warn("No libGDX audio device yet — {} stays silent for now", sound);
                 }
+
                 return null;
             }
+
             final File staged = stage(sound);
+
             if (staged == null)
             {
                 return null;
             }
+
             try
             {
                 final Sound baked = Gdx.audio.newSound(
                     Gdx.files.absolute(staged.getAbsolutePath()));
+
                 loaded.put(sound, baked);
+
                 LOG.info("Loaded {} — {} samples of generated PCM at {} Hz, staged at {}",
                     sound, Integer.valueOf(SoundBank.sampleCount(sound)),
                     Integer.valueOf(SoundBank.sampleRate(sound)), staged);
+
                 return baked;
             }
             catch (final RuntimeException e)
@@ -300,6 +318,7 @@ public final class GdxAudioPort implements I_AudioPort
                 // native, a decoder refusing the file. Either way: log, go
                 // silent, keep playing the game.
                 warnOnce("Could not load " + sound + ", running silent: {}", e.toString());
+
                 return null;
             }
         }
@@ -317,9 +336,12 @@ public final class GdxAudioPort implements I_AudioPort
         if (cacheDirectory == null)
         {
             warnOnce("No cache directory — {} cannot be staged, running silent", sound);
+
             return null;
         }
+
         final File file = new File(cacheDirectory, SoundBank.fileName(sound));
+
         // Rewritten every run rather than reused if present. It is a few KB, it is
         // deterministic, and a truncated file left by a killed process would
         // otherwise be a permanently broken sound that reinstalling does not fix.
@@ -329,6 +351,7 @@ public final class GdxAudioPort implements I_AudioPort
             // FileOutputStream fails outright if the parent does not exist, so
             // creating it afterwards would be creating it too late.
             cacheDirectory.mkdirs();
+
             try (OutputStream out = new FileOutputStream(file))
             {
                 // SoundBank, not a synthesis class. THIS LINE WAS THE BUG the
@@ -345,8 +368,10 @@ public final class GdxAudioPort implements I_AudioPort
         catch (final IOException | RuntimeException e)
         {
             warnOnce("Could not stage " + sound + ", running silent: {}", e.toString());
+
             return null;
         }
+
         return file;
     }
 
@@ -359,7 +384,9 @@ public final class GdxAudioPort implements I_AudioPort
         {
             return;
         }
+
         this.warned = true;
+
         LOG.warn(format, detail);
     }
 

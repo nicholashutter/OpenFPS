@@ -40,7 +40,9 @@ class WorkerPoolTest
     void setUp()
     {
         bus = EventBusFactory.createShared();
+
         bus.init(64);
+
         registry = new SubsystemRegistry();
     }
 
@@ -49,15 +51,21 @@ class WorkerPoolTest
     void shouldStartHotThreads() throws Exception
     {
         pool = ThreadPoolFactory.createFixed(bus, registry);
+
         pool.init(4);
+
         assertThat(pool.state()).isEqualTo(I_ThreadPoolPort.State.READY);
+
         assertThat(pool.workerCount()).isEqualTo(4);
 
         pool.start();
+
         assertThat(pool.state()).isEqualTo(I_ThreadPoolPort.State.RUNNING);
+
         Thread.sleep(50);  // give the JVM time to spin up the threads
 
         pool.shutdown();
+
         assertThat(pool.awaitTermination(2000)).isTrue();
     }
 
@@ -67,6 +75,7 @@ class WorkerPoolTest
     {
         // Counter subsystem
         final AtomicInteger processed = new AtomicInteger(0);
+
         registry.register(new com.openfps.engine.core.subsystem.Subsystem(SubsystemId.P_)
         {
             @Override
@@ -75,16 +84,21 @@ class WorkerPoolTest
                 processed.incrementAndGet();
             }
         });
+
         registry.initAll();
 
         // Use a larger bus so publishing 100 events doesn't block the test thread.
         // We can't re-init a SHUTDOWN bus, so create a fresh one.
         bus.shutdown();
+
         bus = EventBusFactory.createShared();
+
         bus.init(256);
 
         pool = ThreadPoolFactory.createFixed(bus, registry);
+
         pool.init(2);
+
         pool.start();
 
         // Publish 100 events
@@ -99,15 +113,18 @@ class WorkerPoolTest
             while (processed.get() < i + 1)
             {
                 Thread.sleep(5);
+
                 if (Thread.currentThread().isInterrupted())
                 {
                     fail("interrupted");
                 }
             }
         }
+
         assertThat(processed.get()).isEqualTo(100);
 
         pool.shutdown();
+
         assertThat(pool.awaitTermination(2000)).isTrue();
     }
 
@@ -116,8 +133,11 @@ class WorkerPoolTest
     void shouldParallelizeDispatch() throws Exception
     {
         final int workers = 4;
+
         final int events = 40;
+
         final ConcurrentLinkedQueue<String> log = new ConcurrentLinkedQueue<>();
+
         final CountDownLatch allDone = new CountDownLatch(events);
 
         registry.register(new com.openfps.engine.core.subsystem.Subsystem(SubsystemId.P_)
@@ -133,14 +153,19 @@ class WorkerPoolTest
                 {
                     Thread.currentThread().interrupt();
                 }
+
                 log.add(Thread.currentThread().getName() + " processed " + event);
+
                 allDone.countDown();
             }
         });
+
         registry.initAll();
 
         pool = ThreadPoolFactory.createFixed(bus, registry);
+
         pool.init(workers);
+
         pool.start();
 
         for (int i = 0; i < events; i++)
@@ -151,16 +176,19 @@ class WorkerPoolTest
         assertThat(allDone.await(5, TimeUnit.SECONDS))
             .as("all events should be processed within 5s")
             .isTrue();
+
         // Confirm multiple worker thread names were used
         final long distinctWorkerNames = log.stream()
             .map(s -> s.split(" ")[0])
             .distinct()
             .count();
+
         assertThat(distinctWorkerNames)
             .as("should use multiple worker threads")
             .isGreaterThan(1);
 
         pool.shutdown();
+
         assertThat(pool.awaitTermination(2000)).isTrue();
     }
 
@@ -169,8 +197,10 @@ class WorkerPoolTest
     void shouldThrowOnBadInit()
     {
         pool = ThreadPoolFactory.createFixed(bus, registry);
+
         assertThatThrownBy(() -> pool.init(0))
             .isInstanceOf(IllegalArgumentException.class);
+
         assertThatThrownBy(() -> pool.init(-1))
             .isInstanceOf(IllegalArgumentException.class);
     }
@@ -180,6 +210,7 @@ class WorkerPoolTest
     void shouldThrowOnStartBeforeInit()
     {
         pool = ThreadPoolFactory.createFixed(bus, registry);
+
         assertThatThrownBy(pool::start)
             .isInstanceOf(IllegalStateException.class);
     }
@@ -189,9 +220,13 @@ class WorkerPoolTest
     void shouldThrowOnDoubleShutdown() throws Exception
     {
         pool = ThreadPoolFactory.createFixed(bus, registry);
+
         pool.init(2);
+
         pool.start();
+
         pool.shutdown();
+
         assertThatThrownBy(pool::shutdown)
             .isInstanceOf(IllegalStateException.class);
     }
@@ -201,22 +236,27 @@ class WorkerPoolTest
     void shouldSurviveHandlerException() throws Exception
     {
         final AtomicInteger processed = new AtomicInteger(0);
+
         registry.register(new com.openfps.engine.core.subsystem.Subsystem(SubsystemId.P_)
         {
             @Override
             protected void onEvent(final I_EngineEvent event)
             {
                 final int n = processed.incrementAndGet();
+
                 if (n == 1)
                 {
                     throw new RuntimeException("intentional");
                 }
             }
         });
+
         registry.initAll();
 
         pool = ThreadPoolFactory.createFixed(bus, registry);
+
         pool.init(1);
+
         pool.start();
 
         for (int i = 0; i < 3; i++)
@@ -229,9 +269,11 @@ class WorkerPoolTest
         {
             Thread.sleep(50);
         }
+
         assertThat(processed.get()).isEqualTo(3);
 
         pool.shutdown();
+
         assertThat(pool.awaitTermination(2000)).isTrue();
     }
 }

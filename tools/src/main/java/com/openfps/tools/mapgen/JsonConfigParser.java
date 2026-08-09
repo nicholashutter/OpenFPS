@@ -99,6 +99,7 @@ public final class JsonConfigParser
     public MapGenConfig parseReader(final Reader reader) throws IOException
     {
         final JsonElement root;
+
         try
         {
             root = JsonParser.parseReader(reader);
@@ -107,10 +108,12 @@ public final class JsonConfigParser
         {
             throw new IllegalArgumentException("malformed config JSON: " + e.getMessage(), e);
         }
+
         if (root == null || !root.isJsonObject())
         {
             throw new IllegalArgumentException("config root must be a JSON object");
         }
+
         return fromJson(root.getAsJsonObject());
     }
 
@@ -126,14 +129,22 @@ public final class JsonConfigParser
     public MapGenConfig fromJson(final JsonObject root)
     {
         final String id = readString(root, "id");
+
         final String displayName = readString(root, "displayName");
+
         final String setting = readStringOrNull(root, "setting");
+
         final String mode = readStringOrNull(root, "mode");
+
         final int textureEdge = readIntOrDefault(root, "textureEdge", DEFAULT_TEXTURE_EDGE);
+
         final float worldUnitsPerTile = readFloatOrDefault(root, "worldUnitsPerTile",
             DEFAULT_WORLD_UNITS_PER_TILE);
+
         final JsonArray primitivesArray = readArray(root, "primitives");
+
         final List<Primitive> primitives = new ArrayList<>(primitivesArray.size());
+
         for (final JsonElement element : primitivesArray)
         {
             if (element == null || !element.isJsonObject())
@@ -141,10 +152,13 @@ public final class JsonConfigParser
                 throw new IllegalArgumentException(
                     "primitives must be a JSON array of objects");
             }
+
             final Primitive primitive = factory.create(element.getAsJsonObject(),
                 worldUnitsPerTile);
+
             primitives.add(primitive);
         }
+
         return new MapGenConfig(id, displayName, setting, mode, textureEdge, worldUnitsPerTile,
             primitives);
     }
@@ -159,6 +173,7 @@ public final class JsonConfigParser
     public MapGenConfig parseString(final String json)
     {
         final JsonElement root;
+
         try
         {
             root = JsonParser.parseString(json);
@@ -167,10 +182,12 @@ public final class JsonConfigParser
         {
             throw new IllegalArgumentException("malformed config JSON: " + e.getMessage(), e);
         }
+
         if (root == null || !root.isJsonObject())
         {
             throw new IllegalArgumentException("config root must be a JSON object");
         }
+
         return fromJson(root.getAsJsonObject());
     }
 
@@ -182,6 +199,7 @@ public final class JsonConfigParser
         {
             throw new IllegalArgumentException("config requires field '" + field + "'");
         }
+
         return obj.get(field).getAsString();
     }
 
@@ -191,6 +209,7 @@ public final class JsonConfigParser
         {
             return null;
         }
+
         return obj.get(field).getAsString();
     }
 
@@ -200,6 +219,7 @@ public final class JsonConfigParser
         {
             return def;
         }
+
         return obj.get(field).getAsInt();
     }
 
@@ -210,6 +230,7 @@ public final class JsonConfigParser
         {
             return def;
         }
+
         return obj.get(field).getAsFloat();
     }
 
@@ -219,11 +240,14 @@ public final class JsonConfigParser
         {
             throw new IllegalArgumentException("config requires field '" + field + "'");
         }
+
         final JsonElement element = obj.get(field);
+
         if (!element.isJsonArray())
         {
             throw new IllegalArgumentException("config field '" + field + "' must be an array");
         }
+
         return element.getAsJsonArray();
     }
 }

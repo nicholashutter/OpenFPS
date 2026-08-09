@@ -84,6 +84,7 @@ public final class AndroidWindowPort implements I_WindowPort
         {
             throw new IllegalArgumentException("application must not be null");
         }
+
         this.application = application;
     }
 
@@ -94,6 +95,7 @@ public final class AndroidWindowPort implements I_WindowPort
         // framework and it is already up by the time an Activity exists.
         // The flags are reset so a relaunched Activity starts clean.
         closeRequested.set(false);
+
         loopStarted.set(false);
     }
 
@@ -116,6 +118,7 @@ public final class AndroidWindowPort implements I_WindowPort
         {
             throw new IllegalArgumentException("callback must not be null");
         }
+
         if (!loopStarted.compareAndSet(false, true))
         {
             throw new IllegalStateException("runFrameLoop already started for this Activity");
@@ -125,6 +128,7 @@ public final class AndroidWindowPort implements I_WindowPort
         // returns. It does NOT block — see the class Javadoc for why it
         // must not.
         application.initialize(new GdxLifecycleBridge(callback), buildConfig());
+
         Log.i(TAG, "Platform frame loop started (GLSurfaceView thread owns it)");
     }
 
@@ -142,6 +146,7 @@ public final class AndroidWindowPort implements I_WindowPort
         if (closeRequested.compareAndSet(false, true))
         {
             Log.i(TAG, "Close requested — finishing the Activity");
+
             application.runOnUiThread(application::finish);
         }
     }
@@ -159,7 +164,9 @@ public final class AndroidWindowPort implements I_WindowPort
         // callback has already had onSurfaceLost by the time this runs. All
         // that is left is to drop the flags so the port is reusable.
         Log.i(TAG, "Window port shut down");
+
         closeRequested.set(false);
+
         loopStarted.set(false);
     }
 
@@ -169,20 +176,33 @@ public final class AndroidWindowPort implements I_WindowPort
     private static AndroidApplicationConfiguration buildConfig()
     {
         final AndroidApplicationConfiguration config = new AndroidApplicationConfiguration();
+
         config.useAccelerometer = false;
+
         config.useCompass = false;
+
         config.useGyroscope = false;
+
         // The manifest declares GLES 3.0 as required, so ask for it here too
         // rather than silently running the 2.0 path on a device that has 3.0.
         config.useGL30 = true;
+
         config.useImmersiveMode = true;
+
         config.r = COLOR_BITS;
+
         config.g = COLOR_BITS;
+
         config.b = COLOR_BITS;
+
         config.a = ALPHA_BITS;
+
         config.depth = DEPTH_BITS;
+
         config.stencil = 0;
+
         config.numSamples = 0;
+
         return config;
     }
 }

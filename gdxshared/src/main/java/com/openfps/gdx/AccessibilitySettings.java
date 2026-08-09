@@ -143,8 +143,11 @@ public final class AccessibilitySettings
             // reasserting its outline mode for nothing.
             return;
         }
+
         this.targetOutlineVisible = visible;
+
         final Consumer<Boolean> told = observer;
+
         if (told != null)
         {
             told.accept(Boolean.valueOf(visible));
@@ -160,6 +163,7 @@ public final class AccessibilitySettings
     public boolean toggleTargetOutline()
     {
         setTargetOutlineVisible(!targetOutlineVisible);
+
         return targetOutlineVisible;
     }
 
@@ -200,6 +204,7 @@ public final class AccessibilitySettings
         {
             return "ON";
         }
+
         return "OFF";
     }
 

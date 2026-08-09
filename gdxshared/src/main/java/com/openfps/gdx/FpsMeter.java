@@ -115,6 +115,7 @@ public final class FpsMeter
             throw new IllegalArgumentException(
                 "sampleWeight must be in (0, 1], got " + sampleWeight);
         }
+
         this.smoothing = sampleWeight;
     }
 
@@ -137,7 +138,9 @@ public final class FpsMeter
         {
             return;
         }
+
         final float millis = frameNanos / NANOS_PER_MILLI;
+
         if (samples == 0L)
         {
             // Taken whole. See the class Javadoc: seeding at zero would make
@@ -148,6 +151,7 @@ public final class FpsMeter
         {
             this.frameMillis = frameMillis + smoothing * (millis - frameMillis);
         }
+
         this.samples = samples + 1L;
     }
 
@@ -176,6 +180,7 @@ public final class FpsMeter
         {
             return 0.0f;
         }
+
         return MILLIS_PER_SECOND / frameMillis;
     }
 
@@ -207,6 +212,7 @@ public final class FpsMeter
     public void reset()
     {
         this.frameMillis = 0.0f;
+
         this.samples = 0L;
     }
 

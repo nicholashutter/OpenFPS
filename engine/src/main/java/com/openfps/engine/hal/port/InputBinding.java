@@ -105,7 +105,9 @@ public final class InputBinding
         {
             throw new IllegalArgumentException("source must not be null");
         }
+
         this.source = deviceSource;
+
         this.code = platformCode;
     }
 
@@ -186,10 +188,12 @@ public final class InputBinding
         {
             return true;
         }
+
         if (!(other instanceof InputBinding that))
         {
             return false;
         }
+
         return code == that.code && source == that.source;
     }
 

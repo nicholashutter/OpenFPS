@@ -181,29 +181,39 @@ public final class MapGameplayPort implements I_GameplayPort
         {
             throw new IllegalArgumentException("spec must not be null");
         }
+
         if (input == null)
         {
             throw new IllegalArgumentException("input must not be null");
         }
+
         if (renderPort == null)
         {
             throw new IllegalArgumentException("renderPort must not be null");
         }
+
         if (config == null)
         {
             throw new IllegalArgumentException("config must not be null");
         }
+
         if (playerTeam == null)
         {
             throw new IllegalArgumentException("playerTeam must not be null");
         }
+
         final SpawnPoint spawn = pickSpawn(spec, playerTeam, spawnIndex);
+
         final PlayerController controller = new PlayerController(
             spawn.x(), spawn.y(), spawn.z(), spawn.yawRadians(), 0.0f);
+
         final Bot[] roster = botsFromSpec(spec);
+
         final Match match = new Match(roster, new BotRng(), BotSkill.DUMB,
             Match.UNLIMITED_DEATHS, spec);
+
         match.setPlayerTeam(playerTeam);
+
         return new MapGameplayPort(spec, input, renderPort, config, controller, match,
             playerTeam, spawn);
     }
@@ -214,16 +224,27 @@ public final class MapGameplayPort implements I_GameplayPort
         final SpawnPoint spawn)
     {
         this.spec = spec;
+
         this.inputPort = input;
+
         this.renderer = renderPort;
+
         this.controller = controller;
+
         this.deltaSeconds = (float) (config.nanosPerTic() / NANOS_PER_SECOND);
+
         this.match = match;
+
         this.playerTeam = playerTeam;
+
         this.spawnX = spawn.x();
+
         this.spawnY = spawn.y();
+
         this.spawnZ = spawn.z();
+
         this.spawnYaw = spawn.yawRadians();
+
         this.spawnPitch = 0.0f;
     }
 
@@ -251,6 +272,7 @@ public final class MapGameplayPort implements I_GameplayPort
         if (spawnIndex >= 0)
         {
             int teamSeen = 0;
+
             for (final SpawnPoint s : spec.spawnPoints())
             {
                 if (s.team() == team)
@@ -259,10 +281,12 @@ public final class MapGameplayPort implements I_GameplayPort
                     {
                         return s;
                     }
+
                     teamSeen = teamSeen + 1;
                 }
             }
         }
+
         // Either negative spawnIndex (single-player) or no spawn for the
         // requested team (a spec with only one team's spawns); return the
         // first spec spawn, which is the spec's own canonical placement.
@@ -301,7 +325,9 @@ public final class MapGameplayPort implements I_GameplayPort
         {
             return;
         }
+
         tickLock.lock();
+
         try
         {
             if (!matchLive || match.state().isOver())
@@ -309,18 +335,29 @@ public final class MapGameplayPort implements I_GameplayPort
                 // Frozen: still latch input and aim the camera, so the view
                 // does not desync from the world when the menu goes away.
                 inputPort.sampleInput(ticIndex);
+
                 inputView.wrap(inputPort.currentInput());
+
                 controller.update(inputView, deltaSeconds);
+
                 aimCamera();
+
                 return;
             }
+
             inputPort.sampleInput(ticIndex);
+
             inputView.wrap(inputPort.currentInput());
+
             controller.update(inputView, deltaSeconds);
+
             aimCamera();
+
             fireIfRequested(ticIndex, inputPort.currentInput());
+
             final int damage = match.tick(ticIndex, controller.positionX(),
                 controller.positionY(), controller.positionZ());
+
             if (damage > 0 && match.isPlayerDown())
             {
                 // The damage this tic finished the player off. The order
@@ -337,24 +374,30 @@ public final class MapGameplayPort implements I_GameplayPort
                 LOG.info("took {} damage — {} hp left (spec={})", damage,
                     match.playerHealth(), spec.id());
             }
+
             if (match.consumePlayerRespawned())
             {
                 // The match decided a respawn happened; the port puts the
                 // body back at the spawn the spec gave it.
                 controller.respawnAt(spawnX, spawnY, spawnZ, spawnYaw, spawnPitch);
+
                 LOG.info("RESPAWNED at ({}, {}, {}) on {} (spec={})", spawnX, spawnY, spawnZ,
                     playerTeam, spec.id());
             }
+
             exchangeNetwork(ticIndex, inputPort.currentInput());
+
             ticsApplied = ticsApplied + 1;
         }
         finally
         {
             tickLock.unlock();
         }
+
         if (match.state() != reportedState)
         {
             reportedState = match.state();
+
             LOG.info("Map match state -> {} (tic {}, spec={})", reportedState, ticIndex,
                 spec.id());
         }
@@ -368,11 +411,14 @@ public final class MapGameplayPort implements I_GameplayPort
     private void aimCamera()
     {
         final int width = renderer.surfaceWidth();
+
         final int height = renderer.surfaceHeight();
+
         if (width <= 0 || height <= 0)
         {
             return;
         }
+
         renderer.setCamera(controller.camera((float) width / (float) height));
     }
 
@@ -388,15 +434,22 @@ public final class MapGameplayPort implements I_GameplayPort
         {
             return;
         }
+
         if (ticIndex - lastFireTic < FIRE_INTERVAL_TICS)
         {
             return;
         }
+
         final float eyeX = controller.positionX();
+
         final float eyeY = controller.positionY() + PlayerController.EYE_HEIGHT_UNITS;
+
         final float eyeZ = controller.positionZ();
+
         final float yaw = controller.yawRadians();
+
         final float pitch = controller.pitchRadians();
+
         // Aim unit vector from yaw/pitch: standard yaw rotation around y,
         // pitch tilt around x. Kept here rather than in PlayerController
         // because the demo port does the same and the existing
@@ -404,13 +457,21 @@ public final class MapGameplayPort implements I_GameplayPort
         // pass reuses the same trig to keep the visual tracer pipeline
         // honest. A future pass extracts a small Aim helper.
         final float cosPitch = (float) StrictMath.cos(pitch);
+
         final float sinPitch = (float) StrictMath.sin(pitch);
+
         final float cosYaw = (float) StrictMath.cos(yaw);
+
         final float sinYaw = (float) StrictMath.sin(yaw);
+
         final float aimX = cosPitch * sinYaw;
+
         final float aimY = -sinPitch;
+
         final float aimZ = -cosPitch * cosYaw;
+
         match.firePlayerShot(eyeX, eyeY, eyeZ, aimX, aimY, aimZ);
+
         lastFireTic = ticIndex;
     }
 
@@ -425,10 +486,12 @@ public final class MapGameplayPort implements I_GameplayPort
     private void exchangeNetwork(final int ticIndex, final InputState input)
     {
         final NetSession session = net;
+
         if (session == null || !session.isOpen())
         {
             return;
         }
+
         // AFTER the controller has been updated, so the yaw and pitch
         // sent are the ones this tic's look deltas produced rather than
         // the previous tic's. The same ordering the demo port enforces.
@@ -438,6 +501,7 @@ public final class MapGameplayPort implements I_GameplayPort
             TicCmdEncoder.encodeAngle(controller.yawRadians()),
             TicCmdEncoder.encodePitch(controller.pitchRadians()),
             TicCmdEncoder.encodeButtons(input));
+
         session.tick(ticIndex);
     }
 
@@ -481,6 +545,7 @@ public final class MapGameplayPort implements I_GameplayPort
         {
             LOG.info("Match frozen — the menu is in front (spec={})", spec.id());
         }
+
         this.matchLive = live;
     }
 
@@ -492,11 +557,14 @@ public final class MapGameplayPort implements I_GameplayPort
     public void attachNetwork(final NetSession session)
     {
         this.net = session;
+
         if (session == null)
         {
             LOG.info("Map network detached — local match");
+
             return;
         }
+
         LOG.info("Map network attached: {}", session);
     }
 
@@ -511,7 +579,9 @@ public final class MapGameplayPort implements I_GameplayPort
         {
             throw new IllegalArgumentException("team must not be null");
         }
+
         this.playerTeam = team;
+
         match.setPlayerTeam(team);
     }
 
@@ -550,6 +620,7 @@ public final class MapGameplayPort implements I_GameplayPort
     private static Bot[] botsFromSpec(final MapSpec spec)
     {
         final int count = Math.min(spec.botWaypoints().size(), Match.DEFAULT_BOT_COUNT);
+
         if (count == 0)
         {
             return new Bot[]
@@ -558,13 +629,17 @@ public final class MapGameplayPort implements I_GameplayPort
                     BotPattern.SENTRY, 0.0f, 60, 0)
             };
         }
+
         final Bot[] bots = new Bot[count];
+
         for (int index = 0; index < count; index++)
         {
             final Waypoint wp = spec.botWaypoints().get(index);
+
             bots[index] = new Bot(Match.FIRST_BOT_ENTITY_ID + index, wp.x(), wp.y(), wp.z(),
                 BotPattern.SENTRY, 0.0f, 60, index);
         }
+
         return bots;
     }
 

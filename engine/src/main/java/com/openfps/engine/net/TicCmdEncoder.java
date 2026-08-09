@@ -106,15 +106,19 @@ public final class TicCmdEncoder
             // every peer. Centred is the honest reading of "no usable input".
             return 0;
         }
+
         final float scaled = axis * AXIS_SCALE;
+
         if (scaled >= AXIS_SCALE)
         {
             return AXIS_SCALE;
         }
+
         if (scaled <= -AXIS_SCALE)
         {
             return -AXIS_SCALE;
         }
+
         return roundToInt(scaled);
     }
 
@@ -135,19 +139,25 @@ public final class TicCmdEncoder
         {
             return 0;
         }
+
         final float turns = yawRadians / FULL_TURN_RADIANS;
+
         float fraction = turns - (float) (long) turns;
+
         if (fraction < 0.0f)
         {
             fraction = fraction + 1.0f;
         }
+
         final int steps = roundToInt(fraction * ANGLE_STEPS);
+
         // Rounding up from just under a full turn lands on ANGLE_STEPS, which
         // is one past the field. It is the same heading as zero.
         if (steps >= ANGLE_STEPS)
         {
             return 0;
         }
+
         return steps;
     }
 
@@ -174,11 +184,14 @@ public final class TicCmdEncoder
         {
             return 0;
         }
+
         final float scaled = pitchRadians / MAX_PITCH_RADIANS * TicCmd.MAX_PITCH;
+
         if (scaled >= TicCmd.MAX_PITCH)
         {
             return TicCmd.MAX_PITCH;
         }
+
         // -MAX_PITCH, not MIN_PITCH. Clamping to the two's-complement floor is
         // the obvious thing to write and makes the range asymmetric by one step
         // at exactly the values that reach it — so an extreme downward look
@@ -188,6 +201,7 @@ public final class TicCmdEncoder
         {
             return -TicCmd.MAX_PITCH;
         }
+
         return roundToInt(scaled);
     }
 
@@ -203,19 +217,24 @@ public final class TicCmdEncoder
         {
             throw new IllegalArgumentException("input must not be null");
         }
+
         int bits = 0;
+
         if (input.fire())
         {
             bits = bits | BUTTON_FIRE;
         }
+
         if (input.jump())
         {
             bits = bits | BUTTON_JUMP;
         }
+
         if (input.sprint())
         {
             bits = bits | BUTTON_SPRINT;
         }
+
         return bits;
     }
 
@@ -278,6 +297,7 @@ public final class TicCmdEncoder
         {
             return (int) (value - 0.5f);
         }
+
         return (int) (value + 0.5f);
     }
 }

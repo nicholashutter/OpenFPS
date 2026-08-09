@@ -52,11 +52,17 @@ class ModelFormatTest
             final ModelFormat model = ModelFormat.read(ModelFileFixture.valid());
 
             assertThat(model.versionMajor()).isEqualTo(ModelFormat.VERSION_MAJOR);
+
             assertThat(model.versionMinor()).isEqualTo(ModelFormat.VERSION_MINOR);
+
             assertThat(model.vertexCount()).isEqualTo(4);
+
             assertThat(model.indexCount()).isEqualTo(6);
+
             assertThat(model.triangleCount()).isEqualTo(2);
+
             assertThat(model.submeshCount()).isEqualTo(2);
+
             assertThat(model.textureCount()).isEqualTo(1);
         }
 
@@ -67,11 +73,17 @@ class ModelFormatTest
             final ModelFormat model = ModelFormat.read(ModelFileFixture.valid());
 
             assertThat(model.positionX(0)).isEqualTo(0.0f);
+
             assertThat(model.positionY(2)).isEqualTo(1.0f);
+
             assertThat(model.positionZ(3)).isEqualTo(0.0f);
+
             assertThat(model.texCoordU(1)).isEqualTo(1.0f);
+
             assertThat(model.texCoordV(2)).isEqualTo(1.0f);
+
             assertThat(model.colour(0)).isEqualTo(0xFF0000FF);
+
             assertThat(model.colour(3)).isEqualTo(0xFFFFFFFF);
         }
 
@@ -82,8 +94,11 @@ class ModelFormatTest
             final ModelFormat model = ModelFormat.read(ModelFileFixture.valid());
 
             assertThat(Rgba.red(model.colour(0))).isEqualTo(255);
+
             assertThat(Rgba.green(model.colour(0))).isZero();
+
             assertThat(Rgba.blue(model.colour(0))).isZero();
+
             assertThat(Rgba.alpha(model.colour(0))).isEqualTo(255);
         }
 
@@ -94,6 +109,7 @@ class ModelFormatTest
             final ModelFormat model = ModelFormat.read(ModelFileFixture.valid());
 
             assertThat(model.indices()).containsExactly(0, 1, 2, 0, 2, 3);
+
             assertThat(model.vertexData())
                 .hasSize(4 * ModelFormat.VERTEX_STRIDE_INTS)
                 .isSameAs(model.vertexData());
@@ -106,9 +122,13 @@ class ModelFormatTest
             final ModelFormat model = ModelFormat.read(ModelFileFixture.valid());
 
             assertThat(model.submeshFirstIndex(0)).isZero();
+
             assertThat(model.submeshIndexCount(0)).isEqualTo(3);
+
             assertThat(model.submeshTextureIndex(0)).isZero();
+
             assertThat(model.submeshFirstIndex(1)).isEqualTo(3);
+
             assertThat(model.submeshTextureIndex(1)).isEqualTo(ModelFormat.NO_TEXTURE);
         }
 
@@ -117,14 +137,21 @@ class ModelFormatTest
         void shouldBuildMipChain()
         {
             final ModelFormat model = ModelFormat.read(ModelFileFixture.valid());
+
             final MipChain chain = model.mipChain(0);
 
             assertThat(model.textureWidth(0)).isEqualTo(2);
+
             assertThat(model.textureHeight(0)).isEqualTo(2);
+
             assertThat(model.textureLevelCount(0)).isEqualTo(2);
+
             assertThat(chain.levelCount()).isEqualTo(2);
+
             assertThat(chain.texel(0, 0, 0)).isEqualTo(0xFF0000FF);
+
             assertThat(chain.texel(0, 1, 1)).isEqualTo(0xFFFFFFFF);
+
             assertThat(chain.texel(1, 0, 0)).isEqualTo(0x7F7F7FFF);
         }
 
@@ -144,10 +171,15 @@ class ModelFormatTest
             final ModelFormat model = ModelFormat.read(ModelFileFixture.valid());
 
             assertThat(model.minX()).isEqualTo(0.0f);
+
             assertThat(model.minY()).isEqualTo(0.0f);
+
             assertThat(model.minZ()).isEqualTo(0.0f);
+
             assertThat(model.maxX()).isEqualTo(1.0f);
+
             assertThat(model.maxY()).isEqualTo(1.0f);
+
             assertThat(model.maxZ()).isEqualTo(0.0f);
         }
 
@@ -158,9 +190,13 @@ class ModelFormatTest
             final ModelFormat model = ModelFormat.read(ModelFileFixture.empty());
 
             assertThat(model.vertexCount()).isZero();
+
             assertThat(model.indexCount()).isZero();
+
             assertThat(model.submeshCount()).isZero();
+
             assertThat(model.textureCount()).isZero();
+
             assertThat(ModelFileFixture.empty()).hasSize(ModelFileFixture.HEADER_BYTES);
         }
 
@@ -171,12 +207,16 @@ class ModelFormatTest
             final byte[] data = ModelFileFixture.valid();
 
             assertThat(ModelFormat.HEADER_SIZE).isEqualTo(ModelFileFixture.HEADER_BYTES);
+
             assertThat(ModelFileFixture.getInt(data, ModelFileFixture.AT_VERTEX_OFFSET))
                 .isEqualTo(ModelFileFixture.HEADER_BYTES);
+
             assertThat(ModelFileFixture.getInt(data, ModelFileFixture.AT_INDEX_OFFSET) % 4)
                 .isZero();
+
             assertThat(ModelFileFixture.getInt(data, ModelFileFixture.AT_TEXEL_OFFSET) % 4)
                 .isZero();
+
             assertThat(ModelFileFixture.getInt(data, ModelFileFixture.AT_FILE_SIZE))
                 .isEqualTo(data.length);
         }
@@ -200,6 +240,7 @@ class ModelFormatTest
         void shouldRejectBadMagic()
         {
             final byte[] data = ModelFileFixture.valid();
+
             ModelFileFixture.putInt(data, ModelFileFixture.AT_MAGIC, 0x12345678);
 
             assertThatThrownBy(() -> ModelFormat.read(data))
@@ -213,9 +254,13 @@ class ModelFormatTest
         void shouldRejectForeignFile()
         {
             final byte[] wad = new byte[ModelFileFixture.HEADER_BYTES];
+
             wad[0] = 'I';
+
             wad[1] = 'W';
+
             wad[2] = 'A';
+
             wad[3] = 'D';
 
             assertThatThrownBy(() -> ModelFormat.read(wad))
@@ -228,7 +273,9 @@ class ModelFormatTest
         void shouldRejectUnknownMajorVersion()
         {
             final byte[] data = ModelFileFixture.valid();
+
             ModelFileFixture.putShort(data, ModelFileFixture.AT_VERSION_MAJOR, 7);
+
             ModelFileFixture.putShort(data, ModelFileFixture.AT_VERSION_MINOR, 3);
 
             assertThatThrownBy(() -> ModelFormat.read(data))
@@ -243,6 +290,7 @@ class ModelFormatTest
         void shouldRejectVersionZero()
         {
             final byte[] data = ModelFileFixture.valid();
+
             ModelFileFixture.putShort(data, ModelFileFixture.AT_VERSION_MAJOR, 0);
 
             assertThatThrownBy(() -> ModelFormat.read(data))
@@ -255,11 +303,13 @@ class ModelFormatTest
         void shouldAcceptHigherMinorVersion()
         {
             final byte[] data = ModelFileFixture.valid();
+
             ModelFileFixture.putShort(data, ModelFileFixture.AT_VERSION_MINOR, 9);
 
             final ModelFormat model = ModelFormat.read(data);
 
             assertThat(model.versionMinor()).isEqualTo(9);
+
             assertThat(model.vertexCount()).isEqualTo(4);
         }
 
@@ -268,6 +318,7 @@ class ModelFormatTest
         void shouldRejectShrunkenHeader()
         {
             final byte[] data = ModelFileFixture.valid();
+
             ModelFileFixture.putInt(data, ModelFileFixture.AT_HEADER_SIZE, 32);
 
             assertThatThrownBy(() -> ModelFormat.read(data))
@@ -281,6 +332,7 @@ class ModelFormatTest
         void shouldRejectHeaderPastEndOfFile()
         {
             final byte[] data = ModelFileFixture.valid();
+
             ModelFileFixture.putInt(data, ModelFileFixture.AT_HEADER_SIZE, data.length + 4);
 
             assertThatThrownBy(() -> ModelFormat.read(data))
@@ -316,6 +368,7 @@ class ModelFormatTest
         void shouldRejectSizeMismatch()
         {
             final byte[] data = ModelFileFixture.valid();
+
             ModelFileFixture.putInt(data, ModelFileFixture.AT_FILE_SIZE, data.length - 4);
 
             assertThatThrownBy(() -> ModelFormat.read(data))
@@ -328,9 +381,11 @@ class ModelFormatTest
         void shouldRejectEveryTruncation()
         {
             final byte[] full = ModelFileFixture.valid();
+
             for (int length = 0; length < full.length; length++)
             {
                 final byte[] cut = Arrays.copyOf(full, length);
+
                 assertThatThrownBy(() -> ModelFormat.read(cut))
                     .describedAs("truncated to %d bytes", length)
                     .isInstanceOf(ModelFormatException.class);
@@ -358,6 +413,7 @@ class ModelFormatTest
         void shouldRejectOffsetInsideHeader()
         {
             final byte[] data = ModelFileFixture.valid();
+
             ModelFileFixture.putInt(data, ModelFileFixture.AT_VERTEX_OFFSET, 16);
 
             assertThatThrownBy(() -> ModelFormat.read(data))
@@ -371,6 +427,7 @@ class ModelFormatTest
         void shouldRejectOffsetPastEndOfFile()
         {
             final byte[] data = ModelFileFixture.valid();
+
             ModelFileFixture.putInt(data, ModelFileFixture.AT_INDEX_OFFSET, data.length + 64);
 
             assertThatThrownBy(() -> ModelFormat.read(data))
@@ -383,6 +440,7 @@ class ModelFormatTest
         void shouldRejectNegativeOffset()
         {
             final byte[] data = ModelFileFixture.valid();
+
             ModelFileFixture.putInt(data, ModelFileFixture.AT_TEXEL_OFFSET, -4);
 
             assertThatThrownBy(() -> ModelFormat.read(data))
@@ -395,6 +453,7 @@ class ModelFormatTest
         void shouldRejectMisalignedOffset()
         {
             final byte[] data = ModelFileFixture.valid();
+
             ModelFileFixture.putInt(data, ModelFileFixture.AT_VERTEX_OFFSET,
                 ModelFileFixture.HEADER_BYTES + 1);
 
@@ -408,6 +467,7 @@ class ModelFormatTest
         void shouldRejectSectionOverrun()
         {
             final byte[] data = ModelFileFixture.valid();
+
             ModelFileFixture.putInt(data, ModelFileFixture.AT_VERTEX_COUNT, 64);
 
             assertThatThrownBy(() -> ModelFormat.read(data))
@@ -420,6 +480,7 @@ class ModelFormatTest
         void shouldRejectNegativeCount()
         {
             final byte[] data = ModelFileFixture.valid();
+
             ModelFileFixture.putInt(data, ModelFileFixture.AT_TEXTURE_COUNT, -1);
 
             assertThatThrownBy(() -> ModelFormat.read(data))
@@ -432,6 +493,7 @@ class ModelFormatTest
         void shouldRejectAbsurdCount()
         {
             final byte[] data = ModelFileFixture.valid();
+
             ModelFileFixture.putInt(data, ModelFileFixture.AT_VERTEX_COUNT,
                 ModelFormat.MAX_VERTEX_COUNT + 1);
 
@@ -445,6 +507,7 @@ class ModelFormatTest
         void shouldRejectPartialTriangle()
         {
             final byte[] data = ModelFileFixture.valid();
+
             ModelFileFixture.putInt(data, ModelFileFixture.AT_INDEX_COUNT, 4);
 
             assertThatThrownBy(() -> ModelFormat.read(data))
@@ -462,7 +525,9 @@ class ModelFormatTest
         void shouldRejectOutOfRangeIndex()
         {
             final byte[] data = ModelFileFixture.valid();
+
             final int indexOffset = ModelFileFixture.getInt(data, ModelFileFixture.AT_INDEX_OFFSET);
+
             ModelFileFixture.putInt(data, indexOffset + 4, 99);
 
             assertThatThrownBy(() -> ModelFormat.read(data))
@@ -476,7 +541,9 @@ class ModelFormatTest
         void shouldRejectNegativeIndex()
         {
             final byte[] data = ModelFileFixture.valid();
+
             final int indexOffset = ModelFileFixture.getInt(data, ModelFileFixture.AT_INDEX_OFFSET);
+
             ModelFileFixture.putInt(data, indexOffset, -1);
 
             assertThatThrownBy(() -> ModelFormat.read(data))
@@ -489,7 +556,9 @@ class ModelFormatTest
         void shouldRejectSubmeshOverrun()
         {
             final byte[] data = ModelFileFixture.valid();
+
             final int at = ModelFileFixture.getInt(data, ModelFileFixture.AT_SUBMESH_OFFSET);
+
             ModelFileFixture.putInt(data, at + 4, 300);
 
             assertThatThrownBy(() -> ModelFormat.read(data))
@@ -503,7 +572,9 @@ class ModelFormatTest
         void shouldRejectSubmeshPartialTriangle()
         {
             final byte[] data = ModelFileFixture.valid();
+
             final int at = ModelFileFixture.getInt(data, ModelFileFixture.AT_SUBMESH_OFFSET);
+
             ModelFileFixture.putInt(data, at + 4, 2);
 
             assertThatThrownBy(() -> ModelFormat.read(data))
@@ -516,7 +587,9 @@ class ModelFormatTest
         void shouldRejectSubmeshTexture()
         {
             final byte[] data = ModelFileFixture.valid();
+
             final int at = ModelFileFixture.getInt(data, ModelFileFixture.AT_SUBMESH_OFFSET);
+
             ModelFileFixture.putInt(data, at + 8, 5);
 
             assertThatThrownBy(() -> ModelFormat.read(data))
@@ -529,7 +602,9 @@ class ModelFormatTest
         void shouldAcceptNoTexture()
         {
             final byte[] data = ModelFileFixture.valid();
+
             final int at = ModelFileFixture.getInt(data, ModelFileFixture.AT_SUBMESH_OFFSET);
+
             ModelFileFixture.putInt(data, at + 8, ModelFormat.NO_TEXTURE);
 
             assertThatCode(() -> ModelFormat.read(data)).doesNotThrowAnyException();
@@ -540,7 +615,9 @@ class ModelFormatTest
         void shouldRejectNonPowerOfTwoTexture()
         {
             final byte[] data = ModelFileFixture.valid();
+
             final int at = ModelFileFixture.getInt(data, ModelFileFixture.AT_TEXTURE_OFFSET);
+
             ModelFileFixture.putInt(data, at, 3);
 
             assertThatThrownBy(() -> ModelFormat.read(data))
@@ -554,7 +631,9 @@ class ModelFormatTest
         void shouldRejectTooManyLevels()
         {
             final byte[] data = ModelFileFixture.valid();
+
             final int at = ModelFileFixture.getInt(data, ModelFileFixture.AT_TEXTURE_OFFSET);
+
             ModelFileFixture.putInt(data, at + 8, 6);
 
             assertThatThrownBy(() -> ModelFormat.read(data))
@@ -567,7 +646,9 @@ class ModelFormatTest
         void shouldRejectZeroLevels()
         {
             final byte[] data = ModelFileFixture.valid();
+
             final int at = ModelFileFixture.getInt(data, ModelFileFixture.AT_TEXTURE_OFFSET);
+
             ModelFileFixture.putInt(data, at + 8, 0);
 
             assertThatThrownBy(() -> ModelFormat.read(data))
@@ -580,7 +661,9 @@ class ModelFormatTest
         void shouldRejectTexelOverrun()
         {
             final byte[] data = ModelFileFixture.valid();
+
             final int at = ModelFileFixture.getInt(data, ModelFileFixture.AT_TEXTURE_OFFSET);
+
             ModelFileFixture.putInt(data, at + 12, 3);
 
             assertThatThrownBy(() -> ModelFormat.read(data))
@@ -593,7 +676,9 @@ class ModelFormatTest
         void shouldRejectNegativeFirstTexel()
         {
             final byte[] data = ModelFileFixture.valid();
+
             final int at = ModelFileFixture.getInt(data, ModelFileFixture.AT_TEXTURE_OFFSET);
+
             ModelFileFixture.putInt(data, at + 12, -1);
 
             assertThatThrownBy(() -> ModelFormat.read(data))
@@ -606,14 +691,18 @@ class ModelFormatTest
         void shouldReadBudgetSizedTexture()
         {
             final int size = ModelFormat.MAX_TEXTURE_DIMENSION;
+
             final int[] texels = new int[pyramidTexels(size)];
+
             Arrays.fill(texels, Rgba.OPAQUE_BLACK);
+
             final byte[] data = ModelFileFixture.build(new int[0], new int[0], new int[0],
                 new int[] {size, size, 10, 0}, texels, new float[6]);
 
             final ModelFormat model = ModelFormat.read(data);
 
             assertThat(model.mipChain(0).levelCount()).isEqualTo(10);
+
             assertThat(model.mipChain(0).width(9)).isEqualTo(1);
         }
     }
@@ -627,10 +716,13 @@ class ModelFormatTest
         void shouldContainEverySingleByteCorruption()
         {
             final byte[] original = ModelFileFixture.valid();
+
             for (int at = 0; at < original.length; at++)
             {
                 assertSurvivesCorruption(original, at, (byte) 0xFF);
+
                 assertSurvivesCorruption(original, at, (byte) 0x00);
+
                 assertSurvivesCorruption(original, at, (byte) 0x80);
             }
         }
@@ -640,6 +732,7 @@ class ModelFormatTest
         void shouldRejectArbitraryHeader()
         {
             final byte[] noise = new byte[ModelFormat.HEADER_SIZE];
+
             for (int i = 0; i < noise.length; i++)
             {
                 noise[i] = (byte) ((i * 37) + 11);
@@ -657,10 +750,12 @@ class ModelFormatTest
         final byte value)
     {
         final byte[] data = original.clone();
+
         if (data[at] == value)
         {
             return;
         }
+
         data[at] = value;
 
         try
@@ -683,10 +778,12 @@ class ModelFormatTest
     {
         // MUTABLE local — running sum over the pyramid.
         int total = 0;
+
         for (int dimension = size; dimension >= 1; dimension >>= 1)
         {
             total += dimension * dimension;
         }
+
         return total;
     }
 }

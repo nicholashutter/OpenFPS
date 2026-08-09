@@ -37,15 +37,23 @@ class SpanRendererTest
     private static Framebuffer renderFlat(final float[] screen)
     {
         final Framebuffer target = RasterFixtures.framebuffer(WIDTH, HEIGHT, TILE);
+
         final float[] vertices = new float[TriangleClipper.TRIANGLE_VERTICES
             * TriangleClipper.POSITION_FLOATS];
+
         final float[][] attributes = {RasterFixtures.NO_ATTRIBUTES,
             RasterFixtures.NO_ATTRIBUTES, RasterFixtures.NO_ATTRIBUTES};
+
         RasterFixtures.triangle(vertices, 0, WIDTH, HEIGHT, screen, 1.0f, attributes);
+
         final Rasterizer rasterizer = new Rasterizer(0, 2, 1, Rasterizer.CullMode.NONE);
+
         rasterizer.beginFrame(target);
+
         rasterizer.setupAndBin(vertices, 1, null, new int[] {RED});
+
         rasterizer.rasterize(new SpanRenderer(SpanRenderer.ShadingMode.FLAT, 0), null);
+
         return target;
     }
 
@@ -66,14 +74,22 @@ class SpanRendererTest
         final int px, final int py)
     {
         final float cx = px + 0.5f;
+
         final float cy = py + 0.5f;
+
         final float area2 = orient(screen[0], screen[1], screen[2], screen[3],
             screen[4], screen[5]);
+
         final float l0 = orient(screen[2], screen[3], screen[4], screen[5], cx, cy) / area2;
+
         final float l1 = orient(screen[4], screen[5], screen[0], screen[1], cx, cy) / area2;
+
         final float l2 = orient(screen[0], screen[1], screen[2], screen[3], cx, cy) / area2;
+
         final float invW = l0 / w[0] + l1 / w[1] + l2 / w[2];
+
         final float overW = l0 * q[0] / w[0] + l1 * q[1] / w[1] + l2 * q[2] / w[2];
+
         return overW / invW;
     }
 
@@ -83,12 +99,18 @@ class SpanRendererTest
         final int py)
     {
         final float cx = px + 0.5f;
+
         final float cy = py + 0.5f;
+
         final float area2 = orient(screen[0], screen[1], screen[2], screen[3],
             screen[4], screen[5]);
+
         final float l0 = orient(screen[2], screen[3], screen[4], screen[5], cx, cy) / area2;
+
         final float l1 = orient(screen[4], screen[5], screen[0], screen[1], cx, cy) / area2;
+
         final float l2 = orient(screen[0], screen[1], screen[2], screen[3], cx, cy) / area2;
+
         return l0 / w[0] + l1 / w[1] + l2 / w[2];
     }
 
@@ -98,12 +120,18 @@ class SpanRendererTest
         final int py)
     {
         final float cx = px + 0.5f;
+
         final float cy = py + 0.5f;
+
         final float area2 = orient(screen[0], screen[1], screen[2], screen[3],
             screen[4], screen[5]);
+
         final float l0 = orient(screen[2], screen[3], screen[4], screen[5], cx, cy) / area2;
+
         final float l1 = orient(screen[4], screen[5], screen[0], screen[1], cx, cy) / area2;
+
         final float l2 = orient(screen[0], screen[1], screen[2], screen[3], cx, cy) / area2;
+
         return l0 * q[0] + l1 * q[1] + l2 * q[2];
     }
 
@@ -139,8 +167,11 @@ class SpanRendererTest
         void shouldAcceptFlatShadingWithNoAttributes()
         {
             final SpanRenderer renderer = new SpanRenderer(SpanRenderer.ShadingMode.FLAT, 0);
+
             assertThat(renderer.mode()).isEqualTo(SpanRenderer.ShadingMode.FLAT);
+
             assertThat(renderer.attributeCount()).isZero();
+
             assertThat(SpanRenderer.ShadingMode.FLAT.requiredAttributes()).isZero();
         }
     }
@@ -165,22 +196,29 @@ class SpanRendererTest
             final int expectedUnion)
         {
             final boolean[] a = RasterFixtures.paintedMask(renderFlat(first), CLEAR);
+
             final boolean[] b = RasterFixtures.paintedMask(renderFlat(second), CLEAR);
+
             // MUTABLE locals — running tallies over the two coverage masks.
             int both = 0;
+
             int either = 0;
+
             for (int i = 0; i < a.length; i++)
             {
                 if (a[i] && b[i])
                 {
                     both++;
                 }
+
                 if (a[i] || b[i])
                 {
                     either++;
                 }
             }
+
             assertThat(both).as("pixels painted by both triangles").isZero();
+
             assertThat(either).as("pixels painted by either triangle").isEqualTo(expectedUnion);
         }
 
@@ -196,23 +234,31 @@ class SpanRendererTest
         void shouldPaintAHorizontalSharedEdgeExactlyOnce()
         {
             final boolean[] up = RasterFixtures.paintedMask(renderFlat(POINTING_UP), CLEAR);
+
             final boolean[] down = RasterFixtures.paintedMask(renderFlat(POINTING_DOWN), CLEAR);
+
             // MUTABLE locals — tallies restricted to the shared row.
             int both = 0;
+
             int either = 0;
+
             for (int x = 1; x < 7; x++)
             {
                 final int index = 4 * WIDTH + x;
+
                 if (up[index] && down[index])
                 {
                     both++;
                 }
+
                 if (up[index] || down[index])
                 {
                     either++;
                 }
             }
+
             assertThat(both).as("row 4 pixels painted twice").isZero();
+
             assertThat(either).as("row 4 pixels painted at all").isEqualTo(6);
         }
 
@@ -223,20 +269,28 @@ class SpanRendererTest
             // If this ever stops holding, the fill-rule test above degenerates
             // into a plain coverage test and stops proving anything.
             final Framebuffer target = RasterFixtures.framebuffer(WIDTH, HEIGHT, TILE);
+
             final float[] vertices = new float[TriangleClipper.TRIANGLE_VERTICES
                 * TriangleClipper.POSITION_FLOATS];
+
             final float[][] attributes = {RasterFixtures.NO_ATTRIBUTES,
                 RasterFixtures.NO_ATTRIBUTES, RasterFixtures.NO_ATTRIBUTES};
+
             RasterFixtures.triangle(vertices, 0, WIDTH, HEIGHT, UPPER_RIGHT, 1.0f, attributes);
+
             final Rasterizer rasterizer = new Rasterizer(0, 2, 1, Rasterizer.CullMode.NONE);
+
             rasterizer.beginFrame(target);
+
             rasterizer.setupAndBin(vertices, 1, null, new int[] {RED});
 
             // Edge 1 of this triangle runs from (8, 8) back to (0, 0), the
             // shared diagonal. Evaluated at pixel (3, 3) it must be exactly zero.
             final float[] records = rasterizer.records();
+
             final float value = records[Rasterizer.EDGE1_DX] * 3
                 + records[Rasterizer.EDGE1_DY] * 3 + records[Rasterizer.EDGE1_CONST];
+
             assertThat(value).isZero();
         }
 
@@ -245,15 +299,24 @@ class SpanRendererTest
         void shouldLeaveNoSeamAcrossAQuad()
         {
             final Framebuffer target = RasterFixtures.framebuffer(WIDTH, HEIGHT, TILE);
+
             final int stride = TriangleClipper.POSITION_FLOATS;
+
             final float[] vertices = new float[2 * TriangleClipper.TRIANGLE_VERTICES * stride];
+
             final float[][] attributes = {RasterFixtures.NO_ATTRIBUTES,
                 RasterFixtures.NO_ATTRIBUTES, RasterFixtures.NO_ATTRIBUTES};
+
             RasterFixtures.triangle(vertices, 0, WIDTH, HEIGHT, UPPER_RIGHT, 1.0f, attributes);
+
             RasterFixtures.triangle(vertices, 1, WIDTH, HEIGHT, LOWER_LEFT, 1.0f, attributes);
+
             final Rasterizer rasterizer = new Rasterizer(0, 2, 1, Rasterizer.CullMode.NONE);
+
             rasterizer.beginFrame(target);
+
             rasterizer.setupAndBin(vertices, 2, null, new int[] {RED, RED});
+
             rasterizer.rasterize(new SpanRenderer(SpanRenderer.ShadingMode.FLAT, 0), null);
 
             for (int y = 0; y < 8; y++)
@@ -263,6 +326,7 @@ class SpanRendererTest
                     assertThat(target.pixel(x, y)).as("pixel %d,%d", x, y).isEqualTo(RED);
                 }
             }
+
             assertThat(target.pixel(8, 8)).isEqualTo(CLEAR);
         }
     }
@@ -275,20 +339,27 @@ class SpanRendererTest
         void shouldPaintNothingWhenTheTileDoesNotMeetTheTriangle()
         {
             final Framebuffer target = RasterFixtures.framebuffer(WIDTH, HEIGHT, TILE);
+
             final float[] vertices = new float[TriangleClipper.TRIANGLE_VERTICES
                 * TriangleClipper.POSITION_FLOATS];
+
             final float[][] attributes = {RasterFixtures.NO_ATTRIBUTES,
                 RasterFixtures.NO_ATTRIBUTES, RasterFixtures.NO_ATTRIBUTES};
+
             RasterFixtures.triangle(vertices, 0, WIDTH, HEIGHT,
                 new float[] {0.0f, 0.0f, 8.0f, 0.0f, 0.0f, 8.0f}, 1.0f, attributes);
+
             final Rasterizer rasterizer = new Rasterizer(0, 2, 1, Rasterizer.CullMode.NONE);
+
             rasterizer.beginFrame(target);
+
             rasterizer.setupAndBin(vertices, 1, null, new int[] {RED});
 
             // Hand the triangle a tile it does not overlap at all.
             new SpanRenderer(SpanRenderer.ShadingMode.FLAT, 0).renderTriangle(target,
                 rasterizer.records(), 0, Rasterizer.NO_MATERIAL, RED, null,
                 16, 16, 31, 31);
+
             assertThat(RasterFixtures.paintedMask(target, CLEAR)).containsOnly(false);
         }
 
@@ -301,14 +372,21 @@ class SpanRendererTest
             // an edge the fill rule does not award to this triangle.
             final Framebuffer target = renderFlat(new float[] {4.0f, 4.0f, 7.0f, 4.0f,
                 4.0f, 7.0f});
+
             assertThat(target.pixel(4, 4)).isEqualTo(RED);
+
             assertThat(target.pixel(5, 4)).isEqualTo(RED);
+
             assertThat(target.pixel(4, 5)).isEqualTo(RED);
+
             assertThat(target.pixel(6, 4)).as("centre exactly on the hypotenuse")
                 .isEqualTo(CLEAR);
+
             assertThat(target.pixel(5, 5)).as("centre exactly on the hypotenuse")
                 .isEqualTo(CLEAR);
+
             assertThat(target.pixel(3, 4)).isEqualTo(CLEAR);
+
             assertThat(target.pixel(4, 3)).isEqualTo(CLEAR);
         }
     }
@@ -326,22 +404,30 @@ class SpanRendererTest
         private Framebuffer renderVertexColored()
         {
             final Framebuffer target = RasterFixtures.framebuffer(WIDTH, HEIGHT, TILE);
+
             final int stride = TriangleClipper.POSITION_FLOATS
                 + SpanRenderer.VERTEX_COLOR_ATTRIBUTES;
+
             final float[] vertices =
                 new float[TriangleClipper.TRIANGLE_VERTICES * stride];
+
             for (int v = 0; v < TriangleClipper.TRIANGLE_VERTICES; v++)
             {
                 RasterFixtures.vertex(vertices, v * stride, WIDTH, HEIGHT,
                     SCREEN[v * 2], SCREEN[v * 2 + 1], W[v],
                     new float[] {REDS[v], 0.0f, 0.0f});
             }
+
             final Rasterizer rasterizer = new Rasterizer(SpanRenderer.VERTEX_COLOR_ATTRIBUTES,
                 2, 1, Rasterizer.CullMode.NONE);
+
             rasterizer.beginFrame(target);
+
             rasterizer.setupAndBin(vertices, 1, null, null);
+
             rasterizer.rasterize(new SpanRenderer(SpanRenderer.ShadingMode.VERTEX_COLOR,
                 SpanRenderer.VERTEX_COLOR_ATTRIBUTES), null);
+
             return target;
         }
 
@@ -350,8 +436,10 @@ class SpanRendererTest
         void shouldMatchTheTextbookInterpolation()
         {
             final Framebuffer target = renderVertexColored();
+
             // MUTABLE local — how many covered pixels were actually compared.
             int compared = 0;
+
             for (int y = 3; y < 28; y++)
             {
                 for (int x = 3; x < 28; x++)
@@ -360,15 +448,19 @@ class SpanRendererTest
                     {
                         continue;
                     }
+
                     final float expected = oracle(SCREEN, W, REDS, x, y);
+
                     // The renderer truncates toward zero on the way into the
                     // 8-bit channel, so allow one whole step either side.
                     assertThat((float) Rgba.red(target.pixel(x, y)))
                         .as("red at %d,%d", x, y)
                         .isCloseTo(expected, offset(1.5f));
+
                     compared++;
                 }
             }
+
             assertThat(compared).isGreaterThan(100);
         }
 
@@ -377,8 +469,10 @@ class SpanRendererTest
         void shouldDifferFromAffineInterpolation()
         {
             final Framebuffer target = renderVertexColored();
+
             // MUTABLE local — largest gap between the correct and affine values.
             float worst = 0.0f;
+
             for (int y = 3; y < 28; y++)
             {
                 for (int x = 3; x < 28; x++)
@@ -387,11 +481,14 @@ class SpanRendererTest
                     {
                         continue;
                     }
+
                     final float gap = Math.abs(oracle(SCREEN, W, REDS, x, y)
                         - affine(SCREEN, REDS, x, y));
+
                     worst = Math.max(worst, gap);
                 }
             }
+
             // If the renderer ever dropped the divide, the assertion above would
             // still have to hold against the oracle — so the two together pin it.
             assertThat(worst).as("perspective vs affine difference").isGreaterThan(20.0f);
@@ -402,6 +499,7 @@ class SpanRendererTest
         void shouldStoreTheInterpolatedReciprocalAsDepth()
         {
             final Framebuffer target = renderVertexColored();
+
             for (int y = 5; y < 20; y += 3)
             {
                 for (int x = 5; x < 20; x += 3)
@@ -410,6 +508,7 @@ class SpanRendererTest
                     {
                         continue;
                     }
+
                     assertThat(target.depthAt(x, y)).as("depth at %d,%d", x, y)
                         .isCloseTo(oracleInvW(SCREEN, W, x, y), offset(1.0e-5f));
                 }
@@ -424,22 +523,32 @@ class SpanRendererTest
         private Framebuffer renderTextured(final MipChain[] textures, final int material)
         {
             final Framebuffer target = RasterFixtures.framebuffer(WIDTH, HEIGHT, TILE);
+
             final int stride = TriangleClipper.POSITION_FLOATS
                 + SpanRenderer.TEXTURED_ATTRIBUTES;
+
             final float[] vertices = new float[TriangleClipper.TRIANGLE_VERTICES * stride];
+
             final float[] screen = {2.0f, 2.0f, 28.0f, 2.0f, 2.0f, 28.0f};
+
             final float[][] uvs = {{0.0f, 0.0f}, {1.0f, 0.0f}, {0.0f, 1.0f}};
+
             for (int v = 0; v < TriangleClipper.TRIANGLE_VERTICES; v++)
             {
                 RasterFixtures.vertex(vertices, v * stride, WIDTH, HEIGHT,
                     screen[v * 2], screen[v * 2 + 1], 2.0f, uvs[v]);
             }
+
             final Rasterizer rasterizer = new Rasterizer(SpanRenderer.TEXTURED_ATTRIBUTES,
                 2, 1, Rasterizer.CullMode.NONE);
+
             rasterizer.beginFrame(target);
+
             rasterizer.setupAndBin(vertices, 1, new int[] {material}, new int[] {RED});
+
             rasterizer.rasterize(new SpanRenderer(SpanRenderer.ShadingMode.TEXTURED,
                 SpanRenderer.TEXTURED_ATTRIBUTES), textures);
+
             return target;
         }
 
@@ -447,9 +556,13 @@ class SpanRendererTest
         void shouldPaintTexelsFromTheBoundTexture()
         {
             final int green = TextureFixtures.rgba(0, MAX_CHANNEL, 0, MAX_CHANNEL);
+
             final MipChain[] textures = {TextureFixtures.solid(16, 16, 5, green)};
+
             final Framebuffer target = renderTextured(textures, 0);
+
             assertThat(target.pixel(6, 6)).isEqualTo(green);
+
             assertThat(target.pixel(30, 30)).isEqualTo(CLEAR);
         }
 
@@ -457,6 +570,7 @@ class SpanRendererTest
         void shouldFallBackToTheFlatColourWhenNoMaterialIsSet()
         {
             final Framebuffer target = renderTextured(null, Rasterizer.NO_MATERIAL);
+
             assertThat(target.pixel(6, 6)).isEqualTo(RED);
         }
 
@@ -464,8 +578,11 @@ class SpanRendererTest
         void shouldFallBackToTheFlatColourWhenTheMaterialIsOutOfRange()
         {
             final int green = TextureFixtures.rgba(0, MAX_CHANNEL, 0, MAX_CHANNEL);
+
             final MipChain[] textures = {TextureFixtures.solid(16, 16, 5, green)};
+
             final Framebuffer target = renderTextured(textures, 7);
+
             assertThat(target.pixel(6, 6)).isEqualTo(RED);
         }
 
@@ -477,7 +594,9 @@ class SpanRendererTest
             // magnification, so the finest level must win. Only level 0 carries
             // the marker colour; a coarser level would report black.
             final int[] base = new int[4 * 4];
+
             Arrays.fill(base, TextureFixtures.rgba(MAX_CHANNEL, 0, 0, MAX_CHANNEL));
+
             final int[][] levels = {
                 base,
                 {TextureFixtures.rgba(0, 0, MAX_CHANNEL, MAX_CHANNEL),
@@ -485,9 +604,13 @@ class SpanRendererTest
                     TextureFixtures.rgba(0, 0, MAX_CHANNEL, MAX_CHANNEL),
                     TextureFixtures.rgba(0, 0, MAX_CHANNEL, MAX_CHANNEL)},
                 {TextureFixtures.rgba(0, 0, MAX_CHANNEL, MAX_CHANNEL)}};
+
             final MipChain[] textures = {TextureFixtures.chain(4, 4, levels)};
+
             final Framebuffer target = renderTextured(textures, 0);
+
             assertThat(Rgba.red(target.pixel(6, 6))).isEqualTo(MAX_CHANNEL);
+
             assertThat(Rgba.blue(target.pixel(6, 6))).isZero();
         }
     }

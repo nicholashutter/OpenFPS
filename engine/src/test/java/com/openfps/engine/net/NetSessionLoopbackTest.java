@@ -76,34 +76,50 @@ class NetSessionLoopbackTest
     void shouldExchangeEveryTicOverLoopback()
     {
         final DesktopDatagramPort aliceSocket = new DesktopDatagramPort();
+
         final DesktopDatagramPort bobSocket = new DesktopDatagramPort();
+
         final NetSession alice = new NetSession(aliceSocket, ALICE, TIC_NANOS);
+
         final NetSession bob = new NetSession(bobSocket, BOB, TIC_NANOS);
+
         try
         {
             // Port 0 asks the OS for a free one, which is what lets this run
             // alongside a real game and alongside itself.
             alice.open(0);
+
             bob.open(0);
+
             final int alicePort = aliceSocket.localPort();
+
             final int bobPort = bobSocket.localPort();
+
             assertThat(alicePort).as("the OS gave us no port").isPositive();
+
             assertThat(bobPort).isPositive();
+
             assertThat(bobPort).isNotEqualTo(alicePort);
 
             alice.addPeer(BOB, "127.0.0.1:" + bobPort);
+
             bob.addPeer(ALICE, "127.0.0.1:" + alicePort);
 
             for (int tic = 0; tic < TICS; tic++)
             {
                 alice.recordLocalCommand(commandFor(tic, ALICE));
+
                 bob.recordLocalCommand(commandFor(tic, BOB));
+
                 alice.tick(tic);
+
                 bob.tick(tic);
             }
+
             // One more pass with no new input, so the last tic each side sent
             // has somewhere to be received.
             alice.tick(TICS);
+
             bob.tick(TICS);
 
             // TICS + 1: the drain pass above also sends, because a session with
@@ -111,9 +127,13 @@ class NetSessionLoopbackTest
             // quiet the moment the input stops. That is the redundancy model
             // working, not an off-by-one.
             assertThat(alice.packetsSent()).isEqualTo(TICS + 1L);
+
             assertThat(bob.packetsReceived()).isPositive();
+
             assertThat(alice.packetsReceived()).isPositive();
+
             assertThat(alice.packetsMalformed()).isZero();
+
             assertThat(alice.packetsFromStrangers()).isZero();
 
             // Every tic either side sent must be readable on the other, with
@@ -124,14 +144,17 @@ class NetSessionLoopbackTest
                 assertThat(bob.commands().has(1, tic))
                     .as("Bob never received Alice's tic %d", tic)
                     .isTrue();
+
                 assertThat(bob.commands().forward(1, tic))
                     .isEqualTo(commandFor(tic, ALICE).forward());
+
                 assertThat(bob.commands().buttons(1, tic))
                     .isEqualTo(commandFor(tic, ALICE).buttons());
 
                 assertThat(alice.commands().has(1, tic))
                     .as("Alice never received Bob's tic %d", tic)
                     .isTrue();
+
                 assertThat(alice.commands().strafe(1, tic))
                     .isEqualTo(commandFor(tic, BOB).strafe());
             }
@@ -139,6 +162,7 @@ class NetSessionLoopbackTest
         finally
         {
             alice.close();
+
             bob.close();
         }
     }
@@ -152,29 +176,41 @@ class NetSessionLoopbackTest
         // like it worked — every tic would arrive — and would degrade badly the
         // first time a real link dropped anything.
         final DesktopDatagramPort aliceSocket = new DesktopDatagramPort();
+
         final DesktopDatagramPort bobSocket = new DesktopDatagramPort();
+
         final NetSession alice = new NetSession(aliceSocket, ALICE, TIC_NANOS);
+
         final NetSession bob = new NetSession(bobSocket, BOB, TIC_NANOS);
+
         try
         {
             alice.open(0);
+
             bob.open(0);
+
             alice.addPeer(BOB, "127.0.0.1:" + bobSocket.localPort());
+
             bob.addPeer(ALICE, "127.0.0.1:" + aliceSocket.localPort());
 
             for (int tic = 0; tic < TICS; tic++)
             {
                 alice.recordLocalCommand(commandFor(tic, ALICE));
+
                 bob.recordLocalCommand(commandFor(tic, BOB));
+
                 alice.tick(tic);
+
                 bob.tick(tic);
             }
 
             assertThat(alice.peerById(BOB).remoteAckedTic())
                 .as("Bob never acknowledged anything Alice sent")
                 .isGreaterThanOrEqualTo(0);
+
             assertThat(bob.peerById(ALICE).remoteAckedTic())
                 .isGreaterThanOrEqualTo(0);
+
             assertThat(alice.peerById(BOB).ackWindow().highestContiguousTic())
                 .as("a clean loopback link should have no gaps")
                 .isGreaterThan(TICS / 2);
@@ -182,6 +218,7 @@ class NetSessionLoopbackTest
         finally
         {
             alice.close();
+
             bob.close();
         }
     }
@@ -195,14 +232,19 @@ class NetSessionLoopbackTest
         // failure mode worth having a test for: a hang is much harder to
         // diagnose from a bug report than a wrong value.
         final DesktopDatagramPort socket = new DesktopDatagramPort();
+
         final NetSession lonely = new NetSession(socket, ALICE, TIC_NANOS);
+
         try
         {
             lonely.open(0);
+
             lonely.recordLocalCommand(commandFor(0, ALICE));
 
             assertThat(lonely.tick(0)).isZero();
+
             assertThat(lonely.packetsReceived()).isZero();
+
             // No peers, so nothing was sent either — a host waiting for someone
             // to join is a legitimate state, not an error.
             assertThat(lonely.packetsSent()).isZero();

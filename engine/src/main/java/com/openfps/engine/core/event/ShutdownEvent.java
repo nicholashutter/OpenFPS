@@ -26,7 +26,9 @@ public final class ShutdownEvent implements I_EngineEvent
                          final String reason)
     {
         this.sequenceNumber = sequenceNumber;
+
         this.timestampNanos = timestampNanos;
+
         this.reason = reason;
     }
 

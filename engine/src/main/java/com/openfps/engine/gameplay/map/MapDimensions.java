@@ -39,10 +39,12 @@ public record MapDimensions(float width, float depth, float height)
         {
             throw new IllegalArgumentException("width must be positive, got " + width);
         }
+
         if (!(depth > 0.0f))
         {
             throw new IllegalArgumentException("depth must be positive, got " + depth);
         }
+
         if (!(height > 0.0f))
         {
             throw new IllegalArgumentException("height must be positive, got " + height);

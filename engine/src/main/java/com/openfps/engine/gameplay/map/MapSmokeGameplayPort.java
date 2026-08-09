@@ -52,6 +52,7 @@ public final class MapSmokeGameplayPort implements I_GameplayPort
     private MapSmokeGameplayPort(final MapSpec spec, final Match match)
     {
         this.spec = spec;
+
         this.match = match;
     }
 
@@ -71,19 +72,24 @@ public final class MapSmokeGameplayPort implements I_GameplayPort
     public static I_GameplayPort create(final I_InputPort inputPort, final String mapId)
     {
         final MapSpec spec = MapLoader.load(mapId);
+
         if (spec == null)
         {
             LOG.warn("MapSmokeGameplayPort: unknown map id '{}', using cornerstone fallback",
                 mapId);
+
             return create(inputPort, "cornerstone");
         }
+
         // A small, deterministic bot roster: one sentry at the centre of
         // each lane, walking closed-form routes. Skill is DUMB so the
         // smoke test is not flaky — we are not measuring hit rates here,
         // we are measuring that the engine can run a spec'd match.
         final Bot[] roster = botsFromSpec(spec);
+
         final Match match = new Match(roster, new BotRng(), BotSkill.DUMB,
             Match.UNLIMITED_DEATHS, spec);
+
         return new MapSmokeGameplayPort(spec, match);
     }
 
@@ -96,8 +102,10 @@ public final class MapSmokeGameplayPort implements I_GameplayPort
     public static I_GameplayPort forSpec(final MapSpec spec)
     {
         final Bot[] roster = botsFromSpec(spec);
+
         final Match match = new Match(roster, new BotRng(), BotSkill.DUMB,
             Match.UNLIMITED_DEATHS, spec);
+
         return new MapSmokeGameplayPort(spec, match);
     }
 
@@ -133,11 +141,13 @@ public final class MapSmokeGameplayPort implements I_GameplayPort
         {
             return;
         }
+
         // Player stands at the world origin; the bots patrol the waypoints
         // declared in the spec. The actual positions are deterministic —
         // a function of ticIndex — and the smoke test does not assert on
         // them.
         match.tick(ticIndex, 0.0f, 0.0f, 0.0f);
+
         if (ticIndex == 0 || ticIndex == MAX_TICS - 1)
         {
             LOG.info("Tic {}: match state = {}, player health = {}, bots alive = {}/{}",
@@ -162,6 +172,7 @@ public final class MapSmokeGameplayPort implements I_GameplayPort
     private static Bot[] botsFromSpec(final MapSpec spec)
     {
         final int count = Math.min(spec.botWaypoints().size(), Match.DEFAULT_BOT_COUNT);
+
         if (count == 0)
         {
             // No waypoints: a single sentry at the world origin. An
@@ -174,13 +185,17 @@ public final class MapSmokeGameplayPort implements I_GameplayPort
                     BotPattern.SENTRY, 0.0f, 60, 0)
             };
         }
+
         final Bot[] bots = new Bot[count];
+
         for (int index = 0; index < count; index++)
         {
             final Waypoint wp = spec.botWaypoints().get(index);
+
             bots[index] = new Bot(Match.FIRST_BOT_ENTITY_ID + index, wp.x(), wp.y(), wp.z(),
                 BotPattern.SENTRY, 0.0f, 60, index);
         }
+
         return bots;
     }
 }

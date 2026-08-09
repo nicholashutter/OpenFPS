@@ -103,6 +103,7 @@ public final class MipChain
     public MipChain(final int width, final int height, final int[][] levels)
     {
         requirePowerOfTwo(width, "width");
+
         requirePowerOfTwo(height, "height");
 
         if (levels == null || levels.length == 0)
@@ -111,6 +112,7 @@ public final class MipChain
         }
 
         final int maxLevels = log2(Math.max(width, height)) + 1;
+
         if (levels.length > maxLevels)
         {
             throw new IllegalArgumentException(
@@ -119,17 +121,24 @@ public final class MipChain
         }
 
         this.levelCount = levels.length;
+
         this.levelOffset = new int[levelCount];
+
         this.levelWidthMask = new int[levelCount];
+
         this.levelHeightMask = new int[levelCount];
+
         this.levelWidthShift = new int[levelCount];
 
         // MUTABLE local — running texel count across the pyramid.
         int total = 0;
+
         for (int level = 0; level < levelCount; level++)
         {
             final int levelWidth = Math.max(1, width >> level);
+
             final int levelHeight = Math.max(1, height >> level);
+
             final int expected = levelWidth * levelHeight;
 
             if (levels[level] == null || levels[level].length != expected)
@@ -140,13 +149,18 @@ public final class MipChain
             }
 
             levelOffset[level] = total;
+
             levelWidthMask[level] = levelWidth - 1;
+
             levelHeightMask[level] = levelHeight - 1;
+
             levelWidthShift[level] = log2(levelWidth);
+
             total += expected;
         }
 
         this.texels = new int[total];
+
         for (int level = 0; level < levelCount; level++)
         {
             System.arraycopy(levels[level], 0, texels, levelOffset[level], levels[level].length);
@@ -200,7 +214,9 @@ public final class MipChain
     public int texel(final int level, final int x, final int y)
     {
         final int wrappedX = x & levelWidthMask[level];
+
         final int wrappedY = y & levelHeightMask[level];
+
         return texels[levelOffset[level] + (wrappedY << levelWidthShift[level]) + wrappedX];
     }
 
@@ -228,6 +244,7 @@ public final class MipChain
         {
             return "null";
         }
+
         return Integer.toString(level.length);
     }
 }

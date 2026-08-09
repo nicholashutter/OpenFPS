@@ -142,10 +142,15 @@ final class DemoSmokeInMotionTest
     private static ModelFormat wall()
     {
         final int[] vertices = new int[QUAD_CORNERS * ModelFormat.VERTEX_STRIDE_INTS];
+
         ModelFormat.writeVertex(vertices, 0, -WALL_HALF, -WALL_HALF, 0.0f, 0.0f, 0.0f, WALL);
+
         ModelFormat.writeVertex(vertices, 1, WALL_HALF, -WALL_HALF, 0.0f, 1.0f, 0.0f, WALL);
+
         ModelFormat.writeVertex(vertices, 2, WALL_HALF, WALL_HALF, 0.0f, 1.0f, 1.0f, WALL);
+
         ModelFormat.writeVertex(vertices, 3, -WALL_HALF, WALL_HALF, 0.0f, 0.0f, 1.0f, WALL);
+
         return ModelFormat.ofGeometry(vertices, QUAD_INDICES);
     }
 
@@ -174,15 +179,22 @@ final class DemoSmokeInMotionTest
         Fixture()
         {
             final Scene.Builder builder = Scene.builder();
+
             builder.addWorldInstance(wall(),
                 DemoScene.placement(0.0f, 0.0f, -WALL_DISTANCE, 0.0f, 1.0f));
+
             this.effects = DemoEffects.addTo(builder);
 
             final I_TimePort time = new NullTimePort();
+
             time.init();
+
             this.port = new SoftwareRenderPort(null, time);
+
             port.init();
+
             port.resize(WIDTH, HEIGHT);
+
             // The demo's own camera parameters, because the muzzle offsets are
             // tuned against them: a different field of view puts the puff
             // somewhere else and changes what fraction of the frame it covers.
@@ -191,12 +203,15 @@ final class DemoSmokeInMotionTest
                 PlayerController.DEFAULT_FOV_Y_RADIANS,
                 (float) WIDTH / (float) HEIGHT,
                 PlayerController.DEFAULT_NEAR_PLANE_UNITS));
+
             port.setScene(builder.build());
 
             // The first publish is what hides the pool, so the empty room has to
             // be taken after it and not before — see DemoEffects.hidden.
             effects.publish(port);
+
             port.renderFrame(0);
+
             port.copyColorInto(empty);
         }
 
@@ -209,9 +224,13 @@ final class DemoSmokeInMotionTest
             {
                 effects.spawn(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, -1.0f);
             }
+
             effects.advance();
+
             effects.publish(port);
+
             port.renderFrame(index);
+
             port.copyColorInto(frame);
         }
 
@@ -219,8 +238,10 @@ final class DemoSmokeInMotionTest
         float smokeFraction()
         {
             final int from = (int) (WIDTH * SMOKE_WINDOW_FRACTION);
+
             // MUTABLE local — pixels counted so far.
             int changed = 0;
+
             for (int y = 0; y < HEIGHT; y++)
             {
                 for (int x = from; x < WIDTH; x++)
@@ -231,6 +252,7 @@ final class DemoSmokeInMotionTest
                     }
                 }
             }
+
             return changed / FRAME_PIXELS;
         }
 
@@ -241,16 +263,20 @@ final class DemoSmokeInMotionTest
         int deepestDrop()
         {
             final int from = (int) (WIDTH * SMOKE_WINDOW_FRACTION);
+
             // MUTABLE local — the deepest drop found so far.
             int deepest = 0;
+
             for (int y = 0; y < HEIGHT; y++)
             {
                 for (int x = from; x < WIDTH; x++)
                 {
                     final int pixel = frame[y * WIDTH + x];
+
                     deepest = Math.max(deepest, Rgba.blue(WALL) - Rgba.blue(pixel));
                 }
             }
+
             return deepest;
         }
 
@@ -281,11 +307,13 @@ final class DemoSmokeInMotionTest
             // lasted five tics. Whatever else is true of the effect, the frame
             // after the trigger has to have something on it.
             final Fixture fixture = new Fixture();
+
             fixture.tic(true, 0);
 
             assertThat(fixture.smokeFraction())
                 .as("fraction of the frame covered one tic after the shot")
                 .isGreaterThan(FRESH_PUFF_FRACTION);
+
             fixture.shutdown();
         }
 
@@ -299,12 +327,16 @@ final class DemoSmokeInMotionTest
             // and its smoke read as one event and the smoke was the part you
             // could drop.
             final Fixture fixture = new Fixture();
+
             fixture.tic(true, 0);
+
             // MUTABLE local — tics on which the cloud was visible at all.
             int seen = 0;
+
             for (int tic = 1; tic <= DemoEffects.PUFF_LIFE_TICS; tic++)
             {
                 fixture.tic(false, tic);
+
                 if (fixture.smokeFraction() > 0.0f)
                 {
                     seen++;
@@ -314,6 +346,7 @@ final class DemoSmokeInMotionTest
             assertThat(seen)
                 .as("tics of a single puff a player could see something on")
                 .isGreaterThanOrEqualTo(30);
+
             fixture.shutdown();
         }
 
@@ -329,20 +362,26 @@ final class DemoSmokeInMotionTest
             // that is the first empty frame. Counting to PUFF_LIFE_TICS instead
             // steps past the end and measures the empty frame twice.
             final Fixture fixture = new Fixture();
+
             fixture.tic(true, 0);
+
             for (int tic = 1; tic < DemoEffects.PUFF_LIFE_TICS - 1; tic++)
             {
                 fixture.tic(false, tic);
             }
+
             final float lastRung = fixture.smokeFraction();
+
             fixture.tic(false, DemoEffects.PUFF_LIFE_TICS - 1);
 
             assertThat(lastRung)
                 .as("the final rung is still a wisp")
                 .isGreaterThan(0.0f);
+
             assertThat(fixture.smokeFraction())
                 .as("and the tic after the puff's life is empty")
                 .isZero();
+
             fixture.shutdown();
         }
     }
@@ -361,16 +400,20 @@ final class DemoSmokeInMotionTest
             // puff shorter-lived than the gap between shots strobes at five
             // hertz, which the eye reads as a glitch rather than as smoke.
             final Fixture fixture = new Fixture();
+
             final int tics = SHOTS * DemoGameplayPort.FIRE_INTERVAL_TICS;
+
             for (int tic = 0; tic < tics; tic++)
             {
                 final boolean fire = tic % DemoGameplayPort.FIRE_INTERVAL_TICS == 0;
+
                 fixture.tic(fire, tic);
 
                 assertThat(fixture.smokeFraction())
                     .as("smoke on screen at tic %d of %d", tic, tics)
                     .isGreaterThan(SUSTAINED_FRACTION);
             }
+
             fixture.shutdown();
         }
 
@@ -389,8 +432,11 @@ final class DemoSmokeInMotionTest
             // puffs cover somewhat less than 2x of a single fresh puff. The
             // property the test still guards is the climb, not the multiplier.
             final Fixture fixture = new Fixture();
+
             fixture.tic(true, 0);
+
             final float afterOne = fixture.smokeFraction();
+
             for (int tic = 1; tic < SHOTS * DemoGameplayPort.FIRE_INTERVAL_TICS; tic++)
             {
                 fixture.tic(tic % DemoGameplayPort.FIRE_INTERVAL_TICS == 0, tic);
@@ -400,6 +446,7 @@ final class DemoSmokeInMotionTest
                 .as("three shots in, against one shot's %s", afterOne)
                 .isGreaterThan(HELD_TRIGGER_FRACTION)
                 .isGreaterThan(afterOne * 1.5f);
+
             fixture.shutdown();
         }
 
@@ -414,7 +461,9 @@ final class DemoSmokeInMotionTest
             // and against the SMOKE's own colour, since a pixel that reached it
             // would be one the wall contributed nothing to.
             final Fixture fixture = new Fixture();
+
             final int floor = Rgba.blue(WALL) - Rgba.blue(DemoEffects.smokeColour());
+
             for (int tic = 0; tic < SHOTS * DemoGameplayPort.FIRE_INTERVAL_TICS; tic++)
             {
                 fixture.tic(tic % DemoGameplayPort.FIRE_INTERVAL_TICS == 0, tic);
@@ -422,10 +471,12 @@ final class DemoSmokeInMotionTest
                 assertThat(fixture.deepestDrop())
                     .as("deepest pixel at tic %d must be visibly darker than the wall", tic)
                     .isGreaterThan(CHANGED_DELTA);
+
                 assertThat(fixture.deepestDrop())
                     .as("but the wall must still show through it at tic %d", tic)
                     .isLessThan(floor);
             }
+
             fixture.shutdown();
         }
     }

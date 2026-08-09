@@ -59,6 +59,7 @@ public final class MemoryPortFactory
     {
         LOG.info("MemoryPortFactory: selecting JvmMemoryPort backend (capacity={} bytes)",
             heapSizeBytes);
+
         return new JvmMemoryPort();
     }
 
@@ -74,6 +75,7 @@ public final class MemoryPortFactory
     {
         LOG.info("MemoryPortFactory: selecting ZoneMemoryPort backend (heap={} bytes)",
             heapSizeBytes);
+
         return new ZoneMemoryPort();
     }
 

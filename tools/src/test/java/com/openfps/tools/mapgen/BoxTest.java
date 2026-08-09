@@ -26,15 +26,25 @@ final class BoxTest
             "{\"type\":\"box\",\"x\":1.0,\"y\":2.0,\"z\":3.0,"
             + "\"sx\":10.0,\"sy\":20.0,\"sz\":30.0,"
             + "\"submesh\":1,\"texture\":\"wall\"}");
+
         final Box box = Box.fromJson(obj, 8.0f);
+
         assertThat(box.type()).isEqualTo("box");
+
         assertThat(box.submesh()).isEqualTo(1);
+
         assertThat(box.texture()).isEqualTo("wall");
+
         assertThat(box.minX()).isEqualTo(1.0f);
+
         assertThat(box.minY()).isEqualTo(2.0f);
+
         assertThat(box.minZ()).isEqualTo(3.0f);
+
         assertThat(box.sizeX()).isEqualTo(10.0f);
+
         assertThat(box.sizeY()).isEqualTo(20.0f);
+
         assertThat(box.sizeZ()).isEqualTo(30.0f);
     }
 
@@ -43,8 +53,11 @@ final class BoxTest
     {
         final JsonObject obj = (JsonObject) JsonParser.parseString(
             "{\"x\":0.0,\"y\":0.0,\"z\":0.0,\"sx\":1.0,\"sy\":1.0,\"sz\":1.0}");
+
         final Box box = Box.fromJson(obj, 8.0f);
+
         assertThat(box.submesh()).isEqualTo(Box.SUBMESH_WALL);
+
         assertThat(box.texture()).isEqualTo("wall");
     }
 
@@ -53,6 +66,7 @@ final class BoxTest
     {
         final JsonObject obj = (JsonObject) JsonParser.parseString(
             "{\"sx\":1.0,\"sy\":1.0,\"sz\":1.0}");
+
         assertThatThrownBy(() -> Box.fromJson(obj, 8.0f))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("x");
@@ -63,6 +77,7 @@ final class BoxTest
     {
         final JsonObject obj = (JsonObject) JsonParser.parseString(
             "{\"x\":0.0,\"y\":0.0,\"z\":0.0,\"sy\":1.0,\"sz\":1.0}");
+
         assertThatThrownBy(() -> Box.fromJson(obj, 8.0f))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("sx");
@@ -73,6 +88,7 @@ final class BoxTest
     {
         final JsonObject obj = (JsonObject) JsonParser.parseString(
             "{\"x\":0.0,\"y\":0.0,\"z\":0.0,\"sx\":0.0,\"sy\":1.0,\"sz\":1.0}");
+
         assertThatThrownBy(() -> Box.fromJson(obj, 8.0f))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("sx");
@@ -92,6 +108,7 @@ final class BoxTest
     {
         final Box box = new Box(0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f,
             Box.SUBMESH_WALL, "wall", 8.0f);
+
         box.validate();
     }
 
@@ -100,6 +117,7 @@ final class BoxTest
     {
         final Box box = new Box(0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f,
             Box.SUBMESH_WALL, "wall", 8.0f);
+
         assertThatThrownBy(() -> box.addTo(new com.openfps.tools.model.ModelBuilder("test"), -1))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("textureIndex");

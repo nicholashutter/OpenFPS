@@ -64,6 +64,7 @@ public final class DesktopTimePort implements I_TimePort
     public void init()
     {
         originNanos = System.nanoTime();
+
         LOG.info("DesktopTimePort initialized: monotonic origin captured");
     }
 

@@ -90,11 +90,14 @@ public final class WadFilePort implements I_WadPort
         {
             throw new WadException("WadFilePort requires an I_MemoryPort");
         }
+
         if (budgetBytes <= 0)
         {
             throw new WadException("WadFilePort budget must be > 0, got " + budgetBytes);
         }
+
         this.memory = memory;
+
         this.budgetBytes = budgetBytes;
     }
 
@@ -104,13 +107,17 @@ public final class WadFilePort implements I_WadPort
         if (initialized)
         {
             LOG.warn("WadFilePort.init() called twice — ignoring");
+
             return;
         }
+
         if (memory.state() == I_MemoryPort.State.UNINITIALIZED)
         {
             memory.init(budgetBytes);
         }
+
         initialized = true;
+
         LOG.info("WadFilePort initialized: lump cache budget={} bytes", budgetBytes);
     }
 
@@ -118,7 +125,9 @@ public final class WadFilePort implements I_WadPort
     public boolean open(final String path)
     {
         requireInitialized("open");
+
         close();
+
         try
         {
             return adopt(WadReader.fromFile(path), path);
@@ -126,6 +135,7 @@ public final class WadFilePort implements I_WadPort
         catch (final WadException e)
         {
             LOG.error("Failed to open WAD '{}'", path, e);
+
             return false;
         }
     }
@@ -142,7 +152,9 @@ public final class WadFilePort implements I_WadPort
     public boolean openInMemory(final byte[] wadBytes, final String label)
     {
         requireInitialized("openInMemory");
+
         close();
+
         try
         {
             return adopt(WadReader.fromBytes(wadBytes), label);
@@ -150,6 +162,7 @@ public final class WadFilePort implements I_WadPort
         catch (final WadException e)
         {
             LOG.error("Failed to open in-memory WAD '{}'", label, e);
+
             return false;
         }
     }
@@ -161,9 +174,13 @@ public final class WadFilePort implements I_WadPort
         {
             return;
         }
+
         cache.flush();
+
         cache = null;
+
         reader = null;
+
         LOG.debug("WadFilePort closed the open WAD");
     }
 
@@ -173,13 +190,17 @@ public final class WadFilePort implements I_WadPort
         if (reader == null)
         {
             LOG.warn("readLump({}) with no WAD open", lumpIndex);
+
             return null;
         }
+
         if (!reader.hasLump(lumpIndex))
         {
             LOG.debug("readLump({}) — index out of range [0, {})", lumpIndex, reader.lumpCount());
+
             return null;
         }
+
         return cache.load(lumpIndex);
     }
 
@@ -189,14 +210,19 @@ public final class WadFilePort implements I_WadPort
         if (reader == null)
         {
             LOG.warn("readLump('{}') with no WAD open", lumpName);
+
             return null;
         }
+
         final int index = reader.findLump(lumpName);
+
         if (index == WadReader.LUMP_NOT_FOUND)
         {
             LOG.debug("readLump('{}') — no such lump", lumpName);
+
             return null;
         }
+
         return cache.load(index);
     }
 
@@ -207,6 +233,7 @@ public final class WadFilePort implements I_WadPort
         {
             return NO_WAD_OPEN;
         }
+
         return reader.lumpCount();
     }
 
@@ -216,14 +243,18 @@ public final class WadFilePort implements I_WadPort
         if (reader == null)
         {
             LOG.warn("precacheLump({}) with no WAD open", lumpIndex);
+
             return;
         }
+
         if (!reader.hasLump(lumpIndex))
         {
             LOG.warn("precacheLump({}) — index out of range [0, {})",
                 lumpIndex, reader.lumpCount());
+
             return;
         }
+
         cache.acquire(lumpIndex);
     }
 
@@ -239,14 +270,18 @@ public final class WadFilePort implements I_WadPort
         if (reader == null)
         {
             LOG.warn("releaseLump({}) with no WAD open", lumpIndex);
+
             return;
         }
+
         if (!reader.hasLump(lumpIndex))
         {
             LOG.warn("releaseLump({}) — index out of range [0, {})",
                 lumpIndex, reader.lumpCount());
+
             return;
         }
+
         cache.release(lumpIndex);
     }
 
@@ -257,6 +292,7 @@ public final class WadFilePort implements I_WadPort
         {
             return;
         }
+
         cache.flush();
     }
 
@@ -264,11 +300,14 @@ public final class WadFilePort implements I_WadPort
     public void shutdown()
     {
         close();
+
         if (memory.state() != I_MemoryPort.State.SHUTDOWN)
         {
             memory.shutdown();
         }
+
         initialized = false;
+
         LOG.info("WadFilePort shut down");
     }
 
@@ -281,6 +320,7 @@ public final class WadFilePort implements I_WadPort
         {
             return null;
         }
+
         return reader.wadType();
     }
 
@@ -297,6 +337,7 @@ public final class WadFilePort implements I_WadPort
         {
             return WadReader.LUMP_NOT_FOUND;
         }
+
         return reader.findLump(lumpName);
     }
 
@@ -310,6 +351,7 @@ public final class WadFilePort implements I_WadPort
         {
             return 0;
         }
+
         return cache.residentBytes();
     }
 
@@ -323,6 +365,7 @@ public final class WadFilePort implements I_WadPort
         {
             return 0;
         }
+
         return cache.residentCount();
     }
 
@@ -332,9 +375,12 @@ public final class WadFilePort implements I_WadPort
     private boolean adopt(final WadReader newReader, final String label)
     {
         this.reader = newReader;
+
         this.cache = new LumpCache(newReader, memory, budgetBytes);
+
         LOG.info("Opened {} '{}': {} lumps, {} byte image",
             newReader.wadType(), label, newReader.lumpCount(), newReader.imageBytes());
+
         return true;
     }
 

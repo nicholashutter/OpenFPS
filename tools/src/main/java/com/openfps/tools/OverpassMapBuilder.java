@@ -106,14 +106,19 @@ public final class OverpassMapBuilder
     public static void main(final String[] args)
     {
         final String out = option(args, "--out=");
+
         if (out == null)
         {
             LOG.error("usage: OverpassMapBuilder --out=<directory>"
                 + " [--atlas=<colormap.png>]");
+
             return;
         }
+
         final String atlasOption = option(args, "--atlas=");
+
         final Path atlasPath;
+
         if (atlasOption == null)
         {
             atlasPath = null;
@@ -122,7 +127,9 @@ public final class OverpassMapBuilder
         {
             atlasPath = Path.of(atlasOption);
         }
+
         final Path outDir = Path.of(out);
+
         try
         {
             Files.createDirectories(outDir);
@@ -131,8 +138,11 @@ public final class OverpassMapBuilder
         {
             throw new UncheckedIOException("could not create output directory: " + outDir, e);
         }
+
         final byte[] bytes = build(atlasPath);
+
         final Path outFile = outDir.resolve(FILE_NAME);
+
         try
         {
             Files.write(outFile, bytes);
@@ -141,7 +151,9 @@ public final class OverpassMapBuilder
         {
             throw new UncheckedIOException("could not write " + outFile, e);
         }
+
         final ModelFormat parsed = ModelFormat.read(bytes);
+
         LOG.info("Wrote {} ({} triangles, {} vertices, {} textures)",
             outFile, parsed.indexCount() / 3, parsed.vertexCount(), parsed.textureCount());
     }
@@ -175,7 +187,9 @@ public final class OverpassMapBuilder
     public static byte[] build(final Path atlasPath)
     {
         final ModelBuilder builder = new ModelBuilder(MODEL_NAME);
+
         final int[] floorTexels;
+
         if (atlasPath != null)
         {
             floorTexels = KenneyTexture.forceOpaque(KenneyTexture.floor(atlasPath));
@@ -184,7 +198,9 @@ public final class OverpassMapBuilder
         {
             floorTexels = floorTexels();
         }
+
         final int[] wallTexels;
+
         if (atlasPath != null)
         {
             wallTexels = KenneyTexture.forceOpaque(KenneyTexture.wall(atlasPath));
@@ -193,31 +209,48 @@ public final class OverpassMapBuilder
         {
             wallTexels = wallTexels();
         }
+
         final int[] accentTexels = accentTexels();
+
         final int floorTexture = builder.addTexture("overpass-floor", TEXTURE_EDGE,
             TEXTURE_EDGE, MipGenerator.generate(TEXTURE_EDGE, TEXTURE_EDGE, floorTexels));
+
         final int wallTexture = builder.addTexture("overpass-wall", TEXTURE_EDGE,
             TEXTURE_EDGE, MipGenerator.generate(TEXTURE_EDGE, TEXTURE_EDGE, wallTexels));
+
         final int accentTexture = builder.addTexture("overpass-accent", TEXTURE_EDGE,
             TEXTURE_EDGE, MipGenerator.generate(TEXTURE_EDGE, TEXTURE_EDGE, accentTexels));
 
         builder.beginSubmesh(floorTexture);
+
         addGroundSlab(builder);
+
         addServiceRoad(builder);
+
         addOverpassDecks(builder);
+
         builder.endSubmesh();
 
         builder.beginSubmesh(wallTexture);
+
         addPerimeterWalls(builder);
+
         addUnderdeckSupports(builder);
+
         addRampWalls(builder);
+
         addControlBuilding(builder);
+
         addStairway(builder);
+
         addConcreteBarriers(builder);
+
         builder.endSubmesh();
 
         builder.beginSubmesh(accentTexture);
+
         addAccentGeometry(builder);
+
         builder.endSubmesh();
 
         return builder.toBytes();
@@ -278,6 +311,7 @@ public final class OverpassMapBuilder
         addBox(builder, -HALF_EXTENT, OVERPASS_DECK_HEIGHT, 40.0f - OVERPASS_DECK_WIDTH / 2.0f,
             HALF_EXTENT, OVERPASS_DECK_HEIGHT + OVERPASS_DECK_THICKNESS,
             40.0f + OVERPASS_DECK_WIDTH / 2.0f);
+
         // South overpass: deck centred at z=240, width 16
         addBox(builder, -HALF_EXTENT, OVERPASS_DECK_HEIGHT, 240.0f - OVERPASS_DECK_WIDTH / 2.0f,
             HALF_EXTENT, OVERPASS_DECK_HEIGHT + OVERPASS_DECK_THICKNESS,
@@ -292,17 +326,23 @@ public final class OverpassMapBuilder
     private static void addPerimeterWalls(final ModelBuilder builder)
     {
         final float halfWallHeight = 48.0f;
+
         final float e = HALF_EXTENT;
+
         // North wall (z = -e)
         addBox(builder, -e, 0.0f, -e - WALL_THICKNESS, e, halfWallHeight, -e);
+
         // South wall (z = e) — but the control building sits on it, so
         // we leave a gap at x=128..224.
         addBox(builder, -e, 0.0f, e, -128.0f - WALL_THICKNESS / 2.0f, halfWallHeight,
             e + WALL_THICKNESS);
+
         addBox(builder, 224.0f + WALL_THICKNESS / 2.0f, 0.0f, e, e, halfWallHeight,
             e + WALL_THICKNESS);
+
         // West wall (x = -e)
         addBox(builder, -e - WALL_THICKNESS, 0.0f, -e, -e, halfWallHeight, e);
+
         // East wall (x = e)
         addBox(builder, e, 0.0f, -e, e + WALL_THICKNESS, halfWallHeight, e);
     }
@@ -322,10 +362,13 @@ public final class OverpassMapBuilder
             // South overpass
             {-140.0f, 240.0f}, {-44.0f, 240.0f}, {44.0f, 240.0f}, {140.0f, 240.0f}
         };
+
         for (final float[] pos : positions)
         {
             final float x = pos[0];
+
             final float z = pos[1];
+
             addBox(builder, x - 4.0f, 0.0f, z - 4.0f, x + 4.0f, OVERPASS_DECK_HEIGHT,
                 z + 4.0f);
         }
@@ -343,9 +386,12 @@ public final class OverpassMapBuilder
         // placed at x=16. The ramp surface is approximated by the
         // top faces of the two boxes.
         addBox(builder, 16.0f, 32.0f, 120.0f, 24.0f, 64.0f, 200.0f);
+
         addBox(builder, 16.0f, 0.0f, 120.0f, 24.0f, 32.0f, 200.0f);
+
         // East ramp: mirror at x=304..296
         addBox(builder, 296.0f, 32.0f, 120.0f, 304.0f, 64.0f, 200.0f);
+
         addBox(builder, 296.0f, 0.0f, 120.0f, 304.0f, 32.0f, 200.0f);
     }
 
@@ -367,6 +413,7 @@ public final class OverpassMapBuilder
     private static void addStairway(final ModelBuilder builder)
     {
         addBox(builder, 184.0f, 0.0f, 232.0f, 200.0f, 32.0f, 240.0f);
+
         addBox(builder, 184.0f, 32.0f, 240.0f, 200.0f, 64.0f, 248.0f);
     }
 
@@ -379,10 +426,15 @@ public final class OverpassMapBuilder
     private static void addConcreteBarriers(final ModelBuilder builder)
     {
         addBox(builder, -108.0f, 0.0f, 152.0f, -92.0f, 24.0f, 168.0f);
+
         addBox(builder, -8.0f, 0.0f, 152.0f, 8.0f, 24.0f, 168.0f);
+
         addBox(builder, 92.0f, 0.0f, 152.0f, 108.0f, 24.0f, 168.0f);
+
         addBox(builder, -108.0f, 0.0f, 168.0f, -92.0f, 24.0f, 184.0f);
+
         addBox(builder, -8.0f, 0.0f, 168.0f, 8.0f, 24.0f, 184.0f);
+
         addBox(builder, 92.0f, 0.0f, 168.0f, 108.0f, 24.0f, 184.0f);
     }
 
@@ -395,9 +447,12 @@ public final class OverpassMapBuilder
     {
         // West signposts
         addBox(builder, 12.0f, 0.0f, 156.0f, 16.0f, 32.0f, 160.0f);
+
         addBox(builder, 12.0f, 0.0f, 200.0f, 16.0f, 32.0f, 204.0f);
+
         // East signposts
         addBox(builder, 304.0f, 0.0f, 156.0f, 308.0f, 32.0f, 160.0f);
+
         addBox(builder, 304.0f, 0.0f, 200.0f, 308.0f, 32.0f, 204.0f);
     }
 
@@ -409,14 +464,19 @@ public final class OverpassMapBuilder
     {
         // +x face
         addFace(builder, maxX, minY, maxZ, maxX, maxY, maxZ, maxX, maxY, minZ, maxX, minY, minZ);
+
         // -x face
         addFace(builder, minX, minY, minZ, minX, maxY, minZ, minX, maxY, maxZ, minX, minY, maxZ);
+
         // +y face
         addFace(builder, minX, maxY, maxZ, maxX, maxY, maxZ, maxX, maxY, minZ, minX, maxY, minZ);
+
         // -y face
         addFace(builder, minX, minY, minZ, maxX, minY, minZ, maxX, minY, maxZ, minX, minY, maxZ);
+
         // +z face
         addFace(builder, minX, minY, maxZ, minX, maxY, maxZ, maxX, maxY, maxZ, maxX, minY, maxZ);
+
         // -z face
         addFace(builder, maxX, minY, minZ, maxX, maxY, minZ, minX, maxY, minZ, minX, minY, minZ);
     }
@@ -430,15 +490,21 @@ public final class OverpassMapBuilder
         final float cy, final float cz, final float dx, final float dy, final float dz)
     {
         final float uScale = 1.0f / WORLD_UNITS_PER_TILE;
+
         final int a = builder.addVertex(ax, ay, az, ax * uScale, az * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         final int b = builder.addVertex(bx, by, bz, bx * uScale, bz * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         final int c = builder.addVertex(cx, cy, cz, cx * uScale, cz * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         final int d = builder.addVertex(dx, dy, dz, dx * uScale, dz * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         builder.addTriangle(a, b, c);
+
         builder.addTriangle(a, c, d);
     }
 
@@ -449,51 +515,66 @@ public final class OverpassMapBuilder
     private static int[] floorTexels()
     {
         final int base = Rgba.pack(86, 88, 92, 255);
+
         final int line = Rgba.pack(140, 144, 152, 255);
+
         final int[] out = new int[TEXTURE_EDGE * TEXTURE_EDGE];
+
         for (int y = 0; y < TEXTURE_EDGE; y++)
         {
             for (int x = 0; x < TEXTURE_EDGE; x++)
             {
                 int colour = base;
+
                 if (x == 0 || y == 0 || x == TEXTURE_EDGE - 1 || y == TEXTURE_EDGE - 1)
                 {
                     colour = line;
                 }
+
                 out[y * TEXTURE_EDGE + x] = colour;
             }
         }
+
         return out;
     }
 
     private static int[] wallTexels()
     {
         final int base = Rgba.pack(120, 124, 132, 255);
+
         final int shade = Rgba.pack(88, 92, 100, 255);
+
         final int[] out = new int[TEXTURE_EDGE * TEXTURE_EDGE];
+
         for (int y = 0; y < TEXTURE_EDGE; y++)
         {
             for (int x = 0; x < TEXTURE_EDGE; x++)
             {
                 int colour = base;
+
                 if ((x / 8 + y / 8) % 2 == 0)
                 {
                     colour = shade;
                 }
+
                 out[y * TEXTURE_EDGE + x] = colour;
             }
         }
+
         return out;
     }
 
     private static int[] accentTexels()
     {
         final int colour = Rgba.pack(192, 64, 48, 255);
+
         final int[] out = new int[TEXTURE_EDGE * TEXTURE_EDGE];
+
         for (int index = 0; index < out.length; index++)
         {
             out[index] = colour;
         }
+
         return out;
     }
 
@@ -506,6 +587,7 @@ public final class OverpassMapBuilder
                 return arg.substring(prefix.length());
             }
         }
+
         return null;
     }
 }

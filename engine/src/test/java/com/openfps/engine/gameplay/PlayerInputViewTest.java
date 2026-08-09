@@ -31,12 +31,17 @@ class PlayerInputViewTest
     {
         // Four distinct values, so a swapped pair cannot pass by coincidence.
         final InputState state = InputState.of(0.25f, -0.5f, 0.75f, -0.125f, false, false, false);
+
         final PlayerInputView view = new PlayerInputView();
+
         view.wrap(state);
 
         assertThat(view.forwardAxis()).isEqualTo(0.25f);
+
         assertThat(view.strafeAxis()).isEqualTo(-0.5f);
+
         assertThat(view.yawDelta()).isEqualTo(0.75f);
+
         assertThat(view.pitchDelta()).isEqualTo(-0.125f);
     }
 
@@ -45,10 +50,13 @@ class PlayerInputViewTest
     void shouldForwardJumpAndSprintButNotFire()
     {
         final InputState state = InputState.of(0.0f, 0.0f, 0.0f, 0.0f, true, true, true);
+
         final PlayerInputView view = new PlayerInputView();
+
         view.wrap(state);
 
         assertThat(view.jump()).isTrue();
+
         assertThat(view.sprint()).isTrue();
     }
 
@@ -59,9 +67,13 @@ class PlayerInputViewTest
         final PlayerInputView view = new PlayerInputView();
 
         assertThat(view.source()).isSameAs(InputState.NEUTRAL);
+
         assertThat(view.forwardAxis()).isZero();
+
         assertThat(view.strafeAxis()).isZero();
+
         assertThat(view.yawDelta()).isZero();
+
         assertThat(view.pitchDelta()).isZero();
     }
 
@@ -72,15 +84,21 @@ class PlayerInputViewTest
         // The reason this class is mutable: one object for the whole session
         // rather than one per tic in the simulation path.
         final PlayerInputView view = new PlayerInputView();
+
         final InputState first = InputState.of(1.0f, 0.0f, 0.0f, 0.0f, false, false, false);
+
         final InputState second = InputState.of(0.0f, 1.0f, 0.0f, 0.0f, false, false, false);
 
         view.wrap(first);
+
         assertThat(view.forwardAxis()).isEqualTo(1.0f);
 
         view.wrap(second);
+
         assertThat(view.forwardAxis()).isZero();
+
         assertThat(view.strafeAxis()).isEqualTo(1.0f);
+
         assertThat(view.source()).isSameAs(second);
     }
 
@@ -103,15 +121,19 @@ class PlayerInputViewTest
         // view must move the player exactly as the controller's own contract
         // says it should.
         final PlayerInputView view = new PlayerInputView();
+
         view.wrap(InputState.of(1.0f, 0.0f, 0.0f, 0.0f, false, false, false));
 
         final PlayerController controller = new PlayerController();
+
         final float startZ = controller.positionZ();
+
         controller.update(view, 1.0f);
 
         assertThat(controller.positionZ())
             .as("yaw 0 faces +z, so full forward input advances along +z")
             .isGreaterThan(startZ);
+
         assertThat(controller.positionX())
             .as("no strafe input means no lateral movement")
             .isZero();

@@ -89,12 +89,19 @@ final class DemoEffectsTest
         Fixture()
         {
             final Scene.Builder builder = Scene.builder();
+
             this.effects = DemoEffects.addTo(builder);
+
             final I_TimePort time = new NullTimePort();
+
             time.init();
+
             this.renderer = new SoftwareRenderPort(null, time);
+
             renderer.init();
+
             renderer.resize(SURFACE, SURFACE);
+
             renderer.setScene(builder.build());
         }
 
@@ -107,6 +114,7 @@ final class DemoEffectsTest
         void tic()
         {
             effects.advance();
+
             effects.publish(renderer);
         }
 
@@ -146,8 +154,11 @@ final class DemoEffectsTest
             for (int vertex = 0; vertex < cloud.vertexCount(); vertex++)
             {
                 final float x = cloud.positionX(vertex);
+
                 final float y = cloud.positionY(vertex);
+
                 final float z = cloud.positionZ(vertex);
+
                 assertThat((float) StrictMath.sqrt(x * x + y * y + z * z))
                     .as("vertex %d distance from the origin", vertex)
                     .isCloseTo(0.5f, within(EPSILON));
@@ -162,6 +173,7 @@ final class DemoEffectsTest
             final ModelFormat cloud = DemoEffects.sphere(DemoEffects.smokeColour());
 
             assertThat(cloud.minX()).isCloseTo(-0.5f, within(EPSILON));
+
             assertThat(cloud.maxY()).isCloseTo(0.5f, within(EPSILON));
         }
 
@@ -178,24 +190,38 @@ final class DemoEffectsTest
             // For a convex body about the origin, "outward" is exactly
             // "the face normal points away from the centroid".
             final ModelFormat cloud = DemoEffects.sphere(DemoEffects.smokeColour());
+
             final int[] indices = cloud.indices();
 
             for (int triangle = 0; triangle * 3 < indices.length; triangle++)
             {
                 final int a = indices[triangle * 3];
+
                 final int b = indices[triangle * 3 + 1];
+
                 final int c = indices[triangle * 3 + 2];
+
                 final float ux = cloud.positionX(b) - cloud.positionX(a);
+
                 final float uy = cloud.positionY(b) - cloud.positionY(a);
+
                 final float uz = cloud.positionZ(b) - cloud.positionZ(a);
+
                 final float vx = cloud.positionX(c) - cloud.positionX(a);
+
                 final float vy = cloud.positionY(c) - cloud.positionY(a);
+
                 final float vz = cloud.positionZ(c) - cloud.positionZ(a);
+
                 final float nx = uy * vz - uz * vy;
+
                 final float ny = uz * vx - ux * vz;
+
                 final float nz = ux * vy - uy * vx;
+
                 final float outward = nx * cloud.positionX(a)
                     + ny * cloud.positionY(a) + nz * cloud.positionZ(a);
+
                 assertThat(outward)
                     .as("triangle %d normal must point away from the centre", triangle)
                     .isPositive();
@@ -209,7 +235,9 @@ final class DemoEffectsTest
             // An open sphere would show its inside through the gap, which on a
             // translucent instance is a bright hole rather than a missing patch.
             final ModelFormat cloud = DemoEffects.sphere(DemoEffects.smokeColour());
+
             final int[] indices = cloud.indices();
+
             final java.util.Map<Long, Integer> edges = new java.util.HashMap<>();
 
             for (int triangle = 0; triangle * 3 < indices.length; triangle++)
@@ -217,11 +245,15 @@ final class DemoEffectsTest
                 for (int corner = 0; corner < 3; corner++)
                 {
                     final int from = indices[triangle * 3 + corner];
+
                     final int to = indices[triangle * 3 + (corner + 1) % 3];
+
                     final long key = (long) Math.min(from, to) << 32 | Math.max(from, to);
+
                     edges.merge(Long.valueOf(key), Integer.valueOf(1), Integer::sum);
                 }
             }
+
             assertThat(edges.values())
                 .as("every edge of a closed surface is walked exactly twice")
                 .allMatch(count -> count.intValue() == 2);
@@ -236,7 +268,9 @@ final class DemoEffectsTest
             final ModelFormat cloud = DemoEffects.sphere(DemoEffects.smokeColour());
 
             assertThat(cloud.submeshCount()).isZero();
+
             assertThat(cloud.textureCount()).isZero();
+
             assertThat(cloud.colour(0)).isEqualTo(DemoEffects.smokeColour());
         }
 
@@ -249,6 +283,7 @@ final class DemoEffectsTest
             assertThat(cloud.triangleCount())
                 .as("more facets than a cube's twelve, or it is still a block")
                 .isGreaterThan(48);
+
             assertThat(cloud.triangleCount())
                 .as("but nowhere near an authored asset — 36 of these are staged")
                 .isLessThan(200);
@@ -273,17 +308,23 @@ final class DemoEffectsTest
             // into a single sphere exactly when the player shoots straight
             // ahead, which is most of the time.
             final Fixture fixture = new Fixture();
+
             fixture.fire();
+
             fixture.tic();
 
             final Mat4 centre = fixture.puffOverride(0, 0, 0);
+
             for (int lobe = 1; lobe < DemoEffects.PUFF_LOBES; lobe++)
             {
                 final Mat4 out = fixture.puffOverride(0, 0, lobe);
+
                 final float alongAim = (out.get(2, 3) - centre.get(2, 3)) * AIM_Z;
+
                 assertThat(Math.abs(alongAim))
                     .as("lobe %d must not be displaced along the aim", lobe)
                     .isLessThan(EPSILON);
+
                 assertThat(separation(centre, out))
                     .as("lobe %d must actually be somewhere else", lobe)
                     .isGreaterThan(0.0f);
@@ -297,11 +338,15 @@ final class DemoEffectsTest
             // Lobes further apart than their radii are three balls, not a
             // cloud. Each outrider's centre has to be inside the main lobe.
             final Fixture fixture = new Fixture();
+
             fixture.fire();
+
             fixture.tic();
 
             final Mat4 centre = fixture.puffOverride(0, 0, 0);
+
             final float mainRadius = centre.get(1, 1) * 0.5f;
+
             for (int lobe = 1; lobe < DemoEffects.PUFF_LOBES; lobe++)
             {
                 assertThat(separation(centre, fixture.puffOverride(0, 0, lobe)))
@@ -315,10 +360,13 @@ final class DemoEffectsTest
         void outridersAreSmaller()
         {
             final Fixture fixture = new Fixture();
+
             fixture.fire();
+
             fixture.tic();
 
             final float main = fixture.puffOverride(0, 0, 0).get(1, 1);
+
             for (int lobe = 1; lobe < DemoEffects.PUFF_LOBES; lobe++)
             {
                 assertThat(fixture.puffOverride(0, 0, lobe).get(1, 1))
@@ -337,9 +385,13 @@ final class DemoEffectsTest
             // while the spheres swelled through each other, and the cloud would
             // turn into a single ball as it aged.
             final Fixture fixture = new Fixture();
+
             fixture.fire();
+
             fixture.tic();
+
             final Mat4 youngCentre = fixture.puffOverride(0, 0, 0);
+
             final float young = separation(youngCentre, fixture.puffOverride(0, 0, 1))
                 / youngCentre.get(1, 1);
 
@@ -347,14 +399,18 @@ final class DemoEffectsTest
             {
                 fixture.tic();
             }
+
             final int stage = DemoEffects.stageFor(fixture.effects.puffAge(0));
+
             final Mat4 oldCentre = fixture.puffOverride(0, stage, 0);
+
             final float old = separation(oldCentre, fixture.puffOverride(0, stage, 1))
                 / oldCentre.get(1, 1);
 
             assertThat(oldCentre.get(1, 1))
                 .as("the puff really did grow")
                 .isGreaterThan(youngCentre.get(1, 1));
+
             assertThat(old)
                 .as("and the lumps kept their proportions")
                 .isCloseTo(young, within(EPSILON));
@@ -364,8 +420,11 @@ final class DemoEffectsTest
         private float separation(final Mat4 first, final Mat4 second)
         {
             final float dx = second.get(0, 3) - first.get(0, 3);
+
             final float dy = second.get(1, 3) - first.get(1, 3);
+
             final float dz = second.get(2, 3) - first.get(2, 3);
+
             return (float) StrictMath.sqrt(dx * dx + dy * dy + dz * dz);
         }
     }
@@ -379,6 +438,7 @@ final class DemoEffectsTest
         void instanceCountIsTheWholePool()
         {
             final Scene.Builder builder = Scene.builder();
+
             final DemoEffects effects = DemoEffects.addTo(builder);
 
             // The full pool: tracer slots (one instance per slot), puff slots
@@ -391,6 +451,7 @@ final class DemoEffectsTest
                 + DemoEffects.puffSlotCount() * DemoEffects.PUFF_STAGES
                     * DemoEffects.PUFF_LOBES * DemoEffects.PUFF_COLOR_VARIANTS
                 + DemoEffects.flashSlotCount());
+
             assertThat(builder.worldInstanceCount()).isEqualTo(effects.instanceCount());
         }
 
@@ -404,9 +465,11 @@ final class DemoEffectsTest
             // (slot, stage, lobe) is its own instance, not just the warm one,
             // because the publish writes one per active variant.
             final Scene.Builder builder = Scene.builder();
+
             final DemoEffects effects = DemoEffects.addTo(builder);
 
             final java.util.Set<Integer> seen = new java.util.HashSet<>();
+
             for (int slot = 0; slot < DemoEffects.MAX_PUFFS; slot++)
             {
                 for (int stage = 0; stage < DemoEffects.PUFF_STAGES; stage++)
@@ -425,6 +488,7 @@ final class DemoEffectsTest
                     }
                 }
             }
+
             assertThat(seen).hasSize(
                 DemoEffects.MAX_PUFFS * DemoEffects.PUFF_STAGES * DemoEffects.PUFF_LOBES
                     * DemoEffects.PUFF_COLOR_VARIANTS);
@@ -435,6 +499,7 @@ final class DemoEffectsTest
         void theShortIndexIsTheMainLobe()
         {
             final Scene.Builder builder = Scene.builder();
+
             final DemoEffects effects = DemoEffects.addTo(builder);
 
             assertThat(effects.puffInstanceIndex(1, 2))
@@ -449,7 +514,9 @@ final class DemoEffectsTest
             // that disagreed would cut the run and cost a whole extra batched
             // pass per puff, for a cloud that is meant to be one thing.
             final Scene.Builder builder = Scene.builder();
+
             final DemoEffects effects = DemoEffects.addTo(builder);
+
             final Scene scene = builder.build();
 
             for (int stage = 0; stage < DemoEffects.PUFF_STAGES; stage++)
@@ -474,6 +541,7 @@ final class DemoEffectsTest
             // variants, and so on. A reader that does not have that property
             // would pay a back-to-front pass per lobe.
             final Scene.Builder builder = Scene.builder();
+
             final DemoEffects effects = DemoEffects.addTo(builder);
 
             for (int variant = 1; variant < DemoEffects.PUFF_COLOR_VARIANTS; variant++)
@@ -481,6 +549,7 @@ final class DemoEffectsTest
                 assertThat(effects.puffInstanceIndex(2, 1, 0, variant))
                     .isEqualTo(effects.puffInstanceIndex(2, 1, 0, variant - 1) + 1);
             }
+
             for (int lobe = 1; lobe < DemoEffects.PUFF_LOBES; lobe++)
             {
                 assertThat(effects.puffInstanceIndex(2, 1, lobe, 0))
@@ -495,12 +564,15 @@ final class DemoEffectsTest
         void onlyTheSmokeIsTranslucent()
         {
             final Scene.Builder builder = Scene.builder();
+
             final DemoEffects effects = DemoEffects.addTo(builder);
+
             final Scene scene = builder.build();
 
             assertThat(scene.translucentInstanceCount())
                 .isEqualTo(DemoEffects.puffSlotCount() * DemoEffects.PUFF_STAGES
                     * DemoEffects.PUFF_LOBES * DemoEffects.PUFF_COLOR_VARIANTS);
+
             for (int slot = 0; slot < DemoEffects.tracerSlotCount(); slot++)
             {
                 assertThat(scene.isWorldTranslucent(effects.tracerInstanceIndex(slot)))
@@ -514,7 +586,9 @@ final class DemoEffectsTest
         void stagesFadeDown()
         {
             final Scene.Builder builder = Scene.builder();
+
             final DemoEffects effects = DemoEffects.addTo(builder);
+
             final Scene scene = builder.build();
 
             for (int stage = 1; stage < DemoEffects.PUFF_STAGES; stage++)
@@ -523,8 +597,10 @@ final class DemoEffectsTest
                     .as("stage %d must be fainter than the one before it", stage)
                     .isLessThan(DemoEffects.coverageFor(stage - 1));
             }
+
             assertThat(scene.worldCoverage(effects.puffInstanceIndex(0, 0)))
                 .isEqualTo(DemoEffects.coverageFor(0));
+
             assertThat(DemoEffects.coverageFor(0)).isLessThan(Scene.OPAQUE);
         }
 
@@ -593,8 +669,10 @@ final class DemoEffectsTest
             assertThat(Math.abs(Rgba.red(core) - ROOM_RED))
                 .as("red must move; composited %s over the room", core)
                 .isGreaterThanOrEqualTo(VISIBLE_DELTA);
+
             assertThat(Math.abs(Rgba.green(core) - ROOM_GREEN))
                 .isGreaterThanOrEqualTo(VISIBLE_DELTA);
+
             assertThat(Math.abs(Rgba.blue(core) - ROOM_BLUE))
                 .isGreaterThanOrEqualTo(VISIBLE_DELTA);
         }
@@ -616,17 +694,22 @@ final class DemoEffectsTest
             // dissolves rather than ending. See puffStaysSmallEnoughToReadAsSmoke,
             // whose size ceiling used to be doing this test's job badly.
             final int rim = compositeLobes(0, 1);
+
             final int shoulder = compositeLobes(0, DemoEffects.PUFF_LOBES / 2);
+
             final int core = compositeLobes(0, DemoEffects.PUFF_LOBES);
 
             assertThat(Rgba.red(core)).isLessThan(Rgba.red(shoulder));
+
             assertThat(Rgba.red(shoulder)).isLessThan(Rgba.red(rim));
+
             assertThat(Rgba.red(rim)).isLessThan(ROOM_RED);
 
             // Each step has to be a step a viewer can see, or the gradient is a
             // rounding artefact rather than a shape.
             assertThat(Rgba.red(rim) - Rgba.red(shoulder))
                 .as("rim to shoulder").isGreaterThanOrEqualTo(WISP_DELTA);
+
             assertThat(Rgba.red(shoulder) - Rgba.red(core))
                 .as("shoulder to core").isGreaterThanOrEqualTo(WISP_DELTA);
         }
@@ -639,11 +722,13 @@ final class DemoEffectsTest
             // would only be making it denser, and the edge would be as hard as
             // the old cube's.
             final int rim = compositeLobes(0, 1);
+
             final int core = coreOf(0);
 
             assertThat(ROOM_RED - Rgba.red(rim))
                 .as("the rim is visible")
                 .isGreaterThanOrEqualTo(WISP_DELTA);
+
             assertThat(ROOM_RED - Rgba.red(rim))
                 .as("but is at most two thirds of the core's density")
                 .isLessThan((ROOM_RED - Rgba.red(core)) * 2 / 3 + 1);
@@ -656,11 +741,13 @@ final class DemoEffectsTest
         {
             // MUTABLE local — the pixel as each successive lobe leaves it.
             int pixel = Rgba.pack(ROOM_RED, ROOM_GREEN, ROOM_BLUE, Scene.OPAQUE);
+
             for (int lobe = 0; lobe < lobes; lobe++)
             {
                 pixel = Rgba.srcOver(DemoEffects.smokeColour(), pixel,
                     DemoEffects.coverageFor(stage));
             }
+
             return pixel;
         }
 
@@ -703,15 +790,18 @@ final class DemoEffectsTest
                     .isLessThan(Scene.OPAQUE)
                     .isPositive();
             }
+
             // Against the DENSEST point of the cloud — every lobe overlapping —
             // because that is where an overshoot would show up, and because the
             // lobes compound: a per-lobe coverage that looks modest can still
             // add up to something you cannot see through. That is the new way
             // the old 228 mistake could come back.
             final int core = coreOf(0);
+
             assertThat(Rgba.red(core))
                 .as("the room still shows through the thickest part of the cloud")
                 .isGreaterThan(Rgba.red(DemoEffects.smokeColour()));
+
             assertThat(Rgba.red(core) - Rgba.red(DemoEffects.smokeColour()))
                 .as("and by a visible margin, not by one level")
                 .isGreaterThan(WISP_DELTA);
@@ -730,6 +820,7 @@ final class DemoEffectsTest
             assertThat(DemoEffects.MUZZLE_RIGHT_UNITS)
                 .as("further right than the weapon's origin")
                 .isGreaterThan(DemoScene.WEAPON_VIEW_RIGHT);
+
             assertThat(DemoEffects.MUZZLE_FORWARD_UNITS)
                 .as("and further out than the weapon is held")
                 .isGreaterThan(DemoScene.WEAPON_VIEW_FORWARD);
@@ -765,19 +856,24 @@ final class DemoEffectsTest
             // player's point of aim. A muzzle effect that veils the crosshair
             // stops being decoration and starts being a handicap.
             final float extent = DemoEffects.PUFF_RADIUS_END * DemoEffects.cloudExtentRadii();
+
             final double halfAngle =
                 StrictMath.atan(extent / DemoEffects.MUZZLE_FORWARD_UNITS);
+
             final double fractionOfHeight = 2.0 * halfAngle / (Math.PI / 3.0);
 
             assertThat(fractionOfHeight)
                 .as("a muzzle puff should not fill a third of the window")
                 .isLessThan(0.35);
+
             assertThat(extent)
                 .as("and never reaches back to where the player is aiming")
                 .isLessThan(DemoEffects.MUZZLE_RIGHT_UNITS);
+
             assertThat(DemoEffects.PUFF_RADIUS_END)
                 .as("but it still expands over its life")
                 .isGreaterThan(DemoEffects.PUFF_RADIUS_START);
+
             assertThat(DemoEffects.cloudExtentRadii())
                 .as("and the arrangement really is wider than one sphere")
                 .isGreaterThan(1.0f);
@@ -795,8 +891,11 @@ final class DemoEffectsTest
             final Fixture fixture = new Fixture();
 
             assertThat(fixture.effects.liveTracerCount()).isZero();
+
             assertThat(fixture.effects.livePuffCount()).isZero();
+
             assertThat(fixture.effects.tracerRemaining(0)).isEqualTo(DemoEffects.DEAD);
+
             assertThat(fixture.effects.puffAge(0)).isEqualTo(DemoEffects.DEAD);
         }
 
@@ -805,12 +904,16 @@ final class DemoEffectsTest
         void oneShotOneOfEach()
         {
             final Fixture fixture = new Fixture();
+
             fixture.fire();
 
             assertThat(fixture.effects.liveTracerCount()).isEqualTo(1);
+
             assertThat(fixture.effects.livePuffCount()).isEqualTo(1);
+
             assertThat(fixture.effects.tracerRemaining(0))
                 .isEqualTo(DemoEffects.TRACER_LIFE_TICS);
+
             assertThat(fixture.effects.puffAge(0)).isZero();
         }
 
@@ -819,18 +922,22 @@ final class DemoEffectsTest
         void tracerExpiresOnSchedule()
         {
             final Fixture fixture = new Fixture();
+
             fixture.fire();
 
             for (int tic = 1; tic < DemoEffects.TRACER_LIFE_TICS; tic++)
             {
                 fixture.tic();
+
                 assertThat(fixture.effects.tracerRemaining(0))
                     .as("still flying at tic %d of %d", tic, DemoEffects.TRACER_LIFE_TICS)
                     .isEqualTo(DemoEffects.TRACER_LIFE_TICS - tic);
             }
+
             fixture.tic();
 
             assertThat(fixture.effects.tracerRemaining(0)).isEqualTo(DemoEffects.DEAD);
+
             assertThat(fixture.effects.liveTracerCount()).isZero();
         }
 
@@ -839,18 +946,22 @@ final class DemoEffectsTest
         void puffExpiresOnSchedule()
         {
             final Fixture fixture = new Fixture();
+
             fixture.fire();
 
             for (int tic = 1; tic < DemoEffects.PUFF_LIFE_TICS; tic++)
             {
                 fixture.tic();
+
                 assertThat(fixture.effects.puffAge(0))
                     .as("still drifting at tic %d of %d", tic, DemoEffects.PUFF_LIFE_TICS)
                     .isEqualTo(tic);
             }
+
             fixture.tic();
 
             assertThat(fixture.effects.puffAge(0)).isEqualTo(DemoEffects.DEAD);
+
             assertThat(fixture.effects.livePuffCount()).isZero();
         }
 
@@ -867,10 +978,13 @@ final class DemoEffectsTest
         void advancingEmptyIsSafe()
         {
             final Fixture fixture = new Fixture();
+
             fixture.tic();
+
             fixture.tic();
 
             assertThat(fixture.effects.liveTracerCount()).isZero();
+
             assertThat(fixture.effects.livePuffCount()).isZero();
         }
 
@@ -879,6 +993,7 @@ final class DemoEffectsTest
         void poolWrapsRoundRobin()
         {
             final Fixture fixture = new Fixture();
+
             for (int shot = 0; shot < DemoEffects.MAX_TRACERS + 2; shot++)
             {
                 fixture.fire();
@@ -887,6 +1002,7 @@ final class DemoEffectsTest
             // Every slot busy, none lost, nothing thrown. The two extra shots
             // overwrote the two oldest, which is the documented behaviour.
             assertThat(fixture.effects.liveTracerCount()).isEqualTo(DemoEffects.MAX_TRACERS);
+
             assertThat(fixture.effects.livePuffCount()).isEqualTo(DemoEffects.MAX_PUFFS);
         }
 
@@ -895,13 +1011,17 @@ final class DemoEffectsTest
         void consecutiveShotsDoNotShareASlot()
         {
             final Fixture fixture = new Fixture();
+
             fixture.fire();
+
             fixture.tic();
+
             fixture.fire();
 
             assertThat(fixture.effects.tracerRemaining(0))
                 .as("the first bolt has aged")
                 .isEqualTo(DemoEffects.TRACER_LIFE_TICS - 1);
+
             assertThat(fixture.effects.tracerRemaining(1))
                 .as("the second is brand new, in its own slot")
                 .isEqualTo(DemoEffects.TRACER_LIFE_TICS);
@@ -912,17 +1032,21 @@ final class DemoEffectsTest
         void flashExpiresOnSchedule()
         {
             final Fixture fixture = new Fixture();
+
             fixture.fire();
 
             assertThat(fixture.effects.flashRemaining(0))
                 .isEqualTo(DemoEffects.FLASH_LIFE_TICS);
+
             for (int tic = 1; tic < DemoEffects.FLASH_LIFE_TICS; tic++)
             {
                 fixture.tic();
+
                 assertThat(fixture.effects.flashRemaining(0))
                     .as("still glowing at tic %d of %d", tic, DemoEffects.FLASH_LIFE_TICS)
                     .isEqualTo(DemoEffects.FLASH_LIFE_TICS - tic);
             }
+
             fixture.tic();
 
             assertThat(fixture.effects.flashRemaining(0)).isEqualTo(DemoEffects.DEAD);
@@ -939,12 +1063,16 @@ final class DemoEffectsTest
             // DemoEffects.spawn() derives it, so the test exercises the
             // SAME arithmetic and not a hand-rolled copy of it.
             final Fixture fixture = new Fixture();
+
             fixture.fire();
 
             assertThat(DemoEffects.flashSlotCount())
                 .isEqualTo(DemoEffects.MAX_PLAYER_FLASHES + DemoEffects.MAX_BOT_FLASHES);
+
             assertThat(fixture.effects.flashPositionX(0)).isEqualTo(EXPECTED_MUZZLE_X);
+
             assertThat(fixture.effects.flashPositionY(0)).isEqualTo(EXPECTED_MUZZLE_Y);
+
             assertThat(fixture.effects.flashPositionZ(0)).isEqualTo(EXPECTED_MUZZLE_Z);
         }
     }
@@ -960,14 +1088,20 @@ final class DemoEffectsTest
             // MUTABLE local — the highest stage seen so far, which must never
             // go down as the puff ages.
             int previous = 0;
+
             for (int age = 0; age < DemoEffects.PUFF_LIFE_TICS; age++)
             {
                 final int stage = DemoEffects.stageFor(age);
+
                 assertThat(stage).isBetween(0, DemoEffects.PUFF_STAGES - 1);
+
                 assertThat(stage).isGreaterThanOrEqualTo(previous);
+
                 previous = stage;
             }
+
             assertThat(DemoEffects.stageFor(0)).isZero();
+
             assertThat(DemoEffects.stageFor(DemoEffects.PUFF_LIFE_TICS - 1))
                 .isEqualTo(DemoEffects.PUFF_STAGES - 1);
         }
@@ -985,11 +1119,15 @@ final class DemoEffectsTest
         void onlyOneStageIsShown()
         {
             final Fixture fixture = new Fixture();
+
             fixture.fire();
+
             for (int tic = 1; tic < DemoEffects.PUFF_LIFE_TICS; tic++)
             {
                 fixture.tic();
+
                 final int shown = DemoEffects.stageFor(fixture.effects.puffAge(0));
+
                 for (int stage = 0; stage < DemoEffects.PUFF_STAGES; stage++)
                 {
                     if (stage == shown)
@@ -1022,12 +1160,14 @@ final class DemoEffectsTest
             // frame. Scene.Builder refuses a degenerate placement, so the pool
             // cannot enter the scene already hidden.
             final Fixture fixture = new Fixture();
+
             fixture.effects.publish(fixture.renderer);
 
             for (int slot = 0; slot < DemoEffects.MAX_TRACERS; slot++)
             {
                 assertThat(fixture.tracerOverride(slot)).isSameAs(DemoEffects.HIDDEN);
             }
+
             for (int slot = 0; slot < DemoEffects.MAX_PUFFS; slot++)
             {
                 for (int stage = 0; stage < DemoEffects.PUFF_STAGES; stage++)
@@ -1053,6 +1193,7 @@ final class DemoEffectsTest
                     assertThat(DemoEffects.HIDDEN.get(row, column)).isZero();
                 }
             }
+
             assertThat(DemoEffects.HIDDEN.get(Mat4.ORDER - 1, Mat4.ORDER - 1)).isEqualTo(1.0f);
         }
 
@@ -1061,15 +1202,21 @@ final class DemoEffectsTest
         void tracerTravels()
         {
             final Fixture fixture = new Fixture();
+
             fixture.fire();
+
             fixture.tic();
+
             final float first = fixture.tracerOverride(0).get(2, Mat4.ORDER - 1);
+
             fixture.tic();
+
             final float second = fixture.tracerOverride(0).get(2, Mat4.ORDER - 1);
 
             assertThat(first)
                 .as("one step down the aim before it is ever drawn")
                 .isGreaterThan(EYE_Z);
+
             assertThat(second - first)
                 .isEqualTo(DemoEffects.TRACER_SPEED_UNITS);
         }
@@ -1084,10 +1231,13 @@ final class DemoEffectsTest
             // while the weapon was drawn on the right — which is what this
             // pins down.
             final Fixture fixture = new Fixture();
+
             fixture.fire();
+
             fixture.tic();
 
             final Mat4 puff = fixture.puffOverride(0, 0);
+
             assertThat(puff.get(0, Mat4.ORDER - 1))
                 .as("the puff must be on the same side of the eye as the weapon")
                 .isLessThan(EYE_X);
@@ -1098,8 +1248,11 @@ final class DemoEffectsTest
         void puffExpands()
         {
             final Fixture fixture = new Fixture();
+
             fixture.fire();
+
             fixture.tic();
+
             final float young = fixture.puffOverride(0, DemoEffects.stageFor(
                 fixture.effects.puffAge(0))).get(1, 1);
 
@@ -1107,6 +1260,7 @@ final class DemoEffectsTest
             {
                 fixture.tic();
             }
+
             final float old = fixture.puffOverride(0, DemoEffects.stageFor(
                 fixture.effects.puffAge(0))).get(1, 1);
 
@@ -1118,13 +1272,16 @@ final class DemoEffectsTest
         void expiredEffectsAreHidden()
         {
             final Fixture fixture = new Fixture();
+
             fixture.fire();
+
             for (int tic = 0; tic < DemoEffects.PUFF_LIFE_TICS + 2; tic++)
             {
                 fixture.tic();
             }
 
             assertThat(fixture.tracerOverride(0)).isSameAs(DemoEffects.HIDDEN);
+
             for (int stage = 0; stage < DemoEffects.PUFF_STAGES; stage++)
             {
                 assertThat(fixture.puffOverride(0, stage)).isSameAs(DemoEffects.HIDDEN);
@@ -1176,9 +1333,12 @@ final class DemoEffectsTest
             assertThat(fixture.effects.liveOutgoingTracerCount())
                 .as("incoming fire took a slot from the player")
                 .isZero();
+
             assertThat(fixture.effects.liveIncomingTracerCount())
                 .isEqualTo(DemoEffects.MAX_BOT_TRACERS);
+
             assertThat(fixture.effects.liveOutgoingPuffCount()).isZero();
+
             assertThat(fixture.effects.liveIncomingPuffCount())
                 .isEqualTo(DemoEffects.MAX_BOT_PUFFS);
         }
@@ -1188,17 +1348,20 @@ final class DemoEffectsTest
         void outgoingSurvivesAVolley()
         {
             final Fixture fixture = new Fixture();
+
             fixture.fire();
 
             for (int shot = 0; shot < DemoEffects.MAX_BOT_TRACERS * 3; shot++)
             {
                 fireBack(fixture.effects);
             }
+
             fixture.tic();
 
             assertThat(fixture.tracerOverride(0))
                 .as("the player's bolt was evicted by return fire")
                 .isNotSameAs(DemoEffects.HIDDEN);
+
             assertThat(fixture.effects.liveOutgoingTracerCount()).isEqualTo(1);
         }
 
@@ -1210,10 +1373,13 @@ final class DemoEffectsTest
             // guns". Match fires from the middle of a body; a bolt born there
             // floats out of a chest.
             final Fixture fixture = new Fixture();
+
             fireBack(fixture.effects);
+
             fixture.tic();
 
             final Mat4 bolt = fixture.tracerOverride(DemoEffects.MAX_TRACERS);
+
             // One tic of travel has already happened — the port advances before it
             // publishes — so back it out to recover where the bolt was born.
             // Column 2 is the model's +z, the direction of travel, scaled by the
@@ -1221,6 +1387,7 @@ final class DemoEffectsTest
             final float bornY = bolt.get(1, 3)
                 - DemoEffects.BOT_TRACER_SPEED_UNITS * bolt.get(1, 2)
                     / DemoEffects.TRACER_LENGTH_UNITS;
+
             assertThat(bornY)
                 .as("the bolt started at the bot's eye rather than at its muzzle")
                 .isCloseTo(30.0f, within(1.0f));
@@ -1236,36 +1403,54 @@ final class DemoEffectsTest
             // the shot and fourteen units to one side of it — most of a player
             // radius — so a hit would look like a miss.
             final Fixture fixture = new Fixture();
+
             fireBack(fixture.effects);
+
             fixture.tic();
 
             final Mat4 bolt = fixture.tracerOverride(DemoEffects.MAX_TRACERS);
+
             // Column 2 is the image of the model's +z, which is the bolt's own
             // direction of travel, scaled by its length.
             final float dirX = bolt.get(0, 2) / DemoEffects.TRACER_LENGTH_UNITS;
+
             final float dirY = bolt.get(1, 2) / DemoEffects.TRACER_LENGTH_UNITS;
+
             final float dirZ = bolt.get(2, 2) / DemoEffects.TRACER_LENGTH_UNITS;
 
             // Where the real ray ends up at the distance the shot was taken at —
             // the point the simulation aimed at, and the point the bolt has to
             // reach if the two are to agree about a near-miss.
             final float aimX = BOT_X;
+
             final float aimY = BOT_EYE_Y;
+
             final float aimZ = BOT_Z - RANGE;
+
             final float muzzleX = BOT_X + 9.0f;
+
             final float muzzleY = 30.0f;
+
             final float muzzleZ = BOT_Z - 8.0f;
+
             final float toX = aimX - muzzleX;
+
             final float toY = aimY - muzzleY;
+
             final float toZ = aimZ - muzzleZ;
+
             final float span = (float) StrictMath.sqrt(toX * toX + toY * toY + toZ * toZ);
 
             assertThat(dirX).as("across").isCloseTo(toX / span, within(EPSILON));
+
             assertThat(dirY).as("vertically").isCloseTo(toY / span, within(EPSILON));
+
             assertThat(dirZ).as("in depth").isCloseTo(toZ / span, within(EPSILON));
+
             assertThat(dirX * dirX + dirY * dirY + dirZ * dirZ)
                 .as("the flight direction is not unit length")
                 .isCloseTo(1.0f, within(EPSILON));
+
             // And it is NOT simply the ray's own direction, which is what a naive
             // implementation would draw and is the bug this converges away.
             assertThat(dirX).as("the bolt just copied the ray's direction")
@@ -1286,23 +1471,33 @@ final class DemoEffectsTest
             // is the approach and it has to be slow enough and long-lived enough to
             // watch. See BOT_TRACER_SPEED_UNITS for what a capture caught here.
             final int mine = 0;
+
             final int theirs = DemoEffects.MAX_TRACERS;
 
             assertThat(DemoEffects.isIncomingTracer(mine)).isFalse();
+
             assertThat(DemoEffects.isIncomingTracer(theirs)).isTrue();
+
             assertThat(DemoEffects.tracerWidthOf(theirs))
                 .isGreaterThan(DemoEffects.tracerWidthOf(mine));
+
             assertThat(DemoEffects.incomingLifeFor(400.0f))
                 .isGreaterThan(DemoEffects.TRACER_LIFE_TICS);
+
             assertThat(DemoEffects.tracerSpeedOf(theirs))
                 .as("an approaching bolt must not cross the room faster than the eye reads it")
                 .isLessThan(DemoEffects.tracerSpeedOf(mine));
+
             assertThat(DemoEffects.isIncomingPuff(0)).isFalse();
+
             assertThat(DemoEffects.isIncomingPuff(DemoEffects.MAX_PUFFS)).isTrue();
+
             assertThat(DemoEffects.puffStartRadiusOf(DemoEffects.MAX_PUFFS))
                 .isGreaterThan(DemoEffects.puffStartRadiusOf(0));
+
             assertThat(DemoEffects.puffEndRadiusOf(DemoEffects.MAX_PUFFS))
                 .isGreaterThan(DemoEffects.puffEndRadiusOf(0));
+
             assertThat(DemoEffects.puffRiseOf(DemoEffects.MAX_PUFFS))
                 .isGreaterThan(DemoEffects.puffRiseOf(0));
         }
@@ -1335,14 +1530,17 @@ final class DemoEffectsTest
             // Asserted as a time at a representative range rather than as the raw
             // constant, because that is the property a player experiences.
             final float typicalRange = 250.0f;
+
             final float ticsOnScreen = typicalRange / DemoEffects.BOT_TRACER_SPEED_UNITS;
 
             assertThat(ticsOnScreen)
                 .as("a bolt from mid-room is a strobe rather than a flight")
                 .isGreaterThan(6.0f);
+
             assertThat(DemoEffects.incomingLifeFor(250.0f))
                 .as("a bolt from mid-room is drawn for too few frames to read")
                 .isGreaterThanOrEqualTo(5);
+
             // And a shot from across the room lasts several times as long as one
             // from the next crate, which is what makes the flight tell a player how
             // far away the threat is without them counting anything.
@@ -1364,6 +1562,7 @@ final class DemoEffectsTest
             for (final float range : new float[] {120.0f, 250.0f, 400.0f, 512.0f})
             {
                 final float flown = DemoEffects.incomingLifeFor(range) * speed;
+
                 assertThat(range - flown)
                     .as("a bolt fired from %s units ends up inside the player's head", range)
                     .isGreaterThanOrEqualTo(DemoEffects.INCOMING_STANDOFF_UNITS
@@ -1379,6 +1578,7 @@ final class DemoEffectsTest
             // with no tell. Inside the standoff the arithmetic gives zero.
             assertThat(DemoEffects.incomingLifeFor(20.0f))
                 .isEqualTo(DemoEffects.BOT_TRACER_MIN_LIFE_TICS);
+
             assertThat(DemoEffects.incomingLifeFor(0.0f))
                 .as("no range at all is the one case with nothing to shorten against")
                 .isEqualTo(DemoEffects.BOT_TRACER_LIFE_TICS);
@@ -1399,10 +1599,12 @@ final class DemoEffectsTest
             final int maxConcurrent = (DemoEffects.PUFF_LIFE_TICS
                 + com.openfps.engine.gameplay.BotSkill.DUMB.cooldownTics() - 1)
                 / com.openfps.engine.gameplay.BotSkill.DUMB.cooldownTics();
+
             assertThat(DemoEffects.MAX_BOT_PUFFS)
                 .as("the pool covers every bot's worst case plus one spare")
                 .isEqualTo(maxConcurrent
                     * com.openfps.engine.gameplay.Match.DEFAULT_BOT_COUNT + 1);
+
             assertThat(DemoEffects.MAX_BOT_TRACERS)
                 .as("a bot never has two tracers alive, so the simple +1 spare holds")
                 .isGreaterThan(com.openfps.engine.gameplay.Match.DEFAULT_BOT_COUNT);

@@ -70,21 +70,25 @@ public sealed interface MapMarkers
             {
                 throw new IllegalArgumentException("zones must not be null");
             }
+
             if (zones.size() != 3)
             {
                 throw new IllegalArgumentException(
                     "Hardpoint requires exactly three zones, got " + zones.size());
             }
+
             if (rotationTics <= 0)
             {
                 throw new IllegalArgumentException(
                     "rotationTics must be positive, got " + rotationTics);
             }
+
             if (scorePerTick <= 0)
             {
                 throw new IllegalArgumentException(
                     "scorePerTick must be positive, got " + scorePerTick);
             }
+
             zones = List.copyOf(zones);
         }
     }
@@ -110,11 +114,13 @@ public sealed interface MapMarkers
             {
                 throw new IllegalArgumentException("flags must not be null");
             }
+
             if (flags.size() != 3)
             {
                 throw new IllegalArgumentException(
                     "Domination requires exactly three flags, got " + flags.size());
             }
+
             flags = List.copyOf(flags);
         }
     }
@@ -142,6 +148,7 @@ public sealed interface MapMarkers
             {
                 throw new IllegalArgumentException("redBase must not be null");
             }
+
             if (blueBase == null)
             {
                 throw new IllegalArgumentException("blueBase must not be null");
@@ -172,15 +179,19 @@ public sealed interface MapMarkers
             {
                 throw new IllegalArgumentException("id must not be null or blank");
             }
+
             if (callout == null || callout.isBlank())
             {
                 throw new IllegalArgumentException("callout must not be null or blank");
             }
+
             if (!(radius > 0.0f))
             {
                 throw new IllegalArgumentException("radius must be positive, got " + radius);
             }
+
             id = id.intern();
+
             callout = callout.intern();
         }
     }
@@ -209,15 +220,19 @@ public sealed interface MapMarkers
             {
                 throw new IllegalArgumentException("id must not be null or blank");
             }
+
             if (callout == null || callout.isBlank())
             {
                 throw new IllegalArgumentException("callout must not be null or blank");
             }
+
             if (!(radius > 0.0f))
             {
                 throw new IllegalArgumentException("radius must be positive, got " + radius);
             }
+
             id = id.intern();
+
             callout = callout.intern();
         }
     }
@@ -254,6 +269,7 @@ public sealed interface MapMarkers
             {
                 throw new IllegalArgumentException("team must not be null");
             }
+
             if (!(radius > 0.0f))
             {
                 throw new IllegalArgumentException("radius must be positive, got " + radius);

@@ -343,6 +343,7 @@ public final class Crosshair
         {
             return ENEMY_CORE_COLOR;
         }
+
         return CORE_COLOR;
     }
 
@@ -373,6 +374,7 @@ public final class Crosshair
         {
             throw new IllegalArgumentException("target must not be null");
         }
+
         if (target.state() != Framebuffer.State.READY)
         {
             throw new IllegalStateException("draw() called from state " + target.state()
@@ -380,13 +382,19 @@ public final class Crosshair
         }
 
         final int width = target.width();
+
         final int height = target.height();
+
         final int stride = target.strideInPixels();
+
         final int[] color = target.colorBuffer();
 
         final int core = coreThickness(height);
+
         final int outline = outlineThickness(height);
+
         final int gap = centreGap(height);
+
         final int arm = armLength(height);
 
         // The border is the SAME figure grown by `outline` pixels in every
@@ -398,6 +406,7 @@ public final class Crosshair
         // for free.
         drawCross(color, width, height, stride, core + 2 * outline, gap - outline,
             gap + arm + outline, OUTLINE_COLOR);
+
         drawCross(color, width, height, stride, core, gap, gap + arm,
             coreColor(enemyUnderAim));
     }
@@ -498,22 +507,36 @@ public final class Crosshair
         // Horizontal pair. Its thickness lies along Y, so it takes the
         // HEIGHT's parity; its length lies along X and takes the WIDTH's.
         final int barTop = centredLow(height, thickness);
+
         final int barBottom = barTop + matchParity(height, thickness);
+
         final int leftTip = centredLow(width, 2 * outerHalf);
+
         final int rightTip = leftTip + matchParity(width, 2 * outerHalf);
+
         final int gapLeft = centredLow(width, 2 * innerHalf);
+
         final int gapRight = gapLeft + matchParity(width, 2 * innerHalf);
+
         fillRect(color, width, height, stride, leftTip, barTop, gapLeft, barBottom, rgba);
+
         fillRect(color, width, height, stride, gapRight, barTop, rightTip, barBottom, rgba);
 
         // Vertical pair, with the two axes exchanged.
         final int barLeft = centredLow(width, thickness);
+
         final int barRight = barLeft + matchParity(width, thickness);
+
         final int topTip = centredLow(height, 2 * outerHalf);
+
         final int bottomTip = topTip + matchParity(height, 2 * outerHalf);
+
         final int gapTop = centredLow(height, 2 * innerHalf);
+
         final int gapBottom = gapTop + matchParity(height, 2 * innerHalf);
+
         fillRect(color, width, height, stride, barLeft, topTip, barRight, gapTop, rgba);
+
         fillRect(color, width, height, stride, barLeft, gapBottom, barRight, bottomTip, rgba);
     }
 
@@ -528,16 +551,22 @@ public final class Crosshair
         final int rgba)
     {
         final int lowX = Math.max(0, x0);
+
         final int highX = Math.min(width, x1);
+
         final int lowY = Math.max(0, y0);
+
         final int highY = Math.min(height, y1);
+
         if (lowX >= highX || lowY >= highY)
         {
             return;
         }
+
         for (int y = lowY; y < highY; y++)
         {
             final int row = y * stride;
+
             Arrays.fill(color, row + lowX, row + highX, rgba);
         }
     }

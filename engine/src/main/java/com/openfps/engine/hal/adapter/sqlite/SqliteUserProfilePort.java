@@ -111,22 +111,29 @@ public final class SqliteUserProfilePort implements I_UserProfilePort
         {
             throw new IllegalStateException("init() called from state SHUTDOWN");
         }
+
         if (state == State.READY)
         {
             throw new IllegalStateException("init() called from state READY — already initialized");
         }
 
         this.dbPath = resolveDbPath();
+
         try
         {
             ensureDirectory(dbPath);
+
             connection = DriverManager.getConnection("jdbc:sqlite:" + dbPath);
+
             try (final Statement stmt = connection.createStatement())
             {
                 stmt.executeUpdate(PRAGMAS);
+
                 stmt.executeUpdate(SCHEMA_SQL);
             }
+
             state = State.READY;
+
             LOG.info("SqliteUserProfilePort initialized: db={}", dbPath);
         }
         catch (final SQLException e)
@@ -142,6 +149,7 @@ public final class SqliteUserProfilePort implements I_UserProfilePort
         {
             throw new IllegalStateException("shutdown() called from state SHUTDOWN");
         }
+
         if (connection != null)
         {
             try
@@ -152,9 +160,12 @@ public final class SqliteUserProfilePort implements I_UserProfilePort
             {
                 LOG.warn("Error closing SQLite connection", e);
             }
+
             connection = null;
         }
+
         state = State.SHUTDOWN;
+
         LOG.info("SqliteUserProfilePort shut down");
     }
 
@@ -172,20 +183,25 @@ public final class SqliteUserProfilePort implements I_UserProfilePort
     public Optional<UserProfile> findById(final String id)
     {
         requireReady();
+
         if (id == null || id.isBlank())
         {
             return Optional.empty();
         }
+
         final String sql = "SELECT * FROM user_profile WHERE id = ?";
+
         try (final PreparedStatement ps = connection.prepareStatement(sql))
         {
             ps.setString(1, id);
+
             try (final ResultSet rs = ps.executeQuery())
             {
                 if (rs.next())
                 {
                     return Optional.of(fromResultSet(rs));
                 }
+
                 return Optional.empty();
             }
         }
@@ -199,8 +215,11 @@ public final class SqliteUserProfilePort implements I_UserProfilePort
     public List<UserProfile> findAll()
     {
         requireReady();
+
         final String sql = "SELECT * FROM user_profile ORDER BY created_at_epoch_ms ASC";
+
         final List<UserProfile> result = new ArrayList<>();
+
         try (final PreparedStatement ps = connection.prepareStatement(sql);
              final ResultSet rs = ps.executeQuery())
         {
@@ -208,6 +227,7 @@ public final class SqliteUserProfilePort implements I_UserProfilePort
             {
                 result.add(fromResultSet(rs));
             }
+
             return result;
         }
         catch (final SQLException e)
@@ -220,6 +240,7 @@ public final class SqliteUserProfilePort implements I_UserProfilePort
     public void save(final UserProfile profile)
     {
         requireReady();
+
         if (profile == null)
         {
             throw new IllegalArgumentException("profile must not be null");
@@ -233,18 +254,29 @@ public final class SqliteUserProfilePort implements I_UserProfilePort
                 created_at_epoch_ms, updated_at_epoch_ms
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """;
+
         try (final PreparedStatement ps = connection.prepareStatement(sql))
         {
             ps.setString(1,  profile.id());
+
             ps.setString(2,  profile.displayName());
+
             ps.setDouble(3,  profile.audioVolume());
+
             ps.setDouble(4,  profile.mouseSensitivity());
+
             ps.setInt(5,  profile.fieldOfView());
+
             ps.setString(6,  profile.preferredColor());
+
             ps.setLong(7,  profile.lastLoginAtEpochMs());
+
             ps.setLong(8,  profile.totalPlaytimeSeconds());
+
             ps.setLong(9,  profile.createdAtEpochMs());
+
             ps.setLong(10, profile.updatedAtEpochMs());
+
             ps.executeUpdate();
         }
         catch (final SQLException e)
@@ -257,14 +289,18 @@ public final class SqliteUserProfilePort implements I_UserProfilePort
     public void delete(final String id)
     {
         requireReady();
+
         if (id == null || id.isBlank())
         {
             return;
         }
+
         final String sql = "DELETE FROM user_profile WHERE id = ?";
+
         try (final PreparedStatement ps = connection.prepareStatement(sql))
         {
             ps.setString(1, id);
+
             ps.executeUpdate();
         }
         catch (final SQLException e)
@@ -277,7 +313,9 @@ public final class SqliteUserProfilePort implements I_UserProfilePort
     public int count()
     {
         requireReady();
+
         final String sql = "SELECT COUNT(*) FROM user_profile";
+
         try (final PreparedStatement ps = connection.prepareStatement(sql);
              final ResultSet rs = ps.executeQuery())
         {
@@ -285,6 +323,7 @@ public final class SqliteUserProfilePort implements I_UserProfilePort
             {
                 return rs.getInt(1);
             }
+
             return 0;
         }
         catch (final SQLException e)
@@ -332,32 +371,42 @@ public final class SqliteUserProfilePort implements I_UserProfilePort
     {
         // Precedence: system property > environment variable > default.
         final String propOverride = System.getProperty(PROP_DB_PATH);
+
         if (propOverride != null && !propOverride.isBlank())
         {
             return propOverride;
         }
+
         final String override = System.getenv(ENV_DB_PATH);
+
         if (override != null && !override.isBlank())
         {
             return override;
         }
+
         final String userHome = System.getProperty("user.home");
+
         if (userHome == null || userHome.isBlank())
         {
             throw new IllegalStateException("user.home system property is not set");
         }
+
         return userHome + "/" + DEFAULT_DB_DIR + "/" + DEFAULT_DB_FILE;
     }
 
     private static void ensureDirectory(final String dbPath)
     {
         final int lastSlash = dbPath.lastIndexOf('/');
+
         if (lastSlash <= 0)
         {
             return;
         }
+
         final String dirPath = dbPath.substring(0, lastSlash);
+
         final java.io.File dir = new java.io.File(dirPath);
+
         if (!dir.exists() && !dir.mkdirs())
         {
             throw new IllegalStateException("Failed to create directory: " + dirPath);
@@ -371,17 +420,23 @@ public final class SqliteUserProfilePort implements I_UserProfilePort
         {
             throw new IllegalStateException("init() called from state SHUTDOWN");
         }
+
         if (state == State.READY)
         {
             throw new IllegalStateException("init() called from state READY — already initialized");
         }
+
         connection = DriverManager.getConnection("jdbc:sqlite::memory:");
+
         try (final Statement stmt = connection.createStatement())
         {
             stmt.executeUpdate(PRAGMAS);
+
             stmt.executeUpdate(SCHEMA_SQL);
         }
+
         dbPath = ":memory:";
+
         state = State.READY;
     }
 }

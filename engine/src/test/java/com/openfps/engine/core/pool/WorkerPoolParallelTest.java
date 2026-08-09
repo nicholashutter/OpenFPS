@@ -53,7 +53,9 @@ class WorkerPoolParallelTest
     void setUp()
     {
         bus = EventBusFactory.createShared();
+
         bus.init(512);
+
         registry = new SubsystemRegistry();
     }
 
@@ -70,8 +72,10 @@ class WorkerPoolParallelTest
             && pool.state() != I_ThreadPoolPort.State.UNINITIALIZED)
         {
             pool.shutdown();
+
             pool.awaitTermination(5000);
         }
+
         if (bus.state() != I_EventBusPort.State.SHUTDOWN)
         {
             bus.shutdown();
@@ -82,7 +86,9 @@ class WorkerPoolParallelTest
     private void startPool(final int workers)
     {
         pool = ThreadPoolFactory.createFixed(bus, registry);
+
         pool.init(workers);
+
         pool.start();
     }
 
@@ -100,8 +106,11 @@ class WorkerPoolParallelTest
         // nothing is left to run what it queued. The latch timeout turns that
         // hang into a failed assertion.
         final AtomicInteger ran = new AtomicInteger(0);
+
         final Set<String> threadNames = ConcurrentHashMap.newKeySet();
+
         final CountDownLatch submitReturned = new CountDownLatch(1);
+
         final I_ParallelJob job = index -> recordRun(ran, threadNames);
 
         registry.register(new Subsystem(SubsystemId.P_)
@@ -110,18 +119,23 @@ class WorkerPoolParallelTest
             protected void onEvent(final I_EngineEvent event)
             {
                 pool.submitParallel(job, 32);
+
                 submitReturned.countDown();
             }
         });
+
         registry.initAll();
 
         startPool(1);
+
         bus.publish(factory.newTick(1, 0));
 
         assertThat(submitReturned.await(10, TimeUnit.SECONDS))
             .as("submitParallel() from the only worker must return, not deadlock")
             .isTrue();
+
         assertThat(ran.get()).isEqualTo(32);
+
         assertThat(threadNames)
             .as("with one worker, that worker is the caller and runs every job")
             .containsExactly(WORKER_NAME_PREFIX + "0");
@@ -135,30 +149,40 @@ class WorkerPoolParallelTest
         // worker is parked inside a handler and cannot possibly help, so if
         // the submitting thread were only waiting, nothing would ever run.
         final CountDownLatch handlerEntered = new CountDownLatch(1);
+
         final CountDownLatch releaseHandler = new CountDownLatch(1);
+
         registry.register(new Subsystem(SubsystemId.P_)
         {
             @Override
             protected void onEvent(final I_EngineEvent event)
             {
                 handlerEntered.countDown();
+
                 awaitQuietly(releaseHandler);
             }
         });
+
         registry.initAll();
 
         startPool(1);
+
         bus.publish(factory.newTick(1, 0));
+
         assertThat(handlerEntered.await(10, TimeUnit.SECONDS)).isTrue();
 
         final AtomicInteger ran = new AtomicInteger(0);
+
         final Set<String> threadNames = ConcurrentHashMap.newKeySet();
+
         final I_ParallelJob job = index -> recordRun(ran, threadNames);
 
         pool.submitParallel(job, 64);
 
         assertThat(ran.get()).isEqualTo(64);
+
         assertThat(threadNames).hasSize(1);
+
         assertThat(threadNames.iterator().next())
             .as("every job ran on the submitting thread, not on a pool worker")
             .doesNotStartWith(WORKER_NAME_PREFIX);
@@ -175,22 +199,28 @@ class WorkerPoolParallelTest
     void shouldRunEveryIndexExactlyOnce()
     {
         final int jobCount = 20_000;
+
         final AtomicIntegerArray runs = new AtomicIntegerArray(jobCount);
+
         final I_ParallelJob job = index -> runs.incrementAndGet(index);
 
         startPool(2);
+
         pool.submitParallel(job, jobCount);
 
         // MUTABLE: scanning for the first violation
         int wrong = -1;
+
         for (int i = 0; i < jobCount; i++)
         {
             if (runs.get(i) != 1)
             {
                 wrong = i;
+
                 break;
             }
         }
+
         assertThat(wrong)
             .as("index %d ran %d times instead of once", wrong, Math.max(0, wrong))
             .isEqualTo(-1);
@@ -201,16 +231,21 @@ class WorkerPoolParallelTest
     void shouldSpreadJobsAcrossWorkers()
     {
         final Set<String> threadNames = ConcurrentHashMap.newKeySet();
+
         final AtomicInteger ran = new AtomicInteger(0);
+
         final I_ParallelJob job = index -> recordSlowRun(ran, threadNames);
 
         startPool(4);
+
         pool.submitParallel(job, 64);
 
         assertThat(ran.get()).isEqualTo(64);
+
         assertThat(threadNames)
             .as("idle workers should be woken to help: %s", threadNames)
             .hasSizeGreaterThan(1);
+
         assertThat(threadNames)
             .as("at least one pool worker took part")
             .anyMatch(WorkerPoolParallelTest::isWorkerThreadName);
@@ -221,9 +256,11 @@ class WorkerPoolParallelTest
     void shouldDoNothingForZeroJobs()
     {
         final AtomicInteger ran = new AtomicInteger(0);
+
         final I_ParallelJob job = index -> ran.incrementAndGet();
 
         startPool(2);
+
         pool.submitParallel(job, 0);
 
         assertThat(ran.get()).isZero();
@@ -238,7 +275,9 @@ class WorkerPoolParallelTest
     void shouldPropagateFirstFailureAndStillRunEveryJob()
     {
         final int jobCount = 200;
+
         final AtomicIntegerArray runs = new AtomicIntegerArray(jobCount);
+
         final I_ParallelJob job = index -> runAndFailAt(runs, index, 42);
 
         startPool(3);
@@ -250,10 +289,12 @@ class WorkerPoolParallelTest
 
         // MUTABLE: total across the range
         int total = 0;
+
         for (int i = 0; i < jobCount; i++)
         {
             total += runs.get(i);
         }
+
         assertThat(total)
             .as("a failure must not abort the rest of the batch")
             .isEqualTo(jobCount);
@@ -264,22 +305,32 @@ class WorkerPoolParallelTest
     void shouldCountEveryFailureAndStayUsable()
     {
         final int jobCount = 60;
+
         final AtomicIntegerArray runs = new AtomicIntegerArray(jobCount);
+
         final I_ParallelJob failing = index -> runAndFailBelow(runs, index, 5);
 
         startPool(3);
 
         final Throwable thrown = catchThrowable(() -> pool.submitParallel(failing, jobCount));
+
         assertThat(thrown).isInstanceOf(ParallelJobException.class);
+
         final ParallelJobException failure = (ParallelJobException) thrown;
+
         assertThat(failure.failureCount()).isEqualTo(5);
+
         assertThat(failure.jobCount()).isEqualTo(jobCount);
+
         assertThat(failure.getCause()).isInstanceOf(IllegalStateException.class);
 
         // Pool state must be intact: the very next submission has to work.
         final AtomicInteger ran = new AtomicInteger(0);
+
         final I_ParallelJob clean = index -> ran.incrementAndGet();
+
         pool.submitParallel(clean, 100);
+
         assertThat(ran.get()).isEqualTo(100);
     }
 
@@ -288,6 +339,7 @@ class WorkerPoolParallelTest
     void shouldNotHangWhenAJobThrowsAnError()
     {
         final AtomicInteger ran = new AtomicInteger(0);
+
         final I_ParallelJob job = index -> runOrThrowError(ran, index);
 
         startPool(2);
@@ -295,6 +347,7 @@ class WorkerPoolParallelTest
         assertThatThrownBy(() -> pool.submitParallel(job, 40))
             .isInstanceOf(ParallelJobException.class)
             .hasRootCauseInstanceOf(AssertionError.class);
+
         assertThat(ran.get()).isEqualTo(39);
     }
 
@@ -310,19 +363,26 @@ class WorkerPoolParallelTest
         // eight pre-allocated batch slots, so this also exercises the inline
         // fallback — which must still run every index exactly once.
         final int outerCount = 24;
+
         final int innerCount = 16;
+
         final AtomicIntegerArray outerRuns = new AtomicIntegerArray(outerCount);
+
         final AtomicInteger innerRuns = new AtomicInteger(0);
+
         final I_ParallelJob inner = index -> innerRuns.incrementAndGet();
+
         final I_ParallelJob outer = index -> runNested(outerRuns, index, inner, innerCount);
 
         startPool(4);
+
         pool.submitParallel(outer, outerCount);
 
         for (int i = 0; i < outerCount; i++)
         {
             assertThat(outerRuns.get(i)).as("outer index %d", i).isEqualTo(1);
         }
+
         assertThat(innerRuns.get()).isEqualTo(outerCount * innerCount);
     }
 
@@ -335,11 +395,15 @@ class WorkerPoolParallelTest
     void shouldKeepDispatchingEventsAroundAParallelSection() throws Exception
     {
         final int firstBurst = 40;
+
         final int secondBurst = 20;
+
         // Both latches count down on every event, so the first reaches zero
         // after the first burst and the second only after both.
         final CountDownLatch firstDispatched = new CountDownLatch(firstBurst);
+
         final CountDownLatch allDispatched = new CountDownLatch(firstBurst + secondBurst);
+
         final AtomicInteger dispatched = new AtomicInteger(0);
 
         registry.register(new Subsystem(SubsystemId.P_)
@@ -348,10 +412,13 @@ class WorkerPoolParallelTest
             protected void onEvent(final I_EngineEvent event)
             {
                 dispatched.incrementAndGet();
+
                 firstDispatched.countDown();
+
                 allDispatched.countDown();
             }
         });
+
         registry.initAll();
 
         startPool(3);
@@ -363,8 +430,11 @@ class WorkerPoolParallelTest
 
         // Fan out immediately, so the batch overlaps the burst still in flight.
         final AtomicInteger ran = new AtomicInteger(0);
+
         final I_ParallelJob job = index -> recordSlowRun(ran, null);
+
         pool.submitParallel(job, 120);
+
         assertThat(ran.get()).isEqualTo(120);
 
         assertThat(firstDispatched.await(15, TimeUnit.SECONDS))
@@ -375,9 +445,11 @@ class WorkerPoolParallelTest
         {
             bus.publish(factory.newTick(firstBurst + i, 0));
         }
+
         assertThat(allDispatched.await(15, TimeUnit.SECONDS))
             .as("the pool must keep draining the bus after a parallel section")
             .isTrue();
+
         assertThat(dispatched.get()).isEqualTo(firstBurst + secondBurst);
     }
 
@@ -390,10 +462,12 @@ class WorkerPoolParallelTest
     void shouldRejectBadArguments()
     {
         final I_ParallelJob job = index -> assertThat(index).isNotNegative();
+
         startPool(2);
 
         assertThatThrownBy(() -> pool.submitParallel(null, 4))
             .isInstanceOf(IllegalArgumentException.class);
+
         assertThatThrownBy(() -> pool.submitParallel(job, -1))
             .isInstanceOf(IllegalArgumentException.class);
     }
@@ -405,18 +479,23 @@ class WorkerPoolParallelTest
         final I_ParallelJob job = index -> assertThat(index).isNotNegative();
 
         pool = ThreadPoolFactory.createFixed(bus, registry);
+
         assertThatThrownBy(() -> pool.submitParallel(job, 4))
             .as("UNINITIALIZED")
             .isInstanceOf(IllegalStateException.class);
 
         pool.init(2);
+
         assertThatThrownBy(() -> pool.submitParallel(job, 4))
             .as("READY — no workers exist yet")
             .isInstanceOf(IllegalStateException.class);
 
         pool.start();
+
         pool.shutdown();
+
         assertThat(pool.awaitTermination(5000)).isTrue();
+
         assertThatThrownBy(() -> pool.submitParallel(job, 4))
             .as("SHUTDOWN")
             .isInstanceOf(IllegalStateException.class);
@@ -435,6 +514,7 @@ class WorkerPoolParallelTest
     private static void recordRun(final AtomicInteger ran, final Set<String> threadNames)
     {
         ran.incrementAndGet();
+
         threadNames.add(Thread.currentThread().getName());
     }
 
@@ -450,7 +530,9 @@ class WorkerPoolParallelTest
         {
             Thread.currentThread().interrupt();
         }
+
         ran.incrementAndGet();
+
         if (threadNames != null)
         {
             threadNames.add(Thread.currentThread().getName());
@@ -461,6 +543,7 @@ class WorkerPoolParallelTest
                                      final int failIndex)
     {
         runs.incrementAndGet(index);
+
         if (index == failIndex)
         {
             throw new IllegalStateException("job " + index + " exploded");
@@ -471,6 +554,7 @@ class WorkerPoolParallelTest
                                         final int failBelow)
     {
         runs.incrementAndGet(index);
+
         if (index < failBelow)
         {
             throw new IllegalStateException("job " + index + " exploded");
@@ -483,6 +567,7 @@ class WorkerPoolParallelTest
         {
             throw new AssertionError("job 7 threw an Error");
         }
+
         ran.incrementAndGet();
     }
 
@@ -490,6 +575,7 @@ class WorkerPoolParallelTest
                            final I_ParallelJob inner, final int innerCount)
     {
         outerRuns.incrementAndGet(index);
+
         pool.submitParallel(inner, innerCount);
     }
 
@@ -512,6 +598,7 @@ class WorkerPoolParallelTest
         //
         // Against the old behaviour this fails on the first assertion.
         startPool(2);
+
         pool.shutdown();
 
         assertThat(pool.state())
@@ -519,9 +606,11 @@ class WorkerPoolParallelTest
             .isEqualTo(I_ThreadPoolPort.State.DRAINING);
 
         final AtomicInteger ran = new AtomicInteger(0);
+
         assertThatCode(() -> pool.submitParallel(index -> ran.incrementAndGet(), 16))
             .as("fan-out during the drain window must be permitted")
             .doesNotThrowAnyException();
+
         assertThat(ran.get())
             .as("caller participation completes the batch even as workers exit")
             .isEqualTo(16);
@@ -532,10 +621,13 @@ class WorkerPoolParallelTest
     void shouldReachShutdownOnlyAfterWorkersExit() throws Exception
     {
         startPool(2);
+
         pool.shutdown();
+
         assertThat(pool.awaitTermination(5000))
             .as("workers must exit within the timeout")
             .isTrue();
+
         assertThat(pool.state())
             .as("awaitTermination closes the drain window")
             .isEqualTo(I_ThreadPoolPort.State.SHUTDOWN);
@@ -555,7 +647,9 @@ class WorkerPoolParallelTest
         // error. `WorkerPoolTest.double-shutdown is rejected` covers the
         // SHUTDOWN case; this covers the new intermediate one.
         startPool(2);
+
         pool.shutdown();
+
         assertThatThrownBy(pool::shutdown)
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("DRAINING");

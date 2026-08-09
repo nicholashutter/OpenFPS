@@ -95,10 +95,12 @@ public final class MapSelection
     private static String initialMapId()
     {
         final String fromProperty = System.getProperty(MAP_PROPERTY);
+
         if (fromProperty != null && !fromProperty.isBlank())
         {
             return fromProperty;
         }
+
         return DEFAULT_MAP_ID;
     }
 
@@ -132,6 +134,7 @@ public final class MapSelection
         {
             throw new IllegalArgumentException("mapId must not be null or blank");
         }
+
         if (mapId.equals(currentMapId))
         {
             // A picker that reasserts the current value is a no-op; firing
@@ -140,8 +143,11 @@ public final class MapSelection
             // for the same call.
             return;
         }
+
         this.currentMapId = mapId;
+
         final Consumer<String> told = observer;
+
         if (told != null)
         {
             told.accept(mapId);

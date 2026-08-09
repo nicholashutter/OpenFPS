@@ -213,6 +213,7 @@ public final class FixedMath
         {
             return -value;
         }
+
         return value;
     }
 
@@ -232,7 +233,9 @@ public final class FixedMath
     public static int clamp(final int value, final int min, final int max)
     {
         if (value < min) return min;
+
         if (value > max) return max;
+
         return value;
     }
 }

@@ -42,11 +42,15 @@ class DefaultMenuActionsTest
     void shouldRequestCloseOnQuit()
     {
         final NullWindowPort window = new NullWindowPort();
+
         window.init();
+
         final MenuActions actions = new DefaultMenuActions(window);
+
         assertThat(window.isCloseRequested()).isFalse();
 
         actions.onQuit();
+
         assertThat(window.isCloseRequested()).isTrue();
     }
 
@@ -57,12 +61,16 @@ class DefaultMenuActionsTest
         // The whole chain a click or a tap travels — Scene2D change event,
         // listener, action, port — with only the gesture itself faked.
         final NullWindowPort window = new NullWindowPort();
+
         window.init();
+
         final MenuButtonListener quitButton =
             new MenuButtonListener(new DefaultMenuActions(window)::onQuit);
 
         assertThat(window.isCloseRequested()).isFalse();
+
         quitButton.changed(null, null);
+
         assertThat(window.isCloseRequested()).isTrue();
     }
 
@@ -71,8 +79,11 @@ class DefaultMenuActionsTest
     void shouldNotCloseOnStartGame()
     {
         final NullWindowPort window = new NullWindowPort();
+
         window.init();
+
         new DefaultMenuActions(window).onStartGame();
+
         assertThat(window.isCloseRequested()).isFalse();
     }
 
@@ -81,8 +92,11 @@ class DefaultMenuActionsTest
     void shouldNotCloseOnMultiplayer()
     {
         final NullWindowPort window = new NullWindowPort();
+
         window.init();
+
         new DefaultMenuActions(window).onMultiplayer();
+
         assertThat(window.isCloseRequested()).isFalse();
     }
 
@@ -91,8 +105,11 @@ class DefaultMenuActionsTest
     void shouldNotCloseOnSettings()
     {
         final NullWindowPort window = new NullWindowPort();
+
         window.init();
+
         new DefaultMenuActions(window).onSettings();
+
         assertThat(window.isCloseRequested()).isFalse();
     }
 }

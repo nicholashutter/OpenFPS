@@ -345,8 +345,11 @@ public final class GdxInputPort implements I_InputPort
         {
             throw new IllegalArgumentException("inputAccumulator must not be null");
         }
+
         this.accumulator = inputAccumulator;
+
         this.autoWalkTics = Integer.getInteger(AUTO_WALK_TICS_PROPERTY, 0).intValue();
+
         if (autoWalkTics <= 0)
         {
             this.autoWalk = null;
@@ -359,7 +362,9 @@ public final class GdxInputPort implements I_InputPort
             this.autoWalk = InputState.of(axisProperty(AUTO_WALK_FORWARD_PROPERTY, 1.0f),
                 axisProperty(AUTO_WALK_STRAFE_PROPERTY, 0.0f), 0.0f, 0.0f, false, false, false);
         }
+
         this.autoFireTics = Integer.getInteger(AUTO_FIRE_TICS_PROPERTY, 0).intValue();
+
         if (autoFireTics <= 0)
         {
             this.autoFire = null;
@@ -379,10 +384,12 @@ public final class GdxInputPort implements I_InputPort
     private static float axisProperty(final String name, final float fallback)
     {
         final String raw = System.getProperty(name);
+
         if (raw == null || raw.isEmpty())
         {
             return fallback;
         }
+
         try
         {
             return Float.parseFloat(raw);
@@ -390,6 +397,7 @@ public final class GdxInputPort implements I_InputPort
         catch (final NumberFormatException e)
         {
             LOG.warn("{} is not a number ({}) — using {}", name, raw, Float.valueOf(fallback));
+
             return fallback;
         }
     }
@@ -410,6 +418,7 @@ public final class GdxInputPort implements I_InputPort
         {
             throw new IllegalArgumentException("actionBindings must not be null");
         }
+
         this.bindings = actionBindings;
     }
 
@@ -435,6 +444,7 @@ public final class GdxInputPort implements I_InputPort
         {
             throw new IllegalArgumentException("source must not be null");
         }
+
         this.gamepad = source;
     }
 
@@ -465,6 +475,7 @@ public final class GdxInputPort implements I_InputPort
             throw new IllegalArgumentException(
                 "tic rate must be positive, got " + ticsPerSecond);
         }
+
         accumulator.setTicDuration(1.0f / ticsPerSecond);
     }
 
@@ -472,21 +483,28 @@ public final class GdxInputPort implements I_InputPort
     public void init()
     {
         accumulator.clearAll();
+
         latched = InputState.NEUTRAL;
+
         // Armed, not cleared. A port that comes up already in PLAYING — which
         // --start-in-game does, because the match begins before this runs —
         // sees no MENU->PLAYING transition, so syncUiState() never arms the
         // discard and the capture warp lands on the camera unopposed. That is
         // not a harness quirk: any path that starts captured has the same hole.
         discardLookPolls = DISCARD_LOOK_POLLS_AFTER_CAPTURE;
+
         windowClosed = false;
+
         // Not "no controller" — "nothing known about a controller yet", so the
         // first poll that finds one logs it. A restarted port must announce the
         // pad again; the alternative is a second window in which a connected
         // controller is never mentioned anywhere.
         gamepadConnected = false;
+
         appliedState = uiState.state();
+
         final GameAction unbound = bindings.firstUnbound();
+
         if (unbound != null)
         {
             // Not fatal — the game is playable with no sprint key. Loud anyway,
@@ -494,8 +512,10 @@ public final class GdxInputPort implements I_InputPort
             // way out, and nothing else in the system would report it.
             LOG.warn("No control is bound to {} — that action cannot be triggered", unbound);
         }
+
         LOG.info("GdxInputPort initialized — sensitivity {} rad/px, controls {}",
             accumulator.radiansPerPixel(), bindings);
+
         if (autoWalk != null)
         {
             // Loud, because a run that walks by itself and is not expected to
@@ -506,6 +526,7 @@ public final class GdxInputPort implements I_InputPort
                 Float.valueOf(autoWalk.strafeAxis()), Integer.valueOf(autoWalkTics),
                 AUTO_WALK_TICS_PROPERTY);
         }
+
         if (autoFire != null)
         {
             // Loud for the same reason, and more so: a run that fires by itself
@@ -564,8 +585,11 @@ public final class GdxInputPort implements I_InputPort
         {
             throw new IllegalArgumentException("machine must not be null");
         }
+
         this.uiState = machine;
+
         this.appliedState = machine.state();
+
         accumulator.clearAll();
     }
 
@@ -598,12 +622,15 @@ public final class GdxInputPort implements I_InputPort
     public void shutdown()
     {
         accumulator.clearAll();
+
         latched = InputState.NEUTRAL;
+
         // Only if the window is still there — see onWindowClosing().
         if (!windowClosed)
         {
             releaseCursor();
         }
+
         LOG.info("GdxInputPort shut down");
     }
 
@@ -633,6 +660,7 @@ public final class GdxInputPort implements I_InputPort
     public void onWindowClosing()
     {
         releaseCursor();
+
         windowClosed = true;
     }
 
@@ -659,14 +687,17 @@ public final class GdxInputPort implements I_InputPort
     public void sampleInput(final int ticIndex)
     {
         latched = accumulator.latch();
+
         if (autoWalk != null && ticIndex < autoWalkTics)
         {
             latched = autoWalk;
+
             // The walk wins for as long as it is running, so the two harness
             // windows are a sequence rather than a blend. Returning here rather
             // than falling through is the whole of that rule.
             return;
         }
+
         if (autoFire != null && ticIndex < autoFireTics)
         {
             latched = autoFire;
@@ -714,13 +745,18 @@ public final class GdxInputPort implements I_InputPort
     public void pollDevice()
     {
         syncUiState();
+
         final Input input = Gdx.input;
+
         if (input == null)
         {
             return;
         }
+
         applyCursorMode(input);
+
         final GamepadSource pad = gamepad;
+
         if (!appliedState.capturesCursor())
         {
             // The menu is in front. The pointer belongs to the buttons, so bank
@@ -728,31 +764,43 @@ public final class GdxInputPort implements I_InputPort
             // controller left leaning while the player reads the menu is not a
             // request to walk.
             accumulator.clearAll();
+
             return;
         }
+
         // Before any question is asked of the pad, and specifically before
         // LEAVE_MATCH: that action may be bound to Start, and a button edge is
         // only available on the frame the poll that saw it ran.
         pollGamepad(pad);
+
         if (isJustPressed(input, pad, GameAction.LEAVE_MATCH))
         {
             // Leaving play. Do the whole handover now rather than next frame,
             // so the cursor is free before the menu is drawn over it.
             uiState.returnToMenu();
+
             syncUiState();
+
             applyCursorMode(input);
+
             LOG.debug("Escape — back to the menu, cursor released");
+
             return;
         }
+
         if (!input.isCursorCatched())
         {
             // Asked for capture and did not get it: the window is not focused.
             // Do not read a half-real device.
             accumulator.clearAll();
+
             return;
         }
+
         pollInvertToggle(input, pad);
+
         pollKeys(input, pad);
+
         pollLook(input);
     }
 
@@ -786,27 +834,35 @@ public final class GdxInputPort implements I_InputPort
     void pollGamepad(final GamepadSource pad)
     {
         pad.poll();
+
         if (!pad.isConnected())
         {
             if (gamepadConnected)
             {
                 gamepadConnected = false;
+
                 LOG.info("Controller disconnected — gamepad input dropped,"
                     + " keyboard and mouse unaffected");
             }
+
             accumulator.clearGamepad();
+
             return;
         }
+
         if (!gamepadConnected)
         {
             gamepadConnected = true;
+
             LOG.info("Controller connected: {}", pad.name());
         }
+
         // Left stick moves. The vertical axis is negated because a pad reports
         // "pushed away from the player" as NEGATIVE y, and forward is positive
         // here; the pair is negated together so the magnitude — and therefore
         // the radial dead zone — is unchanged.
         accumulator.setGamepadMovementAxes(0.0f - pad.leftStickY(), pad.leftStickX());
+
         // Right stick looks. Handed over EXACTLY as reported, with no sign flip,
         // because the pad's vertical convention already IS the accumulator's
         // documented "+y downward" — the same fact that makes the desktop mouse
@@ -828,6 +884,7 @@ public final class GdxInputPort implements I_InputPort
         {
             return;
         }
+
         setInvertLook(!accumulator.isInvertPitch());
     }
 
@@ -850,6 +907,7 @@ public final class GdxInputPort implements I_InputPort
     public void setInvertLook(final boolean inverted)
     {
         accumulator.setInvertPitch(inverted);
+
         LOG.info("Invert mouse look: {}", Boolean.valueOf(inverted));
     }
 
@@ -875,16 +933,20 @@ public final class GdxInputPort implements I_InputPort
     private void syncUiState()
     {
         final UiState current = uiState.state();
+
         if (current == appliedState)
         {
             return;
         }
+
         appliedState = current;
+
         // Nothing gathered under the previous UI describes what the player
         // wants under this one. Crossing into PLAYING that is a mouse sweep
         // across the menu; crossing back it is a key still held at the moment
         // Escape was pressed.
         accumulator.clearAll();
+
         // Capture warps the pointer to the window centre, so the next delta
         // reported is the warp and not a hand movement.
         discardLookPolls = DISCARD_LOOK_POLLS_AFTER_CAPTURE;
@@ -896,6 +958,7 @@ public final class GdxInputPort implements I_InputPort
     private void applyCursorMode(final Input input)
     {
         final boolean shouldCatch = appliedState.capturesCursor();
+
         if (input.isCursorCatched() != shouldCatch)
         {
             input.setCursorCatched(shouldCatch);
@@ -923,6 +986,7 @@ public final class GdxInputPort implements I_InputPort
             isHeld(input, pad, GameAction.MOVE_BACKWARD),
             isHeld(input, pad, GameAction.STRAFE_LEFT),
             isHeld(input, pad, GameAction.STRAFE_RIGHT));
+
         accumulator.setActionKeys(
             isHeld(input, pad, GameAction.FIRE),
             isHeld(input, pad, GameAction.JUMP),
@@ -971,6 +1035,7 @@ public final class GdxInputPort implements I_InputPort
         final ControlProbe probe)
     {
         final InputBinding[] bound = table.bindingsFor(action);
+
         for (int index = 0; index < bound.length; index++)
         {
             if (probe.isActive(bound[index]))
@@ -978,6 +1043,7 @@ public final class GdxInputPort implements I_InputPort
                 return true;
             }
         }
+
         return false;
     }
 
@@ -1017,18 +1083,22 @@ public final class GdxInputPort implements I_InputPort
         {
             return input.isKeyPressed(binding.code());
         }
+
         if (binding.source() == InputBinding.Source.MOUSE_BUTTON)
         {
             return input.isButtonPressed(binding.code());
         }
+
         if (binding.source() == InputBinding.Source.GAMEPAD_BUTTON)
         {
             return pad.isButtonDown(binding.code());
         }
+
         if (binding.source() == InputBinding.Source.GAMEPAD_AXIS)
         {
             return pad.isAxisPressed(binding.code());
         }
+
         return false;
     }
 
@@ -1046,14 +1116,17 @@ public final class GdxInputPort implements I_InputPort
         {
             return input.isKeyJustPressed(binding.code());
         }
+
         if (binding.source() == InputBinding.Source.MOUSE_BUTTON)
         {
             return input.isButtonJustPressed(binding.code());
         }
+
         if (binding.source() == InputBinding.Source.GAMEPAD_BUTTON)
         {
             return pad.didButtonGoDown(binding.code());
         }
+
         return false;
     }
 
@@ -1096,9 +1169,12 @@ public final class GdxInputPort implements I_InputPort
         if (discardLookPolls > 0)
         {
             discardLookPolls = discardLookPolls - 1;
+
             accumulator.resetLook();
+
             return;
         }
+
         accumulator.accumulateLook(input.getDeltaX(), input.getDeltaY());
     }
 
@@ -1107,10 +1183,12 @@ public final class GdxInputPort implements I_InputPort
     private void releaseCursor()
     {
         final Input input = Gdx.input;
+
         if (input == null)
         {
             return;
         }
+
         input.setCursorCatched(false);
     }
 }

@@ -31,7 +31,9 @@ final class AudioVolumeTest
         void shouldPassThroughAValidVolume()
         {
             assertThat(AudioVolume.clamp(0.5f)).isEqualTo(0.5f);
+
             assertThat(AudioVolume.clamp(0.001f)).isEqualTo(0.001f);
+
             assertThat(AudioVolume.clamp(0.999f)).isEqualTo(0.999f);
         }
 
@@ -43,6 +45,7 @@ final class AudioVolumeTest
             // still drives a voice on some mixers, and full scale that is
             // 1 + 1e-7 clips on others.
             assertThat(AudioVolume.clamp(AudioVolume.SILENT)).isEqualTo(0.0f);
+
             assertThat(AudioVolume.clamp(AudioVolume.FULL)).isEqualTo(1.0f);
         }
     }
@@ -56,6 +59,7 @@ final class AudioVolumeTest
         void shouldClampBelow()
         {
             assertThat(AudioVolume.clamp(-0.5f)).isEqualTo(AudioVolume.SILENT);
+
             assertThat(AudioVolume.clamp(-1000.0f)).isEqualTo(AudioVolume.SILENT);
         }
 
@@ -64,6 +68,7 @@ final class AudioVolumeTest
         void shouldClampAbove()
         {
             assertThat(AudioVolume.clamp(1.5f)).isEqualTo(AudioVolume.FULL);
+
             assertThat(AudioVolume.clamp(1000.0f)).isEqualTo(AudioVolume.FULL);
         }
 
@@ -73,6 +78,7 @@ final class AudioVolumeTest
         {
             assertThat(AudioVolume.clamp(Float.POSITIVE_INFINITY))
                 .isEqualTo(AudioVolume.FULL);
+
             assertThat(AudioVolume.clamp(Float.NEGATIVE_INFINITY))
                 .isEqualTo(AudioVolume.SILENT);
         }
@@ -95,6 +101,7 @@ final class AudioVolumeTest
             final float clamped = AudioVolume.clamp(Float.NaN);
 
             assertThat(Float.isNaN(clamped)).as("NaN reached the mixer").isFalse();
+
             assertThat(clamped).isEqualTo(AudioVolume.SILENT);
         }
 

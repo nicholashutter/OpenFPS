@@ -32,10 +32,12 @@ final class WavAudioTest
     private static short[] ramp(final int count)
     {
         final short[] pcm = new short[count];
+
         for (int index = 0; index < count; index++)
         {
             pcm[index] = (short) index;
         }
+
         return pcm;
     }
 
@@ -70,8 +72,11 @@ final class WavAudioTest
             final byte[] wav = WavAudio.wav(ramp(4), 22050);
 
             assertThat(tagAt(wav, 0)).isEqualTo("RIFF");
+
             assertThat(tagAt(wav, 8)).isEqualTo("WAVE");
+
             assertThat(tagAt(wav, 12)).isEqualTo("fmt ");
+
             assertThat(tagAt(wav, 36)).isEqualTo("data");
         }
 
@@ -96,6 +101,7 @@ final class WavAudioTest
             final byte[] wav = WavAudio.wav(ramp(64), 22050);
 
             assertThat(reader(wav).getInt(40)).isEqualTo(128);
+
             assertThat(reader(wav).getInt(40)).isEqualTo(wav.length - WavAudio.HEADER_BYTES);
         }
     }
@@ -111,8 +117,11 @@ final class WavAudioTest
             final ByteBuffer wav = reader(WavAudio.wav(ramp(8), 22050));
 
             assertThat(wav.getInt(16)).as("fmt chunk body size").isEqualTo(16);
+
             assertThat(wav.getShort(20)).as("format tag: 1 is PCM").isEqualTo((short) 1);
+
             assertThat(wav.getShort(22)).as("channels").isEqualTo((short) WavAudio.CHANNELS);
+
             assertThat(wav.getShort(34)).as("bits per sample")
                 .isEqualTo((short) WavAudio.BITS_PER_SAMPLE);
         }
@@ -122,6 +131,7 @@ final class WavAudioTest
         void shouldStoreTheSampleRate()
         {
             assertThat(reader(WavAudio.wav(ramp(8), 44100)).getInt(24)).isEqualTo(44100);
+
             assertThat(reader(WavAudio.wav(ramp(8), 22050)).getInt(24)).isEqualTo(22050);
         }
 
@@ -136,6 +146,7 @@ final class WavAudioTest
             final ByteBuffer wav = reader(WavAudio.wav(ramp(8), 22050));
 
             assertThat(wav.getInt(28)).as("byte rate").isEqualTo(22050 * 2);
+
             assertThat(wav.getShort(32)).as("block align").isEqualTo((short) 2);
         }
     }
@@ -149,6 +160,7 @@ final class WavAudioTest
         void shouldRoundTripTheSamples()
         {
             final short[] pcm = ramp(32);
+
             final ByteBuffer wav = reader(WavAudio.wav(pcm, 22050));
 
             for (int index = 0; index < pcm.length; index++)
@@ -166,6 +178,7 @@ final class WavAudioTest
             // the byte packing is inaudible on a ramp of small positives and
             // catastrophic on a real signal.
             final short[] pcm = {Short.MIN_VALUE, -1, 0, 1, Short.MAX_VALUE};
+
             final ByteBuffer wav = reader(WavAudio.wav(pcm, 22050));
 
             for (int index = 0; index < pcm.length; index++)
@@ -182,7 +195,9 @@ final class WavAudioTest
             final byte[] wav = WavAudio.wav(new short[0], 22050);
 
             assertThat(wav).hasSize(WavAudio.HEADER_BYTES);
+
             assertThat(reader(wav).getInt(40)).isEqualTo(0);
+
             assertThat(reader(wav).getInt(4)).isEqualTo(WavAudio.HEADER_BYTES - 8);
         }
     }
@@ -201,9 +216,11 @@ final class WavAudioTest
             assertThatThrownBy(() -> WavAudio.wav(null, 22050))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("must not be null");
+
             assertThatThrownBy(() -> WavAudio.wav(ramp(4), 0))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("must be positive");
+
             assertThatThrownBy(() -> WavAudio.wav(ramp(4), -22050))
                 .isInstanceOf(IllegalArgumentException.class);
         }
@@ -225,8 +242,11 @@ final class WavAudioTest
 
             assertThat(wav)
                 .hasSize(WavAudio.HEADER_BYTES + BlasterSound.sampleCount() * 2);
+
             assertThat(tagAt(wav, 0)).isEqualTo("RIFF");
+
             assertThat(reader(wav).getInt(24)).isEqualTo(BlasterSound.SAMPLE_RATE);
+
             assertThat(wav.length).isLessThan(16 * 1024);
         }
     }

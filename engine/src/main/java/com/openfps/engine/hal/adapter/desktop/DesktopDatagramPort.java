@@ -76,17 +76,22 @@ public final class DesktopDatagramPort implements I_DatagramPort
         {
             throw new IllegalStateException("init() called twice on DesktopDatagramPort");
         }
+
         receiveBuffer = ByteBuffer.allocateDirect(MAX_DATAGRAM_BYTES);
+
         sendBuffer = ByteBuffer.allocateDirect(MAX_DATAGRAM_BYTES);
+
         try
         {
             channel = DatagramChannel.open();
+
             channel.configureBlocking(false);
         }
         catch (final IOException e)
         {
             throw new IllegalStateException("Failed to open UDP datagram channel", e);
         }
+
         LOG.info("DesktopDatagramPort initialized: non-blocking, {}-byte direct buffers",
             MAX_DATAGRAM_BYTES);
     }
@@ -95,9 +100,11 @@ public final class DesktopDatagramPort implements I_DatagramPort
     public void bind(final int port)
     {
         requireOpen();
+
         try
         {
             channel.bind(new InetSocketAddress(port));
+
             LOG.info("DesktopDatagramPort bound to local port {}", localPort());
         }
         catch (final IOException e)
@@ -113,16 +120,21 @@ public final class DesktopDatagramPort implements I_DatagramPort
         {
             throw new IllegalArgumentException("data must not be null");
         }
+
         if (data.length > MAX_DATAGRAM_BYTES)
         {
             throw new IllegalArgumentException("datagram too large: " + data.length
                 + " bytes, max is " + MAX_DATAGRAM_BYTES);
         }
+
         requireOpen();
 
         sendBuffer.clear();
+
         sendBuffer.put(data);
+
         sendBuffer.flip();
+
         try
         {
             channel.send(sendBuffer, parseAddress(address));
@@ -143,7 +155,9 @@ public final class DesktopDatagramPort implements I_DatagramPort
         }
 
         receiveBuffer.clear();
+
         final SocketAddress from;
+
         try
         {
             from = channel.receive(receiveBuffer);
@@ -151,8 +165,10 @@ public final class DesktopDatagramPort implements I_DatagramPort
         catch (final IOException e)
         {
             LOG.warn("DesktopDatagramPort: receive failed", e);
+
             return null;
         }
+
         if (from == null)
         {
             // Nothing queued — the steady-state path. Zero allocation.
@@ -160,13 +176,18 @@ public final class DesktopDatagramPort implements I_DatagramPort
         }
 
         receiveBuffer.flip();
+
         final int length = receiveBuffer.remaining();
+
         // Sanctioned adapter allocation: I_DatagramPort#receive() returns
         // byte[], so the payload has to leave the reused direct buffer as
         // an exact-sized array. See the class Javadoc.
         final byte[] payload = new byte[length];
+
         receiveBuffer.get(payload);
+
         LOG.debug("DesktopDatagramPort: received {} bytes from {}", length, from);
+
         return payload;
     }
 
@@ -184,6 +205,7 @@ public final class DesktopDatagramPort implements I_DatagramPort
         {
             return;
         }
+
         try
         {
             channel.close();
@@ -192,6 +214,7 @@ public final class DesktopDatagramPort implements I_DatagramPort
         {
             LOG.warn("DesktopDatagramPort: error closing UDP socket", e);
         }
+
         channel = null;
     }
 
@@ -199,8 +222,11 @@ public final class DesktopDatagramPort implements I_DatagramPort
     public void shutdown()
     {
         close();
+
         receiveBuffer = null;
+
         sendBuffer = null;
+
         LOG.info("DesktopDatagramPort shut down");
     }
 
@@ -217,18 +243,22 @@ public final class DesktopDatagramPort implements I_DatagramPort
         {
             return -1;
         }
+
         try
         {
             final SocketAddress local = channel.getLocalAddress();
+
             if (local instanceof InetSocketAddress)
             {
                 return ((InetSocketAddress) local).getPort();
             }
+
             return -1;
         }
         catch (final IOException e)
         {
             LOG.warn("DesktopDatagramPort: could not read local address", e);
+
             return -1;
         }
     }
@@ -256,18 +286,23 @@ public final class DesktopDatagramPort implements I_DatagramPort
         {
             throw new IllegalArgumentException("address must not be null or blank");
         }
+
         final int separator = address.lastIndexOf(':');
+
         if (separator < 0)
         {
             return new InetSocketAddress(address, Constants.DEFAULT_NET_PORT);
         }
 
         String host = address.substring(0, separator);
+
         if (host.isBlank())
         {
             host = LOOPBACK_HOST;
         }
+
         final String portText = address.substring(separator + 1);
+
         try
         {
             return new InetSocketAddress(host, Integer.parseInt(portText));

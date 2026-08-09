@@ -81,6 +81,7 @@ public final class MenuBackground extends Actor
         {
             throw new IllegalArgumentException("whitePixel must not be null");
         }
+
         this.pixel = whitePixel;
     }
 
@@ -88,6 +89,7 @@ public final class MenuBackground extends Actor
     public void act(final float deltaSeconds)
     {
         super.act(deltaSeconds);
+
         this.elapsedSeconds = elapsedSeconds + deltaSeconds;
     }
 
@@ -95,17 +97,22 @@ public final class MenuBackground extends Actor
     public void draw(final Batch batch, final float parentAlpha)
     {
         final Color previous = batch.getColor();
+
         final int columns = (int) StrictMath.ceil(getWidth() / CELL_PIXELS);
+
         final int rows = (int) StrictMath.ceil(getHeight() / CELL_PIXELS);
+
         for (int column = 0; column < columns; column++)
         {
             for (int row = 0; row < rows; row++)
             {
                 batch.setColor(cellColour(column, row));
+
                 batch.draw(pixel, getX() + column * CELL_PIXELS, getY() + row * CELL_PIXELS,
                     CELL_PIXELS, CELL_PIXELS);
             }
         }
+
         batch.setColor(previous);
     }
 
@@ -123,22 +130,29 @@ public final class MenuBackground extends Actor
     public Color cellColour(final int column, final int row)
     {
         final boolean light = (column + row) % 2 == 0;
+
         final float across = gradientAt(column);
+
         if (light)
         {
             scratch.set(MenuPalette.GRID_LIGHT);
+
             scratch.lerp(MenuPalette.GRID_LIGHT_FAR, across);
         }
         else
         {
             scratch.set(MenuPalette.GRID_DARK);
+
             scratch.lerp(MenuPalette.GRID_DARK_FAR, across);
         }
+
         final float strength = bandStrengthAt(column, row);
+
         if (strength > 0.0f)
         {
             scratch.lerp(MenuPalette.GRID_PULSE, strength);
         }
+
         return scratch;
     }
 
@@ -160,21 +174,26 @@ public final class MenuBackground extends Actor
     public float gradientAt(final int column)
     {
         final float width = getWidth();
+
         if (width <= 0.0f)
         {
             // No bounds yet — before the first layout. Left edge is as good an
             // answer as any and is the one that never extrapolates.
             return 0.0f;
         }
+
         final float across = column * CELL_PIXELS / width;
+
         if (across <= 0.0f)
         {
             return 0.0f;
         }
+
         if (across >= 1.0f)
         {
             return 1.0f;
         }
+
         return across;
     }
 
@@ -191,20 +210,27 @@ public final class MenuBackground extends Actor
         // Diagonal: the band's coordinate is column + row, so it sweeps
         // corner to corner rather than down one axis.
         final float diagonal = column + row;
+
         final float head = elapsedSeconds * BAND_CELLS_PER_SECOND;
+
         float distance = (diagonal - head) % BAND_PERIOD_CELLS;
+
         if (distance < 0.0f)
         {
             distance = distance + BAND_PERIOD_CELLS;
         }
+
         // Measure from the nearer side of the wrap, so the band is continuous
         // across the seam instead of vanishing and reappearing.
         final float fromCentre = StrictMath.min(distance, BAND_PERIOD_CELLS - distance);
+
         if (fromCentre >= BAND_HALF_WIDTH_CELLS)
         {
             return 0.0f;
         }
+
         final float falloff = 1.0f - fromCentre / BAND_HALF_WIDTH_CELLS;
+
         return BAND_STRENGTH * falloff;
     }
 

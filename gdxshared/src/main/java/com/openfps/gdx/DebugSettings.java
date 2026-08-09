@@ -112,8 +112,11 @@ public final class DebugSettings
             // renderer reasserting its outline mode for nothing.
             return;
         }
+
         this.overlayVisible = visible;
+
         final Consumer<Boolean> told = observer;
+
         if (told != null)
         {
             told.accept(Boolean.valueOf(visible));
@@ -129,6 +132,7 @@ public final class DebugSettings
     public boolean toggleOverlay()
     {
         setOverlayVisible(!overlayVisible);
+
         return overlayVisible;
     }
 
@@ -170,6 +174,7 @@ public final class DebugSettings
         {
             return "ON";
         }
+
         return "OFF";
     }
 

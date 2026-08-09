@@ -38,7 +38,9 @@ class MipGeneratorTest
         void shouldCountSquareLevels()
         {
             assertThat(MipGenerator.levelCount(256, 256)).isEqualTo(9);
+
             assertThat(MipGenerator.levelCount(512, 512)).isEqualTo(10);
+
             assertThat(MipGenerator.levelCount(1, 1)).isEqualTo(1);
         }
 
@@ -47,6 +49,7 @@ class MipGeneratorTest
         void shouldCountNonSquareLevels()
         {
             assertThat(MipGenerator.levelCount(256, 64)).isEqualTo(9);
+
             assertThat(MipGenerator.levelCount(2, 8)).isEqualTo(4);
         }
 
@@ -57,9 +60,13 @@ class MipGeneratorTest
             final int[][] levels = MipGenerator.generate(8, 2, new int[16]);
 
             assertThat(levels.length).isEqualTo(4);
+
             assertThat(levels[0]).hasSize(8 * 2);
+
             assertThat(levels[1]).hasSize(4 * 1);
+
             assertThat(levels[2]).hasSize(2 * 1);
+
             assertThat(levels[3]).hasSize(1);
         }
 
@@ -68,11 +75,13 @@ class MipGeneratorTest
         void shouldProduceARuntimeChain()
         {
             final int[] level0 = new int[64 * 32];
+
             Arrays.fill(level0, Rgba.OPAQUE_BLACK);
 
             final int[][] levels = MipGenerator.generate(64, 32, level0);
 
             assertThatCode(() -> new MipChain(64, 32, levels)).doesNotThrowAnyException();
+
             assertThat(new MipChain(64, 32, levels).levelCount())
                 .isEqualTo(MipGenerator.levelCount(64, 32));
         }
@@ -84,6 +93,7 @@ class MipGeneratorTest
             final int[] level0 = {1, 2, 3, 4};
 
             final int[][] levels = MipGenerator.generate(2, 2, level0);
+
             level0[0] = 99;
 
             assertThat(levels[0][0]).isEqualTo(1);
@@ -107,9 +117,13 @@ class MipGeneratorTest
             final int[] level1 = MipGenerator.downsample(level0, 2, 2);
 
             assertThat(level1).hasSize(1);
+
             assertThat(Rgba.red(level1[0])).isEqualTo(50);
+
             assertThat(Rgba.green(level1[0])).isEqualTo(100);
+
             assertThat(Rgba.blue(level1[0])).isZero();
+
             assertThat(Rgba.alpha(level1[0])).isEqualTo(255);
         }
 
@@ -118,7 +132,9 @@ class MipGeneratorTest
         void shouldPreserveUniformColour()
         {
             final int colour = Rgba.pack(37, 211, 5, 255);
+
             final int[] level0 = new int[16 * 16];
+
             Arrays.fill(level0, colour);
 
             final int[][] levels = MipGenerator.generate(16, 16, level0);
@@ -138,6 +154,7 @@ class MipGeneratorTest
             final int[] halved = MipGenerator.downsample(source, 2, 1);
 
             assertThat(halved).hasSize(1);
+
             assertThat(Rgba.red(halved[0])).isEqualTo(100);
         }
 
@@ -167,6 +184,7 @@ class MipGeneratorTest
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("width")
                 .hasMessageContaining("3");
+
             assertThatThrownBy(() -> MipGenerator.generate(4, 6, new int[24]))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("height");
@@ -179,6 +197,7 @@ class MipGeneratorTest
             assertThatThrownBy(() -> MipGenerator.generate(4, 4, new int[15]))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("16");
+
             assertThatThrownBy(() -> MipGenerator.generate(4, 4, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("null");

@@ -648,6 +648,7 @@ public final class Match
     public Match(final Bot[] opponents, final MapSpec spec)
     {
         this(opponents, new BotRng(), BotSkill.DUMB, UNLIMITED_DEATHS, spec);
+
         // Validate after chaining. The 5-arg constructor accepts a null
         // spec for the legacy demo path, but the 2-arg form is only ever
         // useful with a real spec. The check is below the chained call
@@ -680,30 +681,36 @@ public final class Match
         {
             throw new IllegalArgumentException("opponents must not be null");
         }
+
         if (generator == null)
         {
             throw new IllegalArgumentException("generator must not be null");
         }
+
         if (botSkill == null)
         {
             throw new IllegalArgumentException("botSkill must not be null");
         }
+
         if (deathsAllowed < 0)
         {
             throw new IllegalArgumentException(
                 "deathsAllowed must not be negative, got " + deathsAllowed);
         }
+
         for (int index = 0; index < opponents.length; index++)
         {
             if (opponents[index] == null)
             {
                 throw new IllegalArgumentException("bot " + index + " must not be null");
             }
+
             if (opponents[index].entityId() == PLAYER_ENTITY_ID)
             {
                 throw new IllegalArgumentException("bot " + index + " uses the reserved player id "
                     + PLAYER_ENTITY_ID);
             }
+
             for (int other = 0; other < index; other++)
             {
                 if (opponents[other].entityId() == opponents[index].entityId())
@@ -713,11 +720,17 @@ public final class Match
                 }
             }
         }
+
         this.bots = opponents.clone();
+
         this.rng = generator;
+
         this.skill = botSkill;
+
         this.deathLimit = deathsAllowed;
+
         this.shots = new BotShotLog(bots.length);
+
         this.mapSpec = spec;
     }
 
@@ -763,25 +776,40 @@ public final class Match
         {
             bots[index].reset();
         }
+
         this.playerHealth = PLAYER_MAX_HEALTH;
+
         this.botsKilled = 0;
+
         this.playerDeaths = 0;
+
         // BOTH halves of the reward, and the second one is the one that matters.
         // A rematch that inherited a live super blaster would open with four
         // seconds of double damage nobody earned — and it is exactly the class of
         // bug this reset already shipped once, when reviving the bots in the
         // simulation left them hidden in the renderer.
         this.killStreak = 0;
+
         this.superBlasterTicsLeft = 0;
+
         this.superBlasterAwardedThisTic = false;
+
         this.superBlasterExpiredThisTic = false;
+
         this.playerShotsFired = 0;
+
         this.playerShotsHit = 0;
+
         this.botShotsFired = 0;
+
         this.botShotsLanded = 0;
+
         this.respawnAtTic = 0;
+
         this.playerDown = false;
+
         this.respawnedThisTic = false;
+
         // Mode-specific state, reset so a rematch opens in the same
         // shape a fresh match would. Same justification as the
         // super-blaster lines above: a Hardpoint rematch that
@@ -790,10 +818,15 @@ public final class Match
         // that is no longer active would see a HUD that does not agree
         // with the room.
         this.hardpointRotationCounter = 0;
+
         this.hardpointActiveZone = 0;
+
         this.hardpointRedScore = 0;
+
         this.hardpointBlueScore = 0;
+
         this.hardpointActiveHolder = Team.NEUTRAL;
+
         // Domination per-flag owners reset to NEUTRAL so the round
         // opens with the spec's neutral start, not with the previous
         // round's captures. Same justification as the Hardpoint
@@ -803,8 +836,11 @@ public final class Match
         {
             dominationFlagOwners[index] = Team.NEUTRAL;
         }
+
         this.dominationRedScore = 0;
+
         this.dominationBlueScore = 0;
+
         // CTF per-flag carriers return to null and per-team capture
         // counts return to zero. The match opens with both flags at
         // home and no captures scored — a rematch that inherited a
@@ -812,10 +848,15 @@ public final class Match
         // already had, and a rematch with an inherited capture count
         // would be one closer to the limit than the round earned.
         this.ctfRedFlagCarrier = null;
+
         this.ctfBlueFlagCarrier = null;
+
         this.ctfRedCaptures = 0;
+
         this.ctfBlueCaptures = 0;
+
         this.ctfElapsedTics = 0;
+
         // The player's team is a rematch input, not a rematch
         // output: a rematch opens with the same team the previous
         // round did, set by the gameplay port. The smoke-test path
@@ -857,52 +898,66 @@ public final class Match
         final float playerFeetZ)
     {
         this.respawnedThisTic = false;
+
         // The two reward edges, cleared here for the reason the respawn flag is:
         // they describe something that happened on ONE tic, and a flag left raised
         // would have the effect layer announce the same award again next tic. The
         // clear is before ageSuperBlaster below, which is what may re-raise the
         // expiry one on this very tic.
         this.superBlasterAwardedThisTic = false;
+
         this.superBlasterExpiredThisTic = false;
+
         // FIRST, and before the early-outs below. Every one of them is a tic on
         // which nobody fires, and a log still holding the previous tic's rays
         // would have the effect layer spawn the same bolts again the moment the
         // player went down or the room emptied.
         shots.clear();
+
         if (state().isOver())
         {
             return 0;
         }
+
         // AFTER the early-out, so a decided round stops the reward's clock along
         // with everything else — the same rule this method already applies to the
         // bots, and the alternative is a power-down noise over the win screen.
         // What that leaves behind is a live buff on a finished round, which
         // reset() is what clears.
         ageSuperBlaster();
+
         for (int index = 0; index < bots.length; index++)
         {
             bots[index].moveTo(ticIndex);
         }
+
         if (playerDown)
         {
             // The bodies keep walking and keep facing whatever they last knew,
             // so the room does not freeze while the player is on the floor.
             faceAll();
+
             advanceRespawn(ticIndex);
+
             return 0;
         }
+
         for (int index = 0; index < bots.length; index++)
         {
             bots[index].observePlayer(ticIndex, playerFeetX, playerFeetZ, skill);
         }
+
         faceAll();
+
         final int damage = resolveBotFire(ticIndex, playerFeetX, playerFeetY, playerFeetZ);
+
         // Mode-specific update, AFTER the bot fire has been resolved so a
         // Hardpoint score from this tic reflects every bot that landed a
         // shot on a player who is also holding a zone. No-op for modes that
         // have no per-tic state (TDM); stubs for the other three that keep
         // the simulation state coherent without implementing the rules.
         updateMode(ticIndex, playerFeetX, playerFeetZ);
+
         return damage;
     }
 
@@ -926,6 +981,7 @@ public final class Match
     private void updateMode(final int ticIndex, final float playerX, final float playerZ)
     {
         final MatchMode currentMode = mode();
+
         switch (currentMode)
         {
             case HARDPOINT -> updateHardpoint(ticIndex, playerX, playerZ);
@@ -994,14 +1050,22 @@ public final class Match
         {
             return;
         }
+
         // 1. Resolve the active holder.
         final MapMarkers.HardpointZone active = hp.zones().get(hardpointActiveZone);
+
         final boolean playerInZone = isInHardpointZone(playerX, playerZ, active);
+
         final boolean playerRed = playerInZone && playerTeam == Team.RED;
+
         final boolean playerBlue = playerInZone && playerTeam == Team.BLUE;
+
         final boolean redBody = playerRed || botTeamInZone(Team.RED, active);
+
         final boolean blueBody = playerBlue || botTeamInZone(Team.BLUE, active);
+
         final Team newHolder;
+
         if (redBody && !blueBody)
         {
             newHolder = Team.RED;
@@ -1014,21 +1078,27 @@ public final class Match
         {
             newHolder = Team.NEUTRAL;
         }
+
         this.hardpointActiveHolder = newHolder;
+
         // 2. Award score.
         if (newHolder == Team.RED)
         {
             this.hardpointRedScore = hardpointRedScore + hp.scorePerTick();
         }
+
         if (newHolder == Team.BLUE)
         {
             this.hardpointBlueScore = hardpointBlueScore + hp.scorePerTick();
         }
+
         // 3. Advance the rotation.
         this.hardpointRotationCounter = hardpointRotationCounter + 1;
+
         if (hardpointRotationCounter >= hp.rotationTics())
         {
             this.hardpointRotationCounter = 0;
+
             this.hardpointActiveZone = (hardpointActiveZone + 1) % hp.zones().size();
         }
     }
@@ -1049,7 +1119,9 @@ public final class Match
         final MapMarkers.HardpointZone zone)
     {
         final float dx = x - zone.x();
+
         final float dz = z - zone.z();
+
         // Squared distance — sqrt is unnecessary; the comparison is
         // (d <= r), which is the same as (d^2 <= r^2). Saves a StrictMath.sqrt
         // on the tic path.
@@ -1075,15 +1147,18 @@ public final class Match
         for (int index = 0; index < bots.length; index++)
         {
             final Bot bot = bots[index];
+
             if (!bot.isAlive() || bot.team() != team)
             {
                 continue;
             }
+
             if (isInHardpointZone(bot.positionX(), bot.positionZ(), zone))
             {
                 return true;
             }
         }
+
         return false;
     }
 
@@ -1139,14 +1214,20 @@ public final class Match
         {
             return;
         }
+
         // 1. Resolve each flag.
         final List<MapMarkers.Flag> flags = dom.flags();
+
         for (int index = 0; index < flags.size(); index++)
         {
             final MapMarkers.Flag flag = flags.get(index);
+
             final boolean redIn = isInDominationRadius(playerX, playerZ, flag, Team.RED);
+
             final boolean blueIn = isInDominationRadius(playerX, playerZ, flag, Team.BLUE);
+
             final Team newOwner;
+
             if (redIn && !blueIn)
             {
                 newOwner = Team.RED;
@@ -1164,12 +1245,15 @@ public final class Match
                 // below awards points only to the captured side.
                 continue;
             }
+
             dominationFlagOwners[index] = newOwner;
         }
+
         // 2. Score: one point per flag per tic for the holding team.
         for (int index = 0; index < dominationFlagOwners.length; index++)
         {
             final Team owner = dominationFlagOwners[index];
+
             if (owner == Team.RED)
             {
                 this.dominationRedScore = dominationRedScore + 1;
@@ -1202,28 +1286,38 @@ public final class Match
         if (playerTeam == team)
         {
             final float dx = x - flag.x();
+
             final float dz = z - flag.z();
+
             if (dx * dx + dz * dz <= flag.radius() * flag.radius())
             {
                 return true;
             }
         }
+
         for (int index = 0; index < bots.length; index++)
         {
             final Bot bot = bots[index];
+
             if (!bot.isAlive() || bot.team() != team)
             {
                 continue;
             }
+
             final float bx = bot.positionX();
+
             final float bz = bot.positionZ();
+
             final float dx = bx - flag.x();
+
             final float dz = bz - flag.z();
+
             if (dx * dx + dz * dz <= flag.radius() * flag.radius())
             {
                 return true;
             }
         }
+
         return false;
     }
 
@@ -1272,7 +1366,9 @@ public final class Match
         {
             return;
         }
+
         this.ctfElapsedTics = ctfElapsedTics + 1;
+
         // 1. Drop on death: a dead carrier returns the flag to its base
         // instantly. A player who is down is not in any flag's radius (a
         // future "lying on the ground for 30s" pass would change this, but
@@ -1280,9 +1376,12 @@ public final class Match
         if (playerDown)
         {
             ctfRedFlagCarrier = null;
+
             ctfBlueFlagCarrier = null;
+
             return;
         }
+
         // 2. The player is the only carrier; bots do not pick up. A
         // NEUTRAL player (legacy demo, smoke test) does not interact with
         // flags at all.
@@ -1290,24 +1389,32 @@ public final class Match
         {
             return;
         }
+
         final boolean playerIsRed = playerTeam == Team.RED;
+
         final MapMarkers.Base enemyBase;
+
         final MapMarkers.Base homeBase;
+
         if (playerIsRed)
         {
             enemyBase = ctf.blueBase();
+
             homeBase = ctf.redBase();
         }
         else
         {
             enemyBase = ctf.redBase();
+
             homeBase = ctf.blueBase();
         }
+
         // 3. Pickup: enemy flag at home (its slot is null), player inside
         // the enemy flag's radius. Reads the carrier field directly so
         // the check sees the start-of-tic state, not the post-pickup
         // state from earlier in this tic.
         final boolean enemyFlagAtHome;
+
         if (playerIsRed)
         {
             enemyFlagAtHome = ctfBlueFlagCarrier == null;
@@ -1316,6 +1423,7 @@ public final class Match
         {
             enemyFlagAtHome = ctfRedFlagCarrier == null;
         }
+
         if (enemyFlagAtHome && isInCtfFlagRadius(playerX, playerZ, enemyBase))
         {
             if (playerIsRed)
@@ -1327,10 +1435,12 @@ public final class Match
                 ctfRedFlagCarrier = Team.BLUE;
             }
         }
+
         // 4. Return or capture: player carrying the enemy flag, touching
         // their own base. The carrier check reads the field directly for
         // the same reason as the pickup above.
         final boolean isCarrying;
+
         if (playerIsRed)
         {
             isCarrying = ctfBlueFlagCarrier == Team.RED;
@@ -1339,6 +1449,7 @@ public final class Match
         {
             isCarrying = ctfRedFlagCarrier == Team.BLUE;
         }
+
         if (isCarrying && isInCtfFlagRadius(playerX, playerZ, homeBase))
         {
             if (isInCtfCaptureRadius(playerX, playerZ, homeBase))
@@ -1352,8 +1463,10 @@ public final class Match
                     this.ctfBlueCaptures = ctfBlueCaptures + 1;
                 }
             }
+
             // Either save or capture, both flags return home.
             ctfRedFlagCarrier = null;
+
             ctfBlueFlagCarrier = null;
         }
     }
@@ -1375,7 +1488,9 @@ public final class Match
         final MapMarkers.Base base)
     {
         final float dx = x - base.flagX();
+
         final float dz = z - base.flagZ();
+
         return dx * dx + dz * dz <= base.radius() * base.radius();
     }
 
@@ -1391,7 +1506,9 @@ public final class Match
         final MapMarkers.Base base)
     {
         final float dx = x - base.captureX();
+
         final float dz = z - base.captureZ();
+
         return dx * dx + dz * dz <= base.radius() * base.radius();
     }
 
@@ -1408,7 +1525,9 @@ public final class Match
         {
             return;
         }
+
         this.superBlasterTicsLeft = superBlasterTicsLeft - 1;
+
         if (superBlasterTicsLeft == 0)
         {
             this.superBlasterExpiredThisTic = true;
@@ -1437,8 +1556,11 @@ public final class Match
         {
             return;
         }
+
         this.playerHealth = PLAYER_MAX_HEALTH;
+
         this.playerDown = false;
+
         this.respawnedThisTic = true;
     }
 
@@ -1470,26 +1592,35 @@ public final class Match
         final float aimX, final float aimY, final float aimZ)
     {
         this.playerShotsFired = playerShotsFired + 1;
+
         final Target[] living = livingBotTargets();
+
         if (living.length == 0)
         {
             return NO_HIT;
         }
+
         if (!Hitscan.fire(eyeX, eyeY, eyeZ, aimX, aimY, aimZ, living, living.length, hit))
         {
             return NO_HIT;
         }
+
         this.playerShotsHit = playerShotsHit + 1;
+
         final int struck = hit.entityId();
+
         final Bot victim = byId(struck);
+
         // playerShotDamage(), not PLAYER_SHOT_DAMAGE. The one line in this method
         // the reward touches at all, and the reason the buff needed no second
         // firing path: a super shot is this shot with a bigger number in it.
         if (victim != null && victim.damage(playerShotDamage()))
         {
             this.botsKilled = botsKilled + 1;
+
             countTowardTheStreak();
         }
+
         return struck;
     }
 
@@ -1516,12 +1647,16 @@ public final class Match
     private void countTowardTheStreak()
     {
         this.killStreak = killStreak + 1;
+
         if (killStreak < SUPER_BLASTER_KILL_STREAK)
         {
             return;
         }
+
         this.killStreak = 0;
+
         this.superBlasterTicsLeft = SUPER_BLASTER_TICS;
+
         this.superBlasterAwardedThisTic = true;
     }
 
@@ -1540,6 +1675,7 @@ public final class Match
                 return bots[index];
             }
         }
+
         return null;
     }
 
@@ -1563,10 +1699,12 @@ public final class Match
         {
             return MatchState.LOST;
         }
+
         if (livingBots() == 0)
         {
             return MatchState.WON;
         }
+
         // CTF win conditions: a team reaches the capture limit, or the
         // time limit is reached. Checked AFTER the living-bots rule
         // because the legacy demo runs without a spec (no CTF check)
@@ -1580,6 +1718,7 @@ public final class Match
                 return MatchState.WON;
             }
         }
+
         return MatchState.IN_PROGRESS;
     }
 
@@ -1587,6 +1726,7 @@ public final class Match
     public int livingBots()
     {
         int alive = 0;
+
         for (int index = 0; index < bots.length; index++)
         {
             if (bots[index].isAlive())
@@ -1594,6 +1734,7 @@ public final class Match
                 alive++;
             }
         }
+
         return alive;
     }
 
@@ -1684,6 +1825,7 @@ public final class Match
         {
             return SUPER_BLASTER_SHOT_DAMAGE;
         }
+
         return PLAYER_SHOT_DAMAGE;
     }
 
@@ -1701,7 +1843,9 @@ public final class Match
     public boolean consumeSuperBlasterAwarded()
     {
         final boolean awarded = superBlasterAwardedThisTic;
+
         this.superBlasterAwardedThisTic = false;
+
         return awarded;
     }
 
@@ -1714,7 +1858,9 @@ public final class Match
     public boolean consumeSuperBlasterExpired()
     {
         final boolean expired = superBlasterExpiredThisTic;
+
         this.superBlasterExpiredThisTic = false;
+
         return expired;
     }
 
@@ -1773,6 +1919,7 @@ public final class Match
         {
             return 0;
         }
+
         return respawnAtTic - ticIndex;
     }
 
@@ -1790,7 +1937,9 @@ public final class Match
     public boolean consumePlayerRespawned()
     {
         final boolean respawned = respawnedThisTic;
+
         this.respawnedThisTic = false;
+
         return respawned;
     }
 
@@ -1862,6 +2011,7 @@ public final class Match
         {
             return MatchMode.TDM;
         }
+
         return mapSpec.mode();
     }
 
@@ -1882,11 +2032,14 @@ public final class Match
     public int[] teamScores()
     {
         final int[] out = new int[2];
+
         if (mapSpec == null)
         {
             out[0] = botsKilled;
+
             return out;
         }
+
         switch (mode())
         {
             case TDM:
@@ -1910,6 +2063,7 @@ public final class Match
                 out[1] = 0;
                 break;
         }
+
         return out;
     }
 
@@ -1937,6 +2091,7 @@ public final class Match
         {
             throw new IllegalArgumentException("team must not be null");
         }
+
         this.playerTeam = team;
     }
 
@@ -1997,6 +2152,7 @@ public final class Match
         {
             throw new IllegalArgumentException("flagIndex out of range: " + flagIndex);
         }
+
         return dominationFlagOwners[flagIndex];
     }
 
@@ -2058,29 +2214,38 @@ public final class Match
         final float playerFeetY, final float playerFeetZ)
     {
         int damageTaken = 0;
+
         for (int index = 0; index < bots.length; index++)
         {
             final Bot shooter = bots[index];
+
             if (!shooter.wantsToFire(ticIndex, rng, skill))
             {
                 continue;
             }
+
             this.botShotsFired = botShotsFired + 1;
+
             if (!botShotConnects(shooter, ticIndex, playerFeetX, playerFeetY, playerFeetZ))
             {
                 continue;
             }
+
             damageTaken = damageTaken + BOT_SHOT_DAMAGE;
         }
+
         if (damageTaken > 0)
         {
             this.botShotsLanded = botShotsLanded + damageTaken / BOT_SHOT_DAMAGE;
+
             this.playerHealth = playerHealth - damageTaken;
+
             if (playerHealth <= 0)
             {
                 killPlayer(ticIndex);
             }
         }
+
         return damageTaken;
     }
 
@@ -2091,14 +2256,19 @@ public final class Match
     private void killPlayer(final int ticIndex)
     {
         this.playerHealth = 0;
+
         this.playerDeaths = playerDeaths + 1;
+
         this.playerDown = true;
+
         this.respawnAtTic = ticIndex + RESPAWN_DELAY_TICS;
+
         // The streak dies with the life that was building it. That is what the
         // word means, and it is the half of the rule a player can feel: without it
         // "three kills" is a running total and the gun changes at a moment nothing
         // on screen accounts for.
         this.killStreak = 0;
+
         if (superBlasterTicsLeft > 0)
         {
             // A live buff goes too, and it raises the same edge an expiry does, so
@@ -2108,6 +2278,7 @@ public final class Match
             // of the window anyway, which would make death cancel it in practice
             // while the rules said otherwise.
             this.superBlasterTicsLeft = 0;
+
             this.superBlasterExpiredThisTic = true;
         }
     }
@@ -2126,13 +2297,18 @@ public final class Match
         {
             return false;
         }
+
         final float toX = shooter.rememberedPlayerX() - shooter.positionX();
+
         final float toZ = shooter.rememberedPlayerZ() - shooter.positionZ();
+
         final float groundDistanceSquared = toX * toX + toZ * toZ;
+
         if (groundDistanceSquared > BOT_RANGE_UNITS * BOT_RANGE_UNITS)
         {
             return false;
         }
+
         if (groundDistanceSquared == 0.0f)
         {
             // Standing exactly where it thinks the player is. There is no
@@ -2148,8 +2324,10 @@ public final class Match
         // chest of a 56-unit body. Modelling the vertical would be modelling a
         // constant.
         final int id = shooter.entityId();
+
         final float aimYaw = shotYaw(shooter, ticIndex, toX, toZ)
             + rng.symmetric(ticIndex, id, BotRng.CHANNEL_AIM_YAW, skill.aimSpreadRadians());
+
         final float aimPitch =
             rng.symmetric(ticIndex, id, BotRng.CHANNEL_AIM_PITCH, skill.aimSpreadRadians());
 
@@ -2158,8 +2336,11 @@ public final class Match
         // matters: Hitscan REQUIRES a unit direction and rejects anything else
         // outright rather than normalising for its callers.
         final float cosPitch = (float) StrictMath.cos(aimPitch);
+
         final float dirX = cosPitch * (float) StrictMath.sin(aimYaw);
+
         final float dirY = (float) StrictMath.sin(aimPitch);
+
         final float dirZ = cosPitch * (float) StrictMath.cos(aimYaw);
 
         // Written down HERE — after the scatter, before the trace, and whatever
@@ -2179,11 +2360,13 @@ public final class Match
             dirX, dirY, dirZ, (float) StrictMath.sqrt(groundDistanceSquared));
 
         final Target[] scene = shotSceneFor(shooter, playerFeetX, playerFeetY, playerFeetZ);
+
         if (!Hitscan.fire(shooter.positionX(), shooter.eyeY(), shooter.positionZ(),
             dirX, dirY, dirZ, scene, scene.length, hit))
         {
             return false;
         }
+
         // Nearest wins. Another bot standing in the way genuinely blocks the
         // shot, and takes no damage for it — friendly fire would let the room
         // clear itself while the player watched.
@@ -2203,10 +2386,12 @@ public final class Match
         final float toZ)
     {
         final int id = shooter.entityId();
+
         if (rng.chance(ticIndex, id, BotRng.CHANNEL_WILD, skill.wildShotChancePermille()))
         {
             return rng.unitFloat(ticIndex, id, BotRng.CHANNEL_WILD) * FULL_TURN_RADIANS;
         }
+
         // PlayerController's convention: yaw 0 faces world +z and increases
         // toward +x, hence atan2(dx, dz). Getting it backwards mirrors the room.
         return (float) StrictMath.atan2(toX, toZ);
@@ -2219,6 +2404,7 @@ public final class Match
         final float playerFeetY, final float playerFeetZ)
     {
         int count = 1;
+
         for (int index = 0; index < bots.length; index++)
         {
             if (bots[index] != shooter && bots[index].isAlive())
@@ -2226,18 +2412,24 @@ public final class Match
                 count++;
             }
         }
+
         final Target[] scene = new Target[count];
+
         scene[0] = Target.aroundFeet(PLAYER_ENTITY_ID, playerFeetX, playerFeetY, playerFeetZ,
             Bot.RADIUS_UNITS, Bot.HEIGHT_UNITS);
+
         int next = 1;
+
         for (int index = 0; index < bots.length; index++)
         {
             if (bots[index] != shooter && bots[index].isAlive())
             {
                 scene[next] = bots[index].hitbox();
+
                 next++;
             }
         }
+
         return scene;
     }
 
@@ -2245,16 +2437,21 @@ public final class Match
     private Target[] livingBotTargets()
     {
         final int alive = livingBots();
+
         final Target[] boxes = new Target[alive];
+
         int next = 0;
+
         for (int index = 0; index < bots.length; index++)
         {
             if (bots[index].isAlive())
             {
                 boxes[next] = bots[index].hitbox();
+
                 next++;
             }
         }
+
         return boxes;
     }
 

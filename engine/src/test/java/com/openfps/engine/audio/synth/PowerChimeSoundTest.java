@@ -53,8 +53,10 @@ final class PowerChimeSoundTest
 
             assertThat(pitchOfNote(pcm, 0))
                 .isCloseTo(PowerChimeSound.LOW_HZ, withinPercentage(PITCH_TOLERANCE_PERCENT));
+
             assertThat(pitchOfNote(pcm, 1))
                 .isCloseTo(PowerChimeSound.HIGH_HZ, withinPercentage(PITCH_TOLERANCE_PERCENT));
+
             assertThat(pitchOfNote(pcm, 1)).isGreaterThan(pitchOfNote(pcm, 0));
         }
 
@@ -66,8 +68,10 @@ final class PowerChimeSoundTest
 
             assertThat(pitchOfNote(pcm, 0))
                 .isCloseTo(PowerChimeSound.HIGH_HZ, withinPercentage(PITCH_TOLERANCE_PERCENT));
+
             assertThat(pitchOfNote(pcm, 1))
                 .isCloseTo(PowerChimeSound.LOW_HZ, withinPercentage(PITCH_TOLERANCE_PERCENT));
+
             assertThat(pitchOfNote(pcm, 1)).isLessThan(pitchOfNote(pcm, 0));
         }
 
@@ -87,6 +91,7 @@ final class PowerChimeSoundTest
         void theIntervalIsAFifth()
         {
             assertThat(PowerChimeSound.FIFTH_RATIO).isEqualTo(1.5);
+
             assertThat(PowerChimeSound.HIGH_HZ / PowerChimeSound.LOW_HZ).isEqualTo(1.5);
         }
     }
@@ -104,11 +109,15 @@ final class PowerChimeSoundTest
             // taken at nonzero amplitude is a step discontinuity — the same click
             // the ramps exist to prevent, in the one place it is most audible.
             final short[] pcm = PowerChimeSound.readySamples();
+
             final int seam = PowerChimeSound.noteSampleCount();
 
             assertThat(pcm[0]).isZero();
+
             assertThat(pcm[pcm.length - 1]).isZero();
+
             assertThat(pcm[seam - 1]).as("the first note ends mid-cycle").isZero();
+
             assertThat(pcm[seam]).as("the second note starts mid-cycle").isZero();
         }
 
@@ -121,10 +130,13 @@ final class PowerChimeSoundTest
             // per-note count rather than from DURATION_MS, so there is no rounding
             // remainder of silence on the end.
             assertThat(PowerChimeSound.NOTE_COUNT).isEqualTo(2);
+
             assertThat(PowerChimeSound.sampleCount())
                 .isEqualTo(PowerChimeSound.noteSampleCount() * PowerChimeSound.NOTE_COUNT);
+
             assertThat(PowerChimeSound.readySamples())
                 .hasSize(PowerChimeSound.sampleCount());
+
             assertThat(PowerChimeSound.spentSamples())
                 .hasSize(PowerChimeSound.sampleCount());
         }
@@ -136,6 +148,7 @@ final class PowerChimeSoundTest
             assertThat(loudestOf(PowerChimeSound.readySamples()))
                 .isLessThan(Short.MAX_VALUE)
                 .isGreaterThan(Short.MAX_VALUE / 8);
+
             assertThat(loudestOf(PowerChimeSound.spentSamples()))
                 .isLessThan(Short.MAX_VALUE)
                 .isGreaterThan(Short.MAX_VALUE / 16);
@@ -150,6 +163,7 @@ final class PowerChimeSoundTest
             // already spent four seconds telling you. The louder sound is the one
             // carrying information the player does not otherwise have.
             assertThat(PowerChimeSound.SPENT_PEAK).isLessThan(PowerChimeSound.READY_PEAK);
+
             assertThat(loudestOf(PowerChimeSound.spentSamples()))
                 .isLessThan(loudestOf(PowerChimeSound.readySamples()));
         }
@@ -160,6 +174,7 @@ final class PowerChimeSoundTest
         {
             assertThat(PowerChimeSound.readySamples())
                 .isEqualTo(PowerChimeSound.readySamples());
+
             assertThat(PowerChimeSound.spentSamples())
                 .isEqualTo(PowerChimeSound.spentSamples());
         }
@@ -179,6 +194,7 @@ final class PowerChimeSoundTest
             // the same figure, where the blaster's has fallen by a fifth of an
             // octave over the same span.
             final short[] chime = PowerChimeSound.readySamples();
+
             final int perNote = PowerChimeSound.noteSampleCount();
 
             assertThat(pitchOver(chime, 0, perNote / 4))
@@ -213,6 +229,7 @@ final class PowerChimeSoundTest
             // a different game's user interface pasted over this one. It belongs to
             // the same instrument family and is told apart by SHAPE.
             assertThat(PowerChimeSound.LOW_HZ).isGreaterThan(BlasterSound.END_HZ);
+
             assertThat(PowerChimeSound.HIGH_HZ).isLessThan(BlasterSound.START_HZ * 1.5);
         }
     }
@@ -222,7 +239,9 @@ final class PowerChimeSoundTest
     private static double pitchOfNote(final short[] pcm, final int note)
     {
         final int perNote = PowerChimeSound.noteSampleCount();
+
         final int from = note * perNote;
+
         return pitchOver(pcm, from, from + perNote / 2);
     }
 
@@ -231,6 +250,7 @@ final class PowerChimeSoundTest
     {
         // MUTABLE local — crossings counted so far.
         int crossings = 0;
+
         for (int index = from + 1; index < to; index++)
         {
             if (pcm[index - 1] < 0 && pcm[index] >= 0 || pcm[index - 1] >= 0 && pcm[index] < 0)
@@ -238,7 +258,9 @@ final class PowerChimeSoundTest
                 crossings++;
             }
         }
+
         final double seconds = (to - from) / (double) PowerChimeSound.sampleRate();
+
         return crossings / seconds / CROSSINGS_PER_CYCLE;
     }
 
@@ -247,10 +269,12 @@ final class PowerChimeSoundTest
     {
         // MUTABLE local — the loudest sample seen.
         int loudest = 0;
+
         for (final short sample : pcm)
         {
             loudest = Math.max(loudest, Math.abs(sample));
         }
+
         return loudest;
     }
 }

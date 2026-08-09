@@ -200,6 +200,7 @@ public final class Hitscan
         final Target[] targets, final int targetCount, final HitResult out)
     {
         validateRay(originX, originY, originZ, directionX, directionY, directionZ);
+
         validateTargets(targets, targetCount, out);
 
         out.clear();
@@ -208,12 +209,15 @@ public final class Hitscan
         // rather than using a sentinel distance, because zero is a legitimate
         // hit distance and would be indistinguishable from "nothing yet".
         boolean found = false;
+
         int bestEntityId = HitResult.NO_ENTITY;
+
         float bestDistance = 0.0f;
 
         for (int i = 0; i < targetCount; i++)
         {
             final Target target = targets[i];
+
             if (target == null)
             {
                 continue;
@@ -221,6 +225,7 @@ public final class Hitscan
 
             final float distance = entryDistance(target,
                 originX, originY, originZ, directionX, directionY, directionZ);
+
             if (distance < 0.0f)
             {
                 continue;
@@ -229,12 +234,15 @@ public final class Hitscan
             if (!found)
             {
                 found = true;
+
                 bestEntityId = target.entityId();
+
                 bestDistance = distance;
             }
             else if (distance < bestDistance)
             {
                 bestEntityId = target.entityId();
+
                 bestDistance = distance;
             }
             else if (distance == bestDistance && target.entityId() < bestEntityId)
@@ -249,6 +257,7 @@ public final class Hitscan
         {
             out.set(bestEntityId, bestDistance);
         }
+
         return found;
     }
 
@@ -267,6 +276,7 @@ public final class Hitscan
         final float lengthSquared = directionX * directionX
             + directionY * directionY
             + directionZ * directionZ;
+
         // StrictMath.abs rather than Math.abs so the "no java/lang/Math here"
         // guard stays a single flat rule with no exceptions to remember.
         if (!(StrictMath.abs(lengthSquared - 1.0f) <= DIRECTION_LENGTH_TOLERANCE))
@@ -285,10 +295,12 @@ public final class Hitscan
         {
             throw new IllegalArgumentException("targets must not be null");
         }
+
         if (out == null)
         {
             throw new IllegalArgumentException("out must not be null");
         }
+
         if (targetCount < 0 || targetCount > targets.length)
         {
             throw new IllegalArgumentException("targetCount must be in [0, " + targets.length
@@ -307,6 +319,7 @@ public final class Hitscan
     {
         // MUTABLE locals: the running intersection of the three slab intervals.
         float enter = 0.0f;
+
         float exit = Float.POSITIVE_INFINITY;
 
         if (directionX == 0.0f)
@@ -321,6 +334,7 @@ public final class Hitscan
         else
         {
             enter = larger(enter, slabEnter(target.minX(), target.maxX(), originX, directionX));
+
             exit = smaller(exit, slabExit(target.minX(), target.maxX(), originX, directionX));
         }
 
@@ -334,6 +348,7 @@ public final class Hitscan
         else
         {
             enter = larger(enter, slabEnter(target.minY(), target.maxY(), originY, directionY));
+
             exit = smaller(exit, slabExit(target.minY(), target.maxY(), originY, directionY));
         }
 
@@ -347,6 +362,7 @@ public final class Hitscan
         else
         {
             enter = larger(enter, slabEnter(target.minZ(), target.maxZ(), originZ, directionZ));
+
             exit = smaller(exit, slabExit(target.minZ(), target.maxZ(), originZ, directionZ));
         }
 
@@ -355,6 +371,7 @@ public final class Hitscan
         {
             return NO_HIT;
         }
+
         return enter;
     }
 
@@ -389,6 +406,7 @@ public final class Hitscan
         {
             return a;
         }
+
         return b;
     }
 
@@ -398,6 +416,7 @@ public final class Hitscan
         {
             return a;
         }
+
         return b;
     }
 }

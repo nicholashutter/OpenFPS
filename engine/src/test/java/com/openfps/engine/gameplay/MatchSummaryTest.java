@@ -64,6 +64,7 @@ class MatchSummaryTest
         void shouldReportHitRate()
         {
             assertThat(summaryWithShots(20, 13).accuracyPercent()).isEqualTo(65);
+
             assertThat(summaryWithShots(4, 1).accuracyPercent()).isEqualTo(25);
         }
 
@@ -74,6 +75,7 @@ class MatchSummaryTest
             // 2 of 3 is 66.67%, which reads as 67. Truncation would show 66 and
             // look like an off-by-one nobody could explain.
             assertThat(summaryWithShots(3, 2).accuracyPercent()).isEqualTo(67);
+
             assertThat(summaryWithShots(3, 1).accuracyPercent()).isEqualTo(33);
         }
 
@@ -110,6 +112,7 @@ class MatchSummaryTest
         {
             assertThat(new MatchSummary(MatchState.WON, 7, 1, 7, 21, 13, 44, 56).isWin())
                 .isTrue();
+
             assertThat(new MatchSummary(MatchState.LOST, 3, 4, 7, 18, 9, 100, 0).isWin())
                 .isFalse();
         }
@@ -156,6 +159,7 @@ class MatchSummaryTest
         {
             assertThatThrownBy(() -> new MatchSummary(MatchState.WON, -1, 0, 7, 0, 0, 0, 100))
                 .isInstanceOf(IllegalArgumentException.class);
+
             assertThatThrownBy(() -> new MatchSummary(MatchState.WON, 0, 0, 7, -2, 0, 0, 100))
                 .isInstanceOf(IllegalArgumentException.class);
         }
@@ -166,6 +170,7 @@ class MatchSummaryTest
         {
             final MatchSummary summary =
                 new MatchSummary(MatchState.LOST, 2, 3, 7, 10, 4, 102, -2);
+
             assertThat(summary.playerHealth()).isEqualTo(-2);
         }
     }
@@ -179,22 +184,33 @@ class MatchSummaryTest
         void shouldCopyAWonRound()
         {
             final Match match = matchWithOneBot();
+
             // Three shots at PLAYER_SHOT_DAMAGE each puts a MAX_HEALTH bot down.
             for (int shot = 0; shot < 3; shot++)
             {
                 shootAhead(match);
             }
+
             assertThat(match.state()).isEqualTo(MatchState.WON);
 
             final MatchSummary summary = MatchSummary.of(match);
+
             assertThat(summary.outcome()).isEqualTo(MatchState.WON);
+
             assertThat(summary.isWin()).isTrue();
+
             assertThat(summary.botsKilled()).isEqualTo(1);
+
             assertThat(summary.botCount()).isEqualTo(1);
+
             assertThat(summary.shotsFired()).isEqualTo(3);
+
             assertThat(summary.shotsHit()).isEqualTo(3);
+
             assertThat(summary.accuracyPercent()).isEqualTo(100);
+
             assertThat(summary.playerHealth()).isEqualTo(Match.PLAYER_MAX_HEALTH);
+
             assertThat(summary.damageTaken()).isZero();
         }
 
@@ -203,15 +219,20 @@ class MatchSummaryTest
         void shouldCountMisses()
         {
             final Match match = matchWithOneBot();
+
             shootBehind(match);
+
             for (int shot = 0; shot < 3; shot++)
             {
                 shootAhead(match);
             }
 
             final MatchSummary summary = MatchSummary.of(match);
+
             assertThat(summary.shotsFired()).isEqualTo(4);
+
             assertThat(summary.shotsHit()).isEqualTo(3);
+
             assertThat(summary.accuracyPercent()).isEqualTo(75);
         }
 
@@ -222,8 +243,11 @@ class MatchSummaryTest
             // Legal, and it is what a scene with no character art staged
             // produces. Match documents it, so the summary has to survive it.
             final MatchSummary summary = MatchSummary.of(new Match(new Bot[0]));
+
             assertThat(summary.isWin()).isTrue();
+
             assertThat(summary.botCount()).isZero();
+
             assertThat(summary.accuracyPercent()).isZero();
         }
 
@@ -256,6 +280,7 @@ class MatchSummaryTest
         {
             final String text =
                 new MatchSummary(MatchState.LOST, 3, 4, 7, 18, 9, 100, 0).toString();
+
             assertThat(text).contains("LOST").contains("3/7").contains("9/18")
                 .contains("50%");
         }

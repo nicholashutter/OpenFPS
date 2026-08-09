@@ -37,6 +37,7 @@ public abstract class Subsystem implements ISubsystem
     protected Subsystem(final SubsystemId id)
     {
         this.id = id;
+
         this.state = SubsystemState.UNINITIALIZED;
     }
 
@@ -60,16 +61,21 @@ public abstract class Subsystem implements ISubsystem
             throw new SubsystemException("init() called from state " + state
                 + " for subsystem " + id + " — only valid from UNINITIALIZED");
         }
+
         try
         {
             onInit();
+
             state = SubsystemState.READY;
+
             LOG.debug("Subsystem {} initialized → READY", id);
         }
         catch (final RuntimeException e)
         {
             state = SubsystemState.ERROR;
+
             LOG.error("Subsystem {} init() failed", id, e);
+
             throw e;
         }
     }
@@ -82,16 +88,21 @@ public abstract class Subsystem implements ISubsystem
             throw new SubsystemException("shutdown() called from state SHUTDOWN for subsystem "
                 + id + " — already terminal");
         }
+
         try
         {
             onShutdown();
+
             state = SubsystemState.SHUTDOWN;
+
             LOG.debug("Subsystem {} shut down", id);
         }
         catch (final RuntimeException e)
         {
             state = SubsystemState.ERROR;
+
             LOG.error("Subsystem {} shutdown() failed", id, e);
+
             throw e;
         }
     }
@@ -104,6 +115,7 @@ public abstract class Subsystem implements ISubsystem
             throw new SubsystemException("processEvent() called from state " + state
                 + " for subsystem " + id + " — only valid from READY");
         }
+
         try
         {
             onEvent(event);
@@ -116,6 +128,7 @@ public abstract class Subsystem implements ISubsystem
             // thread is implicitly released back to the pool when onEvent returns.
             LOG.error("Subsystem {} event handler threw on event {}",
                 id, event, e);
+
             throw e;
         }
     }
@@ -148,6 +161,7 @@ public abstract class Subsystem implements ISubsystem
         {
             return true;
         }
+
         return switch (from)
         {
             case UNINITIALIZED -> to == SubsystemState.READY

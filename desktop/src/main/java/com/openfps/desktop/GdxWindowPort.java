@@ -189,8 +189,11 @@ public final class GdxWindowPort implements I_WindowPort
         {
             throw new IllegalStateException("init() while the frame loop is running");
         }
+
         closeRequested.set(false);
+
         state = State.INITIALIZED;
+
         LOG.info("GdxWindowPort initialized (LWJGL3 backend)");
     }
 
@@ -201,19 +204,26 @@ public final class GdxWindowPort implements I_WindowPort
         {
             throw new IllegalStateException("create() requires INITIALIZED, was " + state);
         }
+
         if (windowWidth <= 0 || windowHeight <= 0)
         {
             throw new IllegalArgumentException(
                 "window size must be positive, got " + windowWidth + "x" + windowHeight);
         }
+
         if (windowTitle == null)
         {
             throw new IllegalArgumentException("title must not be null");
         }
+
         this.width = windowWidth;
+
         this.height = windowHeight;
+
         this.title = windowTitle;
+
         state = State.CREATED;
+
         LOG.info("Window configured: {}x{} '{}'", windowWidth, windowHeight, windowTitle);
     }
 
@@ -235,21 +245,30 @@ public final class GdxWindowPort implements I_WindowPort
         {
             throw new IllegalArgumentException("callback must not be null");
         }
+
         if (state != State.CREATED)
         {
             throw new IllegalStateException("runFrameLoop() requires CREATED, was " + state);
         }
+
         state = State.RUNNING;
+
         LOG.info("Entering LWJGL3 frame loop — the platform owns the thread from here");
+
         try
         {
             final GdxFrameLoopListener listener = new GdxFrameLoopListener(
                 callback, new DefaultMenuActions(this), presenter(), inputPort,
                 settings(), accessibility(), resolvedMapSelection(), resolvedMapEntries());
+
             listener.attachMatchGate(matchGate);
+
             listener.attachMatchResult(matchResult);
+
             listener.attachMatchRestart(matchRestart);
+
             listener.attachMatchStatus(matchStatus, matchTicsPerSecond);
+
             new Lwjgl3Application(listener, buildConfiguration());
         }
         finally
@@ -258,7 +277,9 @@ public final class GdxWindowPort implements I_WindowPort
             // Either way the window is gone, so the close flag reflects
             // reality and the port drops back to a shutdown-able state.
             closeRequested.set(true);
+
             state = State.CREATED;
+
             LOG.info("LWJGL3 frame loop exited");
         }
     }
@@ -286,6 +307,7 @@ public final class GdxWindowPort implements I_WindowPort
         {
             throw new IllegalStateException("attachRenderer() while the frame loop is running");
         }
+
         this.renderer = softwareRenderer;
     }
 
@@ -313,6 +335,7 @@ public final class GdxWindowPort implements I_WindowPort
         {
             throw new IllegalStateException("attachInput() while the frame loop is running");
         }
+
         this.inputPort = desktopInput;
     }
 
@@ -351,6 +374,7 @@ public final class GdxWindowPort implements I_WindowPort
         {
             throw new IllegalStateException("attachMatchGate() while the frame loop is running");
         }
+
         this.matchGate = gate;
     }
 
@@ -382,6 +406,7 @@ public final class GdxWindowPort implements I_WindowPort
         {
             throw new IllegalStateException("attachMatchResult() while the frame loop is running");
         }
+
         this.matchResult = result;
     }
 
@@ -414,6 +439,7 @@ public final class GdxWindowPort implements I_WindowPort
             throw new IllegalStateException(
                 "attachMatchRestart() while the frame loop is running");
         }
+
         this.matchRestart = restart;
     }
 
@@ -446,7 +472,9 @@ public final class GdxWindowPort implements I_WindowPort
             throw new IllegalStateException(
                 "attachMatchStatus() while the frame loop is running");
         }
+
         this.matchStatus = status;
+
         this.matchTicsPerSecond = simulationTicsPerSecond;
     }
 
@@ -472,6 +500,7 @@ public final class GdxWindowPort implements I_WindowPort
         {
             throw new IllegalStateException("attachDebugSettings() while the loop is running");
         }
+
         this.debugSettings = settings;
     }
 
@@ -500,6 +529,7 @@ public final class GdxWindowPort implements I_WindowPort
             throw new IllegalStateException(
                 "attachAccessibilitySettings() while the loop is running");
         }
+
         this.accessibilitySettings = settings;
     }
 
@@ -528,6 +558,7 @@ public final class GdxWindowPort implements I_WindowPort
             throw new IllegalStateException(
                 "attachMapSelection() while the loop is running");
         }
+
         this.mapSelection = selection;
     }
 
@@ -547,6 +578,7 @@ public final class GdxWindowPort implements I_WindowPort
             throw new IllegalStateException(
                 "attachMapEntries() while the loop is running");
         }
+
         if (entries == null)
         {
             this.mapEntries = List.of();
@@ -574,10 +606,12 @@ public final class GdxWindowPort implements I_WindowPort
     private DebugSettings settings()
     {
         final DebugSettings attached = debugSettings;
+
         if (attached == null)
         {
             return new DebugSettings();
         }
+
         return attached;
     }
 
@@ -586,10 +620,12 @@ public final class GdxWindowPort implements I_WindowPort
     private AccessibilitySettings accessibility()
     {
         final AccessibilitySettings attached = accessibilitySettings;
+
         if (attached == null)
         {
             return new AccessibilitySettings();
         }
+
         return attached;
     }
 
@@ -598,10 +634,12 @@ public final class GdxWindowPort implements I_WindowPort
     private MapSelection resolvedMapSelection()
     {
         final MapSelection attached = mapSelection;
+
         if (attached == null)
         {
             return new MapSelection();
         }
+
         return attached;
     }
 
@@ -610,10 +648,12 @@ public final class GdxWindowPort implements I_WindowPort
     private List<MapSelectionScreen.Entry> resolvedMapEntries()
     {
         final List<MapSelectionScreen.Entry> attached = mapEntries;
+
         if (attached == null)
         {
             return List.of();
         }
+
         return attached;
     }
 
@@ -623,10 +663,12 @@ public final class GdxWindowPort implements I_WindowPort
     private FramebufferPresenter presenter()
     {
         final SoftwareRenderPort attached = renderer;
+
         if (attached == null)
         {
             return null;
         }
+
         return new FramebufferPresenter(attached);
     }
 
@@ -634,13 +676,17 @@ public final class GdxWindowPort implements I_WindowPort
     private Lwjgl3ApplicationConfiguration buildConfiguration()
     {
         final Lwjgl3ApplicationConfiguration config = new Lwjgl3ApplicationConfiguration();
+
         config.setTitle(title);
+
         config.setWindowedMode(width, height);
+
         // Vsync governs presentation rate. It must not govern anything else:
         // GameLoop is the simulation clock at a fixed 30/60/120 Hz on its own
         // thread, so a 144 Hz panel changes how often the menu redraws and
         // nothing about the tic rate.
         config.useVsync(true);
+
         return config;
     }
 
@@ -654,10 +700,12 @@ public final class GdxWindowPort implements I_WindowPort
     public void requestClose()
     {
         closeRequested.set(true);
+
         // Only meaningful while an application is live. Headless — in tests,
         // or before runFrameLoop — Gdx.app is null and the flag alone is the
         // whole answer.
         final Application app = Gdx.app;
+
         if (app != null)
         {
             app.exit();
@@ -677,7 +725,9 @@ public final class GdxWindowPort implements I_WindowPort
         {
             throw new IllegalStateException("shutdown() while the frame loop is running");
         }
+
         state = State.SHUTDOWN;
+
         LOG.info("GdxWindowPort shut down");
     }
 

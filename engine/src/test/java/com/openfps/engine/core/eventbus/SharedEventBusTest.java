@@ -32,6 +32,7 @@ class SharedEventBusTest
     void setUp()
     {
         bus = new SharedEventBus();
+
         factory = new EventFactory(new NullTimePort());
     }
 
@@ -40,8 +41,11 @@ class SharedEventBusTest
     void shouldInitToReady()
     {
         bus.init(16);
+
         assertThat(bus.state()).isEqualTo(I_EventBusPort.State.READY);
+
         assertThat(bus.capacity()).isEqualTo(16);
+
         assertThat(bus.pendingCount()).isEqualTo(0);
     }
 
@@ -50,7 +54,9 @@ class SharedEventBusTest
     void shouldRoundTrip()
     {
         bus.init(16);
+
         final TickEvent event = factory.newTick(0, 100);
+
         try
         {
             bus.publish(event);
@@ -59,7 +65,9 @@ class SharedEventBusTest
         {
             fail("publish was interrupted");
         }
+
         assertThat(bus.pendingCount()).isEqualTo(1);
+
         try
         {
             assertThat(bus.take()).isSameAs(event);
@@ -68,6 +76,7 @@ class SharedEventBusTest
         {
             fail("take was interrupted");
         }
+
         assertThat(bus.pendingCount()).isEqualTo(0);
     }
 
@@ -76,6 +85,7 @@ class SharedEventBusTest
     void shouldFifo()
     {
         bus.init(16);
+
         for (int i = 0; i < 5; i++)
         {
             try
@@ -87,12 +97,15 @@ class SharedEventBusTest
                 fail("publish was interrupted");
             }
         }
+
         for (int i = 0; i < 5; i++)
         {
             try
             {
                 final I_EngineEvent e = bus.take();
+
                 assertThat(e).isInstanceOf(TickEvent.class);
+
                 assertThat(((TickEvent) e).ticNumber()).isEqualTo(i);
             }
             catch (final InterruptedException ex)
@@ -107,16 +120,23 @@ class SharedEventBusTest
     void shouldBlockWhenFull() throws Exception
     {
         bus.init(2);
+
         bus.publish(factory.newTick(0, 0));
+
         bus.publish(factory.newTick(1, 0));
+
         // Queue is now full
         final AtomicReference<Boolean> publishedAfterDelay = new AtomicReference<>(false);
+
         final CountDownLatch publisherStarted = new CountDownLatch(1);
+
         final Thread publisher = new Thread(() -> {
             publisherStarted.countDown();
+
             try
             {
                 bus.publish(factory.newTick(2, 0));
+
                 publishedAfterDelay.set(true);
             }
             catch (final InterruptedException e)
@@ -124,17 +144,23 @@ class SharedEventBusTest
                 Thread.currentThread().interrupt();
             }
         });
+
         publisher.start();
+
         assertThat(publisherStarted.await(100, TimeUnit.MILLISECONDS)).isTrue();
+
         // Give the publisher time to block
         Thread.sleep(100);
+
         assertThat(publishedAfterDelay.get())
             .as("publisher should still be blocked")
             .isFalse();
 
         // Drain one event — the publisher should now unblock
         bus.take();
+
         Thread.sleep(100);
+
         assertThat(publishedAfterDelay.get())
             .as("publisher should have unblocked")
             .isTrue();
@@ -145,7 +171,9 @@ class SharedEventBusTest
     void shouldBlockWhenEmpty() throws Exception
     {
         bus.init(4);
+
         final AtomicReference<I_EngineEvent> taken = new AtomicReference<>();
+
         final Thread consumer = new Thread(() -> {
             try
             {
@@ -156,13 +184,19 @@ class SharedEventBusTest
                 Thread.currentThread().interrupt();
             }
         });
+
         consumer.start();
+
         Thread.sleep(100);
+
         assertThat(taken.get()).isNull();
 
         bus.publish(factory.newTick(42, 0));
+
         Thread.sleep(100);
+
         assertThat(taken.get()).isNotNull();
+
         assertThat(((TickEvent) taken.get()).ticNumber()).isEqualTo(42);
     }
 
@@ -171,13 +205,18 @@ class SharedEventBusTest
     void shouldDrain() throws Exception
     {
         bus.init(8);
+
         bus.publish(factory.newTick(0, 0));
+
         bus.publish(factory.newTick(1, 0));
+
         bus.drain();
+
         assertThat(bus.state()).isEqualTo(I_EventBusPort.State.DRAINING);
 
         // Remaining events still come out
         assertThat(((TickEvent) bus.take()).ticNumber()).isEqualTo(0);
+
         assertThat(((TickEvent) bus.take()).ticNumber()).isEqualTo(1);
 
         // Now empty — take returns null instead of blocking
@@ -189,13 +228,17 @@ class SharedEventBusTest
     void shouldThrowAfterShutdown()
     {
         bus.init(4);
+
         bus.shutdown();
+
         assertThat(bus.state()).isEqualTo(I_EventBusPort.State.SHUTDOWN);
 
         assertThatThrownBy(() -> bus.publish(factory.newTick(0, 0)))
             .isInstanceOf(IllegalStateException.class);
+
         assertThatThrownBy(() -> bus.take())
             .isInstanceOf(IllegalStateException.class);
+
         assertThatThrownBy(bus::drain)
             .isInstanceOf(IllegalStateException.class);
     }
@@ -214,6 +257,7 @@ class SharedEventBusTest
     {
         assertThatThrownBy(() -> bus.init(0))
             .isInstanceOf(IllegalArgumentException.class);
+
         assertThatThrownBy(() -> bus.init(-1))
             .isInstanceOf(IllegalArgumentException.class);
     }
@@ -223,6 +267,7 @@ class SharedEventBusTest
     void shouldThrowOnNullPublish()
     {
         bus.init(4);
+
         assertThatThrownBy(() -> bus.publish(null))
             .isInstanceOf(IllegalArgumentException.class);
     }

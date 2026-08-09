@@ -55,17 +55,25 @@ final class QuadFixture
             halfWidth, halfHeight,
             -halfWidth, halfHeight,
         };
+
         final float[] uv = {0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f};
 
         final int[] vertices = new int[4 * VERTEX_SLOTS];
+
         for (int corner = 0; corner < 4; corner++)
         {
             final int at = corner * VERTEX_SLOTS;
+
             vertices[at] = ModelFileFixture.bits(corners[corner * 2]);
+
             vertices[at + 1] = ModelFileFixture.bits(corners[corner * 2 + 1]);
+
             vertices[at + 2] = ModelFileFixture.bits(0.0f);
+
             vertices[at + 3] = ModelFileFixture.bits(uv[corner * 2]);
+
             vertices[at + 4] = ModelFileFixture.bits(uv[corner * 2 + 1]);
+
             vertices[at + 5] = colour;
         }
 
@@ -113,17 +121,25 @@ final class QuadFixture
             halfEdge, halfEdge,
             -halfEdge, halfEdge,
         };
+
         final float[] uv = {0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f};
 
         final int[] vertices = new int[4 * VERTEX_SLOTS];
+
         for (int corner = 0; corner < 4; corner++)
         {
             final int at = corner * VERTEX_SLOTS;
+
             vertices[at] = ModelFileFixture.bits(corners[corner * 2]);
+
             vertices[at + 1] = ModelFileFixture.bits(corners[corner * 2 + 1]);
+
             vertices[at + 2] = ModelFileFixture.bits(0.0f);
+
             vertices[at + 3] = ModelFileFixture.bits(uv[corner * 2]);
+
             vertices[at + 4] = ModelFileFixture.bits(uv[corner * 2 + 1]);
+
             vertices[at + 5] = bakedColour;
         }
 

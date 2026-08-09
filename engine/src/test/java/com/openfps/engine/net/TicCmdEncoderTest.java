@@ -42,6 +42,7 @@ class TicCmdEncoderTest
         void shouldRoundTripTheCentre()
         {
             assertThat(TicCmdEncoder.encodeAxis(0.0f)).isZero();
+
             assertThat(TicCmdEncoder.decodeAxis(0)).isZero();
         }
 
@@ -50,6 +51,7 @@ class TicCmdEncoderTest
         void shouldReachBothExtremes()
         {
             assertThat(TicCmdEncoder.encodeAxis(1.0f)).isEqualTo(TicCmd.MAX_AXIS);
+
             assertThat(TicCmdEncoder.encodeAxis(-1.0f)).isEqualTo(-TicCmd.MAX_AXIS);
         }
 
@@ -60,6 +62,7 @@ class TicCmdEncoderTest
             // Wrapping would turn a slightly-over-full push into full reverse,
             // which is the single worst way for this to be wrong.
             assertThat(TicCmdEncoder.encodeAxis(5.0f)).isEqualTo(TicCmd.MAX_AXIS);
+
             assertThat(TicCmdEncoder.encodeAxis(-5.0f)).isEqualTo(-TicCmd.MAX_AXIS);
         }
 
@@ -68,9 +71,11 @@ class TicCmdEncoderTest
         void shouldRoundTripWithinOneStep()
         {
             final float step = 1.0f / TicCmdEncoder.AXIS_SCALE;
+
             for (float axis = -1.0f; axis <= 1.0f; axis += 0.01f)
             {
                 final float back = TicCmdEncoder.decodeAxis(TicCmdEncoder.encodeAxis(axis));
+
                 assertThat(back).as("axis %f", axis).isCloseTo(axis, within(step));
             }
         }
@@ -86,6 +91,7 @@ class TicCmdEncoderTest
             final float justOverHalfAStep = 1.6f / TicCmdEncoder.AXIS_SCALE;
 
             assertThat(TicCmdEncoder.encodeAxis(justOverHalfAStep)).isEqualTo(2);
+
             assertThat(TicCmdEncoder.encodeAxis(-justOverHalfAStep)).isEqualTo(-2);
         }
 
@@ -120,6 +126,7 @@ class TicCmdEncoderTest
             // Clamping would make a player who spun past the wrap point appear
             // to stop turning.
             final int once = TicCmdEncoder.encodeAngle(0.75f);
+
             final int again = TicCmdEncoder.encodeAngle(0.75f + FULL_TURN * 3.0f);
 
             assertThat(again).isEqualTo(once);
@@ -132,6 +139,7 @@ class TicCmdEncoderTest
             final int negative = TicCmdEncoder.encodeAngle(-0.5f);
 
             assertThat(negative).isBetween(0, TicCmd.MAX_ANGLE);
+
             assertThat(TicCmdEncoder.decodeAngle(negative))
                 .isCloseTo(FULL_TURN - 0.5f, within(0.01f));
         }
@@ -149,6 +157,7 @@ class TicCmdEncoderTest
                     .as("angle %f", angle)
                     .isBetween(0, TicCmd.MAX_ANGLE);
             }
+
             assertThat(TicCmdEncoder.encodeAngle(FULL_TURN)).isZero();
         }
 
@@ -157,6 +166,7 @@ class TicCmdEncoderTest
         void shouldRoundTripAnAngle()
         {
             final float step = FULL_TURN / TicCmdEncoder.ANGLE_STEPS;
+
             for (float angle = 0.0f; angle < FULL_TURN; angle += 0.05f)
             {
                 assertThat(TicCmdEncoder.decodeAngle(TicCmdEncoder.encodeAngle(angle)))
@@ -170,6 +180,7 @@ class TicCmdEncoderTest
         void shouldHandleANonFiniteAngle()
         {
             assertThat(TicCmdEncoder.encodeAngle(Float.NaN)).isZero();
+
             assertThat(TicCmdEncoder.encodeAngle(Float.POSITIVE_INFINITY)).isZero();
         }
     }
@@ -186,6 +197,7 @@ class TicCmdEncoderTest
             // resolution on angles nothing can reach.
             assertThat(TicCmdEncoder.encodePitch(TicCmdEncoder.MAX_PITCH_RADIANS))
                 .isEqualTo(TicCmd.MAX_PITCH);
+
             assertThat(TicCmdEncoder.encodePitch(-TicCmdEncoder.MAX_PITCH_RADIANS))
                 .isEqualTo(-TicCmd.MAX_PITCH);
         }
@@ -195,6 +207,7 @@ class TicCmdEncoderTest
         void shouldClampAnExtremePitch()
         {
             assertThat(TicCmdEncoder.encodePitch(10.0f)).isEqualTo(TicCmd.MAX_PITCH);
+
             assertThat(TicCmdEncoder.encodePitch(-10.0f)).isEqualTo(-TicCmd.MAX_PITCH);
         }
 
@@ -213,6 +226,7 @@ class TicCmdEncoderTest
                     .as("pitch %f is not the mirror of its negative", pitch)
                     .isEqualTo(-TicCmdEncoder.encodePitch(pitch));
             }
+
             assertThat(TicCmdEncoder.encodePitch(-100.0f))
                 .as("the unused code must stay unused")
                 .isNotEqualTo(TicCmd.MIN_PITCH);
@@ -232,6 +246,7 @@ class TicCmdEncoderTest
         void shouldRoundTripPitch()
         {
             final float step = TicCmdEncoder.MAX_PITCH_RADIANS / TicCmd.MAX_PITCH;
+
             for (float pitch = -TicCmdEncoder.MAX_PITCH_RADIANS;
                 pitch <= TicCmdEncoder.MAX_PITCH_RADIANS; pitch += 0.02f)
             {
@@ -253,7 +268,9 @@ class TicCmdEncoderTest
             // Overlapping bits would make one control silently trigger another,
             // and only on the remote end.
             assertThat(TicCmdEncoder.BUTTON_FIRE & TicCmdEncoder.BUTTON_JUMP).isZero();
+
             assertThat(TicCmdEncoder.BUTTON_FIRE & TicCmdEncoder.BUTTON_SPRINT).isZero();
+
             assertThat(TicCmdEncoder.BUTTON_JUMP & TicCmdEncoder.BUTTON_SPRINT).isZero();
         }
 
@@ -264,15 +281,20 @@ class TicCmdEncoderTest
             for (int mask = 0; mask < 8; mask++)
             {
                 final boolean fire = (mask & 1) != 0;
+
                 final boolean jump = (mask & 2) != 0;
+
                 final boolean sprint = (mask & 4) != 0;
+
                 final int packed = TicCmdEncoder.encodeButtons(
                     InputState.of(0.0f, 0.0f, 0.0f, 0.0f, fire, jump, sprint));
 
                 assertThat(TicCmdEncoder.isDown(packed, TicCmdEncoder.BUTTON_FIRE))
                     .isEqualTo(fire);
+
                 assertThat(TicCmdEncoder.isDown(packed, TicCmdEncoder.BUTTON_JUMP))
                     .isEqualTo(jump);
+
                 assertThat(TicCmdEncoder.isDown(packed, TicCmdEncoder.BUTTON_SPRINT))
                     .isEqualTo(sprint);
             }
@@ -322,6 +344,7 @@ class TicCmdEncoderTest
             {
                 assertThat(TicCmdEncoder.encodeAxis(value))
                     .isEqualTo(TicCmdEncoder.encodeAxis(value));
+
                 assertThat(TicCmdEncoder.encodeAngle(value))
                     .isEqualTo(TicCmdEncoder.encodeAngle(value));
             }
@@ -333,9 +356,11 @@ class TicCmdEncoderTest
     private static String constantPoolOf(final Class<?> type)
     {
         final String resource = type.getName().replace('.', '/') + ".class";
+
         try (InputStream in = type.getClassLoader().getResourceAsStream(resource))
         {
             assertThat(in).as("class file for %s must be readable", type).isNotNull();
+
             return new String(in.readAllBytes(), StandardCharsets.ISO_8859_1);
         }
         catch (final IOException e)

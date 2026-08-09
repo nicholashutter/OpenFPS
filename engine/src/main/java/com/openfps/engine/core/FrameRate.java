@@ -89,6 +89,7 @@ public enum FrameRate
     FrameRate(final int fps)
     {
         this.fps = fps;
+
         this.nanosPerFrame = 1_000_000_000L / fps;
     }
 
@@ -131,18 +132,22 @@ public enum FrameRate
         {
             throw new IllegalArgumentException("frame rate string must not be null");
         }
+
         final String normalized = s.trim().toUpperCase();
+
         for (final FrameRate r : values())
         {
             if (r.name().equals(normalized))
             {
                 return r;
             }
+
             if (String.valueOf(r.fps).equals(normalized))
             {
                 return r;
             }
         }
+
         throw new IllegalArgumentException(
             "unknown frame rate: '" + s + "' (supported: 30, 60, 120)");
     }

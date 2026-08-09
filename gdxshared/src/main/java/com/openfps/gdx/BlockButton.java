@@ -108,17 +108,25 @@ public final class BlockButton extends Actor
         {
             throw new IllegalArgumentException("BlockButton takes no null arguments");
         }
+
         if (!(fontScale > 0.0f))
         {
             throw new IllegalArgumentException(
                 "fontScale must be positive and a number, got " + fontScale);
         }
+
         this.labelScale = fontScale;
+
         this.label = text;
+
         this.faceColor = face;
+
         this.shadeColor = shade;
+
         this.pixel = whitePixel;
+
         this.font = labelFont;
+
         this.clicks = new ClickListener()
         {
             @Override
@@ -127,6 +135,7 @@ public final class BlockButton extends Actor
                 action.run();
             }
         };
+
         addListener(clicks);
     }
 
@@ -152,6 +161,7 @@ public final class BlockButton extends Actor
         {
             throw new IllegalArgumentException("text must not be null");
         }
+
         this.label = text;
     }
 
@@ -186,10 +196,12 @@ public final class BlockButton extends Actor
             // than like the button shrinking.
             return 0.0f;
         }
+
         if (isHovered())
         {
             return DEPTH_PIXELS + HOVER_LIFT_PIXELS;
         }
+
         return DEPTH_PIXELS;
     }
 
@@ -197,19 +209,25 @@ public final class BlockButton extends Actor
     public void draw(final Batch batch, final float parentAlpha)
     {
         final Color previous = batch.getColor();
+
         final float width = getWidth();
+
         final float faceHeight = getHeight() - DEPTH_PIXELS;
+
         final float lift = faceOffset();
 
         // The base is drawn full height so there is always something solid under
         // a lifted face; otherwise hovering opens a gap onto the background.
         batch.setColor(shadeColor);
+
         batch.draw(pixel, getX(), getY(), width, getHeight());
 
         batch.setColor(faceColor);
+
         batch.draw(pixel, getX(), getY() + lift, width, faceHeight);
 
         drawLabel(batch, width, faceHeight, lift);
+
         batch.setColor(previous);
     }
 
@@ -225,12 +243,17 @@ public final class BlockButton extends Actor
         final float lift)
     {
         final float scaleX = font.getData().scaleX;
+
         final float scaleY = font.getData().scaleY;
+
         font.getData().setScale(labelScale);
+
         try
         {
             layout.setText(font, label);
+
             font.setColor(MenuPalette.BUTTON_LABEL);
+
             font.draw(batch, layout,
                 getX() + (width - layout.width) * 0.5f,
                 getY() + lift + (faceHeight + layout.height) * 0.5f);

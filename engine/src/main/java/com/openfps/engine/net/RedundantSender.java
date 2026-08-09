@@ -81,6 +81,7 @@ public final class RedundantSender
     public static int maxCommandsPerPacket()
     {
         final int byMtu = (MAX_DATAGRAM_BYTES - HEADER_BYTES) / TicCmd.BYTES;
+
         return Math.min(byMtu, AckWindow.WIDTH);
     }
 
@@ -162,7 +163,9 @@ public final class RedundantSender
         {
             throw new IllegalArgumentException("latestTic must not be negative: " + latestTic);
         }
+
         final int capacityCommands = (dst.length - offset - HEADER_BYTES) / TicCmd.BYTES;
+
         if (capacityCommands < 1)
         {
             throw new IllegalArgumentException(
@@ -173,22 +176,29 @@ public final class RedundantSender
         final int window = Math.min(
             Math.min(AckWindow.clampWindow(windowTics), maxCommandsPerPacket()),
             capacityCommands);
+
         int firstTic = latestTic - window + 1;
+
         if (firstTic < 0)
         {
             firstTic = 0;
         }
 
         NetBytes.writeInt(dst, offset + OFFSET_PLAYER_ID, playerId);
+
         NetBytes.writeInt(dst, offset + OFFSET_LATEST_TIC, latestTic);
+
         NetBytes.writeInt(dst, offset + OFFSET_ACK_TIC, peer.ackWindow().highestContiguousTic());
+
         NetBytes.writeLong(dst, offset + OFFSET_ACK_BITFIELD, peer.ackWindow().bitfield());
 
         int cursor = offset + HEADER_BYTES;
+
         for (int tic = firstTic; tic <= latestTic; tic++)
         {
             cursor += buffer.encodeInto(dst, cursor, playerSlot, tic);
         }
+
         return cursor - offset;
     }
 
@@ -221,24 +231,32 @@ public final class RedundantSender
         }
 
         peer.recordReceivedPacket();
+
         peer.recordRemoteAck(readAckTic(src, offset), readAckBitfield(src, offset));
 
         final int count = commandCount(length);
+
         int accepted = 0;
+
         for (int i = 0; i < count; i++)
         {
             final int cmdOffset = offset + HEADER_BYTES + i * TicCmd.BYTES;
+
             final int ticNumber = TicCmd.decodeTicNumber(src, cmdOffset);
+
             if (ticNumber < 0)
             {
                 continue;
             }
+
             if (buffer.putEncoded(playerSlot, src, cmdOffset))
             {
                 peer.recordReceivedTic(ticNumber);
+
                 accepted++;
             }
         }
+
         return accepted;
     }
 
@@ -254,6 +272,7 @@ public final class RedundantSender
         {
             return 0;
         }
+
         return (length - HEADER_BYTES) / TicCmd.BYTES;
     }
 

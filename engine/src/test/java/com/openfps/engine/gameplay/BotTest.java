@@ -68,9 +68,12 @@ class BotTest
             for (int tic = 0; tic < PERIOD * 3; tic++)
             {
                 sentry.moveTo(tic);
+
                 assertThat(sentry.positionX()).isEqualTo(25.0f);
+
                 assertThat(sentry.positionZ()).isEqualTo(-60.0f);
             }
+
             assertThat(BotPattern.SENTRY.moves()).isFalse();
         }
 
@@ -79,23 +82,32 @@ class BotTest
         void shouldMoveOnOneAxisOnlyWhenPacing()
         {
             final Bot alongX = bot(BotPattern.PACE_X);
+
             final Bot alongZ = bot(BotPattern.PACE_Z);
 
             boolean sawXMove = false;
+
             boolean sawZMove = false;
+
             for (int tic = 0; tic < PERIOD; tic++)
             {
                 alongX.moveTo(tic);
+
                 alongZ.moveTo(tic);
+
                 assertThat(alongX.positionZ()).as("PACE_X must not move on z").isEqualTo(0.0f);
+
                 assertThat(alongZ.positionX()).as("PACE_Z must not move on x").isEqualTo(0.0f);
+
                 sawXMove = sawXMove || alongX.positionX() != 0.0f;
+
                 sawZMove = sawZMove || alongZ.positionZ() != 0.0f;
             }
 
             // Guards the vacuous pass: "never moves on z" is trivially true for
             // a bot that never moves at all.
             assertThat(sawXMove).isTrue();
+
             assertThat(sawZMove).isTrue();
         }
 
@@ -108,6 +120,7 @@ class BotTest
             for (int tic = 0; tic < PERIOD; tic++)
             {
                 orbiter.moveTo(tic);
+
                 final float radius = (float) StrictMath.sqrt(
                     orbiter.positionX() * orbiter.positionX()
                         + orbiter.positionZ() * orbiter.positionZ());
@@ -126,17 +139,22 @@ class BotTest
         void shouldReachBothExtremesWhenPacing()
         {
             final Bot alongX = bot(BotPattern.PACE_X);
+
             float lowest = Float.MAX_VALUE;
+
             float highest = -Float.MAX_VALUE;
 
             for (int tic = 0; tic < PERIOD; tic++)
             {
                 alongX.moveTo(tic);
+
                 lowest = StrictMath.min(lowest, alongX.positionX());
+
                 highest = StrictMath.max(highest, alongX.positionX());
             }
 
             assertThat(highest).isCloseTo(AMPLITUDE, within(1.0f));
+
             assertThat(lowest).isCloseTo(-AMPLITUDE, within(1.0f));
         }
     }
@@ -152,11 +170,15 @@ class BotTest
             final Bot walker = bot(BotPattern.ORBIT);
 
             walker.moveTo(37);
+
             final float x = walker.positionX();
+
             final float z = walker.positionZ();
+
             walker.moveTo(37);
 
             assertThat(walker.positionX()).isEqualTo(x);
+
             assertThat(walker.positionZ()).isEqualTo(z);
         }
 
@@ -167,7 +189,9 @@ class BotTest
             final Bot walker = bot(BotPattern.ORBIT);
 
             walker.moveTo(11);
+
             final int early = bits(walker);
+
             // Ten thousand tics later — nearly three minutes at 60 Hz. An
             // INTEGRATED patrol would have accumulated float error by now and
             // drifted off its route; a closed-form one is the same expression
@@ -182,12 +206,14 @@ class BotTest
         void shouldNotDependOnHistoryWhenTicsAreSkipped()
         {
             final Bot stepped = bot(BotPattern.ORBIT);
+
             final Bot jumped = bot(BotPattern.ORBIT);
 
             for (int tic = 0; tic <= 200; tic++)
             {
                 stepped.moveTo(tic);
             }
+
             jumped.moveTo(200);
 
             // The property that lets a peer join a match late, or drop a frame,
@@ -207,6 +233,7 @@ class BotTest
             assertThat(walker.phaseAt(-1))
                 .isGreaterThanOrEqualTo(0.0f)
                 .isLessThan((float) (2.0 * StrictMath.PI));
+
             assertThat(walker.phaseAt(-PERIOD)).isEqualTo(walker.phaseAt(0));
         }
 
@@ -216,14 +243,17 @@ class BotTest
         {
             final Bot leading = new Bot(2, 0.0f, 0.0f, 0.0f, BotPattern.ORBIT,
                 AMPLITUDE, PERIOD, 0);
+
             final Bot trailing = new Bot(3, 0.0f, 0.0f, 0.0f, BotPattern.ORBIT,
                 AMPLITUDE, PERIOD, PERIOD / 2);
 
             leading.moveTo(0);
+
             trailing.moveTo(0);
 
             // Half a period apart on a circle is the far side of it.
             assertThat(trailing.positionX()).isCloseTo(-leading.positionX(), within(EPSILON));
+
             assertThat(trailing.positionZ()).isCloseTo(-leading.positionZ(), within(EPSILON));
         }
 
@@ -279,7 +309,9 @@ class BotTest
         {
             final Bot sentry = new Bot(2, 10.0f, 0.0f, 20.0f, BotPattern.SENTRY,
                 0.0f, PERIOD, 0);
+
             sentry.faceToward(10.0f, 120.0f);
+
             final float before = sentry.yawRadians();
 
             sentry.faceToward(10.0f, 20.0f);
@@ -299,8 +331,11 @@ class BotTest
             final Bot victim = bot(BotPattern.SENTRY);
 
             assertThat(victim.damage(Bot.MAX_HEALTH - 1)).isFalse();
+
             assertThat(victim.damage(1)).as("the shot that kills").isTrue();
+
             assertThat(victim.damage(999)).as("and never again").isFalse();
+
             assertThat(victim.damage(1)).isFalse();
         }
 
@@ -313,6 +348,7 @@ class BotTest
             victim.damage(Bot.MAX_HEALTH * 10);
 
             assertThat(victim.health()).isEqualTo(0);
+
             assertThat(victim.isAlive()).isFalse();
         }
 
@@ -321,10 +357,13 @@ class BotTest
         void shouldStopMovingWhenDead()
         {
             final Bot victim = bot(BotPattern.ORBIT);
+
             victim.moveTo(10);
+
             final int whereItFell = bits(victim);
 
             victim.damage(Bot.MAX_HEALTH);
+
             victim.moveTo(60);
 
             // A body that carried on patrolling would be indistinguishable from
@@ -338,7 +377,9 @@ class BotTest
         {
             final Bot victim = new Bot(2, 0.0f, 0.0f, 0.0f, BotPattern.SENTRY,
                 0.0f, PERIOD, 0);
+
             final BotRng rng = new BotRng();
+
             assertThat(victim.wantsToFire(0, rng, BotSkill.MARKSMAN))
                 .as("a live marksman fires whenever it is ready")
                 .isTrue();
@@ -357,6 +398,7 @@ class BotTest
         {
             assertThatThrownBy(() -> bot(BotPattern.SENTRY).damage(0))
                 .isInstanceOf(IllegalArgumentException.class);
+
             assertThatThrownBy(() -> bot(BotPattern.SENTRY).damage(-5))
                 .isInstanceOf(IllegalArgumentException.class);
         }
@@ -375,7 +417,9 @@ class BotTest
             // moment the generator came up twice, and the player would have no
             // way to read it as anything but a bug.
             final Bot shooter = bot(BotPattern.SENTRY);
+
             final BotRng rng = new BotRng();
+
             int previous = Integer.MIN_VALUE;
 
             for (int tic = 0; tic < LONG_RUN_TICS; tic++)
@@ -384,14 +428,17 @@ class BotTest
                 {
                     continue;
                 }
+
                 if (previous != Integer.MIN_VALUE)
                 {
                     assertThat(tic - previous)
                         .as("tic %d came only %d tics after the last shot", tic, tic - previous)
                         .isGreaterThanOrEqualTo(BotSkill.DUMB.cooldownTics());
                 }
+
                 previous = tic;
             }
+
             assertThat(previous).as("nothing fired at all over %d tics", LONG_RUN_TICS)
                 .isNotEqualTo(Integer.MIN_VALUE);
         }
@@ -406,8 +453,11 @@ class BotTest
             // purpose: this is a random process, and a tight assertion here would
             // be a test that fails for being correct.
             final Bot shooter = bot(BotPattern.SENTRY);
+
             final BotRng rng = new BotRng();
+
             int shots = 0;
+
             for (int tic = 0; tic < LONG_RUN_TICS; tic++)
             {
                 if (shooter.wantsToFire(tic, rng, BotSkill.DUMB))
@@ -417,6 +467,7 @@ class BotTest
             }
 
             final int expected = LONG_RUN_TICS / BotSkill.DUMB.meanShotIntervalTics();
+
             assertThat(shots).isBetween(expected / 2, expected * 2);
         }
 
@@ -429,7 +480,9 @@ class BotTest
             // it by construction, and this asserts the property a PLAYER
             // experiences — a broadside rather than pressure.
             final BotRng rng = new BotRng();
+
             final Bot[] room = new Bot[Match.DEFAULT_BOT_COUNT];
+
             for (int index = 0; index < room.length; index++)
             {
                 room[index] = new Bot(Match.FIRST_BOT_ENTITY_ID + index, 0.0f, 0.0f, 0.0f,
@@ -437,9 +490,11 @@ class BotTest
             }
 
             int busiestTic = 0;
+
             for (int tic = 0; tic < LONG_RUN_TICS; tic++)
             {
                 int firing = 0;
+
                 for (final Bot shooter : room)
                 {
                     if (shooter.wantsToFire(tic, rng, BotSkill.DUMB))
@@ -447,6 +502,7 @@ class BotTest
                         firing++;
                     }
                 }
+
                 busiestTic = Math.max(busiestTic, firing);
             }
 
@@ -464,9 +520,11 @@ class BotTest
             // here would fail this test on the second run, which is the point of
             // having it.
             final String underOneSeed = shotPattern(1234L);
+
             assertThat(shotPattern(1234L))
                 .as("the same seed must replay exactly")
                 .isEqualTo(underOneSeed);
+
             assertThat(shotPattern(9876L))
                 .as("a different seed must produce a different match")
                 .isNotEqualTo(underOneSeed);
@@ -478,8 +536,11 @@ class BotTest
         {
             final Bot shooter = new Bot(2, 0.0f, 0.0f, 0.0f, BotPattern.SENTRY,
                 0.0f, PERIOD, 0);
+
             final BotRng rng = new BotRng(seed);
+
             final StringBuilder fired = new StringBuilder();
+
             for (int tic = 0; tic < LONG_RUN_TICS; tic++)
             {
                 if (shooter.wantsToFire(tic, rng, BotSkill.DUMB))
@@ -487,6 +548,7 @@ class BotTest
                     fired.append(tic).append(' ');
                 }
             }
+
             return fired.toString();
         }
     }
@@ -505,6 +567,7 @@ class BotTest
             final Bot fresh = bot(BotPattern.SENTRY);
 
             assertThat(fresh.hasSeenPlayer()).isFalse();
+
             assertThat(fresh.yawRadians()).isEqualTo(0.0f);
         }
 
@@ -524,13 +587,17 @@ class BotTest
             // passed with the memory wired straight through, which is exactly the
             // class of mistake this project has already shipped twice.
             final Bot watcher = bot(BotPattern.SENTRY);
+
             final float stepPerTic = PlayerController.MOVE_SPEED_UNITS_PER_SECOND / 60.0f;
+
             float worstLag = 0.0f;
 
             for (int tic = 0; tic < BotSkill.DUMB.reactionTics() * 4; tic++)
             {
                 final float truthX = tic * stepPerTic;
+
                 watcher.observePlayer(tic, truthX, 0.0f, BotSkill.DUMB);
+
                 worstLag = StrictMath.max(worstLag,
                     StrictMath.abs(truthX - watcher.rememberedPlayerX()));
             }
@@ -546,6 +613,7 @@ class BotTest
         void shouldRefreshOnceTheReactionIntervalElapses()
         {
             final Bot watcher = bot(BotPattern.SENTRY);
+
             for (int tic = 0; tic < BotSkill.DUMB.reactionTics() * 3; tic++)
             {
                 watcher.observePlayer(tic, 200.0f, 0.0f, BotSkill.DUMB);
@@ -564,15 +632,20 @@ class BotTest
             // position would have a positive-x forward vector; one facing the
             // memory has a negative one. Sines, not radians.
             final Bot watcher = bot(BotPattern.SENTRY);
+
             watcher.observePlayer(0, 300.0f, 0.0f, BotSkill.DUMB);
+
             watcher.faceRemembered();
+
             final float towardMemory = (float) StrictMath.sin(watcher.yawRadians());
 
             watcher.observePlayer(1, -300.0f, 0.0f, BotSkill.DUMB);
+
             watcher.faceRemembered();
 
             assertThat(towardMemory).as("yaw 0 must face +z, and +x must be a positive sine")
                 .isGreaterThan(0.0f);
+
             assertThat((float) StrictMath.sin(watcher.yawRadians()))
                 .as("the bot swung round to the player's real position immediately")
                 .isGreaterThan(0.0f);
@@ -583,6 +656,7 @@ class BotTest
         void shouldStopObservingWhenDead()
         {
             final Bot victim = bot(BotPattern.SENTRY);
+
             victim.damage(Bot.MAX_HEALTH);
 
             victim.observePlayer(0, 300.0f, 0.0f, BotSkill.DUMB);
@@ -603,27 +677,43 @@ class BotTest
             // list of fields somebody has to remember to extend. A field added to
             // Bot later and not restored in reset() fails HERE.
             final Bot fresh = bot(BotPattern.ORBIT);
+
             final Bot used = bot(BotPattern.ORBIT);
+
             final BotRng rng = new BotRng();
 
             used.observePlayer(0, 120.0f, 40.0f, BotSkill.DUMB);
+
             used.faceRemembered();
+
             used.moveTo(137);
+
             used.wantsToFire(137, rng, BotSkill.MARKSMAN);
+
             used.damage(Bot.MAX_HEALTH);
+
             assertThat(used.isAlive()).isFalse();
 
             used.reset();
 
             assertThat(used.health()).isEqualTo(fresh.health());
+
             assertThat(used.isAlive()).isTrue();
+
             assertThat(used.positionX()).isEqualTo(fresh.positionX());
+
             assertThat(used.positionZ()).isEqualTo(fresh.positionZ());
+
             assertThat(used.yawRadians()).isEqualTo(fresh.yawRadians());
+
             assertThat(used.readyAtTic()).isEqualTo(fresh.readyAtTic());
+
             assertThat(used.lastFiredTic()).isEqualTo(fresh.lastFiredTic());
+
             assertThat(used.hasSeenPlayer()).isEqualTo(fresh.hasSeenPlayer());
+
             assertThat(used.rememberedPlayerX()).isEqualTo(fresh.rememberedPlayerX());
+
             assertThat(used.rememberedPlayerZ()).isEqualTo(fresh.rememberedPlayerZ());
         }
 
@@ -637,9 +727,13 @@ class BotTest
             // standing where the last round killed it.
             final Bot pacer = new Bot(2, 0.0f, 0.0f, 0.0f, BotPattern.PACE_X,
                 AMPLITUDE, PERIOD, 0);
+
             final float atSpawn = pacer.positionX();
+
             pacer.moveTo(PERIOD / 4);
+
             assertThat(pacer.positionX()).isNotEqualTo(atSpawn);
+
             pacer.damage(Bot.MAX_HEALTH);
 
             pacer.reset();
@@ -662,8 +756,11 @@ class BotTest
             final Target box = standing.hitbox();
 
             assertThat(box.entityId()).isEqualTo(4);
+
             assertThat(box.maxY() - box.minY()).isEqualTo(Bot.HEIGHT_UNITS);
+
             assertThat(box.maxX() - box.minX()).isEqualTo(Bot.RADIUS_UNITS * 2.0f);
+
             // Around the FEET, not centred on them. Centring buries half the box
             // in the floor and every shot misses low.
             assertThat(box.minY()).isEqualTo(0.0f);
@@ -674,12 +771,14 @@ class BotTest
         void shouldFollowTheBotWhenItMoves()
         {
             final Bot walker = bot(BotPattern.PACE_X);
+
             walker.moveTo(PERIOD / 4);
 
             final Target box = walker.hitbox();
 
             assertThat(box.minX()).isCloseTo(walker.positionX() - Bot.RADIUS_UNITS,
                 within(EPSILON));
+
             assertThat(box.maxX()).isCloseTo(walker.positionX() + Bot.RADIUS_UNITS,
                 within(EPSILON));
         }
@@ -719,6 +818,7 @@ class BotTest
             assertThatThrownBy(() -> new Bot(2, 0.0f, 0.0f, 0.0f, BotPattern.SENTRY,
                 Float.NaN, PERIOD, 0))
                 .isInstanceOf(IllegalArgumentException.class);
+
             assertThatThrownBy(() -> new Bot(2, Float.POSITIVE_INFINITY, 0.0f, 0.0f,
                 BotPattern.SENTRY, 0.0f, PERIOD, 0))
                 .isInstanceOf(IllegalArgumentException.class);
@@ -756,6 +856,7 @@ class BotTest
             assertThat(constantPoolOf(Bot.class))
                 .as("Bot must not reference java.lang.Math anywhere")
                 .doesNotContain("java/lang/Math");
+
             assertThat(constantPoolOf(BotPattern.class))
                 .as("BotPattern must not reference java.lang.Math anywhere")
                 .doesNotContain("java/lang/Math");
@@ -768,8 +869,11 @@ class BotTest
             // The negative test above passes trivially if the trigonometry is
             // deleted, so pin the positive too.
             assertThat(constantPoolOf(BotPattern.class)).contains("java/lang/StrictMath");
+
             assertThat(constantPoolOf(BotPattern.class)).contains("sin");
+
             assertThat(constantPoolOf(BotPattern.class)).contains("cos");
+
             assertThat(constantPoolOf(Bot.class)).contains("atan2");
         }
 
@@ -778,15 +882,21 @@ class BotTest
         void shouldAgreeBitForBitWhenTwoPeersWalkTheSameRoute()
         {
             final Bot peerA = bot(BotPattern.ORBIT);
+
             final Bot peerB = bot(BotPattern.ORBIT);
 
             for (int tic = 0; tic < 500; tic++)
             {
                 peerA.moveTo(tic);
+
                 peerB.moveTo(tic);
+
                 peerA.faceToward(13.5f, -7.25f);
+
                 peerB.faceToward(13.5f, -7.25f);
+
                 assertThat(bits(peerB)).isEqualTo(bits(peerA));
+
                 assertThat(Float.floatToRawIntBits(peerB.yawRadians()))
                     .isEqualTo(Float.floatToRawIntBits(peerA.yawRadians()));
             }
@@ -805,9 +915,11 @@ class BotTest
     private static String constantPoolOf(final Class<?> type)
     {
         final String resource = type.getName().replace('.', '/') + ".class";
+
         try (InputStream in = type.getClassLoader().getResourceAsStream(resource))
         {
             assertThat(in).as("class file for %s must be readable", type).isNotNull();
+
             return new String(in.readAllBytes(), StandardCharsets.ISO_8859_1);
         }
         catch (final IOException e)

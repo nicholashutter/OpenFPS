@@ -52,6 +52,7 @@ class InputAccumulatorTest
         void shouldDefaultToTheNamedSensitivity()
         {
             final InputAccumulator accumulator = new InputAccumulator();
+
             assertThat(accumulator.radiansPerPixel())
                 .isEqualTo(InputAccumulator.DEFAULT_RADIANS_PER_PIXEL)
                 .isPositive();
@@ -63,6 +64,7 @@ class InputAccumulatorTest
         {
             final double pixelsPerTurn =
                 2.0 * Math.PI / InputAccumulator.DEFAULT_RADIANS_PER_PIXEL;
+
             // Anything under ~1000 px is uncontrollably twitchy and anything
             // over ~10000 px means dragging the mouse off the desk twice.
             assertThat(pixelsPerTurn).isBetween(1000.0, 10000.0);
@@ -75,10 +77,13 @@ class InputAccumulatorTest
             assertThatThrownBy(() -> new InputAccumulator(0.0f))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("sensitivity");
+
             assertThatThrownBy(() -> new InputAccumulator(-0.01f))
                 .isInstanceOf(IllegalArgumentException.class);
+
             assertThatThrownBy(() -> new InputAccumulator(Float.NaN))
                 .isInstanceOf(IllegalArgumentException.class);
+
             assertThatThrownBy(() -> new InputAccumulator(Float.POSITIVE_INFINITY))
                 .isInstanceOf(IllegalArgumentException.class);
         }
@@ -100,7 +105,9 @@ class InputAccumulatorTest
         void shouldConvertPixelsToRadians()
         {
             final InputAccumulator accumulator = new InputAccumulator(0.01f);
+
             accumulator.accumulateLook(10, 0);
+
             assertThat(accumulator.latch().yawDelta()).isCloseTo(0.1f, within(EPSILON));
         }
 
@@ -109,10 +116,15 @@ class InputAccumulatorTest
         void shouldSumPollsBetweenLatches()
         {
             final InputAccumulator accumulator = unitAccumulator();
+
             accumulator.accumulateLook(3, 0);
+
             accumulator.accumulateLook(4, 0);
+
             accumulator.accumulateLook(5, 0);
+
             assertThat(accumulator.pendingYawPixels()).isEqualTo(12);
+
             assertThat(accumulator.latch().yawDelta()).isCloseTo(12.0f, within(EPSILON));
         }
 
@@ -121,16 +133,23 @@ class InputAccumulatorTest
         void shouldDrainOnLatch()
         {
             final InputAccumulator accumulator = unitAccumulator();
+
             accumulator.accumulateLook(20, -8);
 
             final InputState first = accumulator.latch();
+
             assertThat(first.yawDelta()).isCloseTo(20.0f, within(EPSILON));
+
             assertThat(first.pitchDelta()).isCloseTo(8.0f, within(EPSILON));
 
             final InputState second = accumulator.latch();
+
             assertThat(second.yawDelta()).isZero();
+
             assertThat(second.pitchDelta()).isZero();
+
             assertThat(accumulator.pendingYawPixels()).isZero();
+
             assertThat(accumulator.pendingPitchPixels()).isZero();
         }
 
@@ -139,9 +158,13 @@ class InputAccumulatorTest
         void shouldReportZeroWhenNothingWasPolled()
         {
             final InputAccumulator accumulator = unitAccumulator();
+
             accumulator.accumulateLook(9, 0);
+
             accumulator.latch();
+
             assertThat(accumulator.latch().yawDelta()).isZero();
+
             assertThat(accumulator.latch().yawDelta()).isZero();
         }
 
@@ -151,22 +174,28 @@ class InputAccumulatorTest
         {
             // Render faster than the simulation: six frames feed one tic.
             final InputAccumulator renderFast = unitAccumulator();
+
             for (int frame = 0; frame < 6; frame++)
             {
                 renderFast.accumulateLook(2, 0);
             }
+
             final float fastTotal = renderFast.latch().yawDelta();
 
             // Simulation faster than render: one frame, then three tics.
             final InputAccumulator simFast = unitAccumulator();
+
             simFast.accumulateLook(12, 0);
+
             float simTotal = 0.0f;
+
             for (int tic = 0; tic < 3; tic++)
             {
                 simTotal += simFast.latch().yawDelta();
             }
 
             assertThat(fastTotal).isCloseTo(12.0f, within(EPSILON));
+
             assertThat(simTotal).isCloseTo(fastTotal, within(EPSILON));
         }
 
@@ -175,9 +204,13 @@ class InputAccumulatorTest
         void shouldDiscardPendingLookOnReset()
         {
             final InputAccumulator accumulator = unitAccumulator();
+
             accumulator.accumulateLook(400, 300);
+
             accumulator.resetLook();
+
             assertThat(accumulator.pendingYawPixels()).isZero();
+
             assertThat(accumulator.latch().yawDelta()).isZero();
         }
 
@@ -186,9 +219,12 @@ class InputAccumulatorTest
         void shouldClampAnImplausiblePoll()
         {
             final InputAccumulator accumulator = unitAccumulator();
+
             accumulator.accumulateLook(100000, -100000);
+
             assertThat(accumulator.pendingYawPixels())
                 .isEqualTo(InputAccumulator.MAX_PIXELS_PER_POLL);
+
             assertThat(accumulator.pendingPitchPixels())
                 .isEqualTo(-InputAccumulator.MAX_PIXELS_PER_POLL);
         }
@@ -198,12 +234,15 @@ class InputAccumulatorTest
         void shouldSaturateRatherThanOverflow()
         {
             final InputAccumulator accumulator = unitAccumulator();
+
             final int pollsToSaturate =
                 InputAccumulator.MAX_ACCUMULATED_PIXELS / InputAccumulator.MAX_PIXELS_PER_POLL;
+
             for (int poll = 0; poll < pollsToSaturate + 16; poll++)
             {
                 accumulator.accumulateLook(InputAccumulator.MAX_PIXELS_PER_POLL, 0);
             }
+
             assertThat(accumulator.pendingYawPixels())
                 .isEqualTo(InputAccumulator.MAX_ACCUMULATED_PIXELS);
         }
@@ -218,7 +257,9 @@ class InputAccumulatorTest
         void shouldTurnRightOnPositiveDeltaX()
         {
             final InputAccumulator accumulator = unitAccumulator();
+
             accumulator.accumulateLook(15, 0);
+
             assertThat(accumulator.latch().yawDelta()).isPositive();
         }
 
@@ -227,7 +268,9 @@ class InputAccumulatorTest
         void shouldTurnLeftOnNegativeDeltaX()
         {
             final InputAccumulator accumulator = unitAccumulator();
+
             accumulator.accumulateLook(-15, 0);
+
             assertThat(accumulator.latch().yawDelta()).isNegative();
         }
 
@@ -236,13 +279,16 @@ class InputAccumulatorTest
         void shouldInvertPitchAgainstScreenOrientation()
         {
             final InputAccumulator accumulator = unitAccumulator();
+
             assertThat(accumulator.isInvertPitch())
                 .as("the conventional scheme is the default")
                 .isFalse();
+
             // The contract is "+y downward". A caller whose device reports the
             // other way round owes this class a negated delta — see
             // GdxInputPort.pollLook.
             accumulator.accumulateLook(0, -30);
+
             assertThat(accumulator.latch().pitchDelta())
                 .as("a negative delta must look up")
                 .isCloseTo(30.0f, within(EPSILON));
@@ -253,7 +299,9 @@ class InputAccumulatorTest
         void shouldLookDownOnPositiveDeltaY()
         {
             final InputAccumulator accumulator = unitAccumulator();
+
             accumulator.accumulateLook(0, 30);
+
             assertThat(accumulator.latch().pitchDelta())
                 .isCloseTo(-30.0f, within(EPSILON));
         }
@@ -263,14 +311,19 @@ class InputAccumulatorTest
         void shouldNegateOnlyPitchWhenInverted()
         {
             final InputAccumulator accumulator = unitAccumulator();
+
             accumulator.setInvertPitch(true);
+
             assertThat(accumulator.isInvertPitch()).isTrue();
 
             accumulator.accumulateLook(12, -30);
+
             final InputState inverted = accumulator.latch();
+
             assertThat(inverted.pitchDelta())
                 .as("inverting flips the vertical axis")
                 .isCloseTo(-30.0f, within(EPSILON));
+
             assertThat(inverted.yawDelta())
                 .as("and does nothing at all to the horizontal one")
                 .isCloseTo(12.0f, within(EPSILON));
@@ -281,12 +334,17 @@ class InputAccumulatorTest
         void shouldBeASignFlipBothWays()
         {
             final InputAccumulator plain = unitAccumulator();
+
             plain.accumulateLook(0, 42);
+
             final float upright = plain.latch().pitchDelta();
 
             final InputAccumulator flipped = unitAccumulator();
+
             flipped.setInvertPitch(true);
+
             flipped.accumulateLook(0, 42);
+
             assertThat(flipped.latch().pitchDelta())
                 .isCloseTo(-upright, within(EPSILON));
         }
@@ -296,12 +354,17 @@ class InputAccumulatorTest
         void shouldKeepTheAxesIndependent()
         {
             final InputAccumulator accumulator = unitAccumulator();
+
             accumulator.accumulateLook(7, 0);
+
             final InputState yawOnly = accumulator.latch();
+
             assertThat(yawOnly.pitchDelta()).isZero();
 
             accumulator.accumulateLook(0, 7);
+
             final InputState pitchOnly = accumulator.latch();
+
             assertThat(pitchOnly.yawDelta()).isZero();
         }
     }
@@ -315,10 +378,13 @@ class InputAccumulatorTest
         void shouldMapForwardAndBack()
         {
             final InputAccumulator accumulator = unitAccumulator();
+
             accumulator.setMovementKeys(true, false, false, false);
+
             assertThat(accumulator.latch().forwardAxis()).isEqualTo(1.0f);
 
             accumulator.setMovementKeys(false, true, false, false);
+
             assertThat(accumulator.latch().forwardAxis()).isEqualTo(-1.0f);
         }
 
@@ -327,10 +393,13 @@ class InputAccumulatorTest
         void shouldMapStrafe()
         {
             final InputAccumulator accumulator = unitAccumulator();
+
             accumulator.setMovementKeys(false, false, false, true);
+
             assertThat(accumulator.latch().strafeAxis()).isEqualTo(1.0f);
 
             accumulator.setMovementKeys(false, false, true, false);
+
             assertThat(accumulator.latch().strafeAxis()).isEqualTo(-1.0f);
         }
 
@@ -339,9 +408,13 @@ class InputAccumulatorTest
         void shouldCancelOpposingKeys()
         {
             final InputAccumulator accumulator = unitAccumulator();
+
             accumulator.setMovementKeys(true, true, true, true);
+
             final InputState state = accumulator.latch();
+
             assertThat(state.forwardAxis()).isZero();
+
             assertThat(state.strafeAxis()).isZero();
         }
 
@@ -350,12 +423,17 @@ class InputAccumulatorTest
         void shouldNormaliseTheDiagonal()
         {
             final InputAccumulator accumulator = unitAccumulator();
+
             accumulator.setMovementKeys(true, false, false, true);
+
             final InputState diagonal = accumulator.latch();
+
             assertThat(diagonal.forwardAxis()).isCloseTo(DIAGONAL, within(EPSILON));
+
             assertThat(diagonal.strafeAxis()).isCloseTo(DIAGONAL, within(EPSILON));
 
             final double speed = Math.hypot(diagonal.forwardAxis(), diagonal.strafeAxis());
+
             assertThat(speed).isCloseTo(1.0, within(1.0e-5));
         }
 
@@ -364,8 +442,11 @@ class InputAccumulatorTest
         void shouldTreatMovementAsALevel()
         {
             final InputAccumulator accumulator = unitAccumulator();
+
             accumulator.setMovementKeys(true, false, false, false);
+
             assertThat(accumulator.latch().forwardAxis()).isEqualTo(1.0f);
+
             // No further poll — the key is still down in reality.
             assertThat(accumulator.latch().forwardAxis()).isEqualTo(1.0f);
         }
@@ -380,12 +461,17 @@ class InputAccumulatorTest
         void shouldReportHeldActions()
         {
             final InputAccumulator accumulator = unitAccumulator();
+
             accumulator.setActionKeys(true, true, true);
+
             for (int tic = 0; tic < 3; tic++)
             {
                 final InputState state = accumulator.latch();
+
                 assertThat(state.fire()).isTrue();
+
                 assertThat(state.jump()).isTrue();
+
                 assertThat(state.sprint()).isTrue();
             }
         }
@@ -395,11 +481,14 @@ class InputAccumulatorTest
         void shouldNotDropAShortPress()
         {
             final InputAccumulator accumulator = unitAccumulator();
+
             // Two frames between one tic and the next: pressed, then released.
             accumulator.setActionKeys(true, false, false);
+
             accumulator.setActionKeys(false, false, false);
 
             assertThat(accumulator.latch().fire()).isTrue();
+
             assertThat(accumulator.latch().fire()).isFalse();
         }
 
@@ -408,13 +497,19 @@ class InputAccumulatorTest
         void shouldClearReleasedActions()
         {
             final InputAccumulator accumulator = unitAccumulator();
+
             accumulator.setActionKeys(true, true, true);
+
             assertThat(accumulator.latch().fire()).isTrue();
 
             accumulator.setActionKeys(false, false, false);
+
             final InputState released = accumulator.latch();
+
             assertThat(released.fire()).isFalse();
+
             assertThat(released.jump()).isFalse();
+
             assertThat(released.sprint()).isFalse();
         }
 
@@ -423,10 +518,15 @@ class InputAccumulatorTest
         void shouldKeepActionsIndependent()
         {
             final InputAccumulator accumulator = unitAccumulator();
+
             accumulator.setActionKeys(false, true, false);
+
             final InputState state = accumulator.latch();
+
             assertThat(state.fire()).isFalse();
+
             assertThat(state.jump()).isTrue();
+
             assertThat(state.sprint()).isFalse();
         }
     }
@@ -440,14 +540,19 @@ class InputAccumulatorTest
         void shouldReturnToRest()
         {
             final InputAccumulator accumulator = unitAccumulator();
+
             accumulator.accumulateLook(50, 50);
+
             accumulator.setMovementKeys(true, false, false, true);
+
             accumulator.setActionKeys(true, true, true);
 
             accumulator.clearAll();
 
             assertThat(accumulator.pendingYawPixels()).isZero();
+
             assertThat(accumulator.pendingPitchPixels()).isZero();
+
             assertThat(accumulator.latch()).isEqualTo(InputState.NEUTRAL);
         }
 
@@ -456,9 +561,13 @@ class InputAccumulatorTest
         void shouldClearStickyActions()
         {
             final InputAccumulator accumulator = unitAccumulator();
+
             accumulator.setActionKeys(true, true, true);
+
             accumulator.setActionKeys(false, false, false);
+
             accumulator.clearAll();
+
             assertThat(accumulator.latch().fire()).isFalse();
         }
     }
@@ -479,18 +588,24 @@ class InputAccumulatorTest
             // deterministic even though the interleaving is not: whatever the
             // schedule, the two sides must agree to the pixel.
             final InputAccumulator accumulator = unitAccumulator();
+
             final AtomicInteger collected = new AtomicInteger();
 
             final Thread producer = new Thread(() -> pollRepeatedly(accumulator), "poll");
+
             final Thread consumer = new Thread(() -> latchUntil(accumulator, collected), "latch");
 
             producer.start();
+
             consumer.start();
+
             producer.join();
+
             consumer.join();
 
             // Anything the consumer stopped short of is still pending.
             collected.addAndGet(Math.round(accumulator.latch().yawDelta()));
+
             assertThat(collected.get()).isEqualTo(POLL_COUNT);
         }
 
@@ -533,8 +648,11 @@ class InputAccumulatorTest
         private float yawOverOneSecond(final int pollsPerTic, final float deflection)
         {
             final InputAccumulator accumulator = unitAccumulator();
+
             accumulator.setTicDuration(TIC_60);
+
             float total = 0.0f;
+
             for (int tic = 0; tic < TICS_PER_SECOND_AT_60; tic++)
             {
                 for (int poll = 0; poll < pollsPerTic; poll++)
@@ -543,8 +661,10 @@ class InputAccumulatorTest
                     // the line that would be a summing accumulate() in the bug.
                     accumulator.setGamepadLookAxes(deflection, 0.0f);
                 }
+
                 total = total + accumulator.latch().yawDelta();
             }
+
             return total;
         }
 
@@ -562,6 +682,7 @@ class InputAccumulatorTest
             // stick is read: 144 polls/sec against 72 (so at 60 tics/sec, 2 and
             // 1 polls per tic... expressed as whole polls per tic below).
             final float fast = yawOverOneSecond(4, 1.0f);
+
             final float slow = yawOverOneSecond(1, 1.0f);
 
             assertThat(fast)
@@ -582,10 +703,13 @@ class InputAccumulatorTest
             // The other half of "it is a rate": the angle is proportional to
             // TIME, which is the property a summed-per-poll implementation loses.
             final InputAccumulator accumulator = unitAccumulator();
+
             accumulator.setTicDuration(TIC_60);
 
             accumulator.setGamepadLookAxes(1.0f, 0.0f);
+
             final float oneTic = accumulator.latch().yawDelta();
+
             final float twoTics = accumulator.latch().yawDelta()
                 + accumulator.latch().yawDelta();
 
@@ -600,15 +724,21 @@ class InputAccumulatorTest
             // rotation. Per SECOND the two agree, which is the whole point of
             // the units — radians per second times seconds.
             final InputAccumulator slow = unitAccumulator();
+
             slow.setTicDuration(1.0f / 30.0f);
+
             slow.setGamepadLookAxes(1.0f, 0.0f);
 
             final InputAccumulator fast = unitAccumulator();
+
             fast.setTicDuration(TIC_60);
+
             fast.setGamepadLookAxes(1.0f, 0.0f);
 
             final float perTicAt30 = slow.latch().yawDelta();
+
             final float perTicAt60 = fast.latch().yawDelta();
+
             assertThat(perTicAt30).isCloseTo(2.0f * perTicAt60, within(EPSILON));
 
             // 30 tics at 30 Hz and 60 tics at 60 Hz are both one second.
@@ -625,16 +755,23 @@ class InputAccumulatorTest
             // and describes reality until the device says otherwise. If the game
             // loop outruns the render thread, a held stick must still be held.
             final InputAccumulator accumulator = unitAccumulator();
+
             accumulator.setTicDuration(TIC_60);
+
             accumulator.setGamepadLookAxes(1.0f, 0.0f);
 
             final float first = accumulator.latch().yawDelta();
+
             final float second = accumulator.latch().yawDelta();
+
             final float third = accumulator.latch().yawDelta();
 
             assertThat(first).isPositive();
+
             assertThat(second).isCloseTo(first, within(EPSILON));
+
             assertThat(third).isCloseTo(first, within(EPSILON));
+
             assertThat(accumulator.gamepadYawAxis()).isCloseTo(1.0f, within(EPSILON));
         }
 
@@ -645,14 +782,19 @@ class InputAccumulatorTest
             // Proof the two kinds of quantity coexist rather than one having
             // been converted into the other.
             final InputAccumulator accumulator = unitAccumulator();
+
             accumulator.setTicDuration(TIC_60);
+
             accumulator.accumulateLook(10, 0);
+
             accumulator.setGamepadLookAxes(1.0f, 0.0f);
 
             final float stickOnly = InputAccumulator.GAMEPAD_LOOK_RADIANS_PER_SECOND * TIC_60;
+
             assertThat(accumulator.latch().yawDelta())
                 .as("mouse pixels plus one tic of stick")
                 .isCloseTo(10.0f + stickOnly, within(1.0e-4f));
+
             assertThat(accumulator.latch().yawDelta())
                 .as("the pixels are gone; the stick is not")
                 .isCloseTo(stickOnly, within(1.0e-4f));
@@ -663,13 +805,18 @@ class InputAccumulatorTest
         void shouldNotDriftAtRest()
         {
             final InputAccumulator accumulator = unitAccumulator();
+
             accumulator.setTicDuration(TIC_60);
+
             // Resting noise from a real pad, re-reported every poll.
             for (int tic = 0; tic < 600; tic++)
             {
                 accumulator.setGamepadLookAxes(0.04f, -0.03f);
+
                 final InputState snapshot = accumulator.latch();
+
                 assertThat(snapshot.yawDelta()).isZero();
+
                 assertThat(snapshot.pitchDelta()).isZero();
             }
         }
@@ -679,17 +826,20 @@ class InputAccumulatorTest
         void shouldShareThePitchConvention()
         {
             final InputAccumulator accumulator = unitAccumulator();
+
             accumulator.setTicDuration(TIC_60);
 
             // Positive is DOWNWARD on the way in, exactly as for mouse pixels.
             // A stick pushed away from the player reports negative Y on GLFW and
             // on Android alike, so a backend passes it through untouched.
             accumulator.setGamepadLookAxes(0.0f, -1.0f);
+
             assertThat(accumulator.latch().pitchDelta())
                 .as("stick pushed away aims up")
                 .isPositive();
 
             accumulator.setGamepadLookAxes(0.0f, 1.0f);
+
             assertThat(accumulator.latch().pitchDelta())
                 .as("stick pulled back aims down")
                 .isNegative();
@@ -700,15 +850,19 @@ class InputAccumulatorTest
         void shouldInvertBothDevices()
         {
             final InputAccumulator accumulator = unitAccumulator();
+
             accumulator.setTicDuration(TIC_60);
+
             accumulator.setInvertPitch(true);
 
             accumulator.setGamepadLookAxes(0.0f, -1.0f);
+
             assertThat(accumulator.latch().pitchDelta())
                 .as("inverted: stick pushed away now aims down")
                 .isNegative();
 
             accumulator.accumulateLook(0, -30);
+
             assertThat(accumulator.latch().pitchDelta())
                 .as("inverted: and so does the mouse")
                 .isNegative();
@@ -719,13 +873,17 @@ class InputAccumulatorTest
         void shouldRejectABadTicDuration()
         {
             final InputAccumulator accumulator = unitAccumulator();
+
             assertThat(accumulator.ticDurationSeconds())
                 .isEqualTo(InputAccumulator.DEFAULT_TIC_SECONDS);
+
             assertThatThrownBy(() -> accumulator.setTicDuration(0.0f))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("tic duration");
+
             assertThatThrownBy(() -> accumulator.setTicDuration(-1.0f))
                 .isInstanceOf(IllegalArgumentException.class);
+
             assertThatThrownBy(() -> accumulator.setTicDuration(Float.NaN))
                 .isInstanceOf(IllegalArgumentException.class);
         }
@@ -743,11 +901,15 @@ class InputAccumulatorTest
             // one channel overwrote the other, whichever was polled second would
             // win and the game would effectively be in a mode.
             final InputAccumulator accumulator = unitAccumulator();
+
             accumulator.setMovementKeys(false, false, true, false);
+
             accumulator.setGamepadMovementAxes(1.0f, 0.0f);
 
             final InputState snapshot = accumulator.latch();
+
             assertThat(snapshot.forwardAxis()).as("from the stick").isPositive();
+
             assertThat(snapshot.strafeAxis()).as("from the keyboard").isNegative();
         }
 
@@ -756,8 +918,11 @@ class InputAccumulatorTest
         void shouldCancelOpposingDevices()
         {
             final InputAccumulator accumulator = unitAccumulator();
+
             accumulator.setMovementKeys(false, true, false, false);
+
             accumulator.setGamepadMovementAxes(1.0f, 0.0f);
+
             assertThat(accumulator.latch().forwardAxis()).isCloseTo(0.0f, within(EPSILON));
         }
 
@@ -769,12 +934,16 @@ class InputAccumulatorTest
             // the disc clamp is that class's job — not repeated here, and still
             // enforced.
             final InputAccumulator accumulator = unitAccumulator();
+
             accumulator.setMovementKeys(true, false, false, true);
+
             accumulator.setGamepadMovementAxes(1.0f, 1.0f);
 
             final InputState snapshot = accumulator.latch();
+
             final float magnitude = (float) Math.hypot(snapshot.forwardAxis(),
                 snapshot.strafeAxis());
+
             assertThat(magnitude).isLessThanOrEqualTo(1.0f + EPSILON);
         }
 
@@ -783,11 +952,15 @@ class InputAccumulatorTest
         void shouldOrTheActionChannels()
         {
             final InputAccumulator withPad = unitAccumulator();
+
             withPad.setGamepadActions(true, false, false);
+
             assertThat(withPad.latch().fire()).isTrue();
 
             final InputAccumulator withKeys = unitAccumulator();
+
             withKeys.setActionKeys(false, true, false);
+
             assertThat(withKeys.latch().jump()).isTrue();
         }
 
@@ -796,10 +969,13 @@ class InputAccumulatorTest
         void shouldNotLetOneDeviceReleaseTheOther()
         {
             final InputAccumulator accumulator = unitAccumulator();
+
             accumulator.setActionKeys(true, false, false);
+
             // The pad is polled afterwards and reports nothing pressed. A shared
             // field would clear the key that is still physically held.
             accumulator.setGamepadActions(false, false, false);
+
             assertThat(accumulator.latch().fire())
                 .as("the key is still down")
                 .isTrue();
@@ -813,9 +989,13 @@ class InputAccumulatorTest
             // reason InputState.of clamps the disc: a third backend cannot
             // forget what it never had to remember.
             final InputAccumulator accumulator = unitAccumulator();
+
             accumulator.setGamepadMovementAxes(0.1f, -0.1f);
+
             assertThat(accumulator.gamepadForwardAxis()).isZero();
+
             assertThat(accumulator.gamepadStrafeAxis()).isZero();
+
             assertThat(accumulator.latch()).isEqualTo(InputState.NEUTRAL);
         }
 
@@ -824,9 +1004,12 @@ class InputAccumulatorTest
         void shouldShapeTheLookStick()
         {
             final InputAccumulator accumulator = unitAccumulator();
+
             final float halfway = AnalogStick.DEAD_ZONE
                 + 0.5f * (1.0f - AnalogStick.DEAD_ZONE);
+
             accumulator.setGamepadLookAxes(halfway, 0.0f);
+
             assertThat(accumulator.gamepadYawAxis()).isCloseTo(0.25f, within(EPSILON));
         }
     }
@@ -848,18 +1031,27 @@ class InputAccumulatorTest
             // Precedent: clearAll() exists because a key held at the moment of
             // focus loss did exactly this.
             final InputAccumulator accumulator = unitAccumulator();
+
             accumulator.setTicDuration(1.0f / 60.0f);
+
             accumulator.setGamepadMovementAxes(1.0f, 1.0f);
+
             accumulator.setGamepadLookAxes(1.0f, 1.0f);
+
             accumulator.setGamepadActions(true, true, true);
+
             assertThat(accumulator.latch().isNeutral()).isFalse();
 
             accumulator.clearGamepad();
 
             assertThat(accumulator.gamepadForwardAxis()).isZero();
+
             assertThat(accumulator.gamepadStrafeAxis()).isZero();
+
             assertThat(accumulator.gamepadYawAxis()).isZero();
+
             assertThat(accumulator.gamepadPitchAxis()).isZero();
+
             // The sticky action flags are drained by the latch above, so the
             // very next snapshot is fully at rest.
             assertThat(accumulator.latch()).isEqualTo(InputState.NEUTRAL);
@@ -870,11 +1062,15 @@ class InputAccumulatorTest
         void shouldStopTurningForever()
         {
             final InputAccumulator accumulator = unitAccumulator();
+
             accumulator.setTicDuration(1.0f / 60.0f);
+
             accumulator.setGamepadLookAxes(1.0f, 0.0f);
+
             accumulator.latch();
 
             accumulator.clearGamepad();
+
             for (int tic = 0; tic < 240; tic++)
             {
                 assertThat(accumulator.latch().yawDelta())
@@ -891,15 +1087,21 @@ class InputAccumulatorTest
             // usually still holding a key, and clearing that would drop an input
             // they are making right now.
             final InputAccumulator accumulator = unitAccumulator();
+
             accumulator.setMovementKeys(true, false, false, false);
+
             accumulator.accumulateLook(25, 0);
+
             accumulator.setGamepadMovementAxes(0.0f, 1.0f);
 
             accumulator.clearGamepad();
 
             final InputState snapshot = accumulator.latch();
+
             assertThat(snapshot.forwardAxis()).as("W is still held").isEqualTo(1.0f);
+
             assertThat(snapshot.strafeAxis()).as("the stick is gone").isZero();
+
             assertThat(snapshot.yawDelta()).as("mouse pixels survive").isPositive();
         }
 
@@ -910,8 +1112,11 @@ class InputAccumulatorTest
             // Focus loss is not a player asking to move, whatever device they
             // are holding.
             final InputAccumulator accumulator = unitAccumulator();
+
             accumulator.setGamepadMovementAxes(1.0f, 1.0f);
+
             accumulator.setGamepadLookAxes(1.0f, 1.0f);
+
             accumulator.setGamepadActions(true, true, true);
 
             accumulator.clearAll();
@@ -924,9 +1129,13 @@ class InputAccumulatorTest
         void shouldRecoverOnReconnect()
         {
             final InputAccumulator accumulator = unitAccumulator();
+
             accumulator.setGamepadMovementAxes(1.0f, 0.0f);
+
             accumulator.clearGamepad();
+
             accumulator.setGamepadMovementAxes(0.0f, 1.0f);
+
             assertThat(accumulator.latch().strafeAxis()).isEqualTo(1.0f);
         }
     }

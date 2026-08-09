@@ -1083,31 +1083,51 @@ public final class DemoEffects
         final int[] flashIndices)
     {
         this.tracerInstance = tracerIndices;
+
         this.puffInstance = puffIndices;
+
         this.flashInstance = flashIndices;
+
         this.tracerRemaining = new int[TRACER_SLOTS];
+
         this.tracerPosition = new float[TRACER_SLOTS * AXES];
+
         this.tracerDirection = new float[TRACER_SLOTS * AXES];
+
         this.tracerShown = new boolean[TRACER_SLOTS];
+
         this.puffAge = new int[PUFF_SLOTS];
+
         this.puffPosition = new float[PUFF_SLOTS * AXES];
+
         this.puffAcross = new float[PUFF_SLOTS * AXES];
+
         this.puffUp = new float[PUFF_SLOTS * AXES];
+
         this.puffShownStage = new int[PUFF_SLOTS];
+
         this.puffColorVariant = new int[PUFF_SLOTS];
+
         this.flashRemaining = new int[FLASH_SLOTS];
+
         this.flashPosition = new float[FLASH_SLOTS * AXES];
+
         this.flashShown = new boolean[FLASH_SLOTS];
+
         for (int slot = 0; slot < TRACER_SLOTS; slot++)
         {
             tracerRemaining[slot] = DEAD;
         }
+
         for (int slot = 0; slot < PUFF_SLOTS; slot++)
         {
             puffAge[slot] = DEAD;
+
             puffShownStage[slot] = DEAD;
+
             puffColorVariant[slot] = DEAD;
         }
+
         for (int slot = 0; slot < FLASH_SLOTS; slot++)
         {
             flashRemaining[slot] = DEAD;
@@ -1132,12 +1152,15 @@ public final class DemoEffects
         {
             throw new IllegalArgumentException("builder must not be null");
         }
+
         final ModelFormat bolt = box(TRACER_COLOUR);
+
         // A second model for the same box, because a bolt's colour is BAKED into
         // its vertices and Scene is immutable — there is nowhere later to change
         // it. Two ModelFormats is the whole cost of telling outgoing fire from
         // incoming, and it is twelve triangles.
         final ModelFormat incoming = box(INCOMING_COLOUR);
+
         // One sphere shared by every lobe instance in the pool.
         // SoftwareRenderPort.prepare keys on reference identity, so the flattened
         // submesh table and the mip chains are built once for the whole pool
@@ -1156,10 +1179,12 @@ public final class DemoEffects
         // deterministic — see spawnPuff for why a "different every time"
         // rule would not be.
         final ModelFormat[] cloudModels = new ModelFormat[PUFF_COLOR_VARIANTS];
+
         for (int variant = 0; variant < PUFF_COLOR_VARIANTS; variant++)
         {
             cloudModels[variant] = sphere(SMOKE_COLOURS[variant]);
         }
+
         // A second sphere for the muzzle flash, smaller and baked in the
         // flash colour. The radius is a per-shot property — player 0.30
         // view units, bot 5 world units — so a single model of radius 0.5
@@ -1169,13 +1194,16 @@ public final class DemoEffects
         final ModelFormat flashSphere = sphere(FLASH_COLOUR);
 
         final int[] tracers = new int[TRACER_SLOTS];
+
         for (int slot = 0; slot < TRACER_SLOTS; slot++)
         {
             tracers[slot] = builder.worldInstanceCount();
+
             builder.addWorldInstance(boltFor(slot, bolt, incoming), Mat4.identity());
         }
 
         final int[] puffs = new int[PUFF_SLOTS * PUFF_STAGES * PUFF_LOBES * PUFF_COLOR_VARIANTS];
+
         for (int puff = 0; puff < PUFF_SLOTS; puff++)
         {
             for (int stage = 0; stage < PUFF_STAGES; stage++)
@@ -1186,6 +1214,7 @@ public final class DemoEffects
                     {
                         puffs[stageOffset(puff, stage) + lobe * PUFF_COLOR_VARIANTS + variant]
                             = builder.worldInstanceCount();
+
                         builder.addTranslucentWorldInstance(cloudModels[variant], Mat4.identity(),
                             Scene.UNTAGGED, PUFF_COVERAGE[stage]);
                     }
@@ -1199,11 +1228,14 @@ public final class DemoEffects
         // colour is what the eye reads as "flash", and the lifetime of
         // FLASH_LIFE_TICS = 2 keeps it from being a glowing ball.
         final int[] flashes = new int[FLASH_SLOTS];
+
         for (int slot = 0; slot < FLASH_SLOTS; slot++)
         {
             flashes[slot] = builder.worldInstanceCount();
+
             builder.addWorldInstance(flashSphere, Mat4.identity());
         }
+
         return new DemoEffects(tracers, puffs, flashes);
     }
 
@@ -1226,16 +1258,22 @@ public final class DemoEffects
         final float aimX, final float aimY, final float aimZ)
     {
         final float[] right = acrossScratch;
+
         crossWithReference(aimX, aimY, aimZ, right);
 
         final float muzzleX = eyeX + aimX * MUZZLE_FORWARD_UNITS + right[0] * MUZZLE_RIGHT_UNITS;
+
         final float muzzleY = eyeY + aimY * MUZZLE_FORWARD_UNITS + right[1] * MUZZLE_RIGHT_UNITS
             - MUZZLE_DROP_UNITS;
+
         final float muzzleZ = eyeZ + aimZ * MUZZLE_FORWARD_UNITS + right[2] * MUZZLE_RIGHT_UNITS;
 
         final int slot = claimPlayerTracer();
+
         spawnTracer(slot, muzzleX, muzzleY, muzzleZ, aimX, aimY, aimZ, TRACER_LIFE_TICS);
+
         spawnPuff(claimPlayerPuff(), muzzleX, muzzleY, muzzleZ, aimX, aimY, aimZ, right);
+
         spawnFlash(claimPlayerFlash(), muzzleX, muzzleY, muzzleZ);
     }
 
@@ -1287,30 +1325,45 @@ public final class DemoEffects
         final float dirX, final float dirY, final float dirZ, final float rangeUnits)
     {
         final float[] flight = acrossScratch;
+
         flight[0] = dirX;
+
         flight[1] = dirY;
+
         flight[2] = dirZ;
+
         if (rangeUnits > 0.0f)
         {
             flight[0] = originX + dirX * rangeUnits - muzzleX;
+
             flight[1] = originY + dirY * rangeUnits - muzzleY;
+
             flight[2] = originZ + dirZ * rangeUnits - muzzleZ;
+
             normalise(flight);
         }
+
         final float alongX = flight[0];
+
         final float alongY = flight[1];
+
         final float alongZ = flight[2];
 
         final int slot = claimIncomingTracer();
+
         spawnTracer(slot, muzzleX, muzzleY, muzzleZ, alongX, alongY, alongZ,
             incomingLifeFor(rangeUnits));
+
         // The lobe basis is rebuilt from the flight direction, reusing the scratch
         // the convergence above has now finished with. spawnPuff copies what it
         // needs, so the two uses cannot tread on each other.
         final float[] across = acrossScratch;
+
         crossWithReference(alongX, alongY, alongZ, across);
+
         spawnPuff(claimIncomingPuff(), muzzleX, muzzleY, muzzleZ, alongX, alongY, alongZ,
             across);
+
         spawnFlash(claimIncomingFlash(), muzzleX, muzzleY, muzzleZ);
     }
 
@@ -1318,7 +1371,9 @@ public final class DemoEffects
     private int claimPlayerTracer()
     {
         final int slot = tracerCursor;
+
         this.tracerCursor = (tracerCursor + 1) % MAX_TRACERS;
+
         return slot;
     }
 
@@ -1326,7 +1381,9 @@ public final class DemoEffects
     private int claimPlayerPuff()
     {
         final int slot = puffCursor;
+
         this.puffCursor = (puffCursor + 1) % MAX_PUFFS;
+
         return slot;
     }
 
@@ -1336,7 +1393,9 @@ public final class DemoEffects
     private int claimIncomingTracer()
     {
         final int slot = incomingTracerCursor;
+
         this.incomingTracerCursor = MAX_TRACERS + (slot + 1 - MAX_TRACERS) % MAX_BOT_TRACERS;
+
         return slot;
     }
 
@@ -1344,7 +1403,9 @@ public final class DemoEffects
     private int claimIncomingPuff()
     {
         final int slot = incomingPuffCursor;
+
         this.incomingPuffCursor = MAX_PUFFS + (slot + 1 - MAX_PUFFS) % MAX_BOT_PUFFS;
+
         return slot;
     }
 
@@ -1352,7 +1413,9 @@ public final class DemoEffects
     private int claimPlayerFlash()
     {
         final int slot = flashCursor;
+
         this.flashCursor = (flashCursor + 1) % MAX_PLAYER_FLASHES;
+
         return slot;
     }
 
@@ -1360,8 +1423,10 @@ public final class DemoEffects
     private int claimIncomingFlash()
     {
         final int slot = incomingFlashCursor;
+
         this.incomingFlashCursor = MAX_PLAYER_FLASHES + (slot + 1 - MAX_PLAYER_FLASHES)
             % MAX_BOT_FLASHES;
+
         return slot;
     }
 
@@ -1377,9 +1442,13 @@ public final class DemoEffects
     private void spawnFlash(final int slot, final float x, final float y, final float z)
     {
         final int at = slot * AXES;
+
         flashPosition[at] = x;
+
         flashPosition[at + 1] = y;
+
         flashPosition[at + 2] = z;
+
         flashRemaining[slot] = FLASH_LIFE_TICS;
     }
 
@@ -1395,12 +1464,19 @@ public final class DemoEffects
         final float aimX, final float aimY, final float aimZ, final int lifeTics)
     {
         final int at = slot * AXES;
+
         tracerPosition[at] = x;
+
         tracerPosition[at + 1] = y;
+
         tracerPosition[at + 2] = z;
+
         tracerDirection[at] = aimX;
+
         tracerDirection[at + 1] = aimY;
+
         tracerDirection[at + 2] = aimZ;
+
         tracerRemaining[slot] = lifeTics;
     }
 
@@ -1413,27 +1489,39 @@ public final class DemoEffects
         final float aimX, final float aimY, final float aimZ, final float[] across)
     {
         final int at = slot * AXES;
+
         puffPosition[at] = x;
+
         puffPosition[at + 1] = y;
+
         puffPosition[at + 2] = z;
+
         puffAcross[at] = across[0];
+
         puffAcross[at + 1] = across[1];
+
         puffAcross[at + 2] = across[2];
+
         // up = aim x across, the same operand order tracerPlacement uses to
         // complete its (across, up, forward) frame. Any unit vector
         // perpendicular to both would do here — the lobes only need two
         // independent screen-plane directions — but reusing the one definition
         // keeps a second cross-product convention out of the file.
         puffUp[at] = aimY * across[2] - aimZ * across[1];
+
         puffUp[at + 1] = aimZ * across[0] - aimX * across[2];
+
         puffUp[at + 2] = aimX * across[1] - aimY * across[0];
+
         puffAge[slot] = 0;
+
         // Claim one colour variant for the puff's whole life. The cursor walks
         // the variant ladder so a held trigger does not stamp out identical
         // puffs. The variant is fixed at spawn — a puff that shifts colour as
         // it ages reads as a different smoke, not as the same smoke in motion,
         // and the "same smoke in motion" is the feature.
         puffColorVariant[slot] = variantCursor;
+
         variantCursor = (variantCursor + 1) % PUFF_COLOR_VARIANTS;
     }
 
@@ -1464,24 +1552,33 @@ public final class DemoEffects
         {
             tracerRemaining[slot] = DEAD;
         }
+
         for (int slot = 0; slot < PUFF_SLOTS; slot++)
         {
             puffAge[slot] = DEAD;
         }
+
         for (int slot = 0; slot < FLASH_SLOTS; slot++)
         {
             flashRemaining[slot] = DEAD;
         }
+
         // The cursors go back to zero too, so a fresh round claims slots in the
         // same order the first one did. Nothing looks different either way, and
         // "indistinguishable from a fresh start" is easier to assert than
         // "indistinguishable apart from two cursors nobody can see".
         this.tracerCursor = 0;
+
         this.puffCursor = 0;
+
         this.flashCursor = 0;
+
         this.incomingTracerCursor = MAX_TRACERS;
+
         this.incomingPuffCursor = MAX_PUFFS;
+
         this.incomingFlashCursor = MAX_PLAYER_FLASHES;
+
         this.variantCursor = 0;
     }
 
@@ -1499,37 +1596,51 @@ public final class DemoEffects
             {
                 continue;
             }
+
             final int at = slot * AXES;
+
             final float speed = tracerSpeedOf(slot);
+
             tracerPosition[at] += tracerDirection[at] * speed;
+
             tracerPosition[at + 1] += tracerDirection[at + 1] * speed;
+
             tracerPosition[at + 2] += tracerDirection[at + 2] * speed;
+
             tracerRemaining[slot]--;
+
             if (tracerRemaining[slot] <= 0)
             {
                 tracerRemaining[slot] = DEAD;
             }
         }
+
         for (int slot = 0; slot < PUFF_SLOTS; slot++)
         {
             if (puffAge[slot] == DEAD)
             {
                 continue;
             }
+
             puffPosition[slot * AXES + 1] += puffRiseOf(slot);
+
             puffAge[slot]++;
+
             if (puffAge[slot] >= PUFF_LIFE_TICS)
             {
                 puffAge[slot] = DEAD;
             }
         }
+
         for (int slot = 0; slot < FLASH_SLOTS; slot++)
         {
             if (flashRemaining[slot] == DEAD)
             {
                 continue;
             }
+
             flashRemaining[slot]--;
+
             if (flashRemaining[slot] <= 0)
             {
                 flashRemaining[slot] = DEAD;
@@ -1553,35 +1664,43 @@ public final class DemoEffects
         if (!hidden)
         {
             hideEverything(renderer);
+
             this.hidden = true;
         }
+
         for (int slot = 0; slot < TRACER_SLOTS; slot++)
         {
             if (tracerRemaining[slot] != DEAD)
             {
                 renderer.setWorldTransform(tracerInstance[slot], tracerPlacement(slot));
+
                 tracerShown[slot] = true;
             }
             else if (tracerShown[slot])
             {
                 renderer.setWorldTransform(tracerInstance[slot], HIDDEN);
+
                 tracerShown[slot] = false;
             }
         }
+
         for (int slot = 0; slot < PUFF_SLOTS; slot++)
         {
             publishPuff(renderer, slot);
         }
+
         for (int slot = 0; slot < FLASH_SLOTS; slot++)
         {
             if (flashRemaining[slot] != DEAD)
             {
                 renderer.setWorldTransform(flashInstance[slot], flashPlacement(slot));
+
                 flashShown[slot] = true;
             }
             else if (flashShown[slot])
             {
                 renderer.setWorldTransform(flashInstance[slot], HIDDEN);
+
                 flashShown[slot] = false;
             }
         }
@@ -1595,10 +1714,12 @@ public final class DemoEffects
         {
             renderer.setWorldTransform(instance, HIDDEN);
         }
+
         for (final int instance : puffInstance)
         {
             renderer.setWorldTransform(instance, HIDDEN);
         }
+
         for (final int instance : flashInstance)
         {
             renderer.setWorldTransform(instance, HIDDEN);
@@ -1617,26 +1738,34 @@ public final class DemoEffects
     private void publishPuff(final SoftwareRenderPort renderer, final int slot)
     {
         final int age = puffAge[slot];
+
         if (age == DEAD)
         {
             if (puffShownStage[slot] != DEAD)
             {
                 hideStage(renderer, slot, puffShownStage[slot]);
+
                 puffShownStage[slot] = DEAD;
             }
+
             return;
         }
+
         final int stage = stageFor(age);
+
         if (puffShownStage[slot] != DEAD && puffShownStage[slot] != stage)
         {
             hideStage(renderer, slot, puffShownStage[slot]);
         }
+
         final int variant = puffColorVariant[slot];
+
         for (int lobe = 0; lobe < PUFF_LOBES; lobe++)
         {
             renderer.setWorldTransform(puffInstanceIndex(slot, stage, lobe, variant),
                 puffPlacement(slot, lobe, age));
         }
+
         puffShownStage[slot] = stage;
     }
 
@@ -1722,6 +1851,7 @@ public final class DemoEffects
         {
             return BOT_TRACER_SPEED_UNITS;
         }
+
         return TRACER_SPEED_UNITS;
     }
 
@@ -1750,8 +1880,10 @@ public final class DemoEffects
         {
             return BOT_TRACER_LIFE_TICS;
         }
+
         final int drawn =
             (int) ((rangeUnits - INCOMING_STANDOFF_UNITS) / BOT_TRACER_SPEED_UNITS);
+
         return Math.min(BOT_TRACER_LIFE_TICS, Math.max(BOT_TRACER_MIN_LIFE_TICS, drawn));
     }
 
@@ -1768,6 +1900,7 @@ public final class DemoEffects
         {
             return BOT_TRACER_WIDTH_UNITS;
         }
+
         return TRACER_WIDTH_UNITS;
     }
 
@@ -1790,6 +1923,7 @@ public final class DemoEffects
         {
             return BOT_FLASH_RADIUS;
         }
+
         return PLAYER_FLASH_RADIUS;
     }
 
@@ -1806,6 +1940,7 @@ public final class DemoEffects
         {
             return BOT_PUFF_RADIUS_START;
         }
+
         return PUFF_RADIUS_START;
     }
 
@@ -1822,6 +1957,7 @@ public final class DemoEffects
         {
             return BOT_PUFF_RADIUS_END;
         }
+
         return PUFF_RADIUS_END;
     }
 
@@ -1838,6 +1974,7 @@ public final class DemoEffects
         {
             return BOT_PUFF_RISE_UNITS;
         }
+
         return PUFF_RISE_UNITS;
     }
 
@@ -1851,6 +1988,7 @@ public final class DemoEffects
         {
             return incoming;
         }
+
         return outgoing;
     }
 
@@ -1879,6 +2017,7 @@ public final class DemoEffects
             throw new IndexOutOfBoundsException("variant " + variant
                 + " is outside [0, " + PUFF_COLOR_VARIANTS + ")");
         }
+
         return puffInstance[stageOffset(slot, stage) + lobe * PUFF_COLOR_VARIANTS + variant];
     }
 
@@ -1891,6 +2030,7 @@ public final class DemoEffects
     public static int stageFor(final int age)
     {
         final int stage = age * PUFF_STAGES / PUFF_LIFE_TICS;
+
         return Math.min(stage, PUFF_STAGES - 1);
     }
 
@@ -1911,12 +2051,15 @@ public final class DemoEffects
     {
         // MUTABLE local — the farthest reach found so far.
         float reach = 0.0f;
+
         for (int lobe = 0; lobe < PUFF_LOBES; lobe++)
         {
             final float offset = (float) StrictMath.sqrt(
                 LOBE_ACROSS[lobe] * LOBE_ACROSS[lobe] + LOBE_UP[lobe] * LOBE_UP[lobe]);
+
             reach = Math.max(reach, offset + LOBE_SCALE[lobe]);
         }
+
         return reach;
     }
 
@@ -1959,21 +2102,30 @@ public final class DemoEffects
     private Mat4 tracerPlacement(final int slot)
     {
         final int at = slot * AXES;
+
         final float dirX = tracerDirection[at];
+
         final float dirY = tracerDirection[at + 1];
+
         final float dirZ = tracerDirection[at + 2];
 
         final float[] across = acrossScratch;
+
         crossWithReference(dirX, dirY, dirZ, across);
+
         // up = forward x across, which completes a right-handed
         // (across, up, forward) — see crossWithReference for why that is the
         // order rather than the more obvious (across, forward, up).
         final float upX = dirY * across[2] - dirZ * across[1];
+
         final float upY = dirZ * across[0] - dirX * across[2];
+
         final float upZ = dirX * across[1] - dirY * across[0];
 
         final float wide = tracerWidthOf(slot);
+
         final float along = TRACER_LENGTH_UNITS;
+
         return Mat4.ofRowMajor(new float[]
         {
             across[0] * wide, upX * wide, dirX * along, tracerPosition[at],
@@ -1994,17 +2146,26 @@ public final class DemoEffects
     private Mat4 puffPlacement(final int slot, final int lobe, final int age)
     {
         final int at = slot * AXES;
+
         final float start = puffStartRadiusOf(slot);
+
         final float end = puffEndRadiusOf(slot);
+
         final float grown = start + (end - start) * age / PUFF_LIFE_TICS;
+
         final float outAcross = LOBE_ACROSS[lobe] * grown;
+
         final float outUp = LOBE_UP[lobe] * grown;
+
         final float centreX = puffPosition[at]
             + puffAcross[at] * outAcross + puffUp[at] * outUp;
+
         final float centreY = puffPosition[at + 1]
             + puffAcross[at + 1] * outAcross + puffUp[at + 1] * outUp;
+
         final float centreZ = puffPosition[at + 2]
             + puffAcross[at + 2] * outAcross + puffUp[at + 2] * outUp;
+
         return DemoScene.placement(centreX, centreY, centreZ, 0.0f,
             grown * LOBE_SCALE[lobe] * 2.0f);
     }
@@ -2017,6 +2178,7 @@ public final class DemoEffects
     private Mat4 flashPlacement(final int slot)
     {
         final int at = slot * AXES;
+
         return DemoScene.placement(flashPosition[at], flashPosition[at + 1],
             flashPosition[at + 2], 0.0f, flashRadiusOf(slot) * 2.0f);
     }
@@ -2045,20 +2207,28 @@ public final class DemoEffects
         final float[] out)
     {
         out[0] = -dz;
+
         out[1] = 0.0f;
+
         out[2] = dx;
+
         if (lengthOf(out) > PARALLEL_EPSILON)
         {
             normalise(out);
+
             return;
         }
+
         // Straight up or straight down, where the aim IS world up and the cross
         // above is exactly zero. `cross(aim, worldForward)` instead, which
         // cannot also degenerate because the two references are perpendicular
         // to each other.
         out[0] = dy;
+
         out[1] = -dx;
+
         out[2] = 0.0f;
+
         normalise(out);
     }
 
@@ -2074,12 +2244,16 @@ public final class DemoEffects
     private static void normalise(final float[] vector)
     {
         final float length = lengthOf(vector);
+
         if (!(length > 0.0f))
         {
             return;
         }
+
         vector[0] /= length;
+
         vector[1] /= length;
+
         vector[2] /= length;
     }
 
@@ -2244,6 +2418,7 @@ public final class DemoEffects
     {
         // MUTABLE local — running count.
         int live = 0;
+
         for (int slot = from; slot < to; slot++)
         {
             if (slots[slot] != DEAD)
@@ -2251,6 +2426,7 @@ public final class DemoEffects
                 live++;
             }
         }
+
         return live;
     }
 
@@ -2290,15 +2466,25 @@ public final class DemoEffects
     static ModelFormat box(final int colour)
     {
         final float low = -0.5f;
+
         final float high = 0.5f;
+
         final int[] vertices = new int[BOX_VERTICES * ModelFormat.VERTEX_STRIDE_INTS];
+
         ModelFormat.writeVertex(vertices, 0, low, low, low, 0.0f, 0.0f, colour);
+
         ModelFormat.writeVertex(vertices, 1, high, low, low, 0.0f, 0.0f, colour);
+
         ModelFormat.writeVertex(vertices, 2, high, high, low, 0.0f, 0.0f, colour);
+
         ModelFormat.writeVertex(vertices, 3, low, high, low, 0.0f, 0.0f, colour);
+
         ModelFormat.writeVertex(vertices, 4, low, low, high, 0.0f, 0.0f, colour);
+
         ModelFormat.writeVertex(vertices, 5, high, low, high, 0.0f, 0.0f, colour);
+
         ModelFormat.writeVertex(vertices, 6, high, high, high, 0.0f, 0.0f, colour);
+
         ModelFormat.writeVertex(vertices, 7, low, high, high, 0.0f, 0.0f, colour);
 
         final int[] indices =
@@ -2310,6 +2496,7 @@ public final class DemoEffects
             7, 6, 2, 7, 2, 3,
             0, 1, 5, 0, 5, 4,
         };
+
         return ModelFormat.ofGeometry(vertices, indices);
     }
 
@@ -2346,18 +2533,27 @@ public final class DemoEffects
     static ModelFormat sphere(final int colour)
     {
         final int ringVertices = (SPHERE_STACKS - 1) * SPHERE_MERIDIANS;
+
         final int south = ringVertices + 1;
+
         final int[] vertices = new int[(south + 1) * ModelFormat.VERTEX_STRIDE_INTS];
+
         ModelFormat.writeVertex(vertices, 0, 0.0f, SPHERE_RADIUS, 0.0f, 0.0f, 0.0f, colour);
+
         ModelFormat.writeVertex(vertices, south, 0.0f, -SPHERE_RADIUS, 0.0f, 0.0f, 0.0f, colour);
+
         for (int stack = 1; stack < SPHERE_STACKS; stack++)
         {
             final float polar = HALF_TURN_RADIANS * stack / SPHERE_STACKS;
+
             final float height = SPHERE_RADIUS * (float) StrictMath.cos(polar);
+
             final float ring = SPHERE_RADIUS * (float) StrictMath.sin(polar);
+
             for (int meridian = 0; meridian < SPHERE_MERIDIANS; meridian++)
             {
                 final float azimuth = FULL_TURN_RADIANS * meridian / SPHERE_MERIDIANS;
+
                 ModelFormat.writeVertex(vertices, ringVertex(stack, meridian),
                     ring * (float) StrictMath.cos(azimuth), height,
                     ring * (float) StrictMath.sin(azimuth), 0.0f, 0.0f, colour);
@@ -2366,29 +2562,41 @@ public final class DemoEffects
 
         // Two caps of MERIDIANS triangles and STACKS-2 bands of twice that.
         final int triangles = SPHERE_MERIDIANS * 2 * (SPHERE_STACKS - 1);
+
         final int[] indices = new int[triangles * ModelFormat.INDICES_PER_TRIANGLE];
+
         // MUTABLE local — the write cursor into the index array.
         int at = 0;
+
         for (int meridian = 0; meridian < SPHERE_MERIDIANS; meridian++)
         {
             final int next = (meridian + 1) % SPHERE_MERIDIANS;
+
             // North cap. The pole is the degenerate case of the band below with
             // its upper ring collapsed to a point, so the order is the band's
             // second triangle with u[j] and u[j+1] both replaced by the pole.
             at = triangle(indices, at, 0, ringVertex(1, next), ringVertex(1, meridian));
+
             for (int stack = 1; stack < SPHERE_STACKS - 1; stack++)
             {
                 final int upperHere = ringVertex(stack, meridian);
+
                 final int upperNext = ringVertex(stack, next);
+
                 final int lowerHere = ringVertex(stack + 1, meridian);
+
                 final int lowerNext = ringVertex(stack + 1, next);
+
                 at = triangle(indices, at, upperHere, upperNext, lowerNext);
+
                 at = triangle(indices, at, upperHere, lowerNext, lowerHere);
             }
+
             // South cap, the same degeneracy at the other end.
             at = triangle(indices, at, ringVertex(SPHERE_STACKS - 1, meridian),
                 ringVertex(SPHERE_STACKS - 1, next), south);
         }
+
         return ModelFormat.ofGeometry(vertices, indices);
     }
 
@@ -2404,8 +2612,11 @@ public final class DemoEffects
         final int c)
     {
         indices[at] = a;
+
         indices[at + 1] = b;
+
         indices[at + 2] = c;
+
         return at + ModelFormat.INDICES_PER_TRIANGLE;
     }
 

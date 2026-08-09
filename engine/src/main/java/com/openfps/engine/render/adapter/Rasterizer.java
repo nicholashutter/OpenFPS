@@ -382,28 +382,42 @@ public final class Rasterizer
             throw new IllegalArgumentException(
                 "attributeCount must not be negative, got " + attributeCount);
         }
+
         if (maxTriangles <= 0)
         {
             throw new IllegalArgumentException("maxTriangles must be > 0, got " + maxTriangles);
         }
+
         if (chunkCount <= 0)
         {
             throw new IllegalArgumentException("chunkCount must be > 0, got " + chunkCount);
         }
+
         if (cullMode == null)
         {
             throw new IllegalArgumentException("cullMode must not be null");
         }
+
         this.attributeCount = attributeCount;
+
         this.vertexStride = TriangleClipper.POSITION_FLOATS + attributeCount;
+
         this.recordStride = RECORD_HEADER_FLOATS + PLANE_FLOATS * attributeCount;
+
         this.maxTriangles = maxTriangles;
+
         this.chunkCount = chunkCount;
+
         this.cullMode = cullMode;
+
         this.records = new float[maxTriangles * recordStride];
+
         this.binCount = new int[0];
+
         this.binStart = new int[0];
+
         this.binCursor = new int[0];
+
         this.binEntries = new int[maxTriangles];
     }
 
@@ -437,27 +451,41 @@ public final class Rasterizer
         {
             throw new IllegalArgumentException("framebuffer must not be null");
         }
+
         if (target.state() != Framebuffer.State.READY)
         {
             throw new IllegalStateException("Framebuffer is " + target.state() + ", not READY");
         }
+
         this.framebuffer = target;
+
         this.width = target.width();
+
         this.height = target.height();
+
         this.tileSize = target.tileSize();
+
         this.tilesX = target.tilesX();
+
         this.triangleCount = 0;
 
         final int tiles = target.tileCount();
+
         if (tiles != tileCount)
         {
             this.tileCount = tiles;
+
             final int slots = chunkCount * tiles;
+
             this.binCount = new int[slots];
+
             this.binStart = new int[slots];
+
             this.binCursor = new int[slots];
+
             return;
         }
+
         Arrays.fill(binCount, 0);
     }
 
@@ -529,28 +557,40 @@ public final class Rasterizer
         final int[] triangleEntityIds, final I_ThreadPoolPort pool)
     {
         requireFrame();
+
         if (triangles < 0 || triangles > maxTriangles)
         {
             throw new IllegalArgumentException("triangles must be in [0, " + maxTriangles
                 + "], got " + triangles);
         }
+
         final int neededFloats = triangles * TriangleClipper.TRIANGLE_VERTICES * vertexStride;
+
         if (vertices == null || vertices.length < neededFloats)
         {
             throw new IllegalArgumentException("vertices must hold " + neededFloats + " floats");
         }
+
         requireTable(materialIndices, triangles, "materialIndices");
+
         requireTable(triangleColors, triangles, "triangleColors");
+
         requireTable(triangleEntityIds, triangles, "triangleEntityIds");
 
         this.clipVertices = vertices;
+
         this.materials = materialIndices;
+
         this.flatColors = triangleColors;
+
         this.entityIds = triangleEntityIds;
+
         this.triangleCount = triangles;
 
         dispatch(setupJob, chunkCount, pool);
+
         buildBinOffsets();
+
         dispatch(scatterJob, chunkCount, pool);
     }
 
@@ -588,18 +628,24 @@ public final class Rasterizer
         final I_ThreadPoolPort pool)
     {
         requireFrame();
+
         if (renderer == null)
         {
             throw new IllegalArgumentException("renderer must not be null");
         }
+
         if (renderer.attributeCount() != attributeCount)
         {
             throw new IllegalArgumentException("SpanRenderer expects " + renderer.attributeCount()
                 + " attributes, this Rasterizer produces " + attributeCount);
         }
+
         this.spanRenderer = renderer;
+
         this.textures = textureTable;
+
         this.entityIdTarget = idTargetFor(framebuffer);
+
         dispatch(tileJob, tileCount, pool);
     }
 
@@ -680,6 +726,7 @@ public final class Rasterizer
     public boolean isLive(final int triangleIndex)
     {
         final int base = triangleIndex * recordStride;
+
         return records[base + BOUND_MAX_X] >= records[base + BOUND_MIN_X];
     }
 
@@ -730,8 +777,11 @@ public final class Rasterizer
     private void runSetupChunk(final int chunk)
     {
         final int from = chunkStart(chunk);
+
         final int to = chunkStart(chunk + 1);
+
         final int countBase = chunk * tileCount;
+
         for (int triangle = from; triangle < to; triangle++)
         {
             if (setupTriangle(triangle))
@@ -746,53 +796,74 @@ public final class Rasterizer
     private boolean setupTriangle(final int triangle)
     {
         final int base = triangle * recordStride;
+
         final float[] src = clipVertices;
+
         final int a = triangle * TriangleClipper.TRIANGLE_VERTICES * vertexStride;
+
         final int b = a + vertexStride;
+
         final int c = b + vertexStride;
 
         // The frame geometry is volatile so that a pass sees what beginFrame
         // published; read it once here rather than twelve times below.
         final int viewWidth = width;
+
         final int viewHeight = height;
 
         final float invW0 = 1.0f / src[a + TriangleClipper.OFFSET_W];
+
         final float invW1 = 1.0f / src[b + TriangleClipper.OFFSET_W];
+
         final float invW2 = 1.0f / src[c + TriangleClipper.OFFSET_W];
 
         final float sx0 = screenX(src[a + TriangleClipper.OFFSET_X], invW0, viewWidth);
+
         final float sy0 = screenY(src[a + TriangleClipper.OFFSET_Y], invW0, viewHeight);
+
         final float sx1 = screenX(src[b + TriangleClipper.OFFSET_X], invW1, viewWidth);
+
         final float sy1 = screenY(src[b + TriangleClipper.OFFSET_Y], invW1, viewHeight);
+
         final float sx2 = screenX(src[c + TriangleClipper.OFFSET_X], invW2, viewWidth);
+
         final float sy2 = screenY(src[c + TriangleClipper.OFFSET_Y], invW2, viewHeight);
 
         // One sign check culls the back face and rejects the degenerate
         // triangle before anything divides by its area. A NaN area lands here
         // too: every comparison against NaN is false.
         final float area2 = (sx1 - sx0) * (sy2 - sy0) - (sy1 - sy0) * (sx2 - sx0);
+
         final float sign = cullSign(area2);
+
         if (sign == 0.0f || !writeBounds(base, sx0, sy0, sx1, sy1, sx2, sy2))
         {
             markRejected(base);
+
             return false;
         }
 
         writeEdge(base, EDGE0_DX, EDGE0_BIAS, sx1, sy1, sx2, sy2, sign);
+
         writeEdge(base, EDGE1_DX, EDGE1_BIAS, sx2, sy2, sx0, sy0, sign);
+
         writeEdge(base, EDGE2_DX, EDGE2_BIAS, sx0, sy0, sx1, sy1, sign);
 
         // 1/area2 once, then multiply — README § 7. Both operands carry the
         // normalised sign, so the quotient is positive.
         final float invArea2 = 1.0f / (area2 * sign);
+
         writePlane(base, INV_W_DX, invW0, invW1, invW2, invArea2);
+
         for (int k = 0; k < attributeCount; k++)
         {
             final int offset = TriangleClipper.POSITION_FLOATS + k;
+
             // attr/w is the screen-linear quantity, not attr — README § 8.
             writePlane(base, attributePlaneOffset(k), src[a + offset] * invW0,
                 src[b + offset] * invW1, src[c + offset] * invW2, invArea2);
         }
+
         return true;
     }
 
@@ -817,16 +888,20 @@ public final class Rasterizer
             {
                 return 0.0f;
             }
+
             return 1.0f;
         }
+
         if (area2 < 0.0f)
         {
             if (cullMode == CullMode.COUNTER_CLOCKWISE)
             {
                 return 0.0f;
             }
+
             return -1.0f;
         }
+
         return 0.0f;
     }
 
@@ -837,17 +912,26 @@ public final class Rasterizer
         final float sx1, final float sy1, final float sx2, final float sy2)
     {
         final float minXf = Math.min(sx0, Math.min(sx1, sx2));
+
         final float maxXf = Math.max(sx0, Math.max(sx1, sx2));
+
         final float minYf = Math.min(sy0, Math.min(sy1, sy2));
+
         final float maxYf = Math.max(sy0, Math.max(sy1, sy2));
+
         if (!(maxXf >= 0.0f && minXf < width && maxYf >= 0.0f && minYf < height))
         {
             return false;
         }
+
         records[base + BOUND_MIN_X] = floorClamp(minXf, width - 1);
+
         records[base + BOUND_MAX_X] = ceilClamp(maxXf, width - 1);
+
         records[base + BOUND_MIN_Y] = floorClamp(minYf, height - 1);
+
         records[base + BOUND_MAX_Y] = ceilClamp(maxYf, height - 1);
+
         return true;
     }
 
@@ -856,24 +940,33 @@ public final class Rasterizer
         final float px, final float py, final float qx, final float qy, final float sign)
     {
         final float dx = (py - qy) * sign;
+
         final float dy = (qx - px) * sign;
+
         // Cross-product form, deliberately. See the class Javadoc: the adjacent
         // triangle's mirrored edge must produce the exact negation of this
         // constant or the top-left rule stops being exact on a shared edge.
         final float constant = (px * qy - qx * py) * sign;
+
         final float[] r = records;
+
         r[base + edgeOffset] = dx;
+
         r[base + edgeOffset + 1] = dy;
+
         // Fold the half-pixel sample offset in once, so the inner loop can
         // evaluate at integer pixel coordinates.
         r[base + edgeOffset + 2] = constant + HALF * (dx + dy);
+
         // Left edge, or top edge. The neighbour sharing this edge sees both
         // coefficients exactly negated, so exactly one of the pair owns it.
         if (dx > 0.0f || (dx == 0.0f && dy > 0.0f))
         {
             r[base + biasOffset] = TOP_LEFT_BIAS;
+
             return;
         }
+
         r[base + biasOffset] = EXCLUSIVE_BIAS;
     }
 
@@ -885,10 +978,13 @@ public final class Rasterizer
         final float q1, final float q2, final float invArea2)
     {
         final float[] r = records;
+
         r[base + planeOffset] = (r[base + EDGE0_DX] * q0 + r[base + EDGE1_DX] * q1
             + r[base + EDGE2_DX] * q2) * invArea2;
+
         r[base + planeOffset + 1] = (r[base + EDGE0_DY] * q0 + r[base + EDGE1_DY] * q1
             + r[base + EDGE2_DY] * q2) * invArea2;
+
         r[base + planeOffset + 2] = (r[base + EDGE0_CONST] * q0 + r[base + EDGE1_CONST] * q1
             + r[base + EDGE2_CONST] * q2) * invArea2;
     }
@@ -897,8 +993,11 @@ public final class Rasterizer
     private void markRejected(final int base)
     {
         records[base + BOUND_MIN_X] = 0.0f;
+
         records[base + BOUND_MIN_Y] = 0.0f;
+
         records[base + BOUND_MAX_X] = -1.0f;
+
         records[base + BOUND_MAX_Y] = -1.0f;
     }
 
@@ -909,18 +1008,29 @@ public final class Rasterizer
     private void countTiles(final int triangle, final int countBase)
     {
         final int base = triangle * recordStride;
+
         final int minX = (int) records[base + BOUND_MIN_X];
+
         final int maxX = (int) records[base + BOUND_MAX_X];
+
         final int minY = (int) records[base + BOUND_MIN_Y];
+
         final int maxY = (int) records[base + BOUND_MAX_Y];
+
         final int edge = tileSize;
+
         final int columns = tilesX;
+
         final int firstTileX = minX / edge;
+
         final int lastTileX = maxX / edge;
+
         final int lastTileY = maxY / edge;
+
         for (int ty = minY / edge; ty <= lastTileY; ty++)
         {
             final int rowBase = countBase + ty * columns;
+
             for (int tx = firstTileX; tx <= lastTileX; tx++)
             {
                 binCount[rowBase + tx]++;
@@ -938,19 +1048,25 @@ public final class Rasterizer
     {
         // MUTABLE local — the running offset into binEntries.
         int running = 0;
+
         for (int tile = 0; tile < tileCount; tile++)
         {
             for (int chunk = 0; chunk < chunkCount; chunk++)
             {
                 final int slot = chunk * tileCount + tile;
+
                 binStart[slot] = running;
+
                 binCursor[slot] = running;
+
                 running += binCount[slot];
             }
         }
+
         if (binEntries.length < running)
         {
             LOG.debug("Rasterizer bin capacity {} -> {} entries", binEntries.length, running);
+
             binEntries = new int[running];
         }
     }
@@ -960,17 +1076,24 @@ public final class Rasterizer
     private void runScatterChunk(final int chunk)
     {
         final int from = chunkStart(chunk);
+
         final int to = chunkStart(chunk + 1);
+
         final int cursorBase = chunk * tileCount;
+
         for (int triangle = from; triangle < to; triangle++)
         {
             final int base = triangle * recordStride;
+
             final int minX = (int) records[base + BOUND_MIN_X];
+
             final int maxX = (int) records[base + BOUND_MAX_X];
+
             if (maxX < minX)
             {
                 continue;
             }
+
             scatterTiles(triangle, cursorBase, minX, maxX);
         }
     }
@@ -979,22 +1102,35 @@ public final class Rasterizer
         final int maxX)
     {
         final int base = triangle * recordStride;
+
         final int minY = (int) records[base + BOUND_MIN_Y];
+
         final int maxY = (int) records[base + BOUND_MAX_Y];
+
         final int edge = tileSize;
+
         final int columns = tilesX;
+
         final int[] entries = binEntries;
+
         final int[] cursor = binCursor;
+
         final int firstTileX = minX / edge;
+
         final int lastTileX = maxX / edge;
+
         final int lastTileY = maxY / edge;
+
         for (int ty = minY / edge; ty <= lastTileY; ty++)
         {
             final int rowBase = cursorBase + ty * columns;
+
             for (int tx = firstTileX; tx <= lastTileX; tx++)
             {
                 final int slot = rowBase + tx;
+
                 entries[cursor[slot]] = triangle;
+
                 cursor[slot]++;
             }
         }
@@ -1008,20 +1144,30 @@ public final class Rasterizer
     private void runTile(final int tile)
     {
         final Framebuffer target = framebuffer;
+
         final SpanRenderer renderer = spanRenderer;
+
         final MipChain[] textureTable = textures;
+
         // Null unless this pass carries entity ids. Hoisted here, once per
         // tile, so the per-pixel test is against a local rather than a
         // volatile read.
         final int[] idTarget = entityIdTarget;
+
         final int minX = target.tileMinX(tile);
+
         final int minY = target.tileMinY(tile);
+
         final int maxX = target.tileMaxX(tile);
+
         final int maxY = target.tileMaxY(tile);
+
         final int end = binEnd(tile);
+
         for (int entry = binStart[tile]; entry < end; entry++)
         {
             final int triangle = binEntries[entry];
+
             renderer.renderTriangle(target, records, triangle * recordStride,
                 materialOf(triangle), flatColorOf(triangle), textureTable,
                 idTarget, entityIdOf(triangle), minX, minY, maxX, maxY);
@@ -1038,16 +1184,19 @@ public final class Rasterizer
         {
             return null;
         }
+
         return target.entityIdBuffer();
     }
 
     private int entityIdOf(final int triangle)
     {
         final int[] table = entityIds;
+
         if (table == null)
         {
             return Scene.UNTAGGED;
         }
+
         return table[triangle];
     }
 
@@ -1060,20 +1209,24 @@ public final class Rasterizer
     private int materialOf(final int triangle)
     {
         final int[] table = materials;
+
         if (table == null)
         {
             return NO_MATERIAL;
         }
+
         return table[triangle];
     }
 
     private int flatColorOf(final int triangle)
     {
         final int[] table = flatColors;
+
         if (table == null)
         {
             return DEFAULT_FLAT_COLOR;
         }
+
         return table[triangle];
     }
 
@@ -1087,14 +1240,17 @@ public final class Rasterizer
         final I_ThreadPoolPort pool)
     {
         this.parallelPasses = parallelPasses + 1L;
+
         if (pool == null)
         {
             for (int index = 0; index < jobCount; index++)
             {
                 job.runJob(index);
             }
+
             return;
         }
+
         pool.submitParallel(job, jobCount);
     }
 
@@ -1127,28 +1283,34 @@ public final class Rasterizer
     private static float floorClamp(final float value, final int limit)
     {
         final int floor = (int) Math.floor(value);
+
         if (floor < 0)
         {
             return 0.0f;
         }
+
         if (floor > limit)
         {
             return limit;
         }
+
         return floor;
     }
 
     private static float ceilClamp(final float value, final int limit)
     {
         final int ceil = (int) Math.ceil(value);
+
         if (ceil < 0)
         {
             return 0.0f;
         }
+
         if (ceil > limit)
         {
             return limit;
         }
+
         return ceil;
     }
 

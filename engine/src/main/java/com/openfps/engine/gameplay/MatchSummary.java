@@ -95,27 +95,38 @@ public final class MatchSummary
         {
             throw new IllegalArgumentException("finalState must not be null");
         }
+
         if (!finalState.isOver())
         {
             throw new IllegalArgumentException(
                 "a match still in progress has no summary, got " + finalState);
         }
+
         if (kills < 0 || deaths < 0 || opponents < 0 || fired < 0 || hits < 0 || damage < 0)
         {
             throw new IllegalArgumentException("match counters must not be negative");
         }
+
         if (hits > fired)
         {
             throw new IllegalArgumentException(
                 "hits must not exceed shots fired, got " + hits + " of " + fired);
         }
+
         this.outcome = finalState;
+
         this.botsKilled = kills;
+
         this.playerDeaths = deaths;
+
         this.botCount = opponents;
+
         this.shotsFired = fired;
+
         this.shotsHit = hits;
+
         this.damageTaken = damage;
+
         this.playerHealth = healthLeft;
     }
 
@@ -132,6 +143,7 @@ public final class MatchSummary
         {
             throw new IllegalArgumentException("match must not be null");
         }
+
         // Landed shots times the damage per shot, and NOT "max health minus what
         // is left" — which is what this used to be, and which stopped being the
         // same number the moment a death respawned the player at full health.
@@ -139,6 +151,7 @@ public final class MatchSummary
         // so the difference at the end understates the damage taken by two
         // hundred. What the player actually absorbed is the sum of the hits.
         final int damage = match.botShotsLanded() * Match.BOT_SHOT_DAMAGE;
+
         return new MatchSummary(match.state(), match.botsKilled(), match.playerDeaths(),
             match.botCount(), match.playerShotsFired(), match.playerShotsHit(), damage,
             match.playerHealth());
@@ -219,6 +232,7 @@ public final class MatchSummary
         {
             return 0;
         }
+
         // Rounded rather than truncated: 2 of 3 reads as 67%, not 66%.
         return (shotsHit * PERCENT + shotsFired / 2) / shotsFired;
     }

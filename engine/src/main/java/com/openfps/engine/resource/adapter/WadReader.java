@@ -164,9 +164,11 @@ public final class WadReader
         {
             throw new WadException("WAD path is null");
         }
+
         try
         {
             final Path file = Path.of(path);
+
             return new WadReader(Files.readAllBytes(file));
         }
         catch (final IOException | InvalidPathException e)
@@ -181,6 +183,7 @@ public final class WadReader
         {
             throw new WadException("WAD image is null");
         }
+
         if (wadBytes.length < HEADER_SIZE)
         {
             throw new WadException("WAD truncated: " + wadBytes.length
@@ -188,30 +191,46 @@ public final class WadReader
         }
 
         final WadType type = parseMagic(wadBytes);
+
         final int count = LittleEndian.int32(wadBytes, HEADER_OFFSET_LUMP_COUNT);
+
         final int dirOffset = LittleEndian.int32(wadBytes, HEADER_OFFSET_DIRECTORY);
+
         validateDirectoryBounds(count, dirOffset, wadBytes.length);
 
         this.data = wadBytes;
+
         this.wadType = type;
+
         this.lumpCount = count;
+
         this.lumpOffsets = new int[count];
+
         this.lumpSizes = new int[count];
+
         this.lumpNames = new String[count];
+
         this.nameIndex = new HashMap<>();
 
         for (int i = 0; i < count; i++)
         {
             final int entry = dirOffset + (i * DIRECTORY_ENTRY_SIZE);
+
             final int filePos = LittleEndian.int32(wadBytes, entry);
+
             final int size = LittleEndian.int32(wadBytes, entry + ENTRY_OFFSET_SIZE);
+
             final String name = LittleEndian.ascii(
                 wadBytes, entry + ENTRY_OFFSET_NAME, LUMP_NAME_LENGTH);
+
             validateLump(i, name, filePos, size, wadBytes.length);
 
             this.lumpOffsets[i] = filePos;
+
             this.lumpSizes[i] = size;
+
             this.lumpNames[i] = name;
+
             this.nameIndex.putIfAbsent(name, Integer.valueOf(i));
         }
 
@@ -253,6 +272,7 @@ public final class WadReader
     public String lumpName(final int index)
     {
         checkIndex(index);
+
         return lumpNames[index];
     }
 
@@ -266,6 +286,7 @@ public final class WadReader
     public int lumpSize(final int index)
     {
         checkIndex(index);
+
         return lumpSizes[index];
     }
 
@@ -279,6 +300,7 @@ public final class WadReader
     public int lumpOffset(final int index)
     {
         checkIndex(index);
+
         return lumpOffsets[index];
     }
 
@@ -308,11 +330,14 @@ public final class WadReader
         {
             return LUMP_NOT_FOUND;
         }
+
         final Integer index = nameIndex.get(normalize(name));
+
         if (index == null)
         {
             return LUMP_NOT_FOUND;
         }
+
         return index.intValue();
     }
 
@@ -336,12 +361,16 @@ public final class WadReader
     public byte[] sliceLump(final int index)
     {
         checkIndex(index);
+
         final int size = lumpSizes[index];
+
         if (size == 0)
         {
             return EMPTY_LUMP;
         }
+
         final int start = lumpOffsets[index];
+
         return Arrays.copyOfRange(data, start, start + size);
     }
 
@@ -351,14 +380,17 @@ public final class WadReader
     private static WadType parseMagic(final byte[] wadBytes)
     {
         final String magic = LittleEndian.ascii(wadBytes, 0, MAGIC_LENGTH);
+
         if ("IWAD".equals(magic))
         {
             return WadType.IWAD;
         }
+
         if ("PWAD".equals(magic))
         {
             return WadType.PWAD;
         }
+
         throw new WadException("Bad WAD magic '" + magic + "' — expected IWAD or PWAD");
     }
 
@@ -370,13 +402,16 @@ public final class WadReader
         {
             throw new WadException("WAD lump count is negative: " + count);
         }
+
         if (dirOffset < HEADER_SIZE)
         {
             throw new WadException("WAD directory offset " + dirOffset
                 + " overlaps the " + HEADER_SIZE + "-byte header");
         }
+
         // long arithmetic: count * 16 overflows int for a corrupt header
         final long directoryEnd = (long) dirOffset + ((long) count * DIRECTORY_ENTRY_SIZE);
+
         if (directoryEnd > imageLength)
         {
             throw new WadException("WAD directory runs past EOF: offset " + dirOffset
@@ -394,12 +429,15 @@ public final class WadReader
             throw new WadException("Lump " + index + " '" + name
                 + "' has negative size " + size);
         }
+
         if (size == 0)
         {
             // Marker lump — filePos is meaningless and often garbage.
             return;
         }
+
         final long end = (long) filePos + (long) size;
+
         if (filePos < HEADER_SIZE || end > imageLength)
         {
             throw new WadException("Lump " + index + " '" + name + "' payload ["
@@ -412,15 +450,19 @@ public final class WadReader
     private static String normalize(final String name)
     {
         String candidate = name;
+
         final int nul = candidate.indexOf('\0');
+
         if (nul >= 0)
         {
             candidate = candidate.substring(0, nul);
         }
+
         if (candidate.length() > LUMP_NAME_LENGTH)
         {
             candidate = candidate.substring(0, LUMP_NAME_LENGTH);
         }
+
         return candidate.trim().toUpperCase(Locale.ROOT);
     }
 

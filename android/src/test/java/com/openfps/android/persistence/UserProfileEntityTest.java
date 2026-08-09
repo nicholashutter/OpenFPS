@@ -59,15 +59,24 @@ class UserProfileEntityTest
             final UserProfileEntity row = UserProfileEntity.fromDomain(profile);
 
             assertThat(row.id).isEqualTo(profile.id());
+
             assertThat(row.displayName).isEqualTo(profile.displayName());
+
             assertThat(row.audioVolume).isCloseTo(profile.audioVolume(), offset(EPSILON));
+
             assertThat(row.mouseSensitivity)
                 .isCloseTo(profile.mouseSensitivity(), offset(EPSILON));
+
             assertThat(row.fieldOfView).isEqualTo(profile.fieldOfView());
+
             assertThat(row.preferredColor).isEqualTo(profile.preferredColor());
+
             assertThat(row.lastLoginAtEpochMs).isEqualTo(profile.lastLoginAtEpochMs());
+
             assertThat(row.totalPlaytimeSeconds).isEqualTo(profile.totalPlaytimeSeconds());
+
             assertThat(row.createdAtEpochMs).isEqualTo(profile.createdAtEpochMs());
+
             assertThat(row.updatedAtEpochMs).isEqualTo(profile.updatedAtEpochMs());
         }
     }
@@ -85,17 +94,27 @@ class UserProfileEntityTest
             final UserProfile restored = UserProfileEntity.fromDomain(original).toDomain();
 
             assertThat(restored.id()).isEqualTo(original.id());
+
             assertThat(restored.displayName()).isEqualTo(original.displayName());
+
             assertThat(restored.audioVolume()).isCloseTo(original.audioVolume(), offset(EPSILON));
+
             assertThat(restored.mouseSensitivity())
                 .isCloseTo(original.mouseSensitivity(), offset(EPSILON));
+
             assertThat(restored.fieldOfView()).isEqualTo(original.fieldOfView());
+
             assertThat(restored.preferredColor()).isEqualTo(original.preferredColor());
+
             assertThat(restored.lastLoginAtEpochMs()).isEqualTo(original.lastLoginAtEpochMs());
+
             assertThat(restored.totalPlaytimeSeconds())
                 .isEqualTo(original.totalPlaytimeSeconds());
+
             assertThat(restored.createdAtEpochMs()).isEqualTo(original.createdAtEpochMs());
+
             assertThat(restored.updatedAtEpochMs()).isEqualTo(original.updatedAtEpochMs());
+
             assertThat(restored).isEqualTo(original);
         }
 
@@ -113,6 +132,7 @@ class UserProfileEntityTest
         void shouldRejectAnOutOfRangeRow()
         {
             final UserProfileEntity row = UserProfileEntity.fromDomain(sampleProfile());
+
             row.fieldOfView = 400;
 
             assertThatThrownBy(row::toDomain)

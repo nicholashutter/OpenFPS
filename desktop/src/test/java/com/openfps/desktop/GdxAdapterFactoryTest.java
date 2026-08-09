@@ -55,16 +55,25 @@ class GdxAdapterFactoryTest
     void shouldDelegateEveryPortExceptTheWindow()
     {
         final I_AdapterFactory delegate = new NullAdapterFactory();
+
         final GdxAdapterFactory factory = factoryOver(delegate);
+
         factory.init();
+
         try
         {
             assertThat(factory.getTimePort()).isSameAs(delegate.getTimePort());
+
             assertThat(factory.getInputPort()).isNotSameAs(delegate.getInputPort());
+
             assertThat(factory.getDatagramPort()).isSameAs(delegate.getDatagramPort());
+
             assertThat(factory.getFilePort()).isSameAs(delegate.getFilePort());
+
             assertThat(factory.getSystemInfoPort()).isSameAs(delegate.getSystemInfoPort());
+
             assertThat(factory.getUserProfilePort()).isSameAs(delegate.getUserProfilePort());
+
             assertThat(factory.getWindowPort()).isNotSameAs(delegate.getWindowPort());
         }
         finally
@@ -78,11 +87,15 @@ class GdxAdapterFactoryTest
     void shouldSupplyARealWindow()
     {
         final GdxAdapterFactory factory = factoryOver(new NullAdapterFactory());
+
         factory.init();
+
         try
         {
             assertThat(factory.getWindowPort()).isInstanceOf(GdxWindowPort.class);
+
             assertThat(factory.getWindowPort().isRealWindow()).isTrue();
+
             assertThat(factory.getWindowPort().isCloseRequested()).isFalse();
         }
         finally
@@ -96,10 +109,13 @@ class GdxAdapterFactoryTest
     void shouldSupplyRealInput()
     {
         final GdxAdapterFactory factory = factoryOver(new NullAdapterFactory());
+
         factory.init();
+
         try
         {
             assertThat(factory.getInputPort()).isInstanceOf(GdxInputPort.class);
+
             assertThat(factory.getInputPort().currentInput()).isEqualTo(InputState.NEUTRAL);
         }
         finally
@@ -113,10 +129,13 @@ class GdxAdapterFactoryTest
     void shouldAttachInputToTheWindow()
     {
         final GdxWindowPort window = new GdxWindowPort();
+
         final GdxAdapterFactory factory = new GdxAdapterFactory(new NullAdapterFactory(), window);
+
         assertThat(window.inputPort()).isNull();
 
         factory.init();
+
         try
         {
             assertThat(window.inputPort()).isSameAs(factory.getInputPort());
@@ -132,13 +151,17 @@ class GdxAdapterFactoryTest
     void shouldConfigureWindowDuringInit()
     {
         final GdxWindowPort window = new GdxWindowPort();
+
         final GdxAdapterFactory factory = new GdxAdapterFactory(new NullAdapterFactory(), window);
+
         assertThat(window.state()).isEqualTo(GdxWindowPort.State.NEW);
 
         factory.init();
+
         assertThat(window.state()).isEqualTo(GdxWindowPort.State.CREATED);
 
         factory.shutdown();
+
         assertThat(window.state()).isEqualTo(GdxWindowPort.State.SHUTDOWN);
     }
 }

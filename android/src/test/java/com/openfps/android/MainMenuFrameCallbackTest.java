@@ -72,6 +72,7 @@ class MainMenuFrameCallbackTest
         final MainMenuFrameCallback menu = menu();
 
         assertThatCode(menu::onPause).doesNotThrowAnyException();
+
         assertThatCode(menu::onResume).doesNotThrowAnyException();
     }
 
@@ -86,6 +87,7 @@ class MainMenuFrameCallbackTest
         final float laidOut = MainMenuFrameCallback.layoutDensity(1080, 2.625f);
 
         assertThat(laidOut).isLessThan(2.625f);
+
         assertThat(MainMenuFrameCallback.naturalHeightDp() * laidOut)
             .isLessThanOrEqualTo(1080.0f);
     }
@@ -104,6 +106,7 @@ class MainMenuFrameCallbackTest
     void shouldTolerateAZeroHeightSurface()
     {
         assertThat(MainMenuFrameCallback.layoutDensity(0, 2.625f)).isEqualTo(2.625f);
+
         assertThat(MainMenuFrameCallback.layoutDensity(1080, 0.0f)).isZero();
     }
 
@@ -120,6 +123,7 @@ class MainMenuFrameCallbackTest
         final MainMenuFrameCallback menu = menu();
 
         assertThatCode(menu::attachInputProcessor).doesNotThrowAnyException();
+
         assertThatCode(menu::detachInputProcessor).doesNotThrowAnyException();
     }
 }

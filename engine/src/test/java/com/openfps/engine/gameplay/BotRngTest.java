@@ -47,6 +47,7 @@ class BotRngTest
             for (int tic = 0; tic < 100; tic++)
             {
                 final float first = rng.unitFloat(tic, 2, BotRng.CHANNEL_FIRE);
+
                 assertThat(rng.unitFloat(tic, 2, BotRng.CHANNEL_FIRE))
                     .as("asking twice gave two answers at tic %d", tic)
                     .isEqualTo(first);
@@ -61,6 +62,7 @@ class BotRngTest
             // in for two machines: they have exchanged nothing but a seed, and they
             // have to reach the same answer to every question.
             final BotRng peerOne = new BotRng(0xC0FFEEL);
+
             final BotRng peerTwo = new BotRng(0xC0FFEEL);
 
             for (int tic = -50; tic < 200; tic++)
@@ -85,13 +87,16 @@ class BotRngTest
             // would shift every later draw, and adding one `if` to the firing path
             // would desync a build against its own previous version.
             final BotRng forwards = new BotRng(7L);
+
             final BotRng backwards = new BotRng(7L);
 
             final float[] ascending = new float[50];
+
             for (int tic = 0; tic < ascending.length; tic++)
             {
                 ascending[tic] = forwards.unitFloat(tic, 3, BotRng.CHANNEL_FIRE);
             }
+
             // Same questions, asked from the other end, with half of them skipped
             // on the way past.
             for (int tic = ascending.length - 1; tic >= 0; tic -= 2)
@@ -109,9 +114,11 @@ class BotRngTest
             // The negative half. Without it, a generator that ignored its seed
             // entirely would pass every test above.
             final BotRng one = new BotRng(1L);
+
             final BotRng two = new BotRng(2L);
 
             int agreements = 0;
+
             for (int tic = 0; tic < 200; tic++)
             {
                 if (one.unitFloat(tic, 2, BotRng.CHANNEL_FIRE)
@@ -139,6 +146,7 @@ class BotRngTest
             final BotRng rng = new BotRng();
 
             int collisions = 0;
+
             for (int tic = 0; tic < 500; tic++)
             {
                 if (rng.unitFloat(tic, 2, BotRng.CHANNEL_FIRE)
@@ -177,6 +185,7 @@ class BotRngTest
             final BotRng rng = new BotRng();
 
             int collisions = 0;
+
             for (int tic = 0; tic < 500; tic++)
             {
                 if (rng.unitFloat(tic, 2, BotRng.CHANNEL_FIRE)
@@ -207,6 +216,7 @@ class BotRngTest
             for (int tic = -SAMPLES / 2; tic < SAMPLES / 2; tic++)
             {
                 final float drawn = rng.unitFloat(tic, 2, BotRng.CHANNEL_FIRE);
+
                 assertThat(drawn).as("tic %d drew %f", tic, drawn)
                     .isGreaterThanOrEqualTo(0.0f).isLessThan(1.0f);
             }
@@ -217,11 +227,13 @@ class BotRngTest
         void shouldKeepBoundedIntInRange()
         {
             final BotRng rng = new BotRng();
+
             final int bound = 90;
 
             for (int tic = -SAMPLES / 2; tic < SAMPLES / 2; tic++)
             {
                 final int drawn = rng.boundedInt(tic, 2, BotRng.CHANNEL_COOLDOWN, bound);
+
                 assertThat(drawn).as("tic %d drew %d", tic, drawn)
                     .isGreaterThanOrEqualTo(0).isLessThan(bound);
             }
@@ -235,15 +247,20 @@ class BotRngTest
             // side. A one-sided error would make every bot in the room pull its
             // shots the same way, which a player would learn to stand in front of.
             final BotRng rng = new BotRng();
+
             final float magnitude = 0.244f;
+
             int negatives = 0;
+
             int positives = 0;
 
             for (int tic = 0; tic < SAMPLES; tic++)
             {
                 final float drawn =
                     rng.symmetric(tic, 2, BotRng.CHANNEL_AIM_YAW, magnitude);
+
                 assertThat(drawn).isGreaterThanOrEqualTo(-magnitude).isLessThan(magnitude);
+
                 if (drawn < 0.0f)
                 {
                     negatives++;
@@ -257,6 +274,7 @@ class BotRngTest
             // Roughly even, loosely asserted — the point is that both signs happen
             // in quantity, not that they are balanced to a percent.
             assertThat(negatives).isGreaterThan(SAMPLES / 3);
+
             assertThat(positives).isGreaterThan(SAMPLES / 3);
         }
 
@@ -267,7 +285,9 @@ class BotRngTest
             // BotSkill's fire chance is expressed in parts per thousand and the
             // whole balance argument rests on it meaning what it says.
             final BotRng rng = new BotRng();
+
             final int permille = 250;
+
             int hits = 0;
 
             for (int tic = 0; tic < SAMPLES; tic++)
@@ -279,6 +299,7 @@ class BotRngTest
             }
 
             final int measured = hits * BotRng.PER_MILLE / SAMPLES;
+
             assertThat(measured).as("asked for %d/1000 and got %d/1000", permille, measured)
                 .isBetween(permille - 30, permille + 30);
         }
@@ -296,6 +317,7 @@ class BotRngTest
             for (int tic = 0; tic < 1000; tic++)
             {
                 assertThat(rng.chance(tic, 2, BotRng.CHANNEL_WILD, 0)).isFalse();
+
                 assertThat(rng.chance(tic, 2, BotRng.CHANNEL_FIRE, BotRng.PER_MILLE)).isTrue();
             }
         }
@@ -309,6 +331,7 @@ class BotRngTest
             assertThatThrownBy(() -> rng.boundedInt(0, 2, BotRng.CHANNEL_COOLDOWN, 0))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("bound");
+
             assertThatThrownBy(() -> rng.boundedInt(0, 2, BotRng.CHANNEL_COOLDOWN, -5))
                 .isInstanceOf(IllegalArgumentException.class);
         }
@@ -328,7 +351,9 @@ class BotRngTest
             // pass every reproducibility test above and put every draw in one
             // tenth of the range.
             final BotRng rng = new BotRng();
+
             final int buckets = 10;
+
             final int[] counts = new int[buckets];
 
             for (int tic = 0; tic < SAMPLES; tic++)
@@ -337,6 +362,7 @@ class BotRngTest
             }
 
             final int expected = SAMPLES / buckets;
+
             for (int bucket = 0; bucket < buckets; bucket++)
             {
                 assertThat(counts[bucket]).as("bucket %d held %d of an expected %d",
@@ -375,8 +401,11 @@ class BotRngTest
             final String pool = constantPoolOf(BotRng.class);
 
             assertThat(pool).as("a seeded-from-the-clock generator").doesNotContain("java/util/Random");
+
             assertThat(pool).as("thread-scoped randomness").doesNotContain("ThreadLocalRandom");
+
             assertThat(pool).as("wall-clock time").doesNotContain("nanoTime");
+
             assertThat(pool).as("wall-clock time").doesNotContain("currentTimeMillis");
         }
 
@@ -390,9 +419,13 @@ class BotRngTest
             assertThat(constantPoolOf(Match.class))
                 .as("Match must not reference java.lang.Math anywhere")
                 .doesNotContain("java/lang/Math");
+
             assertThat(constantPoolOf(Match.class)).doesNotContain("java/util/Random");
+
             assertThat(constantPoolOf(Match.class)).doesNotContain("nanoTime");
+
             assertThat(constantPoolOf(Match.class)).doesNotContain("currentTimeMillis");
+
             assertThat(constantPoolOf(BotSkill.class)).doesNotContain("java/util/Random");
         }
 
@@ -407,8 +440,11 @@ class BotRngTest
             final String pool = constantPoolOf(Match.class);
 
             assertThat(pool).contains("java/lang/StrictMath");
+
             assertThat(pool).contains("atan2");
+
             assertThat(pool).contains("sin");
+
             assertThat(pool).contains("cos");
         }
     }
@@ -418,20 +454,27 @@ class BotRngTest
     private static String constantPoolOf(final Class<?> type)
     {
         final String resource = type.getSimpleName() + ".class";
+
         try (InputStream in = type.getResourceAsStream(resource))
         {
             if (in == null)
             {
                 throw new IllegalStateException("no class file for " + type);
             }
+
             final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+
             final byte[] chunk = new byte[8192];
+
             int read = in.read(chunk);
+
             while (read > 0)
             {
                 bytes.write(chunk, 0, read);
+
                 read = in.read(chunk);
             }
+
             return new String(bytes.toByteArray(), StandardCharsets.ISO_8859_1);
         }
         catch (final IOException e)

@@ -98,17 +98,26 @@ public final class PeerConnection
         {
             throw new IllegalArgumentException("peerId out of range: " + peerId);
         }
+
         if (address == null || address.isEmpty())
         {
             throw new IllegalArgumentException("address must not be null or empty");
         }
+
         this.peerId = peerId;
+
         this.address = address;
+
         this.ackWindow = new AckWindow(baseTic);
+
         this.smoothedRttNanos = NO_RTT;
+
         this.hasRttSample = false;
+
         this.remoteAckedTic = baseTic - 1;
+
         this.remoteAckBitfield = 0L;
+
         this.packetsReceived = 0L;
     }
 
@@ -149,12 +158,16 @@ public final class PeerConnection
         {
             throw new IllegalArgumentException("rttNanos must not be negative: " + rttNanos);
         }
+
         if (!hasRttSample)
         {
             smoothedRttNanos = rttNanos;
+
             hasRttSample = true;
+
             return;
         }
+
         smoothedRttNanos =
             (EWMA_OLD_WEIGHT * smoothedRttNanos + EWMA_NEW_WEIGHT * rttNanos) / EWMA_DIVISOR;
     }
@@ -208,8 +221,11 @@ public final class PeerConnection
         {
             return false;
         }
+
         remoteAckedTic = ackTic;
+
         remoteAckBitfield = ackBitfield;
+
         return true;
     }
 
@@ -249,9 +265,13 @@ public final class PeerConnection
         {
             throw new IllegalArgumentException("nanosPerTic must be positive: " + nanosPerTic);
         }
+
         final long rttTics = (smoothedRttNanos + nanosPerTic - 1L) / nanosPerTic;
+
         final long fromRtt = rttTics + WINDOW_SAFETY_TICS;
+
         final int fromAck = latestTic - remoteAckedTic;
+
         return AckWindow.clampWindow((int) Math.max(fromRtt, (long) fromAck));
     }
 

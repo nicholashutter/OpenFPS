@@ -87,29 +87,43 @@ public final class EngineMain
     public static void main(final String[] args)
     {
         LOG.info("OpenFPS engine booting...");
+
         final FrameRate rate;
+
         final boolean useSqlite;
+
         final boolean headless;
+
         final String mapId;
+
         try
         {
             rate = parseFpsArg(args);
+
             useSqlite = !hasFlag(args, "--no-sqlite");
+
             headless = hasFlag(args, "--headless");
+
             mapId = parseMapArg(args);
         }
         catch (final IllegalArgumentException e)
         {
             LOG.error("Failed to parse arguments: {}", e.getMessage());
+
             System.err.println("ERROR: " + e.getMessage());
+
             System.err.println("Usage: java -jar openfps.jar [--fps=30|60|120]"
                 + " [--no-sqlite] [--headless] [--map=<id>]");
+
             System.exit(1);
+
             return;
         }
+
         LOG.info("Engine version 0.1.0-SNAPSHOT, target rate={} Hz, java={}, sqlite={}, "
             + "headless={}, map={}", rate.fps(), System.getProperty("java.version"), useSqlite,
             headless, displayMapId(mapId));
+
         new EngineMain().run(GameConfig.headless(rate), useSqlite, headless, mapId);
     }
 
@@ -129,17 +143,20 @@ public final class EngineMain
         {
             return FrameRate.FPS_60;
         }
+
         for (final String arg : args)
         {
             if (arg == null)
             {
                 continue;
             }
+
             if (arg.startsWith("--fps="))
             {
                 return FrameRate.fromString(arg.substring("--fps=".length()));
             }
         }
+
         return FrameRate.FPS_60;
     }
 
@@ -161,17 +178,20 @@ public final class EngineMain
         {
             return null;
         }
+
         for (final String arg : args)
         {
             if (arg == null)
             {
                 continue;
             }
+
             if (arg.startsWith("--map="))
             {
                 return arg.substring("--map=".length());
             }
         }
+
         return null;
     }
 
@@ -188,6 +208,7 @@ public final class EngineMain
         {
             return "<none>";
         }
+
         return mapId;
     }
 
@@ -195,10 +216,12 @@ public final class EngineMain
     private static boolean hasFlag(final String[] args, final String flag)
     {
         if (args == null) return false;
+
         for (final String a : args)
         {
             if (flag.equals(a)) return true;
         }
+
         return false;
     }
 
@@ -286,7 +309,9 @@ public final class EngineMain
                     final I_RenderPortFactory renderPortFactory)
     {
         final EngineSession session = start(config, hal, renderPortFactory);
+
         session.awaitPlatformLoop();
+
         session.stop();
     }
 
@@ -305,7 +330,9 @@ public final class EngineMain
                     final I_GameplayPortFactory gameplayPortFactory)
     {
         final EngineSession session = start(config, hal, renderPortFactory, gameplayPortFactory);
+
         session.awaitPlatformLoop();
+
         session.stop();
     }
 
@@ -343,6 +370,7 @@ public final class EngineMain
         {
             return EngineMain::nullGameplayPort;
         }
+
         return inputPort ->
             com.openfps.engine.gameplay.map.MapSmokeGameplayPort.create(inputPort, mapId);
     }
@@ -436,10 +464,12 @@ public final class EngineMain
         {
             throw new IllegalArgumentException("hal must not be null");
         }
+
         if (renderPortFactory == null)
         {
             throw new IllegalArgumentException("renderPortFactory must not be null");
         }
+
         if (gameplayPortFactory == null)
         {
             throw new IllegalArgumentException("gameplayPortFactory must not be null");
@@ -447,16 +477,22 @@ public final class EngineMain
 
         // -- 1. Memory port
         final I_MemoryPort memory = MemoryPortFactory.createJvm(Constants.ZONE_HEAP_SIZE);
+
         memory.init(Constants.ZONE_HEAP_SIZE);
 
         // -- 2. HAL adapters
         // One factory owns every port for the chosen backend. init() and
         // shutdown() are main-thread only — see I_AdapterFactory.
         hal.init();
+
         final I_TimePort timePort = hal.getTimePort();
+
         final I_InputPort inputPort = hal.getInputPort();
+
         final I_SystemInfoPort sysinfo = hal.getSystemInfoPort();
+
         final I_UserProfilePort userProfile = hal.getUserProfilePort();
+
         final I_WindowPort window = hal.getWindowPort();
 
         // -- 3. Worker count from HAL
@@ -466,7 +502,9 @@ public final class EngineMain
         // lives — including the -Dopenfps.workers override and the log line
         // that says which rule won. Do not reintroduce the arithmetic here.
         final int logicalCores = sysinfo.logicalProcessorCount();
+
         final int workerCount = ThreadPoolFactory.resolveWorkerCount(logicalCores);
+
         LOG.info("System: {} logical cores, {} workers, target rate={} Hz",
             logicalCores, workerCount, config.rate().fps());
 
@@ -475,6 +513,7 @@ public final class EngineMain
 
         // -- 5. Event bus
         final I_EventBusPort bus = EventBusFactory.createShared();
+
         bus.init(DEFAULT_BUS_CAPACITY);
 
         // -- 6. Worker pool, sized but not yet started.
@@ -485,27 +524,39 @@ public final class EngineMain
         // empty and filled below — the pool only walks it once start() has run,
         // and that is still the last step here.
         final SubsystemRegistry subsystems = new SubsystemRegistry();
+
         final I_ThreadPoolPort pool = ThreadPoolFactory.createFixed(bus, subsystems);
+
         pool.init(workerCount);
 
         // -- 7. Subsystem registry
         final I_RenderPort renderPort = renderPortFactory.createRenderPort(pool, timePort);
+
         if (renderPort == null)
         {
             throw new IllegalStateException("renderPortFactory returned null");
         }
+
         subsystems.register(new CoreSubsystem());
+
         subsystems.register(new MemorySubsystem(memory));
+
         subsystems.register(new HalSubsystem(inputPort));
+
         subsystems.register(new NetSubsystem(new NullNetworkPort()));
+
         // AFTER the render port, deliberately: see this method's Javadoc.
         final I_GameplayPort gameplayPort = gameplayPortFactory.createGameplayPort(inputPort);
+
         if (gameplayPort == null)
         {
             throw new IllegalStateException("gameplayPortFactory returned null");
         }
+
         subsystems.register(new GameplaySubsystem(gameplayPort));
+
         subsystems.register(new RenderSubsystem(renderPort));
+
         // From the HAL, not hard-coded. Audio is a device the platform owns, so
         // which one you get is the same question as which window you get, and it
         // already has an answer: the factory the launcher handed in. A
@@ -515,7 +566,9 @@ public final class EngineMain
         // AudioSubsystem owns init/shutdown from this point — no factory calls
         // them, by the contract on I_AdapterFactory.getAudioPort.
         subsystems.register(new AudioSubsystem(hal.getAudioPort()));
+
         subsystems.initAll();
+
         pool.start();
 
         // -- 8. Event factory + GameLoop (producer) on its own thread
@@ -528,8 +581,11 @@ public final class EngineMain
         //     glfwPollEvents() on the main thread, so main is reserved for
         //     the platform pump below.
         final EventFactory eventFactory = new EventFactory(timePort);
+
         final GameLoop loop = new GameLoop(timePort, bus, eventFactory, config);
+
         final Thread loopThread = new Thread(loop, "openfps-gameloop");
+
         loopThread.start();
 
         // -- 9. Hand back a live session. Shutdown (drain, pool stop,
@@ -567,10 +623,12 @@ public final class EngineMain
         {
             return HalBackend.NULL;
         }
+
         if (useSqlite)
         {
             return HalBackend.SQLITE;
         }
+
         return HalBackend.NULL;
     }
 
@@ -582,15 +640,21 @@ public final class EngineMain
                                                    final I_TimePort timePort)
     {
         final var existing = port.findAll();
+
         if (existing.isEmpty())
         {
             final UserProfile fresh = UserProfile.newDefault(timePort.epochMillis());
+
             port.save(fresh);
+
             LOG.info("Created new user profile: id={}, name='{}'",
                 fresh.id(), fresh.displayName());
+
             return fresh;
         }
+
         UserProfile mostRecent = existing.get(0);
+
         for (final UserProfile p : existing)
         {
             if (p.lastLoginAtEpochMs() > mostRecent.lastLoginAtEpochMs())
@@ -598,10 +662,14 @@ public final class EngineMain
                 mostRecent = p;
             }
         }
+
         final UserProfile touched = mostRecent.withLastLogin(timePort.epochMillis());
+
         port.save(touched);
+
         LOG.info("Loaded user profile: id={}, name='{}'",
             touched.id(), touched.displayName());
+
         return touched;
     }
 
@@ -617,13 +685,17 @@ public final class EngineMain
                             final I_TimePort timePort)
     {
         final long now = timePort.epochMillis();
+
         // Wall clock can jump backwards; clamp so playtime never regresses.
         final long additionalSeconds = Math.max(0L, (now - profile.lastLoginAtEpochMs()) / 1000L);
+
         final UserProfile updated = profile
             .withAddedPlaytime(additionalSeconds)
             .withLastLogin(now)
             .withUpdatedAt(now);
+
         port.save(updated);
+
         LOG.info("Saved user profile: id={}, playtime={}s",
             updated.id(), updated.totalPlaytimeSeconds());
     }

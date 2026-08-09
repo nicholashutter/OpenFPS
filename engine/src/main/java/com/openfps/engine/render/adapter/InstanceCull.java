@@ -120,7 +120,9 @@ public final class InstanceCull
         final float near, final float[] box, final int boxOffset)
     {
         final int x = transformOffset + ROW_X;
+
         final int y = transformOffset + ROW_Y;
+
         final int w = transformOffset + ROW_W;
 
         // Near, and it is the plane that pays for this class in the demo room:
@@ -132,6 +134,7 @@ public final class InstanceCull
         {
             return true;
         }
+
         // Left and right: x + w >= 0 and w - x >= 0. Bottom and top: the same
         // with the y row. The projection scales are already folded into the
         // rows by Camera, so the field of view needs no separate term.
@@ -139,14 +142,17 @@ public final class InstanceCull
         {
             return true;
         }
+
         if (outsideDifference(transform, w, x, box, boxOffset))
         {
             return true;
         }
+
         if (outsideSum(transform, y, w, box, boxOffset))
         {
             return true;
         }
+
         return outsideDifference(transform, w, y, box, boxOffset);
     }
 
@@ -195,15 +201,22 @@ public final class InstanceCull
         final float[] box, final int at)
     {
         final float centreX = (box[at] + box[at + 3]) * 0.5f;
+
         final float centreY = (box[at + 1] + box[at + 4]) * 0.5f;
+
         final float centreZ = (box[at + 2] + box[at + 5]) * 0.5f;
+
         final float extentX = Math.abs(box[at + 3] - box[at]) * 0.5f;
+
         final float extentY = Math.abs(box[at + 4] - box[at + 1]) * 0.5f;
+
         final float extentZ = Math.abs(box[at + 5] - box[at + 2]) * 0.5f;
 
         final float centre = a * centreX + b * centreY + c * centreZ + d;
+
         final float radius = Math.abs(a) * extentX + Math.abs(b) * extentY
             + Math.abs(c) * extentZ;
+
         return centre + radius < 0.0f;
     }
 

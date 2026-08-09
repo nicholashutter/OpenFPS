@@ -45,8 +45,11 @@ final class CarbineSoundTest
             final short[] pcm = CarbineSound.samples();
 
             assertThat(pcm[0]).isZero();
+
             assertThat(pcm[pcm.length - 1]).isZero();
+
             assertThat(CarbineSound.envelopeAt(0)).isZero();
+
             assertThat(CarbineSound.envelopeAt(CarbineSound.sampleCount() - 1)).isZero();
         }
 
@@ -55,8 +58,10 @@ final class CarbineSoundTest
         void staysInsideFullScale()
         {
             final short[] pcm = CarbineSound.samples();
+
             // MUTABLE local — the loudest sample seen.
             int loudest = 0;
+
             for (final short sample : pcm)
             {
                 loudest = Math.max(loudest, Math.abs(sample));
@@ -65,6 +70,7 @@ final class CarbineSoundTest
             assertThat(loudest)
                 .as("the sound clips, which is a crunch rather than a crack")
                 .isLessThan(Short.MAX_VALUE);
+
             assertThat(loudest)
                 .as("nothing was generated at all")
                 .isGreaterThan(Short.MAX_VALUE / 8);
@@ -78,6 +84,7 @@ final class CarbineSoundTest
 
             assertThat(CarbineSound.envelopeAt(count / 4))
                 .isLessThan(CarbineSound.envelopeAt(count / 32));
+
             assertThat(CarbineSound.envelopeAt(count / 2))
                 .isLessThan(CarbineSound.envelopeAt(count / 4));
         }
@@ -90,9 +97,11 @@ final class CarbineSoundTest
             // the approximation is out by about a fifth, and the audible difference
             // is a hiss instead of a thud.
             final double naive = CarbineSound.CUTOFF_HZ / CarbineSound.SAMPLE_RATE;
+
             final double exact = CarbineSound.lowPassCoefficient();
 
             assertThat(exact).isBetween(0.0, 1.0);
+
             assertThat(exact)
                 .as("this is the f/rate approximation, which is the wrong sound")
                 .isNotCloseTo(naive, within(0.02));
@@ -121,7 +130,9 @@ final class CarbineSoundTest
             // of them. Quieter in particular is deliberate: the player's own weapon
             // is the loudest thing in the mix because it is the one they control.
             assertThat(CarbineSound.DURATION_MS).isLessThan(BlasterSound.DURATION_MS);
+
             assertThat(CarbineSound.PEAK).isLessThan(BlasterSound.PEAK);
+
             assertThat(CarbineSound.DECAY_PER_SECOND)
                 .isGreaterThan(BlasterSound.DECAY_PER_SECOND);
         }
@@ -142,6 +153,7 @@ final class CarbineSoundTest
             // every high-frequency component adds crossings of its own.
             final double carbine = crossingsPerSecond(CarbineSound.samples(),
                 CarbineSound.sampleRate());
+
             final double blaster = crossingsPerSecond(BlasterSound.samples(),
                 BlasterSound.sampleRate());
 
@@ -158,6 +170,7 @@ final class CarbineSoundTest
             // pitch. Two and a half octaves below where the sweep ENDS, so they do
             // not share a register even at the blaster's lowest.
             assertThat(CarbineSound.BODY_HZ).isLessThan(BlasterSound.END_HZ / 1.2);
+
             assertThat(CarbineSound.CUTOFF_HZ)
                 .as("the low-pass is above the blaster's start, so it filters nothing")
                 .isLessThan(BlasterSound.START_HZ * 2.0);
@@ -187,6 +200,7 @@ final class CarbineSoundTest
                 com.openfps.engine.demo.BotFireVoices.maxConcurrentVoices(TICS_PER_SECOND);
 
             assertThat(concurrent).isEqualTo(2);
+
             assertThat(CarbineSound.PEAK * concurrent)
                 .as("the one overlap the cap permits clips")
                 .isLessThan(1.0);
@@ -200,6 +214,7 @@ final class CarbineSoundTest
     {
         // MUTABLE local — crossings counted so far.
         int crossings = 0;
+
         for (int index = 1; index < pcm.length; index++)
         {
             if (pcm[index - 1] < 0 && pcm[index] >= 0 || pcm[index - 1] >= 0 && pcm[index] < 0)
@@ -207,6 +222,7 @@ final class CarbineSoundTest
                 crossings++;
             }
         }
+
         return crossings * (double) rate / pcm.length;
     }
 }

@@ -56,11 +56,14 @@ public final class FramePng
         final int width, final int height) throws IOException
     {
         final int[] frame = new int[width * height];
+
         if (!renderer.copyColorInto(frame))
         {
             throw new IOException("renderer produced no frame");
         }
+
         final BufferedImage png = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+
         for (int y = 0; y < height; y++)
         {
             for (int x = 0; x < width; x++)
@@ -68,10 +71,12 @@ public final class FramePng
                 png.setRGB(x, y, (frame[y * width + x] >>> ALPHA_BITS) | OPAQUE_ARGB);
             }
         }
+
         if (out.getParent() != null)
         {
             Files.createDirectories(out.getParent());
         }
+
         ImageIO.write(png, "png", out.toFile());
     }
 }

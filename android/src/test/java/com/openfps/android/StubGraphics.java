@@ -54,30 +54,37 @@ final class StubGraphics
                                  final int width, final int height, final float deltaSeconds)
     {
         final String name = method.getName();
+
         if ("getWidth".equals(name) || "getBackBufferWidth".equals(name))
         {
             return width;
         }
+
         if ("getHeight".equals(name) || "getBackBufferHeight".equals(name))
         {
             return height;
         }
+
         if ("getDeltaTime".equals(name))
         {
             return deltaSeconds;
         }
+
         if ("hashCode".equals(name))
         {
             return System.identityHashCode(proxy);
         }
+
         if ("equals".equals(name))
         {
             return proxy == args[0];
         }
+
         if ("toString".equals(name))
         {
             return "StubGraphics[" + width + "x" + height + "]";
         }
+
         return zeroValue(method.getReturnType());
     }
 
@@ -89,34 +96,42 @@ final class StubGraphics
         {
             return null;
         }
+
         if (type == boolean.class)
         {
             return Boolean.FALSE;
         }
+
         if (type == char.class)
         {
             return Character.valueOf('\0');
         }
+
         if (type == long.class)
         {
             return Long.valueOf(0L);
         }
+
         if (type == float.class)
         {
             return Float.valueOf(0f);
         }
+
         if (type == double.class)
         {
             return Double.valueOf(0d);
         }
+
         if (type == byte.class)
         {
             return Byte.valueOf((byte) 0);
         }
+
         if (type == short.class)
         {
             return Short.valueOf((short) 0);
         }
+
         return Integer.valueOf(0);
     }
 }

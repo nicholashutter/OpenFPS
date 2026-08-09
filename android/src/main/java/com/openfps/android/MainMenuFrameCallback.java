@@ -134,6 +134,7 @@ public final class MainMenuFrameCallback implements I_FrameCallback
         {
             throw new IllegalArgumentException("menuActions must not be null");
         }
+
         this.actions = menuActions;
     }
 
@@ -179,11 +180,14 @@ public final class MainMenuFrameCallback implements I_FrameCallback
         {
             return density;
         }
+
         final float fits = (height * VERTICAL_FILL) / naturalHeightDp();
+
         if (fits < density)
         {
             return fits;
         }
+
         return density;
     }
 
@@ -191,14 +195,17 @@ public final class MainMenuFrameCallback implements I_FrameCallback
     public void onSurfaceReady(final int width, final int height)
     {
         final float density = layoutDensity(height, Gdx.graphics.getDensity());
+
         Log.i(TAG, "Building main menu: " + width + "x" + height
             + " density=" + Gdx.graphics.getDensity() + " laid out at " + density);
 
         skin = MenuSkinFactory.create();
+
         // ScreenViewport, not FitViewport: the UI is laid out in real pixels
         // and sized from the density, so it must not be letterboxed to a
         // fictional design resolution.
         stage = new Stage(new ScreenViewport());
+
         stage.addActor(buildRoot(skin, density));
         // The processor is NOT claimed here. Whoever owns the UI state decides
         // which of the menu and the game reads touches, and reasserting it from
@@ -218,6 +225,7 @@ public final class MainMenuFrameCallback implements I_FrameCallback
         {
             return;
         }
+
         Gdx.input.setInputProcessor(stage);
     }
 
@@ -234,6 +242,7 @@ public final class MainMenuFrameCallback implements I_FrameCallback
         {
             return;
         }
+
         Gdx.input.setInputProcessor(null);
     }
 
@@ -250,8 +259,11 @@ public final class MainMenuFrameCallback implements I_FrameCallback
         {
             return;
         }
+
         ScreenUtils.clear(BACKGROUND);
+
         stage.act(deltaSeconds);
+
         stage.draw();
     }
 
@@ -262,7 +274,9 @@ public final class MainMenuFrameCallback implements I_FrameCallback
         {
             return;
         }
+
         Log.i(TAG, "Menu resized: " + width + "x" + height);
+
         // centerCamera = true: the root table is centred on the viewport, so
         // the camera has to move with it or a rotation leaves the menu off
         // to one side.
@@ -294,16 +308,21 @@ public final class MainMenuFrameCallback implements I_FrameCallback
     public void onSurfaceLost()
     {
         Log.i(TAG, "Menu surface lost — releasing stage and skin");
+
         detachInputProcessor();
+
         if (stage != null)
         {
             stage.dispose();
+
             stage = null;
         }
+
         if (skin != null)
         {
             // One call releases the pixmap, the white texture and the font.
             skin.dispose();
+
             skin = null;
         }
     }
@@ -312,17 +331,25 @@ public final class MainMenuFrameCallback implements I_FrameCallback
     private Table buildRoot(final Skin uiSkin, final float density)
     {
         final Table root = new Table();
+
         root.setFillParent(true);
+
         root.center();
 
         final Label title = new Label("OpenFPS", uiSkin, MenuSkinFactory.TITLE_STYLE);
+
         title.setFontScale(fontScale(TITLE_TEXT_DP, density));
+
         root.add(title).padBottom(TITLE_GAP_DP * density).row();
 
         addButton(root, uiSkin, density, "Single Player", actions::onStartGame);
+
         addButton(root, uiSkin, density, "Multiplayer", actions::onMultiplayer);
+
         addButton(root, uiSkin, density, "Settings", actions::onSettings);
+
         addButton(root, uiSkin, density, "Quit", actions::onQuit);
+
         return root;
     }
 
@@ -331,7 +358,9 @@ public final class MainMenuFrameCallback implements I_FrameCallback
                            final String text, final Runnable action)
     {
         final TextButton button = new TextButton(text, uiSkin);
+
         button.getLabel().setFontScale(fontScale(BUTTON_TEXT_DP, density));
+
         button.addListener(new ChangeListener()
         {
             @Override
@@ -340,6 +369,7 @@ public final class MainMenuFrameCallback implements I_FrameCallback
                 action.run();
             }
         });
+
         root.add(button)
             .width(BUTTON_WIDTH_DP * density)
             .height(BUTTON_HEIGHT_DP * density)

@@ -61,22 +61,30 @@ public final class GameLoop implements Runnable
         {
             throw new IllegalArgumentException("timePort must not be null");
         }
+
         if (bus == null)
         {
             throw new IllegalArgumentException("bus must not be null");
         }
+
         if (eventFactory == null)
         {
             throw new IllegalArgumentException("eventFactory must not be null");
         }
+
         if (config == null)
         {
             throw new IllegalArgumentException("config must not be null");
         }
+
         this.timePort = timePort;
+
         this.bus = bus;
+
         this.eventFactory = eventFactory;
+
         this.config = config;
+
         this.running = false;
     }
 
@@ -88,12 +96,14 @@ public final class GameLoop implements Runnable
         // Origin for absolute deadline math. Captured once; every
         // subsequent deadline is computed from this.
         final long startNanos = timePort.nanos();
+
         final long nanosPerTic = config.nanosPerTic();
 
         LOG.info("GameLoop started: rate={} ({}ns/tic), maxTics={}",
             config.rate(), nanosPerTic, config.maxTics());
 
         int tic = 0;
+
         while (running)
         {
             // -- 1. Compute absolute deadline for this tic
@@ -101,10 +111,12 @@ public final class GameLoop implements Runnable
 
             // -- 2. Sleep + spin-wait until deadline
             final long waitNanos = deadlineNanos - timePort.nanos();
+
             if (waitNanos > 1_000_000L)
             {
                 sleepNanos(waitNanos - 1_000_000L);
             }
+
             while (timePort.nanos() < deadlineNanos)
             {
                 Thread.onSpinWait();
@@ -128,16 +140,21 @@ public final class GameLoop implements Runnable
             // RenderSubsystem's job, and it does coalesce them; see its
             // Javadoc for why the consumer is the only party that can.
             final TickEvent tickEvent = eventFactory.newTick(tic, nanosPerTic);
+
             final RenderFrameEvent renderEvent = eventFactory.newRenderFrame(tic);
+
             try
             {
                 bus.publish(tickEvent);
+
                 bus.publish(renderEvent);
             }
             catch (final InterruptedException e)
             {
                 LOG.info("GameLoop interrupted — exiting");
+
                 Thread.currentThread().interrupt();
+
                 break;
             }
 
@@ -148,12 +165,15 @@ public final class GameLoop implements Runnable
             {
                 LOG.info("GameLoop reached maxTics={} — emitting SHUTDOWN",
                     config.maxTics());
+
                 publishShutdown("maxTics reached");
+
                 break;
             }
         }
 
         running = false;
+
         LOG.info("GameLoop stopped at tic {}", tic);
     }
 
@@ -167,6 +187,7 @@ public final class GameLoop implements Runnable
     private void publishShutdown(final String reason)
     {
         final ShutdownEvent event = eventFactory.newShutdown(reason);
+
         try
         {
             bus.publish(event);
@@ -180,7 +201,9 @@ public final class GameLoop implements Runnable
     private void sleepNanos(final long nanos)
     {
         final long ms = nanos / 1_000_000L;
+
         final int ns = (int) (nanos % 1_000_000L);
+
         try
         {
             Thread.sleep(ms, ns);

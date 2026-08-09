@@ -68,16 +68,21 @@ public final class GltfConverterMain
         if (args.length != 2)
         {
             LOG.error("usage: GltfConverterMain <inputDirectory> <outputDirectory>");
+
             System.exit(EXIT_FAILURE);
+
             return;
         }
 
         final Path input = Path.of(args[0]);
+
         final Path output = Path.of(args[1]);
+
         if (!Files.isDirectory(input))
         {
             LOG.warn("No model source directory at {} — nothing to convert."
                 + " Run fetchAssets first, or pass -PmodelsIn=<dir>.", input);
+
             return;
         }
 
@@ -91,6 +96,7 @@ public final class GltfConverterMain
             // message already names the file and the value; re-wrapping it
             // would bury that, so it is logged and the process fails.
             LOG.error("Asset conversion failed: {}", e.getMessage(), e);
+
             System.exit(EXIT_FAILURE);
         }
     }
@@ -104,9 +110,11 @@ public final class GltfConverterMain
     public static void convertTree(final Path input, final Path output)
     {
         final List<Path> sources = findSources(input);
+
         if (sources.isEmpty())
         {
             LOG.warn("No .gltf or .glb files found under {}", input);
+
             return;
         }
 
@@ -114,6 +122,7 @@ public final class GltfConverterMain
         {
             GltfConverter.convert(source, output.resolve(targetName(input.relativize(source))));
         }
+
         LOG.info("Converted {} models into {}", sources.size(), output);
     }
 
@@ -121,6 +130,7 @@ public final class GltfConverterMain
     private static List<Path> findSources(final Path input)
     {
         final List<Path> sources = new ArrayList<>();
+
         try (Stream<Path> walk = Files.walk(input))
         {
             walk.filter(GltfConverterMain::isModelSource).sorted().forEach(sources::add);
@@ -129,6 +139,7 @@ public final class GltfConverterMain
         {
             throw new UncheckedIOException("cannot scan " + input, e);
         }
+
         return sources;
     }
 
@@ -139,7 +150,9 @@ public final class GltfConverterMain
         {
             return false;
         }
+
         final String name = path.getFileName().toString().toLowerCase(Locale.ROOT);
+
         return name.endsWith(".gltf") || name.endsWith(".glb");
     }
 
@@ -147,13 +160,18 @@ public final class GltfConverterMain
     private static Path targetName(final Path relative)
     {
         final String name = relative.getFileName().toString();
+
         final int dot = name.lastIndexOf('.');
+
         final String stem = name.substring(0, dot);
+
         final Path parent = relative.getParent();
+
         if (parent == null)
         {
             return Path.of(stem + OUTPUT_EXTENSION);
         }
+
         return parent.resolve(stem + OUTPUT_EXTENSION);
     }
 }

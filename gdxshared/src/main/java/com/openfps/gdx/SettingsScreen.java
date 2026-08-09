@@ -270,32 +270,45 @@ public final class SettingsScreen
         {
             throw new IllegalArgumentException("accessibilitySettings must not be null");
         }
+
         if (debugSettings == null)
         {
             throw new IllegalArgumentException("debugSettings must not be null");
         }
+
         if (renderSettings == null)
         {
             throw new IllegalArgumentException("renderSettings must not be null");
         }
+
         if (onBack == null)
         {
             throw new IllegalArgumentException("onBack must not be null");
         }
+
         if (!(scale > 0.0f))
         {
             throw new IllegalArgumentException("scale must be positive, got " + scale);
         }
+
         this.accessibility = accessibilitySettings;
+
         this.settings = debugSettings;
+
         this.render = renderSettings;
+
         this.uiScale = scale;
+
         this.white = whitePixelTexture();
+
         final TextureRegion pixel = new TextureRegion(white);
+
         this.font = new BitmapFont();
+
         this.stage = new Stage(new ScreenViewport());
 
         this.background = new MenuBackground(pixel);
+
         this.heading = new BlockTitle(TITLE_TEXT, pixel, MenuPalette.NEUTRAL_FACE);
 
         // The accessibility group first, and that ordering is a statement rather
@@ -303,9 +316,11 @@ public final class SettingsScreen
         // below the developer tooling in the reading order.
         this.accessibilityGroup =
             label(ACCESSIBILITY_GROUP, MenuPalette.BUTTON_LABEL, GROUP_FONT_SCALE * scale);
+
         this.outlineButton = new BlockButton(outlineButtonLabel(accessibilitySettings),
             MenuPalette.PLAY_FACE, MenuPalette.PLAY_SHADE, pixel, font,
             BUTTON_FONT_SCALE * scale, this::toggleOutline);
+
         this.outlineHint = label(OUTLINE_HINT, MenuPalette.HINT, HINT_FONT_SCALE * scale);
 
         // Green for the aid, blue for the instruments — the same colour language
@@ -313,32 +328,50 @@ public final class SettingsScreen
         // the corner of an eye as well as being read.
         this.displayGroup =
             label(DISPLAY_GROUP, MenuPalette.BUTTON_LABEL, GROUP_FONT_SCALE * scale);
+
         this.renderButton = new BlockButton(renderButtonLabel(renderSettings),
             MenuPalette.NET_FACE, MenuPalette.NET_SHADE, pixel, font,
             BUTTON_FONT_SCALE * scale, this::cycleRender);
+
         this.renderHint = label(RENDER_HINT, MenuPalette.HINT, HINT_FONT_SCALE * scale);
+
         this.debugButton = new BlockButton(debugButtonLabel(debugSettings),
             MenuPalette.NET_FACE, MenuPalette.NET_SHADE, pixel, font,
             BUTTON_FONT_SCALE * scale, this::toggleDebug);
+
         this.debugHint = label(DEBUG_HINT, MenuPalette.HINT, HINT_FONT_SCALE * scale);
 
         this.backButton = new BlockButton("BACK", MenuPalette.NEUTRAL_FACE,
             MenuPalette.NEUTRAL_SHADE, pixel, font, BUTTON_FONT_SCALE * scale, onBack);
 
         stage.addActor(background);
+
         stage.addActor(heading);
+
         stage.addActor(accessibilityGroup);
+
         outlineButton.setSize(BUTTON_WIDTH * scale, BUTTON_HEIGHT * scale);
+
         stage.addActor(outlineButton);
+
         stage.addActor(outlineHint);
+
         stage.addActor(displayGroup);
+
         renderButton.setSize(BUTTON_WIDTH * scale, BUTTON_HEIGHT * scale);
+
         stage.addActor(renderButton);
+
         stage.addActor(renderHint);
+
         debugButton.setSize(BUTTON_WIDTH * scale, BUTTON_HEIGHT * scale);
+
         stage.addActor(debugButton);
+
         stage.addActor(debugHint);
+
         backButton.setSize(BUTTON_WIDTH * scale, BUTTON_HEIGHT * scale);
+
         stage.addActor(backButton);
     }
 
@@ -362,6 +395,7 @@ public final class SettingsScreen
         {
             throw new IllegalArgumentException("accessibilitySettings must not be null");
         }
+
         return OUTLINE_LABEL + "   " + accessibilitySettings.targetOutlineLabel();
     }
 
@@ -381,6 +415,7 @@ public final class SettingsScreen
         {
             throw new IllegalArgumentException("debugSettings must not be null");
         }
+
         return DEBUG_LABEL + "   " + debugSettings.overlayLabel();
     }
 
@@ -402,6 +437,7 @@ public final class SettingsScreen
         {
             throw new IllegalArgumentException("renderSettings must not be null");
         }
+
         return RENDER_LABEL + "   " + renderSettings.label();
     }
 
@@ -457,6 +493,7 @@ public final class SettingsScreen
     private void toggleOutline()
     {
         accessibility.toggleTargetOutline();
+
         outlineButton.setLabel(outlineButtonLabel(accessibility));
     }
 
@@ -465,6 +502,7 @@ public final class SettingsScreen
     private void toggleDebug()
     {
         settings.toggleOverlay();
+
         debugButton.setLabel(debugButtonLabel(settings));
     }
 
@@ -477,6 +515,7 @@ public final class SettingsScreen
     private void cycleRender()
     {
         render.cycle();
+
         renderButton.setLabel(renderButtonLabel(render));
     }
 
@@ -543,44 +582,68 @@ public final class SettingsScreen
         background.setBounds(0.0f, 0.0f, width, height);
 
         final float buttonWidth = BUTTON_WIDTH * uiScale;
+
         final float buttonHeight = BUTTON_HEIGHT * uiScale;
+
         outlineButton.setSize(buttonWidth, buttonHeight);
+
         debugButton.setSize(buttonWidth, buttonHeight);
+
         renderButton.setSize(buttonWidth, buttonHeight);
+
         backButton.setSize(buttonWidth, buttonHeight);
+
         // Packed before anything is measured: a Label's height is whatever its
         // text came to, and both the heading's budget and the hint decision
         // depend on that answer.
         accessibilityGroup.pack();
+
         outlineHint.pack();
+
         displayGroup.pack();
+
         renderHint.pack();
+
         debugHint.pack();
 
         final float headingTop = height * (1.0f - TITLE_TOP_FRACTION);
+
         final float headingWidth = headingWidthFor(width, height, heading.widthInBlocks(),
             headingHeightBudget(height, reachableContentHeight(buttonHeight)));
+
         final float cell = heading.cellSizeFor(headingWidth);
+
         final float headingHeight = cell * BlockFont.GLYPH_HEIGHT;
+
         heading.setBounds((width - headingWidth) * 0.5f, headingTop - headingHeight,
             headingWidth, headingHeight);
 
         final float controlsTop = headingTop - headingHeight;
+
         final boolean showHints = hintsFit(
             controlsTop - reachableContentHeight(buttonHeight), hintsHeight());
+
         outlineHint.setVisible(showHints);
+
         renderHint.setVisible(showHints);
+
         debugHint.setVisible(showHints);
 
         final float gap = separationFor(controlsTop, buttonHeight, showHints);
 
         // MUTABLE local — the y of the next thing to place, walking downwards.
         float cursor = controlsTop - gap;
+
         cursor = placeGroup(accessibilityGroup, cursor, width);
+
         cursor = placeControl(outlineButton, outlineHint, cursor, width, showHints) - gap;
+
         cursor = placeGroup(displayGroup, cursor, width);
+
         cursor = placeControl(renderButton, renderHint, cursor, width, showHints) - gap;
+
         cursor = placeControl(debugButton, debugHint, cursor, width, showHints) - gap;
+
         backButton.setPosition((width - buttonWidth) * 0.5f, cursor - buttonHeight);
     }
 
@@ -608,21 +671,26 @@ public final class SettingsScreen
         final int blocks, final float heightBudget)
     {
         final float wanted = width * TITLE_WIDTH_FRACTION;
+
         if (blocks <= 0)
         {
             return wanted;
         }
+
         // BlockTitle derives its cell size from its WIDTH and draws downward, so
         // every height limit has to be expressed as a width by inverting that
         // arithmetic. Doing it here rather than guessing a second constant is
         // what keeps the two from drifting apart.
         final float allowedHeight =
             Math.min(height * HEADING_MAX_HEIGHT_FRACTION, heightBudget);
+
         final float capped = (allowedHeight / BlockFont.GLYPH_HEIGHT) * blocks;
+
         if (capped < wanted)
         {
             return capped;
         }
+
         return wanted;
     }
 
@@ -646,10 +714,12 @@ public final class SettingsScreen
         final float contentHeight)
     {
         final float budget = surfaceHeight * (1.0f - TITLE_TOP_FRACTION) - contentHeight;
+
         if (budget < 0.0f)
         {
             return 0.0f;
         }
+
         return budget;
     }
 
@@ -676,6 +746,7 @@ public final class SettingsScreen
         {
             return true;
         }
+
         return available >= hintsHeight;
     }
 
@@ -715,16 +786,21 @@ public final class SettingsScreen
         // MUTABLE local — the hints are added only when they are being drawn, or
         // the gaps would be squeezed to pay for three labels nobody can see.
         float content = reachableContentHeight(buttonHeight);
+
         if (showHints)
         {
             content = content + hintsHeight();
         }
+
         final float free = controlsTop - content;
+
         final float shared = Math.min(CONTROL_GAP * uiScale, free / SEPARATION_COUNT);
+
         if (shared < MIN_CONTROL_GAP * uiScale)
         {
             return Math.max(0.0f, shared);
         }
+
         return shared;
     }
 
@@ -732,6 +808,7 @@ public final class SettingsScreen
     private float placeGroup(final Label group, final float top, final float width)
     {
         group.setPosition((width - group.getWidth()) * 0.5f, top - group.getHeight());
+
         return top - group.getHeight() - GROUP_GAP * uiScale;
     }
 
@@ -745,12 +822,16 @@ public final class SettingsScreen
         final float width, final boolean showHints)
     {
         button.setPosition((width - button.getWidth()) * 0.5f, top - button.getHeight());
+
         final float hintTop = top - button.getHeight() - HINT_GAP * uiScale;
+
         hint.setPosition((width - hint.getWidth()) * 0.5f, hintTop - hint.getHeight());
+
         if (!showHints)
         {
             return top - button.getHeight();
         }
+
         return hintTop - hint.getHeight();
     }
 
@@ -763,7 +844,9 @@ public final class SettingsScreen
     public void render(final float deltaSeconds)
     {
         ScreenUtils.clear(MenuPalette.BACKDROP);
+
         stage.act(deltaSeconds);
+
         stage.draw();
     }
 
@@ -774,6 +857,7 @@ public final class SettingsScreen
         {
             return;
         }
+
         Gdx.input.setInputProcessor(stage);
     }
 
@@ -784,6 +868,7 @@ public final class SettingsScreen
         {
             return;
         }
+
         Gdx.input.setInputProcessor(null);
     }
 
@@ -796,6 +881,7 @@ public final class SettingsScreen
     public void resize(final int width, final int height)
     {
         stage.getViewport().update(width, height, true);
+
         layoutFor(width, height);
     }
 
@@ -803,7 +889,9 @@ public final class SettingsScreen
     public void dispose()
     {
         stage.dispose();
+
         white.dispose();
+
         font.dispose();
     }
 
@@ -811,10 +899,15 @@ public final class SettingsScreen
     private static Texture whitePixelTexture()
     {
         final Pixmap pixmap = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
+
         pixmap.setColor(Color.WHITE);
+
         pixmap.fill();
+
         final Texture texture = new Texture(pixmap);
+
         pixmap.dispose();
+
         return texture;
     }
 
@@ -822,7 +915,9 @@ public final class SettingsScreen
     private Label label(final String text, final Color colour, final float scale)
     {
         final Label built = new Label(text, new Label.LabelStyle(font, colour));
+
         built.setFontScale(scale);
+
         return built;
     }
 }

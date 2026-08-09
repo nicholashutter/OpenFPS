@@ -52,7 +52,9 @@ class GdxGamepadInputTest
     private static GdxInputPort portOn(final InputAccumulator accumulator)
     {
         final GdxInputPort port = new GdxInputPort(accumulator);
+
         port.setTicRate(TIC_RATE);
+
         return port;
     }
 
@@ -69,10 +71,13 @@ class GdxGamepadInputTest
             // forward is positive in InputState. Getting it backwards produces a
             // game in which pushing the stick away walks you backwards.
             final InputAccumulator accumulator = new InputAccumulator(1.0f);
+
             final GdxInputPort port = portOn(accumulator);
+
             final FakeGamepad pad = new FakeGamepad().withLeftStick(0.0f, -1.0f);
 
             port.pollGamepad(pad);
+
             port.sampleInput(0);
 
             assertThat(port.currentInput().forwardAxis())
@@ -85,9 +90,13 @@ class GdxGamepadInputTest
         void shouldStrafeRight()
         {
             final InputAccumulator accumulator = new InputAccumulator(1.0f);
+
             final GdxInputPort port = portOn(accumulator);
+
             port.pollGamepad(new FakeGamepad().withLeftStick(1.0f, 0.0f));
+
             port.sampleInput(0);
+
             assertThat(port.currentInput().strafeAxis()).isCloseTo(1.0f, within(EPSILON));
         }
 
@@ -96,9 +105,13 @@ class GdxGamepadInputTest
         void shouldTurnRight()
         {
             final InputAccumulator accumulator = new InputAccumulator(1.0f);
+
             final GdxInputPort port = portOn(accumulator);
+
             port.pollGamepad(new FakeGamepad().withRightStick(1.0f, 0.0f));
+
             port.sampleInput(0);
+
             assertThat(port.currentInput().yawDelta()).isPositive();
         }
 
@@ -112,16 +125,21 @@ class GdxGamepadInputTest
             // second negation here is what "the mouse is still inverted" was
             // last time, and it cost this project several rounds.
             final InputAccumulator accumulator = new InputAccumulator(1.0f);
+
             final GdxInputPort port = portOn(accumulator);
 
             port.pollGamepad(new FakeGamepad().withRightStick(0.0f, -1.0f));
+
             port.sampleInput(0);
+
             assertThat(port.currentInput().pitchDelta())
                 .as("stick away from you aims up")
                 .isPositive();
 
             port.pollGamepad(new FakeGamepad().withRightStick(0.0f, 1.0f));
+
             port.sampleInput(1);
+
             assertThat(port.currentInput().pitchDelta())
                 .as("stick toward you aims down")
                 .isNegative();
@@ -132,12 +150,16 @@ class GdxGamepadInputTest
         void shouldBeNeutralAtRest()
         {
             final InputAccumulator accumulator = new InputAccumulator(1.0f);
+
             final GdxInputPort port = portOn(accumulator);
+
             // Resting noise, not a clean zero — a real pad never reports one.
             port.pollGamepad(new FakeGamepad()
                 .withLeftStick(0.05f, -0.04f)
                 .withRightStick(-0.03f, 0.06f));
+
             port.sampleInput(0);
+
             assertThat(port.currentInput().isNeutral()).isTrue();
         }
 
@@ -146,8 +168,11 @@ class GdxGamepadInputTest
         void shouldTurnAtTheDocumentedRate()
         {
             final InputAccumulator accumulator = new InputAccumulator(1.0f);
+
             final GdxInputPort port = portOn(accumulator);
+
             port.pollGamepad(new FakeGamepad().withRightStick(1.0f, 0.0f));
+
             port.sampleInput(0);
 
             assertThat(port.currentInput().yawDelta()).isCloseTo(
@@ -164,17 +189,24 @@ class GdxGamepadInputTest
             // HERE — by a pollGamepad that called accumulateLook instead of
             // setGamepadLookAxes, which is a plausible-looking one-word change.
             final InputAccumulator once = new InputAccumulator(1.0f);
+
             final GdxInputPort onePoll = portOn(once);
+
             onePoll.pollGamepad(new FakeGamepad().withRightStick(1.0f, 0.0f));
+
             onePoll.sampleInput(0);
 
             final InputAccumulator many = new InputAccumulator(1.0f);
+
             final GdxInputPort manyPolls = portOn(many);
+
             final FakeGamepad held = new FakeGamepad().withRightStick(1.0f, 0.0f);
+
             for (int poll = 0; poll < 8; poll++)
             {
                 manyPolls.pollGamepad(held);
             }
+
             manyPolls.sampleInput(0);
 
             assertThat(manyPolls.currentInput().yawDelta())
@@ -206,19 +238,25 @@ class GdxGamepadInputTest
             // a wall for the rest of the match with nobody touching anything —
             // which is exactly what a held key did before clearAll() existed.
             final InputAccumulator accumulator = new InputAccumulator(1.0f);
+
             final GdxInputPort port = portOn(accumulator);
+
             final FakeGamepad pad = new FakeGamepad()
                 .withLeftStick(0.0f, -1.0f)
                 .withRightStick(1.0f, 0.0f);
 
             port.pollGamepad(pad);
+
             port.sampleInput(0);
+
             assertThat(port.currentInput().forwardAxis()).isCloseTo(1.0f, within(EPSILON));
 
             // The cable comes out. The fake deliberately keeps the deflection in
             // its fields — a real device does not centre itself on the way out.
             pad.unplug();
+
             port.pollGamepad(pad);
+
             port.sampleInput(1);
 
             assertThat(port.currentInput().isNeutral())
@@ -231,15 +269,21 @@ class GdxGamepadInputTest
         void shouldStayStopped()
         {
             final InputAccumulator accumulator = new InputAccumulator(1.0f);
+
             final GdxInputPort port = portOn(accumulator);
+
             final FakeGamepad pad = new FakeGamepad().withRightStick(1.0f, 1.0f);
+
             port.pollGamepad(pad);
+
             pad.unplug();
 
             for (int tic = 0; tic < 240; tic++)
             {
                 port.pollGamepad(pad);
+
                 port.sampleInput(tic);
+
                 assertThat(port.currentInput().isNeutral())
                     .as("tic %d after the pad went away", Integer.valueOf(tic))
                     .isTrue();
@@ -254,24 +298,32 @@ class GdxGamepadInputTest
             // still has a hand on the keyboard, and a total clear would drop an
             // input they are making right now.
             final InputAccumulator accumulator = new InputAccumulator(1.0f);
+
             final GdxInputPort port = portOn(accumulator);
+
             final FakeGamepad pad = new FakeGamepad().withLeftStick(1.0f, 0.0f);
+
             port.pollGamepad(pad);
 
             // Stand in for the keyboard half of the same frame.
             accumulator.setMovementKeys(true, false, false, false);
+
             accumulator.accumulateLook(20, 0);
 
             pad.unplug();
+
             port.pollGamepad(pad);
+
             port.sampleInput(0);
 
             assertThat(port.currentInput().forwardAxis())
                 .as("W is still held")
                 .isCloseTo(1.0f, within(EPSILON));
+
             assertThat(port.currentInput().strafeAxis())
                 .as("the stick is gone")
                 .isZero();
+
             assertThat(port.currentInput().yawDelta())
                 .as("and the mouse still turns the view")
                 .isPositive();
@@ -282,14 +334,21 @@ class GdxGamepadInputTest
         void shouldRecoverOnReplug()
         {
             final InputAccumulator accumulator = new InputAccumulator(1.0f);
+
             final GdxInputPort port = portOn(accumulator);
+
             final FakeGamepad pad = new FakeGamepad().withLeftStick(0.0f, -1.0f);
+
             port.pollGamepad(pad);
+
             pad.unplug();
+
             port.pollGamepad(pad);
 
             pad.replug();
+
             port.pollGamepad(pad);
+
             port.sampleInput(0);
 
             assertThat(port.currentInput().forwardAxis()).isCloseTo(1.0f, within(EPSILON));
@@ -300,14 +359,19 @@ class GdxGamepadInputTest
         void shouldTolerateNoControllerAtAll()
         {
             final InputAccumulator accumulator = new InputAccumulator(1.0f);
+
             final GdxInputPort port = portOn(accumulator);
+
             final FakeGamepad pad = new FakeGamepad().unplug();
 
             port.pollGamepad(pad);
+
             accumulator.setMovementKeys(true, false, false, false);
+
             port.sampleInput(0);
 
             assertThat(pad.pollCount()).isEqualTo(1);
+
             assertThat(port.currentInput().forwardAxis())
                 .as("keyboard play is untouched by the absence of a pad")
                 .isCloseTo(1.0f, within(EPSILON));
@@ -318,6 +382,7 @@ class GdxGamepadInputTest
         void shouldRejectANullGamepad()
         {
             assertThat(new GdxInputPort().gamepad()).isNotNull();
+
             assertThatThrownBy(() -> new GdxInputPort().bindGamepad(null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("source");
@@ -338,6 +403,7 @@ class GdxGamepadInputTest
             // working.
             final InputBinding[] fire =
                 DesktopBindings.defaults().bindingsFor(GameAction.FIRE);
+
             assertThat(fire).extracting(InputBinding::source)
                 .containsExactlyInAnyOrder(
                     InputBinding.Source.MOUSE_BUTTON,
@@ -351,7 +417,9 @@ class GdxGamepadInputTest
         void shouldBindEveryAction()
         {
             final ActionBindings table = DesktopBindings.defaults();
+
             assertThat(table.isComplete()).isTrue();
+
             assertThat(table.firstUnbound()).isNull();
 
             final GameAction[] movement =
@@ -359,6 +427,7 @@ class GdxGamepadInputTest
                 GameAction.MOVE_FORWARD, GameAction.MOVE_BACKWARD,
                 GameAction.STRAFE_LEFT, GameAction.STRAFE_RIGHT,
             };
+
             for (final GameAction action : movement)
             {
                 assertThat(table.bindingsFor(action))
@@ -372,6 +441,7 @@ class GdxGamepadInputTest
         void shouldFireFromAFaceButton()
         {
             final FakeGamepad pad = new FakeGamepad().press(GLFW.GLFW_GAMEPAD_BUTTON_A);
+
             assertThat(GdxInputPort.isAnyActive(DesktopBindings.defaults(), GameAction.FIRE,
                 binding -> probe(pad, binding))).isTrue();
         }
@@ -382,6 +452,7 @@ class GdxGamepadInputTest
         {
             final FakeGamepad pad =
                 new FakeGamepad().pullTrigger(GLFW.GLFW_GAMEPAD_AXIS_RIGHT_TRIGGER);
+
             assertThat(GdxInputPort.isAnyActive(DesktopBindings.defaults(), GameAction.FIRE,
                 binding -> probe(pad, binding))).isTrue();
         }
@@ -392,11 +463,13 @@ class GdxGamepadInputTest
         {
             final FakeGamepad sprinting =
                 new FakeGamepad().press(GLFW.GLFW_GAMEPAD_BUTTON_LEFT_BUMPER);
+
             assertThat(GdxInputPort.isAnyActive(DesktopBindings.defaults(), GameAction.SPRINT,
                 binding -> probe(sprinting, binding))).isTrue();
 
             final FakeGamepad leaving =
                 new FakeGamepad().press(GLFW.GLFW_GAMEPAD_BUTTON_START);
+
             assertThat(GdxInputPort.isAnyActive(DesktopBindings.defaults(),
                 GameAction.LEAVE_MATCH, binding -> probe(leaving, binding))).isTrue();
 
@@ -404,6 +477,7 @@ class GdxGamepadInputTest
             // and being unable to leave a match is not a cosmetic failure.
             final FakeGamepad backing =
                 new FakeGamepad().press(GLFW.GLFW_GAMEPAD_BUTTON_BACK);
+
             assertThat(GdxInputPort.isAnyActive(DesktopBindings.defaults(),
                 GameAction.LEAVE_MATCH, binding -> probe(backing, binding))).isTrue();
         }
@@ -419,6 +493,7 @@ class GdxGamepadInputTest
             // moved sideways. A stick axis has a direction; "is it held" has no
             // answer, so it reports inactive.
             final FakeGamepad pushedHard = new FakeGamepad().withLeftStick(1.0f, 1.0f);
+
             assertThat(GdxInputPort.isAnyActive(DesktopBindings.defaults(),
                 GameAction.MOVE_FORWARD, binding -> probe(pushedHard, binding)))
                 .as("no keyboard key and no pad button is down, so nothing is held")
@@ -433,6 +508,7 @@ class GdxGamepadInputTest
             // that there are five sources rather than three.
             final ActionBindings shared = new ActionBindings()
                 .bind(GameAction.JUMP, InputBinding.touchRegion(2));
+
             assertThat(GdxInputPort.isAnyActive(shared, GameAction.JUMP,
                 binding -> probe(new FakeGamepad(), binding))).isFalse();
         }
@@ -444,16 +520,23 @@ class GdxGamepadInputTest
             // The requirement, end to end at the port: an ADDITIONAL input path.
             // Walk with the stick, aim with the mouse, in one snapshot.
             final InputAccumulator accumulator = new InputAccumulator(1.0f);
+
             final GdxInputPort port = portOn(accumulator);
 
             port.pollGamepad(new FakeGamepad().withLeftStick(0.0f, -1.0f));
+
             accumulator.accumulateLook(30, 0);
+
             accumulator.setActionKeys(true, false, false);
+
             port.sampleInput(0);
 
             final InputState snapshot = port.currentInput();
+
             assertThat(snapshot.forwardAxis()).as("stick walks").isCloseTo(1.0f, within(EPSILON));
+
             assertThat(snapshot.yawDelta()).as("mouse turns").isPositive();
+
             assertThat(snapshot.fire()).as("mouse button fires").isTrue();
         }
     }
@@ -468,10 +551,12 @@ class GdxGamepadInputTest
         {
             return pad.isButtonDown(binding.code());
         }
+
         if (binding.source() == InputBinding.Source.GAMEPAD_AXIS)
         {
             return pad.isAxisPressed(binding.code());
         }
+
         return false;
     }
 
@@ -487,16 +572,27 @@ class GdxGamepadInputTest
             // JVM constructs one every time GdxInputPort is created, including in
             // every test in this module.
             final GlfwGamepad pad = new GlfwGamepad();
+
             assertThat(pad.isConnected()).isFalse();
+
             assertThat(pad.slot()).isNegative();
+
             assertThat(pad.name()).isEqualTo(GlfwGamepad.NO_PAD);
+
             assertThat(pad.leftStickX()).isZero();
+
             assertThat(pad.leftStickY()).isZero();
+
             assertThat(pad.rightStickX()).isZero();
+
             assertThat(pad.rightStickY()).isZero();
+
             assertThat(pad.isButtonDown(GLFW.GLFW_GAMEPAD_BUTTON_A)).isFalse();
+
             assertThat(pad.didButtonGoDown(GLFW.GLFW_GAMEPAD_BUTTON_A)).isFalse();
+
             assertThat(pad.isAxisPressed(GLFW.GLFW_GAMEPAD_AXIS_RIGHT_TRIGGER)).isFalse();
+
             assertThat(pad.toString()).contains(GlfwGamepad.NO_PAD);
         }
 
@@ -508,8 +604,11 @@ class GdxGamepadInputTest
             // wrote it. A code from another platform must not be an
             // ArrayIndexOutOfBoundsException in the middle of a frame.
             final GlfwGamepad pad = new GlfwGamepad();
+
             assertThat(pad.isButtonDown(-1)).isFalse();
+
             assertThat(pad.isButtonDown(Input.Keys.BUTTON_A)).isFalse();
+
             assertThat(pad.didButtonGoDown(9999)).isFalse();
         }
     }

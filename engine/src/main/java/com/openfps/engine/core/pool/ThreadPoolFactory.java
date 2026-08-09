@@ -135,6 +135,7 @@ public final class ThreadPoolFactory
         // the other way. Nothing produces such a count today; the clamp is here
         // so that nothing ever can.
         final int usable = Math.max(MINIMUM_WORKERS, logicalProcessorCount);
+
         return Math.max(MINIMUM_WORKERS, usable - RESERVED_PROCESSORS);
     }
 
@@ -155,15 +156,18 @@ public final class ThreadPoolFactory
                                          final String override)
     {
         final int pinned = parseOverride(override);
+
         if (pinned >= MINIMUM_WORKERS)
         {
             return pinned;
         }
+
         if (override != null && !override.trim().isEmpty())
         {
             LOG.warn("Ignoring -D{}={}: expected a whole number >= {}",
                 WORKER_COUNT_PROPERTY, override, MINIMUM_WORKERS);
         }
+
         return recommendedWorkerCount(logicalProcessorCount);
     }
 
@@ -184,7 +188,9 @@ public final class ThreadPoolFactory
     public static int resolveWorkerCount(final int logicalProcessorCount)
     {
         final String configured = System.getProperty(WORKER_COUNT_PROPERTY);
+
         final int workers = resolveWorkerCount(logicalProcessorCount, configured);
+
         if (workers == parseOverride(configured))
         {
             LOG.info("Worker pool pinned to {} threads by -D{}={} ({} logical processors)",
@@ -196,6 +202,7 @@ public final class ThreadPoolFactory
                 + "reserved for the game loop and the platform frame loop",
                 workers, logicalProcessorCount, RESERVED_PROCESSORS);
         }
+
         return workers;
     }
 
@@ -207,13 +214,16 @@ public final class ThreadPoolFactory
         {
             return NOT_PINNED;
         }
+
         try
         {
             final int parsed = Integer.parseInt(override.trim());
+
             if (parsed < MINIMUM_WORKERS)
             {
                 return NOT_PINNED;
             }
+
             return parsed;
         }
         catch (final NumberFormatException e)

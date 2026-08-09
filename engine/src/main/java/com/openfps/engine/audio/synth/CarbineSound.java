@@ -227,13 +227,18 @@ public final class CarbineSound
     public static double envelopeAt(final int index)
     {
         final int count = sampleCount();
+
         if (index < 0 || index >= count)
         {
             return 0.0;
         }
+
         final double attack = Math.min(1.0, index / (double) ATTACK_SAMPLES);
+
         final double release = Math.min(1.0, (count - 1 - index) / (double) RELEASE_SAMPLES);
+
         final double decay = Math.exp(-DECAY_PER_SECOND * index / SAMPLE_RATE);
+
         return attack * decay * release;
     }
 
@@ -249,28 +254,41 @@ public final class CarbineSound
     public static short[] samples()
     {
         final int count = sampleCount();
+
         final short[] pcm = new short[count];
+
         final double coefficient = lowPassCoefficient();
+
         // MUTABLE locals — the LCG's state, the filter's memory, and the body's
         // phase. All three are accumulators, which is why they are locals carried
         // through the loop rather than recomputed per sample.
         int noiseState = NOISE_SEED;
+
         double filtered = 0.0;
+
         double phase = 0.0;
+
         for (int index = 0; index < count; index++)
         {
             noiseState = noiseState * LCG_MULTIPLIER + LCG_INCREMENT;
+
             final double white = unitNoise(noiseState);
+
             filtered = filtered + coefficient * (white - filtered);
+
             phase = phase + TWO_PI * BODY_HZ / SAMPLE_RATE;
+
             final double wave = NOISE_LEVEL * filtered + BODY_LEVEL * Math.sin(phase);
+
             final double value = PEAK * envelopeAt(index) * wave * Short.MAX_VALUE;
+
             // Clamped rather than trusted, for the reason BlasterSound gives: a
             // cast that wraps turns a loud sample into an equally loud sample of
             // the opposite sign, which is a click and not a clip.
             pcm[index] = (short) Math.max(Short.MIN_VALUE,
                 Math.min(Short.MAX_VALUE, Math.round(value)));
         }
+
         return pcm;
     }
 

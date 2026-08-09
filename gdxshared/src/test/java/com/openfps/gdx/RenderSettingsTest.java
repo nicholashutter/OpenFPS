@@ -51,7 +51,9 @@ class RenderSettingsTest
         void shouldStartAtTheDefault()
         {
             final RenderSettings settings = new RenderSettings();
+
             assertThat(settings.mode()).isEqualTo(RenderMode.P480);
+
             assertThat(settings.label()).isEqualTo("480P");
         }
 
@@ -60,8 +62,11 @@ class RenderSettingsTest
         void shouldReturnTheNewModeFromCycle()
         {
             final RenderSettings settings = new RenderSettings();
+
             assertThat(settings.cycle()).isEqualTo(RenderMode.P720);
+
             assertThat(settings.cycle()).isEqualTo(RenderMode.NATIVE);
+
             assertThat(settings.cycle()).isEqualTo(RenderMode.P480);
         }
 
@@ -70,8 +75,10 @@ class RenderSettingsTest
         void shouldRefuseNull()
         {
             final RenderSettings settings = new RenderSettings();
+
             assertThatThrownBy(() -> settings.setMode(null))
                 .isInstanceOf(IllegalArgumentException.class);
+
             assertThatThrownBy(() -> new RenderSettings(null))
                 .isInstanceOf(IllegalArgumentException.class);
         }
@@ -86,7 +93,9 @@ class RenderSettingsTest
         void shouldNotFireOnAttach()
         {
             final RenderSettings settings = new RenderSettings();
+
             final Recorder recorder = new Recorder();
+
             settings.onChange(recorder);
 
             assertThat(recorder.seen).isEmpty();
@@ -97,11 +106,15 @@ class RenderSettingsTest
         void shouldReportEveryChange()
         {
             final RenderSettings settings = new RenderSettings();
+
             final Recorder recorder = new Recorder();
+
             settings.onChange(recorder);
 
             settings.cycle();
+
             settings.cycle();
+
             settings.setMode(RenderMode.P480);
 
             assertThat(recorder.seen).containsExactly(RenderMode.P720, RenderMode.NATIVE,
@@ -115,14 +128,19 @@ class RenderSettingsTest
             // A rebuilt Texture and a re-sized framebuffer to arrive where we
             // already were is not free, and it drops a published frame with it.
             final RenderSettings settings = new RenderSettings();
+
             final Recorder recorder = new Recorder();
+
             settings.onChange(recorder);
 
             settings.setMode(RenderMode.P480);
+
             assertThat(recorder.seen).isEmpty();
 
             settings.setMode(RenderMode.NATIVE);
+
             settings.setMode(RenderMode.NATIVE);
+
             assertThat(recorder.seen).containsExactly(RenderMode.NATIVE);
         }
 
@@ -131,14 +149,19 @@ class RenderSettingsTest
         void shouldStopReportingWhenDetached()
         {
             final RenderSettings settings = new RenderSettings();
+
             final Recorder recorder = new Recorder();
+
             settings.onChange(recorder);
+
             settings.cycle();
 
             settings.onChange(null);
+
             settings.cycle();
 
             assertThat(recorder.seen).containsExactly(RenderMode.P720);
+
             assertThat(settings.mode()).isEqualTo(RenderMode.NATIVE);
         }
 
@@ -147,7 +170,9 @@ class RenderSettingsTest
         void shouldWorkWithNoObserver()
         {
             final RenderSettings settings = new RenderSettings();
+
             settings.cycle();
+
             assertThat(settings.mode()).isEqualTo(RenderMode.P720);
         }
     }

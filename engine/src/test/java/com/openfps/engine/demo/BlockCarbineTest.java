@@ -38,10 +38,15 @@ final class BlockCarbineTest
         final ModelFormat carbine = BlockCarbine.model();
 
         assertThat(carbine.minX()).isEqualTo(-BlockCarbine.HALF_WIDTH, within(TOLERANCE));
+
         assertThat(carbine.maxX()).isEqualTo(BlockCarbine.HALF_WIDTH, within(TOLERANCE));
+
         assertThat(carbine.minY()).isEqualTo(-BlockCarbine.HALF_HEIGHT, within(TOLERANCE));
+
         assertThat(carbine.maxY()).isEqualTo(BlockCarbine.HALF_HEIGHT, within(TOLERANCE));
+
         assertThat(carbine.minZ()).isEqualTo(-BlockCarbine.HALF_LENGTH, within(TOLERANCE));
+
         assertThat(carbine.maxZ()).isEqualTo(BlockCarbine.HALF_LENGTH, within(TOLERANCE));
     }
 
@@ -56,9 +61,12 @@ final class BlockCarbineTest
         final ModelFormat carbine = BlockCarbine.model();
 
         assertThat(carbine.submeshCount()).isZero();
+
         assertThat(carbine.textureCount()).isZero();
+
         assertThat(carbine.triangleCount())
             .isEqualTo(BlockCarbine.partCount() * 12);
+
         assertThat(carbine.triangleCount())
             .as("a stand-in must not cost more than the model it stands in for")
             .isLessThan(ModelFormat.MAX_TRIANGLES_PER_MODEL);
@@ -89,10 +97,13 @@ final class BlockCarbineTest
         // distances is that the -z end is a thin barrel and the +z end is a
         // shoulder-width stock, so the silhouette tapers toward the muzzle.
         final ModelFormat carbine = BlockCarbine.model();
+
         final float atMuzzle = widthAt(carbine, -BlockCarbine.HALF_LENGTH + TOLERANCE);
+
         final float atStock = widthAt(carbine, BlockCarbine.HALF_LENGTH - TOLERANCE);
 
         assertThat(atMuzzle).isPositive();
+
         assertThat(atMuzzle)
             .as("the muzzle end is as thick as the stock, so this reads as a plank")
             .isLessThan(atStock);
@@ -104,16 +115,20 @@ final class BlockCarbineTest
     {
         // MUTABLE local — the widest span found so far at that depth.
         float widest = 0.0f;
+
         for (int vertex = 0; vertex < model.vertexCount(); vertex++)
         {
             final boolean towardMuzzle = z < 0.0f;
+
             final boolean reaches = towardMuzzle && model.positionZ(vertex) <= z
                 || !towardMuzzle && model.positionZ(vertex) >= z;
+
             if (reaches)
             {
                 widest = Math.max(widest, Math.abs(model.positionX(vertex)));
             }
         }
+
         return widest;
     }
 }

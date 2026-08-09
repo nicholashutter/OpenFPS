@@ -116,10 +116,15 @@ final class SoftwareRenderPortCullTest
     private static ModelFormat quad(final int colour)
     {
         final int[] vertices = new int[QUAD_CORNERS * ModelFormat.VERTEX_STRIDE_INTS];
+
         ModelFormat.writeVertex(vertices, 0, -HALF, -HALF, 0.0f, 0.0f, 0.0f, colour);
+
         ModelFormat.writeVertex(vertices, 1, HALF, -HALF, 0.0f, 1.0f, 0.0f, colour);
+
         ModelFormat.writeVertex(vertices, 2, HALF, HALF, 0.0f, 1.0f, 1.0f, colour);
+
         ModelFormat.writeVertex(vertices, 3, -HALF, HALF, 0.0f, 0.0f, 1.0f, colour);
+
         return ModelFormat.ofGeometry(vertices, QUAD_INDICES);
     }
 
@@ -139,12 +144,18 @@ final class SoftwareRenderPortCullTest
         {
             return renderWith(scene, null);
         }
+
         final I_EventBusPort bus = EventBusFactory.createShared();
+
         bus.init(BUS_CAPACITY);
+
         final I_ThreadPoolPort pool =
             ThreadPoolFactory.createFixed(bus, new SubsystemRegistry());
+
         pool.init(workers);
+
         pool.start();
+
         try
         {
             return renderWith(scene, pool);
@@ -152,6 +163,7 @@ final class SoftwareRenderPortCullTest
         finally
         {
             pool.shutdown();
+
             bus.shutdown();
         }
     }
@@ -161,19 +173,32 @@ final class SoftwareRenderPortCullTest
     private static Rendered renderWith(final Scene scene, final I_ThreadPoolPort pool)
     {
         final I_TimePort time = new NullTimePort();
+
         time.init();
+
         final SoftwareRenderPort port = new SoftwareRenderPort(pool, time);
+
         port.init();
+
         port.resize(SIZE, SIZE);
+
         port.setCamera(camera());
+
         port.setScene(scene);
+
         port.renderFrame(0);
+
         final int[] frame = new int[SIZE * SIZE];
+
         port.copyColorInto(frame);
+
         final Rendered result = new Rendered(frame, port.lastFrameTriangles(),
             port.lastFrameParallelPasses());
+
         port.shutdown();
+
         time.shutdown();
+
         return result;
     }
 
@@ -191,17 +216,21 @@ final class SoftwareRenderPortCullTest
     private static Scene.Builder withDecoys(final Scene.Builder builder)
     {
         final ModelFormat decoy = quad(DECOY_COLOUR);
+
         for (int index = 0; index < DECOY_COUNT; index++)
         {
             if (index % 2 == 0)
             {
                 builder.addWorldInstance(decoy,
                     Mat4.translation(0.0f, 0.0f, BEHIND_Z - index));
+
                 continue;
             }
+
             builder.addWorldInstance(decoy,
                 Mat4.translation(BESIDE_X + index, 0.0f, VISIBLE_Z));
         }
+
         return builder;
     }
 
@@ -214,7 +243,9 @@ final class SoftwareRenderPortCullTest
         void invisibleInstancesChangeNothing()
         {
             final Rendered bare = render(withVisibleQuad().build(), 0);
+
             final Rendered padded = render(withDecoys(withVisibleQuad()).build(), 0);
+
             assertThat(padded.color).isEqualTo(bare.color);
         }
 
@@ -223,9 +254,11 @@ final class SoftwareRenderPortCullTest
         void invisibleInstancesChangeNothingInParallel()
         {
             final Rendered reference = render(withVisibleQuad().build(), 0);
+
             for (final int workers : new int[] {1, 2, 3, 8})
             {
                 final Rendered padded = render(withDecoys(withVisibleQuad()).build(), workers);
+
                 assertThat(padded.color)
                     .withFailMessage("frame differs at %d workers", workers)
                     .isEqualTo(reference.color);
@@ -239,6 +272,7 @@ final class SoftwareRenderPortCullTest
             // Without this the file would pass just as well if every case
             // rendered an empty frame.
             final Rendered bare = render(withVisibleQuad().build(), 0);
+
             assertThat(bare.color[SIZE / 2 * SIZE + SIZE / 2]).isEqualTo(VISIBLE_COLOUR);
         }
 
@@ -247,11 +281,14 @@ final class SoftwareRenderPortCullTest
         void invisibleTranslucentInstancesChangeNothing()
         {
             final ModelFormat visible = quad(VISIBLE_COLOUR);
+
             final ModelFormat decoy = quad(DECOY_COLOUR);
+
             final Scene bare = Scene.builder()
                 .addTranslucentWorldInstance(visible,
                     Mat4.translation(0.0f, 0.0f, VISIBLE_Z), Scene.UNTAGGED, COVERAGE)
                 .build();
+
             // The decoys carry the OTHER coverage and are interleaved in depth
             // with the visible one, so before culling they cut the back-to-front
             // order into three runs. Culling must leave the survivor composited
@@ -265,7 +302,9 @@ final class SoftwareRenderPortCullTest
                     Mat4.translation(BESIDE_X, 0.0f, VISIBLE_Z), Scene.UNTAGGED,
                     OTHER_COVERAGE)
                 .build();
+
             assertThat(render(padded, 0).color).isEqualTo(render(bare, 0).color);
+
             assertThat(render(padded, 8).color).isEqualTo(render(bare, 0).color);
         }
     }
@@ -279,8 +318,11 @@ final class SoftwareRenderPortCullTest
         void triangleCountIsUnchangedByInvisibleInstances()
         {
             final Rendered bare = render(withVisibleQuad().build(), 0);
+
             final Rendered padded = render(withDecoys(withVisibleQuad()).build(), 0);
+
             assertThat(bare.triangles).isEqualTo(QUAD_TRIANGLES);
+
             assertThat(padded.triangles).isEqualTo(bare.triangles);
         }
 
@@ -291,8 +333,11 @@ final class SoftwareRenderPortCullTest
             // Every instance behind the eye: the opaque pass has no triangles,
             // so it must not reach a single publish/join boundary.
             final Scene nothing = withDecoys(Scene.builder()).build();
+
             final Rendered frame = render(nothing, 8);
+
             assertThat(frame.triangles).isZero();
+
             assertThat(frame.parallelPasses).isZero();
         }
 
@@ -301,7 +346,9 @@ final class SoftwareRenderPortCullTest
         void cullingCollapsesTranslucentRuns()
         {
             final ModelFormat visible = quad(VISIBLE_COLOUR);
+
             final ModelFormat decoy = quad(DECOY_COLOUR);
+
             // Two visible puffs of one coverage with an invisible puff of another
             // coverage between them in depth. Cutting runs at coverage changes
             // would give three runs — twelve dispatches — for two visible
@@ -315,6 +362,7 @@ final class SoftwareRenderPortCullTest
                 .addTranslucentWorldInstance(visible,
                     Mat4.translation(0.0f, 0.0f, VISIBLE_Z), Scene.UNTAGGED, COVERAGE)
                 .build();
+
             // Four for the one surviving translucent run and nothing else: there
             // is no opaque instance and no viewmodel in this scene.
             assertThat(render(scene, 8).parallelPasses).isEqualTo(4);
@@ -336,7 +384,9 @@ final class SoftwareRenderPortCullTest
         Rendered(final int[] frame, final int frameTriangles, final int passes)
         {
             this.color = frame;
+
             this.triangles = frameTriangles;
+
             this.parallelPasses = passes;
         }
     }

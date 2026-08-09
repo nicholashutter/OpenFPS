@@ -39,8 +39,11 @@ class MapSpecTest
                 MatchMode.TDM, new MapDimensions(100.0f, 100.0f, 100.0f),
                 threeLanes(), List.of(spawn()), List.of(), MapMarkers.TeamDeathmatch.INSTANCE,
                 new MapAssets("a/level.ofm", "a/weapon.ofm", null));
+
             assertThat(spec.id()).isEqualTo("id");
+
             assertThat(spec.mode()).isEqualTo(MatchMode.TDM);
+
             assertThat(spec.markers()).isInstanceOf(MapMarkers.TeamDeathmatch.class);
         }
 
@@ -114,11 +117,14 @@ class MapSpecTest
             final MapSpec a = new MapSpec("cornerstone", "First", MapSetting.URBAN_WARZONE,
                 MatchMode.TDM, dim(), threeLanes(), List.of(spawn()), List.of(),
                 MapMarkers.TeamDeathmatch.INSTANCE, assets());
+
             final MapSpec b = new MapSpec("cornerstone", "Second", MapSetting.INDUSTRIAL_COMPLEX,
                 MatchMode.TDM, new MapDimensions(50.0f, 50.0f, 50.0f),
                 threeLanes(), List.of(spawn()), List.of(), MapMarkers.TeamDeathmatch.INSTANCE,
                 assets());
+
             assertThat(a).isEqualTo(b);
+
             assertThat(a.hashCode()).isEqualTo(b.hashCode());
         }
 
@@ -129,9 +135,11 @@ class MapSpecTest
             final MapSpec a = new MapSpec("a", "X", MapSetting.URBAN_WARZONE, MatchMode.TDM,
                 dim(), threeLanes(), List.of(spawn()), List.of(),
                 MapMarkers.TeamDeathmatch.INSTANCE, assets());
+
             final MapSpec b = new MapSpec("b", "X", MapSetting.URBAN_WARZONE, MatchMode.TDM,
                 dim(), threeLanes(), List.of(spawn()), List.of(),
                 MapMarkers.TeamDeathmatch.INSTANCE, assets());
+
             assertThat(a).isNotEqualTo(b);
         }
     }

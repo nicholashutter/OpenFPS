@@ -133,24 +133,36 @@ public final class Camera
         final float fovY, final float aspect, final float near)
     {
         this.eye = eye;
+
         this.right = right;
+
         this.up = up;
+
         this.forward = forward;
+
         this.fovY = fovY;
+
         this.aspect = aspect;
+
         this.near = near;
 
         // f = 1 / tan(fovY / 2). Called once per camera, i.e. once per frame.
         final float focal = (float) (1.0 / Math.tan(fovY * 0.5f));
+
         this.scaleX = focal / aspect;
+
         this.scaleY = focal;
 
         // V = R^T . T(-eye): the rows of R^T are the basis vectors, and the
         // translation column is -(basis . eye).
         final float[] packed = new float[WORLD_TO_CLIP_FLOATS];
+
         packRow(packed, ROW_X, right, eye, scaleX);
+
         packRow(packed, ROW_Y, up, eye, scaleY);
+
         packRow(packed, ROW_W, forward, eye, 1.0f);
+
         this.worldToClip = packed;
     }
 
@@ -160,8 +172,11 @@ public final class Camera
         final Vec3 eye, final float scale)
     {
         packed[offset] = axis.x() * scale;
+
         packed[offset + 1] = axis.y() * scale;
+
         packed[offset + 2] = axis.z() * scale;
+
         packed[offset + 3] = -axis.dot(eye) * scale;
     }
 
@@ -192,13 +207,17 @@ public final class Camera
         validateFrustum(fovYRadians, aspect, near);
 
         final Vec3 unitForward = forward.normalized();
+
         final Vec3 rightAxis = unitForward.cross(up);
+
         if (rightAxis.length() == 0.0f)
         {
             throw new IllegalArgumentException(
                 "up is parallel to forward; the camera basis is undefined");
         }
+
         final Vec3 unitRight = rightAxis.normalized();
+
         final Vec3 unitUp = unitRight.cross(unitForward);
 
         return new Camera(eye, unitRight, unitUp, unitForward, fovYRadians, aspect, near);
@@ -233,10 +252,12 @@ public final class Camera
             throw new IllegalArgumentException(
                 "fovY must be in (0, pi) radians, got " + fovYRadians);
         }
+
         if (!(aspect > 0.0f))
         {
             throw new IllegalArgumentException("aspect must be positive, got " + aspect);
         }
+
         if (!(near > 0.0f))
         {
             throw new IllegalArgumentException(
@@ -293,11 +314,15 @@ public final class Camera
         final float x, final float y, final float z, final float[] out, final int outOffset)
     {
         final float[] t = transform;
+
         final int b = transformOffset;
+
         out[outOffset] = t[b + ROW_X] * x + t[b + ROW_X + 1] * y
             + t[b + ROW_X + 2] * z + t[b + ROW_X + 3];
+
         out[outOffset + 1] = t[b + ROW_Y] * x + t[b + ROW_Y + 1] * y
             + t[b + ROW_Y + 2] * z + t[b + ROW_Y + 3];
+
         out[outOffset + 2] = t[b + ROW_W] * x + t[b + ROW_W + 1] * y
             + t[b + ROW_W + 2] * z + t[b + ROW_W + 3];
     }
@@ -325,7 +350,9 @@ public final class Camera
         final int destOffset)
     {
         packConcatenatedRow(worldToClip, ROW_X, modelToWorld, dest, destOffset + ROW_X);
+
         packConcatenatedRow(worldToClip, ROW_Y, modelToWorld, dest, destOffset + ROW_Y);
+
         packConcatenatedRow(worldToClip, ROW_W, modelToWorld, dest, destOffset + ROW_W);
     }
 
@@ -338,10 +365,12 @@ public final class Camera
         {
             // MUTABLE local — accumulator for one dot product.
             float sum = 0.0f;
+
             for (int k = 0; k < Mat4.ORDER; k++)
             {
                 sum += packed[row + k] * rhs.get(k, column);
             }
+
             dest[destOffset + column] = sum;
         }
     }
@@ -370,7 +399,9 @@ public final class Camera
         final int destOffset)
     {
         packScaledRow(modelToView, 0, scaleX, dest, destOffset + ROW_X);
+
         packScaledRow(modelToView, 1, scaleY, dest, destOffset + ROW_Y);
+
         packScaledRow(modelToView, 2, 1.0f, dest, destOffset + ROW_W);
     }
 
@@ -396,10 +427,15 @@ public final class Camera
     public Mat4 viewMatrix()
     {
         final float[] values = new float[Mat4.ELEMENTS];
+
         packViewRow(values, 0, right);
+
         packViewRow(values, 4, up);
+
         packViewRow(values, 8, forward);
+
         values[15] = 1.0f;
+
         return Mat4.ofRowMajor(values);
     }
 
@@ -407,8 +443,11 @@ public final class Camera
     private void packViewRow(final float[] values, final int offset, final Vec3 axis)
     {
         values[offset] = axis.x();
+
         values[offset + 1] = axis.y();
+
         values[offset + 2] = axis.z();
+
         values[offset + 3] = -axis.dot(eye);
     }
 

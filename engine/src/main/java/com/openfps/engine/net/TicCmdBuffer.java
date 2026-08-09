@@ -66,10 +66,15 @@ public final class TicCmdBuffer
     public TicCmdBuffer()
     {
         final int slots = Constants.TIC_BUFFER_SIZE * Constants.MAX_PLAYERS;
+
         this.slotTics = new int[slots];
+
         this.axes = new int[slots];
+
         this.look = new int[slots];
+
         this.latestTics = new int[Constants.MAX_PLAYERS];
+
         reset();
     }
 
@@ -93,9 +98,12 @@ public final class TicCmdBuffer
         for (int i = 0; i < slotTics.length; i++)
         {
             slotTics[i] = EMPTY_TIC;
+
             axes[i] = 0;
+
             look[i] = 0;
         }
+
         for (int p = 0; p < latestTics.length; p++)
         {
             latestTics[p] = EMPTY_TIC;
@@ -110,13 +118,18 @@ public final class TicCmdBuffer
     public void clear(final int playerSlot)
     {
         requirePlayerSlot(playerSlot);
+
         final int base = playerSlot * Constants.TIC_BUFFER_SIZE;
+
         for (int i = 0; i < Constants.TIC_BUFFER_SIZE; i++)
         {
             slotTics[base + i] = EMPTY_TIC;
+
             axes[base + i] = 0;
+
             look[base + i] = 0;
         }
+
         latestTics[playerSlot] = EMPTY_TIC;
     }
 
@@ -164,17 +177,22 @@ public final class TicCmdBuffer
                        final int buttons)
     {
         requirePlayerSlot(playerSlot);
+
         requireTicNumber(ticNumber);
 
         final int index = index(playerSlot, ticNumber);
+
         final int held = slotTics[index];
+
         if (held > ticNumber)
         {
             return false;
         }
 
         slotTics[index] = ticNumber;
+
         axes[index] = ((forward & MASK_16) << SHIFT_HIGH) | (strafe & MASK_16);
+
         look[index] = ((angle & MASK_16) << SHIFT_HIGH)
             | ((pitch & MASK_8) << SHIFT_PITCH)
             | (buttons & MASK_8);
@@ -183,6 +201,7 @@ public final class TicCmdBuffer
         {
             latestTics[playerSlot] = ticNumber;
         }
+
         return true;
     }
 
@@ -217,10 +236,12 @@ public final class TicCmdBuffer
     public boolean has(final int playerSlot, final int ticNumber)
     {
         requirePlayerSlot(playerSlot);
+
         if (ticNumber < 0)
         {
             return false;
         }
+
         return slotTics[index(playerSlot, ticNumber)] == ticNumber;
     }
 
@@ -228,6 +249,7 @@ public final class TicCmdBuffer
     public int latestTic(final int playerSlot)
     {
         requirePlayerSlot(playerSlot);
+
         return latestTics[playerSlot];
     }
 
@@ -310,7 +332,9 @@ public final class TicCmdBuffer
         {
             return 0;
         }
+
         final int index = index(playerSlot, ticNumber);
+
         return TicCmd.encodeFields(dst,
             offset,
             ticNumber,
@@ -335,7 +359,9 @@ public final class TicCmdBuffer
         {
             return null;
         }
+
         final int index = index(playerSlot, ticNumber);
+
         return new TicCmd(ticNumber,
             (short) (axes[index] >>> SHIFT_HIGH),
             (short) axes[index],
@@ -359,6 +385,7 @@ public final class TicCmdBuffer
             throw new IllegalArgumentException(
                 "no command held for player " + playerSlot + " tic " + ticNumber);
         }
+
         return index(playerSlot, ticNumber);
     }
 

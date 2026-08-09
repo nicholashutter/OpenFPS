@@ -85,10 +85,12 @@ public final class LittleEndian
     public static int int16(final byte[] src, final int offset)
     {
         final int raw = uint16(src, offset);
+
         if ((raw & WORD_SIGN_BIT) != 0)
         {
             return raw - WORD_RANGE;
         }
+
         return raw;
     }
 
@@ -108,11 +110,14 @@ public final class LittleEndian
     public static String ascii(final byte[] src, final int offset, final int maxLength)
     {
         int length = 0;
+
         while (length < maxLength && src[offset + length] != 0)
         {
             length++;
         }
+
         final String raw = new String(src, offset, length, StandardCharsets.US_ASCII);
+
         return raw.trim().toUpperCase(Locale.ROOT);
     }
 }

@@ -118,14 +118,19 @@ public final class SandbarMapBuilder
     public static void main(final String[] args)
     {
         final String out = option(args, "--out=");
+
         if (out == null)
         {
             LOG.error("usage: SandbarMapBuilder --out=<directory>"
                 + " [--atlas=<colormap.png>]");
+
             return;
         }
+
         final String atlasOption = option(args, "--atlas=");
+
         final Path atlasPath;
+
         if (atlasOption == null)
         {
             atlasPath = null;
@@ -134,7 +139,9 @@ public final class SandbarMapBuilder
         {
             atlasPath = Path.of(atlasOption);
         }
+
         final Path outDir = Path.of(out);
+
         try
         {
             Files.createDirectories(outDir);
@@ -143,8 +150,11 @@ public final class SandbarMapBuilder
         {
             throw new UncheckedIOException("could not create output directory: " + outDir, e);
         }
+
         final byte[] bytes = build(atlasPath);
+
         final Path outFile = outDir.resolve(FILE_NAME);
+
         try
         {
             Files.write(outFile, bytes);
@@ -153,7 +163,9 @@ public final class SandbarMapBuilder
         {
             throw new UncheckedIOException("could not write " + outFile, e);
         }
+
         final ModelFormat parsed = ModelFormat.read(bytes);
+
         LOG.info("Wrote {} ({} triangles, {} vertices, {} textures)",
             outFile, parsed.indexCount() / 3, parsed.vertexCount(), parsed.textureCount());
     }
@@ -187,7 +199,9 @@ public final class SandbarMapBuilder
     public static byte[] build(final Path atlasPath)
     {
         final ModelBuilder builder = new ModelBuilder(MODEL_NAME);
+
         final int[] floorTexels;
+
         if (atlasPath != null)
         {
             floorTexels = KenneyTexture.forceOpaque(KenneyTexture.floor(atlasPath));
@@ -196,7 +210,9 @@ public final class SandbarMapBuilder
         {
             floorTexels = floorTexels();
         }
+
         final int[] wallTexels;
+
         if (atlasPath != null)
         {
             wallTexels = KenneyTexture.forceOpaque(KenneyTexture.wall(atlasPath));
@@ -205,32 +221,50 @@ public final class SandbarMapBuilder
         {
             wallTexels = wallTexels();
         }
+
         final int[] accentTexels = accentTexels();
+
         final int floorTexture = builder.addTexture("sandbar-floor", TEXTURE_EDGE,
             TEXTURE_EDGE, MipGenerator.generate(TEXTURE_EDGE, TEXTURE_EDGE, floorTexels));
+
         final int wallTexture = builder.addTexture("sandbar-wall", TEXTURE_EDGE,
             TEXTURE_EDGE, MipGenerator.generate(TEXTURE_EDGE, TEXTURE_EDGE, wallTexels));
+
         final int accentTexture = builder.addTexture("sandbar-accent", TEXTURE_EDGE,
             TEXTURE_EDGE, MipGenerator.generate(TEXTURE_EDGE, TEXTURE_EDGE, accentTexels));
 
         builder.beginSubmesh(floorTexture);
+
         addGroundSlab(builder);
+
         addDryRiverbed(builder);
+
         builder.endSubmesh();
 
         builder.beginSubmesh(wallTexture);
+
         addPerimeterWalls(builder);
+
         addButteN(builder);
+
         addButteCentre(builder);
+
         addButteS(builder);
+
         addRamps(builder);
+
         addWashChannels(builder);
+
         addCornerRocks(builder);
+
         addCactusPairs(builder);
+
         builder.endSubmesh();
 
         builder.beginSubmesh(accentTexture);
+
         addAccentGeometry(builder);
+
         builder.endSubmesh();
 
         return builder.toBytes();
@@ -282,9 +316,13 @@ public final class SandbarMapBuilder
     private static void addPerimeterWalls(final ModelBuilder builder)
     {
         final float e = HALF_EXTENT;
+
         addBox(builder, -e, 0.0f, -e - WALL_THICKNESS, e, WALL_HEIGHT, -e);
+
         addBox(builder, -e, 0.0f, e, e, WALL_HEIGHT, e + WALL_THICKNESS);
+
         addBox(builder, -e - WALL_THICKNESS, 0.0f, -e, -e, WALL_HEIGHT, e);
+
         addBox(builder, e, 0.0f, -e, e + WALL_THICKNESS, WALL_HEIGHT, e);
     }
 
@@ -323,7 +361,9 @@ public final class SandbarMapBuilder
     private static void addRamps(final ModelBuilder builder)
     {
         addRamp(builder, 64.0f);
+
         addRamp(builder, 160.0f);
+
         addRamp(builder, 256.0f);
     }
 
@@ -336,12 +376,17 @@ public final class SandbarMapBuilder
     private static void addRamp(final ModelBuilder builder, final float butteZ)
     {
         final float rampX = 208.0f;
+
         for (int i = 0; i < RAMP_TREADS; i++)
         {
             final float yBottom = (float) i * 4.0f;
+
             final float yTop = yBottom + 4.0f;
+
             final float zMin = butteZ - BUTTE_HALF + (float) i * RAMP_STEP_Z;
+
             final float zMax = zMin + RAMP_STEP_Z;
+
             addBox(builder, rampX, yBottom, zMin, rampX + RAMP_STEP_X, yTop, zMax);
         }
     }
@@ -354,6 +399,7 @@ public final class SandbarMapBuilder
     private static void addWashChannels(final ModelBuilder builder)
     {
         addBox(builder, -HALF_EXTENT, -8.0f, 24.0f, HALF_EXTENT, 0.0f, 56.0f);
+
         addBox(builder, -HALF_EXTENT, -8.0f, 264.0f, HALF_EXTENT, 0.0f, 296.0f);
     }
 
@@ -366,10 +412,13 @@ public final class SandbarMapBuilder
     {
         // NW corner
         addBox(builder, -148.0f, 0.0f, -148.0f, -132.0f, 12.0f, -132.0f);
+
         // NE corner
         addBox(builder, 132.0f, 0.0f, -148.0f, 148.0f, 12.0f, -132.0f);
+
         // SW corner
         addBox(builder, -148.0f, 0.0f, 132.0f, -132.0f, 12.0f, 148.0f);
+
         // SE corner
         addBox(builder, 132.0f, 0.0f, 132.0f, 148.0f, 12.0f, 148.0f);
     }
@@ -383,9 +432,12 @@ public final class SandbarMapBuilder
     {
         // Pair 1: z=120
         addBox(builder, -56.0f, 0.0f, 116.0f, -52.0f, 40.0f, 120.0f);
+
         addBox(builder, -36.0f, 0.0f, 124.0f, -32.0f, 40.0f, 128.0f);
+
         // Pair 2: z=200
         addBox(builder, -56.0f, 0.0f, 196.0f, -52.0f, 40.0f, 200.0f);
+
         addBox(builder, -36.0f, 0.0f, 204.0f, -32.0f, 40.0f, 208.0f);
     }
 
@@ -398,8 +450,10 @@ public final class SandbarMapBuilder
     {
         // North butte marker
         addBox(builder, 156.0f, BUTTE_TOP_Y, 60.0f, 164.0f, BUTTE_TOP_Y + 8.0f, 68.0f);
+
         // Centre butte marker
         addBox(builder, 156.0f, BUTTE_TOP_Y, 156.0f, 164.0f, BUTTE_TOP_Y + 8.0f, 164.0f);
+
         // South butte marker
         addBox(builder, 156.0f, BUTTE_TOP_Y, 252.0f, 164.0f, BUTTE_TOP_Y + 8.0f, 260.0f);
     }
@@ -411,10 +465,15 @@ public final class SandbarMapBuilder
         final float minZ, final float maxX, final float maxY, final float maxZ)
     {
         addFace(builder, maxX, minY, maxZ, maxX, maxY, maxZ, maxX, maxY, minZ, maxX, minY, minZ);
+
         addFace(builder, minX, minY, minZ, minX, maxY, minZ, minX, maxY, maxZ, minX, minY, maxZ);
+
         addFace(builder, minX, maxY, maxZ, maxX, maxY, maxZ, maxX, maxY, minZ, minX, maxY, minZ);
+
         addFace(builder, minX, minY, minZ, maxX, minY, minZ, maxX, minY, maxZ, minX, minY, maxZ);
+
         addFace(builder, minX, minY, maxZ, minX, maxY, maxZ, maxX, maxY, maxZ, maxX, minY, maxZ);
+
         addFace(builder, maxX, minY, minZ, maxX, maxY, minZ, minX, maxY, minZ, minX, minY, minZ);
     }
 
@@ -426,15 +485,21 @@ public final class SandbarMapBuilder
         final float cy, final float cz, final float dx, final float dy, final float dz)
     {
         final float uScale = 1.0f / WORLD_UNITS_PER_TILE;
+
         final int a = builder.addVertex(ax, ay, az, ax * uScale, az * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         final int b = builder.addVertex(bx, by, bz, bx * uScale, bz * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         final int c = builder.addVertex(cx, cy, cz, cx * uScale, cz * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         final int d = builder.addVertex(dx, dy, dz, dx * uScale, dz * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         builder.addTriangle(a, b, c);
+
         builder.addTriangle(a, c, d);
     }
 
@@ -445,59 +510,79 @@ public final class SandbarMapBuilder
     private static int[] floorTexels()
     {
         final int base = Rgba.pack(192, 168, 132, 255);
+
         final int streak = Rgba.pack(168, 144, 108, 255);
+
         final int[] out = new int[TEXTURE_EDGE * TEXTURE_EDGE];
+
         for (int y = 0; y < TEXTURE_EDGE; y++)
         {
             for (int x = 0; x < TEXTURE_EDGE; x++)
             {
                 int colour = base;
+
                 if ((x * 7 + y * 13) % 23 == 0)
                 {
                     colour = streak;
                 }
+
                 out[y * TEXTURE_EDGE + x] = colour;
             }
         }
+
         return out;
     }
 
     private static int[] wallTexels()
     {
         final int base = Rgba.pack(168, 140, 100, 255);
+
         final int shade = Rgba.pack(140, 112, 76, 255);
+
         final int rib = Rgba.pack(112, 84, 52, 255);
+
         final int bandHeight = TEXTURE_EDGE / 8;
+
         final int[] out = new int[TEXTURE_EDGE * TEXTURE_EDGE];
+
         for (int y = 0; y < TEXTURE_EDGE; y++)
         {
             final int band = y / bandHeight;
+
             final boolean isRib = (y % bandHeight) == 0;
+
             for (int x = 0; x < TEXTURE_EDGE; x++)
             {
                 int colour = base;
+
                 if ((band % 2) != 0)
                 {
                     colour = shade;
                 }
+
                 if (isRib)
                 {
                     colour = rib;
                 }
+
                 out[y * TEXTURE_EDGE + x] = colour;
             }
         }
+
         return out;
     }
 
     private static int[] accentTexels()
     {
         final int colour = Rgba.pack(200, 64, 48, 255);
+
         final int[] out = new int[TEXTURE_EDGE * TEXTURE_EDGE];
+
         for (int index = 0; index < out.length; index++)
         {
             out[index] = colour;
         }
+
         return out;
     }
 
@@ -510,6 +595,7 @@ public final class SandbarMapBuilder
                 return arg.substring(prefix.length());
             }
         }
+
         return null;
     }
 }

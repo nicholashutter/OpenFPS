@@ -151,6 +151,7 @@ public final class BlasterSound
     public static double frequencyAt(final int index)
     {
         final double progress = index / (double) sampleCount();
+
         return START_HZ * Math.pow(END_HZ / START_HZ, progress);
     }
 
@@ -169,13 +170,18 @@ public final class BlasterSound
     public static double envelopeAt(final int index)
     {
         final int count = sampleCount();
+
         if (index < 0 || index >= count)
         {
             return 0.0;
         }
+
         final double attack = Math.min(1.0, index / (double) ATTACK_SAMPLES);
+
         final double release = Math.min(1.0, (count - 1 - index) / (double) RELEASE_SAMPLES);
+
         final double decay = Math.exp(-DECAY_PER_SECOND * index / SAMPLE_RATE);
+
         return attack * decay * release;
     }
 
@@ -192,17 +198,23 @@ public final class BlasterSound
     public static short[] samples()
     {
         final int count = sampleCount();
+
         final short[] pcm = new short[count];
+
         // Phase is ACCUMULATED, not evaluated — see the class Javadoc. This
         // single line is the difference between a blaster and a broken
         // synthesiser.
         double phase = 0.0;
+
         for (int index = 0; index < count; index++)
         {
             phase = phase + TWO_PI * frequencyAt(index) / SAMPLE_RATE;
+
             final double wave = FUNDAMENTAL * Math.sin(phase)
                 + THIRD_HARMONIC * Math.sin(3.0 * phase);
+
             final double value = PEAK * envelopeAt(index) * wave * Short.MAX_VALUE;
+
             // Clamped rather than trusted. The fundamental and the harmonic can
             // align to slightly more than the sum of their coefficients, and a
             // cast that wraps turns a loud sample into an equally loud sample
@@ -210,6 +222,7 @@ public final class BlasterSound
             pcm[index] = (short) Math.max(Short.MIN_VALUE,
                 Math.min(Short.MAX_VALUE, Math.round(value)));
         }
+
         return pcm;
     }
 }

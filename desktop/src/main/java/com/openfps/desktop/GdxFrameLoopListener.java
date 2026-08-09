@@ -439,39 +439,55 @@ public final class GdxFrameLoopListener implements ApplicationListener
         {
             throw new IllegalArgumentException("callback must not be null");
         }
+
         if (actions == null)
         {
             throw new IllegalArgumentException("actions must not be null");
         }
+
         if (debugSettings == null)
         {
             throw new IllegalArgumentException("debugSettings must not be null");
         }
+
         if (accessibilitySettings == null)
         {
             throw new IllegalArgumentException("accessibilitySettings must not be null");
         }
+
         if (mapSelection == null)
         {
             throw new IllegalArgumentException("mapSelection must not be null");
         }
+
         if (mapEntries == null)
         {
             throw new IllegalArgumentException("mapEntries must not be null");
         }
+
         this.debug = debugSettings;
+
         this.accessibility = accessibilitySettings;
+
         this.mapSelection = mapSelection;
+
         this.mapEntries = List.copyOf(mapEntries);
+
         this.callback = callback;
+
         this.actions = new StartGameTransition(actions, uiState);
+
         this.presenter = framePresenter;
+
         this.inputPort = desktopInput;
+
         this.screenshot = new GdxScreenshot();
+
         if (Boolean.parseBoolean(System.getProperty(START_IN_GAME_PROPERTY, "false")))
         {
             uiState.startGame();
         }
+
         if (desktopInput != null)
         {
             // Both halves of the UI must read the same answer. Bound here
@@ -510,6 +526,7 @@ public final class GdxFrameLoopListener implements ApplicationListener
     public void attachMatchGate(final Consumer<Boolean> gate)
     {
         this.matchGate = gate;
+
         notifyMatchGate();
     }
 
@@ -586,6 +603,7 @@ public final class GdxFrameLoopListener implements ApplicationListener
         final int simulationTicsPerSecond)
     {
         this.matchStatus = status;
+
         this.ticsPerSecond = simulationTicsPerSecond;
     }
 
@@ -652,17 +670,24 @@ public final class GdxFrameLoopListener implements ApplicationListener
     public void create()
     {
         final int width = Gdx.graphics.getWidth();
+
         final int height = Gdx.graphics.getHeight();
+
         // Here rather than in the window port's configuration, because libGDX's
         // setWindowIcon takes file paths and this icon is generated. This is the
         // first moment a GLFW window handle exists, and it is on the right
         // thread — see WindowIcon.
         WindowIcon.apply();
+
         menu = new MainMenuScreen(actions);
+
         menu.layoutFor(width, height);
+
         settings = new SettingsScreen(accessibility, debug, renderSettings(),
             uiState::returnToMenu);
+
         settings.layoutFor(width, height);
+
         // The picker is built only when the launcher supplied entries. An empty
         // entries list is the "no map picker wired" case every windowless test
         // gets; the menu's SELECT MAP button still works (it transitions to
@@ -674,14 +699,19 @@ public final class GdxFrameLoopListener implements ApplicationListener
         {
             mapSelect = new MapSelectionScreen(mapSelection, mapEntries,
                 uiState::returnToMenu);
+
             mapSelect.layoutFor(width, height);
         }
+
         appliedState = uiState.state();
+
         applyMenuInput(appliedState);
+
         if (presenter != null)
         {
             presenter.resize(width, height);
         }
+
         callback.onSurfaceReady(width, height);
     }
 
@@ -689,22 +719,28 @@ public final class GdxFrameLoopListener implements ApplicationListener
     public void render()
     {
         final float deltaSeconds = Gdx.graphics.getDeltaTime();
+
         // Input first: the per-frame mouse delta is only valid once per frame,
         // and the game loop may latch it at any moment after this returns.
         if (inputPort != null)
         {
             inputPort.pollDevice();
         }
+
         // Before the state sync, so a round decided on this frame is shown on
         // this frame rather than the next one.
         checkMatchResult();
+
         // After the poll, because Escape is seen there and the menu should come
         // back on the same frame the cursor is released, not the one after.
         // Scene2D button callbacks have already fired by now too: libGDX pumps
         // its input events before it calls render().
         syncUiState();
+
         drawWorld(deltaSeconds);
+
         callback.onFrame(deltaSeconds);
+
         screenshot.afterFrame();
     }
 
@@ -716,17 +752,23 @@ public final class GdxFrameLoopListener implements ApplicationListener
         {
             return;
         }
+
         final MatchSummary summary = matchResult.get();
+
         if (summary == null)
         {
             return;
         }
+
         resultShown = true;
+
         // Built here rather than in the draw, because a screen is a GL resource
         // and building one inside the paint of the frame that needs it is how
         // you get a first frame that is half old and half new.
         gameOver = new GameOverScreen(summary, this::restartMatch, uiState::returnToMenu);
+
         gameOver.layoutFor(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
+
         uiState.endMatch(summary);
     }
 
@@ -756,11 +798,14 @@ public final class GdxFrameLoopListener implements ApplicationListener
             // it being.
             return;
         }
+
         matchRestart.run();
+
         // Cleared here and nowhere else, in the same call that reset the
         // simulation, so the end screen can only re-arm for a round that has
         // actually been restarted.
         resultShown = false;
+
         uiState.restartMatch();
     }
 
@@ -768,29 +813,38 @@ public final class GdxFrameLoopListener implements ApplicationListener
     private void drawWorld(final float deltaSeconds)
     {
         final UiState current = uiState.state();
+
         if (menu != null && current.drawsMenu())
         {
             // The menu owns the whole window, clear included. The world is not
             // presented at all — see the class Javadoc for why that is the
             // point rather than an optimisation.
             menu.render(deltaSeconds);
+
             return;
         }
+
         if (settings != null && current.drawsSettings())
         {
             settings.render(deltaSeconds);
+
             return;
         }
+
         if (mapSelect != null && current.drawsMapSelect())
         {
             mapSelect.render(deltaSeconds);
+
             return;
         }
+
         if (gameOver != null && current.drawsGameOver())
         {
             gameOver.render(deltaSeconds);
+
             return;
         }
+
         drawGame(deltaSeconds);
     }
 
@@ -804,12 +858,15 @@ public final class GdxFrameLoopListener implements ApplicationListener
             // to own the clear or the window shows the driver's leftovers.
             MainMenuScreen.clearBackground();
         }
+
         // BEFORE the debug counter, so the frame counter is the topmost thing on
         // screen when both are up. The score panel is right-aligned and the
         // counter left-aligned, so they do not overlap in any case — but the
         // ordering is what makes that a choice rather than a coincidence.
         drawScore();
+
         sampleDebugOverlay(deltaSeconds);
+
         if (debug.isOverlayVisible())
         {
             // Last, so it is over the world rather than under it. Drawn at the
@@ -838,6 +895,7 @@ public final class GdxFrameLoopListener implements ApplicationListener
         {
             return;
         }
+
         score.render(matchStatus.get(), Gdx.graphics.getWidth(), Gdx.graphics.getHeight(),
             ticsPerSecond);
     }
@@ -851,6 +909,7 @@ public final class GdxFrameLoopListener implements ApplicationListener
         {
             return 0;
         }
+
         return presenter.renderWidth();
     }
 
@@ -861,6 +920,7 @@ public final class GdxFrameLoopListener implements ApplicationListener
         {
             return 0;
         }
+
         return presenter.renderHeight();
     }
 
@@ -874,6 +934,7 @@ public final class GdxFrameLoopListener implements ApplicationListener
         {
             return new RenderSettings();
         }
+
         return presenter.renderSettings();
     }
 
@@ -887,10 +948,12 @@ public final class GdxFrameLoopListener implements ApplicationListener
     private void sampleDebugOverlay(final float deltaSeconds)
     {
         long rendererNanos = 0L;
+
         if (presenter != null)
         {
             rendererNanos = presenter.lastRenderNanos();
         }
+
         overlay.sample((long) (deltaSeconds * NANOS_PER_SECOND), rendererNanos);
     }
 
@@ -900,12 +963,16 @@ public final class GdxFrameLoopListener implements ApplicationListener
     private void syncUiState()
     {
         final UiState current = uiState.state();
+
         if (current == appliedState)
         {
             return;
         }
+
         appliedState = current;
+
         applyMenuInput(current);
+
         notifyMatchGate();
     }
 
@@ -918,6 +985,7 @@ public final class GdxFrameLoopListener implements ApplicationListener
         {
             return;
         }
+
         matchGate.accept(Boolean.valueOf(uiState.isPlaying()));
     }
 
@@ -936,27 +1004,36 @@ public final class GdxFrameLoopListener implements ApplicationListener
         if (menu != null && state.drawsMenu())
         {
             menu.attachInputProcessor();
+
             return;
         }
+
         if (settings != null && state.drawsSettings())
         {
             settings.attachInputProcessor();
+
             return;
         }
+
         if (mapSelect != null && state.drawsMapSelect())
         {
             mapSelect.attachInputProcessor();
+
             return;
         }
+
         if (gameOver != null && state.drawsGameOver())
         {
             gameOver.attachInputProcessor();
+
             return;
         }
+
         if (menu != null)
         {
             menu.detachInputProcessor();
         }
+
         releaseFinishedResult(state);
     }
 
@@ -976,7 +1053,9 @@ public final class GdxFrameLoopListener implements ApplicationListener
         {
             return;
         }
+
         gameOver.dispose();
+
         gameOver = null;
     }
 
@@ -987,18 +1066,22 @@ public final class GdxFrameLoopListener implements ApplicationListener
         {
             menu.resize(width, height);
         }
+
         if (settings != null)
         {
             settings.resize(width, height);
         }
+
         if (gameOver != null)
         {
             gameOver.resize(width, height);
         }
+
         if (presenter != null)
         {
             presenter.resize(width, height);
         }
+
         callback.onResize(width, height);
     }
 
@@ -1022,33 +1105,48 @@ public final class GdxFrameLoopListener implements ApplicationListener
             // Give the processor back before the stage goes: leaving a disposed
             // stage installed would have GLFW dispatching into freed actors.
             menu.detachInputProcessor();
+
             menu.dispose();
+
             menu = null;
         }
+
         if (settings != null)
         {
             settings.detachInputProcessor();
+
             settings.dispose();
+
             settings = null;
         }
+
         if (mapSelect != null)
         {
             mapSelect.detachInputProcessor();
+
             mapSelect.dispose();
+
             mapSelect = null;
         }
+
         if (gameOver != null)
         {
             gameOver.detachInputProcessor();
+
             gameOver.dispose();
+
             gameOver = null;
         }
+
         overlay.dispose();
+
         score.dispose();
+
         if (presenter != null)
         {
             presenter.dispose();
         }
+
         // The last moment at which GLFW is still up: libGDX calls dispose()
         // before it terminates the library, whereas the engine's own
         // I_InputPort.shutdown() runs afterwards. See
@@ -1057,6 +1155,7 @@ public final class GdxFrameLoopListener implements ApplicationListener
         {
             inputPort.onWindowClosing();
         }
+
         callback.onSurfaceLost();
     }
 
@@ -1089,7 +1188,9 @@ public final class GdxFrameLoopListener implements ApplicationListener
             {
                 throw new IllegalArgumentException("actions must not be null");
             }
+
             this.delegate = target;
+
             this.uiState = machine;
         }
 
@@ -1097,6 +1198,7 @@ public final class GdxFrameLoopListener implements ApplicationListener
         public void onStartGame()
         {
             delegate.onStartGame();
+
             uiState.startGame(MatchMode.SINGLE_PLAYER);
         }
 
@@ -1104,6 +1206,7 @@ public final class GdxFrameLoopListener implements ApplicationListener
         public void onMultiplayer()
         {
             delegate.onMultiplayer();
+
             uiState.startGame(MatchMode.MULTIPLAYER);
         }
 
@@ -1111,6 +1214,7 @@ public final class GdxFrameLoopListener implements ApplicationListener
         public void onSettings()
         {
             delegate.onSettings();
+
             uiState.openSettings();
         }
 
@@ -1118,6 +1222,7 @@ public final class GdxFrameLoopListener implements ApplicationListener
         public void onMapSelection()
         {
             delegate.onMapSelection();
+
             uiState.openMapSelect();
         }
 

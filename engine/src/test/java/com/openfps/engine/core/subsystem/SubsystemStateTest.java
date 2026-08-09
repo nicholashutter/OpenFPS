@@ -27,6 +27,7 @@ class SubsystemStateTest
     void shouldStartUninitialized()
     {
         final Subsystem s = new TestSubsystem(SubsystemId.P_);
+
         assertThat(s.state()).isEqualTo(SubsystemState.UNINITIALIZED);
     }
 
@@ -35,7 +36,9 @@ class SubsystemStateTest
     void shouldInitToReady()
     {
         final Subsystem s = new TestSubsystem(SubsystemId.P_);
+
         s.init();
+
         assertThat(s.state()).isEqualTo(SubsystemState.READY);
     }
 
@@ -44,8 +47,11 @@ class SubsystemStateTest
     void shouldStayReadyAfterEvent()
     {
         final Subsystem s = new TestSubsystem(SubsystemId.P_);
+
         s.init();
+
         s.processEvent(factory.newTick(0, 0));
+
         assertThat(s.state()).isEqualTo(SubsystemState.READY);
     }
 
@@ -61,9 +67,12 @@ class SubsystemStateTest
                 throw new RuntimeException("intentional");
             }
         };
+
         s.init();
+
         assertThatThrownBy(() -> s.processEvent(factory.newTick(0, 0)))
             .isInstanceOf(RuntimeException.class);
+
         // Worker keeps going — subsystem remains READY
         assertThat(s.state()).isEqualTo(SubsystemState.READY);
     }
@@ -73,7 +82,9 @@ class SubsystemStateTest
     void shouldThrowOnDoubleInit()
     {
         final Subsystem s = new TestSubsystem(SubsystemId.P_);
+
         s.init();
+
         assertThatThrownBy(s::init).isInstanceOf(SubsystemException.class);
     }
 
@@ -82,6 +93,7 @@ class SubsystemStateTest
     void shouldThrowOnEventWhenNotReady()
     {
         final Subsystem s = new TestSubsystem(SubsystemId.P_);
+
         // UNINITIALIZED
         assertThatThrownBy(() -> s.processEvent(factory.newTick(0, 0)))
             .isInstanceOf(SubsystemException.class);
@@ -92,8 +104,11 @@ class SubsystemStateTest
     void shouldShutdown()
     {
         final Subsystem s = new TestSubsystem(SubsystemId.P_);
+
         s.init();
+
         s.shutdown();
+
         assertThat(s.state()).isEqualTo(SubsystemState.SHUTDOWN);
     }
 
@@ -102,8 +117,11 @@ class SubsystemStateTest
     void shouldThrowOnDoubleShutdown()
     {
         final Subsystem s = new TestSubsystem(SubsystemId.P_);
+
         s.init();
+
         s.shutdown();
+
         assertThatThrownBy(s::shutdown).isInstanceOf(SubsystemException.class);
     }
 
@@ -112,8 +130,11 @@ class SubsystemStateTest
     void shouldThrowOnShutdownFromShutdown()
     {
         final Subsystem s = new TestSubsystem(SubsystemId.P_);
+
         s.init();
+
         s.shutdown();
+
         assertThatThrownBy(s::shutdown).isInstanceOf(SubsystemException.class);
     }
 
@@ -122,18 +143,24 @@ class SubsystemStateTest
     void shouldValidateTransitions()
     {
         assertThat(Subsystem.isValidTransition(SubsystemState.UNINITIALIZED, SubsystemState.READY)).isTrue();
+
         assertThat(Subsystem.isValidTransition(SubsystemState.UNINITIALIZED, SubsystemState.SHUTDOWN)).isTrue();
+
         assertThat(Subsystem.isValidTransition(SubsystemState.UNINITIALIZED, SubsystemState.ERROR)).isTrue();
 
         assertThat(Subsystem.isValidTransition(SubsystemState.READY, SubsystemState.SHUTDOWN)).isTrue();
+
         assertThat(Subsystem.isValidTransition(SubsystemState.READY, SubsystemState.ERROR)).isTrue();
+
         assertThat(Subsystem.isValidTransition(SubsystemState.READY, SubsystemState.UNINITIALIZED)).isFalse();
 
         assertThat(Subsystem.isValidTransition(SubsystemState.ERROR, SubsystemState.UNINITIALIZED)).isTrue();
+
         assertThat(Subsystem.isValidTransition(SubsystemState.ERROR, SubsystemState.READY)).isFalse();
 
         // SHUTDOWN is terminal — no transitions out
         assertThat(Subsystem.isValidTransition(SubsystemState.SHUTDOWN, SubsystemState.READY)).isFalse();
+
         assertThat(Subsystem.isValidTransition(SubsystemState.SHUTDOWN, SubsystemState.UNINITIALIZED)).isFalse();
     }
 

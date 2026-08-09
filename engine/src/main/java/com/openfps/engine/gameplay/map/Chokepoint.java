@@ -37,11 +37,14 @@ public record Chokepoint(String id, String callout, float x, float z)
         {
             throw new IllegalArgumentException("id must not be null or blank");
         }
+
         if (callout == null || callout.isBlank())
         {
             throw new IllegalArgumentException("callout must not be null or blank");
         }
+
         id = id.intern();
+
         callout = callout.intern();
     }
 }

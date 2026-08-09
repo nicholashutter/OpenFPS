@@ -58,9 +58,13 @@ class ScoreOverlayTextTest
             final String[] lines = ScoreOverlay.scoreText(underPressure());
 
             assertThat(lines).hasSize(4);
+
             assertThat(lines[0]).contains("KILLS").contains("3/7");
+
             assertThat(lines[1]).contains("DEATHS").contains("2");
+
             assertThat(lines[2]).contains("HEALTH").contains("20");
+
             assertThat(lines[3]).contains("STREAK");
         }
 
@@ -120,11 +124,14 @@ class ScoreOverlayTextTest
             // has just stopped responding has every reason to assume the worst.
             final String far = ScoreOverlay.countdownText(
                 new MatchStatus(0, 7, 7, 1, 0, true, 120), TICS_PER_SECOND);
+
             final String near = ScoreOverlay.countdownText(
                 new MatchStatus(0, 7, 7, 1, 0, true, 30), TICS_PER_SECOND);
 
             assertThat(far).contains("2");
+
             assertThat(near).contains("1");
+
             assertThat(far).isNotEqualTo(near);
         }
 
@@ -176,6 +183,7 @@ class ScoreOverlayTextTest
             // a mystery rather than a reward.
             assertThat(ScoreOverlay.streakText(streakOf(0)))
                 .contains("STREAK").contains("0/3");
+
             assertThat(ScoreOverlay.streakText(streakOf(2)))
                 .contains("STREAK").contains("2/3");
         }
@@ -190,6 +198,7 @@ class ScoreOverlayTextTest
             final String line = ScoreOverlay.streakText(superFor(240));
 
             assertThat(line).containsIgnoringCase("SUPER").contains("2");
+
             assertThat(line).doesNotContain("0/3");
         }
 
@@ -198,11 +207,14 @@ class ScoreOverlayTextTest
         void shouldCountDown()
         {
             final String fresh = ScoreOverlay.superCountdownText(superFor(240), TICS_PER_SECOND);
+
             final String nearlyGone =
                 ScoreOverlay.superCountdownText(superFor(30), TICS_PER_SECOND);
 
             assertThat(fresh).contains("4");
+
             assertThat(nearlyGone).contains("1");
+
             assertThat(fresh).isNotEqualTo(nearlyGone);
         }
 
@@ -224,7 +236,9 @@ class ScoreOverlayTextTest
             // unsupported one is an exception on the frame the reward first
             // appears — which is mid-fight, which is the worst moment available.
             assertDrawable(ScoreOverlay.superCountdownText(superFor(240), TICS_PER_SECOND));
+
             assertDrawable(ScoreOverlay.streakText(superFor(240)));
+
             assertDrawable(ScoreOverlay.streakText(streakOf(2)));
         }
 
@@ -239,10 +253,13 @@ class ScoreOverlayTextTest
             final int plaqueCells = Math.max(BlockFont.widthInBlocks("SUPER BLASTER"),
                 BlockFont.widthInBlocks(
                     ScoreOverlay.superCountdownText(superFor(240), TICS_PER_SECOND)));
+
             final float plaqueWidth = plaqueCells * ScoreOverlay.SUPER_CELL_PIXELS
                 + ScoreOverlay.PADDING_PIXELS * 4.0f;
+
             final float panelWidth = BlockFont.widthInBlocks("HEALTH 100")
                 * ScoreOverlay.CELL_PIXELS + ScoreOverlay.PADDING_PIXELS * 2.0f;
+
             final float surfaceWidth = 1280.0f;
 
             assertThat(surfaceWidth * 0.5f + plaqueWidth * 0.5f)
@@ -257,6 +274,7 @@ class ScoreOverlayTextTest
             assertThatThrownBy(() -> ScoreOverlay.superCountdownText(null, TICS_PER_SECOND))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("status");
+
             assertThatThrownBy(() -> ScoreOverlay.streakText(null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("status");

@@ -51,6 +51,7 @@ class DesktopDatagramPortTest
     void setUp()
     {
         clock = new DesktopTimePort();
+
         clock.init();
     }
 
@@ -65,15 +66,19 @@ class DesktopDatagramPortTest
     private byte[] receiveWithin(final DesktopDatagramPort port)
     {
         final long deadline = clock.nanos() + RECEIVE_DEADLINE_NANOS;
+
         while (clock.nanos() < deadline)
         {
             final byte[] payload = port.receive();
+
             if (payload != null)
             {
                 return payload;
             }
+
             Thread.onSpinWait();
         }
+
         return null;
     }
 
@@ -86,11 +91,15 @@ class DesktopDatagramPortTest
         void shouldBindToAnEphemeralPort()
         {
             final DesktopDatagramPort port = new DesktopDatagramPort();
+
             port.init();
+
             try
             {
                 assertThat(port.localPort()).isEqualTo(-1);
+
                 port.bind(EPHEMERAL_PORT);
+
                 assertThat(port.localPort()).isGreaterThan(0);
             }
             finally
@@ -104,10 +113,13 @@ class DesktopDatagramPortTest
         void shouldReportNoLocalPortWhenClosed()
         {
             final DesktopDatagramPort port = new DesktopDatagramPort();
+
             assertThat(port.localPort()).isEqualTo(-1);
 
             port.init();
+
             port.bind(EPHEMERAL_PORT);
+
             port.shutdown();
 
             assertThat(port.localPort()).isEqualTo(-1);
@@ -118,7 +130,9 @@ class DesktopDatagramPortTest
         void shouldRejectDoubleInit()
         {
             final DesktopDatagramPort port = new DesktopDatagramPort();
+
             port.init();
+
             try
             {
                 assertThatThrownBy(port::init)
@@ -136,9 +150,13 @@ class DesktopDatagramPortTest
         void shouldTolerateRepeatedClose()
         {
             final DesktopDatagramPort port = new DesktopDatagramPort();
+
             port.init();
+
             port.close();
+
             port.close();
+
             port.shutdown();
 
             assertThat(port.localPort()).isEqualTo(-1);
@@ -149,6 +167,7 @@ class DesktopDatagramPortTest
         void shouldRejectBindBeforeInit()
         {
             final DesktopDatagramPort port = new DesktopDatagramPort();
+
             assertThatThrownBy(() -> port.bind(EPHEMERAL_PORT))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("not open");
@@ -164,10 +183,13 @@ class DesktopDatagramPortTest
         void shouldReturnNullWhenNoDatagramIsQueued()
         {
             final DesktopDatagramPort port = new DesktopDatagramPort();
+
             port.init();
+
             try
             {
                 port.bind(EPHEMERAL_PORT);
+
                 assertThat(port.receive()).isNull();
             }
             finally
@@ -181,7 +203,9 @@ class DesktopDatagramPortTest
         void shouldReturnNullWhenClosed()
         {
             final DesktopDatagramPort port = new DesktopDatagramPort();
+
             port.init();
+
             port.shutdown();
 
             assertThat(port.receive()).isNull();
@@ -197,7 +221,9 @@ class DesktopDatagramPortTest
         void shouldRejectNullPayload()
         {
             final DesktopDatagramPort port = new DesktopDatagramPort();
+
             port.init();
+
             try
             {
                 assertThatThrownBy(() -> port.send(null, LOOPBACK + ":" + Constants.DEFAULT_NET_PORT))
@@ -215,7 +241,9 @@ class DesktopDatagramPortTest
         void shouldRejectBlankAddress()
         {
             final DesktopDatagramPort port = new DesktopDatagramPort();
+
             port.init();
+
             try
             {
                 assertThatThrownBy(() -> port.send(PAYLOAD, "  "))
@@ -233,7 +261,9 @@ class DesktopDatagramPortTest
         void shouldRejectMalformedAddress()
         {
             final DesktopDatagramPort port = new DesktopDatagramPort();
+
             port.init();
+
             try
             {
                 assertThatThrownBy(() -> port.send(PAYLOAD, LOOPBACK + ":not-a-port"))
@@ -251,6 +281,7 @@ class DesktopDatagramPortTest
         void shouldRejectSendBeforeInit()
         {
             final DesktopDatagramPort port = new DesktopDatagramPort();
+
             assertThatThrownBy(() -> port.send(PAYLOAD, LOOPBACK + ":" + Constants.DEFAULT_NET_PORT))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("not open");
@@ -262,24 +293,33 @@ class DesktopDatagramPortTest
     void shouldRoundTripADatagramOverLoopback()
     {
         final DesktopDatagramPort receiver = new DesktopDatagramPort();
+
         final DesktopDatagramPort sender = new DesktopDatagramPort();
+
         receiver.init();
+
         sender.init();
+
         try
         {
             receiver.bind(EPHEMERAL_PORT);
+
             sender.bind(EPHEMERAL_PORT);
 
             sender.send(PAYLOAD, LOOPBACK + ":" + receiver.localPort());
 
             final byte[] received = receiveWithin(receiver);
+
             assertThat(received).isNotNull();
+
             assertThat(received).isEqualTo(PAYLOAD);
+
             assertThat(received).hasSize(PAYLOAD.length);
         }
         finally
         {
             sender.shutdown();
+
             receiver.shutdown();
         }
     }
@@ -289,33 +329,46 @@ class DesktopDatagramPortTest
     void shouldRoundTripTwoDatagramsWithoutBufferBleed()
     {
         final byte[] longFirst = "a-much-longer-first-datagram".getBytes(StandardCharsets.UTF_8);
+
         final byte[] shortSecond = "short".getBytes(StandardCharsets.UTF_8);
 
         final DesktopDatagramPort receiver = new DesktopDatagramPort();
+
         final DesktopDatagramPort sender = new DesktopDatagramPort();
+
         receiver.init();
+
         sender.init();
+
         try
         {
             receiver.bind(EPHEMERAL_PORT);
+
             sender.bind(EPHEMERAL_PORT);
+
             final String destination = LOOPBACK + ":" + receiver.localPort();
 
             sender.send(longFirst, destination);
+
             final byte[] first = receiveWithin(receiver);
+
             assertThat(first).isEqualTo(longFirst);
 
             // The second datagram is shorter. If the reused direct buffer
             // were not cleared and flipped correctly, the tail of the
             // first payload would leak into this one.
             sender.send(shortSecond, destination);
+
             final byte[] second = receiveWithin(receiver);
+
             assertThat(second).isEqualTo(shortSecond);
+
             assertThat(second).hasSize(shortSecond.length);
         }
         finally
         {
             sender.shutdown();
+
             receiver.shutdown();
         }
     }
@@ -325,14 +378,19 @@ class DesktopDatagramPortTest
     void shouldTreatProcessTicAsANoOp()
     {
         final DesktopDatagramPort port = new DesktopDatagramPort();
+
         port.init();
+
         try
         {
             port.bind(EPHEMERAL_PORT);
+
             final int boundPort = port.localPort();
+
             port.processTic(0);
 
             assertThat(port.localPort()).isEqualTo(boundPort);
+
             assertThat(port.receive()).isNull();
         }
         finally

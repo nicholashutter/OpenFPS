@@ -59,45 +59,61 @@ public final class UserProfile
         {
             throw new IllegalArgumentException("id must be non-blank");
         }
+
         if (displayName == null || displayName.isBlank() || displayName.length() > 32)
         {
             throw new IllegalArgumentException("displayName must be 1-32 chars, got '"
                 + displayName + "'");
         }
+
         if (audioVolume < 0.0 || audioVolume > 1.0)
         {
             throw new IllegalArgumentException("audioVolume must be in [0, 1], got "
                 + audioVolume);
         }
+
         if (mouseSensitivity < 0.1 || mouseSensitivity > 5.0)
         {
             throw new IllegalArgumentException("mouseSensitivity must be in [0.1, 5.0], got "
                 + mouseSensitivity);
         }
+
         if (fieldOfView < 60 || fieldOfView > 120)
         {
             throw new IllegalArgumentException("fieldOfView must be in [60, 120], got "
                 + fieldOfView);
         }
+
         if (preferredColor == null || !preferredColor.matches("#[0-9A-Fa-f]{6}"))
         {
             throw new IllegalArgumentException("preferredColor must be #RRGGBB, got "
                 + preferredColor);
         }
+
         if (totalPlaytimeSeconds < 0)
         {
             throw new IllegalArgumentException("totalPlaytimeSeconds must be >= 0, got "
                 + totalPlaytimeSeconds);
         }
+
         this.id = id;
+
         this.displayName = displayName;
+
         this.audioVolume = audioVolume;
+
         this.mouseSensitivity = mouseSensitivity;
+
         this.fieldOfView = fieldOfView;
+
         this.preferredColor = preferredColor;
+
         this.lastLoginAtEpochMs = lastLoginAtEpochMs;
+
         this.totalPlaytimeSeconds = totalPlaytimeSeconds;
+
         this.createdAtEpochMs = createdAtEpochMs;
+
         this.updatedAtEpochMs = updatedAtEpochMs;
     }
 
@@ -140,6 +156,7 @@ public final class UserProfile
     public static UserProfile newDefault(final String id, final long nowEpochMs)
     {
         final long now = nowEpochMs;
+
         return new UserProfile(
             id,
             "Player",
@@ -266,6 +283,7 @@ public final class UserProfile
         {
             throw new IllegalArgumentException("additionalSeconds must be >= 0");
         }
+
         return new UserProfile(id, displayName, audioVolume, mouseSensitivity,
             fieldOfView, preferredColor, lastLoginAtEpochMs,
             totalPlaytimeSeconds + additionalSeconds,
@@ -283,7 +301,9 @@ public final class UserProfile
     public boolean equals(final Object o)
     {
         if (this == o) return true;
+
         if (!(o instanceof UserProfile that)) return false;
+
         return Double.compare(that.audioVolume, audioVolume) == 0
             && Double.compare(that.mouseSensitivity, mouseSensitivity) == 0
             && fieldOfView == that.fieldOfView

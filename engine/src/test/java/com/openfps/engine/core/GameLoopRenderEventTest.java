@@ -51,26 +51,36 @@ final class GameLoopRenderEventTest
     void shouldPublishOneRenderFrameEventPerTic() throws InterruptedException
     {
         final I_TimePort time = new NullTimePort();
+
         time.init();
+
         final I_EventBusPort bus = EventBusFactory.createShared();
+
         bus.init(CAPACITY);
 
         final GameLoop loop = new GameLoop(time, bus, new EventFactory(time),
             GameConfig.of(FrameRate.FPS_120, TICS));
+
         final Thread thread = new Thread(loop, "gameloop-test");
+
         thread.start();
+
         thread.join(JOIN_MS);
 
         final List<I_EngineEvent> published = drain(bus, TICS * 2);
+
         final List<RenderFrameEvent> frames = new ArrayList<>();
+
         // MUTABLE local — how many ticks were seen, for the pairing assertion.
         int ticks = 0;
+
         for (final I_EngineEvent event : published)
         {
             if (event instanceof RenderFrameEvent frame)
             {
                 frames.add(frame);
             }
+
             if (event instanceof TickEvent)
             {
                 ticks++;
@@ -78,14 +88,19 @@ final class GameLoopRenderEventTest
         }
 
         assertThat(frames).as("one render frame per tic").hasSize(TICS);
+
         assertThat(ticks).isEqualTo(TICS);
+
         assertThat(frames.get(0).targetSubsystem()).isEqualTo(SubsystemId.R_);
+
         // The frame number carries the tic, which is what drives the default
         // orbit camera in SoftwareRenderPort.
         assertThat(frames.get(0).frameNumber()).isZero();
+
         assertThat(frames.get(TICS - 1).frameNumber()).isEqualTo(TICS - 1);
 
         bus.shutdown();
+
         time.shutdown();
     }
 
@@ -95,10 +110,12 @@ final class GameLoopRenderEventTest
         throws InterruptedException
     {
         final List<I_EngineEvent> events = new ArrayList<>();
+
         for (int i = 0; i < count; i++)
         {
             events.add(bus.take());
         }
+
         return events;
     }
 }

@@ -159,21 +159,30 @@ public final class BotFireVoices
         if (ticIndex != currentTic)
         {
             this.currentTic = ticIndex;
+
             this.voicesThisTic = 0;
         }
+
         if (voicesThisTic >= MAX_VOICES_PER_TIC)
         {
             this.suppressed = suppressed + 1;
+
             return false;
         }
+
         if (lastPlayedTic != NEVER && ticIndex - lastPlayedTic < MIN_INTERVAL_TICS)
         {
             this.suppressed = suppressed + 1;
+
             return false;
         }
+
         this.voicesThisTic = voicesThisTic + 1;
+
         this.lastPlayedTic = ticIndex;
+
         this.allowed = allowed + 1;
+
         return true;
     }
 
@@ -189,9 +198,13 @@ public final class BotFireVoices
     public void clear()
     {
         this.lastPlayedTic = NEVER;
+
         this.currentTic = NEVER;
+
         this.voicesThisTic = 0;
+
         this.allowed = 0;
+
         this.suppressed = 0;
     }
 
@@ -213,8 +226,10 @@ public final class BotFireVoices
         {
             return 1;
         }
+
         final int soundTics =
             (CarbineSound.DURATION_MS * ticsPerSecond + 999) / 1000;
+
         return Math.max(1, (soundTics + MIN_INTERVAL_TICS - 1) / MIN_INTERVAL_TICS);
     }
 

@@ -72,9 +72,13 @@ final class DemoGameplayPortTest
     private static SoftwareRenderPort renderer()
     {
         final I_TimePort time = new NullTimePort();
+
         time.init();
+
         final SoftwareRenderPort port = new SoftwareRenderPort(null, time);
+
         port.init();
+
         return port;
     }
 
@@ -118,6 +122,7 @@ final class DemoGameplayPortTest
         public void sampleInput(final int ticIndex)
         {
             samples++;
+
             latched = state;
         }
 
@@ -173,15 +178,20 @@ final class DemoGameplayPortTest
         void rejectsNulls()
         {
             final I_InputPort input = new ScriptedInput(InputState.NEUTRAL);
+
             final SoftwareRenderPort render = renderer();
+
             final PlayerController player = new PlayerController();
 
             assertThatThrownBy(() -> new DemoGameplayPort(null, render, player, config()))
                 .isInstanceOf(IllegalArgumentException.class);
+
             assertThatThrownBy(() -> new DemoGameplayPort(input, null, player, config()))
                 .isInstanceOf(IllegalArgumentException.class);
+
             assertThatThrownBy(() -> new DemoGameplayPort(input, render, null, config()))
                 .isInstanceOf(IllegalArgumentException.class);
+
             assertThatThrownBy(() -> new DemoGameplayPort(input, render, player, null))
                 .isInstanceOf(IllegalArgumentException.class);
         }
@@ -196,14 +206,18 @@ final class DemoGameplayPortTest
         void latchesOncePerTic()
         {
             final ScriptedInput input = new ScriptedInput(InputState.NEUTRAL);
+
             final DemoGameplayPort port = new DemoGameplayPort(input, renderer(),
                 new PlayerController(), config());
 
             port.tick(0);
+
             port.tick(1);
+
             port.tick(2);
 
             assertThat(input.samples()).isEqualTo(3);
+
             assertThat(port.ticsApplied()).isEqualTo(3L);
         }
 
@@ -213,7 +227,9 @@ final class DemoGameplayPortTest
         {
             final ScriptedInput input = new ScriptedInput(
                 InputState.of(1.0f, 0.0f, 0.0f, 0.0f, false, false, false));
+
             final PlayerController player = new PlayerController();
+
             final DemoGameplayPort port = new DemoGameplayPort(input, renderer(), player,
                 config());
 
@@ -226,6 +242,7 @@ final class DemoGameplayPortTest
             // MOVE_SPEED_UNITS_PER_SECOND.
             assertThat(player.positionZ())
                 .isCloseTo(PlayerController.MOVE_SPEED_UNITS_PER_SECOND, within(0.5f));
+
             assertThat(player.positionX()).isCloseTo(0.0f, within(EPSILON));
         }
 
@@ -234,9 +251,12 @@ final class DemoGameplayPortTest
         void turnsThePlayer()
         {
             final float perTic = 0.01f;
+
             final ScriptedInput input = new ScriptedInput(
                 InputState.of(0.0f, 0.0f, perTic, 0.0f, false, false, false));
+
             final PlayerController player = new PlayerController();
+
             final DemoGameplayPort port = new DemoGameplayPort(input, renderer(), player,
                 config());
 
@@ -283,23 +303,30 @@ final class DemoGameplayPortTest
         void cameraReachesTheRenderer()
         {
             final SoftwareRenderPort render = renderer();
+
             render.resize(SURFACE, SURFACE);
+
             render.setScene(Scene.of(ModelFormat.read(DemoModelFixture.quad())));
 
             final PlayerController player = new PlayerController(10.0f, 0.0f, -20.0f,
                 0.0f, 0.0f);
+
             final DemoGameplayPort port = new DemoGameplayPort(
                 new ScriptedInput(InputState.NEUTRAL), render, player, config());
 
             port.tick(0);
+
             render.renderFrame(0);
 
             // This is the whole join, asserted end to end: the camera the
             // rasterizer actually used is the one the player produced.
             assertThat(render.lastCamera()).isNotNull();
+
             assertThat(render.lastCamera().eye().x()).isCloseTo(10.0f, within(EPSILON));
+
             assertThat(render.lastCamera().eye().y())
                 .isCloseTo(PlayerController.EYE_HEIGHT_UNITS, within(EPSILON));
+
             assertThat(render.lastCamera().eye().z()).isCloseTo(-20.0f, within(EPSILON));
         }
 
@@ -308,22 +335,28 @@ final class DemoGameplayPortTest
         void cameraTracksMovement()
         {
             final SoftwareRenderPort render = renderer();
+
             render.resize(SURFACE, SURFACE);
+
             render.setScene(Scene.of(ModelFormat.read(DemoModelFixture.quad())));
 
             final PlayerController player = new PlayerController();
+
             final DemoGameplayPort port = new DemoGameplayPort(
                 new ScriptedInput(InputState.of(1.0f, 0.0f, 0.0f, 0.0f, false, false, false)),
                 render, player, config());
 
             port.tick(0);
+
             render.renderFrame(0);
+
             final float first = render.lastCamera().eye().z();
 
             for (int tic = 1; tic <= 30; tic++)
             {
                 port.tick(tic);
             }
+
             render.renderFrame(1);
 
             assertThat(render.lastCamera().eye().z()).isGreaterThan(first);
@@ -345,15 +378,19 @@ final class DemoGameplayPortTest
             DemoModelFixture.write(
                 root.resolve(DemoModels.CHARACTER_DIRECTORY).resolve(person));
         }
+
         for (final String piece : new String[] {"floor-square.ofm", "wall.ofm",
             "wall-doorway.ofm", "column.ofm", "crate.ofm", "stairs.ofm", "shape-slope.ofm"})
         {
             DemoModelFixture.write(root.resolve(DemoModels.LEVEL_DIRECTORY).resolve(piece));
         }
+
         DemoModelFixture.write(
             root.resolve(DemoModels.WEAPON_DIRECTORY).resolve(DemoModels.WEAPON_MODEL));
+
         DemoModelFixture.write(
             root.resolve(DemoModels.WEAPON_DIRECTORY).resolve(DemoModels.BOT_WEAPON_MODEL));
+
         return DemoScene.build(DemoModels.load(root));
     }
 
@@ -361,10 +398,12 @@ final class DemoGameplayPortTest
     private static int[] indicesOf(final DemoScene demo)
     {
         final int[] indices = new int[demo.botCount()];
+
         for (int index = 0; index < indices.length; index++)
         {
             indices[index] = demo.botInstanceIndex(index);
         }
+
         return indices;
     }
 
@@ -376,7 +415,9 @@ final class DemoGameplayPortTest
         final DemoGameplayPort port = new DemoGameplayPort(
             new ScriptedInput(InputState.NEUTRAL), render, demo.spawnController(),
             config(), round, indicesOf(demo));
+
         port.setMatchLive(true);
+
         return port;
     }
 
@@ -398,11 +439,15 @@ final class DemoGameplayPortTest
             // moment the window opened, so a player who read the title screen
             // for ten seconds arrived already down a fifth of their health.
             final DemoScene demo = world(root);
+
             final SoftwareRenderPort render = renderer();
+
             render.resize(SURFACE, SURFACE);
+
             render.setScene(demo.scene());
 
             final Match round = demo.newMatch();
+
             final DemoGameplayPort port = new DemoGameplayPort(
                 new ScriptedInput(InputState.NEUTRAL), render, demo.spawnController(),
                 config(), round, indicesOf(demo));
@@ -418,7 +463,9 @@ final class DemoGameplayPortTest
             assertThat(round.playerHealth())
                 .as("the player was shot while the menu was up")
                 .isEqualTo(Match.PLAYER_MAX_HEALTH);
+
             final int walker = firstMover(round);
+
             assertThat(round.bots()[walker].positionX())
                 .as("a bot walked its patrol behind the menu")
                 .isEqualTo(0.0f);
@@ -429,18 +476,25 @@ final class DemoGameplayPortTest
         void shouldResumeWhenTheWorldComesBack(@TempDir final Path root) throws IOException
         {
             final DemoScene demo = world(root);
+
             final SoftwareRenderPort render = renderer();
+
             render.resize(SURFACE, SURFACE);
+
             render.setScene(demo.scene());
 
             final Match round = demo.newMatch();
+
             final DemoGameplayPort port = new DemoGameplayPort(
                 new ScriptedInput(InputState.NEUTRAL), render, demo.spawnController(),
                 config(), round, indicesOf(demo));
 
             port.tick(0);
+
             port.setMatchLive(true);
+
             assertThat(port.isMatchLive()).isTrue();
+
             for (int tic = 1; tic <= SETTLE_TICS; tic++)
             {
                 port.tick(tic);
@@ -451,6 +505,7 @@ final class DemoGameplayPortTest
             // resumes wherever the clock has reached. That is the property that
             // lets a peer join late and agree with everyone else.
             final int walker = firstMover(round);
+
             assertThat(round.bots()[walker].positionX()).isNotEqualTo(0.0f);
         }
 
@@ -466,28 +521,37 @@ final class DemoGameplayPortTest
             // while the hitboxes stay put. You would shoot a visible bot and
             // hit nothing, and see nothing wrong in any single frame.
             final DemoScene demo = world(root);
+
             final SoftwareRenderPort render = renderer();
+
             render.resize(SURFACE, SURFACE);
+
             render.setScene(demo.scene());
 
             final Match round = demo.newMatch();
+
             final DemoGameplayPort port = portFor(demo, render, round);
+
             for (int tic = 0; tic <= SETTLE_TICS; tic++)
             {
                 port.tick(tic);
             }
 
             final Bot[] roster = round.bots();
+
             for (int index = 0; index < roster.length; index++)
             {
                 final Mat4 placed = render.worldTransformOverride(demo.botInstanceIndex(index));
+
                 assertThat(placed)
                     .as("bot %d's model was never placed", index)
                     .isNotNull();
+
                 // Column 3 of a placement is its translation.
                 assertThat(placed.get(0, 3))
                     .as("bot %d's model is not standing on bot %d's feet (x)", index, index)
                     .isCloseTo(roster[index].positionX(), within(EPSILON));
+
                 assertThat(placed.get(2, 3))
                     .as("bot %d's model is not standing on bot %d's feet (z)", index, index)
                     .isCloseTo(roster[index].positionZ(), within(EPSILON));
@@ -499,15 +563,21 @@ final class DemoGameplayPortTest
         void shouldMoveTheModelWhenTheBotWalks(@TempDir final Path root) throws IOException
         {
             final DemoScene demo = world(root);
+
             final SoftwareRenderPort render = renderer();
+
             render.resize(SURFACE, SURFACE);
+
             render.setScene(demo.scene());
 
             final Match round = demo.newMatch();
+
             final DemoGameplayPort port = portFor(demo, render, round);
 
             port.tick(0);
+
             final int walker = firstMover(round);
+
             final float startX = render
                 .worldTransformOverride(demo.botInstanceIndex(walker)).get(0, 3);
 
@@ -515,6 +585,7 @@ final class DemoGameplayPortTest
             {
                 port.tick(tic);
             }
+
             final float laterX = render
                 .worldTransformOverride(demo.botInstanceIndex(walker)).get(0, 3);
 
@@ -530,17 +601,24 @@ final class DemoGameplayPortTest
             // The other half of the test above. A model that moves when it
             // should not is the same index bug seen from the other side.
             final DemoScene demo = world(root);
+
             final SoftwareRenderPort render = renderer();
+
             render.resize(SURFACE, SURFACE);
+
             render.setScene(demo.scene());
 
             final Match round = demo.newMatch();
+
             final DemoGameplayPort port = portFor(demo, render, round);
+
             final int sentry = firstSentry(round);
 
             port.tick(0);
+
             final float startX = render
                 .worldTransformOverride(demo.botInstanceIndex(sentry)).get(0, 3);
+
             final float startZ = render
                 .worldTransformOverride(demo.botInstanceIndex(sentry)).get(2, 3);
 
@@ -551,6 +629,7 @@ final class DemoGameplayPortTest
 
             assertThat(render.worldTransformOverride(demo.botInstanceIndex(sentry)).get(0, 3))
                 .isEqualTo(startX);
+
             assertThat(render.worldTransformOverride(demo.botInstanceIndex(sentry)).get(2, 3))
                 .isEqualTo(startZ);
         }
@@ -560,21 +639,29 @@ final class DemoGameplayPortTest
         void shouldTopplTheModelWhenABotIsKilled(@TempDir final Path root) throws IOException
         {
             final DemoScene demo = world(root);
+
             final SoftwareRenderPort render = renderer();
+
             render.resize(SURFACE, SURFACE);
+
             render.setScene(demo.scene());
 
             final Match round = demo.newMatch();
+
             final DemoGameplayPort port = portFor(demo, render, round);
+
             port.tick(0);
 
             final int victim = firstSentry(round);
+
             round.bots()[victim].damage(Bot.MAX_HEALTH);
+
             port.tick(1);
 
             // Column 1 is the image of the model's up axis. Standing, it is
             // world up; fallen, it is horizontal.
             final Mat4 down = render.worldTransformOverride(demo.botInstanceIndex(victim));
+
             assertThat(down.get(1, 1))
                 .as("the body is still standing up")
                 .isCloseTo(0.0f, within(EPSILON));
@@ -589,7 +676,9 @@ final class DemoGameplayPortTest
             // then throws, and the throw surfaced as a subsystem error on tic 0
             // of every run.
             final DemoScene demo = world(root);
+
             final SoftwareRenderPort render = renderer();
+
             render.resize(SURFACE, SURFACE);
 
             final DemoGameplayPort port = portFor(demo, render, demo.newMatch());
@@ -614,14 +703,19 @@ final class DemoGameplayPortTest
             // The defect lives exactly in the join between them, and it took
             // firing at a bot by hand on a phone to find it.
             final DemoScene demo = world(root);
+
             final SoftwareRenderPort render = renderer();
+
             render.resize(SURFACE, SURFACE);
+
             render.setScene(demo.scene());
 
             final Match round = demo.newMatch();
+
             final DemoGameplayPort port = new DemoGameplayPort(
                 new ScriptedInput(InputState.of(0.0f, 0.0f, 0.0f, 0.0f, true, false, false)),
                 render, demo.spawnController(), config(), round, indicesOf(demo));
+
             port.setMatchLive(true);
 
             port.tick(0);
@@ -640,17 +734,23 @@ final class DemoGameplayPortTest
             // a fix that simply removed the cooldown would pass the test above
             // and turn the blaster into 60 hitscans a second.
             final DemoScene demo = world(root);
+
             final SoftwareRenderPort render = renderer();
+
             render.resize(SURFACE, SURFACE);
+
             render.setScene(demo.scene());
 
             final Match round = demo.newMatch();
+
             final DemoGameplayPort port = new DemoGameplayPort(
                 new ScriptedInput(InputState.of(0.0f, 0.0f, 0.0f, 0.0f, true, false, false)),
                 render, demo.spawnController(), config(), round, indicesOf(demo));
+
             port.setMatchLive(true);
 
             final int tics = 60;
+
             for (int tic = 0; tic < tics; tic++)
             {
                 port.tick(tic);
@@ -665,6 +765,7 @@ final class DemoGameplayPortTest
         private static int firstMover(final Match round)
         {
             final Bot[] roster = round.bots();
+
             for (int index = 0; index < roster.length; index++)
             {
                 if (roster[index].pattern().moves())
@@ -672,6 +773,7 @@ final class DemoGameplayPortTest
                     return index;
                 }
             }
+
             throw new IllegalStateException("the roster has no moving bot to test with");
         }
 
@@ -679,6 +781,7 @@ final class DemoGameplayPortTest
         private static int firstSentry(final Match round)
         {
             final Bot[] roster = round.bots();
+
             for (int index = 0; index < roster.length; index++)
             {
                 if (!roster[index].pattern().moves())
@@ -686,6 +789,7 @@ final class DemoGameplayPortTest
                     return index;
                 }
             }
+
             throw new IllegalStateException("the roster has no sentry to test with");
         }
     }
@@ -709,13 +813,19 @@ final class DemoGameplayPortTest
             // suite passes while the room looks empty. So this asserts the pixel
             // side of the seam: the transform the renderer is actually holding.
             final DemoScene demo = world(root);
+
             final SoftwareRenderPort render = renderer();
+
             render.resize(SURFACE, SURFACE);
+
             render.setScene(demo.scene());
 
             final Match round = demo.newMatch();
+
             final DemoGameplayPort port = portFor(demo, render, round);
+
             port.setMatchLive(true);
+
             port.tick(0);
 
             // Clear the room the way a player would — through the match, so the
@@ -724,7 +834,9 @@ final class DemoGameplayPortTest
             {
                 bot.damage(Bot.MAX_HEALTH);
             }
+
             port.tick(1);
+
             for (int index = 0; index < round.botCount(); index++)
             {
                 assertThat(hiddenAt(render, demo.botInstanceIndex(index)))
@@ -740,7 +852,9 @@ final class DemoGameplayPortTest
                     .as("bot %d is alive and shooting but INVISIBLE after the rematch", index)
                     .isFalse();
             }
+
             assertThat(round.livingBots()).isEqualTo(round.botCount());
+
             assertThat(round.state()).isEqualTo(MatchState.IN_PROGRESS);
         }
 
@@ -754,23 +868,32 @@ final class DemoGameplayPortTest
             // there is no tic on which they disagree, and this is the assertion
             // that keeps them there.
             final DemoScene demo = world(root);
+
             final SoftwareRenderPort render = renderer();
+
             render.resize(SURFACE, SURFACE);
+
             render.setScene(demo.scene());
 
             final Match round = demo.newMatch();
+
             final DemoGameplayPort port = new DemoGameplayPort(
                 new ScriptedInput(InputState.NEUTRAL), render, demo.spawnController(),
                 config(), round, indicesOf(demo), demo.effects(), weaponIndicesOf(demo));
+
             port.setMatchLive(true);
+
             port.tick(0);
+
             assertThat(demo.hasBotWeapons()).as("no weapon art was staged").isTrue();
 
             for (final Bot bot : round.bots())
             {
                 bot.damage(Bot.MAX_HEALTH);
             }
+
             port.tick(1);
+
             for (int index = 0; index < round.botCount(); index++)
             {
                 assertThat(hiddenAt(render, demo.botWeaponInstanceIndex(index)))
@@ -794,27 +917,36 @@ final class DemoGameplayPortTest
             throws IOException
         {
             final DemoScene demo = world(root);
+
             final SoftwareRenderPort render = renderer();
+
             render.resize(SURFACE, SURFACE);
+
             render.setScene(demo.scene());
 
             final PlayerController player = demo.spawnController();
+
             final float spawnZ = player.positionZ();
+
             final Match round = demo.newMatch();
+
             final DemoGameplayPort port = new DemoGameplayPort(
                 new ScriptedInput(InputState.of(1.0f, 0.0f, 0.0f, 0.0f, false, false, false)),
                 render, player, config(), round, indicesOf(demo));
+
             port.setMatchLive(true);
 
             for (int tic = 0; tic < 60; tic++)
             {
                 port.tick(tic);
             }
+
             assertThat(player.positionZ()).as("the player never moved").isNotEqualTo(spawnZ);
 
             port.restartMatch();
 
             assertThat(player.positionZ()).isEqualTo(spawnZ);
+
             assertThat(player.yawRadians()).isEqualTo(demo.spawnYawRadians());
         }
 
@@ -826,22 +958,31 @@ final class DemoGameplayPortTest
             // room visibly remembering a match it is supposed to have forgotten —
             // and the bolts would be halfway across it, going nowhere.
             final DemoScene demo = world(root);
+
             final SoftwareRenderPort render = renderer();
+
             render.resize(SURFACE, SURFACE);
+
             render.setScene(demo.scene());
 
             final DemoEffects effects = demo.effects();
+
             final Match round = demo.newMatch();
+
             final DemoGameplayPort port = new DemoGameplayPort(
                 new ScriptedInput(InputState.of(0.0f, 0.0f, 0.0f, 0.0f, true, false, false)),
                 render, demo.spawnController(), config(), round, indicesOf(demo), effects);
+
             port.setMatchLive(true);
+
             port.tick(0);
+
             assertThat(effects.liveTracerCount()).as("nothing was fired").isGreaterThan(0);
 
             port.restartMatch();
 
             assertThat(effects.liveTracerCount()).isEqualTo(0);
+
             assertThat(effects.livePuffCount()).isEqualTo(0);
         }
 
@@ -852,21 +993,30 @@ final class DemoGameplayPortTest
             // What the player sees on the end screen. A reset that zeroed the bots
             // and forgot the counters would report fourteen kills out of seven.
             final DemoScene demo = world(root);
+
             final SoftwareRenderPort render = renderer();
+
             render.resize(SURFACE, SURFACE);
+
             render.setScene(demo.scene());
 
             final Match round = demo.newMatch();
+
             final DemoGameplayPort port = portFor(demo, render, round);
+
             port.setMatchLive(true);
+
             port.tick(0);
+
             for (final Bot bot : round.bots())
             {
                 bot.damage(Bot.MAX_HEALTH);
             }
+
             port.tick(1);
 
             port.restartMatch();
+
             for (final Bot bot : round.bots())
             {
                 bot.damage(Bot.MAX_HEALTH);
@@ -875,7 +1025,9 @@ final class DemoGameplayPortTest
             assertThat(round.botsKilled())
                 .as("the kills of two rounds were added together")
                 .isEqualTo(0);
+
             assertThat(round.playerShotsFired()).isEqualTo(0);
+
             assertThat(round.playerDeaths()).isEqualTo(0);
         }
 
@@ -888,6 +1040,7 @@ final class DemoGameplayPortTest
                 config());
 
             assertThatCode(port::restartMatch).doesNotThrowAnyException();
+
             assertThat(port.status()).isNull();
         }
 
@@ -902,10 +1055,12 @@ final class DemoGameplayPortTest
         private static boolean hiddenAt(final SoftwareRenderPort render, final int instance)
         {
             final Mat4 placed = render.worldTransformOverride(instance);
+
             if (placed == null)
             {
                 return false;
             }
+
             for (int row = 0; row < 3; row++)
             {
                 for (int column = 0; column < 3; column++)
@@ -916,6 +1071,7 @@ final class DemoGameplayPortTest
                     }
                 }
             }
+
             return true;
         }
 
@@ -923,10 +1079,12 @@ final class DemoGameplayPortTest
         private static int[] weaponIndicesOf(final DemoScene demo)
         {
             final int[] indices = new int[demo.botCount()];
+
             for (int index = 0; index < indices.length; index++)
             {
                 indices[index] = demo.botWeaponInstanceIndex(index);
             }
+
             return indices;
         }
     }

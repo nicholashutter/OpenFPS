@@ -238,14 +238,17 @@ public final class Bot
             throw new IllegalArgumentException(
                 "entity id must be at least " + Target.MIN_ENTITY_ID + ", got " + id);
         }
+
         if (routePattern == null)
         {
             throw new IllegalArgumentException("pattern must not be null");
         }
+
         if (team == null)
         {
             throw new IllegalArgumentException("team must not be null");
         }
+
         // Negated >= so NaN, which fails every comparison, is rejected here
         // rather than reaching a position and poisoning the hitbox.
         if (!(routeAmplitudeUnits >= 0.0f))
@@ -253,9 +256,13 @@ public final class Bot
             throw new IllegalArgumentException(
                 "amplitude must be non-negative and a number, got " + routeAmplitudeUnits);
         }
+
         requireFinite("routeCentreX", routeCentreX);
+
         requireFinite("routeCentreY", routeCentreY);
+
         requireFinite("routeCentreZ", routeCentreZ);
+
         if (routePeriodTics <= 0)
         {
             throw new IllegalArgumentException(
@@ -263,14 +270,23 @@ public final class Bot
         }
 
         this.entityId = id;
+
         this.homeX = routeCentreX;
+
         this.homeY = routeCentreY;
+
         this.homeZ = routeCentreZ;
+
         this.pattern = routePattern;
+
         this.amplitudeUnits = routeAmplitudeUnits;
+
         this.periodTics = routePeriodTics;
+
         this.phaseTics = routePhaseTics;
+
         this.team = team;
+
         // Place it on its route immediately, so a bot is never at its home
         // point for one tic before the first update moves it there.
         moveTo(0);
@@ -298,12 +314,19 @@ public final class Bot
     public void reset()
     {
         this.health = MAX_HEALTH;
+
         this.yawRadians = 0.0f;
+
         this.readyAtTic = Integer.MIN_VALUE;
+
         this.lastFiredTic = NEVER_FIRED;
+
         this.rememberedPlayerX = 0.0f;
+
         this.rememberedPlayerZ = 0.0f;
+
         this.hasSeenPlayer = false;
+
         // Last, and after the health: moveTo does nothing to a dead bot, so a
         // reset that placed the body before reviving it would leave every corpse
         // where it fell and restart the room with the survivors misplaced.
@@ -330,8 +353,11 @@ public final class Bot
         {
             return;
         }
+
         final float phase = phaseAt(ticIndex);
+
         this.positionX = homeX + pattern.offsetX(phase, amplitudeUnits);
+
         this.positionZ = homeZ + pattern.offsetZ(phase, amplitudeUnits);
     }
 
@@ -348,6 +374,7 @@ public final class Bot
     public float phaseAt(final int ticIndex)
     {
         final int step = cyclicIndex(ticIndex + phaseTics, periodTics);
+
         return FULL_TURN_RADIANS * step / periodTics;
     }
 
@@ -375,10 +402,12 @@ public final class Bot
     private static int cyclicIndex(final int value, final int modulus)
     {
         final int remainder = value % modulus;
+
         if (remainder < 0)
         {
             return remainder + modulus;
         }
+
         return remainder;
     }
 
@@ -411,12 +440,16 @@ public final class Bot
         {
             return;
         }
+
         if (hasSeenPlayer && cyclicIndex(ticIndex + entityId, skill.reactionTics()) != 0)
         {
             return;
         }
+
         this.rememberedPlayerX = playerX;
+
         this.rememberedPlayerZ = playerZ;
+
         this.hasSeenPlayer = true;
     }
 
@@ -439,6 +472,7 @@ public final class Bot
         {
             return;
         }
+
         faceToward(rememberedPlayerX, rememberedPlayerZ);
     }
 
@@ -456,7 +490,9 @@ public final class Bot
     public void faceToward(final float targetX, final float targetZ)
     {
         final float deltaX = targetX - positionX;
+
         final float deltaZ = targetZ - positionZ;
+
         if (deltaX == 0.0f && deltaZ == 0.0f)
         {
             // Standing exactly on the target. Any heading is as correct as any
@@ -464,6 +500,7 @@ public final class Bot
             // current one avoids a visible snap for no information.
             return;
         }
+
         this.yawRadians = (float) StrictMath.atan2(deltaX, deltaZ);
     }
 
@@ -493,12 +530,16 @@ public final class Bot
         {
             return false;
         }
+
         if (!rng.chance(ticIndex, entityId, BotRng.CHANNEL_FIRE, skill.fireChancePermille()))
         {
             return false;
         }
+
         this.lastFiredTic = ticIndex;
+
         this.readyAtTic = ticIndex + skill.cooldownTics() + extraCooldown(ticIndex, rng, skill);
+
         return true;
     }
 
@@ -512,6 +553,7 @@ public final class Bot
         {
             return 0;
         }
+
         return rng.boundedInt(ticIndex, entityId, BotRng.CHANNEL_COOLDOWN,
             skill.cooldownSpreadTics());
     }
@@ -533,17 +575,23 @@ public final class Bot
         {
             throw new IllegalArgumentException("damage must be positive, got " + amount);
         }
+
         if (!isAlive())
         {
             return false;
         }
+
         final int remaining = health - amount;
+
         if (remaining <= 0)
         {
             this.health = 0;
+
             return true;
         }
+
         this.health = remaining;
+
         return false;
     }
 

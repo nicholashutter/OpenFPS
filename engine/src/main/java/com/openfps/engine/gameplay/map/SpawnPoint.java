@@ -40,14 +40,17 @@ public record SpawnPoint(String id, Team team, float x, float y, float z, float 
         {
             throw new IllegalArgumentException("id must not be null or blank");
         }
+
         if (team == null)
         {
             throw new IllegalArgumentException("team must not be null");
         }
+
         if (Float.isNaN(yawRadians))
         {
             throw new IllegalArgumentException("yawRadians must not be NaN");
         }
+
         id = id.intern();
     }
 }

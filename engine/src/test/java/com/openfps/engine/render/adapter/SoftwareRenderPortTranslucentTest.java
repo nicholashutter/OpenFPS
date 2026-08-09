@@ -95,10 +95,15 @@ final class SoftwareRenderPortTranslucentTest
     private static ModelFormat quad(final int colour)
     {
         final int[] vertices = new int[QUAD_CORNERS * ModelFormat.VERTEX_STRIDE_INTS];
+
         ModelFormat.writeVertex(vertices, 0, -HALF, -HALF, 0.0f, 0.0f, 0.0f, colour);
+
         ModelFormat.writeVertex(vertices, 1, HALF, -HALF, 0.0f, 1.0f, 0.0f, colour);
+
         ModelFormat.writeVertex(vertices, 2, HALF, HALF, 0.0f, 1.0f, 1.0f, colour);
+
         ModelFormat.writeVertex(vertices, 3, -HALF, HALF, 0.0f, 0.0f, 1.0f, colour);
+
         return ModelFormat.ofGeometry(vertices, QUAD_INDICES);
     }
 
@@ -111,16 +116,27 @@ final class SoftwareRenderPortTranslucentTest
     private static int[] frameOf(final Scene scene)
     {
         final I_TimePort time = new NullTimePort();
+
         time.init();
+
         final SoftwareRenderPort port = new SoftwareRenderPort(null, time);
+
         port.init();
+
         port.resize(SIZE, SIZE);
+
         port.setCamera(camera());
+
         port.setScene(scene);
+
         port.renderFrame(0);
+
         final int[] frame = new int[SIZE * SIZE];
+
         port.copyColorInto(frame);
+
         port.shutdown();
+
         return frame;
     }
 
@@ -136,6 +152,7 @@ final class SoftwareRenderPortTranslucentTest
     {
         final int overClear = Rgba.srcOver(FAR_COLOUR,
             SoftwareRenderPort.DEFAULT_CLEAR_COLOR, farCoverage);
+
         return Rgba.srcOver(NEAR_COLOUR, overClear, nearCoverage);
     }
 
@@ -214,7 +231,9 @@ final class SoftwareRenderPortTranslucentTest
             // over, and the composite has to swap with them: the sort is a
             // per-frame thing, not a bind-time one.
             final ModelFormat red = quad(NEAR_COLOUR);
+
             final ModelFormat blue = quad(FAR_COLOUR);
+
             final Scene scene = Scene.builder()
                 .addTranslucentWorldInstance(red, Mat4.translation(0.0f, 0.0f, NEAR_Z),
                     Scene.UNTAGGED, COVERAGE)
@@ -223,21 +242,34 @@ final class SoftwareRenderPortTranslucentTest
                 .build();
 
             final I_TimePort time = new NullTimePort();
+
             time.init();
+
             final SoftwareRenderPort port = new SoftwareRenderPort(null, time);
+
             port.init();
+
             port.resize(SIZE, SIZE);
+
             port.setCamera(camera());
+
             port.setScene(scene);
+
             port.setWorldTransform(0, Mat4.translation(0.0f, 0.0f, FAR_Z));
+
             port.setWorldTransform(1, Mat4.translation(0.0f, 0.0f, NEAR_Z));
+
             port.renderFrame(0);
+
             final int[] frame = new int[SIZE * SIZE];
+
             port.copyColorInto(frame);
+
             port.shutdown();
 
             final int blueOverClear = Rgba.srcOver(NEAR_COLOUR,
                 SoftwareRenderPort.DEFAULT_CLEAR_COLOR, COVERAGE);
+
             assertThat(frame[CENTRE * SIZE + CENTRE])
                 .as("red is now the far one, so it must be composited first")
                 .isEqualTo(Rgba.srcOver(FAR_COLOUR, blueOverClear, COVERAGE));
@@ -266,6 +298,7 @@ final class SoftwareRenderPortTranslucentTest
             // the opaque pass's own order alone.
             final int overBackdrop =
                 Rgba.srcOver(FAR_COLOUR, BACKDROP_COLOUR, COVERAGE);
+
             assertThat(centreOf(scene))
                 .isEqualTo(Rgba.srcOver(NEAR_COLOUR, overBackdrop, COVERAGE));
         }
@@ -305,6 +338,7 @@ final class SoftwareRenderPortTranslucentTest
 
             final int first = Rgba.srcOver(FAR_COLOUR,
                 SoftwareRenderPort.DEFAULT_CLEAR_COLOR, COVERAGE);
+
             assertThat(centreOf(scene))
                 .as("equal depths keep scene order, and neither may occlude the other")
                 .isEqualTo(Rgba.srcOver(NEAR_COLOUR, first, COVERAGE));
@@ -319,6 +353,7 @@ final class SoftwareRenderPortTranslucentTest
                 .build();
 
             assertThat(scene.translucentInstanceCount()).isZero();
+
             assertThat(centreOf(scene)).isEqualTo(BACKDROP_COLOUR);
         }
 

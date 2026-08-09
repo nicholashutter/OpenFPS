@@ -99,61 +99,83 @@ public final class MapSpec
         {
             throw new IllegalArgumentException("id must not be null or blank");
         }
+
         if (displayName == null || displayName.isBlank())
         {
             throw new IllegalArgumentException("displayName must not be null or blank");
         }
+
         if (setting == null)
         {
             throw new IllegalArgumentException("setting must not be null");
         }
+
         if (mode == null)
         {
             throw new IllegalArgumentException("mode must not be null");
         }
+
         if (dimensions == null)
         {
             throw new IllegalArgumentException("dimensions must not be null");
         }
+
         if (lanes == null)
         {
             throw new IllegalArgumentException("lanes must not be null");
         }
+
         if (lanes.size() != 3)
         {
             throw new IllegalArgumentException(
                 "a map must have exactly three lanes, got " + lanes.size());
         }
+
         if (spawnPoints == null)
         {
             throw new IllegalArgumentException("spawnPoints must not be null");
         }
+
         if (spawnPoints.isEmpty())
         {
             throw new IllegalArgumentException("spawnPoints must not be empty");
         }
+
         if (botWaypoints == null)
         {
             throw new IllegalArgumentException("botWaypoints must not be null");
         }
+
         if (markers == null)
         {
             throw new IllegalArgumentException("markers must not be null");
         }
+
         if (assets == null)
         {
             throw new IllegalArgumentException("assets must not be null");
         }
+
         validateMarkersForMode(mode, markers);
+
         this.id = id.intern();
+
         this.displayName = displayName.intern();
+
         this.setting = setting;
+
         this.mode = mode;
+
         this.dimensions = dimensions;
+
         this.lanes = List.copyOf(lanes);
+
         this.spawnPoints = List.copyOf(spawnPoints);
+
         this.botWaypoints = List.copyOf(botWaypoints);
+
         this.markers = markers;
+
         this.assets = assets;
     }
 
@@ -289,10 +311,12 @@ public final class MapSpec
         {
             return true;
         }
+
         if (!(other instanceof MapSpec otherSpec))
         {
             return false;
         }
+
         return id.equals(otherSpec.id);
     }
 
@@ -331,6 +355,7 @@ public final class MapSpec
             // for the existing single-player / multiplayer distinction.
             case SINGLE_PLAYER, MULTIPLAYER -> false;
         };
+
         if (!ok)
         {
             throw new IllegalArgumentException("markers " + markers.getClass().getSimpleName()

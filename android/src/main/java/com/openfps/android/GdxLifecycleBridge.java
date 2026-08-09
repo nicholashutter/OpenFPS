@@ -76,9 +76,12 @@ final class GdxLifecycleBridge implements ApplicationListener
     public void create()
     {
         lastWidth = Gdx.graphics.getWidth();
+
         lastHeight = Gdx.graphics.getHeight();
+
         Log.i(TAG, "GL surface ready: " + lastWidth + "x" + lastHeight
             + " (GL30=" + (Gdx.gl30 != null) + ")");
+
         callback.onSurfaceReady(lastWidth, lastHeight);
     }
 
@@ -91,8 +94,11 @@ final class GdxLifecycleBridge implements ApplicationListener
         {
             return;
         }
+
         lastWidth = width;
+
         lastHeight = height;
+
         callback.onResize(width, height);
     }
 
@@ -110,6 +116,7 @@ final class GdxLifecycleBridge implements ApplicationListener
         // so anything done here must be short and synchronous — there is no
         // "finish later".
         Log.i(TAG, "Paused");
+
         callback.onPause();
     }
 
@@ -117,6 +124,7 @@ final class GdxLifecycleBridge implements ApplicationListener
     public void resume()
     {
         Log.i(TAG, "Resumed");
+
         callback.onResume();
     }
 
@@ -124,6 +132,7 @@ final class GdxLifecycleBridge implements ApplicationListener
     public void dispose()
     {
         Log.i(TAG, "GL surface lost");
+
         callback.onSurfaceLost();
     }
 }

@@ -75,7 +75,9 @@ public final class NullAudioPort implements I_AudioPort
         {
             return;
         }
+
         this.lastSound = sound;
+
         plays.incrementAndGet();
     }
 

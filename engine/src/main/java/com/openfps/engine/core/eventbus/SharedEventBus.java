@@ -51,13 +51,18 @@ public final class SharedEventBus implements I_EventBusPort
             throw new IllegalStateException("init() called from state " + state
                 + " — only valid from UNINITIALIZED");
         }
+
         if (capacity < 1)
         {
             throw new IllegalArgumentException("capacity must be >= 1, got " + capacity);
         }
+
         this.capacity = capacity;
+
         this.queue = new LinkedBlockingQueue<>(capacity);
+
         this.state = State.READY;
+
         LOG.info("SharedEventBus initialized: capacity={} events", capacity);
     }
 
@@ -68,17 +73,23 @@ public final class SharedEventBus implements I_EventBusPort
         {
             throw new IllegalStateException("shutdown() called from state SHUTDOWN — already terminal");
         }
+
         final State prev = state;
+
         state = State.SHUTDOWN;
+
         // Discard remaining events to allow blocked take() calls to exit.
         // Workers should already be exiting on drain() so this should be small.
         // Count BEFORE clearing — otherwise the log always reports zero.
         int discarded = 0;
+
         if (queue != null)
         {
             discarded = queue.size();
+
             queue.clear();
         }
+
         LOG.info("SharedEventBus shut down (was {}, discarded={} events)", prev, discarded);
     }
 
@@ -90,7 +101,9 @@ public final class SharedEventBus implements I_EventBusPort
             throw new IllegalStateException("drain() called from state " + state
                 + " — only valid from READY");
         }
+
         state = State.DRAINING;
+
         LOG.info("SharedEventBus draining: {} events remaining", queue.size());
     }
 
@@ -102,10 +115,12 @@ public final class SharedEventBus implements I_EventBusPort
             throw new IllegalStateException("publish() called from state " + state
                 + " — only valid from READY");
         }
+
         if (event == null)
         {
             throw new IllegalArgumentException("event must not be null");
         }
+
         // LinkedBlockingQueue.put blocks when full — this is the backpressure.
         queue.put(event);
     }
@@ -117,11 +132,13 @@ public final class SharedEventBus implements I_EventBusPort
         {
             throw new IllegalStateException("take() called from state SHUTDOWN — bus is closed");
         }
+
         if (state == State.DRAINING)
         {
             // Return null if drained, otherwise keep draining
             return queue.poll();
         }
+
         // LinkedBlockingQueue.take blocks when empty.
         return queue.take();
     }
@@ -133,6 +150,7 @@ public final class SharedEventBus implements I_EventBusPort
         {
             return 0;
         }
+
         return queue.size();
     }
 

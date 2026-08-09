@@ -213,12 +213,15 @@ public final class Framebuffer
         {
             throw new IllegalArgumentException("tileSize must be > 0, got " + tileSize);
         }
+
         if (tileSize % STRIDE_ALIGNMENT != 0)
         {
             throw new IllegalArgumentException("tileSize must be a multiple of "
                 + STRIDE_ALIGNMENT + " pixels (one cache line of int), got " + tileSize);
         }
+
         this.tileSize = tileSize;
+
         this.state = State.UNINITIALIZED;
     }
 
@@ -241,8 +244,11 @@ public final class Framebuffer
             throw new IllegalStateException("init() called from state " + state
                 + " — only valid from UNINITIALIZED");
         }
+
         allocate(newWidth, newHeight);
+
         state = State.READY;
+
         LOG.info("Framebuffer initialized: {}x{} px, stride={} px, tiles={}x{} of {} px",
             width, height, strideInPixels, tilesX, tilesY, tileSize);
     }
@@ -265,11 +271,14 @@ public final class Framebuffer
     public void resize(final int newWidth, final int newHeight)
     {
         requireReady("resize()");
+
         if (newWidth == width && newHeight == height)
         {
             return;
         }
+
         allocate(newWidth, newHeight);
+
         LOG.info("Framebuffer resized: {}x{} px, stride={} px, tiles={}x{} of {} px",
             width, height, strideInPixels, tilesX, tilesY, tileSize);
     }
@@ -289,15 +298,25 @@ public final class Framebuffer
             throw new IllegalStateException("shutdown() called from state SHUTDOWN "
                 + "— already terminal");
         }
+
         color = null;
+
         depth = null;
+
         entityIds = null;
+
         width = 0;
+
         height = 0;
+
         strideInPixels = 0;
+
         tilesX = 0;
+
         tilesY = 0;
+
         state = State.SHUTDOWN;
+
         LOG.info("Framebuffer shut down");
     }
 
@@ -424,7 +443,9 @@ public final class Framebuffer
     public void clear(final int rgba)
     {
         clearColor(rgba);
+
         clearDepth();
+
         clearEntityIds();
     }
 
@@ -436,6 +457,7 @@ public final class Framebuffer
     public void clearColor(final int rgba)
     {
         requireReady("clearColor()");
+
         // Fills the padding columns too: one contiguous fill beats two
         // strided ones, and nothing ever reads the padding.
         Arrays.fill(color, rgba);
@@ -456,6 +478,7 @@ public final class Framebuffer
     public void clearDepth()
     {
         requireReady("clearDepth()");
+
         Arrays.fill(depth, DEPTH_CLEAR);
     }
 
@@ -472,6 +495,7 @@ public final class Framebuffer
     public void clearEntityIds()
     {
         requireReady("clearEntityIds()");
+
         Arrays.fill(entityIds, Scene.UNTAGGED);
     }
 
@@ -489,6 +513,7 @@ public final class Framebuffer
     public void setPixel(final int x, final int y, final int rgba)
     {
         checkPixel(x, y);
+
         color[index(x, y)] = rgba;
     }
 
@@ -504,6 +529,7 @@ public final class Framebuffer
     public int pixel(final int x, final int y)
     {
         checkPixel(x, y);
+
         return color[index(x, y)];
     }
 
@@ -519,6 +545,7 @@ public final class Framebuffer
     public void setDepth(final int x, final int y, final float invW)
     {
         checkPixel(x, y);
+
         depth[index(x, y)] = invW;
     }
 
@@ -534,6 +561,7 @@ public final class Framebuffer
     public float depthAt(final int x, final int y)
     {
         checkPixel(x, y);
+
         return depth[index(x, y)];
     }
 
@@ -549,6 +577,7 @@ public final class Framebuffer
     public void setEntityId(final int x, final int y, final int entityId)
     {
         checkPixel(x, y);
+
         entityIds[index(x, y)] = entityId;
     }
 
@@ -564,6 +593,7 @@ public final class Framebuffer
     public int entityIdAt(final int x, final int y)
     {
         checkPixel(x, y);
+
         return entityIds[index(x, y)];
     }
 
@@ -603,6 +633,7 @@ public final class Framebuffer
     public int tileMinX(final int tileIndex)
     {
         checkTile(tileIndex);
+
         return (tileIndex % tilesX) * tileSize;
     }
 
@@ -616,6 +647,7 @@ public final class Framebuffer
     public int tileMinY(final int tileIndex)
     {
         checkTile(tileIndex);
+
         return (tileIndex / tilesX) * tileSize;
     }
 
@@ -693,12 +725,15 @@ public final class Framebuffer
     public void copyColorTo(final int[] destination)
     {
         requireReady("copyColorTo()");
+
         final int required = width * height;
+
         if (destination == null || destination.length < required)
         {
             throw new IllegalArgumentException("copyColorTo() needs an int[" + required
                 + "] for a " + width + "x" + height + " frame");
         }
+
         for (int y = 0; y < height; y++)
         {
             System.arraycopy(color, y * strideInPixels, destination, y * width, width);
@@ -793,9 +828,13 @@ public final class Framebuffer
             throw new IllegalArgumentException("writeRgbaBytes() needs 4 bytes at offset "
                 + offset);
         }
+
         out[offset] = (byte) red(rgba);
+
         out[offset + 1] = (byte) green(rgba);
+
         out[offset + 2] = (byte) blue(rgba);
+
         out[offset + 3] = (byte) alpha(rgba);
     }
 
@@ -816,6 +855,7 @@ public final class Framebuffer
             throw new IllegalArgumentException("readRgbaBytes() needs 4 bytes at offset "
                 + offset);
         }
+
         return packRgba(in[offset], in[offset + 1], in[offset + 2], in[offset + 3]);
     }
 
@@ -864,7 +904,9 @@ public final class Framebuffer
         // lines is what puts each tile row on a line boundary — see the class
         // Javadoc and README section 7.
         final int newStride = alignUp(newWidth, STRIDE_ALIGNMENT);
+
         final long elements = (long) newStride * (long) newHeight;
+
         if (elements > Integer.MAX_VALUE)
         {
             throw new IllegalArgumentException("Framebuffer " + newWidth + "x" + newHeight
@@ -873,14 +915,21 @@ public final class Framebuffer
 
         // Sanctioned allocation — STYLE.md § 13.4, README § 11(a).
         this.color = new int[(int) elements];
+
         this.depth = new float[(int) elements];
+
         // Java zeroes a fresh int[], and Scene.UNTAGGED is zero, so a
         // just-allocated id buffer is already cleared.
         this.entityIds = new int[(int) elements];
+
         this.width = newWidth;
+
         this.height = newHeight;
+
         this.strideInPixels = newStride;
+
         this.tilesX = ceilDiv(newWidth, tileSize);
+
         this.tilesY = ceilDiv(newHeight, tileSize);
     }
 
@@ -905,6 +954,7 @@ public final class Framebuffer
     private void checkPixel(final int x, final int y)
     {
         requireReady("pixel access");
+
         if (x < 0 || x >= width || y < 0 || y >= height)
         {
             throw new IllegalArgumentException("Pixel (" + x + ", " + y
@@ -916,6 +966,7 @@ public final class Framebuffer
     private void checkTile(final int tileIndex)
     {
         requireReady("tile access");
+
         if (tileIndex < 0 || tileIndex >= tilesX * tilesY)
         {
             throw new IllegalArgumentException("Tile index " + tileIndex + " outside [0, "

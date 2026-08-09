@@ -107,28 +107,39 @@ public final class RenderPreviewMain
     public static void main(final String[] args) throws IOException
     {
         final String out = option(args, "--out=");
+
         final int frames = intOption(args, "--frames=", 0);
+
         if (out == null && frames <= 0)
         {
             LOG.error("Nothing to do: give --out=<path.png>, --frames=<n>, or both.");
+
             System.exit(EXIT_USAGE);
+
             return;
         }
 
         final byte[] image = modelImage(option(args, "--model="));
+
         final String writeModel = option(args, "--writeModel=");
+
         if (writeModel != null)
         {
             Files.write(Path.of(writeModel), image);
+
             LOG.info("Wrote model {} ({} bytes)", writeModel, image.length);
         }
 
         final int width = intOption(args, "--width=", DEFAULT_WIDTH);
+
         final int height = intOption(args, "--height=", DEFAULT_HEIGHT);
+
         final int threads = intOption(args, "--threads=", 0);
+
         final Rasterizer.CullMode cull = cullOption(args);
 
         final ToolPool pool = ToolPool.open(threads);
+
         try
         {
             render(image, out, width, height, frames, cull, pool.port(),
@@ -150,26 +161,36 @@ public final class RenderPreviewMain
         final float elevationFactor) throws IOException
     {
         final I_TimePort time = new DesktopTimePort();
+
         time.init();
 
         final ModelFormat model = ModelFormat.read(image);
+
         final SoftwareRenderPort renderer = new SoftwareRenderPort(pool, time, cull);
+
         renderer.init();
+
         renderer.resize(width, height);
+
         renderer.loadModel(model);
+
         renderer.setCamera(fixedCamera(model, (float) width / (float) height,
             (float) Math.toRadians(angleDegrees), distanceFactor, elevationFactor));
 
         renderer.renderFrame(0);
+
         if (frames > 0)
         {
             measure(renderer, frames, width, height, pool);
         }
+
         if (out != null)
         {
             writePng(renderer, out, width, height);
         }
+
         renderer.shutdown();
+
         time.shutdown();
     }
 
@@ -181,31 +202,42 @@ public final class RenderPreviewMain
     {
         // MUTABLE locals — the running best and total across the sample.
         long best = Long.MAX_VALUE;
+
         long total = 0L;
+
         for (int frame = 0; frame < frames; frame++)
         {
             renderer.renderFrame(frame);
+
             final long took = renderer.lastFrameNanos();
+
             total += took;
+
             if (took < best)
             {
                 best = took;
             }
         }
+
         final double pixels = (double) width * (double) height;
+
         final long covered = coveredPixels(renderer, width, height);
+
         // MUTABLE local — the worker count, zero meaning the serial path.
         int workers = 0;
+
         if (pool != null)
         {
             workers = pool.workerCount();
         }
+
         LOG.info("Frame time at {}x{}: best {} ms, mean {} ms over {} frames, "
             + "{} workers, {} triangles after clipping",
             width, height,
             String.format("%.3f", best / NANOS_PER_MILLI),
             String.format("%.3f", total / (double) frames / NANOS_PER_MILLI),
             frames, workers, renderer.lastFrameTriangles());
+
         // Two figures, because they answer different questions. Per screen
         // pixel includes the clear and the empty tiles and is what a frame
         // budget cares about; per covered pixel is the span-loop cost
@@ -213,6 +245,7 @@ public final class RenderPreviewMain
         // fraction alongside it to be comparable at all.
         LOG.info("Coverage: {} of {} pixels ({}%)", covered, (long) pixels,
             String.format("%.1f", 100.0 * covered / pixels));
+
         LOG.info("Best frame: {} ns per screen pixel, {} ns per covered pixel",
             String.format("%.2f", best / pixels),
             String.format("%.2f", best / Math.max(1.0, (double) covered)));
@@ -224,12 +257,15 @@ public final class RenderPreviewMain
         final int height)
     {
         final int[] frame = new int[width * height];
+
         if (!renderer.copyColorInto(frame))
         {
             return 0L;
         }
+
         // MUTABLE local — the running count.
         long covered = 0L;
+
         for (final int pixel : frame)
         {
             if (pixel != SoftwareRenderPort.DEFAULT_CLEAR_COLOR)
@@ -237,6 +273,7 @@ public final class RenderPreviewMain
                 covered++;
             }
         }
+
         return covered;
     }
 
@@ -247,7 +284,9 @@ public final class RenderPreviewMain
         final int width, final int height) throws IOException
     {
         final Path target = Path.of(out);
+
         FramePng.write(renderer, target, width, height);
+
         LOG.info("Wrote {} ({}x{}, cull={})", target.toAbsolutePath(), width, height,
             renderer.cullMode());
     }
@@ -259,22 +298,32 @@ public final class RenderPreviewMain
         final float angleRadians, final float distanceFactor, final float elevationFactor)
     {
         final float centreX = (model.minX() + model.maxX()) * 0.5f;
+
         final float centreY = (model.minY() + model.maxY()) * 0.5f;
+
         final float centreZ = (model.minZ() + model.maxZ()) * 0.5f;
+
         final float spanX = model.maxX() - model.minX();
+
         final float spanY = model.maxY() - model.minY();
+
         final float spanZ = model.maxZ() - model.minZ();
+
         // MUTABLE local — bounding radius, floored for a degenerate model.
         float radius = 0.5f * (float) Math.sqrt(spanX * spanX + spanY * spanY + spanZ * spanZ);
+
         if (!(radius > 0.0f))
         {
             radius = 1.0f;
         }
+
         final float distance = radius * distanceFactor;
+
         final Vec3 eye = new Vec3(
             centreX + distance * (float) Math.sin(angleRadians),
             centreY + radius * elevationFactor,
             centreZ + distance * (float) Math.cos(angleRadians));
+
         return Camera.lookingAt(eye, new Vec3(centreX, centreY, centreZ),
             new Vec3(0.0f, 1.0f, 0.0f), SoftwareRenderPort.DEFAULT_FOV_Y, aspect,
             SoftwareRenderPort.DEFAULT_NEAR);
@@ -286,8 +335,10 @@ public final class RenderPreviewMain
         if (path == null)
         {
             LOG.info("No --model given — drawing the built-in cube");
+
             return CubeModel.build();
         }
+
         return Files.readAllBytes(Path.of(path));
     }
 
@@ -302,16 +353,19 @@ public final class RenderPreviewMain
                 return arg.substring(prefix.length());
             }
         }
+
         return null;
     }
 
     private static int intOption(final String[] args, final String prefix, final int fallback)
     {
         final String value = option(args, prefix);
+
         if (value == null || value.isEmpty())
         {
             return fallback;
         }
+
         return Integer.parseInt(value);
     }
 
@@ -319,20 +373,24 @@ public final class RenderPreviewMain
         final float fallback)
     {
         final String value = option(args, prefix);
+
         if (value == null || value.isEmpty())
         {
             return fallback;
         }
+
         return Float.parseFloat(value);
     }
 
     private static Rasterizer.CullMode cullOption(final String[] args)
     {
         final String value = option(args, "--cull=");
+
         if (value == null || value.isEmpty())
         {
             return SoftwareRenderPort.BACKFACE_CULL_MODE;
         }
+
         return Rasterizer.CullMode.valueOf(value.toUpperCase(Locale.ROOT));
     }
 

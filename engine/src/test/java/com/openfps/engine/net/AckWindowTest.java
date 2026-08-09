@@ -41,9 +41,13 @@ class AckWindowTest
     void startsEmpty()
     {
         assertThat(window.highestTic()).isEqualTo(AckWindow.NO_TIC);
+
         assertThat(window.highestContiguousTic()).isEqualTo(-1);
+
         assertThat(window.bitfield()).isZero();
+
         assertThat(window.isAcked(0)).isFalse();
+
         assertThat(window.lossPercent()).isZero();
     }
 
@@ -54,9 +58,12 @@ class AckWindowTest
         for (int tic = 0; tic <= 9; tic++)
         {
             assertThat(window.record(tic)).isTrue();
+
             assertThat(window.highestContiguousTic()).isEqualTo(tic);
         }
+
         assertThat(window.highestTic()).isEqualTo(9);
+
         assertThat(window.lossPercent()).isZero();
     }
 
@@ -74,8 +81,11 @@ class AckWindowTest
         }
 
         assertThat(window.highestTic()).isEqualTo(9);
+
         assertThat(window.highestContiguousTic()).isEqualTo(4);
+
         assertThat(window.isAcked(5)).isFalse();
+
         assertThat(window.isAcked(6)).isTrue();
 
         assertThat(window.record(5)).isTrue();
@@ -96,15 +106,21 @@ class AckWindowTest
         }
 
         assertThat(window.highestContiguousTic()).isEqualTo(3);
+
         assertThat(window.isAcked(4)).isFalse();
+
         assertThat(window.isAcked(5)).isFalse();
+
         assertThat(window.isAcked(6)).isFalse();
 
         window.record(4);
+
         window.record(5);
+
         assertThat(window.highestContiguousTic()).isEqualTo(5);
 
         window.record(6);
+
         assertThat(window.highestContiguousTic()).isEqualTo(11);
     }
 
@@ -113,7 +129,9 @@ class AckWindowTest
     void recoversFromSevenConsecutiveLosses()
     {
         final int lossStart = 10;
+
         final int lossCount = 7;
+
         for (int tic = 0; tic <= 25; tic++)
         {
             if (tic < lossStart || tic >= lossStart + lossCount)
@@ -123,6 +141,7 @@ class AckWindowTest
         }
 
         assertThat(window.highestContiguousTic()).isEqualTo(lossStart - 1);
+
         for (int tic = lossStart; tic < lossStart + lossCount; tic++)
         {
             assertThat(window.isAcked(tic)).isFalse();
@@ -134,6 +153,7 @@ class AckWindowTest
         }
 
         assertThat(window.highestContiguousTic()).isEqualTo(25);
+
         assertThat(window.lossPercent()).isZero();
     }
 
@@ -142,12 +162,17 @@ class AckWindowTest
     void handlesOutOfOrderArrival()
     {
         window.record(3);
+
         window.record(1);
+
         window.record(0);
+
         window.record(4);
+
         window.record(2);
 
         assertThat(window.highestTic()).isEqualTo(4);
+
         assertThat(window.highestContiguousTic()).isEqualTo(4);
     }
 
@@ -156,13 +181,17 @@ class AckWindowTest
     void treatsDuplicatesAsNoOps()
     {
         assertThat(window.record(0)).isTrue();
+
         assertThat(window.record(0)).isFalse();
 
         window.record(1);
+
         window.record(2);
 
         assertThat(window.record(1)).isFalse();
+
         assertThat(window.record(2)).isFalse();
+
         assertThat(window.highestContiguousTic()).isEqualTo(2);
     }
 
@@ -171,18 +200,22 @@ class AckWindowTest
     void coversExactlySixtyFourTicsBelowTheNewest()
     {
         final int width = AckWindow.WIDTH;
+
         for (int tic = 0; tic <= width; tic++)
         {
             window.record(tic);
         }
 
         assertThat(window.highestTic()).isEqualTo(width);
+
         assertThat(window.bitfield()).isEqualTo(-1L);
+
         assertThat(window.isAcked(0)).isTrue();
 
         window.record(width + 1);
 
         assertThat(window.isAcked(1)).isTrue();
+
         assertThat(window.windowBits()).isEqualTo(width);
     }
 
@@ -191,7 +224,9 @@ class AckWindowTest
     void shiftsTheBitfieldAsTheNewestTicAdvances()
     {
         window.record(0);
+
         window.record(1);
+
         window.record(3);
 
         // bit 0 covers tic 2 (missing), bit 1 covers tic 1, bit 2 covers tic 0
@@ -213,13 +248,17 @@ class AckWindowTest
         {
             window.record(tic);
         }
+
         final int jump = 5 + AckWindow.WIDTH;
 
         window.record(jump);
 
         assertThat(window.bitfield()).isZero();
+
         assertThat(window.isAcked(jump)).isTrue();
+
         assertThat(window.isAcked(4)).isTrue();
+
         assertThat(window.isAcked(jump - 1)).isFalse();
     }
 
@@ -229,7 +268,9 @@ class AckWindowTest
     void floorsTheContiguousTicOneWindowBack()
     {
         final int width = AckWindow.WIDTH;
+
         window.record(0);
+
         // tic 1 is never delivered, by any packet, ever
         for (int tic = 2; tic <= width + 1; tic++)
         {
@@ -238,7 +279,9 @@ class AckWindowTest
 
         // The gap at tic 1 still pins the run, so only the floor moves it.
         assertThat(window.highestTic()).isEqualTo(width + 1);
+
         assertThat(window.highestContiguousTic()).isEqualTo(1);
+
         assertThat(window.isAcked(1)).isTrue();
 
         // One more tic and the gap has fallen out of the bitfield entirely, so
@@ -258,6 +301,7 @@ class AckWindowTest
         }
 
         assertThat(window.record(0)).isFalse();
+
         assertThat(window.record(1)).isFalse();
     }
 
@@ -269,11 +313,15 @@ class AckWindowTest
         {
             window.record(tic);
         }
+
         assertThat(window.windowBits()).isEqualTo(9);
+
         assertThat(window.receivedInWindow()).isEqualTo(9);
+
         assertThat(window.lossPercent()).isZero();
 
         final AckWindow lossy = new AckWindow();
+
         for (int tic = 0; tic <= 10; tic++)
         {
             if (tic % 2 == 0)
@@ -281,9 +329,12 @@ class AckWindowTest
                 lossy.record(tic);
             }
         }
+
         // Newest is 10; bits cover tics 9..0, of which the five even ones arrived.
         assertThat(lossy.windowBits()).isEqualTo(10);
+
         assertThat(lossy.receivedInWindow()).isEqualTo(5);
+
         assertThat(lossy.lossPercent()).isEqualTo(50);
     }
 
@@ -304,7 +355,9 @@ class AckWindowTest
     void widensTheWindowToCoverUnackedTics()
     {
         window.record(0);
+
         window.record(1);
+
         // tic 2 lost; the sender must keep resending from tic 2 onward
         window.record(3);
 
@@ -316,10 +369,15 @@ class AckWindowTest
     void clampsTheRedundancyWindow()
     {
         assertThat(AckWindow.clampWindow(0)).isEqualTo(1);
+
         assertThat(AckWindow.clampWindow(-5)).isEqualTo(1);
+
         assertThat(AckWindow.clampWindow(1)).isEqualTo(1);
+
         assertThat(AckWindow.clampWindow(AckWindow.WIDTH)).isEqualTo(AckWindow.WIDTH);
+
         assertThat(AckWindow.clampWindow(AckWindow.WIDTH + 1)).isEqualTo(AckWindow.WIDTH);
+
         assertThat(window.redundancyWindow(10_000)).isEqualTo(AckWindow.WIDTH);
     }
 
@@ -331,12 +389,15 @@ class AckWindowTest
         final AckWindow late = new AckWindow(1000);
 
         assertThat(late.highestContiguousTic()).isEqualTo(999);
+
         assertThat(late.redundancyWindow(1000)).isEqualTo(1);
 
         late.record(1000);
+
         late.record(1001);
 
         assertThat(late.highestContiguousTic()).isEqualTo(1001);
+
         assertThat(late.windowBits()).isEqualTo(1);
     }
 
@@ -345,12 +406,15 @@ class AckWindowTest
     void resetsToTheInitialState()
     {
         window.record(0);
+
         window.record(1);
 
         window.reset();
 
         assertThat(window.highestTic()).isEqualTo(AckWindow.NO_TIC);
+
         assertThat(window.highestContiguousTic()).isEqualTo(-1);
+
         assertThat(window.bitfield()).isZero();
     }
 
@@ -360,8 +424,10 @@ class AckWindowTest
     {
         assertThatThrownBy(() -> window.record(-1))
             .isInstanceOf(IllegalArgumentException.class);
+
         assertThatThrownBy(() -> new AckWindow(-1))
             .isInstanceOf(IllegalArgumentException.class);
+
         assertThat(window.isAcked(-1)).isFalse();
     }
 }

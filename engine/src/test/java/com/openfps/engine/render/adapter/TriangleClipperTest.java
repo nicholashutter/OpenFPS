@@ -48,9 +48,13 @@ class TriangleClipperTest
     private static float[] triangle(final float[] a, final float[] b, final float[] c)
     {
         final float[] out = new float[3 * UV_STRIDE];
+
         System.arraycopy(a, 0, out, 0, UV_STRIDE);
+
         System.arraycopy(b, 0, out, UV_STRIDE, UV_STRIDE);
+
         System.arraycopy(c, 0, out, 2 * UV_STRIDE, UV_STRIDE);
+
         return out;
     }
 
@@ -59,6 +63,7 @@ class TriangleClipperTest
         final int vertexIndex)
     {
         final int offset = (triangleIndex * 3 + vertexIndex) * UV_STRIDE;
+
         return Arrays.copyOfRange(buffer, offset, offset + UV_STRIDE);
     }
 
@@ -72,14 +77,23 @@ class TriangleClipperTest
     private static float signedAreaNdc(final float[] buffer, final int triangleIndex)
     {
         final float[] a = vertexAt(buffer, triangleIndex, 0);
+
         final float[] b = vertexAt(buffer, triangleIndex, 1);
+
         final float[] c = vertexAt(buffer, triangleIndex, 2);
+
         final float ax = a[0] / a[2];
+
         final float ay = a[1] / a[2];
+
         final float bx = b[0] / b[2];
+
         final float by = b[1] / b[2];
+
         final float cx = c[0] / c[2];
+
         final float cy = c[1] / c[2];
+
         return (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
     }
 
@@ -99,12 +113,17 @@ class TriangleClipperTest
             final TriangleClipper uv = new TriangleClipper(UV_ATTRIBUTES);
 
             assertThat(TriangleClipper.POSITION_FLOATS).isEqualTo(3);
+
             assertThat(uv.attributeCount()).isEqualTo(UV_ATTRIBUTES);
+
             assertThat(uv.stride()).isEqualTo(UV_STRIDE);
+
             assertThat(uv.maxOutputFloats()).isEqualTo(2 * 3 * UV_STRIDE);
+
             assertThat(uv.toString()).contains("stride=5");
 
             final TriangleClipper positionOnly = new TriangleClipper(0);
+
             assertThat(positionOnly.stride()).isEqualTo(TriangleClipper.POSITION_FLOATS);
         }
 
@@ -113,6 +132,7 @@ class TriangleClipperTest
         void shouldBoundOutputAtAQuadWhenClippingOnePlane()
         {
             assertThat(TriangleClipper.MAX_CLIPPED_VERTICES).isEqualTo(4);
+
             assertThat(TriangleClipper.MAX_OUTPUT_TRIANGLES).isEqualTo(2);
         }
 
@@ -135,13 +155,16 @@ class TriangleClipperTest
         void shouldPassThroughUnchangedWhenAllVerticesAreInFront()
         {
             final TriangleClipper clipper = new TriangleClipper(UV_ATTRIBUTES);
+
             final float[] in = triangle(
                 vertex(-1.0f, -1.0f, 3.0f, 0.0f, 0.0f),
                 vertex(1.0f, -1.0f, 50.0f, 1.0f, 0.0f),
                 vertex(0.0f, 1.0f, 4.0f, 0.5f, 1.0f));
+
             final float[] out = outputBuffer(clipper);
 
             assertThat(clipper.clipTriangle(NEAR, in, 0, out, 0)).isEqualTo(1);
+
             assertThat(Arrays.copyOfRange(out, 0, in.length)).containsExactly(in);
         }
 
@@ -150,14 +173,18 @@ class TriangleClipperTest
         void shouldTakeFastPathWhenWIsJustPastNear()
         {
             final TriangleClipper clipper = new TriangleClipper(UV_ATTRIBUTES);
+
             final float justInside = Math.nextUp(NEAR);
+
             final float[] in = triangle(
                 vertex(0.0f, 0.0f, justInside, 0.0f, 0.0f),
                 vertex(1.0f, 0.0f, justInside, 1.0f, 0.0f),
                 vertex(0.0f, 1.0f, justInside, 0.0f, 1.0f));
+
             final float[] out = outputBuffer(clipper);
 
             assertThat(clipper.clipTriangle(NEAR, in, 0, out, 0)).isEqualTo(1);
+
             assertThat(Arrays.copyOfRange(out, 0, in.length)).containsExactly(in);
         }
 
@@ -166,14 +193,18 @@ class TriangleClipperTest
         void shouldRejectWhenAllVerticesAreBehindNear()
         {
             final TriangleClipper clipper = new TriangleClipper(UV_ATTRIBUTES);
+
             final float[] in = triangle(
                 vertex(0.0f, 0.0f, 1.0f, 0.0f, 0.0f),
                 vertex(1.0f, 0.0f, -5.0f, 1.0f, 0.0f),
                 vertex(0.0f, 1.0f, 0.0f, 0.0f, 1.0f));
+
             final float[] out = outputBuffer(clipper);
+
             Arrays.fill(out, Float.NaN);
 
             assertThat(clipper.clipTriangle(NEAR, in, 0, out, 0)).isZero();
+
             assertThat(out).containsOnly(Float.NaN);
         }
 
@@ -185,6 +216,7 @@ class TriangleClipperTest
             // triangle coincident with the plane is edge-on and covers no
             // pixels, so rejecting it is correct as well as conservative.
             final TriangleClipper clipper = new TriangleClipper(UV_ATTRIBUTES);
+
             final float[] in = triangle(
                 vertex(0.0f, 0.0f, NEAR, 0.0f, 0.0f),
                 vertex(1.0f, 0.0f, NEAR, 1.0f, 0.0f),
@@ -198,16 +230,21 @@ class TriangleClipperTest
         void shouldHandleDegenerateTrianglesWhereverTheySit()
         {
             final TriangleClipper clipper = new TriangleClipper(UV_ATTRIBUTES);
+
             final float[] point = vertex(1.0f, 2.0f, 10.0f, 0.25f, 0.75f);
+
             final float[] inFront = triangle(point, point, point);
+
             final float[] out = outputBuffer(clipper);
 
             // Zero-area triangles are the rasterizer's problem (area2 == 0), not
             // the clipper's; it must simply not choke on them.
             assertThat(clipper.clipTriangle(NEAR, inFront, 0, out, 0)).isEqualTo(1);
+
             assertVertex(vertexAt(out, 0, 0), point);
 
             final float[] behind = vertex(1.0f, 2.0f, -10.0f, 0.25f, 0.75f);
+
             assertThat(clipper.clipTriangle(NEAR, triangle(behind, behind, behind), 0, out, 0))
                 .isZero();
         }
@@ -229,6 +266,7 @@ class TriangleClipperTest
         void shouldClipToOneTriangleWhenOnlyOneVertexIsInside()
         {
             final TriangleClipper clipper = new TriangleClipper(UV_ATTRIBUTES);
+
             final float[] out = outputBuffer(clipper);
 
             assertThat(clipper.clipTriangle(NEAR, input, 0, out, 0)).isEqualTo(1);
@@ -236,7 +274,9 @@ class TriangleClipperTest
             // Sutherland-Hodgman emits, per edge: the crossing on 0->1, then the
             // crossing on 2->0, then the surviving vertex 0.
             assertVertex(vertexAt(out, 0, 0), vertex(4.0f, 0.0f, NEAR, 0.5f, 0.0f));
+
             assertVertex(vertexAt(out, 0, 1), vertex(0.0f, 4.0f, NEAR, 0.0f, 0.5f));
+
             assertVertex(vertexAt(out, 0, 2), vertex(0.0f, 0.0f, 4.0f, 0.0f, 0.0f));
         }
 
@@ -245,13 +285,16 @@ class TriangleClipperTest
         void shouldPlaceNewVerticesExactlyOnNearWhenClipping()
         {
             final TriangleClipper clipper = new TriangleClipper(UV_ATTRIBUTES);
+
             final float[] out = outputBuffer(clipper);
+
             clipper.clipTriangle(NEAR, input, 0, out, 0);
 
             // Exact equality, not an epsilon: w is assigned, not interpolated,
             // so that the rasterizer's 1/w is bounded by 1/near with no chance
             // of a rounding pushing a vertex a hair behind the plane.
             assertThat(vertexAt(out, 0, 0)[TriangleClipper.OFFSET_W]).isEqualTo(NEAR);
+
             assertThat(vertexAt(out, 0, 1)[TriangleClipper.OFFSET_W]).isEqualTo(NEAR);
         }
 
@@ -260,6 +303,7 @@ class TriangleClipperTest
         void shouldPreserveWindingWhenClipping()
         {
             final TriangleClipper clipper = new TriangleClipper(UV_ATTRIBUTES);
+
             final float[] out = outputBuffer(clipper);
 
             // The same triangle wholly in front, for the reference sign.
@@ -267,11 +311,15 @@ class TriangleClipperTest
                 vertex(0.0f, 0.0f, 4.0f, 0.0f, 0.0f),
                 vertex(8.0f, 0.0f, 4.0f, 1.0f, 0.0f),
                 vertex(0.0f, 8.0f, 4.0f, 0.0f, 1.0f));
+
             clipper.clipTriangle(NEAR, unclipped, 0, out, 0);
+
             final float reference = signedAreaNdc(out, 0);
+
             assertThat(reference).isGreaterThan(0.0f);
 
             clipper.clipTriangle(NEAR, input, 0, out, 0);
+
             assertThat(signedAreaNdc(out, 0)).isGreaterThan(0.0f);
 
             // Reverse the input winding; both must flip together.
@@ -279,7 +327,9 @@ class TriangleClipperTest
                 Arrays.copyOfRange(input, 0, UV_STRIDE),
                 Arrays.copyOfRange(input, 2 * UV_STRIDE, 3 * UV_STRIDE),
                 Arrays.copyOfRange(input, UV_STRIDE, 2 * UV_STRIDE));
+
             clipper.clipTriangle(NEAR, reversed, 0, out, 0);
+
             assertThat(signedAreaNdc(out, 0)).isLessThan(0.0f);
         }
 
@@ -290,15 +340,20 @@ class TriangleClipperTest
             // w = -4 behind the eye: t = (2 - 4) / (-4 - 4) = 0.25, a quarter of
             // the way along the edge, not the halfway a sign error would give.
             final TriangleClipper clipper = new TriangleClipper(UV_ATTRIBUTES);
+
             final float[] in = triangle(
                 vertex(0.0f, 0.0f, 4.0f, 0.0f, 0.0f),
                 vertex(8.0f, 0.0f, -4.0f, 1.0f, 0.0f),
                 vertex(0.0f, 8.0f, -4.0f, 0.0f, 1.0f));
+
             final float[] out = outputBuffer(clipper);
 
             assertThat(clipper.clipTriangle(NEAR, in, 0, out, 0)).isEqualTo(1);
+
             assertVertex(vertexAt(out, 0, 0), vertex(2.0f, 0.0f, NEAR, 0.25f, 0.0f));
+
             assertVertex(vertexAt(out, 0, 1), vertex(0.0f, 2.0f, NEAR, 0.0f, 0.25f));
+
             assertVertex(vertexAt(out, 0, 2), vertex(0.0f, 0.0f, 4.0f, 0.0f, 0.0f));
         }
     }
@@ -319,21 +374,30 @@ class TriangleClipperTest
         void shouldFanTriangulateWhenTwoVerticesAreInside()
         {
             final TriangleClipper clipper = new TriangleClipper(UV_ATTRIBUTES);
+
             final float[] out = outputBuffer(clipper);
 
             assertThat(clipper.clipTriangle(NEAR, input, 0, out, 0)).isEqualTo(2);
 
             final float[] p0 = vertex(8.0f, 0.0f, 4.0f, 1.0f, 0.0f);
+
             final float[] p1 = vertex(4.0f, 4.0f, NEAR, 0.5f, 0.5f);
+
             final float[] p2 = vertex(0.0f, 4.0f, NEAR, 0.0f, 0.5f);
+
             final float[] p3 = vertex(0.0f, 0.0f, 4.0f, 0.0f, 0.0f);
 
             // Fan from polygon vertex 0: (0, 1, 2) then (0, 2, 3).
             assertVertex(vertexAt(out, 0, 0), p0);
+
             assertVertex(vertexAt(out, 0, 1), p1);
+
             assertVertex(vertexAt(out, 0, 2), p2);
+
             assertVertex(vertexAt(out, 1, 0), p0);
+
             assertVertex(vertexAt(out, 1, 1), p2);
+
             assertVertex(vertexAt(out, 1, 2), p3);
         }
 
@@ -342,14 +406,19 @@ class TriangleClipperTest
         void shouldGiveBothFanTrianglesTheSameWindingWhenQuadIsSplit()
         {
             final TriangleClipper clipper = new TriangleClipper(UV_ATTRIBUTES);
+
             final float[] out = outputBuffer(clipper);
+
             clipper.clipTriangle(NEAR, input, 0, out, 0);
 
             final float first = signedAreaNdc(out, 0);
+
             final float second = signedAreaNdc(out, 1);
 
             assertThat(first).isNotZero();
+
             assertThat(second).isNotZero();
+
             assertThat(Math.signum(first)).isEqualTo(Math.signum(second));
         }
 
@@ -358,11 +427,15 @@ class TriangleClipperTest
         void shouldFillExactlyTheAdvertisedBufferWhenQuadIsSplit()
         {
             final TriangleClipper clipper = new TriangleClipper(UV_ATTRIBUTES);
+
             final float[] out = outputBuffer(clipper);
+
             Arrays.fill(out, Float.NaN);
 
             assertThat(clipper.clipTriangle(NEAR, input, 0, out, 0)).isEqualTo(2);
+
             assertThat(out).doesNotContain(Float.NaN);
+
             assertThat(out).hasSize(2 * 3 * UV_STRIDE);
         }
     }
@@ -381,24 +454,34 @@ class TriangleClipperTest
             // with V1 duplicated. The fan emits the original triangle plus one
             // zero-area triangle, which the rasterizer discards.
             final TriangleClipper clipper = new TriangleClipper(UV_ATTRIBUTES);
+
             final float[] v0 = vertex(0.0f, 0.0f, 4.0f, 0.0f, 0.0f);
+
             final float[] v1 = vertex(8.0f, 0.0f, NEAR, 1.0f, 0.0f);
+
             final float[] v2 = vertex(0.0f, 8.0f, 4.0f, 0.0f, 1.0f);
+
             final float[] out = outputBuffer(clipper);
 
             assertThat(clipper.clipTriangle(NEAR, triangle(v0, v1, v2), 0, out, 0)).isEqualTo(2);
 
             // Triangle 0 is the degenerate one: two coincident vertices.
             assertVertex(vertexAt(out, 0, 0), v1);
+
             assertVertex(vertexAt(out, 0, 1), v1);
+
             assertVertex(vertexAt(out, 0, 2), v2);
+
             assertThat(signedAreaNdc(out, 0)).isZero();
 
             // Triangle 1 is the input, cyclically rotated — same winding, same
             // attributes, nothing lost.
             assertVertex(vertexAt(out, 1, 0), v1);
+
             assertVertex(vertexAt(out, 1, 1), v2);
+
             assertVertex(vertexAt(out, 1, 2), v0);
+
             assertThat(signedAreaNdc(out, 1)).isNotZero();
         }
 
@@ -410,13 +493,19 @@ class TriangleClipperTest
             // crossing parameters are t = 1 on 1->2 and t = 0 on 2->0. Both
             // intersections must reproduce V2 exactly, attributes included.
             final TriangleClipper clipper = new TriangleClipper(UV_ATTRIBUTES);
+
             final float[] v0 = vertex(-1.0f, -1.0f, 6.0f, 0.0f, 0.0f);
+
             final float[] v1 = vertex(5.0f, -1.0f, 6.0f, 1.0f, 0.0f);
+
             final float[] v2 = vertex(0.0f, 3.0f, NEAR, 0.3f, 0.9f);
+
             final float[] out = outputBuffer(clipper);
 
             assertThat(clipper.clipTriangle(NEAR, triangle(v0, v1, v2), 0, out, 0)).isEqualTo(2);
+
             assertVertex(vertexAt(out, 0, 1), v2);
+
             assertVertex(vertexAt(out, 0, 2), v2);
         }
 
@@ -427,18 +516,24 @@ class TriangleClipperTest
             // w == 0 is the case that makes the divide produce an infinity. It
             // must never reach the rasterizer, so every emitted w is >= near.
             final TriangleClipper clipper = new TriangleClipper(UV_ATTRIBUTES);
+
             final float[] in = triangle(
                 vertex(1.0f, 1.0f, 9.0f, 0.0f, 0.0f),
                 vertex(2.0f, 0.0f, 0.0f, 1.0f, 0.0f),
                 vertex(0.0f, 2.0f, 7.0f, 0.0f, 1.0f));
+
             final float[] out = outputBuffer(clipper);
 
             final int count = clipper.clipTriangle(NEAR, in, 0, out, 0);
+
             assertThat(count).isEqualTo(2);
+
             for (int i = 0; i < count * 3; i++)
             {
                 final float w = out[i * UV_STRIDE + TriangleClipper.OFFSET_W];
+
                 assertThat(w).isGreaterThanOrEqualTo(NEAR);
+
                 assertThat(w).isFinite();
             }
         }
@@ -456,25 +551,40 @@ class TriangleClipperTest
             // the same loop, so a wide vertex is the case that would catch a
             // hard-coded UV-only lerp.
             final int wideAttributes = 5;
+
             final int wideStride = TriangleClipper.POSITION_FLOATS + wideAttributes;
+
             final TriangleClipper clipper = new TriangleClipper(wideAttributes);
+
             final float[] in = new float[3 * wideStride];
+
             // V0 in front at w = 4, attributes all 0.
             in[0] = 0.0f;
+
             in[1] = 0.0f;
+
             in[2] = 4.0f;
+
             // V1 behind the eye at w = -4, attributes all 1: t = 0.25.
             in[wideStride] = 8.0f;
+
             in[wideStride + 1] = 0.0f;
+
             in[wideStride + 2] = -4.0f;
+
             Arrays.fill(in, wideStride + 3, wideStride + wideStride, 1.0f);
+
             // V2 in front at w = 4, attributes all 2.
             in[2 * wideStride] = 0.0f;
+
             in[2 * wideStride + 1] = 8.0f;
+
             in[2 * wideStride + 2] = 4.0f;
+
             Arrays.fill(in, 2 * wideStride + 3, 3 * wideStride, 2.0f);
 
             final float[] out = new float[clipper.maxOutputFloats()];
+
             assertThat(clipper.clipTriangle(NEAR, in, 0, out, 0)).isEqualTo(2);
 
             // Crossing on edge 0->1 at t = 0.25: every attribute is 0.25.
@@ -482,12 +592,15 @@ class TriangleClipperTest
             {
                 assertThat(out[3 + a]).isCloseTo(0.25f, within(EPSILON));
             }
+
             assertThat(out[0]).isCloseTo(2.0f, within(EPSILON));
+
             assertThat(out[2]).isEqualTo(NEAR);
 
             // Crossing on edge 1->2 at t = (2 - -4) / (4 - -4) = 0.75: every
             // attribute is 1 + 0.75 * (2 - 1) = 1.75.
             final int second = wideStride;
+
             for (int a = 0; a < wideAttributes; a++)
             {
                 assertThat(out[second + 3 + a]).isCloseTo(1.75f, within(EPSILON));
@@ -499,15 +612,19 @@ class TriangleClipperTest
         void shouldClipWhenThereAreNoAttributes()
         {
             final TriangleClipper clipper = new TriangleClipper(0);
+
             final int stride = TriangleClipper.POSITION_FLOATS;
+
             final float[] in = {
                 0.0f, 0.0f, 4.0f,
                 8.0f, 0.0f, 0.0f,
                 0.0f, 8.0f, 0.0f,
             };
+
             final float[] out = new float[clipper.maxOutputFloats()];
 
             assertThat(clipper.clipTriangle(NEAR, in, 0, out, 0)).isEqualTo(1);
+
             assertThat(Arrays.copyOfRange(out, 0, 3 * stride)).containsExactly(new float[] {
                 4.0f, 0.0f, NEAR,
                 0.0f, 4.0f, NEAR,
@@ -525,6 +642,7 @@ class TriangleClipperTest
         void shouldRespectOffsetsWhenBuffersAreShared()
         {
             final TriangleClipper clipper = new TriangleClipper(UV_ATTRIBUTES);
+
             final float[] source = triangle(
                 vertex(0.0f, 0.0f, 4.0f, 0.0f, 0.0f),
                 vertex(8.0f, 0.0f, 0.0f, 1.0f, 0.0f),
@@ -533,12 +651,17 @@ class TriangleClipperTest
             // Same triangle, parked in the middle of a larger buffer full of
             // poison, as a real vertex stream would be.
             final int inOffset = 7;
+
             final float[] in = new float[inOffset + source.length + 4];
+
             Arrays.fill(in, Float.NaN);
+
             System.arraycopy(source, 0, in, inOffset, source.length);
 
             final int outOffset = 3;
+
             final float[] out = new float[outOffset + clipper.maxOutputFloats() + 5];
+
             Arrays.fill(out, Float.NaN);
 
             assertThat(clipper.clipTriangle(NEAR, in, inOffset, out, outOffset)).isEqualTo(1);
@@ -547,10 +670,12 @@ class TriangleClipperTest
             {
                 assertThat(out[i]).isNaN();
             }
+
             for (int i = outOffset + 3 * UV_STRIDE; i < out.length; i++)
             {
                 assertThat(out[i]).isNaN();
             }
+
             assertThat(Arrays.copyOfRange(out, outOffset, outOffset + 3 * UV_STRIDE))
                 .containsExactly(new float[] {
                     4.0f, 0.0f, NEAR, 0.5f, 0.0f,
@@ -568,24 +693,30 @@ class TriangleClipperTest
             // were ever read before being written, alternating shapes would leak
             // one into the next.
             final TriangleClipper clipper = new TriangleClipper(UV_ATTRIBUTES);
+
             final float[] quadCase = triangle(
                 vertex(0.0f, 0.0f, 4.0f, 0.0f, 0.0f),
                 vertex(8.0f, 0.0f, 4.0f, 1.0f, 0.0f),
                 vertex(0.0f, 8.0f, 0.0f, 0.0f, 1.0f));
+
             final float[] triangleCase = triangle(
                 vertex(0.0f, 0.0f, 4.0f, 0.0f, 0.0f),
                 vertex(8.0f, 0.0f, 0.0f, 1.0f, 0.0f),
                 vertex(0.0f, 8.0f, 0.0f, 0.0f, 1.0f));
 
             final float[] firstQuad = outputBuffer(clipper);
+
             clipper.clipTriangle(NEAR, quadCase, 0, firstQuad, 0);
 
             final float[] scratchpad = outputBuffer(clipper);
+
             for (int i = 0; i < 4; i++)
             {
                 assertThat(clipper.clipTriangle(NEAR, triangleCase, 0, scratchpad, 0))
                     .isEqualTo(1);
+
                 assertThat(clipper.clipTriangle(NEAR, quadCase, 0, scratchpad, 0)).isEqualTo(2);
+
                 assertThat(scratchpad).containsExactly(firstQuad);
             }
         }
@@ -603,35 +734,52 @@ class TriangleClipperTest
             // it safe to divide. The triangle runs from well in front of the
             // camera to well behind it.
             final float near = 0.5f;
+
             final Camera camera = Camera.create(
                 new Vec3(0.0f, 0.0f, -10.0f), new Vec3(0.0f, 0.0f, 1.0f),
                 new Vec3(0.0f, 1.0f, 0.0f), (float) (Math.PI / 2.0), 16.0f / 9.0f, near);
+
             final TriangleClipper clipper = new TriangleClipper(UV_ATTRIBUTES);
 
             final float[] in = new float[3 * UV_STRIDE];
+
             camera.transformToClip(-4.0f, -2.0f, 5.0f, in, 0);
+
             in[3] = 0.0f;
+
             in[4] = 0.0f;
+
             camera.transformToClip(4.0f, -2.0f, -20.0f, in, UV_STRIDE);
+
             in[UV_STRIDE + 3] = 1.0f;
+
             in[UV_STRIDE + 4] = 0.0f;
+
             camera.transformToClip(0.0f, 6.0f, -30.0f, in, 2 * UV_STRIDE);
+
             in[2 * UV_STRIDE + 3] = 0.5f;
+
             in[2 * UV_STRIDE + 4] = 1.0f;
 
             // One vertex 15 units in front, two behind the camera entirely.
             assertThat(in[TriangleClipper.OFFSET_W]).isCloseTo(15.0f, within(EPSILON));
+
             assertThat(in[UV_STRIDE + TriangleClipper.OFFSET_W]).isNegative();
+
             assertThat(in[2 * UV_STRIDE + TriangleClipper.OFFSET_W]).isNegative();
 
             final float[] out = outputBuffer(clipper);
+
             final int count = clipper.clipTriangle(near, in, 0, out, 0);
+
             assertThat(count).isEqualTo(1);
 
             for (int i = 0; i < count * 3; i++)
             {
                 final float w = out[i * UV_STRIDE + TriangleClipper.OFFSET_W];
+
                 assertThat(w).isGreaterThanOrEqualTo(near);
+
                 // Every surviving vertex is safe to divide by.
                 assertThat(1.0f / w).isFinite();
             }
@@ -641,6 +789,7 @@ class TriangleClipperTest
             for (int i = 0; i < count * 3; i++)
             {
                 assertThat(out[i * UV_STRIDE + 3]).isBetween(0.0f, 1.0f);
+
                 assertThat(out[i * UV_STRIDE + 4]).isBetween(0.0f, 1.0f);
             }
         }

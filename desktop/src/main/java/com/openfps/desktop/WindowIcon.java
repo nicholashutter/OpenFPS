@@ -118,10 +118,14 @@ public final class WindowIcon
         {
             throw new IllegalArgumentException("icon size must be positive, got " + size);
         }
+
         final int[] out = new int[size * size];
+
         // Every threshold is DOUBLED, and so is every distance. See colourAt.
         final int thickness = atLeast(size / THICKNESS_DIVISOR) * 2;
+
         final int gap = atLeast(size / GAP_DIVISOR) * 2;
+
         final int reach = size - 1 - atLeast(size / MARGIN_DIVISOR) * 2;
 
         for (int y = 0; y < size; y++)
@@ -131,6 +135,7 @@ public final class WindowIcon
                 out[y * size + x] = colourAt(x, y, size, thickness, gap, reach);
             }
         }
+
         return out;
     }
 
@@ -168,19 +173,24 @@ public final class WindowIcon
         {
             return BORDER_COLOR;
         }
+
         final int fromCentreX = StrictMath.abs(2 * x - (size - 1));
+
         final int fromCentreY = StrictMath.abs(2 * y - (size - 1));
 
         // Horizontal arm: thin in y, long in x, with a hole in the middle.
         final boolean acrossArm = fromCentreY < thickness
             && fromCentreX >= gap && fromCentreX <= reach;
+
         // Vertical arm: the same, transposed.
         final boolean downArm = fromCentreX < thickness
             && fromCentreY >= gap && fromCentreY <= reach;
+
         if (acrossArm || downArm)
         {
             return Crosshair.CORE_COLOR;
         }
+
         return BACKGROUND_COLOR;
     }
 
@@ -195,27 +205,35 @@ public final class WindowIcon
     public static void apply()
     {
         final long handle = windowHandle();
+
         if (handle == 0L)
         {
             LOG.debug("No LWJGL3 window — skipping the icon");
+
             return;
         }
+
         // The buffers must stay alive across the glfwSetWindowIcon call, so the
         // whole set is built inside one stack frame. GLFW copies the pixels
         // before returning, which is what makes freeing them here safe.
         try (MemoryStack stack = MemoryStack.stackPush())
         {
             final GLFWImage.Buffer icons = GLFWImage.malloc(SIZES.length, stack);
+
             for (int index = 0; index < SIZES.length; index++)
             {
                 final int size = SIZES[index];
+
                 icons.position(index)
                     .width(size)
                     .height(size)
                     .pixels(toRgbaBuffer(pixels(size), stack));
             }
+
             icons.position(0);
+
             GLFW.glfwSetWindowIcon(handle, icons);
+
             LOG.info("Window icon set at {}, {} and {} pixels", SIZES[0], SIZES[1], SIZES[2]);
         }
     }
@@ -232,6 +250,7 @@ public final class WindowIcon
         {
             return 0L;
         }
+
         return ((Lwjgl3Graphics) Gdx.graphics).getWindow().getWindowHandle();
     }
 
@@ -239,14 +258,20 @@ public final class WindowIcon
     private static ByteBuffer toRgbaBuffer(final int[] packed, final MemoryStack stack)
     {
         final ByteBuffer buffer = stack.malloc(packed.length * BYTES_PER_PIXEL);
+
         for (final int pixel : packed)
         {
             buffer.put((byte) Rgba.red(pixel));
+
             buffer.put((byte) Rgba.green(pixel));
+
             buffer.put((byte) Rgba.blue(pixel));
+
             buffer.put((byte) Rgba.alpha(pixel));
         }
+
         buffer.flip();
+
         return buffer;
     }
 
@@ -257,6 +282,7 @@ public final class WindowIcon
         {
             return MIN_FEATURE;
         }
+
         return value;
     }
 }

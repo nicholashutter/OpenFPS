@@ -53,7 +53,9 @@ class Mat4Test
         void shouldCopySourceArrayWhenBuiltFromAnArray()
         {
             final float[] source = COUNTING.clone();
+
             final Mat4 m = Mat4.ofRowMajor(source);
+
             source[0] = -999.0f;
 
             assertThat(m.get(0, 0)).isEqualTo(1.0f);
@@ -100,14 +102,19 @@ class Mat4Test
         void shouldLeaveMatrixUnchangedWhenMultipliedByIdentity()
         {
             final Mat4 m = Mat4.ofRowMajor(COUNTING);
+
             final Mat4 left = Mat4.identity().multiply(m);
+
             final Mat4 right = m.multiply(Mat4.identity());
 
             for (int i = 0; i < Mat4.ELEMENTS; i++)
             {
                 final int row = i / Mat4.ORDER;
+
                 final int column = i % Mat4.ORDER;
+
                 assertThat(left.get(row, column)).isEqualTo(COUNTING[i]);
+
                 assertThat(right.get(row, column)).isEqualTo(COUNTING[i]);
             }
         }
@@ -122,7 +129,9 @@ class Mat4Test
             final Mat4 square = Mat4.ofRowMajor(COUNTING).multiply(Mat4.ofRowMajor(COUNTING));
 
             assertThat(square.get(0, 0)).isEqualTo(90.0f);
+
             assertThat(square.get(1, 2)).isEqualTo(254.0f);
+
             assertThat(square.get(3, 3)).isEqualTo(600.0f);
         }
 
@@ -132,17 +141,25 @@ class Mat4Test
         {
             // (A * B) applied to p must equal A applied to (B applied to p).
             final Mat4 a = Mat4.translation(1.0f, 2.0f, 3.0f);
+
             final Mat4 b = Mat4.translation(10.0f, 20.0f, 30.0f);
+
             final float[] composed = new float[Mat4.ORDER];
+
             final float[] stepwise = new float[Mat4.ORDER];
 
             a.multiply(b).transformPoint(0.0f, 0.0f, 0.0f, composed, 0);
+
             b.transformPoint(0.0f, 0.0f, 0.0f, stepwise, 0);
+
             a.transformPoint(stepwise[0], stepwise[1], stepwise[2], stepwise, 0);
 
             assertThat(composed[0]).isCloseTo(stepwise[0], within(EPSILON));
+
             assertThat(composed[1]).isCloseTo(stepwise[1], within(EPSILON));
+
             assertThat(composed[2]).isCloseTo(stepwise[2], within(EPSILON));
+
             assertThat(composed[0]).isEqualTo(11.0f);
         }
     }
@@ -156,11 +173,15 @@ class Mat4Test
         void shouldApplyTranslationWhenPointIsTransformed()
         {
             final float[] out = new float[Mat4.ORDER];
+
             Mat4.translation(5.0f, -6.0f, 7.0f).transformPoint(1.0f, 1.0f, 1.0f, out, 0);
 
             assertThat(out[0]).isEqualTo(6.0f);
+
             assertThat(out[1]).isEqualTo(-5.0f);
+
             assertThat(out[2]).isEqualTo(8.0f);
+
             assertThat(out[3]).isEqualTo(1.0f);
         }
 
@@ -169,16 +190,25 @@ class Mat4Test
         void shouldWriteOnlyAtRequestedOffsetWhenGivenAnOffset()
         {
             final float[] out = new float[8];
+
             java.util.Arrays.fill(out, Float.NaN);
+
             Mat4.identity().transformPoint(1.0f, 2.0f, 3.0f, out, 2);
 
             assertThat(out[0]).isNaN();
+
             assertThat(out[1]).isNaN();
+
             assertThat(out[2]).isEqualTo(1.0f);
+
             assertThat(out[3]).isEqualTo(2.0f);
+
             assertThat(out[4]).isEqualTo(3.0f);
+
             assertThat(out[5]).isEqualTo(1.0f);
+
             assertThat(out[6]).isNaN();
+
             assertThat(out[7]).isNaN();
         }
 
@@ -189,9 +219,11 @@ class Mat4Test
             // With COUNTING and p = (1, 0, 0, 1), row 0 gives 1*1 + 4 = 5.
             // A column-major reading would give 1*1 + 13 = 14 instead.
             final float[] out = new float[Mat4.ORDER];
+
             Mat4.ofRowMajor(COUNTING).transformPoint(1.0f, 0.0f, 0.0f, out, 0);
 
             assertThat(out[0]).isEqualTo(5.0f);
+
             assertThat(out[1]).isEqualTo(13.0f);
         }
     }
@@ -205,11 +237,15 @@ class Mat4Test
         void shouldWriteSixteenElementsWhenCopiedOut()
         {
             final float[] dest = new float[Mat4.ELEMENTS + 2];
+
             java.util.Arrays.fill(dest, Float.NaN);
+
             Mat4.ofRowMajor(COUNTING).copyRowMajorInto(dest, 1);
 
             assertThat(dest[0]).isNaN();
+
             assertThat(dest[Mat4.ELEMENTS + 1]).isNaN();
+
             for (int i = 0; i < Mat4.ELEMENTS; i++)
             {
                 assertThat(dest[i + 1]).isEqualTo(COUNTING[i]);

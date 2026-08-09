@@ -36,9 +36,11 @@ class MenuButtonListenerTest
     void shouldRunActionOnChange()
     {
         final AtomicInteger runs = new AtomicInteger();
+
         final MenuButtonListener listener = new MenuButtonListener(runs::incrementAndGet);
 
         listener.changed(null, null);
+
         assertThat(runs.get()).isEqualTo(1);
     }
 
@@ -47,11 +49,15 @@ class MenuButtonListenerTest
     void shouldRunActionPerChange()
     {
         final AtomicInteger runs = new AtomicInteger();
+
         final MenuButtonListener listener = new MenuButtonListener(runs::incrementAndGet);
 
         listener.changed(null, null);
+
         listener.changed(null, null);
+
         listener.changed(null, null);
+
         assertThat(runs.get()).isEqualTo(3);
     }
 

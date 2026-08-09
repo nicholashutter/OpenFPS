@@ -45,6 +45,7 @@ final class EngineFrameCallback implements I_FrameCallback
     EngineFrameCallback(final Thread loopThread, final I_WindowPort window)
     {
         this.loopThread = loopThread;
+
         this.window = window;
     }
 

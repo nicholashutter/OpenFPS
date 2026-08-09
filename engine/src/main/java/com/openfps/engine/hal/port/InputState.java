@@ -81,11 +81,17 @@ public final class InputState
         final boolean fireDown, final boolean jumpDown, final boolean sprintDown)
     {
         this.forwardAxis = forwardAxisValue;
+
         this.strafeAxis = strafeAxisValue;
+
         this.yawDelta = yawDeltaRadians;
+
         this.pitchDelta = pitchDeltaRadians;
+
         this.fire = fireDown;
+
         this.jump = jumpDown;
+
         this.sprint = sprintDown;
     }
 
@@ -117,20 +123,28 @@ public final class InputState
         final boolean fireDown, final boolean jumpDown, final boolean sprintDown)
     {
         requireFinite(forwardAxisValue, "forwardAxis");
+
         requireFinite(strafeAxisValue, "strafeAxis");
+
         requireFinite(yawDeltaRadians, "yawDelta");
+
         requireFinite(pitchDeltaRadians, "pitchDelta");
 
         final float clampedForward = clampAxis(forwardAxisValue);
+
         final float clampedStrafe = clampAxis(strafeAxisValue);
+
         final float magnitude =
             (float) Math.sqrt(clampedForward * clampedForward + clampedStrafe * clampedStrafe);
+
         if (magnitude <= AXIS_LIMIT)
         {
             return new InputState(clampedForward, clampedStrafe, yawDeltaRadians,
                 pitchDeltaRadians, fireDown, jumpDown, sprintDown);
         }
+
         final float scale = AXIS_LIMIT / magnitude;
+
         return new InputState(clampedForward * scale, clampedStrafe * scale, yawDeltaRadians,
             pitchDeltaRadians, fireDown, jumpDown, sprintDown);
     }
@@ -156,6 +170,7 @@ public final class InputState
         {
             return false;
         }
+
         return forwardAxis == 0.0f && strafeAxis == 0.0f
             && yawDelta == 0.0f && pitchDelta == 0.0f;
     }
@@ -209,14 +224,17 @@ public final class InputState
         {
             return true;
         }
+
         if (!(other instanceof InputState that))
         {
             return false;
         }
+
         if (fire != that.fire || jump != that.jump || sprint != that.sprint)
         {
             return false;
         }
+
         return Float.compare(forwardAxis, that.forwardAxis) == 0
             && Float.compare(strafeAxis, that.strafeAxis) == 0
             && Float.compare(yawDelta, that.yawDelta) == 0
@@ -227,12 +245,19 @@ public final class InputState
     public int hashCode()
     {
         int result = Float.hashCode(forwardAxis);
+
         result = 31 * result + Float.hashCode(strafeAxis);
+
         result = 31 * result + Float.hashCode(yawDelta);
+
         result = 31 * result + Float.hashCode(pitchDelta);
+
         result = 31 * result + Boolean.hashCode(fire);
+
         result = 31 * result + Boolean.hashCode(jump);
+
         result = 31 * result + Boolean.hashCode(sprint);
+
         return result;
     }
 
@@ -256,10 +281,12 @@ public final class InputState
         {
             return AXIS_LIMIT;
         }
+
         if (value < -AXIS_LIMIT)
         {
             return -AXIS_LIMIT;
         }
+
         return value;
     }
 

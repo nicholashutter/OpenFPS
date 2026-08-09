@@ -53,12 +53,17 @@ final class SceneTest
         void shouldWrapASingleModelAsOneWorldInstance()
         {
             final ModelFormat model = quad();
+
             final Scene scene = Scene.of(model);
 
             assertThat(scene.worldInstanceCount()).isEqualTo(1);
+
             assertThat(scene.viewInstanceCount()).isZero();
+
             assertThat(scene.worldModel(0)).isSameAs(model);
+
             assertThat(scene.worldTransform(0).get(0, 0)).isEqualTo(1.0f);
+
             assertThat(scene.worldTransform(0).get(0, 3)).isZero();
         }
 
@@ -67,7 +72,9 @@ final class SceneTest
         void shouldKeepWorldAndViewInstancesSeparate()
         {
             final ModelFormat world = quad();
+
             final ModelFormat hand = quad();
+
             final Scene scene = Scene.builder()
                 .addWorldInstance(world, Mat4.translation(1.0f, 0.0f, 0.0f))
                 .addViewInstance(hand, Mat4.translation(0.0f, 0.0f, 1.0f))
@@ -75,11 +82,17 @@ final class SceneTest
                 .build();
 
             assertThat(scene.worldInstanceCount()).isEqualTo(2);
+
             assertThat(scene.viewInstanceCount()).isEqualTo(1);
+
             assertThat(scene.instanceCount()).isEqualTo(3);
+
             assertThat(scene.worldTransform(0).get(0, 3)).isEqualTo(1.0f);
+
             assertThat(scene.worldTransform(1).get(0, 3)).isZero();
+
             assertThat(scene.viewModel(0)).isSameAs(hand);
+
             assertThat(scene.viewTransform(0).get(2, 3)).isEqualTo(1.0f);
         }
 
@@ -88,9 +101,13 @@ final class SceneTest
         void shouldDescribeAnEmptyScene()
         {
             assertThat(Scene.EMPTY.worldInstanceCount()).isZero();
+
             assertThat(Scene.EMPTY.viewInstanceCount()).isZero();
+
             assertThat(Scene.EMPTY.instanceCount()).isZero();
+
             assertThat(Scene.EMPTY.maxInstanceTriangles()).isZero();
+
             assertThat(Scene.EMPTY.toString()).contains("world=0");
         }
 
@@ -102,13 +119,16 @@ final class SceneTest
             // it is a maximum rather than a sum precisely because instances go
             // through the pipeline one at a time.
             final ModelFormat small = quad();
+
             final ModelFormat large = ModelFormat.read(CubeFixture.build());
+
             final Scene scene = Scene.builder()
                 .addWorldInstance(small, Mat4.identity())
                 .addViewInstance(large, Mat4.identity())
                 .build();
 
             assertThat(large.triangleCount()).isGreaterThan(small.triangleCount());
+
             assertThat(scene.maxInstanceTriangles()).isEqualTo(large.triangleCount());
         }
 
@@ -118,10 +138,13 @@ final class SceneTest
         {
             final Scene.Builder builder = Scene.builder().addWorldInstance(quad(),
                 Mat4.identity());
+
             final Scene first = builder.build();
+
             builder.addWorldInstance(quad(), Mat4.identity());
 
             assertThat(first.worldInstanceCount()).isEqualTo(1);
+
             assertThat(builder.build().worldInstanceCount()).isEqualTo(2);
         }
     }
@@ -143,7 +166,9 @@ final class SceneTest
                 .build();
 
             assertThat(Scene.UNTAGGED).isZero();
+
             assertThat(scene.worldEntityId(0)).isEqualTo(Scene.UNTAGGED);
+
             assertThat(scene.hasTaggedEntities()).isFalse();
         }
 
@@ -158,8 +183,11 @@ final class SceneTest
                 .build();
 
             assertThat(scene.worldEntityId(0)).isEqualTo(PLAYER_ID);
+
             assertThat(scene.worldEntityId(1)).isEqualTo(Scene.UNTAGGED);
+
             assertThat(scene.worldEntityId(2)).isEqualTo(OTHER_ID);
+
             assertThat(scene.hasTaggedEntities()).isTrue();
         }
 
@@ -176,6 +204,7 @@ final class SceneTest
                 .build();
 
             assertThat(scene.worldEntityId(0)).isEqualTo(SPARSE_HIGH_ID);
+
             assertThat(scene.worldEntityId(1)).isEqualTo(1);
         }
 
@@ -312,12 +341,15 @@ final class SceneTest
         void shouldRefuseUnusableInstances()
         {
             final Scene.Builder builder = Scene.builder();
+
             final ModelFormat empty = ModelFormat.read(ModelFileFixture.empty());
 
             assertThatThrownBy(() -> builder.addWorldInstance(null, Mat4.identity()))
                 .isInstanceOf(IllegalArgumentException.class);
+
             assertThatThrownBy(() -> builder.addWorldInstance(quad(), null))
                 .isInstanceOf(IllegalArgumentException.class);
+
             assertThatThrownBy(() -> builder.addViewInstance(empty, Mat4.identity()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("no triangles");
@@ -338,7 +370,9 @@ final class SceneTest
                 .build();
 
             assertThat(scene.worldCoverage(0)).isEqualTo(Scene.OPAQUE);
+
             assertThat(scene.isWorldTranslucent(0)).isFalse();
+
             assertThat(scene.translucentInstanceCount())
                 .as("a scene built the old way must cost the translucent phase nothing")
                 .isZero();
@@ -355,9 +389,13 @@ final class SceneTest
                 .build();
 
             assertThat(scene.isWorldTranslucent(0)).isFalse();
+
             assertThat(scene.isWorldTranslucent(1)).isTrue();
+
             assertThat(scene.worldCoverage(1)).isEqualTo(128);
+
             assertThat(scene.worldCoverage(2)).isEqualTo(64);
+
             assertThat(scene.translucentInstanceCount()).isEqualTo(2);
         }
 
@@ -371,6 +409,7 @@ final class SceneTest
                 .build();
 
             assertThat(scene.translucentInstanceCount()).isZero();
+
             assertThat(scene.isWorldTranslucent(0)).isFalse();
         }
 
@@ -384,6 +423,7 @@ final class SceneTest
                 Mat4.identity(), Scene.UNTAGGED, -1))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("coverage");
+
             assertThatThrownBy(() -> builder.addTranslucentWorldInstance(quad(),
                 Mat4.identity(), Scene.UNTAGGED, Scene.OPAQUE + 1))
                 .isInstanceOf(IllegalArgumentException.class)

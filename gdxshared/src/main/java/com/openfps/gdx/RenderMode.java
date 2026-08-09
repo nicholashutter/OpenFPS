@@ -161,6 +161,7 @@ public enum RenderMode
     RenderMode(final String modeLabel, final int shortEdgeCeiling)
     {
         this.label = modeLabel;
+
         this.shortEdge = shortEdgeCeiling;
     }
 
@@ -178,11 +179,14 @@ public enum RenderMode
     public static RenderMode configured()
     {
         final String wanted = System.getProperty(MODE_PROPERTY);
+
         if (wanted == null || wanted.isEmpty())
         {
             return DEFAULT;
         }
+
         final String tidied = wanted.trim().toUpperCase(Locale.ROOT);
+
         for (final RenderMode mode : values())
         {
             if (mode.label.equals(tidied))
@@ -190,7 +194,9 @@ public enum RenderMode
                 return mode;
             }
         }
+
         LOG.warn("Ignoring -D{}={}: expected 480p, 720p or native", MODE_PROPERTY, wanted);
+
         return DEFAULT;
     }
 
@@ -222,6 +228,7 @@ public enum RenderMode
     public RenderMode next()
     {
         final RenderMode[] all = values();
+
         return all[(ordinal() + 1) % all.length];
     }
 
@@ -277,6 +284,7 @@ public enum RenderMode
         {
             return false;
         }
+
         return Math.min(surfaceWidth, surfaceHeight) > shortEdge;
     }
 
@@ -293,17 +301,21 @@ public enum RenderMode
         {
             return wanted;
         }
+
         final int shorter = Math.min(surfaceWidth, surfaceHeight);
+
         if (wanted == shorter)
         {
             return shortEdge;
         }
+
         // The long edge, at the same ratio. Rounded to the nearest whole pixel
         // and floored at 1: an extreme aspect such as 4000x3 never reaches here
         // (its short edge is already under any ceiling), but a floor costs
         // nothing and a framebuffer with a zero dimension is an allocation of no
         // pixels that every downstream divide then trips over.
         final long scaled = Math.round((double) wanted * shortEdge / shorter);
+
         return (int) Math.max(1L, scaled);
     }
 }

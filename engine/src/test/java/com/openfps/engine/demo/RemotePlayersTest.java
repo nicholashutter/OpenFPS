@@ -122,7 +122,9 @@ class RemotePlayersTest
     private static NetSession sessionWithOnePeer()
     {
         final NetSession session = new NetSession(new SilentSocket(), US, TIC_NANOS);
+
         session.addPeer(THEM, THEIR_ADDRESS);
+
         return session;
     }
 
@@ -134,10 +136,13 @@ class RemotePlayersTest
         {
             DemoModelFixture.write(root.resolve(DemoModels.LEVEL_DIRECTORY).resolve(piece));
         }
+
         DemoModelFixture.write(root.resolve(DemoModels.WEAPON_DIRECTORY)
             .resolve(DemoModels.WEAPON_MODEL));
+
         DemoModelFixture.write(root.resolve(DemoModels.WEAPON_DIRECTORY)
             .resolve(DemoModels.BOT_WEAPON_MODEL));
+
         for (final String person : new String[] {"character-a.ofm", "character-d.ofm",
             "character-h.ofm", "character-k.ofm", "character-n.ofm", "character-q.ofm",
             "character-r.ofm"})
@@ -145,6 +150,7 @@ class RemotePlayersTest
             DemoModelFixture.write(root.resolve(DemoModels.CHARACTER_DIRECTORY)
                 .resolve(person));
         }
+
         return DemoModels.load(root);
     }
 
@@ -165,6 +171,7 @@ class RemotePlayersTest
         void shouldPlaceOnePerPossiblePeer(@TempDir final Path root) throws IOException
         {
             final DemoScene demo = DemoScene.build(armedKit(root));
+
             final RemotePlayers peers = demo.remotePlayers();
 
             // The pool is sized off what a SESSION can accept, not off what this
@@ -179,6 +186,7 @@ class RemotePlayersTest
         void shouldStartWithNobodyVisible(@TempDir final Path root) throws IOException
         {
             final DemoScene demo = DemoScene.build(armedKit(root));
+
             final RemotePlayers peers = demo.remotePlayers();
 
             for (int body = 0; body < peers.bodyCount(); body++)
@@ -186,6 +194,7 @@ class RemotePlayersTest
                 assertThat(peers.isLive(body))
                     .as("body %d is live before any input arrived", body)
                     .isFalse();
+
                 assertThat(peers.nextTic(body)).isEqualTo(RemotePlayers.NO_TIC);
             }
         }
@@ -195,15 +204,18 @@ class RemotePlayersTest
         void shouldNotCollideWithTheBotIdBlock(@TempDir final Path root) throws IOException
         {
             final DemoScene demo = DemoScene.build(armedKit(root));
+
             final RemotePlayers peers = demo.remotePlayers();
 
             // The whole reason Match owns FIRST_REMOTE_ENTITY_ID. A collision here
             // would be invisible and vicious: two different bodies would be the
             // same entity, and a shot at one would report a hit on the other.
             final int lastBotId = Match.FIRST_BOT_ENTITY_ID + demo.botCount() - 1;
+
             assertThat(Match.FIRST_REMOTE_ENTITY_ID)
                 .as("the remote block starts past every bot and past the player")
                 .isGreaterThan(lastBotId);
+
             assertThat(Match.FIRST_REMOTE_ENTITY_ID + peers.bodyCount() - 1)
                 .as("the whole remote block fits above the bots")
                 .isGreaterThanOrEqualTo(Match.FIRST_REMOTE_ENTITY_ID);
@@ -220,12 +232,16 @@ class RemotePlayersTest
                 DemoModelFixture.write(root.resolve(DemoModels.LEVEL_DIRECTORY)
                     .resolve(piece));
             }
+
             DemoModelFixture.write(root.resolve(DemoModels.WEAPON_DIRECTORY)
                 .resolve(DemoModels.WEAPON_MODEL));
+
             final DemoScene demo = DemoScene.build(DemoModels.load(root));
+
             final RemotePlayers peers = demo.remotePlayers();
 
             assertThat(peers.bodyCount()).isZero();
+
             // A degraded demo rather than a broken one — the same answer addBots
             // gives, and it must not throw on the per-tic path.
             assertThat(peers.advance(sessionWithOnePeer(), DELTA_SECONDS)).isZero();
@@ -241,16 +257,21 @@ class RemotePlayersTest
         void shouldGoLiveOnTheFirstCommand(@TempDir final Path root) throws IOException
         {
             final DemoScene demo = DemoScene.build(armedKit(root));
+
             final RemotePlayers peers = demo.remotePlayers();
+
             final NetSession session = sessionWithOnePeer();
 
             assertThat(peers.advance(session, DELTA_SECONDS))
                 .as("an empty ring moves nobody")
                 .isZero();
+
             assertThat(peers.isLive(0)).isFalse();
 
             postCommand(session, 0, AXIS_ZERO, AXIS_ZERO, 0.0f);
+
             assertThat(peers.advance(session, DELTA_SECONDS)).isEqualTo(1);
+
             assertThat(peers.isLive(0)).isTrue();
         }
 
@@ -259,8 +280,11 @@ class RemotePlayersTest
         void shouldWalkTheBodyThatOwnsTheInput(@TempDir final Path root) throws IOException
         {
             final DemoScene demo = DemoScene.build(armedKit(root));
+
             final RemotePlayers peers = demo.remotePlayers();
+
             final NetSession session = sessionWithOnePeer();
+
             final float startZ = peers.controller(0).positionZ();
 
             // Yaw zero faces world +z, which is PlayerController's convention and
@@ -269,11 +293,13 @@ class RemotePlayersTest
             {
                 postCommand(session, tic, FORWARD_FULL, AXIS_ZERO, 0.0f);
             }
+
             assertThat(peers.advance(session, DELTA_SECONDS)).isEqualTo(30);
 
             assertThat(peers.controller(0).positionZ())
                 .as("thirty tics of full forward walked the body down the room")
                 .isGreaterThan(startZ);
+
             // The second body shares the pool and the ring and must not have moved:
             // slot is derived from the peer index, and an off-by-one there would
             // drive the wrong body with the right data.
@@ -285,17 +311,21 @@ class RemotePlayersTest
         void shouldTakeTheYawFromTheWire(@TempDir final Path root) throws IOException
         {
             final DemoScene demo = DemoScene.build(armedKit(root));
+
             final RemotePlayers peers = demo.remotePlayers();
+
             final NetSession session = sessionWithOnePeer();
 
             // A quarter turn, sent once. Were the angle integrated as a delta this
             // would turn the body a further quarter on every tic; because it is
             // absolute, ten identical commands leave it facing exactly there.
             final float quarterTurn = (float) (StrictMath.PI / 2.0);
+
             for (int tic = 0; tic < 10; tic++)
             {
                 postCommand(session, tic, AXIS_ZERO, AXIS_ZERO, quarterTurn);
             }
+
             peers.advance(session, DELTA_SECONDS);
 
             assertThat(peers.controller(0).yawRadians())
@@ -308,7 +338,9 @@ class RemotePlayersTest
         void shouldNotReapplyARedeliveredCommand(@TempDir final Path root) throws IOException
         {
             final DemoScene demo = DemoScene.build(armedKit(root));
+
             final RemotePlayers peers = demo.remotePlayers();
+
             final NetSession session = sessionWithOnePeer();
 
             // This is the property the whole reliability model depends on. Every
@@ -320,7 +352,9 @@ class RemotePlayersTest
             {
                 postCommand(session, tic, FORWARD_FULL, AXIS_ZERO, 0.0f);
             }
+
             assertThat(peers.advance(session, DELTA_SECONDS)).isEqualTo(10);
+
             final float afterFirstPass = peers.controller(0).positionZ();
 
             // The identical window arrives again, exactly as redundant redelivery
@@ -329,9 +363,11 @@ class RemotePlayersTest
             {
                 postCommand(session, tic, FORWARD_FULL, AXIS_ZERO, 0.0f);
             }
+
             assertThat(peers.advance(session, DELTA_SECONDS))
                 .as("nothing new arrived, so nothing was applied")
                 .isZero();
+
             assertThat(peers.controller(0).positionZ())
                 .as("the body did not walk the same ten tics twice")
                 .isEqualTo(afterFirstPass);
@@ -342,31 +378,43 @@ class RemotePlayersTest
         void shouldHoldStillAcrossAGap(@TempDir final Path root) throws IOException
         {
             final DemoScene demo = DemoScene.build(armedKit(root));
+
             final RemotePlayers peers = demo.remotePlayers();
+
             final NetSession session = sessionWithOnePeer();
 
             postCommand(session, 0, FORWARD_FULL, AXIS_ZERO, 0.0f);
+
             postCommand(session, 1, FORWARD_FULL, AXIS_ZERO, 0.0f);
+
             // Tic 2 is missing; 3 and 4 have arrived out of the sender's order,
             // which is exactly what an unordered datagram service permits.
             postCommand(session, 3, FORWARD_FULL, AXIS_ZERO, 0.0f);
+
             postCommand(session, 4, FORWARD_FULL, AXIS_ZERO, 0.0f);
 
             assertThat(peers.advance(session, DELTA_SECONDS))
                 .as("only the contiguous run below the hole is applied")
                 .isEqualTo(2);
+
             assertThat(peers.nextTic(0))
                 .as("the cursor waits on the missing tic rather than skipping it")
                 .isEqualTo(2);
+
             final float stalled = peers.controller(0).positionZ();
+
             assertThat(peers.advance(session, DELTA_SECONDS)).isZero();
+
             assertThat(peers.controller(0).positionZ()).isEqualTo(stalled);
 
             // The gap fills, and the body catches up across all three tics in one
             // call — which is the whole point of redundancy over retransmission.
             postCommand(session, 2, FORWARD_FULL, AXIS_ZERO, 0.0f);
+
             assertThat(peers.advance(session, DELTA_SECONDS)).isEqualTo(3);
+
             assertThat(peers.nextTic(0)).isEqualTo(5);
+
             assertThat(peers.controller(0).positionZ()).isGreaterThan(stalled);
         }
 
@@ -375,7 +423,9 @@ class RemotePlayersTest
         void shouldAnchorOnTheOldestHeldTic(@TempDir final Path root) throws IOException
         {
             final DemoScene demo = DemoScene.build(armedKit(root));
+
             final RemotePlayers peers = demo.remotePlayers();
+
             final NetSession session = sessionWithOnePeer();
 
             // A peer whose first packet lands at tic 500. Anchoring the cursor at
@@ -383,9 +433,11 @@ class RemotePlayersTest
             // never held, find tic 0 missing, and never move at all — a body
             // frozen on the spawn point for the whole match.
             postCommand(session, 500, FORWARD_FULL, AXIS_ZERO, 0.0f);
+
             postCommand(session, 501, FORWARD_FULL, AXIS_ZERO, 0.0f);
 
             assertThat(peers.advance(session, DELTA_SECONDS)).isEqualTo(2);
+
             assertThat(peers.nextTic(0)).isEqualTo(502);
         }
 
@@ -394,9 +446,11 @@ class RemotePlayersTest
         void shouldIgnoreANullSession(@TempDir final Path root) throws IOException
         {
             final DemoScene demo = DemoScene.build(armedKit(root));
+
             final RemotePlayers peers = demo.remotePlayers();
 
             assertThat(peers.advance(null, DELTA_SECONDS)).isZero();
+
             assertThat(peers.isLive(0)).isFalse();
         }
     }
@@ -410,24 +464,33 @@ class RemotePlayersTest
         void shouldClearPositionsAndCursors(@TempDir final Path root) throws IOException
         {
             final DemoScene demo = DemoScene.build(armedKit(root));
+
             final RemotePlayers peers = demo.remotePlayers();
+
             final NetSession session = sessionWithOnePeer();
+
             for (int tic = 0; tic < 20; tic++)
             {
                 postCommand(session, tic, FORWARD_FULL, AXIS_ZERO, 0.0f);
             }
+
             peers.advance(session, DELTA_SECONDS);
+
             assertThat(peers.isLive(0)).isTrue();
 
             peers.reset(demo.spawnX(), demo.spawnY(), demo.spawnZ(), 0.0f);
 
             final PlayerController back = peers.controller(0);
+
             assertThat(back.positionX()).isEqualTo(demo.spawnX());
+
             assertThat(back.positionZ()).isEqualTo(demo.spawnZ());
+
             // The cursor has to be forgotten as well as the position. A body that
             // resumed the previous round's tic numbering would sit waiting for a
             // tic the new round will not send for several seconds.
             assertThat(peers.isLive(0)).isFalse();
+
             assertThat(peers.nextTic(0)).isEqualTo(RemotePlayers.NO_TIC);
         }
     }
@@ -447,7 +510,9 @@ class RemotePlayersTest
             // player's own input into a peer's body, which would look like a
             // mirror image following the player around.
             assertThat(NetSession.LOCAL_SLOT).isZero();
+
             assertThat(session.peerCount()).isEqualTo(1);
+
             assertThat(session.commands().latestTic(1)).isEqualTo(TicCmdBuffer.EMPTY_TIC);
         }
     }

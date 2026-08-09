@@ -173,22 +173,30 @@ public final class AndroidAdapterFactory implements I_AdapterFactory
         {
             throw new IllegalArgumentException("audio must not be null");
         }
+
         this.audioPort = audio;
+
         if (delegate == null)
         {
             throw new IllegalArgumentException("delegate must not be null");
         }
+
         if (windowPort == null)
         {
             throw new IllegalArgumentException("windowPort must not be null");
         }
+
         if (userProfilePort == null)
         {
             throw new IllegalArgumentException("userProfilePort must not be null");
         }
+
         this.delegate = delegate;
+
         this.windowPort = windowPort;
+
         this.userProfilePort = userProfilePort;
+
         this.inputPort = touchInput;
     }
 
@@ -197,7 +205,9 @@ public final class AndroidAdapterFactory implements I_AdapterFactory
     {
         Log.i(TAG, "Initializing Android HAL (libGDX window, Room profile, "
             + (inputPort == null ? "no input" : "touch input") + ")");
+
         delegate.init();
+
         userProfilePort.init();
         // The input port is deliberately NOT initialised here. HalSubsystem
         // owns its lifecycle — it calls init() on whatever getInputPort()
@@ -217,10 +227,12 @@ public final class AndroidAdapterFactory implements I_AdapterFactory
         // port and only then calls hal.shutdown(), so closing the database
         // any earlier would lose the write it just made.
         userProfilePort.shutdown();
+
         // Input is HalSubsystem's, on the way down as well as up — see init().
         // The Activity owns the window's teardown in onDestroy — doing it
         // here too would be a double shutdown.
         delegate.shutdown();
+
         Log.i(TAG, "Android HAL shut down");
     }
 
@@ -237,6 +249,7 @@ public final class AndroidAdapterFactory implements I_AdapterFactory
         {
             return inputPort;
         }
+
         return delegate.getInputPort();
     }
 

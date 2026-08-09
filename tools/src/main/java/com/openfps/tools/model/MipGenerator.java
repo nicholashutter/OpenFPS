@@ -86,7 +86,9 @@ public final class MipGenerator
     public static int[][] generate(final int width, final int height, final int[] level0)
     {
         requirePowerOfTwo(width, "width");
+
         requirePowerOfTwo(height, "height");
+
         if (level0 == null || level0.length != width * height)
         {
             throw new IllegalArgumentException("level 0 of a " + width + "x" + height
@@ -94,16 +96,22 @@ public final class MipGenerator
         }
 
         final int levels = levelCount(width, height);
+
         final int[][] pyramid = new int[levels][];
+
         pyramid[0] = new int[level0.length];
+
         System.arraycopy(level0, 0, pyramid[0], 0, level0.length);
 
         for (int level = 1; level < levels; level++)
         {
             final int sourceWidth = Math.max(1, width >> (level - 1));
+
             final int sourceHeight = Math.max(1, height >> (level - 1));
+
             pyramid[level] = downsample(pyramid[level - 1], sourceWidth, sourceHeight);
         }
+
         return pyramid;
     }
 
@@ -122,7 +130,9 @@ public final class MipGenerator
         final int sourceHeight)
     {
         final int targetWidth = Math.max(1, sourceWidth >> 1);
+
         final int targetHeight = Math.max(1, sourceHeight >> 1);
+
         final int[] target = new int[targetWidth * targetHeight];
 
         for (int y = 0; y < targetHeight; y++)
@@ -130,11 +140,13 @@ public final class MipGenerator
             // When the source axis has collapsed to 1 these coincide, and the
             // box filter degenerates to averaging the same texel twice.
             final int y0 = Math.min(y * 2, sourceHeight - 1);
+
             final int y1 = Math.min((y * 2) + 1, sourceHeight - 1);
 
             for (int x = 0; x < targetWidth; x++)
             {
                 final int x0 = Math.min(x * 2, sourceWidth - 1);
+
                 final int x1 = Math.min((x * 2) + 1, sourceWidth - 1);
 
                 target[(y * targetWidth) + x] = average(
@@ -144,6 +156,7 @@ public final class MipGenerator
                     source[(y1 * sourceWidth) + x1]);
             }
         }
+
         return target;
     }
 
@@ -152,12 +165,16 @@ public final class MipGenerator
     {
         final int red = (Rgba.red(a) + Rgba.red(b) + Rgba.red(c) + Rgba.red(d) + ROUND_FOUR)
             / BOX_SAMPLES;
+
         final int green = (Rgba.green(a) + Rgba.green(b) + Rgba.green(c) + Rgba.green(d)
             + ROUND_FOUR) / BOX_SAMPLES;
+
         final int blue = (Rgba.blue(a) + Rgba.blue(b) + Rgba.blue(c) + Rgba.blue(d) + ROUND_FOUR)
             / BOX_SAMPLES;
+
         final int alpha = (Rgba.alpha(a) + Rgba.alpha(b) + Rgba.alpha(c) + Rgba.alpha(d)
             + ROUND_FOUR) / BOX_SAMPLES;
+
         return Rgba.pack(red, green, blue, alpha);
     }
 
@@ -178,6 +195,7 @@ public final class MipGenerator
         {
             return "null";
         }
+
         return Integer.toString(array.length);
     }
 }

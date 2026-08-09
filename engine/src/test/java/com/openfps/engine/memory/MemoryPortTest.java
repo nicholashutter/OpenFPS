@@ -51,7 +51,9 @@ class MemoryPortTest
             case JVM  -> new JvmMemoryPort();
             case ZONE -> new ZoneMemoryPort();
         };
+
         port.init(TEST_HEAP_SIZE);
+
         return port;
     }
 
@@ -71,6 +73,7 @@ class MemoryPortTest
         for (final Backend b : Backend.values())
         {
             final I_MemoryPort port = freshPort(b);
+
             try
             {
                 test.accept(port);
@@ -99,6 +102,7 @@ class MemoryPortTest
         void shouldStartUninitialized()
         {
             assertThat(new JvmMemoryPort().state()).isEqualTo(I_MemoryPort.State.UNINITIALIZED);
+
             assertThat(new ZoneMemoryPort().state()).isEqualTo(I_MemoryPort.State.UNINITIALIZED);
         }
 
@@ -117,7 +121,9 @@ class MemoryPortTest
         {
             forBothBackends(port -> {
                 final int h = port.allocate(16, I_MemoryPort.TAG_STATIC);
+
                 assertThat(h).isNotEqualTo(I_MemoryPort.NULL_HANDLE);
+
                 assertThat(port.state()).isEqualTo(I_MemoryPort.State.ACTIVE);
             });
         }
@@ -128,6 +134,7 @@ class MemoryPortTest
         {
             forBothBackends(port -> {
                 port.shutdown();
+
                 assertThat(port.state()).isEqualTo(I_MemoryPort.State.SHUTDOWN);
             });
         }
@@ -138,12 +145,17 @@ class MemoryPortTest
         {
             forBothBackends(port -> {
                 port.allocate(64, I_MemoryPort.TAG_GAME);
+
                 port.allocate(128, I_MemoryPort.TAG_GAME);
+
                 assertThat(port.handleCount()).isEqualTo(2);
 
                 port.reset();
+
                 assertThat(port.state()).isEqualTo(I_MemoryPort.State.READY);
+
                 assertThat(port.handleCount()).isEqualTo(0);
+
                 assertThat(port.allocatedBytes()).isEqualTo(0);
             });
         }
@@ -164,6 +176,7 @@ class MemoryPortTest
         void shouldThrowOnAllocateBeforeInit()
         {
             final I_MemoryPort port = new JvmMemoryPort();
+
             assertThatThrownBy(() -> port.allocate(64, I_MemoryPort.TAG_STATIC))
                 .isInstanceOf(MemoryException.class)
                 .hasMessageContaining("UNINITIALIZED");
@@ -175,6 +188,7 @@ class MemoryPortTest
         {
             forBothBackends(port -> {
                 port.shutdown();
+
                 assertThatThrownBy(() -> port.allocate(64, I_MemoryPort.TAG_STATIC))
                     .isInstanceOf(MemoryException.class)
                     .hasMessageContaining("SHUTDOWN");
@@ -197,6 +211,7 @@ class MemoryPortTest
         {
             forBothBackends(port -> {
                 port.shutdown();
+
                 assertThatThrownBy(port::shutdown)
                     .isInstanceOf(MemoryException.class)
                     .hasMessageContaining("SHUTDOWN");
@@ -209,6 +224,7 @@ class MemoryPortTest
         {
             forBothBackends(port -> {
                 port.shutdown();
+
                 assertThatThrownBy(port::reset)
                     .isInstanceOf(MemoryException.class)
                     .hasMessageContaining("SHUTDOWN");
@@ -220,14 +236,18 @@ class MemoryPortTest
         void shouldThrowOnBadInitSize()
         {
             final I_MemoryPort jvm = new JvmMemoryPort();
+
             assertThatThrownBy(() -> jvm.init(0))
                 .isInstanceOf(MemoryException.class);
+
             assertThatThrownBy(() -> jvm.init(-1))
                 .isInstanceOf(MemoryException.class);
 
             final I_MemoryPort zone = new ZoneMemoryPort();
+
             assertThatThrownBy(() -> zone.init(0))
                 .isInstanceOf(MemoryException.class);
+
             assertThatThrownBy(() -> zone.init(-1))
                 .isInstanceOf(MemoryException.class);
         }
@@ -247,9 +267,13 @@ class MemoryPortTest
         {
             forBothBackends(port -> {
                 final int h = port.allocate(128, I_MemoryPort.TAG_GAME);
+
                 assertThat(h).isNotEqualTo(I_MemoryPort.NULL_HANDLE);
+
                 assertThat(port.handleCount()).isEqualTo(1);
+
                 assertThat(port.sizeOf(h)).isEqualTo(128);
+
                 assertThat(port.allocatedBytes()).isGreaterThanOrEqualTo(128);
             });
         }
@@ -260,12 +284,17 @@ class MemoryPortTest
         {
             forBothBackends(port -> {
                 final int h1 = port.allocate(64, I_MemoryPort.TAG_GAME);
+
                 final int h2 = port.allocate(64, I_MemoryPort.TAG_GAME);
+
                 assertThat(port.handleCount()).isEqualTo(2);
 
                 port.free(h1);
+
                 assertThat(port.handleCount()).isEqualTo(1);
+
                 assertThat(port.sizeOf(h1)).isEqualTo(0);
+
                 assertThat(port.sizeOf(h2)).isEqualTo(64);
             });
         }
@@ -276,15 +305,22 @@ class MemoryPortTest
         {
             forBothBackends(port -> {
                 final int n = 50;
+
                 final Set<Integer> handles = new HashSet<>();
+
                 for (int i = 0; i < n; i++)
                 {
                     final int h = port.allocate(8, I_MemoryPort.TAG_STATIC);
+
                     assertThat(h).isNotEqualTo(I_MemoryPort.NULL_HANDLE);
+
                     assertThat(handles).doesNotContain(h);
+
                     handles.add(h);
                 }
+
                 assertThat(handles).hasSize(n);
+
                 assertThat(port.handleCount()).isEqualTo(n);
             });
         }
@@ -295,14 +331,21 @@ class MemoryPortTest
         {
             forBothBackends(port -> {
                 final int a1 = port.allocate(32, I_MemoryPort.TAG_GAME);
+
                 final int a2 = port.allocate(32, I_MemoryPort.TAG_GAME);
+
                 final int a3 = port.allocate(32, I_MemoryPort.TAG_CACHE);
 
                 final int freed = port.freeByTag(I_MemoryPort.TAG_GAME);
+
                 assertThat(freed).isEqualTo(2);
+
                 assertThat(port.handleCount()).isEqualTo(1);
+
                 assertThat(port.sizeOf(a3)).isEqualTo(32);
+
                 assertThat(port.sizeOf(a1)).isEqualTo(0);
+
                 assertThat(port.sizeOf(a2)).isEqualTo(0);
             });
         }
@@ -313,7 +356,9 @@ class MemoryPortTest
         {
             forBothBackends(port -> {
                 final int h = port.allocate(0, I_MemoryPort.TAG_STATIC);
+
                 assertThat(h).isNotEqualTo(I_MemoryPort.NULL_HANDLE);
+
                 assertThat(port.sizeOf(h)).isEqualTo(0);
             });
         }
@@ -346,6 +391,7 @@ class MemoryPortTest
                 assertThatThrownBy(() -> port.allocate(64, -1))
                     .isInstanceOf(MemoryException.class)
                     .hasMessageContaining("tag");
+
                 assertThatThrownBy(() -> port.allocate(64, 256))
                     .isInstanceOf(MemoryException.class)
                     .hasMessageContaining("tag");
@@ -358,6 +404,7 @@ class MemoryPortTest
         {
             forBothBackends(port -> {
                 port.allocate(64, I_MemoryPort.TAG_STATIC);  // get to ACTIVE
+
                 assertThatThrownBy(() -> port.free(-1))
                     .isInstanceOf(MemoryException.class);
             });
@@ -369,6 +416,7 @@ class MemoryPortTest
         {
             forBothBackends(port -> {
                 port.allocate(64, I_MemoryPort.TAG_STATIC);
+
                 assertThatThrownBy(() -> port.free(99999))
                     .isInstanceOf(MemoryException.class)
                     .hasMessageContaining("out of range");
@@ -381,7 +429,9 @@ class MemoryPortTest
         {
             forBothBackends(port -> {
                 final int h = port.allocate(64, I_MemoryPort.TAG_GAME);
+
                 port.free(h);
+
                 assertThatThrownBy(() -> port.free(h))
                     .isInstanceOf(MemoryException.class)
                     .hasMessageContaining("not currently allocated");
@@ -394,7 +444,9 @@ class MemoryPortTest
         {
             forBothBackends(port -> {
                 port.allocate(64, I_MemoryPort.TAG_GAME);
+
                 assertThat(port.sizeOf(-1)).isEqualTo(0);
+
                 assertThat(port.sizeOf(99999)).isEqualTo(0);
             });
         }
@@ -414,7 +466,9 @@ class MemoryPortTest
         {
             forBothBackends(port -> {
                 final int h = port.allocate(TEST_HEAP_SIZE * 2, I_MemoryPort.TAG_STATIC);
+
                 assertThat(h).isEqualTo(I_MemoryPort.NULL_HANDLE);
+
                 assertThat(port.handleCount()).isEqualTo(0);
             });
         }
@@ -427,10 +481,14 @@ class MemoryPortTest
                 // Use a fill size that leaves room for at most one more alloc
                 // (accounts for both backends: JVM has no overhead, zone has 8 bytes/alloc)
                 final int fillSize = TEST_HEAP_SIZE - 1024;
+
                 int h = port.allocate(fillSize, I_MemoryPort.TAG_GAME);
+
                 assertThat(h).isNotEqualTo(I_MemoryPort.NULL_HANDLE);
+
                 // Now try to allocate 2 KB more — must overflow for both backends
                 h = port.allocate(2048, I_MemoryPort.TAG_GAME);
+
                 assertThat(h).isEqualTo(I_MemoryPort.NULL_HANDLE);
             });
         }
@@ -444,13 +502,18 @@ class MemoryPortTest
                 // (accounting for zone-port header overhead, which is 8 bytes
                 // per allocation, but for the JVM port this is just payload)
                 final int fillSize = TEST_HEAP_SIZE - 64;  // leaves a tiny margin
+
                 port.allocate(fillSize, I_MemoryPort.TAG_GAME);
+
                 final int big = port.allocate(1024, I_MemoryPort.TAG_GAME);
+
                 assertThat(big).isEqualTo(I_MemoryPort.NULL_HANDLE);
 
                 // Free everything, then try a small one
                 port.reset();
+
                 final int small = port.allocate(64, I_MemoryPort.TAG_GAME);
+
                 assertThat(small).isNotEqualTo(I_MemoryPort.NULL_HANDLE);
             });
         }
@@ -470,8 +533,11 @@ class MemoryPortTest
         {
             forBothBackends(port -> {
                 port.allocate(64, I_MemoryPort.TAG_GAME);
+
                 final int freed = port.freeByTag(I_MemoryPort.TAG_CACHE);
+
                 assertThat(freed).isEqualTo(0);
+
                 assertThat(port.handleCount()).isEqualTo(1);
             });
         }
@@ -482,7 +548,9 @@ class MemoryPortTest
         {
             forBothBackends(port -> {
                 port.reset();
+
                 port.reset();
+
                 assertThat(port.state()).isEqualTo(I_MemoryPort.State.READY);
             });
         }
@@ -493,14 +561,20 @@ class MemoryPortTest
         {
             forBothBackends(port -> {
                 final int h1 = port.allocate(64, I_MemoryPort.TAG_GAME);
+
                 final int h2 = port.allocate(64, I_MemoryPort.TAG_GAME);
+
                 port.free(h1);
+
                 port.free(h2);
+
                 assertThat(port.handleCount()).isEqualTo(0);
+
                 assertThat(port.state()).isEqualTo(I_MemoryPort.State.ACTIVE);
 
                 // Still usable
                 final int h3 = port.allocate(64, I_MemoryPort.TAG_GAME);
+
                 assertThat(h3).isNotEqualTo(I_MemoryPort.NULL_HANDLE);
             });
         }
@@ -520,17 +594,21 @@ class MemoryPortTest
         {
             forBothBackends(port -> {
                 final Random rng = new Random(0xC0FFEE);
+
                 final List<Integer> liveHandles = new ArrayList<>();
 
                 for (int iter = 0; iter < 1000; iter++)
                 {
                     final int choice = rng.nextInt(3);
+
                     if (choice == 0 || liveHandles.isEmpty())
                     {
                         final int size = 16 + rng.nextInt(256);
+
                         // Use the port's own maxAllocatable() so we don't have to
                         // account for backend-specific overhead (zone has 8 bytes/alloc header)
                         final boolean shouldFit = port.maxAllocatable() >= size;
+
                         final int h = port.allocate(size, I_MemoryPort.TAG_GAME);
 
                         if (shouldFit)
@@ -538,6 +616,7 @@ class MemoryPortTest
                             assertThat(h).as("alloc size=%d iter=%d freeBytes=%d",
                                 size, iter, port.freeBytes())
                                 .isNotEqualTo(I_MemoryPort.NULL_HANDLE);
+
                             liveHandles.add(h);
                         }
                         else
@@ -551,13 +630,16 @@ class MemoryPortTest
                     {
                         // free a random live handle
                         final int idx = rng.nextInt(liveHandles.size());
+
                         final int h = liveHandles.remove(idx);
+
                         port.free(h);
                     }
                     else
                     {
                         // freeByTag
                         port.freeByTag(I_MemoryPort.TAG_GAME);
+
                         liveHandles.clear();
                     }
                 }
@@ -570,28 +652,37 @@ class MemoryPortTest
         {
             forBothBackends(port -> {
                 final Random rng = new Random(0xDEADBEEFL);
+
                 int successfulAllocs = 0;
+
                 int failedAllocs = 0;
+
                 int totalBytes = 0;
 
                 for (int i = 0; i < 10_000; i++)
                 {
                     final int size = 1 + rng.nextInt(128);
+
                     final int h = port.allocate(size, I_MemoryPort.TAG_STATIC);
+
                     if (h != I_MemoryPort.NULL_HANDLE)
                     {
                         successfulAllocs++;
+
                         totalBytes += size;
                     }
                     else
                     {
                         failedAllocs++;
+
                         // Verify we don't blow past capacity
                         assertThat(port.allocatedBytes())
                             .isLessThanOrEqualTo(TEST_HEAP_SIZE);
                     }
                 }
+
                 assertThat(successfulAllocs).isGreaterThan(0);
+
                 assertThat(totalBytes).isLessThanOrEqualTo(TEST_HEAP_SIZE);
             });
         }
@@ -611,15 +702,23 @@ class MemoryPortTest
         {
             forBothBackends(port -> {
                 final int g1 = port.allocate(64, I_MemoryPort.TAG_GAME);
+
                 final int g2 = port.allocate(64, I_MemoryPort.TAG_GAME);
+
                 final int c1 = port.allocate(64, I_MemoryPort.TAG_CACHE);
+
                 final int s1 = port.allocate(64, I_MemoryPort.TAG_STATIC);
 
                 final int freed = port.freeByTag(I_MemoryPort.TAG_GAME);
+
                 assertThat(freed).isEqualTo(2);
+
                 assertThat(port.sizeOf(g1)).isEqualTo(0);
+
                 assertThat(port.sizeOf(g2)).isEqualTo(0);
+
                 assertThat(port.sizeOf(c1)).isEqualTo(64);
+
                 assertThat(port.sizeOf(s1)).isEqualTo(64);
             });
         }
@@ -632,8 +731,10 @@ class MemoryPortTest
                 for (int tag = 0; tag <= 3; tag++)
                 {
                     final int h = port.allocate(64, tag);
+
                     assertThat(h).isNotEqualTo(I_MemoryPort.NULL_HANDLE);
                 }
+
                 assertThat(port.handleCount()).isEqualTo(4);
             });
         }
@@ -645,11 +746,14 @@ class MemoryPortTest
         void shouldRejectFreeByTagInBadState(final I_MemoryPort.State badState)
         {
             final I_MemoryPort port = new JvmMemoryPort();
+
             if (badState == I_MemoryPort.State.SHUTDOWN)
             {
                 port.init(1024);
+
                 port.shutdown();
             }
+
             assertThatThrownBy(() -> port.freeByTag(I_MemoryPort.TAG_GAME))
                 .isInstanceOf(MemoryException.class);
         }

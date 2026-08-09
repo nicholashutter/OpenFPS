@@ -56,7 +56,9 @@ class GdxLifecycleBridgeTest
     void setUp()
     {
         Gdx.graphics = StubGraphics.of(WIDTH, HEIGHT, DELTA);
+
         callback = new RecordingFrameCallback();
+
         bridge = new GdxLifecycleBridge(callback);
     }
 
@@ -78,7 +80,9 @@ class GdxLifecycleBridgeTest
             bridge.create();
 
             assertThat(callback.surfaceReadyCount()).isEqualTo(1);
+
             assertThat(callback.lastWidth()).isEqualTo(WIDTH);
+
             assertThat(callback.lastHeight()).isEqualTo(HEIGHT);
         }
     }
@@ -107,7 +111,9 @@ class GdxLifecycleBridgeTest
             bridge.resize(HEIGHT, WIDTH);
 
             assertThat(callback.resizeCount()).isEqualTo(1);
+
             assertThat(callback.lastWidth()).isEqualTo(HEIGHT);
+
             assertThat(callback.lastHeight()).isEqualTo(WIDTH);
         }
 
@@ -116,8 +122,11 @@ class GdxLifecycleBridgeTest
         void shouldSwallowARepeatOfTheCurrentSize()
         {
             bridge.create();
+
             bridge.resize(HEIGHT, WIDTH);
+
             bridge.resize(HEIGHT, WIDTH);
+
             bridge.resize(HEIGHT, WIDTH);
 
             assertThat(callback.resizeCount()).isEqualTo(1);
@@ -128,12 +137,15 @@ class GdxLifecycleBridgeTest
         void shouldForwardAReturnToTheCreateSize()
         {
             bridge.create();
+
             bridge.resize(HEIGHT, WIDTH);
 
             bridge.resize(WIDTH, HEIGHT);
 
             assertThat(callback.resizeCount()).isEqualTo(2);
+
             assertThat(callback.lastWidth()).isEqualTo(WIDTH);
+
             assertThat(callback.lastHeight()).isEqualTo(HEIGHT);
         }
     }
@@ -147,9 +159,11 @@ class GdxLifecycleBridgeTest
         void shouldForwardThePlatformDelta()
         {
             bridge.render();
+
             bridge.render();
 
             assertThat(callback.frameCount()).isEqualTo(2);
+
             assertThat(callback.lastDeltaSeconds()).isCloseTo(DELTA, within(EPSILON));
         }
 
@@ -158,11 +172,15 @@ class GdxLifecycleBridgeTest
         void shouldTranslateTheRemainingLifecycle()
         {
             bridge.pause();
+
             bridge.resume();
+
             bridge.dispose();
 
             assertThat(callback.pauseCount()).isEqualTo(1);
+
             assertThat(callback.resumeCount()).isEqualTo(1);
+
             assertThat(callback.surfaceLostCount()).isEqualTo(1);
         }
 
@@ -174,7 +192,9 @@ class GdxLifecycleBridgeTest
             // onSurfaceReady has to survive the gap on its own, and that only
             // holds while this stays true.
             bridge.create();
+
             bridge.pause();
+
             bridge.resume();
 
             assertThat(callback.surfaceReadyCount()).isEqualTo(1);

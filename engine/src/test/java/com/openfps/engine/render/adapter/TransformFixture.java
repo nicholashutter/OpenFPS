@@ -31,7 +31,9 @@ final class TransformFixture
     static Mat4 rotationZ(final float radians)
     {
         final float cos = (float) Math.cos(radians);
+
         final float sin = (float) Math.sin(radians);
+
         return Mat4.ofRowMajor(new float[]
         {
             cos, -sin, 0.0f, 0.0f,

@@ -32,11 +32,13 @@ public final class NullFilePort implements I_FilePort
         try
         {
             final FileInputStream fis = new FileInputStream(path);
+
             return new RealFileHandle(fis);
         }
         catch (final FileNotFoundException e)
         {
             LOG.warn("NullFilePort: file not found: {}", path);
+
             return null;
         }
     }
@@ -55,6 +57,7 @@ public final class NullFilePort implements I_FilePort
         RealFileHandle(final FileInputStream fis)
         {
             this.fis = fis;
+
             this.open = true;
         }
 
@@ -90,6 +93,7 @@ public final class NullFilePort implements I_FilePort
             try
             {
                 fis.close();
+
                 open = false;
             }
             catch (final IOException e)

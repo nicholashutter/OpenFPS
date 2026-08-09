@@ -86,15 +86,19 @@ public final class DemoAssetsMain
     public static void main(final String[] args)
     {
         final String out = option(args, "--out=");
+
         if (out == null)
         {
             LOG.error("usage: DemoAssetsMain --out=<directory> [--gltf=<directory>]"
                 + " [--forceFallback]");
+
             System.exit(EXIT_FAILURE);
+
             return;
         }
 
         final Path output = Path.of(out);
+
         try
         {
             build(output, option(args, "--gltf="), flag(args, "--forceFallback"));
@@ -102,7 +106,9 @@ public final class DemoAssetsMain
         catch (final IOException e)
         {
             LOG.error("Demo asset generation failed: {}", e.getMessage(), e);
+
             System.exit(EXIT_FAILURE);
+
             return;
         }
         catch (final RuntimeException e)
@@ -111,7 +117,9 @@ public final class DemoAssetsMain
             // already names the file and the offending value, so it is logged
             // rather than re-wrapped, and the process fails so Gradle does too.
             LOG.error("Demo asset generation failed: {}", e.getMessage(), e);
+
             System.exit(EXIT_FAILURE);
+
             return;
         }
 
@@ -136,6 +144,7 @@ public final class DemoAssetsMain
         }
 
         Files.createDirectories(output);
+
         if (forceFallback || models(output).isEmpty())
         {
             writeFallback(output);
@@ -146,7 +155,9 @@ public final class DemoAssetsMain
     private static void writeFallback(final Path output) throws IOException
     {
         final Path target = output.resolve(FALLBACK_MODEL_NAME);
+
         Files.write(target, ProceduralRoom.build());
+
         LOG.warn("Shipping GENERATED geometry, not third-party art: wrote {} ({} triangles)."
             + " This is the docs/ASSETS.md section 3 fallback — a room to stand in when no CC0"
             + " pack has been staged. Do not record it against an upstream source.",
@@ -163,20 +174,24 @@ public final class DemoAssetsMain
     public static boolean verify(final Path output)
     {
         final List<Path> models = models(output);
+
         if (models.isEmpty())
         {
             LOG.error("No {} files under {} — nothing was produced.", MODEL_EXTENSION, output);
+
             return false;
         }
 
         // MUTABLE locals — the running verdict and the whole-scene cost of
         // placing one of every model at once.
         boolean ok = true;
+
         int totalTriangles = 0;
 
         for (final Path model : models)
         {
             final int triangles = report(model);
+
             if (triangles < 0)
             {
                 ok = false;
@@ -190,6 +205,7 @@ public final class DemoAssetsMain
         LOG.info("{} models verified. One of each placed at once costs {} triangles;"
             + " docs/ASSETS.md section 2 affords roughly 10-20k per frame at 720p60.",
             models.size(), totalTriangles);
+
         return ok;
     }
 
@@ -197,6 +213,7 @@ public final class DemoAssetsMain
     private static int report(final Path path)
     {
         final ModelFormat model;
+
         try
         {
             model = ModelFormat.read(Files.readAllBytes(path));
@@ -205,6 +222,7 @@ public final class DemoAssetsMain
         {
             LOG.error("{}: does not read back as a model — {}", path.getFileName(),
                 e.getMessage(), e);
+
             return -1;
         }
 
@@ -235,15 +253,19 @@ public final class DemoAssetsMain
         {
             LOG.error("{}: parses but holds no geometry — {} vertices, {} triangles.",
                 path.getFileName(), model.vertexCount(), model.triangleCount());
+
             return -1;
         }
+
         if (model.triangleCount() > ModelFormat.MAX_TRIANGLES_PER_MODEL)
         {
             LOG.error("{}: {} triangles exceeds the budget of {} (docs/ASSETS.md section 5).",
                 path.getFileName(), model.triangleCount(),
                 ModelFormat.MAX_TRIANGLES_PER_MODEL);
+
             return -1;
         }
+
         for (int texture = 0; texture < model.textureCount(); texture++)
         {
             if (!textureInBudget(path, model, texture))
@@ -251,6 +273,7 @@ public final class DemoAssetsMain
                 return -1;
             }
         }
+
         return model.triangleCount();
     }
 
@@ -259,28 +282,36 @@ public final class DemoAssetsMain
         final int texture)
     {
         final int width = model.textureWidth(texture);
+
         final int height = model.textureHeight(texture);
+
         if (width > ModelFormat.MAX_TEXTURE_DIMENSION
             || height > ModelFormat.MAX_TEXTURE_DIMENSION)
         {
             LOG.error("{}: texture {} is {}x{}, over the {} squared budget"
                 + " (docs/ASSETS.md section 5).", path.getFileName(), texture, width, height,
                 ModelFormat.MAX_TEXTURE_DIMENSION);
+
             return false;
         }
+
         if (!isPowerOfTwo(width) || !isPowerOfTwo(height))
         {
             LOG.error("{}: texture {} is {}x{}, not a power of two.", path.getFileName(),
                 texture, width, height);
+
             return false;
         }
+
         if (model.textureLevelCount(texture) < 2)
         {
             LOG.error("{}: texture {} has {} mip level(s); mipmaps are required, not optional"
                 + " (docs/ASSETS.md section 5).", path.getFileName(), texture,
                 model.textureLevelCount(texture));
+
             return false;
         }
+
         return true;
     }
 
@@ -291,18 +322,22 @@ public final class DemoAssetsMain
         {
             return "";
         }
+
         // MUTABLE local — the accumulating summary.
         final StringBuilder summary = new StringBuilder(" [");
+
         for (int texture = 0; texture < model.textureCount(); texture++)
         {
             if (texture > 0)
             {
                 summary.append(", ");
             }
+
             summary.append(model.textureWidth(texture)).append('x')
                 .append(model.textureHeight(texture)).append(", ")
                 .append(model.textureLevelCount(texture)).append(" mips");
         }
+
         return summary.append(']').toString();
     }
 
@@ -318,7 +353,9 @@ public final class DemoAssetsMain
         {
             return List.of();
         }
+
         final List<Path> found = new ArrayList<>();
+
         try (Stream<Path> walk = Files.walk(output))
         {
             walk.filter(DemoAssetsMain::isModel).sorted().forEach(found::add);
@@ -327,6 +364,7 @@ public final class DemoAssetsMain
         {
             throw new UncheckedIOException("cannot scan " + output, e);
         }
+
         return found;
     }
 
@@ -345,6 +383,7 @@ public final class DemoAssetsMain
                 return arg.substring(prefix.length());
             }
         }
+
         return null;
     }
 
@@ -357,6 +396,7 @@ public final class DemoAssetsMain
                 return true;
             }
         }
+
         return false;
     }
 }

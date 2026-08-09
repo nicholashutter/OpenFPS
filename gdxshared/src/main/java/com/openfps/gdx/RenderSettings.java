@@ -79,6 +79,7 @@ public final class RenderSettings
         {
             throw new IllegalArgumentException("initial must not be null");
         }
+
         this.mode = initial;
     }
 
@@ -100,6 +101,7 @@ public final class RenderSettings
         {
             throw new IllegalArgumentException("wanted must not be null");
         }
+
         if (wanted == mode)
         {
             // Not an error — a caller may reassert the current value — but the
@@ -108,8 +110,11 @@ public final class RenderSettings
             // arrive at the size it already had.
             return;
         }
+
         this.mode = wanted;
+
         final Consumer<RenderMode> told = observer;
+
         if (told != null)
         {
             told.accept(wanted);
@@ -125,6 +130,7 @@ public final class RenderSettings
     public RenderMode cycle()
     {
         setMode(mode.next());
+
         return mode;
     }
 

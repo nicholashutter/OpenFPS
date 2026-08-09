@@ -99,14 +99,19 @@ public final class FoundryMapBuilder
     public static void main(final String[] args)
     {
         final String out = option(args, "--out=");
+
         if (out == null)
         {
             LOG.error("usage: FoundryMapBuilder --out=<directory>"
                 + " [--atlas=<colormap.png>]");
+
             return;
         }
+
         final String atlasOption = option(args, "--atlas=");
+
         final Path atlasPath;
+
         if (atlasOption == null)
         {
             atlasPath = null;
@@ -115,7 +120,9 @@ public final class FoundryMapBuilder
         {
             atlasPath = Path.of(atlasOption);
         }
+
         final Path outDir = Path.of(out);
+
         try
         {
             Files.createDirectories(outDir);
@@ -124,8 +131,11 @@ public final class FoundryMapBuilder
         {
             throw new UncheckedIOException("could not create output directory: " + outDir, e);
         }
+
         final byte[] bytes = build(atlasPath);
+
         final Path outFile = outDir.resolve(FILE_NAME);
+
         try
         {
             Files.write(outFile, bytes);
@@ -134,7 +144,9 @@ public final class FoundryMapBuilder
         {
             throw new UncheckedIOException("could not write " + outFile, e);
         }
+
         final ModelFormat parsed = ModelFormat.read(bytes);
+
         LOG.info("Wrote {} ({} triangles, {} vertices, {} textures)",
             outFile, parsed.indexCount() / 3, parsed.vertexCount(), parsed.textureCount());
     }
@@ -169,7 +181,9 @@ public final class FoundryMapBuilder
     public static byte[] build(final Path atlasPath)
     {
         final ModelBuilder builder = new ModelBuilder(MODEL_NAME);
+
         final int[] floorTexels;
+
         if (atlasPath != null)
         {
             floorTexels = KenneyTexture.forceOpaque(KenneyTexture.floor(atlasPath));
@@ -178,7 +192,9 @@ public final class FoundryMapBuilder
         {
             floorTexels = floorTexels();
         }
+
         final int[] wallTexels;
+
         if (atlasPath != null)
         {
             wallTexels = KenneyTexture.forceOpaque(KenneyTexture.wall(atlasPath));
@@ -187,30 +203,46 @@ public final class FoundryMapBuilder
         {
             wallTexels = wallTexels();
         }
+
         final int[] accentTexels = accentTexels();
+
         final int floorTexture = builder.addTexture("foundry-floor", TEXTURE_EDGE,
             TEXTURE_EDGE, MipGenerator.generate(TEXTURE_EDGE, TEXTURE_EDGE, floorTexels));
+
         final int wallTexture = builder.addTexture("foundry-wall", TEXTURE_EDGE,
             TEXTURE_EDGE, MipGenerator.generate(TEXTURE_EDGE, TEXTURE_EDGE, wallTexels));
+
         final int accentTexture = builder.addTexture("foundry-accent", TEXTURE_EDGE,
             TEXTURE_EDGE, MipGenerator.generate(TEXTURE_EDGE, TEXTURE_EDGE, accentTexels));
 
         builder.beginSubmesh(floorTexture);
+
         addGroundSlab(builder);
+
         addHallFloors(builder);
+
         builder.endSubmesh();
 
         builder.beginSubmesh(wallTexture);
+
         addPerimeterWalls(builder);
+
         addHalls(builder);
+
         addGantries(builder);
+
         addStairways(builder);
+
         addCrates(builder);
+
         addPillars(builder);
+
         builder.endSubmesh();
 
         builder.beginSubmesh(accentTexture);
+
         addAccentGeometry(builder);
+
         builder.endSubmesh();
 
         return builder.toBytes();
@@ -256,8 +288,10 @@ public final class FoundryMapBuilder
     {
         // Cast-metal shop floor (HP_A), at z=270
         addBox(builder, -64.0f, 0.0f, 240.0f, 64.0f, 2.0f, 304.0f);
+
         // Assembly floor (HP_B), at z=160
         addBox(builder, -64.0f, 0.0f, 128.0f, 64.0f, 2.0f, 192.0f);
+
         // Cooling room floor (HP_C), at z=40
         addBox(builder, -64.0f, 0.0f, 8.0f, 64.0f, 2.0f, 72.0f);
     }
@@ -270,12 +304,16 @@ public final class FoundryMapBuilder
     private static void addPerimeterWalls(final ModelBuilder builder)
     {
         final float e = HALF_EXTENT;
+
         // North wall (z = -e)
         addBox(builder, -e, 0.0f, -e - WALL_THICKNESS, e, PERIMETER_WALL_HEIGHT, -e);
+
         // South wall (z = e)
         addBox(builder, -e, 0.0f, e, e, PERIMETER_WALL_HEIGHT, e + WALL_THICKNESS);
+
         // West wall (x = -e)
         addBox(builder, -e - WALL_THICKNESS, 0.0f, -e, -e, PERIMETER_WALL_HEIGHT, e);
+
         // East wall (x = e)
         addBox(builder, e, 0.0f, -e, e + WALL_THICKNESS, PERIMETER_WALL_HEIGHT, e);
     }
@@ -291,8 +329,10 @@ public final class FoundryMapBuilder
     {
         // Cast-metal shop (HP_A) at z=270, with a south exit at z=304
         addHallWalls(builder, 240.0f, 304.0f);
+
         // Assembly floor (HP_B) at z=160, with two side exits
         addHallWalls(builder, 128.0f, 192.0f);
+
         // Cooling room (HP_C) at z=40, with a north exit at z=8
         addHallWalls(builder, 8.0f, 72.0f);
     }
@@ -309,13 +349,18 @@ public final class FoundryMapBuilder
     private static void addHallWalls(final ModelBuilder builder, final float minZ, final float maxZ)
     {
         final float hallY = HALL_HEIGHT;
+
         // South wall (the +z face), with a 32-unit gap at x=0
         addBox(builder, -64.0f, 0.0f, maxZ, -16.0f, hallY, maxZ + WALL_THICKNESS);
+
         addBox(builder, 16.0f, 0.0f, maxZ, 64.0f, hallY, maxZ + WALL_THICKNESS);
+
         // North wall (the -z face), full width
         addBox(builder, -64.0f, 0.0f, minZ - WALL_THICKNESS, 64.0f, hallY, minZ);
+
         // East wall (the +x face), full depth
         addBox(builder, 64.0f, 0.0f, minZ, 64.0f + WALL_THICKNESS, hallY, maxZ);
+
         // West wall (the -x face), full depth
         addBox(builder, -64.0f - WALL_THICKNESS, 0.0f, minZ, -64.0f, hallY, maxZ);
     }
@@ -333,9 +378,11 @@ public final class FoundryMapBuilder
         // Casting-gantry at z=80, deck y=64..68
         addBox(builder, -HALF_EXTENT, GANTRY_HEIGHT, 76.0f, HALF_EXTENT,
             GANTRY_HEIGHT + GANTRY_THICKNESS, 84.0f);
+
         // Foundry spine at z=160, deck y=64..68
         addBox(builder, -HALF_EXTENT, GANTRY_HEIGHT, 156.0f, HALF_EXTENT,
             GANTRY_HEIGHT + GANTRY_THICKNESS, 164.0f);
+
         // Vertical cooling-gantry at x=0, running from z=8 to z=304
         addBox(builder, -4.0f, GANTRY_HEIGHT, 8.0f, 4.0f,
             GANTRY_HEIGHT + GANTRY_THICKNESS, 304.0f);
@@ -351,10 +398,13 @@ public final class FoundryMapBuilder
     {
         // SW stairway
         addBox(builder, -100.0f, 0.0f, 200.0f, -90.0f, GANTRY_HEIGHT, 210.0f);
+
         // SE stairway
         addBox(builder, 90.0f, 0.0f, 200.0f, 100.0f, GANTRY_HEIGHT, 210.0f);
+
         // NW stairway
         addBox(builder, -100.0f, 0.0f, 120.0f, -90.0f, GANTRY_HEIGHT, 130.0f);
+
         // NE stairway
         addBox(builder, 90.0f, 0.0f, 120.0f, 100.0f, GANTRY_HEIGHT, 130.0f);
     }
@@ -368,15 +418,22 @@ public final class FoundryMapBuilder
     {
         // Cast-metal shop (HP_A): two crates at the north and south ends
         addBox(builder, -48.0f, 0.0f, 248.0f, -32.0f, 32.0f, 264.0f);
+
         addBox(builder, 32.0f, 0.0f, 280.0f, 48.0f, 32.0f, 296.0f);
+
         // Assembly floor (HP_B): two crates flanking the centre
         addBox(builder, -48.0f, 0.0f, 136.0f, -32.0f, 32.0f, 152.0f);
+
         addBox(builder, 32.0f, 0.0f, 168.0f, 48.0f, 32.0f, 184.0f);
+
         // Cooling room (HP_C): two crates at the north and south ends
         addBox(builder, -48.0f, 0.0f, 16.0f, -32.0f, 32.0f, 32.0f);
+
         addBox(builder, 32.0f, 0.0f, 48.0f, 48.0f, 32.0f, 64.0f);
+
         // Two extra crates in the floor between halls
         addBox(builder, -16.0f, 0.0f, 200.0f, 0.0f, 32.0f, 216.0f);
+
         addBox(builder, 0.0f, 0.0f, 104.0f, 16.0f, 32.0f, 120.0f);
     }
 
@@ -389,8 +446,11 @@ public final class FoundryMapBuilder
     {
         // Two pairs flanking the cooling-gantry vertical (x=0)
         addBox(builder, -28.0f, 0.0f, 156.0f, -20.0f, GANTRY_HEIGHT, 164.0f);
+
         addBox(builder, 20.0f, 0.0f, 156.0f, 28.0f, GANTRY_HEIGHT, 164.0f);
+
         addBox(builder, -28.0f, 0.0f, 76.0f, -20.0f, GANTRY_HEIGHT, 84.0f);
+
         addBox(builder, 20.0f, 0.0f, 76.0f, 28.0f, GANTRY_HEIGHT, 84.0f);
     }
 
@@ -403,10 +463,13 @@ public final class FoundryMapBuilder
     {
         // Casting-gantry signposts
         addBox(builder, -150.0f, GANTRY_HEIGHT, 76.0f, -146.0f, GANTRY_HEIGHT + 32.0f, 84.0f);
+
         addBox(builder, 146.0f, GANTRY_HEIGHT, 76.0f, 150.0f, GANTRY_HEIGHT + 32.0f, 84.0f);
+
         // Foundry spine signposts
         addBox(builder, -150.0f, GANTRY_HEIGHT, 156.0f, -146.0f, GANTRY_HEIGHT + 32.0f,
             164.0f);
+
         addBox(builder, 146.0f, GANTRY_HEIGHT, 156.0f, 150.0f, GANTRY_HEIGHT + 32.0f,
             164.0f);
     }
@@ -419,14 +482,19 @@ public final class FoundryMapBuilder
     {
         // +x face
         addFace(builder, maxX, minY, maxZ, maxX, maxY, maxZ, maxX, maxY, minZ, maxX, minY, minZ);
+
         // -x face
         addFace(builder, minX, minY, minZ, minX, maxY, minZ, minX, maxY, maxZ, minX, minY, maxZ);
+
         // +y face
         addFace(builder, minX, maxY, maxZ, maxX, maxY, maxZ, maxX, maxY, minZ, minX, maxY, minZ);
+
         // -y face
         addFace(builder, minX, minY, minZ, maxX, minY, minZ, maxX, minY, maxZ, minX, minY, maxZ);
+
         // +z face
         addFace(builder, minX, minY, maxZ, minX, maxY, maxZ, maxX, maxY, maxZ, maxX, minY, maxZ);
+
         // -z face
         addFace(builder, maxX, minY, minZ, maxX, maxY, minZ, minX, maxY, minZ, minX, minY, minZ);
     }
@@ -440,15 +508,21 @@ public final class FoundryMapBuilder
         final float cy, final float cz, final float dx, final float dy, final float dz)
     {
         final float uScale = 1.0f / WORLD_UNITS_PER_TILE;
+
         final int a = builder.addVertex(ax, ay, az, ax * uScale, az * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         final int b = builder.addVertex(bx, by, bz, bx * uScale, bz * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         final int c = builder.addVertex(cx, cy, cz, cx * uScale, cz * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         final int d = builder.addVertex(dx, dy, dz, dx * uScale, dz * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         builder.addTriangle(a, b, c);
+
         builder.addTriangle(a, c, d);
     }
 
@@ -459,59 +533,79 @@ public final class FoundryMapBuilder
     private static int[] floorTexels()
     {
         final int base = Rgba.pack(72, 76, 80, 255);
+
         final int shade = Rgba.pack(52, 56, 60, 255);
+
         final int line = Rgba.pack(120, 124, 132, 255);
+
         final int cell = TEXTURE_EDGE / 4;
+
         final int[] out = new int[TEXTURE_EDGE * TEXTURE_EDGE];
+
         for (int y = 0; y < TEXTURE_EDGE; y++)
         {
             for (int x = 0; x < TEXTURE_EDGE; x++)
             {
                 int colour = base;
+
                 final int cellX = x / cell;
+
                 final int cellY = y / cell;
+
                 if ((cellX + cellY) % 2 == 1)
                 {
                     colour = shade;
                 }
+
                 if (x % cell == 0 || y % cell == 0)
                 {
                     colour = line;
                 }
+
                 out[y * TEXTURE_EDGE + x] = colour;
             }
         }
+
         return out;
     }
 
     private static int[] wallTexels()
     {
         final int base = Rgba.pack(104, 100, 96, 255);
+
         final int shade = Rgba.pack(76, 72, 68, 255);
+
         final int[] out = new int[TEXTURE_EDGE * TEXTURE_EDGE];
+
         for (int y = 0; y < TEXTURE_EDGE; y++)
         {
             for (int x = 0; x < TEXTURE_EDGE; x++)
             {
                 int colour = base;
+
                 if ((x / 8 + y / 8) % 2 == 0)
                 {
                     colour = shade;
                 }
+
                 out[y * TEXTURE_EDGE + x] = colour;
             }
         }
+
         return out;
     }
 
     private static int[] accentTexels()
     {
         final int colour = Rgba.pack(200, 88, 56, 255);
+
         final int[] out = new int[TEXTURE_EDGE * TEXTURE_EDGE];
+
         for (int index = 0; index < out.length; index++)
         {
             out[index] = colour;
         }
+
         return out;
     }
 
@@ -524,6 +618,7 @@ public final class FoundryMapBuilder
                 return arg.substring(prefix.length());
             }
         }
+
         return null;
     }
 }

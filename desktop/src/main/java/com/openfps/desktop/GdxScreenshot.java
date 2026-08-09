@@ -143,8 +143,11 @@ public final class GdxScreenshot
         final boolean exit)
     {
         this.path = file;
+
         this.targetFrame = frame;
+
         this.captureCount = Math.max(1, count);
+
         this.exitAfter = exit;
     }
 
@@ -168,14 +171,19 @@ public final class GdxScreenshot
         {
             return file;
         }
+
         final String suffix = String.format(Locale.ROOT, "-%0" + INDEX_DIGITS + "d", index);
+
         final int dot = file.lastIndexOf('.');
+
         final int separator = Math.max(file.lastIndexOf('/'), file.lastIndexOf('\\'));
+
         if (dot <= separator)
         {
             // No extension at all, or a dot that belongs to a directory name.
             return file + suffix;
         }
+
         return file.substring(0, dot) + suffix + file.substring(dot);
     }
 
@@ -197,13 +205,18 @@ public final class GdxScreenshot
         {
             return;
         }
+
         frames++;
+
         if (frames < targetFrame)
         {
             return;
         }
+
         written++;
+
         write(fileFor(path, captureCount, written));
+
         if (exitAfter && written >= captureCount)
         {
             Gdx.app.exit();
@@ -224,10 +237,12 @@ public final class GdxScreenshot
         {
             final Pixmap shot = Pixmap.createFromFrameBuffer(0, 0,
                 Gdx.graphics.getBackBufferWidth(), Gdx.graphics.getBackBufferHeight());
+
             try
             {
                 PixmapIO.writePNG(new FileHandle(file), shot,
                     Deflater.DEFAULT_COMPRESSION, true);
+
                 LOG.info("Wrote window capture: {} ({}x{})", file, shot.getWidth(),
                     shot.getHeight());
             }

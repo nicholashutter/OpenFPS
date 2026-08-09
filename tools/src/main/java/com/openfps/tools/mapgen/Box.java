@@ -82,14 +82,23 @@ public final class Box implements Primitive
         final float worldUnitsPerTile)
     {
         this.minX = minX;
+
         this.minY = minY;
+
         this.minZ = minZ;
+
         this.sizeX = sizeX;
+
         this.sizeY = sizeY;
+
         this.sizeZ = sizeZ;
+
         this.submesh = submesh;
+
         this.texture = Objects.requireNonNull(texture, "texture");
+
         this.worldUnitsPerTile = worldUnitsPerTile;
+
         if (texture.isBlank())
         {
             throw new IllegalArgumentException("texture must not be blank");
@@ -115,13 +124,21 @@ public final class Box implements Primitive
     public static Box fromJson(final JsonObject obj, final float worldUnitsPerTile)
     {
         final float x = readFloat(obj, "x");
+
         final float y = readFloat(obj, "y");
+
         final float z = readFloat(obj, "z");
+
         final float sx = readPositiveFloat(obj, "sx");
+
         final float sy = readPositiveFloat(obj, "sy");
+
         final float sz = readPositiveFloat(obj, "sz");
+
         final int submesh = readIntOrDefault(obj, "submesh", SUBMESH_WALL);
+
         final String texture = readStringOrDefault(obj, "texture", "wall");
+
         return new Box(x, y, z, sx, sy, sz, submesh, texture, worldUnitsPerTile);
     }
 
@@ -193,23 +210,36 @@ public final class Box implements Primitive
             throw new IllegalArgumentException("textureIndex must be non-negative: "
                 + textureIndex);
         }
+
         final float uScale = 1.0f / worldUnitsPerTile;
+
         final float ax = minX;
+
         final float ay = minY;
+
         final float az = minZ;
+
         final float bx = minX + sizeX;
+
         final float by = minY + sizeY;
+
         final float bz = minZ + sizeZ;
+
         // +x face
         addFace(builder, bx, ay, bz, bx, by, bz, bx, by, az, bx, ay, az, uScale);
+
         // -x face
         addFace(builder, ax, ay, az, ax, by, az, ax, by, bz, ax, ay, bz, uScale);
+
         // +y face
         addFace(builder, ax, by, bz, bx, by, bz, bx, by, az, ax, by, az, uScale);
+
         // -y face
         addFace(builder, ax, ay, az, bx, ay, az, bx, ay, bz, ax, ay, bz, uScale);
+
         // +z face
         addFace(builder, ax, ay, bz, ax, by, bz, bx, by, bz, bx, ay, bz, uScale);
+
         // -z face
         addFace(builder, bx, ay, az, bx, by, az, ax, by, az, ax, ay, az, uScale);
     }
@@ -222,10 +252,12 @@ public final class Box implements Primitive
             throw new IllegalStateException("box sizes must be positive: "
                 + sizeX + ", " + sizeY + ", " + sizeZ);
         }
+
         if (submesh < 0)
         {
             throw new IllegalStateException("submesh must be non-negative: " + submesh);
         }
+
         if (worldUnitsPerTile <= 0.0f)
         {
             throw new IllegalStateException("worldUnitsPerTile must be positive: "
@@ -241,13 +273,18 @@ public final class Box implements Primitive
     {
         final int a = builder.addVertex(ax, ay, az, ax * uScale, az * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         final int b = builder.addVertex(bx, by, bz, bx * uScale, bz * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         final int c = builder.addVertex(cx, cy, cz, cx * uScale, cz * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         final int d = builder.addVertex(dx, dy, dz, dx * uScale, dz * uScale,
             Rgba.pack(255, 255, 255, 255));
+
         builder.addTriangle(a, b, c);
+
         builder.addTriangle(a, c, d);
     }
 
@@ -259,17 +296,20 @@ public final class Box implements Primitive
         {
             throw new IllegalArgumentException("box requires field '" + field + "'");
         }
+
         return obj.get(field).getAsFloat();
     }
 
     private static float readPositiveFloat(final JsonObject obj, final String field)
     {
         final float value = readFloat(obj, field);
+
         if (value <= 0.0f)
         {
             throw new IllegalArgumentException("box field '" + field + "' must be positive: "
                 + value);
         }
+
         return value;
     }
 
@@ -279,6 +319,7 @@ public final class Box implements Primitive
         {
             return def;
         }
+
         return obj.get(field).getAsInt();
     }
 
@@ -289,6 +330,7 @@ public final class Box implements Primitive
         {
             return def;
         }
+
         return obj.get(field).getAsString();
     }
 }

@@ -129,12 +129,16 @@ final class OutlinePassTest
         if (pool != null && pool.state() != I_ThreadPoolPort.State.SHUTDOWN)
         {
             pool.shutdown();
+
             pool.awaitTermination(5000);
+
             pool = null;
         }
+
         if (bus != null && bus.state() != I_EventBusPort.State.SHUTDOWN)
         {
             bus.shutdown();
+
             bus = null;
         }
     }
@@ -151,19 +155,25 @@ final class OutlinePassTest
             // at this one", so the body beside it must carry nothing at all —
             // not a thinner line, not a partial one.
             final Framebuffer fb = frame();
+
             box(fb, PAIR_MIN_X, BOX_MIN_Y, PAIR_SPLIT_X, BOX_MAX_Y, ID_A);
+
             box(fb, PAIR_SPLIT_X + 1, BOX_MIN_Y, PAIR_MAX_X, BOX_MAX_Y, ID_B);
+
             defaultPass().draw(fb, null, ID_A);
 
             assertThat(painted(fb, PAIR_MIN_X, MID_Y))
                 .as("the subject's outer silhouette")
                 .isTrue();
+
             assertThat(painted(fb, PAIR_SPLIT_X, MID_Y))
                 .as("the subject's edge against its neighbour")
                 .isTrue();
+
             assertThat(painted(fb, PAIR_SPLIT_X + 1, MID_Y))
                 .as("the neighbour's own edge is NOT drawn")
                 .isFalse();
+
             assertThat(painted(fb, PAIR_MAX_X, MID_Y))
                 .as("nor is any part of the neighbour")
                 .isFalse();
@@ -178,8 +188,11 @@ final class OutlinePassTest
             // "outlined", and a bug that left one edge on would pass the
             // spot checks above.
             final Framebuffer fb = frame();
+
             box(fb, PAIR_MIN_X, BOX_MIN_Y, PAIR_SPLIT_X, BOX_MAX_Y, ID_A);
+
             box(fb, PAIR_SPLIT_X + 1, BOX_MIN_Y, PAIR_MAX_X, BOX_MAX_Y, ID_B);
+
             defaultPass().draw(fb, null, ID_A);
 
             for (int y = BOX_MIN_Y; y <= BOX_MAX_Y; y++)
@@ -198,7 +211,9 @@ final class OutlinePassTest
         void shouldPaintNothingWhenNothingIsAimedAt()
         {
             final Framebuffer fb = frame();
+
             box(fb, BOX_MIN_X, BOX_MIN_Y, BOX_MAX_X, BOX_MAX_Y, ID_A);
+
             defaultPass().draw(fb, null, Scene.UNTAGGED);
 
             assertThat(anyPainted(fb))
@@ -213,7 +228,9 @@ final class OutlinePassTest
             // An entity that walked behind a wall between the sample and the
             // pass. Silently marking somebody else would be worse than nothing.
             final Framebuffer fb = frame();
+
             box(fb, BOX_MIN_X, BOX_MIN_Y, BOX_MAX_X, BOX_MAX_Y, ID_A);
+
             defaultPass().draw(fb, null, ID_C);
 
             assertThat(anyPainted(fb)).isFalse();
@@ -224,13 +241,19 @@ final class OutlinePassTest
         void shouldReproduceTheAllEntitiesBehaviour()
         {
             final Framebuffer both = frame();
+
             box(both, PAIR_MIN_X, BOX_MIN_Y, PAIR_SPLIT_X, BOX_MAX_Y, ID_A);
+
             box(both, PAIR_SPLIT_X + 1, BOX_MIN_Y, PAIR_MAX_X, BOX_MAX_Y, ID_B);
+
             defaultPass().draw(both, null);
 
             final Framebuffer sentinel = frame();
+
             box(sentinel, PAIR_MIN_X, BOX_MIN_Y, PAIR_SPLIT_X, BOX_MAX_Y, ID_A);
+
             box(sentinel, PAIR_SPLIT_X + 1, BOX_MIN_Y, PAIR_MAX_X, BOX_MAX_Y, ID_B);
+
             defaultPass().draw(sentinel, null, OutlinePass.EVERY_TAGGED_ENTITY);
 
             assertThat(sentinel.colorBuffer()).isEqualTo(both.colorBuffer());
@@ -244,6 +267,7 @@ final class OutlinePassTest
             // sentinel must be neither, or aiming at nothing would outline
             // everything.
             assertThat(OutlinePass.EVERY_TAGGED_ENTITY).isNotEqualTo(Scene.UNTAGGED);
+
             assertThat(OutlinePass.EVERY_TAGGED_ENTITY).isNegative();
         }
 
@@ -252,12 +276,17 @@ final class OutlinePassTest
         void shouldReportItsSubject()
         {
             final OutlinePass pass = defaultPass();
+
             final Framebuffer fb = frame();
+
             box(fb, BOX_MIN_X, BOX_MIN_Y, BOX_MAX_X, BOX_MAX_Y, ID_A);
 
             pass.draw(fb, null, ID_A);
+
             assertThat(pass.subjectEntityId()).isEqualTo(ID_A);
+
             pass.draw(fb, null);
+
             assertThat(pass.subjectEntityId()).isEqualTo(OutlinePass.EVERY_TAGGED_ENTITY);
         }
 
@@ -274,6 +303,7 @@ final class OutlinePassTest
                     }
                 }
             }
+
             return false;
         }
     }
@@ -287,14 +317,20 @@ final class OutlinePassTest
         void shouldOutlineTheBorderAndLeaveTheInteriorAlone()
         {
             final Framebuffer fb = frame();
+
             box(fb, BOX_MIN_X, BOX_MIN_Y, BOX_MAX_X, BOX_MAX_Y, ID_A);
+
             defaultPass().draw(fb, null);
 
             // Just inside each edge: outlined. Well inside: untouched.
             assertThat(painted(fb, BOX_MIN_X, MID_Y)).isTrue();
+
             assertThat(painted(fb, BOX_MAX_X, MID_Y)).isTrue();
+
             assertThat(painted(fb, MID_Y, BOX_MIN_Y)).isTrue();
+
             assertThat(painted(fb, MID_Y, BOX_MAX_Y)).isTrue();
+
             assertThat(painted(fb, MID_Y, MID_Y))
                 .as("the middle of an entity is not an edge")
                 .isFalse();
@@ -307,11 +343,15 @@ final class OutlinePassTest
             // The outline is drawn INSIDE the silhouette: an id of UNTAGGED
             // fails the very first test, whatever its neighbours say.
             final Framebuffer fb = frame();
+
             box(fb, BOX_MIN_X, BOX_MIN_Y, BOX_MAX_X, BOX_MAX_Y, ID_A);
+
             defaultPass().draw(fb, null);
 
             assertThat(painted(fb, BOX_MIN_X - 1, MID_Y)).isFalse();
+
             assertThat(painted(fb, BOX_MAX_X + 1, MID_Y)).isFalse();
+
             assertThat(painted(fb, 0, 0)).isFalse();
         }
 
@@ -326,19 +366,25 @@ final class OutlinePassTest
             // the boundary between 7 and 9 exactly as readily as the boundary
             // between 7 and the wall behind it.
             final Framebuffer fb = frame();
+
             box(fb, PAIR_MIN_X, BOX_MIN_Y, PAIR_SPLIT_X, BOX_MAX_Y, ID_A);
+
             box(fb, PAIR_SPLIT_X + 1, BOX_MIN_Y, PAIR_MAX_X, BOX_MAX_Y, ID_B);
+
             defaultPass().draw(fb, null);
 
             assertThat(painted(fb, PAIR_SPLIT_X, MID_Y))
                 .as("the left entity's edge against the right one")
                 .isTrue();
+
             assertThat(painted(fb, PAIR_SPLIT_X + 1, MID_Y))
                 .as("and the right entity's edge against the left one")
                 .isTrue();
+
             assertThat(painted(fb, PAIR_MIN_X, MID_Y))
                 .as("the outer silhouette survives too")
                 .isTrue();
+
             assertThat(painted(fb, PAIR_MAX_X, MID_Y)).isTrue();
         }
 
@@ -350,12 +396,17 @@ final class OutlinePassTest
             // share an id: a character assembled from several models must not
             // be drawn with a bright line through its own joints.
             final Framebuffer fb = frame();
+
             box(fb, PAIR_MIN_X, BOX_MIN_Y, PAIR_SPLIT_X, BOX_MAX_Y, ID_A);
+
             box(fb, PAIR_SPLIT_X + 1, BOX_MIN_Y, PAIR_MAX_X, BOX_MAX_Y, ID_A);
+
             defaultPass().draw(fb, null);
 
             assertThat(painted(fb, PAIR_SPLIT_X, MID_Y)).isFalse();
+
             assertThat(painted(fb, PAIR_SPLIT_X + 1, MID_Y)).isFalse();
+
             assertThat(painted(fb, PAIR_MIN_X, MID_Y))
                 .as("the joined outer silhouette is still outlined")
                 .isTrue();
@@ -369,11 +420,15 @@ final class OutlinePassTest
             // of frame would otherwise draw a bright line down the side of the
             // window, which reads as a rendering fault rather than as a player.
             final Framebuffer fb = frame();
+
             box(fb, 0, 0, BOX_MIN_X, HEIGHT - 1, ID_A);
+
             defaultPass().draw(fb, null);
 
             assertThat(painted(fb, 0, MID_Y)).as("the left window edge").isFalse();
+
             assertThat(painted(fb, MID_Y / 2, 0)).as("the top window edge").isFalse();
+
             assertThat(painted(fb, BOX_MIN_X, MID_Y))
                 .as("the real silhouette, against the background, is still drawn")
                 .isTrue();
@@ -384,6 +439,7 @@ final class OutlinePassTest
         void shouldPaintNothingWhenNothingIsTagged()
         {
             final Framebuffer fb = frame();
+
             defaultPass().draw(fb, null);
 
             assertThat(fb.colorBuffer()).containsOnly(CLEAR);
@@ -403,13 +459,18 @@ final class OutlinePassTest
             // tell "keyed" from "untouched" and this assertion would be
             // vacuously true.
             final Framebuffer fb = frame();
+
             fb.clearColor(ROOM_GREY);
+
             box(fb, BOX_MIN_X, BOX_MIN_Y, BOX_MAX_X, BOX_MAX_Y, ID_A);
+
             defaultPass().draw(fb, null);
 
             assertThat(fb.colorBuffer()).containsOnly(ROOM_GREY, OutlinePass.OUTLINE_COLOR,
                 OutlinePass.KEYLINE_COLOR);
+
             assertThat(Framebuffer.alpha(OutlinePass.OUTLINE_COLOR)).isEqualTo(0xFF);
+
             assertThat(Framebuffer.alpha(OutlinePass.KEYLINE_COLOR)).isEqualTo(0xFF);
         }
 
@@ -424,11 +485,15 @@ final class OutlinePassTest
             // form and inverted in value rather than deleted, because "which
             // corner" is exactly the thing that moved.
             final int red = Framebuffer.red(OutlinePass.OUTLINE_COLOR);
+
             final int green = Framebuffer.green(OutlinePass.OUTLINE_COLOR);
+
             final int blue = Framebuffer.blue(OutlinePass.OUTLINE_COLOR);
 
             assertThat(red).isEqualTo(0xFF);
+
             assertThat(green).isZero();
+
             assertThat(blue).isZero();
         }
     }
@@ -463,8 +528,11 @@ final class OutlinePassTest
             // else. A line where the body's own surfaces meet reads as
             // geometry instead.
             final Framebuffer fb = frame();
+
             box(fb, BOX_MIN_X, BOX_MIN_Y, BOX_MAX_X, BOX_MAX_Y, ID_A);
+
             depthBox(fb, BOX_MIN_X, BOX_MIN_Y, CREASE_X, BOX_MAX_Y, NEAR_INV_W);
+
             depthBox(fb, CREASE_X + 1, BOX_MIN_Y, BOX_MAX_X, BOX_MAX_Y, FAR_INV_W);
 
             defaultPass().draw(fb, null);
@@ -472,12 +540,15 @@ final class OutlinePassTest
             assertThat(painted(fb, CREASE_X, MID_Y))
                 .as("the near side of the fold")
                 .isTrue();
+
             assertThat(painted(fb, CREASE_X + 1, MID_Y))
                 .as("and the far side of it")
                 .isTrue();
+
             assertThat(painted(fb, CREASE_X - 4, MID_Y))
                 .as("but not the flat surface leading up to it")
                 .isFalse();
+
             assertThat(painted(fb, CREASE_X + 5, MID_Y))
                 .as("nor the flat surface leading away from it")
                 .isFalse();
@@ -492,13 +563,17 @@ final class OutlinePassTest
             // scribbles over the whole body. This is the guard on
             // CREASE_DEPTH_RATIO being comfortably above that.
             final Framebuffer fb = frame();
+
             box(fb, BOX_MIN_X, BOX_MIN_Y, BOX_MAX_X, BOX_MAX_Y, ID_A);
+
             depthBox(fb, BOX_MIN_X, BOX_MIN_Y, CREASE_X, BOX_MAX_Y, NEAR_INV_W);
+
             depthBox(fb, CREASE_X + 1, BOX_MIN_Y, BOX_MAX_X, BOX_MAX_Y, GRAZING_INV_W);
 
             defaultPass().draw(fb, null);
 
             assertThat(painted(fb, CREASE_X, MID_Y)).isFalse();
+
             assertThat(painted(fb, CREASE_X + 1, MID_Y)).isFalse();
         }
 
@@ -511,16 +586,21 @@ final class OutlinePassTest
             // one step whatever `thickness` says. Asserted at a thickness that
             // would obviously show if it did not.
             final Framebuffer fb = frame();
+
             box(fb, BOX_MIN_X, BOX_MIN_Y, BOX_MAX_X, BOX_MAX_Y, ID_A);
+
             depthBox(fb, BOX_MIN_X, BOX_MIN_Y, CREASE_X, BOX_MAX_Y, NEAR_INV_W);
+
             depthBox(fb, CREASE_X + 1, BOX_MIN_Y, BOX_MAX_X, BOX_MAX_Y, FAR_INV_W);
 
             new OutlinePass(4, OutlinePass.OUTLINE_COLOR).draw(fb, null);
 
             assertThat(painted(fb, CREASE_X, MID_Y)).isTrue();
+
             assertThat(painted(fb, CREASE_X - 1, MID_Y))
                 .as("one step in from the fold, not four")
                 .isFalse();
+
             assertThat(painted(fb, CREASE_X + 2, MID_Y))
                 .as("and one step out from it")
                 .isFalse();
@@ -536,9 +616,13 @@ final class OutlinePassTest
             // background pixel's cleared DEPTH_CLEAR into the comparison, where
             // it would find a "crease" against every entity on screen.
             final Framebuffer fb = frame();
+
             box(fb, PAIR_MIN_X, BOX_MIN_Y, PAIR_SPLIT_X, BOX_MAX_Y, ID_A);
+
             box(fb, PAIR_SPLIT_X + 1, BOX_MIN_Y, PAIR_MAX_X, BOX_MAX_Y, ID_B);
+
             depthBox(fb, PAIR_MIN_X, BOX_MIN_Y, PAIR_SPLIT_X, BOX_MAX_Y, NEAR_INV_W);
+
             depthBox(fb, PAIR_SPLIT_X + 1, BOX_MIN_Y, PAIR_MAX_X, BOX_MAX_Y, FAR_INV_W);
 
             defaultPass().draw(fb, null);
@@ -547,6 +631,7 @@ final class OutlinePassTest
             // reaches `thickness` pixels. One pixel further in than that, the
             // depth is uniform and nothing may be painted.
             assertThat(painted(fb, PAIR_SPLIT_X, MID_Y)).isTrue();
+
             assertThat(painted(fb, PAIR_SPLIT_X - OutlinePass.OUTLINE_THICKNESS_PIXELS, MID_Y))
                 .as("inside entity A, past the silhouette band, on uniform depth")
                 .isFalse();
@@ -561,6 +646,7 @@ final class OutlinePassTest
             // which is what would happen if the ratio were applied the other
             // way round, as a division.
             final Framebuffer fb = frame();
+
             box(fb, BOX_MIN_X, BOX_MIN_Y, BOX_MAX_X, BOX_MAX_Y, ID_A);
 
             defaultPass().draw(fb, null);
@@ -594,7 +680,9 @@ final class OutlinePassTest
         void shouldBackTheLineOnePixelInside()
         {
             final Framebuffer fb = wallFrame();
+
             box(fb, BOX_MIN_X, BOX_MIN_Y, BOX_MAX_X, BOX_MAX_Y, ID_A);
+
             defaultPass().draw(fb, null, ID_A);
 
             // Walking in from each edge: line, keyline, then the body as the
@@ -602,14 +690,19 @@ final class OutlinePassTest
             // border and not a band.
             assertThat(fb.pixel(BOX_MIN_X, MID_Y)).as("the line").
                 isEqualTo(OutlinePass.OUTLINE_COLOR);
+
             assertThat(fb.pixel(BOX_MIN_X + 1, MID_Y)).as("keyed, one pixel in").
                 isEqualTo(OutlinePass.KEYLINE_COLOR);
+
             assertThat(fb.pixel(BOX_MIN_X + 2, MID_Y)).as("two pixels in: untouched").
                 isEqualTo(ROOM_GREY);
 
             assertThat(fb.pixel(BOX_MAX_X - 1, MID_Y)).isEqualTo(OutlinePass.KEYLINE_COLOR);
+
             assertThat(fb.pixel(BOX_MAX_X - 2, MID_Y)).isEqualTo(ROOM_GREY);
+
             assertThat(fb.pixel(MID_Y, BOX_MIN_Y + 1)).isEqualTo(OutlinePass.KEYLINE_COLOR);
+
             assertThat(fb.pixel(MID_Y, BOX_MAX_Y - 1)).isEqualTo(OutlinePass.KEYLINE_COLOR);
         }
 
@@ -623,15 +716,19 @@ final class OutlinePassTest
             // because "one more than intended" is exactly the failure that a
             // spot check one pixel further in would miss.
             final Framebuffer fb = wallFrame();
+
             box(fb, BOX_MIN_X, BOX_MIN_Y, BOX_MAX_X, BOX_MAX_Y, ID_A);
+
             defaultPass().draw(fb, null, ID_A);
 
             // MUTABLE local — how many consecutive line pixels there are.
             int deep = 0;
+
             while (fb.pixel(BOX_MIN_X + deep, MID_Y) == OutlinePass.OUTLINE_COLOR)
             {
                 deep++;
             }
+
             assertThat(deep).isEqualTo(OutlinePass.OUTLINE_THICKNESS_PIXELS).isOne();
         }
 
@@ -644,13 +741,18 @@ final class OutlinePassTest
             // unaimed one, and would have a tile worker writing pixels it does
             // not own.
             final Framebuffer fb = wallFrame();
+
             box(fb, PAIR_MIN_X, BOX_MIN_Y, PAIR_SPLIT_X, BOX_MAX_Y, ID_A);
+
             box(fb, PAIR_SPLIT_X + 1, BOX_MIN_Y, PAIR_MAX_X, BOX_MAX_Y, ID_B);
+
             defaultPass().draw(fb, null, ID_A);
 
             assertThat(fb.pixel(PAIR_MIN_X - 1, MID_Y)).as("background, just outside").
                 isEqualTo(ROOM_GREY);
+
             assertThat(fb.pixel(0, 0)).as("a far corner").isEqualTo(ROOM_GREY);
+
             for (int y = BOX_MIN_Y; y <= BOX_MAX_Y; y++)
             {
                 for (int x = PAIR_SPLIT_X + 1; x <= PAIR_MAX_X; x++)
@@ -671,17 +773,24 @@ final class OutlinePassTest
             // One rule covers both kinds of edge, which is why there is no
             // special case for it in the pass.
             final Framebuffer fb = wallFrame();
+
             box(fb, BOX_MIN_X, BOX_MIN_Y, BOX_MAX_X, BOX_MAX_Y, ID_A);
+
             depthBox(fb, BOX_MIN_X, BOX_MIN_Y, CREASE_COLUMN, BOX_MAX_Y, 0.50f);
+
             depthBox(fb, CREASE_COLUMN + 1, BOX_MIN_Y, BOX_MAX_X, BOX_MAX_Y, 0.30f);
+
             defaultPass().draw(fb, null, ID_A);
 
             assertThat(fb.pixel(CREASE_COLUMN, MID_Y)).as("the near side of the fold").
                 isEqualTo(OutlinePass.OUTLINE_COLOR);
+
             assertThat(fb.pixel(CREASE_COLUMN - 1, MID_Y)).as("keyed on the near side").
                 isEqualTo(OutlinePass.KEYLINE_COLOR);
+
             assertThat(fb.pixel(CREASE_COLUMN + 2, MID_Y)).as("keyed on the far side").
                 isEqualTo(OutlinePass.KEYLINE_COLOR);
+
             assertThat(fb.pixel(CREASE_COLUMN - 2, MID_Y)).as("and no further").
                 isEqualTo(ROOM_GREY);
         }
@@ -697,16 +806,21 @@ final class OutlinePassTest
             // from the line, 55 luminance levels from it. At one pixel that is
             // not a line, it is a shading step in the jacket.
             final Framebuffer fb = frame();
+
             fb.clearColor(JACKET_RED);
+
             box(fb, BOX_MIN_X, BOX_MIN_Y, BOX_MAX_X, BOX_MAX_Y, ID_A);
+
             defaultPass().draw(fb, null, ID_A);
 
             assertThat(fb.pixel(BOX_MIN_X + 1, MID_Y))
                 .as("the keyline is what the player actually reads the mark from")
                 .isEqualTo(OutlinePass.KEYLINE_COLOR);
+
             assertThat(luminance(JACKET_RED) - luminance(OutlinePass.OUTLINE_COLOR))
                 .as("the line against this jacket: barely a shading step")
                 .isLessThan(60);
+
             assertThat(luminance(JACKET_RED) - luminance(OutlinePass.KEYLINE_COLOR))
                 .as("the keyline against the same jacket: twice as far")
                 .isGreaterThan(100);
@@ -721,13 +835,17 @@ final class OutlinePassTest
             // bit the surface it is drawn on. Everything the player perceives at
             // that point is the keyline.
             final Framebuffer fb = frame();
+
             fb.clearColor(OutlinePass.OUTLINE_COLOR);
+
             box(fb, BOX_MIN_X, BOX_MIN_Y, BOX_MAX_X, BOX_MAX_Y, ID_A);
+
             defaultPass().draw(fb, null, ID_A);
 
             assertThat(fb.pixel(BOX_MIN_X, MID_Y))
                 .as("the line is genuinely indistinguishable from this body")
                 .isEqualTo(fb.pixel(BOX_MIN_X - 1, MID_Y));
+
             assertThat(fb.pixel(BOX_MIN_X + 1, MID_Y))
                 .as("and the keyline is the whole of the visible mark")
                 .isEqualTo(OutlinePass.KEYLINE_COLOR);
@@ -745,18 +863,23 @@ final class OutlinePassTest
             // background does not sit between them: both are painted, adjacent,
             // every frame.
             final int line = OutlinePass.OUTLINE_COLOR;
+
             final int key = OutlinePass.KEYLINE_COLOR;
 
             assertThat(luminance(line) - luminance(key))
                 .as("luminance step inside the mark")
                 .isGreaterThanOrEqualTo(50);
+
             assertThat(Framebuffer.red(key)).isEqualTo(Framebuffer.green(key));
+
             assertThat(Framebuffer.green(key))
                 .as("the keyline is achromatic, so the step is in chroma too")
                 .isEqualTo(Framebuffer.blue(key));
+
             assertThat(Framebuffer.red(line) - Framebuffer.blue(line))
                 .as("and the line is fully saturated")
                 .isEqualTo(0xFF);
+
             // The amber crate decal is the room surface whose hue is nearest the
             // line's, and it is 135 luminance levels above the line and 189 above
             // the keyline — so the pair is legible over it even though red alone
@@ -772,10 +895,13 @@ final class OutlinePassTest
             // silhouette, so there is nowhere inward to key — and inventing
             // somewhere would mean painting over the room.
             final Framebuffer fb = wallFrame();
+
             box(fb, BOX_MIN_X, BOX_MIN_Y, BOX_MIN_X, BOX_MAX_Y, ID_A);
+
             defaultPass().draw(fb, null, ID_A);
 
             assertThat(fb.pixel(BOX_MIN_X, MID_Y)).isEqualTo(OutlinePass.OUTLINE_COLOR);
+
             assertThat(fb.colorBuffer())
                 .as("no keyline anywhere in the frame")
                 .doesNotContain(OutlinePass.KEYLINE_COLOR);
@@ -792,7 +918,9 @@ final class OutlinePassTest
             // time either was tuned, and the player would be left learning that
             // hue means nothing in particular.
             assertThat(OutlinePass.OUTLINE_COLOR).isEqualTo(Crosshair.coreColor(true));
+
             assertThat(OutlinePass.KEYLINE_COLOR).isEqualTo(Crosshair.OUTLINE_COLOR);
+
             assertThat(OutlinePass.OUTLINE_COLOR).isNotEqualTo(Crosshair.coreColor(false));
         }
 
@@ -801,8 +929,11 @@ final class OutlinePassTest
         void shouldHonourAnExplicitKeylineColour()
         {
             final OutlinePass pass = new OutlinePass(1, CRATE_AMBER, ROOM_GREY);
+
             assertThat(pass.outlineColor()).isEqualTo(CRATE_AMBER);
+
             assertThat(pass.keylineColor()).isEqualTo(ROOM_GREY);
+
             assertThat(pass.toString()).contains("keyline");
         }
     }
@@ -817,8 +948,11 @@ final class OutlinePassTest
         {
             assertThat(new OutlinePass().thickness())
                 .isEqualTo(OutlinePass.OUTLINE_THICKNESS_PIXELS);
+
             assertThat(new OutlinePass().outlineColor()).isEqualTo(OutlinePass.OUTLINE_COLOR);
+
             assertThat(new OutlinePass().keylineColor()).isEqualTo(OutlinePass.KEYLINE_COLOR);
+
             assertThat(new OutlinePass(2, OutlinePass.OUTLINE_COLOR).keylineColor())
                 .as("the two-argument constructor keys with the default")
                 .isEqualTo(OutlinePass.KEYLINE_COLOR);
@@ -830,7 +964,9 @@ final class OutlinePassTest
         void shouldHonourThicknessSymmetrically(final int thickness)
         {
             final Framebuffer fb = frame();
+
             box(fb, BOX_MIN_X, BOX_MIN_Y, BOX_MAX_X, BOX_MAX_Y, ID_A);
+
             new OutlinePass(thickness, OutlinePass.OUTLINE_COLOR).draw(fb, null);
 
             // Walking in from the left edge along a row through the middle,
@@ -839,19 +975,26 @@ final class OutlinePassTest
             {
                 assertThat(painted(fb, BOX_MIN_X + step, MID_Y))
                     .as("left band, %d px in", step).isTrue();
+
                 assertThat(painted(fb, BOX_MAX_X - step, MID_Y))
                     .as("right band, %d px in", step).isTrue();
+
                 assertThat(painted(fb, MID_Y, BOX_MIN_Y + step))
                     .as("top band, %d px in", step).isTrue();
+
                 assertThat(painted(fb, MID_Y, BOX_MAX_Y - step))
                     .as("bottom band, %d px in", step).isTrue();
             }
+
             assertThat(painted(fb, BOX_MIN_X + thickness, MID_Y))
                 .as("one past the left band").isFalse();
+
             assertThat(painted(fb, BOX_MAX_X - thickness, MID_Y))
                 .as("one past the right band").isFalse();
+
             assertThat(painted(fb, MID_Y, BOX_MIN_Y + thickness))
                 .as("one past the top band").isFalse();
+
             assertThat(painted(fb, MID_Y, BOX_MAX_Y - thickness))
                 .as("one past the bottom band").isFalse();
         }
@@ -891,12 +1034,15 @@ final class OutlinePassTest
             // the id buffer is frozen before the pass starts. Fuse this into
             // the raster pass and this test is what fails.
             final Framebuffer serial = crowdedFrame();
+
             defaultPass().draw(serial, null);
 
             final Framebuffer parallel = crowdedFrame();
+
             defaultPass().draw(parallel, startPool(workers));
 
             assertThat(parallel.colorBuffer()).isEqualTo(serial.colorBuffer());
+
             assertThat(parallel.entityIdBuffer())
                 .as("the pass must not write one id")
                 .isEqualTo(serial.entityIdBuffer());
@@ -909,8 +1055,11 @@ final class OutlinePassTest
             // A pure function of the id buffer, so a second run over an
             // already-painted frame must change nothing.
             final Framebuffer fb = crowdedFrame();
+
             defaultPass().draw(fb, null);
+
             final int[] once = fb.colorBuffer().clone();
+
             defaultPass().draw(fb, null);
 
             assertThat(fb.colorBuffer()).isEqualTo(once);
@@ -927,6 +1076,7 @@ final class OutlinePassTest
         {
             assertThatThrownBy(() -> defaultPass().draw(null, null))
                 .isInstanceOf(IllegalArgumentException.class);
+
             assertThatThrownBy(() -> defaultPass().draw(new Framebuffer(TILE), null))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("READY");
@@ -946,7 +1096,9 @@ final class OutlinePassTest
     private static Framebuffer wallFrame()
     {
         final Framebuffer fb = frame();
+
         fb.clearColor(ROOM_GREY);
+
         return fb;
     }
 
@@ -981,8 +1133,11 @@ final class OutlinePassTest
     private static Framebuffer frame()
     {
         final Framebuffer fb = new Framebuffer(TILE);
+
         fb.init(WIDTH, HEIGHT);
+
         fb.clear();
+
         return fb;
     }
 
@@ -997,9 +1152,13 @@ final class OutlinePassTest
         // landed in a different place at eight workers than at one would have
         // compared equal.
         final Framebuffer fb = wallFrame();
+
         box(fb, PAIR_MIN_X, BOX_MIN_Y, PAIR_SPLIT_X, BOX_MAX_Y, ID_A);
+
         box(fb, PAIR_SPLIT_X + 1, BOX_MIN_Y, PAIR_MAX_X, BOX_MAX_Y, ID_B);
+
         box(fb, 1, 1, TILE + 3, TILE * 3 + 5, ID_C);
+
         return fb;
     }
 
@@ -1025,10 +1184,15 @@ final class OutlinePassTest
     private I_ThreadPoolPort startPool(final int workers)
     {
         bus = EventBusFactory.createShared();
+
         bus.init(512);
+
         pool = ThreadPoolFactory.createFixed(bus, new SubsystemRegistry());
+
         pool.init(workers);
+
         pool.start();
+
         return pool;
     }
 }

@@ -22,6 +22,7 @@ public final class MemorySubsystem extends Subsystem
     public MemorySubsystem(final I_MemoryPort port)
     {
         super(SubsystemId.Z_);
+
         this.port = port;
     }
 

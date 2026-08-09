@@ -26,8 +26,11 @@ class MatchModeTest
     void shouldHaveAllFourRuleSets()
     {
         assertThat(MatchMode.valueOf("TDM")).isNotNull();
+
         assertThat(MatchMode.valueOf("HARDPOINT")).isNotNull();
+
         assertThat(MatchMode.valueOf("DOMINATION")).isNotNull();
+
         assertThat(MatchMode.valueOf("CTF")).isNotNull();
     }
 
@@ -36,6 +39,7 @@ class MatchModeTest
     void shouldKeepLegacyEntries()
     {
         assertThat(MatchMode.valueOf("SINGLE_PLAYER")).isNotNull();
+
         assertThat(MatchMode.valueOf("MULTIPLAYER")).isNotNull();
     }
 
@@ -44,8 +48,11 @@ class MatchModeTest
     void shouldRecogniseRuleSets()
     {
         assertThat(MatchMode.TDM.isRuleSet()).isTrue();
+
         assertThat(MatchMode.HARDPOINT.isRuleSet()).isTrue();
+
         assertThat(MatchMode.DOMINATION.isRuleSet()).isTrue();
+
         assertThat(MatchMode.CTF.isRuleSet()).isTrue();
     }
 
@@ -54,6 +61,7 @@ class MatchModeTest
     void shouldNotRecogniseLegacy()
     {
         assertThat(MatchMode.SINGLE_PLAYER.isRuleSet()).isFalse();
+
         assertThat(MatchMode.MULTIPLAYER.isRuleSet()).isFalse();
     }
 }

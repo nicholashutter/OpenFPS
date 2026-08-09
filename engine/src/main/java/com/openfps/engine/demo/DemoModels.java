@@ -174,28 +174,48 @@ public final class DemoModels
         final ModelFormat[] people)
     {
         this.source = modelSource;
+
         this.room = fallbackRoom;
+
         this.weapon = viewmodel;
+
         this.botWeapon = opponentWeapon;
+
         this.realBotWeapon = opponentWeaponIsReal;
+
         this.characters = people;
+
         if (kit == null)
         {
             this.floor = null;
+
             this.wall = null;
+
             this.doorway = null;
+
             this.column = null;
+
             this.crate = null;
+
             this.stairs = null;
+
             this.slope = null;
+
             return;
         }
+
         this.floor = kit[0];
+
         this.wall = kit[1];
+
         this.doorway = kit[2];
+
         this.column = kit[3];
+
         this.crate = kit[4];
+
         this.stairs = kit[5];
+
         this.slope = kit[6];
     }
 
@@ -218,6 +238,7 @@ public final class DemoModels
         {
             throw new IllegalArgumentException("root must not be null");
         }
+
         return load(new DirectoryModelSource(root));
     }
 
@@ -244,14 +265,20 @@ public final class DemoModels
         }
 
         final ModelFormat viewmodel = loadWeapon(source);
+
         final boolean realCarbine = source.has(botWeaponPath());
+
         final ModelFormat opponentWeapon = loadBotWeapon(source);
+
         final ModelFormat[] people = loadCharacters(source);
+
         final List<String> missing = missingKitFiles(source);
+
         if (missing.isEmpty())
         {
             LOG.info("Demo level: REAL Kenney Prototype Kit, {} pieces from {}",
                 KIT_FILES.length, source.describe(LEVEL_DIRECTORY));
+
             return new DemoModels(Source.KENNEY_KIT, loadKit(source), null, viewmodel,
                 opponentWeapon, realCarbine, people);
         }
@@ -269,6 +296,7 @@ public final class DemoModels
             + " geometry, not Kenney art. The real kit is missing {} piece(s): {}. For the"
             + " intended demo run: {}", source.describe(FALLBACK_MODEL), missing.size(),
             String.join(", ", missing), REGENERATE_COMMAND);
+
         return new DemoModels(Source.GENERATED_ROOM, null, read(source, FALLBACK_MODEL),
             viewmodel, opponentWeapon, realCarbine, people);
     }
@@ -297,6 +325,7 @@ public final class DemoModels
     private static ModelFormat loadBotWeapon(final ModelSource source)
     {
         final String path = botWeaponPath();
+
         if (!source.has(path))
         {
             LOG.warn("Demo bot weapon: GENERATED BLOCK CARBINE, not Kenney art. {} is missing,"
@@ -304,10 +333,13 @@ public final class DemoModels
                 + " visibly not the real model. Do NOT record this against an upstream"
                 + " source. For the intended demo run: {}", source.describe(path),
                 BlockCarbine.partCount(), REGENERATE_COMMAND);
+
             return BlockCarbine.model();
         }
+
         LOG.info("Demo bot weapon: REAL Kenney Blaster Kit model from {} — deliberately a"
             + " different blaster from the player's {}", source.describe(path), WEAPON_MODEL);
+
         return read(source, path);
     }
 
@@ -316,13 +348,17 @@ public final class DemoModels
     private static ModelFormat loadWeapon(final ModelSource source)
     {
         final String path = WEAPON_DIRECTORY + "/" + WEAPON_MODEL;
+
         if (!source.has(path))
         {
             LOG.warn("Demo weapon: NONE. {} is missing, so the first-person viewmodel will not"
                 + " be drawn. Produce it with: {}", source.describe(path), REGENERATE_COMMAND);
+
             return null;
         }
+
         LOG.info("Demo weapon: REAL Kenney Blaster Kit model from {}", source.describe(path));
+
         return read(source, path);
     }
 
@@ -358,24 +394,30 @@ public final class DemoModels
     private static ModelFormat[] loadCharacters(final ModelSource source)
     {
         final List<ModelFormat> found = new ArrayList<>();
+
         for (final String name : CHARACTER_FILES)
         {
             final String path = CHARACTER_DIRECTORY + "/" + name;
+
             if (source.has(path))
             {
                 found.add(read(source, path));
             }
         }
+
         if (found.isEmpty())
         {
             LOG.warn("Demo characters: NONE. No character model found under {}, so the demo"
                 + " will have nothing to shoot at and the outline pass will not run."
                 + " Produce them with: {}", source.describe(CHARACTER_DIRECTORY),
                 REGENERATE_COMMAND);
+
             return new ModelFormat[0];
         }
+
         LOG.info("Demo characters: {} of {} Kenney Blocky Characters models from {}",
             found.size(), CHARACTER_FILES.length, source.describe(CHARACTER_DIRECTORY));
+
         return found.toArray(new ModelFormat[0]);
     }
 
@@ -383,6 +425,7 @@ public final class DemoModels
     private static List<String> missingKitFiles(final ModelSource source)
     {
         final List<String> missing = new ArrayList<>();
+
         for (final String name : KIT_FILES)
         {
             if (!source.has(LEVEL_DIRECTORY + "/" + name))
@@ -390,6 +433,7 @@ public final class DemoModels
                 missing.add(name);
             }
         }
+
         return missing;
     }
 
@@ -398,10 +442,12 @@ public final class DemoModels
     private static ModelFormat[] loadKit(final ModelSource source)
     {
         final ModelFormat[] kit = new ModelFormat[KIT_FILES.length];
+
         for (int index = 0; index < KIT_FILES.length; index++)
         {
             kit[index] = read(source, LEVEL_DIRECTORY + "/" + KIT_FILES[index]);
         }
+
         return kit;
     }
 

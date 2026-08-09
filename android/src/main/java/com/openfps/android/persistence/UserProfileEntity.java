@@ -85,16 +85,27 @@ public final class UserProfileEntity
     public static UserProfileEntity fromDomain(final UserProfile profile)
     {
         final UserProfileEntity row = new UserProfileEntity();
+
         row.id = profile.id();
+
         row.displayName = profile.displayName();
+
         row.audioVolume = profile.audioVolume();
+
         row.mouseSensitivity = profile.mouseSensitivity();
+
         row.fieldOfView = profile.fieldOfView();
+
         row.preferredColor = profile.preferredColor();
+
         row.lastLoginAtEpochMs = profile.lastLoginAtEpochMs();
+
         row.totalPlaytimeSeconds = profile.totalPlaytimeSeconds();
+
         row.createdAtEpochMs = profile.createdAtEpochMs();
+
         row.updatedAtEpochMs = profile.updatedAtEpochMs();
+
         return row;
     }
 

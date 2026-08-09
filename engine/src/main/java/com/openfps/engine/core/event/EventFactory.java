@@ -29,7 +29,9 @@ public final class EventFactory
         {
             throw new IllegalArgumentException("timePort must not be null");
         }
+
         this.timePort = timePort;
+
         this.originNanos = timePort.nanos();
     }
 

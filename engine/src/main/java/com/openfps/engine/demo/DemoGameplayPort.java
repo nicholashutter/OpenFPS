@@ -416,37 +416,49 @@ public final class DemoGameplayPort implements I_GameplayPort
         final int[] botWeaponIndices)
     {
         this.effects = shotEffects;
+
         if (round != null && botInstanceIndices == null)
         {
             throw new IllegalArgumentException(
                 "a match needs the scene index of each of its bots");
         }
+
         if (round != null && botInstanceIndices.length < round.botCount())
         {
             throw new IllegalArgumentException("got " + botInstanceIndices.length
                 + " scene indices for " + round.botCount() + " bots");
         }
+
         if (input == null)
         {
             throw new IllegalArgumentException("input must not be null");
         }
+
         if (renderPort == null)
         {
             throw new IllegalArgumentException("renderPort must not be null");
         }
+
         if (playerController == null)
         {
             throw new IllegalArgumentException("playerController must not be null");
         }
+
         if (config == null)
         {
             throw new IllegalArgumentException("config must not be null");
         }
+
         this.inputPort = input;
+
         this.renderer = renderPort;
+
         this.controller = playerController;
+
         this.deltaSeconds = (float) (config.nanosPerTic() / NANOS_PER_SECOND);
+
         this.match = round;
+
         if (round == null)
         {
             this.botInstances = null;
@@ -455,6 +467,7 @@ public final class DemoGameplayPort implements I_GameplayPort
         {
             this.botInstances = botInstanceIndices.clone();
         }
+
         if (botWeaponIndices == null)
         {
             this.botWeaponInstances = null;
@@ -463,6 +476,7 @@ public final class DemoGameplayPort implements I_GameplayPort
         {
             this.botWeaponInstances = botWeaponIndices.clone();
         }
+
         // The controller's placement AT CONSTRUCTION is the spawn, captured here
         // rather than passed in. Two reasons, and the second is the one that
         // decided it: DemoScene.spawnController() is what built this object's
@@ -471,9 +485,13 @@ public final class DemoGameplayPort implements I_GameplayPort
         // second copy is a respawn that puts the player somewhere the level
         // designer never chose. It also keeps every existing caller unchanged.
         this.spawnX = playerController.positionX();
+
         this.spawnY = playerController.positionY();
+
         this.spawnZ = playerController.positionZ();
+
         this.spawnYawRadians = playerController.yawRadians();
+
         this.spawnPitchRadians = playerController.pitchRadians();
     }
 
@@ -484,8 +502,10 @@ public final class DemoGameplayPort implements I_GameplayPort
         {
             LOG.info("Demo gameplay ready: {} s per tic, spawn {} — no opponents, camera only",
                 deltaSeconds, controller);
+
             return;
         }
+
         LOG.info("Demo gameplay ready: {} s per tic, spawn {}, {} opponents, {} hp",
             deltaSeconds, controller, match.botCount(), match.playerHealth());
     }
@@ -496,8 +516,10 @@ public final class DemoGameplayPort implements I_GameplayPort
         if (match == null)
         {
             LOG.info("Demo gameplay stopped after {} tics at {}", ticsApplied, controller);
+
             return;
         }
+
         LOG.info("Demo gameplay stopped after {} tics at {}; {}", ticsApplied, controller, match);
     }
 
@@ -534,6 +556,7 @@ public final class DemoGameplayPort implements I_GameplayPort
         {
             LOG.info("Match frozen — the menu is in front");
         }
+
         this.matchLive = live;
     }
 
@@ -563,11 +586,14 @@ public final class DemoGameplayPort implements I_GameplayPort
     public void attachNetwork(final NetSession session)
     {
         this.net = session;
+
         if (session == null)
         {
             LOG.info("Network detached — this is a local match");
+
             return;
         }
+
         LOG.info("Network attached: {}", session);
     }
 
@@ -593,11 +619,14 @@ public final class DemoGameplayPort implements I_GameplayPort
     public void attachRemoteBodies(final RemotePlayers bodies)
     {
         this.remoteBodies = bodies;
+
         if (bodies == null)
         {
             LOG.info("Remote bodies detached — peers will not be visible");
+
             return;
         }
+
         LOG.info("Remote bodies attached: {}", bodies);
     }
 
@@ -624,11 +653,14 @@ public final class DemoGameplayPort implements I_GameplayPort
     public void attachLocalBody(final LocalPlayerBody body)
     {
         this.localBody = body;
+
         if (body == null)
         {
             LOG.info("Local body detached — the player's arms will not be drawn");
+
             return;
         }
+
         LOG.info("Local body attached: {}", body);
     }
 
@@ -660,10 +692,14 @@ public final class DemoGameplayPort implements I_GameplayPort
         if (port == null)
         {
             this.audio = new NullAudioPort();
+
             LOG.info("Audio detached — the weapon fires silently");
+
             return;
         }
+
         this.audio = port;
+
         // The class, not isAudible(): a real backend cannot say yet. Its device
         // and its sounds are opened lazily, on the first shot, because on
         // desktop there IS no libGDX audio until the frame loop has started —
@@ -687,13 +723,17 @@ public final class DemoGameplayPort implements I_GameplayPort
     public void tick(final int ticIndex)
     {
         tickLock.lock();
+
         try
         {
             // Latching is a consuming read — the look deltas are an integral
             // since the previous call, so exactly one caller per tic may do it.
             inputPort.sampleInput(ticIndex);
+
             inputView.wrap(inputPort.currentInput());
+
             controller.update(inputView, deltaSeconds);
+
             // Opponents move BEFORE the player shoots, so a shot is resolved
             // against where the bodies are on this tic rather than where they
             // were on the last one. The other order makes leading a moving
@@ -701,12 +741,15 @@ public final class DemoGameplayPort implements I_GameplayPort
             // registers as "the hit detection is off" without being able to say
             // why.
             advanceMatch(ticIndex);
+
             // IMMEDIATELY after the match ticked, because Match.tick clears the
             // shot log at the top of the NEXT one — the window is a single tic
             // wide, which is the right lifetime for a per-tic event and the reason
             // it needs no queue. See BotShotLog.
             spawnIncomingFire(ticIndex);
+
             exchangeNetwork(ticIndex, inputPort.currentInput());
+
             // IMMEDIATELY after the exchange, because that call is what drained
             // the socket: replaying here uses the commands that landed on THIS
             // tic rather than making every peer's body a tic staler than the
@@ -718,7 +761,9 @@ public final class DemoGameplayPort implements I_GameplayPort
             // but putting the call in the wrong place now would make that a bug
             // to find later rather than a line to delete.
             advanceRemoteBodies();
+
             fireIfRequested(inputPort.currentInput().fire(), ticIndex);
+
             // AFTER the trigger and BEFORE the publish, which is not an
             // arbitrary order: a tracer spawned this tic sits at the muzzle,
             // 2.4 units from the eye, and it is 40 units long. Published from
@@ -726,12 +771,19 @@ public final class DemoGameplayPort implements I_GameplayPort
             // the room, one step down the ray, which is where a bolt leaving a
             // barrel is by the time anyone could see it anyway.
             advanceEffects();
+
             publishBotPlacements();
+
             publishRemoteBodies();
+
             publishLocalBody();
+
             publishEffects();
+
             aimCamera();
+
             this.ticsApplied = ticsApplied + 1;
+
             this.lastTicIndex = ticIndex;
         }
         finally
@@ -759,6 +811,7 @@ public final class DemoGameplayPort implements I_GameplayPort
         {
             return;
         }
+
         if (match.isPlayerDown())
         {
             // A corpse does not shoot. Gating here rather than inside Match for
@@ -769,10 +822,12 @@ public final class DemoGameplayPort implements I_GameplayPort
             // fell and would spend their own accuracy figure on it.
             return;
         }
+
         if (ticIndex - lastFireTic < FIRE_INTERVAL_TICS)
         {
             return;
         }
+
         this.lastFireTic = ticIndex;
 
         // The shot is now committed, so this is the noise of a shot rather than
@@ -802,7 +857,9 @@ public final class DemoGameplayPort implements I_GameplayPort
         // (the mirrored basis, commit 1776548). Reusing the accessor that the
         // camera also uses keeps a single definition of "forward".
         final Vec3 eye = controller.eyePosition();
+
         final Vec3 aim = controller.forwardVector();
+
         // The visible shot, from the same eye and the same ray the hitscan uses
         // — one definition of where a shot comes from and which way it goes, so
         // the tracer cannot drift away from what was actually resolved.
@@ -814,8 +871,10 @@ public final class DemoGameplayPort implements I_GameplayPort
         {
             effects.spawn(eye.x(), eye.y(), eye.z(), aim.x(), aim.y(), aim.z());
         }
+
         final int struck = match.firePlayerShot(eye.x(), eye.y(), eye.z(),
             aim.x(), aim.y(), aim.z());
+
         // IMMEDIATELY after the shot resolves, because the award is a consequence
         // of it: the streak is completed inside firePlayerShot and the flag is
         // cleared by the next tick, so this is the only window there is. Before the
@@ -824,22 +883,29 @@ public final class DemoGameplayPort implements I_GameplayPort
         if (match.consumeSuperBlasterAwarded())
         {
             audio.play(SoundId.SUPER_BLASTER_READY);
+
             LOG.info("SUPER BLASTER (tic {}) — {} kills without dying, x{} damage for {} tics",
                 ticIndex, Match.SUPER_BLASTER_KILL_STREAK,
                 Match.SUPER_BLASTER_DAMAGE_MULTIPLIER, match.superBlasterTicsRemaining());
         }
+
         if (struck == Match.NO_HIT)
         {
             LOG.debug("miss (tic {})", ticIndex);
+
             return;
         }
+
         final Bot victim = match.byId(struck);
+
         if (victim != null && !victim.isAlive())
         {
             LOG.info("KILL entity {} (tic {}) — {} of {} down", struck, ticIndex,
                 match.botsKilled(), match.botCount());
+
             return;
         }
+
         LOG.info("HIT entity {} (tic {})", struck, ticIndex);
     }
 
@@ -859,6 +925,7 @@ public final class DemoGameplayPort implements I_GameplayPort
         {
             return SoundId.SUPER_WEAPON_FIRE;
         }
+
         return SoundId.WEAPON_FIRE;
     }
 
@@ -876,16 +943,19 @@ public final class DemoGameplayPort implements I_GameplayPort
     private void exchangeNetwork(final int ticIndex, final InputState input)
     {
         final NetSession session = net;
+
         if (session == null || !session.isOpen())
         {
             return;
         }
+
         session.recordLocalCommand(ticIndex,
             TicCmdEncoder.encodeAxis(input.forwardAxis()),
             TicCmdEncoder.encodeAxis(input.strafeAxis()),
             TicCmdEncoder.encodeAngle(controller.yawRadians()),
             TicCmdEncoder.encodePitch(controller.pitchRadians()),
             TicCmdEncoder.encodeButtons(input));
+
         session.tick(ticIndex);
     }
 
@@ -909,10 +979,12 @@ public final class DemoGameplayPort implements I_GameplayPort
     private void advanceRemoteBodies()
     {
         final RemotePlayers bodies = remoteBodies;
+
         if (bodies == null)
         {
             return;
         }
+
         bodies.advance(net, deltaSeconds);
     }
 
@@ -920,10 +992,12 @@ public final class DemoGameplayPort implements I_GameplayPort
     private void resetRemoteBodies()
     {
         final RemotePlayers bodies = remoteBodies;
+
         if (bodies == null)
         {
             return;
         }
+
         bodies.reset(spawnX, spawnY, spawnZ, spawnYawRadians);
     }
 
@@ -936,10 +1010,12 @@ public final class DemoGameplayPort implements I_GameplayPort
     private void publishRemoteBodies()
     {
         final RemotePlayers bodies = remoteBodies;
+
         if (bodies == null || renderer.scene() == null)
         {
             return;
         }
+
         bodies.publish(renderer);
     }
 
@@ -953,10 +1029,12 @@ public final class DemoGameplayPort implements I_GameplayPort
     private void publishLocalBody()
     {
         final LocalPlayerBody body = localBody;
+
         if (body == null || renderer.scene() == null)
         {
             return;
         }
+
         body.publish(renderer, controller, inputView, deltaSeconds);
     }
 
@@ -968,8 +1046,10 @@ public final class DemoGameplayPort implements I_GameplayPort
         {
             return;
         }
+
         final int damage = match.tick(ticIndex, controller.positionX(), controller.positionY(),
             controller.positionZ());
+
         if (damage > 0 && match.isPlayerDown())
         {
             LOG.info("KILLED (tic {}) — death {}, respawning in {} tics", ticIndex,
@@ -979,6 +1059,7 @@ public final class DemoGameplayPort implements I_GameplayPort
         {
             LOG.info("took {} damage — {} hp left", damage, match.playerHealth());
         }
+
         // AFTER the tick, because the tick is what ages the reward, and a consuming
         // read so exactly one thing announces each expiry. Covers both ways it can
         // end — the timer running out and a death cancelling it — because from the
@@ -986,9 +1067,11 @@ public final class DemoGameplayPort implements I_GameplayPort
         if (match.consumeSuperBlasterExpired())
         {
             audio.play(SoundId.SUPER_BLASTER_SPENT);
+
             LOG.info("super blaster spent (tic {}) — back to {} damage a shot", ticIndex,
                 Match.PLAYER_SHOT_DAMAGE);
         }
+
         // AFTER the tick, because the tick is what decides it, and consuming the
         // flag here means exactly one thing acts on each respawn. Match owns WHEN
         // a respawn happens; it has never heard of a spawn point, so putting the
@@ -996,13 +1079,17 @@ public final class DemoGameplayPort implements I_GameplayPort
         if (match.consumePlayerRespawned())
         {
             controller.respawnAt(spawnX, spawnY, spawnZ, spawnYawRadians, spawnPitchRadians);
+
             LOG.info("RESPAWNED at ({}, {}, {}) with {} hp", spawnX, spawnY, spawnZ,
                 match.playerHealth());
         }
+
         final MatchState now = match.state();
+
         if (now != reportedState)
         {
             this.reportedState = now;
+
             LOG.info("MATCH {} — {}", now, match);
         }
     }
@@ -1029,14 +1116,18 @@ public final class DemoGameplayPort implements I_GameplayPort
         {
             return;
         }
+
         final BotShotLog shots = match.shotsThisTic();
+
         for (int slot = 0; slot < shots.count(); slot++)
         {
             final Bot shooter = match.byId(shots.shooterId(slot));
+
             if (shooter == null)
             {
                 continue;
             }
+
             // The noise, BEFORE the bolt and unconditionally on the outcome — the
             // same rule the player's own weapon follows, and for the same reason: a
             // sound that only played when a shot connected would tell the player
@@ -1051,16 +1142,19 @@ public final class DemoGameplayPort implements I_GameplayPort
             {
                 audio.play(SoundId.BOT_WEAPON_FIRE);
             }
+
             if (effects == null)
             {
                 continue;
             }
+
             // The muzzle is where the effect STARTS; the log's origin and
             // direction are the ray the hitscan actually used, and both are
             // needed — spawnIncoming reconciles them so the bolt leaves the gun
             // AND arrives where the shot went. A bolt that did one but not the
             // other is either floating out of a chest or lying about the damage.
             DemoScene.botMuzzle(shooter, muzzleScratch);
+
             effects.spawnIncoming(muzzleScratch[0], muzzleScratch[1], muzzleScratch[2],
                 shots.originX(slot), shots.originY(slot), shots.originZ(slot),
                 shots.directionX(slot), shots.directionY(slot), shots.directionZ(slot),
@@ -1081,6 +1175,7 @@ public final class DemoGameplayPort implements I_GameplayPort
         {
             return;
         }
+
         effects.advance();
     }
 
@@ -1097,6 +1192,7 @@ public final class DemoGameplayPort implements I_GameplayPort
         {
             return;
         }
+
         effects.publish(renderer);
     }
 
@@ -1118,11 +1214,14 @@ public final class DemoGameplayPort implements I_GameplayPort
             // window, and the same reason, as aimCamera's surface check below.
             return;
         }
+
         final Bot[] roster = match.bots();
+
         for (int index = 0; index < roster.length; index++)
         {
             renderer.setWorldTransform(botInstances[index],
                 DemoScene.botPlacement(roster[index]));
+
             publishBotWeapon(index, roster[index]);
         }
     }
@@ -1142,11 +1241,14 @@ public final class DemoGameplayPort implements I_GameplayPort
         {
             return;
         }
+
         final int instance = botWeaponInstances[index];
+
         if (instance == DemoScene.NO_INSTANCE)
         {
             return;
         }
+
         renderer.setWorldTransform(instance, DemoScene.botWeaponPlacement(bot));
     }
 
@@ -1190,35 +1292,47 @@ public final class DemoGameplayPort implements I_GameplayPort
     public void restartMatch()
     {
         tickLock.lock();
+
         try
         {
             if (match == null)
             {
                 return;
             }
+
             match.reset();
+
             controller.respawnAt(spawnX, spawnY, spawnZ, spawnYawRadians, spawnPitchRadians);
+
             if (effects != null)
             {
                 effects.clear();
             }
+
             this.reportedState = MatchState.IN_PROGRESS;
+
             this.lastFireTic = -FIRE_INTERVAL_TICS;
+
             // Beside the effects and for the same reason: a rematch that inherited
             // the last round's final shot would refuse the first few tics of the
             // new one, and "the first bot to shoot at me was silent" is not a bug
             // anybody would trace back to a rematch.
             botVoices.clear();
+
             // The peers go back to the spawn with everyone else. Their cursors are
             // cleared too, so a body does not try to resume the tic sequence of the
             // round that just ended — RemotePlayers.reset explains why that has to
             // be forgotten rather than carried over.
             resetRemoteBodies();
+
             // The un-hide. See the Javadoc above: this is what makes the corpses
             // visible again, and nothing in Match can do it.
             publishBotPlacements();
+
             publishRemoteBodies();
+
             publishEffects();
+
             LOG.info("MATCH RESTARTED — {} opponents back up, {}", match.botCount(), match);
         }
         finally
@@ -1250,6 +1364,7 @@ public final class DemoGameplayPort implements I_GameplayPort
         {
             return null;
         }
+
         return MatchStatus.of(match, lastTicIndex);
     }
 
@@ -1263,11 +1378,14 @@ public final class DemoGameplayPort implements I_GameplayPort
     private void aimCamera()
     {
         final int width = renderer.surfaceWidth();
+
         final int height = renderer.surfaceHeight();
+
         if (width <= 0 || height <= 0)
         {
             return;
         }
+
         renderer.setCamera(controller.camera((float) width / (float) height));
     }
 

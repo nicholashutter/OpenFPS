@@ -91,10 +91,15 @@ public final class BotShotLog
         {
             throw new IllegalArgumentException("botCount must not be negative, got " + botCount);
         }
+
         this.capacity = botCount;
+
         this.shooterId = new int[botCount];
+
         this.origin = new float[botCount * AXES];
+
         this.direction = new float[botCount * AXES];
+
         this.range = new float[botCount];
     }
 
@@ -153,15 +158,25 @@ public final class BotShotLog
         {
             return;
         }
+
         final int at = count * AXES;
+
         shooterId[count] = entityId;
+
         origin[at] = originX;
+
         origin[at + 1] = originY;
+
         origin[at + 2] = originZ;
+
         direction[at] = dirX;
+
         direction[at + 1] = dirY;
+
         direction[at + 2] = dirZ;
+
         range[count] = rangeUnits;
+
         this.count = count + 1;
     }
 
@@ -276,6 +291,7 @@ public final class BotShotLog
             throw new IndexOutOfBoundsException(
                 "shot " + slot + " of " + count + " recorded this tic");
         }
+
         return slot;
     }
 

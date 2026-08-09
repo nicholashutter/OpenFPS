@@ -103,26 +103,38 @@ final class CubeFixture
     static byte[] build()
     {
         final int[] vertices = new int[FACE_COUNT * FACE_CORNERS * VERTEX_SLOTS];
+
         final int[] indices = new int[FACE_COUNT * FACE_INDICES];
+
         final int[] submeshes = new int[FACE_COUNT * SUBMESH_SLOTS];
+
         final int[] textures = new int[FACE_COUNT * TEXTURE_SLOTS];
+
         final int[] texels = new int[FACE_COUNT];
 
         for (int face = 0; face < FACE_COUNT; face++)
         {
             writeFaceVertices(vertices, face);
+
             writeFaceIndices(indices, face);
 
             submeshes[face * SUBMESH_SLOTS] = face * FACE_INDICES;
+
             submeshes[face * SUBMESH_SLOTS + 1] = FACE_INDICES;
+
             submeshes[face * SUBMESH_SLOTS + 2] = face;
+
             submeshes[face * SUBMESH_SLOTS + 3] = 0;
 
             // 1x1, one level, one texel — see the class Javadoc.
             textures[face * TEXTURE_SLOTS] = 1;
+
             textures[face * TEXTURE_SLOTS + 1] = 1;
+
             textures[face * TEXTURE_SLOTS + 2] = 1;
+
             textures[face * TEXTURE_SLOTS + 3] = face;
+
             texels[face] = FACE_COLORS[face];
         }
 
@@ -135,12 +147,19 @@ final class CubeFixture
         for (int corner = 0; corner < FACE_CORNERS; corner++)
         {
             final int source = (face * FACE_CORNERS + corner) * 3;
+
             final int at = (face * FACE_CORNERS + corner) * VERTEX_SLOTS;
+
             vertices[at] = ModelFileFixture.bits(FACES[source] * HALF_EDGE);
+
             vertices[at + 1] = ModelFileFixture.bits(FACES[source + 1] * HALF_EDGE);
+
             vertices[at + 2] = ModelFileFixture.bits(FACES[source + 2] * HALF_EDGE);
+
             vertices[at + 3] = ModelFileFixture.bits(FACE_UV[corner * 2]);
+
             vertices[at + 4] = ModelFileFixture.bits(FACE_UV[corner * 2 + 1]);
+
             vertices[at + 5] = FACE_COLORS[face];
         }
     }
@@ -149,12 +168,19 @@ final class CubeFixture
     private static void writeFaceIndices(final int[] indices, final int face)
     {
         final int first = face * FACE_CORNERS;
+
         final int at = face * FACE_INDICES;
+
         indices[at] = first;
+
         indices[at + 1] = first + 1;
+
         indices[at + 2] = first + 2;
+
         indices[at + 3] = first;
+
         indices[at + 4] = first + 2;
+
         indices[at + 5] = first + 3;
     }
 }

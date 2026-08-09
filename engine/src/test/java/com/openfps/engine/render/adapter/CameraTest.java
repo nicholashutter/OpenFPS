@@ -43,7 +43,9 @@ class CameraTest
     private static float[] clip(final Camera camera, final float x, final float y, final float z)
     {
         final float[] out = new float[Camera.CLIP_FLOATS];
+
         camera.transformToClip(x, y, z, out, 0);
+
         return out;
     }
 
@@ -70,6 +72,7 @@ class CameraTest
             // is the correct one and up x forward is the mirror.
             final Camera front = Camera.create(
                 Vec3.ZERO, new Vec3(0.0f, 0.0f, -1.0f), WORLD_UP, FOV_90, 1.0f, NEAR);
+
             assertThat(front.right().x()).isCloseTo(1.0f, within(EPSILON));
 
             // The reference camera looks the OTHER way, down +z, which is the
@@ -77,8 +80,11 @@ class CameraTest
             // cases are asserted because a sign error that happened to please
             // one of them would fail the other.
             final Camera camera = reference();
+
             assertThat(camera.forward().z()).isCloseTo(1.0f, within(EPSILON));
+
             assertThat(camera.right().x()).isCloseTo(-1.0f, within(EPSILON));
+
             assertThat(camera.up().y()).isCloseTo(1.0f, within(EPSILON));
         }
 
@@ -89,15 +95,23 @@ class CameraTest
             // up leans out of the plane; the camera must re-orthogonalise it.
             final Camera camera = Camera.create(
                 Vec3.ZERO, FORWARD_Z, new Vec3(0.0f, 1.0f, 1.0f), FOV_90, 1.0f, NEAR);
+
             final Vec3 right = camera.right();
+
             final Vec3 up = camera.up();
+
             final Vec3 forward = camera.forward();
 
             assertThat(right.length()).isCloseTo(1.0f, within(EPSILON));
+
             assertThat(up.length()).isCloseTo(1.0f, within(EPSILON));
+
             assertThat(forward.length()).isCloseTo(1.0f, within(EPSILON));
+
             assertThat(right.dot(up)).isCloseTo(0.0f, within(EPSILON));
+
             assertThat(up.dot(forward)).isCloseTo(0.0f, within(EPSILON));
+
             assertThat(forward.dot(right)).isCloseTo(0.0f, within(EPSILON));
 
             // -1, not +1. "View space is left-handed" (+x right, +y up, +z INTO
@@ -105,6 +119,7 @@ class CameraTest
             // BACKWARDS along forward. The old +1 here described a right-handed
             // triple, which is the mirror this test now guards against.
             final Vec3 cross = right.cross(up);
+
             assertThat(cross.dot(forward)).isCloseTo(-1.0f, within(EPSILON));
         }
 
@@ -117,7 +132,9 @@ class CameraTest
             // Forward is +z, so w_clip = z_view with no sign flip. This is the
             // property the near-plane test `w > near` depends on.
             assertThat(clip(camera, 0.0f, 0.0f, 10.0f)[2]).isCloseTo(10.0f, within(EPSILON));
+
             assertThat(clip(camera, 0.0f, 0.0f, 0.0f)[2]).isCloseTo(0.0f, within(EPSILON));
+
             assertThat(clip(camera, 0.0f, 0.0f, -10.0f)[2]).isCloseTo(-10.0f, within(EPSILON));
         }
 
@@ -133,13 +150,16 @@ class CameraTest
             final Camera front = Camera.create(
                 new Vec3(0.0f, 0.0f, 20.0f), new Vec3(0.0f, 0.0f, -1.0f), WORLD_UP,
                 FOV_90, 1.0f, NEAR);
+
             final float[] ahead = clip(front, 3.0f, 0.0f, 10.0f);
+
             assertThat(ahead[0] / ahead[2]).isCloseTo(0.3f, within(EPSILON));
 
             // The reference camera faces the other way, so the same world point
             // is on the left. Not a quirk — walking round behind an object does
             // put its right-hand side on your left.
             final float[] behind = clip(reference(), 3.0f, 0.0f, 10.0f);
+
             assertThat(behind[0] / behind[2]).isCloseTo(-0.3f, within(EPSILON));
         }
     }
@@ -159,12 +179,17 @@ class CameraTest
             // world +x sits at ndc -1. What this test is about is the
             // magnitude: the frustum edge maps to the edge of the screen.
             final float[] rightEdge = clip(camera, 10.0f, 0.0f, 10.0f);
+
             final float[] topEdge = clip(camera, 0.0f, 10.0f, 10.0f);
+
             final float[] centre = clip(camera, 0.0f, 0.0f, 10.0f);
 
             assertThat(rightEdge[0] / rightEdge[2]).isCloseTo(-1.0f, within(EPSILON));
+
             assertThat(topEdge[1] / topEdge[2]).isCloseTo(1.0f, within(EPSILON));
+
             assertThat(centre[0]).isCloseTo(0.0f, within(EPSILON));
+
             assertThat(centre[1]).isCloseTo(0.0f, within(EPSILON));
         }
 
@@ -174,15 +199,20 @@ class CameraTest
         {
             final Camera camera = Camera.create(
                 Vec3.ZERO, FORWARD_Z, WORLD_UP, FOV_60, 1.0f, NEAR);
+
             final float expected = (float) (1.0 / Math.tan(Math.PI / 6.0));
 
             assertThat(camera.projectionScaleY()).isCloseTo(expected, within(EPSILON));
+
             assertThat(camera.projectionScaleX()).isCloseTo(expected, within(EPSILON));
 
             // The top frustum edge at depth z sits at y = z * tan(fovY / 2).
             final float depth = 8.0f;
+
             final float edgeY = depth * (float) Math.tan(Math.PI / 6.0);
+
             final float[] out = clip(camera, 0.0f, edgeY, depth);
+
             assertThat(out[1] / out[2]).isCloseTo(1.0f, within(EPSILON));
         }
 
@@ -194,13 +224,16 @@ class CameraTest
                 Vec3.ZERO, FORWARD_Z, WORLD_UP, FOV_90, 2.0f, NEAR);
 
             assertThat(camera.projectionScaleX()).isCloseTo(0.5f, within(EPSILON));
+
             assertThat(camera.projectionScaleY()).isCloseTo(1.0f, within(EPSILON));
 
             // Twice as wide, so the same world x lands at half the ndc x, while
             // ndc y is untouched. Negative because the reference direction is
             // the back view; the aspect divide is what this asserts.
             final float[] out = clip(camera, 10.0f, 10.0f, 10.0f);
+
             assertThat(out[0] / out[2]).isCloseTo(-0.5f, within(EPSILON));
+
             assertThat(out[1] / out[2]).isCloseTo(1.0f, within(EPSILON));
         }
 
@@ -214,14 +247,21 @@ class CameraTest
             assertThat(Camera.CLIP_FLOATS).isEqualTo(3);
 
             final float[] out = new float[6];
+
             Arrays.fill(out, Float.NaN);
+
             reference().transformToClip(1.0f, 2.0f, 3.0f, out, 1);
 
             assertThat(out[0]).isNaN();
+
             assertThat(out[1]).isNotNaN();
+
             assertThat(out[2]).isNotNaN();
+
             assertThat(out[3]).isNotNaN();
+
             assertThat(out[4]).isNaN();
+
             assertThat(out[5]).isNaN();
         }
 
@@ -232,6 +272,7 @@ class CameraTest
             assertThat(Camera.WORLD_TO_CLIP_FLOATS).isEqualTo(12);
 
             final float[] packed = new float[Camera.WORLD_TO_CLIP_FLOATS];
+
             reference().copyWorldToClipInto(packed, 0);
 
             // Reference camera: at the origin looking down +z, both scales 1.
@@ -254,14 +295,19 @@ class CameraTest
         void shouldMapEyeToOriginWhenCameraIsTranslated()
         {
             final Vec3 eye = new Vec3(3.0f, -4.0f, 12.0f);
+
             final Camera camera = Camera.create(eye, FORWARD_Z, WORLD_UP, FOV_90, 1.0f, NEAR);
+
             final float[] out = new float[Mat4.ORDER];
 
             camera.viewMatrix().transformPoint(eye.x(), eye.y(), eye.z(), out, 0);
 
             assertThat(out[0]).isCloseTo(0.0f, within(EPSILON));
+
             assertThat(out[1]).isCloseTo(0.0f, within(EPSILON));
+
             assertThat(out[2]).isCloseTo(0.0f, within(EPSILON));
+
             assertThat(out[3]).isEqualTo(1.0f);
         }
 
@@ -272,10 +318,14 @@ class CameraTest
             // render/README.md § 4: V = R^T . T(-eye), built directly, never via
             // a general inverse. Compose it the long way and compare.
             final Vec3 eye = new Vec3(-2.0f, 5.0f, 1.5f);
+
             final Camera camera = Camera.create(
                 eye, new Vec3(1.0f, 0.0f, 1.0f), WORLD_UP, FOV_60, 1.5f, NEAR);
+
             final Vec3 r = camera.right();
+
             final Vec3 u = camera.up();
+
             final Vec3 f = camera.forward();
 
             final Mat4 rotationTranspose = Mat4.ofRowMajor(new float[] {
@@ -284,8 +334,10 @@ class CameraTest
                 f.x(), f.y(), f.z(), 0.0f,
                 0.0f, 0.0f, 0.0f, 1.0f,
             });
+
             final Mat4 composed =
                 rotationTranspose.multiply(Mat4.translation(-eye.x(), -eye.y(), -eye.z()));
+
             final Mat4 direct = camera.viewMatrix();
 
             for (int row = 0; row < Mat4.ORDER; row++)
@@ -307,7 +359,9 @@ class CameraTest
 
             // The origin is 5 units in front of a camera sitting at z = -5.
             assertThat(clip(camera, 0.0f, 0.0f, 0.0f)[2]).isCloseTo(5.0f, within(EPSILON));
+
             assertThat(clip(camera, 0.0f, 0.0f, -5.0f)[2]).isCloseTo(0.0f, within(EPSILON));
+
             assertThat(clip(camera, 0.0f, 0.0f, -6.0f)[2]).isCloseTo(-1.0f, within(EPSILON));
         }
 
@@ -327,10 +381,13 @@ class CameraTest
             assertThat(camera.right().z()).isCloseTo(1.0f, within(EPSILON));
 
             final float[] ahead = clip(camera, 10.0f, 0.0f, 0.0f);
+
             assertThat(ahead[2]).isCloseTo(10.0f, within(EPSILON));
+
             assertThat(ahead[0] / ahead[2]).isCloseTo(0.0f, within(EPSILON));
 
             final float[] offset = clip(camera, 10.0f, 0.0f, -3.0f);
+
             assertThat(offset[0] / offset[2]).isCloseTo(-0.3f, within(EPSILON));
         }
     }
@@ -344,14 +401,20 @@ class CameraTest
         void shouldMatchCreateWhenAimedAtATarget()
         {
             final Vec3 eye = new Vec3(1.0f, 2.0f, 3.0f);
+
             final Vec3 target = new Vec3(4.0f, 2.0f, 9.0f);
+
             final Camera aimed = Camera.lookingAt(eye, target, WORLD_UP, FOV_60, 1.25f, NEAR);
+
             final Camera direct = Camera.create(
                 eye, target.subtract(eye), WORLD_UP, FOV_60, 1.25f, NEAR);
 
             final float[] a = new float[Camera.WORLD_TO_CLIP_FLOATS];
+
             final float[] b = new float[Camera.WORLD_TO_CLIP_FLOATS];
+
             aimed.copyWorldToClipInto(a, 0);
+
             direct.copyWorldToClipInto(b, 0);
 
             assertThat(a).containsExactly(b, within(EPSILON));
@@ -362,13 +425,17 @@ class CameraTest
         void shouldIgnoreInputMagnitudesWhenBasisIsNormalized()
         {
             final Camera unit = reference();
+
             final Camera scaled = Camera.create(
                 Vec3.ZERO, FORWARD_Z.scale(500.0f), WORLD_UP.scale(0.001f),
                 FOV_90, 1.0f, NEAR);
 
             final float[] a = new float[Camera.WORLD_TO_CLIP_FLOATS];
+
             final float[] b = new float[Camera.WORLD_TO_CLIP_FLOATS];
+
             unit.copyWorldToClipInto(a, 0);
+
             scaled.copyWorldToClipInto(b, 0);
 
             assertThat(a).containsExactly(b, within(EPSILON));
@@ -379,12 +446,17 @@ class CameraTest
         void shouldExposeFrustumParametersWhenConstructed()
         {
             final Vec3 eye = new Vec3(7.0f, 8.0f, 9.0f);
+
             final Camera camera = Camera.create(eye, FORWARD_Z, WORLD_UP, FOV_60, 1.75f, 0.25f);
 
             assertThat(camera.fovY()).isEqualTo(FOV_60);
+
             assertThat(camera.aspect()).isEqualTo(1.75f);
+
             assertThat(camera.near()).isEqualTo(0.25f);
+
             assertThat(camera.eye().x()).isEqualTo(7.0f);
+
             assertThat(camera.toString()).contains("near=0.25");
         }
 
@@ -396,9 +468,11 @@ class CameraTest
                 () -> Camera.create(Vec3.ZERO, FORWARD_Z, WORLD_UP, 0.0f, 1.0f, NEAR))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("fovY");
+
             assertThatThrownBy(
                 () -> Camera.create(Vec3.ZERO, FORWARD_Z, WORLD_UP, (float) Math.PI, 1.0f, NEAR))
                 .isInstanceOf(IllegalArgumentException.class);
+
             assertThatThrownBy(
                 () -> Camera.create(Vec3.ZERO, FORWARD_Z, WORLD_UP, Float.NaN, 1.0f, NEAR))
                 .isInstanceOf(IllegalArgumentException.class);
@@ -412,6 +486,7 @@ class CameraTest
                 () -> Camera.create(Vec3.ZERO, FORWARD_Z, WORLD_UP, FOV_90, 0.0f, NEAR))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("aspect");
+
             assertThatThrownBy(
                 () -> Camera.create(Vec3.ZERO, FORWARD_Z, WORLD_UP, FOV_90, -1.0f, NEAR))
                 .isInstanceOf(IllegalArgumentException.class);
@@ -425,6 +500,7 @@ class CameraTest
                 () -> Camera.create(Vec3.ZERO, FORWARD_Z, WORLD_UP, FOV_90, 1.0f, 0.0f))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("near");
+
             assertThatThrownBy(
                 () -> Camera.create(Vec3.ZERO, FORWARD_Z, WORLD_UP, FOV_90, 1.0f, -0.5f))
                 .isInstanceOf(IllegalArgumentException.class);
@@ -438,6 +514,7 @@ class CameraTest
                 () -> Camera.create(Vec3.ZERO, Vec3.ZERO, WORLD_UP, FOV_90, 1.0f, NEAR))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("zero-length");
+
             assertThatThrownBy(
                 () -> Camera.create(Vec3.ZERO, WORLD_UP, WORLD_UP, FOV_90, 1.0f, NEAR))
                 .isInstanceOf(IllegalArgumentException.class)

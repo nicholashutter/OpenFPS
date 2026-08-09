@@ -158,12 +158,18 @@ public final class Scene
     private Scene(final Instance[] worldInstances, final Instance[] viewInstances)
     {
         this.world = worldInstances;
+
         this.view = viewInstances;
+
         this.maxInstanceTriangles =
             Math.max(largestModel(worldInstances), largestModel(viewInstances));
+
         this.worldTriangles = totalTriangles(worldInstances);
+
         this.viewTriangles = totalTriangles(viewInstances);
+
         this.tagged = anyTagged(worldInstances);
+
         this.translucent = countTranslucent(worldInstances);
     }
 
@@ -392,10 +398,12 @@ public final class Scene
     {
         // MUTABLE local — running maximum.
         int largest = 0;
+
         for (final Instance instance : instances)
         {
             largest = Math.max(largest, instance.model.triangleCount());
         }
+
         return largest;
     }
 
@@ -411,6 +419,7 @@ public final class Scene
                 return true;
             }
         }
+
         return false;
     }
 
@@ -420,6 +429,7 @@ public final class Scene
     {
         // MUTABLE local — running count.
         int found = 0;
+
         for (final Instance instance : instances)
         {
             if (instance.coverage < OPAQUE)
@@ -427,6 +437,7 @@ public final class Scene
                 found++;
             }
         }
+
         return found;
     }
 
@@ -437,10 +448,12 @@ public final class Scene
     {
         // MUTABLE local — running sum.
         int total = 0;
+
         for (final Instance instance : instances)
         {
             total += instance.model.triangleCount();
         }
+
         return total;
     }
 
@@ -576,12 +589,15 @@ public final class Scene
                 throw new IllegalArgumentException("entityId must be positive, or "
                     + UNTAGGED + " for untagged geometry; got " + entityId);
             }
+
             if (coverage < 0 || coverage > OPAQUE)
             {
                 throw new IllegalArgumentException(
                     "coverage must be 0-" + OPAQUE + ", got " + coverage);
             }
+
             world.add(validated(model, modelToWorld, "modelToWorld", entityId, coverage));
+
             return this;
         }
 
@@ -609,6 +625,7 @@ public final class Scene
             // last over a cleared depth buffer with nothing to sort against.
             // See the class Javadoc for both.
             view.add(validated(model, modelToView, "modelToView", UNTAGGED, OPAQUE));
+
             return this;
         }
 
@@ -633,16 +650,21 @@ public final class Scene
             {
                 throw new IllegalArgumentException("model must not be null");
             }
+
             if (model.triangleCount() <= 0)
             {
                 throw new IllegalArgumentException("model has no triangles");
             }
+
             if (transform == null)
             {
                 throw new IllegalArgumentException(name + " must not be null");
             }
+
             requireAffine(transform, name);
+
             requireOrientationPreserving(transform, name);
+
             return new Instance(model, transform, entityId, coverage);
         }
 
@@ -654,10 +676,12 @@ public final class Scene
             {
                 // MUTABLE local — the value this column's bottom entry must hold.
                 float expected = 0.0f;
+
                 if (column == BOTTOM_ROW)
                 {
                     expected = 1.0f;
                 }
+
                 if (transform.get(BOTTOM_ROW, column) != expected)
                 {
                     throw new IllegalArgumentException(name
@@ -674,15 +698,18 @@ public final class Scene
             final String name)
         {
             final float determinant = upperLeftDeterminant(transform);
+
             if (determinant > 0.0f)
             {
                 return;
             }
+
             if (determinant == 0.0f)
             {
                 throw new IllegalArgumentException(name + " is singular (determinant 0): it "
                     + "collapses the model onto a plane and every triangle degenerates");
             }
+
             throw new IllegalArgumentException(name + " has a negative determinant ("
                 + determinant + "): a mirror or negative scale reverses triangle winding, "
                 + "which inverts backface culling and renders the instance inside-out. "
@@ -714,8 +741,11 @@ public final class Scene
             final int instanceEntityId, final int instanceCoverage)
         {
             this.model = instanceModel;
+
             this.transform = instanceTransform;
+
             this.entityId = instanceEntityId;
+
             this.coverage = instanceCoverage;
         }
     }

@@ -114,23 +114,33 @@ public final class LumpCache
         {
             throw new WadException("LumpCache requires a WadReader");
         }
+
         if (memory == null)
         {
             throw new WadException("LumpCache requires an I_MemoryPort");
         }
+
         if (budgetBytes <= 0)
         {
             throw new WadException("LumpCache budget must be > 0, got " + budgetBytes);
         }
 
         final int count = reader.lumpCount();
+
         this.reader = reader;
+
         this.memory = memory;
+
         this.budgetBytes = budgetBytes;
+
         this.buffers = new byte[count][];
+
         this.refCounts = new int[count];
+
         this.handles = new int[count];
+
         this.useStamps = new long[count];
+
         for (int i = 0; i < count; i++)
         {
             this.handles[i] = I_MemoryPort.NULL_HANDLE;
@@ -161,7 +171,9 @@ public final class LumpCache
     public byte[] acquire(final int index)
     {
         final byte[] payload = ensureResident(index);
+
         refCounts[index]++;
+
         return payload;
     }
 
@@ -180,19 +192,25 @@ public final class LumpCache
     public void release(final int index)
     {
         checkIndex(index);
+
         if (buffers[index] == null)
         {
             LOG.warn("LumpCache.release({}) — lump '{}' is not resident",
                 index, reader.lumpName(index));
+
             return;
         }
+
         if (refCounts[index] == 0)
         {
             LOG.warn("LumpCache.release({}) — lump '{}' has no outstanding references",
                 index, reader.lumpName(index));
+
             return;
         }
+
         refCounts[index]--;
+
         if (refCounts[index] == 0)
         {
             evict(index);
@@ -206,14 +224,17 @@ public final class LumpCache
     public void flush()
     {
         final int before = residentCount;
+
         for (int i = 0; i < buffers.length; i++)
         {
             if (buffers[i] != null)
             {
                 refCounts[i] = 0;
+
                 evict(i);
             }
         }
+
         LOG.debug("LumpCache flushed {} resident lumps", before);
     }
 
@@ -226,6 +247,7 @@ public final class LumpCache
     public boolean isResident(final int index)
     {
         checkIndex(index);
+
         return buffers[index] != null;
     }
 
@@ -239,6 +261,7 @@ public final class LumpCache
     public int refCount(final int index)
     {
         checkIndex(index);
+
         return refCounts[index];
     }
 
@@ -266,21 +289,26 @@ public final class LumpCache
     private byte[] ensureResident(final int index)
     {
         checkIndex(index);
+
         if (buffers[index] != null)
         {
             touch(index);
+
             return buffers[index];
         }
 
         final int size = reader.lumpSize(index);
+
         if (size > budgetBytes)
         {
             throw new WadException("Lump '" + reader.lumpName(index) + "' is " + size
                 + " bytes, larger than the whole cache budget of " + budgetBytes);
         }
+
         makeRoom(size);
 
         final int handle = memory.allocate(size, I_MemoryPort.TAG_CACHE);
+
         if (handle == I_MemoryPort.NULL_HANDLE)
         {
             throw new WadException("Memory port refused " + size + " bytes for lump '"
@@ -288,14 +316,20 @@ public final class LumpCache
         }
 
         final byte[] payload = reader.sliceLump(index);
+
         buffers[index] = payload;
+
         handles[index] = handle;
+
         residentBytes += size;
+
         residentCount++;
+
         touch(index);
 
         LOG.debug("LumpCache loaded lump {} '{}' ({} bytes); resident {}/{} bytes in {} lumps",
             index, reader.lumpName(index), size, residentBytes, budgetBytes, residentCount);
+
         return payload;
     }
 
@@ -305,14 +339,17 @@ public final class LumpCache
         while (residentBytes + incomingBytes > budgetBytes)
         {
             final int victim = findVictim();
+
             if (victim == NO_VICTIM)
             {
                 throw new WadException("LumpCache budget exhausted: need " + incomingBytes
                     + " bytes, " + residentBytes + "/" + budgetBytes
                     + " resident and every resident lump is pinned");
             }
+
             LOG.debug("LumpCache evicting lump {} '{}' to make room for {} bytes",
                 victim, reader.lumpName(victim), incomingBytes);
+
             evict(victim);
         }
     }
@@ -321,15 +358,19 @@ public final class LumpCache
     private int findVictim()
     {
         int victim = NO_VICTIM;
+
         long oldest = Long.MAX_VALUE;
+
         for (int i = 0; i < buffers.length; i++)
         {
             if (buffers[i] != null && refCounts[i] == 0 && useStamps[i] < oldest)
             {
                 oldest = useStamps[i];
+
                 victim = i;
             }
         }
+
         return victim;
     }
 
@@ -337,11 +378,17 @@ public final class LumpCache
     private void evict(final int index)
     {
         memory.free(handles[index]);
+
         residentBytes -= reader.lumpSize(index);
+
         residentCount--;
+
         buffers[index] = null;
+
         handles[index] = I_MemoryPort.NULL_HANDLE;
+
         refCounts[index] = 0;
+
         useStamps[index] = 0L;
     }
 
@@ -349,6 +396,7 @@ public final class LumpCache
     private void touch(final int index)
     {
         useClock++;
+
         useStamps[index] = useClock;
     }
 

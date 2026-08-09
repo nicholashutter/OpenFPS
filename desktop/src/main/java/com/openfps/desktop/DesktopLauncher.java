@@ -163,6 +163,7 @@ public final class DesktopLauncher
     public static void main(final String[] args)
     {
         final FrameRate rate;
+
         try
         {
             rate = EngineMain.parseFpsArg(args);
@@ -170,8 +171,10 @@ public final class DesktopLauncher
         catch (final IllegalArgumentException e)
         {
             LOG.error("Failed to parse arguments: {}", e.getMessage());
+
             return;
         }
+
         LOG.info("OpenFPS desktop launcher: rate={} Hz, java={}",
             rate.fps(), System.getProperty("java.version"));
 
@@ -179,6 +182,7 @@ public final class DesktopLauncher
         // loaded early: a typo in an address should be a console message, not a
         // failure behind a window the user has to close to read.
         final NetArgs netArgs;
+
         try
         {
             netArgs = NetArgs.parse(args);
@@ -186,7 +190,9 @@ public final class DesktopLauncher
         catch (final IllegalArgumentException e)
         {
             LOG.error("Bad network arguments: {}", e.getMessage());
+
             System.exit(EXIT_BAD_NETWORK);
+
             return;
         }
 
@@ -194,9 +200,13 @@ public final class DesktopLauncher
         // report and exit at a console, not behind a black GLFW window the
         // user then has to close to read the reason.
         final String explicitModel = modelArg(args);
+
         final String mapId = mapArg(args);
+
         final DemoScene demo;
+
         final com.openfps.engine.gameplay.map.MapScene mapScene;
+
         try
         {
             if (mapId != null && !mapId.isEmpty())
@@ -209,42 +219,54 @@ public final class DesktopLauncher
                 // gameplay port).
                 LOG.info("--map={} given — building MapScene from the spec, demo bypassed",
                     mapId);
+
                 mapScene = buildMapScene(mapId);
+
                 demo = null;
             }
             else
             {
                 mapScene = null;
+
                 demo = buildDemo(explicitModel, assetsArg(args));
             }
         }
         catch (final DemoAssetException e)
         {
             LOG.error("Cannot start the first-person demo: {}", e.getMessage());
+
             System.exit(EXIT_NO_ASSETS);
+
             return;
         }
 
         if (startInGameArg(args))
         {
             System.setProperty(GdxFrameLoopListener.START_IN_GAME_PROPERTY, "true");
+
             LOG.info("{}: opening straight into the world, no menu", START_IN_GAME_ARG);
         }
 
         final GdxWindowPort window = new GdxWindowPort();
+
         // Built here rather than inside the window, because the launcher is the
         // only object that can see both the settings screen's switch and the
         // renderer it also drives. That is the composition root's job.
         final DebugSettings debug = new DebugSettings();
+
         // Separate from the debug switch, and separately defaulted — the outline
         // is a standard feature for players who need it and starts on, while the
         // frame counter is a diagnostic and starts off. One boolean could not be
         // both, which is how the toggle came to disagree with the game.
         final AccessibilitySettings access = new AccessibilitySettings();
+
         final GdxAdapterFactory hal = new GdxAdapterFactory(
             AdapterFactorySelector.create(HalBackend.DESKTOP), window);
+
         final RendererHolder holder = new RendererHolder();
+
         final GameConfig config = GameConfig.unbounded(rate);
+
         // A gamepad's look stick reports a RATE — "keep turning at this speed" —
         // and a rate is not an angle until something supplies the duration. The
         // launcher is the only object that knows the configured frame rate, so
@@ -254,14 +276,17 @@ public final class DesktopLauncher
         // input path cares, because a mouse delta is a displacement that has
         // already happened.
         hal.inputPort().setTicRate(rate.fps());
+
         // MUTABLE: assigned once on this thread by the factory below, before
         // the frame loop that reads it starts. There is no race — the engine
         // bootstrap has returned by then.
         final DemoGameplayPort[] gameplay = new DemoGameplayPort[1];
+
         // Map mode has its own gameplay port — the spec-driven port, which
         // the same factory path can return for either case because the
         // shape of the port the engine wants is the same.
         final com.openfps.engine.gameplay.map.MapGameplayPort[] mapPort = new com.openfps.engine.gameplay.map.MapGameplayPort[1];
+
         // The player's team on a multiplayer map is derived from the net
         // id (one peer per team, alternating), so the player on a 1-arg
         // --net= with no peers lands on RED. Single-player runs leave
@@ -284,18 +309,25 @@ public final class DesktopLauncher
                             mapScene.spec(), input, holder.renderer(), config,
                             playerTeam,
                             mapSpawnIndexFor(netArgs.localSpawnId(), playerTeam));
+
                     mapPort[0] = port;
+
                     return port;
                 }
+
                 final I_GameplayPort port = gameplayPort(input, holder, demo, config,
                     netArgs.localSpawnId());
+
                 if (port instanceof DemoGameplayPort)
                 {
                     gameplay[0] = (DemoGameplayPort) port;
                 }
+
                 return port;
             });
+
         final SoftwareRenderPort renderer = holder.renderer();
+
         // In map mode bind the map scene to the renderer. In demo
         // mode the existing bindWorld runs. The map bypasses every
         // demo-specific UI hook (match gate, audio, match status)
@@ -308,17 +340,24 @@ public final class DesktopLauncher
         {
             bindWorld(renderer, demo, explicitModel);
         }
+
         window.attachRenderer(renderer);
+
         if (mapScene == null)
         {
             attachMatchGate(window, gameplay[0]);
+
             // The weapon's noise. From the HAL rather than constructed here, so the
             // launcher makes no decision about audio beyond "use the platform's" —
             // which is the same shape as the window and the input port above it.
             attachAudio(hal, gameplay[0]);
+
             attachLocalBody(demo, gameplay[0]);
+
             attachMatchResult(window, gameplay[0]);
+
             attachMatchRestart(window, gameplay[0]);
+
             attachMatchStatus(window, gameplay[0], rate);
         }
         else
@@ -329,16 +368,24 @@ public final class DesktopLauncher
             // reports a status — the window wants the same shapes it
             // already knows how to draw.
             attachMatchGateMap(window, mapPort[0]);
+
             attachAudioMap(hal, mapPort[0]);
+
             attachMatchResultMap(window, mapPort[0]);
+
             attachMatchRestartMap(window, mapPort[0]);
+
             attachMatchStatusMap(window, mapPort[0], rate);
         }
+
         attachDebugSettings(window, debug);
+
         attachAccessibilitySettings(window, access, renderer);
+
         attachMapSelection(window, args);
 
         final NetSession netSession;
+
         try
         {
             // Networking now drives the spec's MapGameplayPort when a
@@ -356,15 +403,20 @@ public final class DesktopLauncher
         catch (final RuntimeException e)
         {
             LOG.error("Cannot open the network session: {}", e.getMessage());
+
             session.stop();
+
             System.exit(EXIT_BAD_NETWORK);
+
             return;
         }
 
         session.awaitPlatformLoop();
+
         if (netSession != null)
         {
             LOG.info("Network summary: {}", netSession);
+
             // The other half of the summary, and the half that says whether the
             // match was playable rather than merely connected: a session can report
             // perfect traffic while every peer body sat still, which is precisely
@@ -385,6 +437,7 @@ public final class DesktopLauncher
                     gameplay[0].controller().positionY(),
                     gameplay[0].controller().positionZ(),
                     gameplay[0].controller().yawRadians());
+
                 LOG.info("Remote body summary: {}", gameplay[0].remoteBodies());
             }
             else if (mapScene != null && mapPort[0] != null)
@@ -402,9 +455,12 @@ public final class DesktopLauncher
                     mapPort[0].controller().yawRadians(),
                     mapScene.spec().id());
             }
+
             netSession.close();
         }
+
         session.stop();
+
         LOG.info("OpenFPS desktop launcher exited");
     }
 
@@ -422,8 +478,10 @@ public final class DesktopLauncher
         if (explicitModel != null && !explicitModel.isEmpty())
         {
             LOG.info("--model given — drawing that one model instead of the demo room");
+
             return null;
         }
+
         return DemoScene.build(DemoModels.load(Path.of(assetRoot)));
     }
 
@@ -444,6 +502,7 @@ public final class DesktopLauncher
     {
         final com.openfps.engine.gameplay.map.MapSpec spec =
             com.openfps.engine.gameplay.map.MapLoader.loadOrFallback(mapId);
+
         return com.openfps.engine.gameplay.map.MapScene.build(spec);
     }
 
@@ -459,6 +518,7 @@ public final class DesktopLauncher
         {
             return new NullGameplayPort();
         }
+
         // The match holds the OTHER bodies. The local player is deliberately
         // absent from it: Hitscan treats a ray origin inside a box as a hit at
         // distance zero, so a shooter listed among its own targets would shoot
@@ -500,14 +560,19 @@ public final class DesktopLauncher
         {
             return null;
         }
+
         final NetSession netSession = new NetSession(new DesktopDatagramPort(),
             netArgs.playerId(), config.nanosPerTic());
+
         netSession.open(netArgs.port());
+
         for (final NetArgs.Peer peer : netArgs.peers())
         {
             netSession.addPeer(peer.id(), peer.address());
         }
+
         gameplay.attachNetwork(netSession);
+
         // The bodies, without which the session is a perfectly working transport
         // between two empty rooms. Attached only on the networked path: a
         // single-player run has nobody to put in them, and the pool costs nothing
@@ -516,8 +581,10 @@ public final class DesktopLauncher
         {
             gameplay.attachRemoteBodies(demo.remotePlayers());
         }
+
         LOG.info("Multiplayer: {} — inputs both ways, and each peer is replayed"
             + " into a body of its own", netArgs);
+
         return netSession;
     }
 
@@ -548,17 +615,23 @@ public final class DesktopLauncher
         {
             return null;
         }
+
         final NetSession netSession = new NetSession(new DesktopDatagramPort(),
             netArgs.playerId(), config.nanosPerTic());
+
         netSession.open(netArgs.port());
+
         for (final NetArgs.Peer peer : netArgs.peers())
         {
             netSession.addPeer(peer.id(), peer.address());
         }
+
         port.attachNetwork(netSession);
+
         LOG.info("Map multiplayer: {} on map={} — inputs both ways, each peer runs the"
             + " same spec match. Peer bodies in the map scene are a follow-up; the"
             + " lockstep claim is on the wire.", netArgs, mapScene.spec().id());
+
         return netSession;
     }
 
@@ -585,6 +658,7 @@ public final class DesktopLauncher
         {
             return;
         }
+
         window.attachMatchGate(live -> gameplay.setMatchLive(live.booleanValue()));
     }
 
@@ -609,6 +683,7 @@ public final class DesktopLauncher
         {
             return;
         }
+
         window.attachMatchResult(() -> finishedMatch(gameplay));
     }
 
@@ -638,6 +713,7 @@ public final class DesktopLauncher
         {
             return;
         }
+
         window.attachMatchRestart(gameplay::restartMatch);
     }
 
@@ -660,6 +736,7 @@ public final class DesktopLauncher
         {
             return;
         }
+
         window.attachMatchStatus(gameplay::status, rate.fps());
     }
 
@@ -680,10 +757,12 @@ public final class DesktopLauncher
     private static MatchSummary finishedMatch(final DemoGameplayPort gameplay)
     {
         final Match round = gameplay.match();
+
         if (round == null || !round.state().isOver())
         {
             return null;
         }
+
         return MatchSummary.of(round);
     }
 
@@ -733,11 +812,14 @@ public final class DesktopLauncher
         final AccessibilitySettings access, final SoftwareRenderPort renderer)
     {
         window.attachAccessibilitySettings(access);
+
         if (renderer == null)
         {
             return;
         }
+
         renderer.setOutlineEnabled(access.isTargetOutlineVisible());
+
         access.onChange(on -> renderer.setOutlineEnabled(on.booleanValue()));
     }
 
@@ -768,6 +850,7 @@ public final class DesktopLauncher
         {
             return;
         }
+
         window.attachMatchGate(live -> port.setMatchLive(live.booleanValue()));
     }
 
@@ -784,13 +867,16 @@ public final class DesktopLauncher
         {
             return;
         }
+
         window.attachMatchResult(() ->
         {
             final com.openfps.engine.gameplay.Match round = port.match();
+
             if (round == null || !round.state().isOver())
             {
                 return null;
             }
+
             return MatchSummary.of(round);
         });
     }
@@ -827,6 +913,7 @@ public final class DesktopLauncher
         {
             return;
         }
+
         // The match status is read every frame; the map port's accessor
         // builds a new snapshot on demand, which is the right shape for
         // the platform's per-frame copy.
@@ -857,19 +944,27 @@ public final class DesktopLauncher
     private static void attachMapSelection(final GdxWindowPort window, final String[] args)
     {
         final MapSelection selection = new MapSelection();
+
         final String initial = mapArg(args);
+
         if (initial != null && !initial.isEmpty() && MapLibrary.has(initial))
         {
             selection.setCurrentMapId(initial);
         }
+
         final List<MapSelectionScreen.Entry> entries = new ArrayList<>(MapLibrary.size());
+
         for (final String id : MapLibrary.ids())
         {
             final MapSpec spec = MapLibrary.get(id);
+
             entries.add(new MapSelectionScreen.Entry(spec.id(), spec.displayName()));
         }
+
         window.attachMapSelection(selection);
+
         window.attachMapEntries(entries);
+
         LOG.info("Map picker wired: {} map(s) registered, current selection = {}",
             entries.size(), selection.currentMapId());
     }
@@ -895,6 +990,7 @@ public final class DesktopLauncher
         {
             return;
         }
+
         gameplay.attachAudio(hal.getAudioPort());
     }
 
@@ -908,6 +1004,7 @@ public final class DesktopLauncher
         {
             return;
         }
+
         gameplay.attachLocalBody(demo.localBody());
     }
 
@@ -916,10 +1013,12 @@ public final class DesktopLauncher
     private static int[] botInstanceIndices(final DemoScene demo)
     {
         final int[] indices = new int[demo.botCount()];
+
         for (int index = 0; index < indices.length; index++)
         {
             indices[index] = demo.botInstanceIndex(index);
         }
+
         return indices;
     }
 
@@ -930,10 +1029,12 @@ public final class DesktopLauncher
     private static int[] botWeaponInstanceIndices(final DemoScene demo)
     {
         final int[] indices = new int[demo.botCount()];
+
         for (int index = 0; index < indices.length; index++)
         {
             indices[index] = demo.botWeaponInstanceIndex(index);
         }
+
         return indices;
     }
 
@@ -946,14 +1047,18 @@ public final class DesktopLauncher
         if (demo == null)
         {
             loadModel(renderer, explicitModel);
+
             return;
         }
+
         renderer.setScene(demo.scene());
+
         // Furniture of a first-person game, so the first-person game asks for
         // it. Off by default so :tools:renderPreview can inspect a model and
         // the render tests can assert exact pixels without a reticle through
         // the middle of every frame.
         renderer.setCrosshairEnabled(true);
+
         LOG.info("First-person demo ready: {} — pick Start Game to enter it, WASD to walk,"
             + " mouse to look, left click to fire, Escape to return to the menu", demo);
     }
@@ -978,10 +1083,12 @@ public final class DesktopLauncher
         {
             return Team.NEUTRAL;
         }
+
         if ((netSpawnId % 2) == 1)
         {
             return Team.RED;
         }
+
         return Team.BLUE;
     }
 
@@ -1002,6 +1109,7 @@ public final class DesktopLauncher
         {
             return -1;
         }
+
         // For two peers on the same team (3rd, 4th, 5th...), the spawn
         // index advances; for the normal 1v1 case, the index is 0 — the
         // first RED or BLUE spawn, which is what a two-peer match wants.
@@ -1009,6 +1117,7 @@ public final class DesktopLauncher
         {
             return (netSpawnId - 1) / 2;
         }
+
         return 0;
     }
 
@@ -1031,7 +1140,9 @@ public final class DesktopLauncher
         final com.openfps.engine.gameplay.map.MapScene mapScene)
     {
         renderer.setScene(mapScene.scene());
+
         renderer.setCrosshairEnabled(true);
+
         LOG.info("Map world ready: {} — viewmodel and bots are bypassed in map mode,"
             + " only the level geometry is rendered. The per-tic mode logic still ticks"
             + " (the smoke gameplay port runs against the spec).", mapScene);
@@ -1046,10 +1157,12 @@ public final class DesktopLauncher
     public static String assetsArg(final String[] args)
     {
         final String value = valueOf(args, ASSETS_ARG);
+
         if (value == null || value.isEmpty())
         {
             return DEFAULT_ASSET_ROOT;
         }
+
         return value;
     }
 
@@ -1065,6 +1178,7 @@ public final class DesktopLauncher
         {
             return false;
         }
+
         for (final String arg : args)
         {
             if (START_IN_GAME_ARG.equals(arg))
@@ -1072,6 +1186,7 @@ public final class DesktopLauncher
                 return true;
             }
         }
+
         return false;
     }
 
@@ -1109,6 +1224,7 @@ public final class DesktopLauncher
         {
             return null;
         }
+
         for (final String arg : args)
         {
             if (arg != null && arg.startsWith(prefix))
@@ -1116,6 +1232,7 @@ public final class DesktopLauncher
                 return arg.substring(prefix.length());
             }
         }
+
         return null;
     }
 
@@ -1127,11 +1244,14 @@ public final class DesktopLauncher
         if (path == null || path.isEmpty())
         {
             LOG.warn("No --model=<path> given — the window will show the menu only.");
+
             return;
         }
+
         try
         {
             renderer.loadModel(Files.readAllBytes(Path.of(path)));
+
             LOG.info("Drawing model {}", path);
         }
         catch (final IOException | RuntimeException e)
@@ -1179,6 +1299,7 @@ public final class DesktopLauncher
         public I_RenderPort createRenderPort(final I_ThreadPoolPort pool, final I_TimePort time)
         {
             built = new SoftwareRenderPort(pool, time);
+
             return built;
         }
 

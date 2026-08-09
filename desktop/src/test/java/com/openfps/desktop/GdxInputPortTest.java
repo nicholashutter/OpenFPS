@@ -56,7 +56,9 @@ class GdxInputPortTest
     void shouldStartNeutral()
     {
         final GdxInputPort port = new GdxInputPort();
+
         assertThat(port).isInstanceOf(I_InputPort.class);
+
         assertThat(port.currentInput()).isSameAs(InputState.NEUTRAL);
     }
 
@@ -76,6 +78,7 @@ class GdxInputPortTest
         assertThat(GdxInputPort.MOUSE_SENSITIVITY_RADIANS_PER_PIXEL)
             .isEqualTo(InputAccumulator.DEFAULT_RADIANS_PER_PIXEL)
             .isPositive();
+
         assertThat(new GdxInputPort().accumulator().radiansPerPixel())
             .isEqualTo(GdxInputPort.MOUSE_SENSITIVITY_RADIANS_PER_PIXEL);
     }
@@ -85,16 +88,22 @@ class GdxInputPortTest
     void shouldLatchAccumulatedInput()
     {
         final InputAccumulator accumulator = new InputAccumulator(1.0f);
+
         final GdxInputPort port = new GdxInputPort(accumulator);
+
         port.init();
 
         // Stand in for a frame's worth of polling: mouse right, W held.
         accumulator.accumulateLook(11, 0);
+
         accumulator.setMovementKeys(true, false, false, false);
 
         assertThat(port.currentInput()).isEqualTo(InputState.NEUTRAL);
+
         port.sampleInput(0);
+
         assertThat(port.currentInput().yawDelta()).isCloseTo(11.0f, within(EPSILON));
+
         assertThat(port.currentInput().forwardAxis()).isEqualTo(1.0f);
     }
 
@@ -103,13 +112,19 @@ class GdxInputPortTest
     void shouldReadTheSnapshotWithoutConsumingIt()
     {
         final InputAccumulator accumulator = new InputAccumulator(1.0f);
+
         final GdxInputPort port = new GdxInputPort(accumulator);
+
         accumulator.accumulateLook(6, 0);
+
         port.sampleInput(0);
 
         final InputState first = port.currentInput();
+
         assertThat(port.currentInput()).isSameAs(first);
+
         assertThat(port.currentInput()).isSameAs(first);
+
         assertThat(first.yawDelta()).isCloseTo(6.0f, within(EPSILON));
     }
 
@@ -118,12 +133,17 @@ class GdxInputPortTest
     void shouldNotRepeatRotationOnTheNextTic()
     {
         final InputAccumulator accumulator = new InputAccumulator(1.0f);
+
         final GdxInputPort port = new GdxInputPort(accumulator);
+
         accumulator.accumulateLook(6, 0);
 
         port.sampleInput(0);
+
         assertThat(port.currentInput().yawDelta()).isCloseTo(6.0f, within(EPSILON));
+
         port.sampleInput(1);
+
         assertThat(port.currentInput().yawDelta()).isZero();
     }
 
@@ -132,19 +152,29 @@ class GdxInputPortTest
     void shouldResetOnLifecycleCalls()
     {
         final InputAccumulator accumulator = new InputAccumulator(1.0f);
+
         final GdxInputPort port = new GdxInputPort(accumulator);
+
         accumulator.accumulateLook(30, 30);
+
         accumulator.setActionKeys(true, true, true);
+
         port.sampleInput(0);
+
         assertThat(port.currentInput().isNeutral()).isFalse();
 
         port.init();
+
         assertThat(port.currentInput()).isEqualTo(InputState.NEUTRAL);
+
         assertThat(accumulator.latch()).isEqualTo(InputState.NEUTRAL);
 
         accumulator.accumulateLook(5, 5);
+
         port.sampleInput(1);
+
         port.shutdown();
+
         assertThat(port.currentInput()).isEqualTo(InputState.NEUTRAL);
     }
 
@@ -153,10 +183,15 @@ class GdxInputPortTest
     void shouldNeverRequestShutdown()
     {
         final GdxInputPort port = new GdxInputPort();
+
         port.init();
+
         port.sampleInput(0);
+
         assertThat(port.isShutdownRequested()).isFalse();
+
         port.shutdown();
+
         assertThat(port.isShutdownRequested()).isFalse();
     }
 
@@ -165,12 +200,18 @@ class GdxInputPortTest
     void shouldSurviveHeadless()
     {
         final GdxInputPort port = new GdxInputPort();
+
         assertThatCode(port::init).doesNotThrowAnyException();
+
         assertThatCode(port::pollDevice).doesNotThrowAnyException();
+
         assertThatCode(port::pollDevice).doesNotThrowAnyException();
+
         assertThatCode(port::shutdown).doesNotThrowAnyException();
+
         // Polling did nothing, so the snapshot is still neutral.
         port.sampleInput(0);
+
         assertThat(port.currentInput()).isEqualTo(InputState.NEUTRAL);
     }
 
@@ -184,13 +225,17 @@ class GdxInputPortTest
         // Error, so nothing on the teardown path catches it, and a completely
         // successful run dies at the very last step.
         final GdxInputPort port = new GdxInputPort();
+
         port.init();
+
         assertThat(port.isWindowClosed()).isFalse();
 
         port.onWindowClosing();
+
         assertThat(port.isWindowClosed()).isTrue();
 
         assertThatCode(port::shutdown).doesNotThrowAnyException();
+
         assertThat(port.isWindowClosed()).isTrue();
     }
 
@@ -199,13 +244,17 @@ class GdxInputPortTest
     void shouldClearTheWindowFlagOnInit()
     {
         final GdxInputPort port = new GdxInputPort();
+
         port.init();
+
         port.onWindowClosing();
+
         port.shutdown();
 
         // GdxWindowPort supports SHUTDOWN -> INITIALIZED for a restart, so the
         // input port must not stay permanently convinced the window is gone.
         port.init();
+
         assertThat(port.isWindowClosed()).isFalse();
     }
 
@@ -218,8 +267,11 @@ class GdxInputPortTest
         void shouldNeverExposeANullUiState()
         {
             final GdxInputPort port = new GdxInputPort();
+
             assertThat(port.uiState()).isNotNull();
+
             assertThat(port.uiState().state()).isEqualTo(UiState.MENU);
+
             assertThat(port.isCursorCaptureWanted()).isFalse();
         }
 
@@ -237,8 +289,11 @@ class GdxInputPortTest
         void shouldNotWantTheCursorInTheMenu()
         {
             final GdxInputPort port = new GdxInputPort();
+
             final UiStateMachine ui = new UiStateMachine();
+
             port.bindUiState(ui);
+
             port.init();
 
             port.pollDevice();
@@ -256,16 +311,23 @@ class GdxInputPortTest
             // cursor with no way out is a window that cannot be closed with the
             // mouse at all.
             final GdxInputPort port = new GdxInputPort();
+
             final UiStateMachine ui = new UiStateMachine();
+
             port.bindUiState(ui);
+
             port.init();
 
             ui.startGame();
+
             port.pollDevice();
+
             assertThat(port.isCursorCaptureWanted()).isTrue();
 
             ui.returnToMenu();
+
             port.pollDevice();
+
             assertThat(port.isCursorCaptureWanted()).isFalse();
         }
     }
@@ -283,22 +345,32 @@ class GdxInputPortTest
             // banked when play begins, the first tic latches the lot and the
             // player's view snaps round before they have touched anything.
             final InputAccumulator accumulator = new InputAccumulator(1.0f);
+
             final GdxInputPort port = new GdxInputPort(accumulator);
+
             final UiStateMachine ui = new UiStateMachine();
+
             port.bindUiState(ui);
+
             port.init();
 
             // A mouse crossing the menu.
             accumulator.accumulateLook(420, -260);
+
             assertThat(accumulator.pendingYawPixels()).isEqualTo(420);
+
             assertThat(accumulator.pendingPitchPixels()).isEqualTo(-260);
 
             ui.startGame();
+
             port.pollDevice();
+
             port.sampleInput(0);
 
             assertThat(port.currentInput().yawDelta()).isZero();
+
             assertThat(port.currentInput().pitchDelta()).isZero();
+
             assertThat(port.currentInput().isNeutral()).isTrue();
         }
 
@@ -307,16 +379,23 @@ class GdxInputPortTest
         void shouldNotFlushMenuKeysIntoTheFirstTic()
         {
             final InputAccumulator accumulator = new InputAccumulator(1.0f);
+
             final GdxInputPort port = new GdxInputPort(accumulator);
+
             final UiStateMachine ui = new UiStateMachine();
+
             port.bindUiState(ui);
+
             port.init();
 
             accumulator.setMovementKeys(true, false, false, true);
+
             accumulator.setActionKeys(true, true, true);
 
             ui.startGame();
+
             port.pollDevice();
+
             port.sampleInput(0);
 
             assertThat(port.currentInput()).isEqualTo(InputState.NEUTRAL);
@@ -327,19 +406,28 @@ class GdxInputPortTest
         void shouldNotKeepWalkingAfterEscape()
         {
             final InputAccumulator accumulator = new InputAccumulator(1.0f);
+
             final GdxInputPort port = new GdxInputPort(accumulator);
+
             final UiStateMachine ui = new UiStateMachine();
+
             port.bindUiState(ui);
+
             port.init();
+
             ui.startGame();
+
             port.pollDevice();
 
             // Forward held and the mouse moving, then Escape.
             accumulator.setMovementKeys(true, false, false, false);
+
             accumulator.accumulateLook(40, 40);
 
             ui.returnToMenu();
+
             port.pollDevice();
+
             port.sampleInput(0);
 
             assertThat(port.currentInput()).isEqualTo(InputState.NEUTRAL);
@@ -350,12 +438,15 @@ class GdxInputPortTest
         void shouldClearOnBind()
         {
             final InputAccumulator accumulator = new InputAccumulator(1.0f);
+
             final GdxInputPort port = new GdxInputPort(accumulator);
+
             accumulator.accumulateLook(90, 90);
 
             port.bindUiState(new UiStateMachine());
 
             assertThat(accumulator.pendingYawPixels()).isZero();
+
             assertThat(accumulator.pendingPitchPixels()).isZero();
         }
     }
@@ -373,13 +464,17 @@ class GdxInputPortTest
             // room with nobody touching a key, and it would look exactly like a
             // stuck keyboard rather than like a debug switch left on.
             final InputAccumulator accumulator = new InputAccumulator(1.0f);
+
             final GdxInputPort port = new GdxInputPort(accumulator);
+
             port.init();
 
             assertThat(port.autoWalk()).isNull();
 
             port.sampleInput(0);
+
             assertThat(port.currentInput().forwardAxis()).isZero();
+
             assertThat(port.currentInput().strafeAxis()).isZero();
         }
 
@@ -392,11 +487,13 @@ class GdxInputPortTest
             // figure and could clear the room with nobody touching a mouse — and it
             // would look like a stuck button rather than like a debug switch.
             final GdxInputPort port = new GdxInputPort(new InputAccumulator(1.0f));
+
             port.init();
 
             assertThat(port.autoFire()).isNull();
 
             port.sampleInput(0);
+
             assertThat(port.currentInput().fire()).isFalse();
         }
     }
@@ -424,20 +521,26 @@ class GdxInputPortTest
             // pollLook — that needs a window — so it asserts the arithmetic the
             // pass-through relies on, which is the half that was wrong.
             final InputAccumulator accumulator = new InputAccumulator(1.0f);
+
             final GdxInputPort port = new GdxInputPort(accumulator);
+
             port.init();
 
             // What GLFW reports when the mouse is pulled TOWARD the player: the
             // pointer travels down the screen, so +y.
             accumulator.accumulateLook(0, 30);
+
             port.sampleInput(0);
+
             assertThat(port.currentInput().pitchDelta())
                 .as("mouse toward you aims down")
                 .isCloseTo(-30.0f, within(EPSILON));
 
             // And pushed away: up the screen, so -y.
             accumulator.accumulateLook(0, -30);
+
             port.sampleInput(1);
+
             assertThat(port.currentInput().pitchDelta())
                 .as("mouse away from you aims up")
                 .isCloseTo(30.0f, within(EPSILON));
@@ -455,20 +558,29 @@ class GdxInputPortTest
         void shouldInvertPitchWhenAsked()
         {
             final InputAccumulator accumulator = new InputAccumulator(1.0f);
+
             final GdxInputPort port = new GdxInputPort(accumulator);
 
             port.setInvertLook(true);
+
             assertThat(port.isInvertLook()).isTrue();
+
             accumulator.accumulateLook(0, -30);
+
             port.sampleInput(0);
+
             assertThat(port.currentInput().pitchDelta())
                 .as("inverted: mouse away from you now aims down")
                 .isCloseTo(-30.0f, within(EPSILON));
 
             port.setInvertLook(false);
+
             assertThat(port.isInvertLook()).isFalse();
+
             accumulator.accumulateLook(0, -30);
+
             port.sampleInput(1);
+
             assertThat(port.currentInput().pitchDelta())
                 .as("and back")
                 .isCloseTo(30.0f, within(EPSILON));
@@ -483,12 +595,15 @@ class GdxInputPortTest
             // settings screen would disagree about which way the mouse goes —
             // which is the class of confusion that produced the original bug.
             final InputAccumulator accumulator = new InputAccumulator(1.0f);
+
             final GdxInputPort port = new GdxInputPort(accumulator);
 
             port.setInvertLook(true);
+
             assertThat(accumulator.isInvertPitch()).isTrue();
 
             accumulator.setInvertPitch(false);
+
             assertThat(port.isInvertLook()).isFalse();
         }
     }

@@ -48,12 +48,15 @@ public final class MapLoader
     public static MapSpec load(final String id)
     {
         Objects.requireNonNull(id, "id must not be null");
+
         final MapSpec spec = MapLibrary.get(id);
+
         if (spec == null)
         {
             LOG.warn("MapLoader: no map registered with id '{}' (known: {})", id,
                 MapLibrary.ids());
         }
+
         return spec;
     }
 
@@ -73,11 +76,14 @@ public final class MapLoader
         {
             return MapLibrary.get("cornerstone");
         }
+
         final MapSpec spec = MapLibrary.get(id);
+
         if (spec == null)
         {
             return MapLibrary.get("cornerstone");
         }
+
         return spec;
     }
 }

@@ -98,6 +98,7 @@ public final class MapScene
     private MapScene(final MapSpec spec, final Scene scene)
     {
         this.spec = spec;
+
         this.scene = scene;
     }
 
@@ -124,21 +125,28 @@ public final class MapScene
         {
             throw new IllegalArgumentException("spec must not be null");
         }
+
         final byte[] bytes = readLevel(spec);
+
         if (bytes == null)
         {
             LOG.warn("MapScene: {} has no readable level model at {} — presenting an empty scene."
                 + " (Was the level.ofm committed? The four shipped maps are at"
                 + " engine/src/main/resources/maps/<id>/level.ofm.)",
                 spec.id(), spec.assets().level());
+
             return new MapScene(spec, Scene.EMPTY);
         }
+
         final ModelFormat model = ModelFormat.read(bytes);
+
         final Scene scene = Scene.builder()
             .addWorldInstance(model, com.openfps.engine.render.adapter.Mat4.identity())
             .build();
+
         LOG.info("MapScene: {} built {} ({} triangles, {} vertices, {} textures)",
             spec.id(), scene, model.indexCount() / 3, model.vertexCount(), model.textureCount());
+
         return new MapScene(spec, scene);
     }
 
@@ -176,10 +184,12 @@ public final class MapScene
     private static byte[] readLevel(final MapSpec spec)
     {
         final String path = spec.assets().level();
+
         if (path == null || path.isBlank())
         {
             return null;
         }
+
         // Try the classpath first, in two forms: the spec's
         // resource path verbatim, and (when the spec carries the
         // build-time prefix) the classpath-relative path. The
@@ -189,19 +199,24 @@ public final class MapScene
         // be stripped to {@code maps/...} before the classpath
         // lookup will find them.
         final byte[] verbatim = readFromClasspath(path);
+
         if (verbatim != null)
         {
             return verbatim;
         }
+
         if (path.contains(RESOURCE_HINT))
         {
             final String resourcePath = stripBuildPrefix(path);
+
             final byte[] fromClasspath = readFromClasspath(resourcePath);
+
             if (fromClasspath != null)
             {
                 return fromClasspath;
             }
         }
+
         // The classpath lookup is the load-bearing one — every
         // shipped map's level .ofm is committed at
         // engine/src/main/resources/maps/<id>/, which is on the
@@ -223,10 +238,12 @@ public final class MapScene
     private static String stripBuildPrefix(final String path)
     {
         final int index = path.indexOf(BUILD_PATH_PREFIX);
+
         if (index < 0)
         {
             return path;
         }
+
         return path.substring(index + BUILD_PATH_PREFIX.length());
     }
 
@@ -244,11 +261,14 @@ public final class MapScene
         // it returns null on a missing resource, which is the
         // "not found" signal we want.
         final ClassLoader loader = MapScene.class.getClassLoader();
+
         if (loader == null)
         {
             return null;
         }
+
         final String normalized;
+
         if (resourcePath.startsWith("/"))
         {
             normalized = resourcePath.substring(1);
@@ -257,18 +277,21 @@ public final class MapScene
         {
             normalized = resourcePath;
         }
+
         try (InputStream stream = loader.getResourceAsStream(normalized))
         {
             if (stream == null)
             {
                 return null;
             }
+
             return stream.readAllBytes();
         }
         catch (final IOException e)
         {
             LOG.warn("MapScene: failed to read classpath resource {}: {}", normalized,
                 e.getMessage());
+
             return null;
         }
     }
@@ -283,10 +306,12 @@ public final class MapScene
     private static byte[] readFromFilesystem(final String path)
     {
         final java.nio.file.Path file = java.nio.file.Path.of(path);
+
         if (!java.nio.file.Files.isRegularFile(file))
         {
             return null;
         }
+
         try
         {
             return java.nio.file.Files.readAllBytes(file);
@@ -294,6 +319,7 @@ public final class MapScene
         catch (final IOException e)
         {
             LOG.warn("MapScene: failed to read {}: {}", path, e.getMessage());
+
             return null;
         }
     }
@@ -305,10 +331,12 @@ public final class MapScene
         {
             return true;
         }
+
         if (!(other instanceof MapScene otherScene))
         {
             return false;
         }
+
         // MapSpec's equals is by id, so two MapScenes for the same
         // spec are equal. The scene is a function of the spec.
         return spec.equals(otherScene.spec);

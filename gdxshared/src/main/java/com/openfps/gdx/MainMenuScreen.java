@@ -133,15 +133,21 @@ public final class MainMenuScreen
         {
             throw new IllegalArgumentException("actions must not be null");
         }
+
         this.white = whitePixelTexture();
+
         final TextureRegion pixel = new TextureRegion(white);
+
         this.font = new BitmapFont();
+
         this.stage = new Stage(new ScreenViewport());
 
         this.background = new MenuBackground(pixel);
+
         this.title = new BlockTitle(TITLE_TEXT, pixel);
 
         this.tagline = label(TAGLINE_TEXT, MenuPalette.HINT, TAGLINE_FONT_SCALE);
+
         this.footer = label("W A S D  move    MOUSE  look    LEFT CLICK  fire    SPACE  jump",
             MenuPalette.HINT, FOOTER_FONT_SCALE);
 
@@ -161,13 +167,18 @@ public final class MainMenuScreen
 
         // Painter's order: backdrop, then title, then the keys on top.
         stage.addActor(background);
+
         stage.addActor(title);
+
         stage.addActor(tagline);
+
         for (final BlockButton button : buttons)
         {
             button.setSize(BUTTON_WIDTH, BUTTON_HEIGHT);
+
             stage.addActor(button);
         }
+
         stage.addActor(footer);
     }
 
@@ -210,25 +221,34 @@ public final class MainMenuScreen
         background.setBounds(0.0f, 0.0f, width, height);
 
         final float titleWidth = width * TITLE_WIDTH_FRACTION;
+
         final float cell = title.cellSizeFor(titleWidth);
+
         final float titleHeight = cell * BlockFont.GLYPH_HEIGHT;
+
         final float titleTop = height * (1.0f - TITLE_TOP_FRACTION);
+
         title.setBounds((width - titleWidth) * 0.5f, titleTop - titleHeight,
             titleWidth, titleHeight);
 
         tagline.pack();
+
         final float taglineTop = titleTop - titleHeight - TAGLINE_GAP;
+
         tagline.setPosition((width - tagline.getWidth()) * 0.5f,
             taglineTop - tagline.getHeight());
 
         float nextTop = taglineTop - tagline.getHeight() - BUTTON_BLOCK_GAP;
+
         for (final BlockButton button : buttons)
         {
             button.setPosition((width - BUTTON_WIDTH) * 0.5f, nextTop - BUTTON_HEIGHT);
+
             nextTop = nextTop - BUTTON_HEIGHT - BUTTON_GAP;
         }
 
         footer.pack();
+
         footer.setPosition((width - footer.getWidth()) * 0.5f, FOOTER_MARGIN);
     }
 
@@ -250,7 +270,9 @@ public final class MainMenuScreen
     public void render(final float deltaSeconds)
     {
         ScreenUtils.clear(MenuPalette.BACKDROP);
+
         stage.act(deltaSeconds);
+
         stage.draw();
     }
 
@@ -281,6 +303,7 @@ public final class MainMenuScreen
         {
             return;
         }
+
         Gdx.input.setInputProcessor(stage);
     }
 
@@ -299,6 +322,7 @@ public final class MainMenuScreen
         {
             return;
         }
+
         Gdx.input.setInputProcessor(null);
     }
 
@@ -311,6 +335,7 @@ public final class MainMenuScreen
     public void resize(final int width, final int height)
     {
         stage.getViewport().update(width, height, true);
+
         layoutFor(width, height);
     }
 
@@ -318,7 +343,9 @@ public final class MainMenuScreen
     public void dispose()
     {
         stage.dispose();
+
         white.dispose();
+
         font.dispose();
     }
 
@@ -326,10 +353,15 @@ public final class MainMenuScreen
     private static Texture whitePixelTexture()
     {
         final Pixmap pixmap = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
+
         pixmap.setColor(Color.WHITE);
+
         pixmap.fill();
+
         final Texture texture = new Texture(pixmap);
+
         pixmap.dispose();
+
         return texture;
     }
 
@@ -337,7 +369,9 @@ public final class MainMenuScreen
     private Label label(final String text, final Color colour, final float scale)
     {
         final Label built = new Label(text, new Label.LabelStyle(font, colour));
+
         built.setFontScale(scale);
+
         return built;
     }
 }

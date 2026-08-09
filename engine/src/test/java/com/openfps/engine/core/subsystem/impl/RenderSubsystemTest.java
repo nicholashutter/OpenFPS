@@ -54,11 +54,13 @@ final class RenderSubsystemTest
         void shouldRenderTheRequestedFrame()
         {
             final RecordingPort port = new RecordingPort();
+
             final RenderSubsystem subsystem = started(port);
 
             subsystem.processEvent(renderFrame(FIRST_TIC));
 
             assertThat(port.rendered).containsExactly(FIRST_TIC);
+
             assertThat(subsystem.pendingFrame()).isEqualTo(-1);
         }
 
@@ -73,18 +75,25 @@ final class RenderSubsystemTest
             // the other forty-nine would each cost a whole frame time to draw
             // something nobody will ever see.
             final BlockingPort port = new BlockingPort();
+
             final RenderSubsystem subsystem = started(port);
+
             final Thread first = new Thread(() -> subsystem.processEvent(renderFrame(0)),
                 "coalesce-first");
+
             first.setDaemon(true);
+
             first.start();
 
             assertThat(port.entered.await(TIMEOUT_SECONDS, TimeUnit.SECONDS)).isTrue();
+
             for (int request = 1; request <= PILED_UP_REQUESTS; request++)
             {
                 subsystem.processEvent(renderFrame(request));
             }
+
             port.release.countDown();
+
             first.join(TimeUnit.SECONDS.toMillis(TIMEOUT_SECONDS));
 
             assertThat(port.rendered)
@@ -97,10 +106,13 @@ final class RenderSubsystemTest
         void shouldNotRenderTheSameRequestTwice()
         {
             final RecordingPort port = new RecordingPort();
+
             final RenderSubsystem subsystem = started(port);
 
             subsystem.processEvent(renderFrame(1));
+
             subsystem.processEvent(renderFrame(2));
+
             subsystem.processEvent(renderFrame(3));
 
             assertThat(port.rendered).containsExactly(1, 2, 3);
@@ -111,13 +123,16 @@ final class RenderSubsystemTest
         void shouldLeaveNothingPendingAfterASerialBurst()
         {
             final RecordingPort port = new RecordingPort();
+
             final RenderSubsystem subsystem = started(port);
+
             for (int tic = 0; tic < PILED_UP_REQUESTS; tic++)
             {
                 subsystem.processEvent(renderFrame(tic));
             }
 
             assertThat(port.rendered).hasSize(PILED_UP_REQUESTS);
+
             assertThat(subsystem.pendingFrame()).isEqualTo(-1);
         }
     }
@@ -131,11 +146,15 @@ final class RenderSubsystemTest
         void shouldForwardLifecycleToThePort()
         {
             final RecordingPort port = new RecordingPort();
+
             final RenderSubsystem subsystem = new RenderSubsystem(port);
+
             subsystem.init();
+
             subsystem.shutdown();
 
             assertThat(port.inits.get()).isEqualTo(1);
+
             assertThat(port.shutdowns.get()).isEqualTo(1);
         }
 
@@ -144,6 +163,7 @@ final class RenderSubsystemTest
         void shouldIgnoreOtherEvents()
         {
             final RecordingPort port = new RecordingPort();
+
             final RenderSubsystem subsystem = started(port);
 
             subsystem.processEvent(new TickEvent(1L, 0L, 0, 0L));
@@ -155,7 +175,9 @@ final class RenderSubsystemTest
     private static RenderSubsystem started(final I_RenderPort port)
     {
         final RenderSubsystem subsystem = new RenderSubsystem(port);
+
         subsystem.init();
+
         return subsystem;
     }
 
@@ -213,9 +235,12 @@ final class RenderSubsystemTest
             if (!blocked)
             {
                 blocked = true;
+
                 entered.countDown();
+
                 await();
             }
+
             super.renderFrame(ticIndex);
         }
 

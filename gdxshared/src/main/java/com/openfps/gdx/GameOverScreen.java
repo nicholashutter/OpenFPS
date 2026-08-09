@@ -186,30 +186,42 @@ public final class GameOverScreen
         {
             throw new IllegalArgumentException("result must not be null");
         }
+
         if (onPlayAgain == null)
         {
             throw new IllegalArgumentException("onPlayAgain must not be null");
         }
+
         if (onBackToMenu == null)
         {
             throw new IllegalArgumentException("onBackToMenu must not be null");
         }
+
         if (!(scale > 0.0f))
         {
             throw new IllegalArgumentException("scale must be positive, got " + scale);
         }
+
         this.summary = result;
+
         this.uiScale = scale;
+
         this.white = whitePixelTexture();
+
         final TextureRegion pixel = new TextureRegion(white);
+
         this.font = new BitmapFont();
+
         this.stage = new Stage(new ScreenViewport());
 
         this.background = new MenuBackground(pixel);
+
         this.heading = new BlockTitle(headingText(result), pixel, headingColour(result));
 
         final String[] text = summaryText(result);
+
         this.summaryLines = new Label[text.length];
+
         for (int index = 0; index < text.length; index++)
         {
             summaryLines[index] = label(text[index], MenuPalette.HINT,
@@ -218,19 +230,26 @@ public final class GameOverScreen
 
         this.playAgainButton = new BlockButton("PLAY AGAIN", MenuPalette.PLAY_FACE,
             MenuPalette.PLAY_SHADE, pixel, font, BUTTON_FONT_SCALE * scale, onPlayAgain);
+
         this.backButton = new BlockButton("BACK TO MENU", MenuPalette.NEUTRAL_FACE,
             MenuPalette.NEUTRAL_SHADE, pixel, font, BUTTON_FONT_SCALE * scale, onBackToMenu);
 
         // Painter's order: backdrop, then heading, then the numbers, then the keys.
         stage.addActor(background);
+
         stage.addActor(heading);
+
         for (final Label line : summaryLines)
         {
             stage.addActor(line);
         }
+
         playAgainButton.setSize(BUTTON_WIDTH * scale, BUTTON_HEIGHT * scale);
+
         stage.addActor(playAgainButton);
+
         backButton.setSize(BUTTON_WIDTH * scale, BUTTON_HEIGHT * scale);
+
         stage.addActor(backButton);
     }
 
@@ -250,6 +269,7 @@ public final class GameOverScreen
         {
             return WIN_TEXT;
         }
+
         return LOSS_TEXT;
     }
 
@@ -265,6 +285,7 @@ public final class GameOverScreen
         {
             return MenuPalette.PLAY_FACE;
         }
+
         return MenuPalette.QUIT_FACE;
     }
 
@@ -286,6 +307,7 @@ public final class GameOverScreen
         {
             throw new IllegalArgumentException("result must not be null");
         }
+
         return new String[]
         {
             "KILLS   " + result.botsKilled() + " of " + result.botCount(),
@@ -368,35 +390,48 @@ public final class GameOverScreen
         }
 
         final float buttonWidth = BUTTON_WIDTH * uiScale;
+
         final float buttonHeight = BUTTON_HEIGHT * uiScale;
+
         final float headingTop = height * (1.0f - TITLE_TOP_FRACTION);
+
         final float mustFit = summaryLinesHeight() + buttonHeight * BUTTON_COUNT
             + BOTTOM_MARGIN * uiScale;
+
         final float headingWidth = headingWidthFor(width, height, heading.widthInBlocks(),
             headingHeightBudget(height, mustFit));
+
         final float cell = heading.cellSizeFor(headingWidth);
+
         final float headingHeight = cell * BlockFont.GLYPH_HEIGHT;
+
         heading.setBounds((width - headingWidth) * 0.5f, headingTop - headingHeight,
             headingWidth, headingHeight);
 
         final float gapScale = gapScaleFor(headingTop - headingHeight, buttonHeight);
 
         float nextTop = headingTop - headingHeight - SUMMARY_GAP * uiScale * gapScale;
+
         for (final Label line : summaryLines)
         {
             line.setPosition((width - line.getWidth()) * 0.5f, nextTop - line.getHeight());
+
             nextTop = nextTop - line.getHeight() - LINE_GAP * uiScale * gapScale;
         }
 
         final float firstButtonTop = nextTop - BUTTON_GAP * uiScale * gapScale;
+
         playAgainButton.setSize(buttonWidth, buttonHeight);
+
         playAgainButton.setPosition((width - buttonWidth) * 0.5f,
             firstButtonTop - buttonHeight);
+
         // The spacing between the two buttons is scaled with the other gaps, but
         // NEITHER button's own box ever is — see layoutFor's Javadoc. A screen
         // that fits by shrinking its own touch targets has solved the wrong
         // problem, and one of these two is now the only way to play again.
         backButton.setSize(buttonWidth, buttonHeight);
+
         backButton.setPosition((width - buttonWidth) * 0.5f,
             firstButtonTop - buttonHeight * BUTTON_COUNT
                 - BUTTON_SPACING * uiScale * gapScale);
@@ -460,21 +495,26 @@ public final class GameOverScreen
         final int blocks, final float heightBudget)
     {
         final float wanted = width * TITLE_WIDTH_FRACTION;
+
         if (blocks <= 0)
         {
             return wanted;
         }
+
         // BlockTitle derives its cell size from its WIDTH and draws downward, so
         // every height limit has to be expressed as a width by inverting that
         // arithmetic. Doing it here rather than guessing a second constant is what
         // keeps the two from drifting apart.
         final float allowedHeight =
             Math.min(height * HEADING_MAX_HEIGHT_FRACTION, heightBudget);
+
         final float capped = (allowedHeight / BlockFont.GLYPH_HEIGHT) * blocks;
+
         if (capped < wanted)
         {
             return capped;
         }
+
         return wanted;
     }
 
@@ -497,10 +537,12 @@ public final class GameOverScreen
         final float contentHeight)
     {
         final float budget = surfaceHeight * (1.0f - TITLE_TOP_FRACTION) - contentHeight;
+
         if (budget < 0.0f)
         {
             return 0.0f;
         }
+
         return budget;
     }
 
@@ -529,14 +571,17 @@ public final class GameOverScreen
         {
             return 1.0f;
         }
+
         if (available >= natural)
         {
             return 1.0f;
         }
+
         if (available <= 0.0f)
         {
             return 0.0f;
         }
+
         return available / natural;
     }
 
@@ -550,8 +595,10 @@ public final class GameOverScreen
         // button, and one between the two buttons.
         final float natural = (SUMMARY_GAP + BUTTON_GAP + BUTTON_SPACING
             + LINE_GAP * summaryLines.length) * uiScale;
+
         final float available = spaceBelowHeading - summaryLinesHeight()
             - buttonHeight * BUTTON_COUNT - BOTTOM_MARGIN * uiScale;
+
         return gapFitFraction(available, natural);
     }
 
@@ -561,10 +608,12 @@ public final class GameOverScreen
     private float summaryLinesHeight()
     {
         float lines = 0.0f;
+
         for (final Label line : summaryLines)
         {
             lines = lines + line.getHeight();
         }
+
         return lines;
     }
 
@@ -582,7 +631,9 @@ public final class GameOverScreen
     public void render(final float deltaSeconds)
     {
         ScreenUtils.clear(MenuPalette.BACKDROP);
+
         stage.act(deltaSeconds);
+
         stage.draw();
     }
 
@@ -593,6 +644,7 @@ public final class GameOverScreen
         {
             return;
         }
+
         Gdx.input.setInputProcessor(stage);
     }
 
@@ -603,6 +655,7 @@ public final class GameOverScreen
         {
             return;
         }
+
         Gdx.input.setInputProcessor(null);
     }
 
@@ -615,6 +668,7 @@ public final class GameOverScreen
     public void resize(final int width, final int height)
     {
         stage.getViewport().update(width, height, true);
+
         layoutFor(width, height);
     }
 
@@ -622,7 +676,9 @@ public final class GameOverScreen
     public void dispose()
     {
         stage.dispose();
+
         white.dispose();
+
         font.dispose();
     }
 
@@ -630,10 +686,15 @@ public final class GameOverScreen
     private static Texture whitePixelTexture()
     {
         final Pixmap pixmap = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
+
         pixmap.setColor(Color.WHITE);
+
         pixmap.fill();
+
         final Texture texture = new Texture(pixmap);
+
         pixmap.dispose();
+
         return texture;
     }
 
@@ -641,7 +702,9 @@ public final class GameOverScreen
     private Label label(final String text, final Color colour, final float scale)
     {
         final Label built = new Label(text, new Label.LabelStyle(font, colour));
+
         built.setFontScale(scale);
+
         return built;
     }
 }
