@@ -305,13 +305,13 @@ public final class MapScene
         {
             return true;
         }
-        if (!(other instanceof MapScene))
+        if (!(other instanceof MapScene otherScene))
         {
             return false;
         }
         // MapSpec's equals is by id, so two MapScenes for the same
         // spec are equal. The scene is a function of the spec.
-        return spec.equals(((MapScene) other).spec);
+        return spec.equals(otherScene.spec);
     }
 
     @Override

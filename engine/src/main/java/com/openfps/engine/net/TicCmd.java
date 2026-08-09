@@ -291,11 +291,10 @@ public final class TicCmd
         {
             return true;
         }
-        if (!(other instanceof TicCmd))
+        if (!(other instanceof TicCmd that))
         {
             return false;
         }
-        final TicCmd that = (TicCmd) other;
         return ticNumber == that.ticNumber
             && forward == that.forward
             && strafe == that.strafe

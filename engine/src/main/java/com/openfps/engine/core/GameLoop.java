@@ -49,7 +49,7 @@ public final class GameLoop implements Runnable
     private final EventFactory eventFactory;
     private final GameConfig config;
 
-    /** True once shutdown() has been called or maxTics reached. */
+    /** True once shutdown() has been called or maxTics reached. MUTABLE: read by the loop thread, written by shutdown() and the loop body's terminal path. */
     private volatile boolean running;
 
     public GameLoop(final I_TimePort timePort,

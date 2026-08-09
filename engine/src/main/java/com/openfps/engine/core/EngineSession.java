@@ -66,7 +66,7 @@ public final class EngineSession
     private final I_WindowPort window;
     private final I_FrameCallback frameCallback;
 
-    /** Guards against a double stop(); shutdown of most ports is not idempotent. */
+    /** Guards against a double stop(); shutdown of most ports is not idempotent. MUTABLE. */
     private boolean stopped;
 
     EngineSession(final I_MemoryPort memory,

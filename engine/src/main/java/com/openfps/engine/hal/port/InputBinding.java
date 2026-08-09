@@ -186,11 +186,10 @@ public final class InputBinding
         {
             return true;
         }
-        if (!(other instanceof InputBinding))
+        if (!(other instanceof InputBinding that))
         {
             return false;
         }
-        final InputBinding that = (InputBinding) other;
         return code == that.code && source == that.source;
     }
 

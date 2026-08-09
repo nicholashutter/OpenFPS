@@ -112,9 +112,11 @@ public final class WorkerPool implements I_ThreadPoolPort
 
     private final I_EventBusPort bus;
     private final SubsystemRegistry registry;
+    /** Set once at {@link #init(int)}, read by {@link #workerCount()}. MUTABLE. */
     private int workerCount;
     private final List<WorkerThread> workers = new ArrayList<>();
     private final AtomicInteger activeWorkers = new AtomicInteger(0);
+    /** Lifecycle state. MUTABLE: read by the workers, written by {@link #init()}, {@link #start()}, {@link #shutdown()}. */
     private volatile State state;
 
     /** Pre-allocated parallel batch slots. Contents are reused, never replaced. */

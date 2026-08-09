@@ -209,11 +209,10 @@ public final class InputState
         {
             return true;
         }
-        if (!(other instanceof InputState))
+        if (!(other instanceof InputState that))
         {
             return false;
         }
-        final InputState that = (InputState) other;
         if (fire != that.fire || jump != that.jump || sprint != that.sprint)
         {
             return false;

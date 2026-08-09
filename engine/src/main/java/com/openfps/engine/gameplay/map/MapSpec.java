@@ -289,11 +289,11 @@ public final class MapSpec
         {
             return true;
         }
-        if (!(other instanceof MapSpec))
+        if (!(other instanceof MapSpec otherSpec))
         {
             return false;
         }
-        return id.equals(((MapSpec) other).id);
+        return id.equals(otherSpec.id);
     }
 
     /**
@@ -320,28 +320,17 @@ public final class MapSpec
      */
     private static void validateMarkersForMode(final MatchMode mode, final MapMarkers markers)
     {
-        final boolean ok;
-        switch (mode)
+        final boolean ok = switch (mode)
         {
-            case TDM:
-                ok = markers instanceof MapMarkers.TeamDeathmatch;
-                break;
-            case HARDPOINT:
-                ok = markers instanceof MapMarkers.Hardpoint;
-                break;
-            case DOMINATION:
-                ok = markers instanceof MapMarkers.Domination;
-                break;
-            case CTF:
-                ok = markers instanceof MapMarkers.CaptureTheFlag;
-                break;
-            default:
-                // SINGLE_PLAYER and MULTIPLAYER are not real modes and never
-                // appear on a MapSpec; the enum's other entries are reserved
-                // for the existing single-player / multiplayer distinction.
-                ok = false;
-                break;
-        }
+            case TDM -> markers instanceof MapMarkers.TeamDeathmatch;
+            case HARDPOINT -> markers instanceof MapMarkers.Hardpoint;
+            case DOMINATION -> markers instanceof MapMarkers.Domination;
+            case CTF -> markers instanceof MapMarkers.CaptureTheFlag;
+            // SINGLE_PLAYER and MULTIPLAYER are not real modes and never
+            // appear on a MapSpec; the enum's other entries are reserved
+            // for the existing single-player / multiplayer distinction.
+            case SINGLE_PLAYER, MULTIPLAYER -> false;
+        };
         if (!ok)
         {
             throw new IllegalArgumentException("markers " + markers.getClass().getSimpleName()

@@ -283,8 +283,7 @@ public final class UserProfile
     public boolean equals(final Object o)
     {
         if (this == o) return true;
-        if (!(o instanceof UserProfile)) return false;
-        final UserProfile that = (UserProfile) o;
+        if (!(o instanceof UserProfile that)) return false;
         return Double.compare(that.audioVolume, audioVolume) == 0
             && Double.compare(that.mouseSensitivity, mouseSensitivity) == 0
             && fieldOfView == that.fieldOfView

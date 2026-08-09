@@ -928,23 +928,18 @@ public final class Match
         final MatchMode currentMode = mode();
         switch (currentMode)
         {
-            case TDM:
-                // No-op: the respawn, score, streak and bot-fire logic in
-                // tick() is the whole of TDM's per-tic work.
-                break;
-            case HARDPOINT:
-                updateHardpoint(ticIndex, playerX, playerZ);
-                break;
-            case DOMINATION:
-                updateDomination(ticIndex, playerX, playerZ);
-                break;
-            case CTF:
-                updateCtf(ticIndex, playerX, playerZ);
-                break;
-            default:
-                // SINGLE_PLAYER and MULTIPLAYER are not mode dispatchers;
-                // they fall back to TDM behaviour through mode().
-                break;
+            case HARDPOINT -> updateHardpoint(ticIndex, playerX, playerZ);
+            case DOMINATION -> updateDomination(ticIndex, playerX, playerZ);
+            case CTF -> updateCtf(ticIndex, playerX, playerZ);
+            case TDM ->
+            {
+                // TDM's per-tic work is the respawn, score, streak and
+                // bot-fire logic in tick().
+            }
+            // SINGLE_PLAYER and MULTIPLAYER are not mode dispatchers;
+            // they fall back to TDM behaviour through mode().
+            case SINGLE_PLAYER, MULTIPLAYER -> { /* no-op */ }
+            default -> { /* defensive: every enum constant is covered above */ }
         }
     }
 

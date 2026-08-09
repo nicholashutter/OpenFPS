@@ -91,15 +91,10 @@ public enum MatchMode
      */
     public boolean isRuleSet()
     {
-        switch (this)
+        return switch (this)
         {
-            case TDM:
-            case HARDPOINT:
-            case DOMINATION:
-            case CTF:
-                return true;
-            default:
-                return false;
-        }
+            case TDM, HARDPOINT, DOMINATION, CTF -> true;
+            case SINGLE_PLAYER, MULTIPLAYER -> false;
+        };
     }
 }

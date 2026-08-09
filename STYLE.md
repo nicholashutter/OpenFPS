@@ -92,6 +92,16 @@ No wildcard imports except for `static` imports of constants.
 
 ### 2.2 Engine-Specific Naming Signals
 
+> These prefixes are *subsystem* prefixes, not Hungarian type prefixes
+> — they say *what package the class belongs to*, not *what type it
+> is*. `I_UserProfilePort` is the port interface for the user-profile
+> subsystem; `R_SoftwareRenderPort` is the render subsystem's
+> rasterizer; `D_GameLoop` is the core subsystem's loop. They are
+> deliberately kept so a reader can tell at a glance what they are
+> looking at, the same way `java.util.List` and `java.util.Map` say
+> what package a class lives in. They are not to be "cleaned up" by
+> renaming. Per the `AGENTS.md` "Subsystem Owners" table.
+
 | Pattern | Meaning |
 |---|---|
 | `I_*` | HAL port interface (e.g., `I_TimeSource`) |
@@ -115,7 +125,7 @@ Treat all fields as immutable by default. This mirrors Rust's `final` / `val` ph
 
 **Rules:**
 - All instance fields must be `final`
-- If a field genuinely needs mutation (e.g., particle positions), mark it explicitly with a comment: `// MUTABLE: updated every frame`
+- If a field genuinely needs mutation (e.g., particle positions), mark it explicitly with a comment in the Javadoc above the field. The marker is the literal word `MUTABLE` (in the Javadoc text) plus a one-line reason: `/** Counter of live workers. MUTABLE: incremented at start, decremented at run() exit. */`. The `// MUTABLE: ...` *inline* form is also acceptable; whichever fits the file.
 - Use `final` on every local variable unless you are reassigning it
 
 ```java
@@ -241,6 +251,16 @@ Prefer early returns. Avoid flag variables when a direct return suffices.
 
 ### 5.5 No Ternary Operator
 
+**The `?:` operator is banned** — in production code, in tests, in
+generated sources, in javadoc examples, and in any line that gets
+compiled. Use `if`/`else`, an early return, a `switch`, or a
+*switch expression* (`case X -> value`). The same rule covers the
+Java 16+ ternary `?` *operator* — there is none, and the rule says
+so. If you need a branched value, the right shape is a switch
+expression or an explicit if/else with a named intermediate.
+
+```java
+
 **The `?:` operator is banned.** Use `if`/`else`, an early return, or a
 `switch`. Control flow should read as control flow, not as an expression
 you have to unpack — especially inside a larger expression such as string
@@ -276,7 +296,30 @@ return "NetworkPacketEvent{bytes=" + (payload == null ? 0 : payload.length) + "}
 ```
 
 Switch *expressions* (`case X -> value`) are not ternaries and are fine —
-they are explicit, exhaustive, and checked by the compiler.
+they are explicit, exhaustive, and checked by the compiler. See § 5.6
+for when to use one and § 6.5 for the syntax.
+
+### 5.6 Intermediate Variables for Complex Expressions
+
+When an expression has more than two operations on different operands
+*and* is not already inside a clearly named method, lift the
+intermediate state into a `final` local. The compiler will inline
+where it matters; the *reader* gets a name for each step.
+
+```java
+// GOOD
+final int totalDamage = baseDamage + bonusDamage - defense;
+final float ratio = (float) totalDamage / maxHealth;
+return ratio > 0.5f;
+
+// BAD — single line, three operations, no name
+return ((float) (baseDamage + bonusDamage - defense) / maxHealth) > 0.5f;
+```
+
+The rule is not "name every intermediate" — it is "name the ones
+that would let a reader skip the expression and still understand
+what it is computing". A `final int sum = a + b` is rarely worth
+the line. A `final int usableRange = max - min` often is.
 
 ---
 
@@ -314,6 +357,106 @@ stream.filter(e -> e.isAlive()).map(e -> { e.activate(); return e; }).collect(to
 ### 6.3 Method References
 
 Prefer method references (`Entity::activate`) over verbose lambdas where the intent is clear.
+
+### 6.4 `instanceof` Pattern Matching (Java 16+)
+
+The build targets Java 17. Use the modern `instanceof` pattern —
+the test and the cast are one expression:
+
+```java
+// GOOD — Java 16+
+if (event instanceof TickEvent tick)
+{
+    port.tick(tick.ticNumber());
+}
+
+// BAD — pre-Java 16
+if (event instanceof TickEvent)
+{
+    final TickEvent tick = (TickEvent) event;
+    port.tick(tick.ticNumber());
+}
+```
+
+For `equals`:
+
+```java
+// GOOD
+if (!(other instanceof MapSpec otherSpec))
+{
+    return false;
+}
+return id.equals(otherSpec.id);
+
+// BAD
+if (!(other instanceof MapSpec))
+{
+    return false;
+}
+return id.equals(((MapSpec) other).id);
+```
+
+The pattern variable is in scope only inside the `if` body (or after
+the `&&` it is bound to). It is *not* a new field; it cannot leak.
+
+### 6.5 Switch Expressions (Java 14+)
+
+A `switch` that is computing a value should be a *switch expression*
+(`switch (x) { case A -> y; ... }`), not a statement with a
+`final` local and `break;`. The expression form is exhaustive, the
+compiler checks it, and it reads as a value rather than as control
+flow.
+
+```java
+// GOOD — expression
+final boolean allowed = switch (from)
+{
+    case UNINITIALIZED -> to == SubsystemState.READY;
+    case READY         -> to == SubsystemState.SHUTDOWN;
+    case ERROR         -> to == SubsystemState.UNINITIALIZED;
+    case SHUTDOWN      -> false;
+};
+
+// BAD — same logic, statement form
+final boolean allowed;
+switch (from)
+{
+    case UNINITIALIZED: allowed = to == SubsystemState.READY; break;
+    case READY:         allowed = to == SubsystemState.SHUTDOWN; break;
+    case ERROR:         allowed = to == SubsystemState.UNINITIALIZED; break;
+    case SHUTDOWN:      allowed = false; break;
+}
+```
+
+For a `switch` that *only* dispatches to other methods, the
+arrow-form `switch` *statement* (Java 14) is the equivalent:
+
+```java
+// GOOD — statement form, dispatch only
+switch (currentMode)
+{
+    case HARDPOINT -> updateHardpoint(ticIndex, playerX, playerZ);
+    case DOMINATION -> updateDomination(ticIndex, playerX, playerZ);
+    case CTF        -> updateCtf(ticIndex, playerX, playerZ);
+    // TDM and the unhandled modes fall through silently — see method Javadoc
+}
+
+// BAD — if/else chain doing the same dispatch
+if (mode == MatchMode.HARDPOINT)
+{
+    updateHardpoint(ticIndex, playerX, playerZ);
+}
+else if (mode == MatchMode.DOMINATION)
+{
+    updateDomination(ticIndex, playerX, playerZ);
+}
+// ...
+```
+
+The `default` arm is required for the statement form (the compiler
+checks exhaustiveness) and optional for the expression form when
+the switch is on an enum (an enum with N constants exhausts the
+switch).
 
 ---
 

@@ -73,17 +73,11 @@ public enum BotPattern
      */
     public float offsetX(final float phaseRadians, final float amplitudeUnits)
     {
-        switch (this)
+        return switch (this)
         {
-            case PACE_X:
-                return amplitudeUnits * (float) StrictMath.sin(phaseRadians);
-            case ORBIT:
-                return amplitudeUnits * (float) StrictMath.sin(phaseRadians);
-            case SENTRY:
-            case PACE_Z:
-            default:
-                return 0.0f;
-        }
+            case PACE_X, ORBIT -> amplitudeUnits * (float) StrictMath.sin(phaseRadians);
+            case SENTRY, PACE_Z -> 0.0f;
+        };
     }
 
     /**
@@ -96,20 +90,15 @@ public enum BotPattern
      */
     public float offsetZ(final float phaseRadians, final float amplitudeUnits)
     {
-        switch (this)
+        return switch (this)
         {
-            case PACE_Z:
-                return amplitudeUnits * (float) StrictMath.sin(phaseRadians);
-            case ORBIT:
-                // Cosine against the sine above, which is what turns two
-                // one-dimensional paces into a circle rather than a diagonal
-                // line — sin on both axes would trace the latter.
-                return amplitudeUnits * (float) StrictMath.cos(phaseRadians);
-            case SENTRY:
-            case PACE_X:
-            default:
-                return 0.0f;
-        }
+            case PACE_Z -> amplitudeUnits * (float) StrictMath.sin(phaseRadians);
+            // Cosine against the sine above, which is what turns two
+            // one-dimensional paces into a circle rather than a diagonal
+            // line — sin on both axes would trace the latter.
+            case ORBIT -> amplitudeUnits * (float) StrictMath.cos(phaseRadians);
+            case SENTRY, PACE_X -> 0.0f;
+        };
     }
 
     /**

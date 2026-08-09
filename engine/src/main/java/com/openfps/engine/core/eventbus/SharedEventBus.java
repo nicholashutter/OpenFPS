@@ -31,8 +31,11 @@ public final class SharedEventBus implements I_EventBusPort
 {
     private static final Logger LOG = LoggerFactory.getLogger(SharedEventBus.class);
 
+    /** Backing queue, swapped on {@link #init(int)}. MUTABLE. */
     private LinkedBlockingQueue<I_EngineEvent> queue;
+    /** Set once at {@link #init(int)}, read by {@link #capacity()}. MUTABLE. */
     private int capacity;
+    /** Lifecycle state. MUTABLE: read by the worker threads, written by {@link #init()}, {@link #shutdown()}. */
     private volatile State state;
 
     public SharedEventBus()
