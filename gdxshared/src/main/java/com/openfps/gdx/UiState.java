@@ -100,6 +100,40 @@ public enum UiState
     MAP_SELECT,
 
     /**
+     * The mode picker is on screen and owns the pointer.
+     *
+     * <p>The first sub-screen after {@link #MENU} when the player picks a
+     * body source (single / multi) and wants to be asked which rule set
+     * next. Reached from the menu and the map picker; returns to the menu
+     * and forward to the map picker. The world's not drawn, the match is
+     * not advancing, and the cursor is free because there are buttons on
+     * the glass.</p>
+     */
+    MODE_SELECT,
+
+    /**
+     * The map is loading and a small "LOADING" screen is on the glass.
+     *
+     * <p>Stays long enough for the engine to swap the scene, then
+     * transitions to {@link #PLAYING}. The same render-side behaviour as
+     * every other pre-play state &mdash; the world is not drawn, the match
+     * does not advance, the cursor is free because the loading screen has
+     * a Back affordance for the case where the engine hangs on the load
+     * and the player wants out.</p>
+     */
+    LOADING,
+
+    /**
+     * The multiplayer lobby is on screen and owns the pointer.
+     *
+     * <p>Reached from the map picker when the player picked a map for
+     * multiplayer. The lobby shows the chosen map and mode and offers
+     * HOST / JOIN / BACK. Returns to the map picker on BACK, advances to
+     * {@link #LOADING} on HOST or JOIN.</p>
+     */
+    LOBBY,
+
+    /**
      * The round is decided and its result is on screen.
      *
      * <p>The world stops being drawn the instant this begins. That is the
@@ -132,13 +166,20 @@ public enum UiState
         switch (this)
         {
             case MENU:
-                return target == PLAYING || target == SETTINGS || target == MAP_SELECT;
+                return target == PLAYING || target == SETTINGS || target == MODE_SELECT;
             case PLAYING:
                 return target == MENU || target == GAME_OVER;
             case SETTINGS:
                 return target == MENU;
+            case MODE_SELECT:
+                return target == MENU || target == MAP_SELECT;
             case MAP_SELECT:
-                return target == MENU;
+                return target == MENU || target == MODE_SELECT
+                    || target == LOADING || target == LOBBY;
+            case LOBBY:
+                return target == MAP_SELECT || target == LOADING;
+            case LOADING:
+                return target == MAP_SELECT || target == PLAYING;
             case GAME_OVER:
                 return target == MENU || target == PLAYING;
             default:
@@ -180,6 +221,39 @@ public enum UiState
     public boolean drawsMapSelect()
     {
         return this == MAP_SELECT;
+    }
+
+    /**
+     * Returns true while the mode picker should be drawn and fed input
+     * events.
+     *
+     * @return true in {@link #MODE_SELECT} only
+     */
+    public boolean drawsModeSelect()
+    {
+        return this == MODE_SELECT;
+    }
+
+    /**
+     * Returns true while the loading screen should be drawn and fed input
+     * events.
+     *
+     * @return true in {@link #LOADING} only
+     */
+    public boolean drawsLoading()
+    {
+        return this == LOADING;
+    }
+
+    /**
+     * Returns true while the multiplayer lobby should be drawn and fed
+     * input events.
+     *
+     * @return true in {@link #LOBBY} only
+     */
+    public boolean drawsLobby()
+    {
+        return this == LOBBY;
     }
 
     /**

@@ -606,6 +606,51 @@ tasks.register<JavaExec>("buildArcticStationMap") {
     })
 }
 
+// Renders one thumbnail.png per map under engine/src/main/resources/maps and
+// writes a meta.json sidecar next to each. The map browser in gdxshared reads
+// the sidecar to get the display name, setting, mode, and caption; the
+// thumbnail is loaded as a Texture when the menu is built.
+//
+//   .\gradlew.bat :tools:renderMapThumbnails
+//
+//   -PmapsDir=<path>     override the maps directory
+//   -Pwidth=N            thumbnail width   (default 320)
+//   -Pheight=N           thumbnail height  (default 180)
+//   -Pthreads=N          worker threads; 0 (default) runs serially
+//   -Ponly=id1,id2,...   render only these map ids; default = every map
+//
+// Idempotent and re-runnable. A pre-existing meta.json with a non-empty
+// caption is preserved (test for a hand edit); a missing or empty caption
+// is regenerated from the registered MapSpec. Re-running overwrites the
+// thumbnail unconditionally -- the .ofm is the source of truth, not the PNG.
+//
+// Deliberately NOT wired into `build`. It writes into the working tree (and
+// into a tree that is git-committed under git add -f), and a tool that
+// regenerates 17 PNGs should not run as a side-effect of compiling.
+tasks.register<JavaExec>("renderMapThumbnails") {
+    group = "openfps"
+    description = "Renders thumbnail.png + meta.json for every map."
+
+    mainClass.set("com.openfps.tools.MapThumbnailMain")
+    classpath = sourceSets["main"].runtimeClasspath
+
+    val rootDirectory = rootProject.projectDir
+    workingDir = rootDirectory
+
+    val mapsDir = providers.gradleProperty("mapsDir")
+        .orElse("engine/src/main/resources/maps").get()
+    val width = providers.gradleProperty("width").orElse("320").get()
+    val height = providers.gradleProperty("height").orElse("180").get()
+    val threads = providers.gradleProperty("threads").orElse("0").get()
+    val only = providers.gradleProperty("only").orElse("").get()
+
+    systemProperty("mapsDir", mapsDir)
+    systemProperty("width", width)
+    systemProperty("height", height)
+    systemProperty("threads", threads)
+    systemProperty("only", only)
+}
+
 // Builds the Foundry map's level model: a 320x320 heavy-machinery
 // foundry with three machine halls (cast-metal shop, assembly floor,
 // cooling room) and a system of mid-level gantries connecting them.

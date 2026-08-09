@@ -161,29 +161,35 @@ class GdxFrameLoopListenerTest
             // path skips stage.act()/stage.draw() when it is false, and the
             // input path detaches the Scene2D processor. Asserting it here is
             // asserting both, without a GL context to draw into.
+            //
+            // Single Player no longer takes the menu straight to PLAYING; it
+            // takes it to MODE_SELECT, where the player picks the rule set.
+            // The "menu is gone" predicate fires as soon as the state leaves
+            // MENU, so the assertion still holds here.
             final GdxFrameLoopListener listener = listenerFor(new RecordingFrameCallback());
 
             listener.menuActions().onStartGame();
 
-            assertThat(listener.uiState().state()).isEqualTo(UiState.PLAYING);
+            assertThat(listener.uiState().state()).isEqualTo(UiState.MODE_SELECT);
 
             assertThat(listener.isMenuActive()).isFalse();
         }
 
         @Test
-        @DisplayName("Single Player and Multiplayer both enter the world, in different modes")
+        @DisplayName("Single Player and Multiplayer both reach the mode picker, in different bodies")
         void shouldRecordWhichKindOfMatchWasStarted()
         {
             // Both buttons make the same UI transition, so the state alone
-            // cannot say which was pressed. The mode is what a networked match
-            // is dispatched on, and reading it back is the only way to tell a
-            // wiring mistake — both buttons on the same handler — from a
-            // working menu, since the screen looks identical either way.
+            // cannot say which was pressed. The body source is what the
+            // downstream screens (mode picker, map browser, lobby) read
+            // to know which side of the fork the player took, and reading
+            // it back is the only way to tell a wiring mistake — both
+            // buttons on the same handler — from a working menu.
             final GdxFrameLoopListener single = listenerFor(new RecordingFrameCallback());
 
             single.menuActions().onStartGame();
 
-            assertThat(single.uiState().state()).isEqualTo(UiState.PLAYING);
+            assertThat(single.uiState().state()).isEqualTo(UiState.MODE_SELECT);
 
             assertThat(single.uiState().mode()).isEqualTo(MatchMode.SINGLE_PLAYER);
 
@@ -191,7 +197,7 @@ class GdxFrameLoopListenerTest
 
             networked.menuActions().onMultiplayer();
 
-            assertThat(networked.uiState().state()).isEqualTo(UiState.PLAYING);
+            assertThat(networked.uiState().state()).isEqualTo(UiState.MODE_SELECT);
 
             assertThat(networked.uiState().mode()).isEqualTo(MatchMode.MULTIPLAYER);
 
@@ -484,11 +490,16 @@ class GdxFrameLoopListenerTest
 
             listener.menuActions().onStartGame();
 
-            assertThat(input.uiState().isPlaying()).isTrue();
+            // The menu no longer takes the game straight to PLAYING; it
+            // takes it to MODE_SELECT first, and the input port is bound
+            // to the same machine, so it sees the same intermediate state.
+            assertThat(input.uiState().state()).isEqualTo(UiState.MODE_SELECT);
 
             input.pollDevice();
 
-            assertThat(input.isCursorCaptureWanted()).isTrue();
+            // Cursor capture fires only in PLAYING; in MODE_SELECT the
+            // pointer is free because the mode picker is on the glass.
+            assertThat(input.isCursorCaptureWanted()).isFalse();
         }
     }
 }

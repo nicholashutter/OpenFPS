@@ -102,7 +102,8 @@ class MapSelectionScreenTest
         @DisplayName("refuse a null id, because a null id is a launcher bug not a player one")
         void shouldRefuseNullId()
         {
-            assertThatThrownBy(() -> new MapSelectionScreen.Entry(null, "Cornerstone"))
+            assertThatThrownBy(() -> new MapSelectionScreen.Entry(null, "Cornerstone",
+                "maps/cornerstone/thumbnail.png", "TDM"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("id");
         }
@@ -111,11 +112,13 @@ class MapSelectionScreenTest
         @DisplayName("refuse a blank id, because a blank id would never load")
         void shouldRefuseBlankId()
         {
-            assertThatThrownBy(() -> new MapSelectionScreen.Entry("", "Cornerstone"))
+            assertThatThrownBy(() -> new MapSelectionScreen.Entry("", "Cornerstone",
+                "maps/cornerstone/thumbnail.png", "TDM"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("id");
 
-            assertThatThrownBy(() -> new MapSelectionScreen.Entry("   ", "Cornerstone"))
+            assertThatThrownBy(() -> new MapSelectionScreen.Entry("   ", "Cornerstone",
+                "maps/cornerstone/thumbnail.png", "TDM"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("id");
         }
@@ -124,7 +127,8 @@ class MapSelectionScreenTest
         @DisplayName("refuse a null display name, because a row needs a name a player can read")
         void shouldRefuseNullDisplayName()
         {
-            assertThatThrownBy(() -> new MapSelectionScreen.Entry("cornerstone", null))
+            assertThatThrownBy(() -> new MapSelectionScreen.Entry("cornerstone", null,
+                "maps/cornerstone/thumbnail.png", "TDM"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("displayName");
         }
@@ -133,7 +137,8 @@ class MapSelectionScreenTest
         @DisplayName("refuse a blank display name, because a row without a name is a label without a value")
         void shouldRefuseBlankDisplayName()
         {
-            assertThatThrownBy(() -> new MapSelectionScreen.Entry("cornerstone", ""))
+            assertThatThrownBy(() -> new MapSelectionScreen.Entry("cornerstone", "",
+                "maps/cornerstone/thumbnail.png", "TDM"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("displayName");
         }
@@ -143,7 +148,8 @@ class MapSelectionScreenTest
         void shouldExposeIdAndName()
         {
             final MapSelectionScreen.Entry entry =
-                new MapSelectionScreen.Entry("cornerstone", "Cornerstone");
+                new MapSelectionScreen.Entry("cornerstone", "Cornerstone",
+                    "maps/cornerstone/thumbnail.png", "TDM");
 
             assertThat(entry.id()).isEqualTo("cornerstone");
 
@@ -159,9 +165,12 @@ class MapSelectionScreenTest
             // they were added, so a screen that takes a List<Entry> cannot
             // accidentally sort by display name and lose the id correspondence.
             final List<MapSelectionScreen.Entry> entries = List.of(
-                new MapSelectionScreen.Entry("cornerstone", "Cornerstone"),
-                new MapSelectionScreen.Entry("overpass", "Overpass"),
-                new MapSelectionScreen.Entry("tripoint", "Tripoint"));
+                new MapSelectionScreen.Entry("cornerstone", "Cornerstone",
+                    "maps/cornerstone/thumbnail.png", "TDM"),
+                new MapSelectionScreen.Entry("overpass", "Overpass",
+                    "maps/overpass/thumbnail.png", "DOMINATION"),
+                new MapSelectionScreen.Entry("tripoint", "Tripoint",
+                    "maps/tripoint/thumbnail.png", "CTF"));
 
             assertThat(entries).hasSize(3);
 

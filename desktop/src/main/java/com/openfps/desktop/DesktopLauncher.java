@@ -958,7 +958,13 @@ public final class DesktopLauncher
         {
             final MapSpec spec = MapLibrary.get(id);
 
-            entries.add(new MapSelectionScreen.Entry(spec.id(), spec.displayName()));
+            // The thumbnail lives next to the .ofm in the same map directory,
+            // and the engine module's resources are on the classpath, so the
+            // classpath-relative path is what the screen needs to load it.
+            final String thumbnailPath = "maps/" + spec.id() + "/thumbnail.png";
+
+            entries.add(new MapSelectionScreen.Entry(spec.id(), spec.displayName(),
+                thumbnailPath, spec.mode().name()));
         }
 
         window.attachMapSelection(selection);

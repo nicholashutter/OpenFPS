@@ -157,8 +157,6 @@ public final class MainMenuScreen
                 pixel, font, BUTTON_FONT_SCALE, actions::onStartGame),
             new BlockButton("MULTIPLAYER", MenuPalette.NET_FACE, MenuPalette.NET_SHADE,
                 pixel, font, BUTTON_FONT_SCALE, actions::onMultiplayer),
-            new BlockButton("SELECT MAP", MenuPalette.ACCENT_FACE, MenuPalette.ACCENT_SHADE,
-                pixel, font, BUTTON_FONT_SCALE, actions::onMapSelection),
             new BlockButton("SETTINGS", MenuPalette.NEUTRAL_FACE, MenuPalette.NEUTRAL_SHADE,
                 pixel, font, BUTTON_FONT_SCALE, actions::onSettings),
             new BlockButton("QUIT", MenuPalette.QUIT_FACE, MenuPalette.QUIT_SHADE,

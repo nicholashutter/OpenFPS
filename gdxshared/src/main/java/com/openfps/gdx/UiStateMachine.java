@@ -218,6 +218,146 @@ public final class UiStateMachine
     }
 
     /**
+     * Opens the mode picker from the menu: {@code MENU -> MODE_SELECT}.
+     *
+     * <p>The body source (single / multi) is recorded first so the
+     * downstream screens know which side of the fork to take. From
+     * {@link UiState#MODE_SELECT} the player picks the rule set
+     * (TDM / Hardpoint / Domination / CTF), then proceeds to the map
+     * picker and from there to either a loading screen (single) or a
+     * lobby (multi) before the game itself starts.</p>
+     *
+     * @param body the body source the player chose on the main menu;
+     *     must be either {@link MatchMode#SINGLE_PLAYER} or
+     *     {@link MatchMode#MULTIPLAYER}
+     * @throws IllegalArgumentException if {@code body} is null or is one
+     *     of the four rule sets
+     * @throws IllegalStateException if the menu is not the screen in front
+     */
+    public void openModeSelect(final MatchMode body)
+    {
+        if (body == null)
+        {
+            throw new IllegalArgumentException("body must not be null");
+        }
+
+        if (body.isRuleSet())
+        {
+            throw new IllegalArgumentException(
+                "body must be SINGLE_PLAYER or MULTIPLAYER, got " + body);
+        }
+
+        this.mode = body;
+
+        transitionTo(UiState.MODE_SELECT);
+    }
+
+    /**
+     * Records the rule set the player chose and advances to the map
+     * picker: {@code MODE_SELECT -> MAP_SELECT}.
+     *
+     * @param rule the rule set the player picked; must be one of the four
+     *     real rule sets ({@link MatchMode#TDM}, {@link MatchMode#HARDPOINT},
+     *     {@link MatchMode#DOMINATION}, {@link MatchMode#CTF})
+     * @throws IllegalArgumentException if {@code rule} is null or is not a
+     *     rule set
+     * @throws IllegalStateException if the mode picker is not in front
+     */
+    public void pickMode(final MatchMode rule)
+    {
+        if (rule == null)
+        {
+            throw new IllegalArgumentException("rule must not be null");
+        }
+
+        if (!rule.isRuleSet())
+        {
+            throw new IllegalArgumentException(
+                "rule must be TDM / HARDPOINT / DOMINATION / CTF, got " + rule);
+        }
+
+        this.mode = rule;
+
+        transitionTo(UiState.MAP_SELECT);
+    }
+
+    /**
+     * Goes back from the map picker to the mode picker:
+     * {@code MAP_SELECT -> MODE_SELECT}.
+     *
+     * @throws IllegalStateException if the map picker is not in front
+     */
+    public void returnToModeSelect()
+    {
+        transitionTo(UiState.MODE_SELECT);
+    }
+
+    /**
+     * Opens the multiplayer lobby from the map picker:
+     * {@code MAP_SELECT -> LOBBY}.
+     *
+     * <p>Only legal when the recorded body source is
+     * {@link MatchMode#MULTIPLAYER}; the single-player fork goes from the
+     * map picker straight to the loading screen.</p>
+     *
+     * @throws IllegalStateException if the body source is single-player
+     *     or the map picker is not in front
+     */
+    public void openLobby()
+    {
+        if (mode != MatchMode.MULTIPLAYER)
+        {
+            throw new IllegalStateException(
+                "lobby is multiplayer-only; body source is " + mode);
+        }
+
+        transitionTo(UiState.LOBBY);
+    }
+
+    /**
+     * Goes back from the lobby to the map picker:
+     * {@code LOBBY -> MAP_SELECT}.
+     *
+     * @throws IllegalStateException if the lobby is not in front
+     */
+    public void returnToMapBrowser()
+    {
+        transitionTo(UiState.MAP_SELECT);
+    }
+
+    /**
+     * Enters the loading screen: {@code MAP_SELECT -> LOADING} or
+     * {@code LOBBY -> LOADING}.
+     *
+     * <p>Called after the map is chosen (single-player) or the player
+     * has confirmed the lobby (multiplayer). The actual scene swap is
+     * done by the platform frame loop on its next reconciliation; this
+     * method is only the decision to move there.</p>
+     *
+     * @throws IllegalStateException if neither the map picker nor the
+     *     lobby is in front
+     */
+    public void openLoading()
+    {
+        transitionTo(UiState.LOADING);
+    }
+
+    /**
+     * Goes back from the loading screen to the map picker:
+     * {@code LOADING -> MAP_SELECT}.
+     *
+     * <p>For the case where the engine hangs on a load and the player
+     * wants out. A loading screen that completed its scene swap would
+     * call {@link #startGame(MatchMode)} instead, not this.</p>
+     *
+     * @throws IllegalStateException if the loading screen is not in front
+     */
+    public void returnFromLoading()
+    {
+        transitionTo(UiState.MAP_SELECT);
+    }
+
+    /**
      * Ends the round and shows its result: {@code PLAYING -> GAME_OVER}.
      *
      * <p>Driven by the platform UI noticing that {@code Match.state().isOver()},

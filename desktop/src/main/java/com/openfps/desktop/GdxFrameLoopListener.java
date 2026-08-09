@@ -22,10 +22,13 @@ import com.openfps.gdx.DebugSettings;
 import com.openfps.gdx.DefaultMenuActions;
 import com.openfps.gdx.FramebufferPresenter;
 import com.openfps.gdx.GameOverScreen;
+import com.openfps.gdx.LoadingScreen;
+import com.openfps.gdx.LobbyScreen;
 import com.openfps.gdx.MainMenuScreen;
 import com.openfps.gdx.MapSelection;
 import com.openfps.gdx.MapSelectionScreen;
 import com.openfps.gdx.MenuActions;
+import com.openfps.gdx.ModeSelectionScreen;
 import com.openfps.gdx.RenderSettings;
 import com.openfps.gdx.ScoreOverlay;
 import com.openfps.gdx.SettingsScreen;
@@ -179,12 +182,33 @@ public final class GdxFrameLoopListener implements ApplicationListener
     private SettingsScreen settings;
 
     /**
-     * The map picker UI.
-     * MUTABLE: built in {@link #create()}, released in {@link #dispose()}, for
-     * the same reason the menu and the settings screen are — there is no
-     * GL context until create().
+     * The mode picker UI. The first sub-screen after the menu when the
+     * player picks single- or multiplayer and wants to be asked which
+     * rule set next.
+     * MUTABLE: built in {@link #create()}, released in {@link #dispose()}.
+     */
+    private ModeSelectionScreen modeSelect;
+
+    /**
+     * The map browser UI. The four-thumbnail grid for the rule set the
+     * player just chose.
+     * MUTABLE: built in {@link #create()}, released in {@link #dispose()}.
      */
     private MapSelectionScreen mapSelect;
+
+    /**
+     * The loading screen. Shown between map pick and game start so the
+     * engine has time to swap the scene.
+     * MUTABLE: built lazily, released when the player leaves the state.
+     */
+    private LoadingScreen loading;
+
+    /**
+     * The multiplayer lobby. Shown between map pick and loading on the
+     * multiplayer branch.
+     * MUTABLE: built lazily, released when the player leaves the state.
+     */
+    private LobbyScreen lobby;
 
     /**
      * The shared map selection the picker writes to. Held by the launcher
@@ -688,6 +712,12 @@ public final class GdxFrameLoopListener implements ApplicationListener
 
         settings.layoutFor(width, height);
 
+        modeSelect = new ModeSelectionScreen(
+            mode -> uiState.pickMode(mode),
+            uiState::returnToMenu);
+
+        modeSelect.layoutFor(width, height);
+
         // The picker is built only when the launcher supplied entries. An empty
         // entries list is the "no map picker wired" case every windowless test
         // gets; the menu's SELECT MAP button still works (it transitions to
@@ -698,7 +728,7 @@ public final class GdxFrameLoopListener implements ApplicationListener
         if (!mapEntries.isEmpty())
         {
             mapSelect = new MapSelectionScreen(mapSelection, mapEntries,
-                uiState::returnToMenu);
+                this::onMapPicked, uiState::returnToModeSelect);
 
             mapSelect.layoutFor(width, height);
         }
@@ -809,6 +839,28 @@ public final class GdxFrameLoopListener implements ApplicationListener
         uiState.restartMatch();
     }
 
+    // Called from a Scene2D click on a map tile. The body's source lives on
+    // the state machine as the "mode" field, set by openModeSelect earlier
+    // in the flow: SINGLE_PLAYER forks straight to the loading screen,
+    // MULTIPLAYER forks to the lobby first. Either path then advances to
+    // loading on the next user action.
+    void onMapPicked(final String mapId)
+    {
+        if (mapId == null || mapId.isBlank())
+        {
+            return;
+        }
+
+        if (uiState.mode() == MatchMode.MULTIPLAYER)
+        {
+            uiState.openLobby();
+        }
+        else
+        {
+            uiState.openLoading();
+        }
+    }
+
     // Exactly one screen draws, and it draws the whole window.
     private void drawWorld(final float deltaSeconds)
     {
@@ -831,9 +883,32 @@ public final class GdxFrameLoopListener implements ApplicationListener
             return;
         }
 
+        if (modeSelect != null && current.drawsModeSelect())
+        {
+            modeSelect.render(deltaSeconds);
+
+            return;
+        }
+
         if (mapSelect != null && current.drawsMapSelect())
         {
+            ensureLoadingAndLobbyBuilt();
+
             mapSelect.render(deltaSeconds);
+
+            return;
+        }
+
+        if (lobby != null && current.drawsLobby())
+        {
+            lobby.render(deltaSeconds);
+
+            return;
+        }
+
+        if (loading != null && current.drawsLoading())
+        {
+            loading.render(deltaSeconds);
 
             return;
         }
@@ -846,6 +921,72 @@ public final class GdxFrameLoopListener implements ApplicationListener
         }
 
         drawGame(deltaSeconds);
+    }
+
+    // The loading and lobby screens are built lazily: the map browser is the
+    // first thing the player sees that might advance to either, and the cost
+    // of a Texture, a font and a Stage is wasted if the player only ever
+    // browses. The idleness the engine tolerates is a second Texture upload
+    // per map visit, which is well under a frame.
+    private void ensureLoadingAndLobbyBuilt()
+    {
+        final UiState current = uiState.state();
+
+        if (current == UiState.MAP_SELECT || current == UiState.LOBBY
+            || current == UiState.LOADING)
+        {
+            if (mapSelection == null || mapSelection.currentMapId() == null)
+            {
+                return;
+            }
+
+            final String mapId = mapSelection.currentMapId();
+
+            final MapSelectionScreen.Entry entry = findEntry(mapId);
+
+            if (entry == null)
+            {
+                return;
+            }
+
+            if (loading == null)
+            {
+                loading = new LoadingScreen(entry.displayName(),
+                    entry.thumbnailPath(), uiState::returnFromLoading);
+
+                loading.resize(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
+            }
+
+            if (lobby == null && uiState.mode() == MatchMode.MULTIPLAYER)
+            {
+                lobby = new LobbyScreen(entry.displayName(), uiState.mode(),
+                    entry.thumbnailPath(), uiState::openLoading,
+                    uiState::openLoading, uiState::returnToMapBrowser);
+
+                lobby.resize(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
+            }
+        }
+    }
+
+    // Look up the entry for a given map id, falling back to the first entry
+    // if the id is not in the list (a stale selection from a previous
+    // launcher run is the failure mode this catches).
+    private MapSelectionScreen.Entry findEntry(final String mapId)
+    {
+        if (mapEntries == null || mapEntries.isEmpty())
+        {
+            return null;
+        }
+
+        for (final MapSelectionScreen.Entry entry : mapEntries)
+        {
+            if (entry.id().equals(mapId))
+            {
+                return entry;
+            }
+        }
+
+        return mapEntries.get(0);
     }
 
     // The world, plus the frame counter if it has been asked for.
@@ -1015,9 +1156,30 @@ public final class GdxFrameLoopListener implements ApplicationListener
             return;
         }
 
+        if (modeSelect != null && state.drawsModeSelect())
+        {
+            modeSelect.attachInputProcessor();
+
+            return;
+        }
+
         if (mapSelect != null && state.drawsMapSelect())
         {
             mapSelect.attachInputProcessor();
+
+            return;
+        }
+
+        if (lobby != null && state.drawsLobby())
+        {
+            lobby.attachInputProcessor();
+
+            return;
+        }
+
+        if (loading != null && state.drawsLoading())
+        {
+            loading.attachInputProcessor();
 
             return;
         }
@@ -1129,6 +1291,33 @@ public final class GdxFrameLoopListener implements ApplicationListener
             mapSelect = null;
         }
 
+        if (modeSelect != null)
+        {
+            modeSelect.detachInputProcessor();
+
+            modeSelect.dispose();
+
+            modeSelect = null;
+        }
+
+        if (lobby != null)
+        {
+            lobby.detachInputProcessor();
+
+            lobby.dispose();
+
+            lobby = null;
+        }
+
+        if (loading != null)
+        {
+            loading.detachInputProcessor();
+
+            loading.dispose();
+
+            loading = null;
+        }
+
         if (gameOver != null)
         {
             gameOver.detachInputProcessor();
@@ -1199,7 +1388,7 @@ public final class GdxFrameLoopListener implements ApplicationListener
         {
             delegate.onStartGame();
 
-            uiState.startGame(MatchMode.SINGLE_PLAYER);
+            uiState.openModeSelect(MatchMode.SINGLE_PLAYER);
         }
 
         @Override
@@ -1207,7 +1396,7 @@ public final class GdxFrameLoopListener implements ApplicationListener
         {
             delegate.onMultiplayer();
 
-            uiState.startGame(MatchMode.MULTIPLAYER);
+            uiState.openModeSelect(MatchMode.MULTIPLAYER);
         }
 
         @Override
