@@ -39,6 +39,15 @@ dependencies {
     // glTF 2.0 specification.
     implementation("com.google.code.gson:gson:2.11.0")
 
+    // JavaParser 3.26.4 — LGPL-2.1-or-later
+    // (https://github.com/javaparser/javaparser/blob/master/LICENSE).
+    // The blank-line formatter (BlankLineFormatter, see STYLE.md § 14) needs
+    // statement ranges from an AST; a regex pass would mangle generics,
+    // string literals and annotations. JavaParser is a parse-only dep here
+    // and never appears on a runtime classpath — the LGPL dynamic-link
+    // exception is irrelevant because nothing ships this.
+    implementation("com.github.javaparser:javaparser-core:3.26.4")
+
     // A logging backend, so the converter's diagnostics actually appear when
     // Gradle runs it. slf4j-api arrives transitively from :engine's `api`.
     runtimeOnly("ch.qos.logback:logback-classic:1.5.12")
@@ -1084,3 +1093,58 @@ tasks.register<JavaExec>("buildMapFromConfig") {
         arguments
     })
 }
+
+// Inserts exactly one blank line between every pair of consecutive statements
+// inside every BlockStmt, across an arbitrary set of source roots. Implements
+// STYLE.md § 14 mechanically: see BlankLineFormatter's Javadoc for the full
+// algorithm.
+//
+// With no extra arguments the task processes every module's src/ tree under
+// the repository root:
+//
+//   .\gradlew.bat :tools:formatBlankLines
+//
+// For an explicit subset, pass paths as --args (single string, space- or
+// comma-separated; the path may be a .java file or a directory, walked
+// recursively with build/, bin/ and .gradle/ subtrees skipped):
+//
+//   .\gradlew.bat :tools:formatBlankLines --args="engine/src,tools/src"
+//
+// The formatter preserves line endings, comments and every byte outside the
+// rewritten gaps.
+//
+// Deliberately NOT wired into `build`: it rewrites source files in place,
+// and a tool that touches the entire .java tree should not run as a
+// side-effect of compiling. Run it explicitly, review the diff, commit.
+tasks.register<JavaExec>("formatBlankLines") {
+    group = "openfps"
+    description = "Inserts a blank line between every pair of consecutive statements (STYLE.md § 14)."
+
+    mainClass.set("com.openfps.tools.format.BlankLineFormatter")
+    classpath = sourceSets["main"].runtimeClasspath
+
+    val rootDirectory = rootProject.projectDir
+    workingDir = rootDirectory
+
+    val userArgs = providers.gradleProperty("formatArgs")
+    argumentProviders.add(CommandLineArgumentProvider {
+        val user = userArgs.orNull
+        if (user != null && user.isNotBlank())
+        {
+            user.split("[,\\s]+".toRegex())
+                .filter { it.isNotBlank() }
+        }
+        else
+        {
+            // No -PformatArgs given: default to every module's src/ tree.
+            listOf(
+                "engine/src",
+                "gdxshared/src",
+                "desktop/src",
+                "android/src",
+                "tools/src"
+            )
+        }
+    })
+}
+

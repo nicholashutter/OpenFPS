@@ -733,4 +733,130 @@ one of each thing. Honor that.
 
 ---
 
+## 14. Blank Line Between Every Statement
+
+Inside every `BlockStmt` — method bodies, constructors, `if`/`else`,
+`for`, `while`, `do`, `try`/`catch`/`finally`, instance initializers,
+anonymous-class method bodies — there is **exactly one blank line
+between every pair of consecutive statements**. A "statement" here is
+the JLS sense (any `Statement` AST node): declaration statements,
+expression statements, control-flow statements, `throw`, `return`,
+`break`, `continue`, labelled statements. Class-level members
+(fields, methods, inner classes, enum constants) are declarations,
+not statements, and are governed by § 1's file structure, not by
+this rule.
+
+```java
+// GOOD
+public final class Example
+{
+    private final int x;
+
+    public Example(final int x)
+    {
+        if (x < 0)
+        {
+            throw new IllegalArgumentException("x must be >= 0");
+        }
+
+        this.x = x;
+    }
+
+    public int doubled()
+    {
+        final int twice = x * 2;
+
+        return twice;
+    }
+}
+
+// BAD — no blank lines between statements in the same block
+public final class Example
+{
+    private final int x;
+
+    public Example(final int x)
+    {
+        if (x < 0)
+        {
+            throw new IllegalArgumentException("x must be >= 0");
+        }
+        this.x = x;
+    }
+    public int doubled()
+    {
+        final int twice = x * 2;
+        return twice;
+    }
+}
+```
+
+### 14.1 Why this is the rule
+
+Three reasons, and the third is the one that makes it more than
+taste:
+
+1. **It survives a refactor.** When a method is grown by inserting
+   statements (a logging line, a guard, an invariant check), the
+   blanks already exist; the new line lands in a gap, not on top of
+   a neighbour. A "tight" method has to be hand-spaced every time.
+2. **It makes diffs reviewable.** A line added in the middle of a
+   block lands on a blank line, so a reviewer sees the new statement
+   immediately, not as one of three lines that moved together.
+3. **It separates control flow from control flow.** Two adjacent
+   statements look like they belong together; a blank between them
+   reads as "and now a different thing." That is almost always true
+   (declaration vs. assignment, side-effect vs. assertion, branch
+   vs. branch), and the rare exception is local enough to break the
+   rule with intent.
+
+The cost is real — every method's visual length roughly doubles —
+but the cost is paid once when the file is written; the benefit
+is paid every time the file is read.
+
+### 14.2 Edge cases the rule does and does not cover
+
+- **Multi-line statements stay together.** A `return` chained with
+  `&&` across many lines, a method-call chain with one argument per
+  line, a wrapped `if`-condition: the blank line lands *before* the
+  statement and *after* it, never inside it. The rule works on
+  statement AST nodes, not on source lines.
+- **Comments are preserved verbatim.** A trailing `// ...` on the
+  previous statement, a Javadoc block above the next statement, a
+  free-standing `//` note in the gap: all of these stay where they
+  are. The blank line lands between the comment block and the
+  following statement, so comments keep their "attached to" reading.
+- **2+ blank lines collapse to 1.** Where an author already
+  used double-blanks as a section break, the formatter folds them
+  back to a single blank. The rule is "exactly one," not "at least
+  one."
+- **Class members, fields, and enum constants are not statements.**
+  The blank lines that already separate them under § 1 are
+  declarations, not gaps between statements, and are untouched.
+- **Lambda bodies are not statement lists.** A `Predicate<String>`
+  written as a single-expression lambda is one expression, not a
+  block; a block-form lambda has its own `BlockStmt` and *is* a
+  case the rule covers. The formatter treats the former as opaque.
+
+### 14.3 Applying it
+
+The rule is enforced mechanically by
+`tools/src/main/java/com/openfps/tools/format/BlankLineFormatter.java`,
+wired as `gradlew :tools:formatBlankLines`. Run it on a clean
+working tree, review the diff, commit. The formatter parses each
+file with JavaParser, walks every `BlockStmt`, finds every
+consecutive `(A, B)` pair, and rewrites the gap text to contain
+exactly one blank line. It preserves line endings (CRLF stays
+CRLF), comments, and every byte outside the rewritten gaps. A
+re-run on an already-conformant tree is a no-op — the rule is
+idempotent.
+
+The task is deliberately **not** wired into `gradlew build`:
+rewriting 364 source files is not a side-effect of compiling, and a
+broken `BlankLineFormatter` (or a freshly parsed Java 21 feature
+it doesn't know about) should not stop the engine from building.
+Run it explicitly, review the diff, commit.
+
+---
+
 *This style guide is a living document. Changes require a PR with rationale and Checkstyle config update.*
