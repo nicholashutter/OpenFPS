@@ -1,0 +1,8 @@
+{
+  "id": "foundry",
+  "displayName": "Foundry",
+  "setting": "INDUSTRIAL_COMPLEX",
+  "mode": "HARDPOINT",
+  "caption": "Foundry. Industrial complex map. Hardpoint ruleset.",
+  "thumbnail": "thumbnail.png"
+}

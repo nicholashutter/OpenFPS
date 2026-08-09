@@ -1,0 +1,8 @@
+{
+  "id": "sandbar",
+  "displayName": "Sandbar",
+  "setting": "DESERT_RAVINE",
+  "mode": "DOMINATION",
+  "caption": "Sandbar. Desert ravine map. Domination ruleset.",
+  "thumbnail": "thumbnail.png"
+}

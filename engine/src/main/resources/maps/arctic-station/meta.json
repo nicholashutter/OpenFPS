@@ -1,0 +1,8 @@
+{
+  "id": "arctic-station",
+  "displayName": "Icebridge",
+  "setting": "ARCTIC_STATION",
+  "mode": "TDM",
+  "caption": "Icebridge. Arctic station map. Team Deathmatch ruleset.",
+  "thumbnail": "thumbnail.png"
+}

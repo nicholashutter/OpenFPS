@@ -1,0 +1,8 @@
+{
+  "id": "arctic-hp",
+  "displayName": "Subzero",
+  "setting": "ARCTIC_STATION",
+  "mode": "HARDPOINT",
+  "caption": "Subzero. Arctic station map. Hardpoint ruleset.",
+  "thumbnail": "thumbnail.png"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "crossroads",
+  "displayName": "Crossroads",
+  "setting": "DESERT_RAVINE",
+  "mode": "TDM",
+  "caption": "Crossroads. Desert ravine map. Team Deathmatch ruleset.",
+  "thumbnail": "thumbnail.png"
+}

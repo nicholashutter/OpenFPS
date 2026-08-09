@@ -1,0 +1,8 @@
+{
+  "id": "tripoint",
+  "displayName": "Tripoint",
+  "setting": "URBAN_WARZONE",
+  "mode": "DOMINATION",
+  "caption": "Tripoint. Urban warzone map. Domination ruleset.",
+  "thumbnail": "thumbnail.png"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "pipeline",
+  "displayName": "Pipeline",
+  "setting": "INDUSTRIAL_COMPLEX",
+  "mode": "DOMINATION",
+  "caption": "Pipeline. Industrial complex map. Domination ruleset.",
+  "thumbnail": "thumbnail.png"
+}

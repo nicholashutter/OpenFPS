@@ -1,0 +1,8 @@
+{
+  "id": "coldfront",
+  "displayName": "Coldfront",
+  "setting": "ARCTIC_STATION",
+  "mode": "CTF",
+  "caption": "Coldfront. Arctic station map. Capture the Flag ruleset.",
+  "thumbnail": "thumbnail.png"
+}

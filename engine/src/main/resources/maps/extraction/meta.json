@@ -1,0 +1,8 @@
+{
+  "id": "extraction",
+  "displayName": "Extraction",
+  "setting": "URBAN_WARZONE",
+  "mode": "CTF",
+  "caption": "Extraction. Urban warzone map. Capture the Flag ruleset.",
+  "thumbnail": "thumbnail.png"
+}

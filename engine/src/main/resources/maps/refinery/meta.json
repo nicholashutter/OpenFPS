@@ -1,0 +1,8 @@
+{
+  "id": "refinery",
+  "displayName": "Refinery",
+  "setting": "INDUSTRIAL_COMPLEX",
+  "mode": "TDM",
+  "caption": "Refinery. Industrial complex map. Team Deathmatch ruleset.",
+  "thumbnail": "thumbnail.png"
+}

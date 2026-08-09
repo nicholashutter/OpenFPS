@@ -1,0 +1,8 @@
+{
+  "id": "stronghold",
+  "displayName": "Stronghold",
+  "setting": "DESERT_RAVINE",
+  "mode": "CTF",
+  "caption": "Stronghold. Desert ravine map. Capture the Flag ruleset.",
+  "thumbnail": "thumbnail.png"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "mesa",
+  "displayName": "Mesa",
+  "setting": "DESERT_RAVINE",
+  "mode": "HARDPOINT",
+  "caption": "Mesa. Desert ravine map. Hardpoint ruleset.",
+  "thumbnail": "thumbnail.png"
+}

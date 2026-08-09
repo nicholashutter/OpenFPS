@@ -1,0 +1,8 @@
+{
+  "id": "cornerstone",
+  "displayName": "Cornerstone",
+  "setting": "URBAN_WARZONE",
+  "mode": "TDM",
+  "caption": "Cornerstone. Urban warzone map. Team Deathmatch ruleset.",
+  "thumbnail": "thumbnail.png"
+}

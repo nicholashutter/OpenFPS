@@ -1,0 +1,8 @@
+{
+  "id": "overpass",
+  "displayName": "Overpass",
+  "setting": "URBAN_WARZONE",
+  "mode": "HARDPOINT",
+  "caption": "Overpass. Urban warzone map. Hardpoint ruleset.",
+  "thumbnail": "thumbnail.png"
+}

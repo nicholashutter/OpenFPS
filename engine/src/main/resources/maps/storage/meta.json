@@ -1,0 +1,8 @@
+{
+  "id": "storage",
+  "displayName": "Storage",
+  "setting": "INDUSTRIAL_COMPLEX",
+  "mode": "CTF",
+  "caption": "Storage. Industrial complex map. Capture the Flag ruleset.",
+  "thumbnail": "thumbnail.png"
+}
