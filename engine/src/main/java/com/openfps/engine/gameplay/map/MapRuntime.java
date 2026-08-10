@@ -280,8 +280,29 @@ public final class MapRuntime
 
         final MapRuntime that = (MapRuntime) other;
 
-        return Objects.equals(this.spec == null ? null : this.spec.id(),
-            that.spec == null ? null : that.spec.id());
+        final String thisId;
+
+        if (this.spec == null)
+        {
+            thisId = null;
+        }
+        else
+        {
+            thisId = this.spec.id();
+        }
+
+        final String thatId;
+
+        if (that.spec == null)
+        {
+            thatId = null;
+        }
+        else
+        {
+            thatId = that.spec.id();
+        }
+
+        return Objects.equals(thisId, thatId);
     }
 
     @Override

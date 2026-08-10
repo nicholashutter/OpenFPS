@@ -49,4 +49,20 @@ public interface ISubsystem
      * @throws SubsystemException if state is not READY
      */
     void processEvent(I_EngineEvent event);
+
+    /**
+     * Adds an observer that will be told of every state
+     * transition this subsystem makes. The observer receives
+     * one event per transition, on whichever thread the
+     * transition fired on; observers must be thread-safe.
+     *
+     * <p>Subsystems that do not implement a state machine
+     * (test stubs, for example) may throw
+     * {@link UnsupportedOperationException}. The
+     * {@link SubsystemRegistry} only calls this on the
+     * production {@link Subsystem} base class.</p>
+     *
+     * @param observer the observer to add; must not be null
+     */
+    void addObserver(I_SubsystemObserver observer);
 }

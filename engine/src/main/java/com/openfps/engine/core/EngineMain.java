@@ -535,6 +535,12 @@ public final class EngineMain
         // and that is still the last step here.
         final SubsystemRegistry subsystems = new SubsystemRegistry();
 
+        // Wire the state-change observer to the log bus before any
+        // subsystem is registered, so even the first transition of
+        // the first subsystem is captured. The observer is bootstrap-
+        // and-listen: it sees every transition from this point on.
+        subsystems.registerObserver(com.openfps.engine.log.SubsystemStateLogger.install());
+
         final I_ThreadPoolPort pool = ThreadPoolFactory.createFixed(bus, subsystems);
 
         pool.init(workerCount);
