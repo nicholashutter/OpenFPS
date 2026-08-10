@@ -1,15 +1,19 @@
 {
-    // Ctrl+Shift+P -> "Tasks: Run Task". The two "run:" entries at the bottom
-    // are the ones that rebuild and launch the game; everything above them is
-    // the plain Gradle set.
+    // Ctrl+Shift+P -> 'Tasks: Run Task'. The 'run:' entries at the bottom are
+    // the ones that rebuild and launch the game; everything above them is the
+    // plain Gradle set.
     //
-    // The run tasks invoke powershell.exe explicitly with -ExecutionPolicy
-    // Bypass rather than calling .\run-desktop.ps1 as a shell command. A
-    // default-configured Windows refuses to run an unsigned .ps1 at all, and
-    // the resulting error mentions execution policy and not the task -- which
-    // would make a one-click launch a support question on a fresh machine.
+    // The run tasks invoke powershell.exe explicitly with -ExecutionPolicy Bypass
+    // rather than calling .\run-desktop.ps1 as a shell command. A default-configured
+    // Windows refuses to run an unsigned .ps1 at all, and the resulting error
+    // mentions execution policy and not the task -- which would make a one-click
+    // launch a support question on a fresh machine.
+    //
+    // This file is JSONC, so // line comments are first-class.
+
     "version": "2.0.0",
     "tasks": [
+
         {
             "label": "gradle: build",
             "type": "shell",
@@ -61,9 +65,10 @@
             "options": { "cwd": "${workspaceFolder}" },
             "problemMatcher": []
         },
+
+        // The default way to play. Recompiles first, every time, and says
+        // which commit it is running -- see run-desktop.ps1.
         {
-            // The default way to play. Recompiles first, every time, and says
-            // which commit it is running -- see run-desktop.ps1.
             "label": "run: desktop",
             "type": "shell",
             "command": "powershell",
@@ -75,9 +80,10 @@
             "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
             "problemMatcher": ["$gradle"]
         },
+
+        // Straight into the world with FRAME / RENDER / RES on screen. The
+        // fastest way to confirm a running build is the one you just built.
         {
-            // Straight into the world with FRAME / RENDER / RES on screen. The
-            // fastest way to confirm a running build is the one you just built.
             "label": "run: desktop (in game, debug overlay)",
             "type": "shell",
             "command": "powershell",
@@ -90,10 +96,10 @@
             "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
             "problemMatcher": ["$gradle"]
         },
+
+        // Prompts for the render mode and whether the overlay is on, so the
+        // three-way comparison needs no task edited and no terminal typed into.
         {
-            // Prompts for the render mode and whether the overlay is on, so the
-            // three-way comparison needs no task edited and no terminal typed
-            // into.
             "label": "run: desktop (pick render mode)",
             "type": "shell",
             "command": "powershell",
@@ -107,18 +113,19 @@
             "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
             "problemMatcher": ["$gradle"]
         },
+
+        // TWO windows, already talking to each other on localhost. Walk in
+        // one and the other player's body moves in the other -- which is the
+        // only way to see the networking work at all.
+        //
+        // Player 1 binds UDP 5021 and player 2 binds 5022; each gets its own
+        // profile database under desktop/build/net-peers. It launches two
+        // plain JVMs from an installDist image rather than two
+        // `gradlew :desktop:run` invocations, because two concurrent Gradle
+        // builds in one directory block on each other -- see run-desktop.ps1.
+        //
+        // Keyboard and mouse follow window focus, so click between the two.
         {
-            // TWO windows, already talking to each other on localhost. Walk in
-            // one and the other player's body moves in the other -- which is the
-            // only way to see the networking work at all.
-            //
-            // Player 1 binds UDP 5021 and player 2 binds 5022; each gets its own
-            // profile database under desktop/build/net-peers. It launches two
-            // plain JVMs from an installDist image rather than two
-            // `gradlew :desktop:run` invocations, because two concurrent Gradle
-            // builds in one directory block on each other -- see run-desktop.ps1.
-            //
-            // Keyboard and mouse follow window focus, so click between the two.
             "label": "run: desktop (two peers, multiplayer)",
             "type": "shell",
             "command": "powershell",
@@ -131,10 +138,11 @@
             "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
             "problemMatcher": ["$gradle"]
         },
+
+        // The same, with the overlay on both windows. Useful because the two
+        // peers must agree on the tic rate for lockstep to mean anything, and
+        // the FRAME line is where a disagreement would show.
         {
-            // The same, with the overlay on both windows. Useful because the two
-            // peers must agree on the tic rate for lockstep to mean anything, and
-            // the FRAME line is where a disagreement would show.
             "label": "run: desktop (two peers, debug overlay)",
             "type": "shell",
             "command": "powershell",
@@ -147,9 +155,10 @@
             "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
             "problemMatcher": ["$gradle"]
         },
+
+        // Rebuild and verify without opening a window. What to run when the
+        // question is "did that compile?" rather than "how does it look?".
         {
-            // Rebuild and verify without opening a window. What to run when the
-            // question is "did that compile?" rather than "how does it look?".
             "label": "run: desktop (build only)",
             "type": "shell",
             "command": "powershell",
@@ -161,10 +170,11 @@
             "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
             "problemMatcher": ["$gradle"]
         },
+
+        // Builds the APK, boots OpenFPS_API36 if it is not already up,
+        // installs, launches, and tails logcat for this app's process.
+        // Does not terminate on its own -- the log tail is the point.
         {
-            // Builds the APK, boots OpenFPS_API36 if it is not already up,
-            // installs, launches, and tails logcat for this app's process.
-            // Does not terminate on its own -- the log tail is the point.
             "label": "run: android",
             "type": "shell",
             "command": "powershell",
@@ -201,11 +211,12 @@
             "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
             "problemMatcher": ["$gradle"]
         },
+
+        // Show the emulator's own window instead of driving it headless.
+        // Separate task rather than an input, because -gpu swiftshader is
+        // still what makes it boot on this machine and that must not be
+        // something a menu can get wrong.
         {
-            // Show the emulator's own window instead of driving it headless.
-            // Separate task rather than an input, because -gpu swiftshader is
-            // still what makes it boot on this machine and that must not be
-            // something a menu can get wrong.
             "label": "run: android (emulator window visible)",
             "type": "shell",
             "command": "powershell",
