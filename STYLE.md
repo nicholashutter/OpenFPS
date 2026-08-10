@@ -900,6 +900,40 @@ model's preview. They are not kept in lock-step automatically: a change
 to a .ofm requires `gradlew :tools:renderMapThumbnails` to be re-run
 for the thumbnail to follow.
 
+### 14.6 Map load helper &mdash; the only seam between launcher and map subsystem
+
+`engine/src/main/java/com/openfps/engine/gameplay/map/MapRuntime.java`
+is the single object that owns the engine-side map state. A launcher
+calls `MapRuntime.loadMap(id)` to build the spec, scene, and per-tic
+port, bind the scene to the renderer, and swap the swappable engine
+port. It calls `MapRuntime.unload()` to release the .ofm, clear the
+renderer back to `Scene.EMPTY`, and swap the engine port back to a
+`NullGameplayPort` (the engine keeps ticking, just against a no-op
+port &mdash; the menu is up, the simulation is paused).
+
+The launcher is still the only object that knows about `--map=`, the
+HAL factory, and the `SoftwareRenderPort`. `MapRuntime` is the only
+object that knows how to turn a `MapSpec` into a running port, and
+how to put the renderer back to "no world loaded" when the user
+returns to the menu. That is the entire split &mdash; it keeps the
+launcher's main short and the engine's map subsystem encapsulated.
+
+The engine ticks one port for the life of a run: the
+`DelegatingGameplayPort` is built once at engine bootstrap, and
+`MapRuntime` swaps its delegate. A future pass that wants to load
+maps from a text format plugs the new loader into `MapLoader` (or
+replaces it) without changing `MapRuntime` or the launcher.
+
+**Returning to the menu tears the map down.** The match-gate
+handler the launcher wires against the runtime calls
+`mapRuntime.unload()` on the false transition, and
+`window.detachMatchHooks()` drops the engine's hook on the now-dead
+port. A subsequent pick rebuilds from scratch &mdash; no scene is
+held against the next pick. The cost is a fresh `.ofm` read on
+every return-to-menu-and-forward bounce; the payoff is the renderer
+goes back to a real "no world" state and the engine's `Match` is
+fresh on every entry.
+
 ---
 
 *This style guide is a living document. Changes require a PR with rationale and Checkstyle config update.*

@@ -156,6 +156,27 @@ public final class GdxWindowPort implements I_WindowPort
     private volatile int matchTicsPerSecond;
 
     /**
+     * Runs when the player picks a map from the menu, or null when the
+     * menu-driven map load is not wired.
+     *
+     * <p>MUTABLE: set by {@link #setLoadMapCallback} before
+     * {@link #runFrameLoop}; forwarded to the listener that the loop
+     * creates. The launcher supplies one so a pick can build the
+     * map and re-attach the match hooks before the loading
+     * screen hands control to {@code uiState.startGame}. A null
+     * value is what every windowless test gets.</p>
+     */
+    private volatile Consumer<String> loadMapCallback;
+
+    /**
+     * The listener the frame loop created. Stored so the window
+     * can forward {@link #detachMatchHooks} calls to it; null
+     * before {@link #runFrameLoop} has set it and after the loop
+     * has returned. MUTABLE: set inside the loop's try block.
+     */
+    private volatile GdxFrameLoopListener listener;
+
+    /**
      * The debug switch the settings screen flips, or null to let the listener
      * keep a private one. MUTABLE: set by {@link #attachDebugSettings} before
      * {@link #runFrameLoop}.
@@ -257,25 +278,31 @@ public final class GdxWindowPort implements I_WindowPort
 
         try
         {
-            final GdxFrameLoopListener listener = new GdxFrameLoopListener(
+            final GdxFrameLoopListener builtListener = new GdxFrameLoopListener(
                 callback, new DefaultMenuActions(this), presenter(), inputPort,
                 settings(), accessibility(), resolvedMapSelection(), resolvedMapEntries());
 
-            listener.attachMatchGate(matchGate);
+            builtListener.attachMatchGate(matchGate);
 
-            listener.attachMatchResult(matchResult);
+            builtListener.attachMatchResult(matchResult);
 
-            listener.attachMatchRestart(matchRestart);
+            builtListener.attachMatchRestart(matchRestart);
 
-            listener.attachMatchStatus(matchStatus, matchTicsPerSecond);
+            builtListener.attachMatchStatus(matchStatus, matchTicsPerSecond);
 
-            new Lwjgl3Application(listener, buildConfiguration());
+            builtListener.setLoadMapCallback(loadMapCallback);
+
+            this.listener = builtListener;
+
+            new Lwjgl3Application(builtListener, buildConfiguration());
         }
         finally
         {
             // The application has exited, by user close or Gdx.app.exit().
             // Either way the window is gone, so the close flag reflects
             // reality and the port drops back to a shutdown-able state.
+            this.listener = null;
+
             closeRequested.set(true);
 
             state = State.CREATED;
@@ -482,6 +509,63 @@ public final class GdxWindowPort implements I_WindowPort
     public Supplier<MatchStatus> matchStatus()
     {
         return matchStatus;
+    }
+
+    /**
+     * Names the consumer the picker fires when the player picks a map.
+     *
+     * <p>The launcher supplies one so a menu pick can build the
+     * map (and re-attach the match hooks) before the loading
+     * screen's {@code onReady} fires {@code uiState.startGame}.
+     * A null callback is what every windowless test gets, and what
+     * a launcher that does not drive the map load wires up.</p>
+     *
+     * <p>Call before {@link #runFrameLoop}. Stored on this window
+     * and forwarded to the listener that the loop creates.</p>
+     *
+     * @param callback told the picked map id on every pick from the
+     *     browser, or null to clear
+     */
+    public void setLoadMapCallback(final Consumer<String> callback)
+    {
+        if (state == State.RUNNING)
+        {
+            throw new IllegalStateException("setLoadMapCallback() while the frame loop is running");
+        }
+
+        this.loadMapCallback = callback;
+    }
+
+    /**
+     * Drops every match-related hook the listener was given.
+     *
+     * <p>Used by the launcher's match-gate handler when the
+     * player returns to the menu: the map is unloaded and the
+     * hooks (gate, result, status, restart) are nulled out so
+     * they no longer read from a port that no longer exists.
+     * A no-op when called before the frame loop is running
+     * (the listener has not been created yet, so there are no
+     * hooks to drop); otherwise forwarded to the listener so
+     * the listener's own copies are also nulled.</p>
+     */
+    public void detachMatchHooks()
+    {
+        this.matchGate = null;
+
+        this.matchResult = null;
+
+        this.matchRestart = null;
+
+        this.matchStatus = null;
+
+        this.matchTicsPerSecond = 0;
+
+        final GdxFrameLoopListener live = this.listener;
+
+        if (live != null)
+        {
+            live.detachMatchHooks();
+        }
     }
 
     /**

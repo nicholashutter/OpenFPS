@@ -24,8 +24,10 @@ import com.openfps.engine.gameplay.Match;
 import com.openfps.engine.gameplay.MatchSummary;
 import com.openfps.engine.gameplay.adapter.NullGameplayPort;
 import com.openfps.engine.gameplay.map.MapLibrary;
+import com.openfps.engine.gameplay.map.MapRuntime;
 import com.openfps.engine.gameplay.map.MapSpec;
 import com.openfps.engine.gameplay.map.Team;
+import com.openfps.engine.gameplay.port.DelegatingGameplayPort;
 import com.openfps.engine.gameplay.port.I_GameplayPort;
 import com.openfps.gdx.AccessibilitySettings;
 import com.openfps.gdx.DebugSettings;
@@ -211,34 +213,28 @@ public final class DesktopLauncher
         // user then has to close to read the reason.
         final String explicitModel = modelArg(args);
 
-        final String mapId = mapArg(args);
+        final String bootMapId = mapArg(args);
 
         final DemoScene demo;
 
-        final com.openfps.engine.gameplay.map.MapScene mapScene;
-
         try
         {
-            if (mapId != null && !mapId.isEmpty())
+            // The demo is built only when the launcher's user actually
+            // wants it. A menu-driven run (no --map= and no --model=)
+            // skips the demo entirely, and the map runtime starts
+            // empty: the menu is the first thing the player sees. A
+            // boot with --map= still works (preserving
+            // --start-in-game --map=ID) and the demo is not built
+            // either, because the map is the world the player wants.
+            if (bootMapId == null || bootMapId.isEmpty())
             {
-                // Map mode: skip the demo entirely. The map scene is built
-                // from the spec, and the gameplay port is the smoke
-                // port — the per-tic mode logic still ticks, but the
-                // demo's bots / UI hooks are not wired (a future pass
-                // can replace the smoke port with a real map-driven
-                // gameplay port).
-                LOG.info("--map={} given — building MapScene from the spec, demo bypassed",
-                    mapId);
-
-                mapScene = buildMapScene(mapId);
-
-                demo = null;
+                demo = buildDemo(explicitModel, assetsArg(args));
             }
             else
             {
-                mapScene = null;
+                LOG.info("--map={} given — demo will not be built; the map is the world", bootMapId);
 
-                demo = buildDemo(explicitModel, assetsArg(args));
+                demo = null;
             }
         }
         catch (final DemoAssetException e)
@@ -287,16 +283,6 @@ public final class DesktopLauncher
         // already happened.
         hal.inputPort().setTicRate(rate.fps());
 
-        // MUTABLE: assigned once on this thread by the factory below, before
-        // the frame loop that reads it starts. There is no race — the engine
-        // bootstrap has returned by then.
-        final DemoGameplayPort[] gameplay = new DemoGameplayPort[1];
-
-        // Map mode has its own gameplay port — the spec-driven port, which
-        // the same factory path can return for either case because the
-        // shape of the port the engine wants is the same.
-        final com.openfps.engine.gameplay.map.MapGameplayPort[] mapPort = new com.openfps.engine.gameplay.map.MapGameplayPort[1];
-
         // The player's team on a multiplayer map is derived from the net
         // id (one peer per team, alternating), so the player on a 1-arg
         // --net= with no peers lands on RED. Single-player runs leave
@@ -304,62 +290,72 @@ public final class DesktopLauncher
         final com.openfps.engine.gameplay.map.Team playerTeam =
             teamForPlayer(netArgs.localSpawnId());
 
+        // MUTABLE: assigned once on this thread by the factory below, before
+        // the frame loop that reads it starts. There is no race — the engine
+        // bootstrap has returned by then.
+        final DemoGameplayPort[] gameplay = new DemoGameplayPort[1];
+
+        // The swappable port the engine ticks. The same instance is
+        // returned by the factory every time, so the engine's
+        // GameplaySubsystem ticks one port for the life of the run;
+        // the runtime swaps the port that delegates to.
+        final DelegatingGameplayPort delegatingPort = new DelegatingGameplayPort();
+
+        // The runtime that owns the current map (if any). A menu
+        // pick calls mapRuntime.loadMap; a return-to-menu calls
+        // mapRuntime.unload. The runtime holds the renderer and the
+        // swappable port, which is the only place either of them
+        // gets touched from outside the engine.
+        final MapRuntime mapRuntime;
+
         final EngineSession session = new EngineMain()
             .start(config, hal, holder, input ->
             {
-                // In map mode the demo-driven gameplay port is bypassed;
-                // the spec-driven MapGameplayPort is what runs. It does
-                // everything the demo port does — input, controller, net
-                // attach, respawn, mode dispatch — but the spec drives
-                // spawn placement, bot waypoints, and the match mode.
-                if (mapScene != null)
+                // The factory returns the swappable port. The
+                // engine's GameplaySubsystem wraps it once and ticks
+                // it for the life of the run; the actual port the
+                // engine ticks is whatever the runtime has set
+                // (NullGameplayPort by default, a MapGameplayPort
+                // after a loadMap).
+                if (demo != null)
                 {
-                    final com.openfps.engine.gameplay.map.MapGameplayPort port =
-                        com.openfps.engine.gameplay.map.MapGameplayPort.create(
-                            mapScene.spec(), input, holder.renderer(), config,
-                            playerTeam,
-                            mapSpawnIndexFor(netArgs.localSpawnId(), playerTeam));
+                    final I_GameplayPort port = gameplayPort(input, holder, demo, config,
+                        netArgs.localSpawnId());
 
-                    mapPort[0] = port;
+                    if (port instanceof DemoGameplayPort)
+                    {
+                        gameplay[0] = (DemoGameplayPort) port;
+                    }
 
-                    return port;
+                    return delegatingPort;
                 }
 
-                final I_GameplayPort port = gameplayPort(input, holder, demo, config,
-                    netArgs.localSpawnId());
-
-                if (port instanceof DemoGameplayPort)
-                {
-                    gameplay[0] = (DemoGameplayPort) port;
-                }
-
-                return port;
+                return delegatingPort;
             });
 
         final SoftwareRenderPort renderer = holder.renderer();
 
-        // In map mode bind the map scene to the renderer. In demo
-        // mode the existing bindWorld runs. The map bypasses every
-        // demo-specific UI hook (match gate, audio, match status)
-        // because there is no DemoGameplayPort to hook them into.
-        if (mapScene != null)
-        {
-            bindMapWorld(renderer, mapScene);
-        }
-        else
-        {
-            bindWorld(renderer, demo, explicitModel);
-        }
+        // Build the map runtime only when a map is in play at boot
+        // (the --map=ID path) or any menu pick can drive it (the no
+        // --map= path). The runtime is bound to the renderer, the
+        // engine's input port, the running config, and the swappable
+        // port the engine ticks — the only place the four come
+        // together.
+        mapRuntime = new MapRuntime(renderer, hal.getInputPort(), config, playerTeam,
+            mapSpawnIndexFor(netArgs.localSpawnId(), playerTeam), delegatingPort);
 
         window.attachRenderer(renderer);
 
-        if (mapScene == null)
+        if (demo != null)
         {
+            // Demo mode keeps its old wiring: the demo scene is bound
+            // once, the demo-specific UI hooks (local body, viewmodel)
+            // are attached, the match gate is the demo port's. The
+            // map runtime is not used.
+            bindWorld(renderer, demo, explicitModel);
+
             attachMatchGate(window, gameplay[0]);
 
-            // The weapon's noise. From the HAL rather than constructed here, so the
-            // launcher makes no decision about audio beyond "use the platform's" —
-            // which is the same shape as the window and the input port above it.
             attachAudio(hal, gameplay[0]);
 
             attachLocalBody(demo, gameplay[0]);
@@ -370,22 +366,45 @@ public final class DesktopLauncher
 
             attachMatchStatus(window, gameplay[0], rate);
         }
+        else if (bootMapId != null && !bootMapId.isEmpty())
+        {
+            // Boot with --map=ID: build the map now, then run the
+            // same wiring the menu path will use. After bootstrap,
+            // --start-in-game (already set above) will move the
+            // state machine to PLAYING and the match gate will
+            // un-freeze the port.
+            mapRuntime.loadMap(bootMapId);
+
+            bindAndAttachMap(window, hal, mapRuntime, rate);
+        }
         else
         {
-            // Map mode wires the same UI hooks the demo port gets, minus
-            // the demo-specific ones (no local body, no viewmodel). The
-            // match still freezes behind a menu, still ends, still
-            // reports a status — the window wants the same shapes it
-            // already knows how to draw.
-            attachMatchGateMap(window, mapPort[0]);
+            // No --map= and no demo. The runtime starts empty, the
+            // menu is the first thing. The match gate is wired to
+            // the runtime's current port, so when the player picks
+            // a map and the loadMapCallback fires, the new port
+            // gets setMatchLive'd through the same gate.
+            bindAndAttachMap(window, hal, mapRuntime, rate);
 
-            attachAudioMap(hal, mapPort[0]);
+            // The picker's hook: when the menu fires, this is the
+            // function that builds the map and re-attaches the UI
+            // hooks (match gate, result, status, restart) against
+            // the new port. Done before openLoading, so by the
+            // time the loading screen's onReady fires startGame,
+            // the gate is in place and the new port is live.
+            window.setLoadMapCallback(id ->
+            {
+                final MapSpec loaded = mapRuntime.loadMap(id);
 
-            attachMatchResultMap(window, mapPort[0]);
+                if (loaded == null)
+                {
+                    LOG.error("Map pick '{}' did not load — staying in the menu", id);
 
-            attachMatchRestartMap(window, mapPort[0]);
+                    return;
+                }
 
-            attachMatchStatusMap(window, mapPort[0], rate);
+                bindAndAttachMap(window, hal, mapRuntime, rate);
+            });
         }
 
         attachDebugSettings(window, debug);
@@ -398,16 +417,47 @@ public final class DesktopLauncher
 
         try
         {
-            // Networking now drives the spec's MapGameplayPort when a
-            // --map= is in play. The demo path is unchanged. Both
-            // ports carry the same network attach shape.
-            if (mapScene == null)
+            // Networking drives the demo's port in demo mode and the
+            // map runtime's current port in map mode. The map port
+            // is read through the runtime, not captured, so a swap
+            // re-targets whatever the runtime now holds. A future
+            // pass tears down and re-opens the net session on swap;
+            // for now the net session is locked to the boot port.
+            if (demo != null)
             {
                 netSession = openNetwork(netArgs, gameplay[0], config, demo);
             }
             else
             {
-                netSession = openNetworkMap(netArgs, mapPort[0], config, mapScene);
+                final com.openfps.engine.gameplay.map.MapGameplayPort currentMapPort =
+                    mapRuntime.mapPort();
+
+                if (currentMapPort != null)
+                {
+                    netSession = openNetworkMap(netArgs, currentMapPort, config,
+                        mapRuntime.scene());
+                }
+                else
+                {
+                    // Boot with no --map= and no demo: the net
+                    // session would have nothing to drive. The
+                    // menu-driven flow will pick a map later, but
+                    // a single-process net session cannot be
+                    // pre-opened for it. Refuse the net args.
+                    if (netArgs.isRequested())
+                    {
+                        LOG.error("Networking was requested (--net=...) but no map is loaded;"
+                            + " open the menu, pick a map, then start a session.");
+
+                        session.stop();
+
+                        System.exit(EXIT_BAD_NETWORK);
+
+                        return;
+                    }
+
+                    netSession = null;
+                }
             }
         }
         catch (final RuntimeException e)
@@ -434,7 +484,7 @@ public final class DesktopLauncher
             // Demo mode reports the local player's final placement beside the
             // remote body summary; map mode does the same, minus the
             // remote-body summary this first pass does not yet simulate.
-            if (mapScene == null && gameplay[0] != null && gameplay[0].remoteBodies() != null)
+            if (demo != null && gameplay[0] != null && gameplay[0].remoteBodies() != null)
             {
                 // The local player's own final placement, printed beside the peer
                 // bodies so the two can be compared directly. This is the whole
@@ -450,7 +500,7 @@ public final class DesktopLauncher
 
                 LOG.info("Remote body summary: {}", gameplay[0].remoteBodies());
             }
-            else if (mapScene != null && mapPort[0] != null)
+            else if (mapRuntime.hasMap() && mapRuntime.mapPort() != null)
             {
                 // Map mode: print the local player's final placement. The
                 // peer's body is not yet simulated into the map scene, so
@@ -458,12 +508,13 @@ public final class DesktopLauncher
                 // yet — the lockstep claim is the two peers' position
                 // values being equal, which the OTHER peer's log will
                 // show for this player.
+                final com.openfps.engine.gameplay.map.MapGameplayPort port =
+                    mapRuntime.mapPort();
+
                 LOG.info("Local player {} finished at ({}, {}, {}) yaw {} (map={})",
-                    netArgs.playerId(), mapPort[0].controller().positionX(),
-                    mapPort[0].controller().positionY(),
-                    mapPort[0].controller().positionZ(),
-                    mapPort[0].controller().yawRadians(),
-                    mapScene.spec().id());
+                    netArgs.playerId(), port.controller().positionX(),
+                    port.controller().positionY(), port.controller().positionZ(),
+                    port.controller().yawRadians(), mapRuntime.spec().id());
             }
 
             netSession.close();
@@ -472,6 +523,74 @@ public final class DesktopLauncher
         session.stop();
 
         LOG.info("OpenFPS desktop launcher exited");
+    }
+
+    /**
+     * Wires every match-related UI hook the window has against the
+     * runtime's current port. Called both at boot (after a {@code --map=}
+     * build) and on every menu pick (after {@code MapRuntime.loadMap}),
+     * so the wiring path is identical in both cases.
+     *
+     * <p>The match gate reads the runtime's port through the closure
+     * rather than capturing a port reference, so a later
+     * {@code mapRuntime.loadMap} that swaps the port is picked up by
+     * the next gate fire. The {@code false} branch additionally calls
+     * {@code mapRuntime.unload} and {@code window.detachMatchHooks}, so
+     * a return-to-menu tears the map down cleanly.</p>
+     *
+     * @param window the window that owns the match hooks
+     * @param hal the platform HAL the audio port comes from
+     * @param runtime the map runtime; must not be null
+     * @param rate the configured frame rate; must not be null
+     */
+    private static void bindAndAttachMap(final GdxWindowPort window, final GdxAdapterFactory hal,
+        final MapRuntime runtime, final FrameRate rate)
+    {
+        final com.openfps.engine.gameplay.map.MapGameplayPort currentPort = runtime.mapPort();
+
+        if (currentPort == null)
+        {
+            LOG.warn("bindAndAttachMap: no map loaded; skipping UI hook attach");
+
+            return;
+        }
+
+        // The match gate is the seam that freezes/unfreezes the match
+        // when the menu is in front. It always reads the current port
+        // through the runtime, so a swap on the next loadMap lands
+        // without a separate re-wiring. The false branch also tears
+        // down the map, which is the "return-to-menu" path the user
+        // asked for: the .ofm is released, the renderer goes back to
+        // empty, and the window's hooks detach.
+        window.attachMatchGate(playing ->
+        {
+            final com.openfps.engine.gameplay.map.MapGameplayPort livePort = runtime.mapPort();
+
+            if (livePort != null)
+            {
+                livePort.setMatchLive(playing.booleanValue());
+            }
+
+            if (!playing.booleanValue() && runtime.hasMap())
+            {
+                LOG.info("Returning to menu: tearing down map '{}'", runtime.spec().id());
+
+                runtime.unload();
+
+                window.detachMatchHooks();
+            }
+        });
+
+        attachAudioMap(hal, currentPort);
+
+        attachMatchResultMap(window, currentPort);
+
+        attachMatchRestartMap(window, currentPort);
+
+        attachMatchStatusMap(window, currentPort, rate);
+
+        LOG.info("bindAndAttachMap: wired UI hooks against map '{}' (port live={})",
+            runtime.spec().id(), currentPort.isMatchLive());
     }
 
     /**

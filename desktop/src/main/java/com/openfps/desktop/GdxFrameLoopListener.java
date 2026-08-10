@@ -325,6 +325,21 @@ public final class GdxFrameLoopListener implements ApplicationListener
     private Consumer<Boolean> matchGate;
 
     /**
+     * Runs when the player picks a map from the menu, or null when the
+     * menu-driven map load is not wired.
+     *
+     * <p>MUTABLE: set by the launcher via
+     * {@link #setLoadMapCallback(java.util.function.Consumer)} before
+     * the loop starts. The default &mdash; a no-op &mdash; is what
+     * windowless tests get, and what the menu flow falls back to when
+     * no launcher is around. The callback receives the picked map id;
+     * the launcher uses it to build a {@code MapRuntime.loadMap} call
+     * and re-attach the match hooks before the loading screen hands
+     * control to {@code uiState.startGame}.</p>
+     */
+    private Consumer<String> loadMapCallback;
+
+    /**
      * Creates the bridge with no world presentation — menu only.
      *
      * @param callback the engine callback to forward lifecycle to; must not
@@ -643,6 +658,56 @@ public final class GdxFrameLoopListener implements ApplicationListener
     }
 
     /**
+     * Names the consumer the picker fires when the player picks a map.
+     *
+     * <p>The launcher supplies one so the menu pick can build a
+     * {@code MapRuntime.loadMap} call and re-attach the match hooks
+     * (gate, result, status, restart) against the freshly loaded
+     * port, before the loading screen hands control to
+     * {@code uiState.startGame}. A null callback (the default) is
+     * what windowless tests get, and what a launcher that does not
+     * drive the map load wires up.</p>
+     *
+     * <p><b>Setting it does not fire on existing picks.</b> The picker
+     * is built in {@link #create()} and reads the same callback for
+     * the life of the window, exactly the same shape as
+     * {@link #attachMatchGate}.</p>
+     *
+     * @param callback told the picked map id on every pick from the
+     *     browser, or null to clear
+     */
+    public void setLoadMapCallback(final Consumer<String> callback)
+    {
+        this.loadMapCallback = callback;
+    }
+
+    /**
+     * Drops every match-related hook this window was given.
+     *
+     * <p>The counterpart to the four {@code attachMatch*} methods:
+     * the gate, the result supplier, the restart runnable and the
+     * status supplier are all nulled out, so a window that returns
+     * to the menu and tears down its map no longer reads from a
+     * port that no longer exists. A future state change after this
+     * call has no match gate to fire, which is the goal &mdash; the
+     * match flow is over until the launcher attaches a fresh set
+     * (which {@code bindAndAttachMap} does, when the player picks
+     * a new map).</p>
+     */
+    public void detachMatchHooks()
+    {
+        this.matchResult = null;
+
+        this.matchRestart = null;
+
+        this.matchStatus = null;
+
+        this.matchGate = null;
+
+        this.ticsPerSecond = 0;
+    }
+
+    /**
      * Returns whether this window can start another round.
      *
      * <p>Exposed so a headless test can assert the presentation rule rather than
@@ -862,6 +927,23 @@ public final class GdxFrameLoopListener implements ApplicationListener
             LOG.warn("onMapPicked: blank map id ignored");
 
             return;
+        }
+
+        // Fire BEFORE the state transition so the launcher can build the
+        // map (and re-attach the match hooks) before the loading screen's
+        // onReady fires uiState.startGame. By the time the state machine
+        // reaches PLAYING, the gate is in place and the match runs against
+        // the freshly built port.
+        if (loadMapCallback != null)
+        {
+            LOG.info("onMapPicked: dispatching map load to launcher: id={}", mapId);
+
+            loadMapCallback.accept(mapId);
+        }
+        else
+        {
+            LOG.warn("onMapPicked: no loadMapCallback wired; the menu is in front but the"
+                + " engine will not load '{}'", mapId);
         }
 
         if (uiState.mode() == MatchMode.MULTIPLAYER)
