@@ -389,20 +389,24 @@ public final class GdxWindowPort implements I_WindowPort
      * engine's demo package to hold one method call. The launcher, which is the
      * composition root and already knows both objects, supplies the lambda.</p>
      *
-     * <p>Call before {@link #runFrameLoop}; the listener that drives it is
-     * constructed inside. Passing null means nothing is told, which is what
-     * every windowless test gets.</p>
+     * <p>Re-entrant safe: the runtime re-attach path (a menu pick) calls
+     * this on the render thread while the frame loop is running. The
+     * listener is on the same thread, so the forward is a happens-before
+     * on the listener's field. The window's own field is also updated so
+     * any future {@code runFrameLoop} sees the latest gate.</p>
      *
      * @param gate told true on entering the world and false on leaving, or null
      */
     public void attachMatchGate(final Consumer<Boolean> gate)
     {
-        if (state == State.RUNNING)
-        {
-            throw new IllegalStateException("attachMatchGate() while the frame loop is running");
-        }
-
         this.matchGate = gate;
+
+        final GdxFrameLoopListener live = this.listener;
+
+        if (live != null)
+        {
+            live.attachMatchGate(gate);
+        }
     }
 
     /** Returns the gate named by {@link #attachMatchGate}, or null. */
@@ -429,12 +433,14 @@ public final class GdxWindowPort implements I_WindowPort
      */
     public void attachMatchResult(final Supplier<MatchSummary> result)
     {
-        if (state == State.RUNNING)
-        {
-            throw new IllegalStateException("attachMatchResult() while the frame loop is running");
-        }
-
         this.matchResult = result;
+
+        final GdxFrameLoopListener live = this.listener;
+
+        if (live != null)
+        {
+            live.attachMatchResult(result);
+        }
     }
 
     /** Returns the supplier named by {@link #attachMatchResult}, or null. */
@@ -461,13 +467,14 @@ public final class GdxWindowPort implements I_WindowPort
      */
     public void attachMatchRestart(final Runnable restart)
     {
-        if (state == State.RUNNING)
-        {
-            throw new IllegalStateException(
-                "attachMatchRestart() while the frame loop is running");
-        }
-
         this.matchRestart = restart;
+
+        final GdxFrameLoopListener live = this.listener;
+
+        if (live != null)
+        {
+            live.attachMatchRestart(restart);
+        }
     }
 
     /** Returns the restart named by {@link #attachMatchRestart}, or null. */
@@ -494,15 +501,16 @@ public final class GdxWindowPort implements I_WindowPort
     public void attachMatchStatus(final Supplier<MatchStatus> status,
         final int simulationTicsPerSecond)
     {
-        if (state == State.RUNNING)
-        {
-            throw new IllegalStateException(
-                "attachMatchStatus() while the frame loop is running");
-        }
-
         this.matchStatus = status;
 
         this.matchTicsPerSecond = simulationTicsPerSecond;
+
+        final GdxFrameLoopListener live = this.listener;
+
+        if (live != null)
+        {
+            live.attachMatchStatus(status, simulationTicsPerSecond);
+        }
     }
 
     /** Returns the supplier named by {@link #attachMatchStatus}, or null. */

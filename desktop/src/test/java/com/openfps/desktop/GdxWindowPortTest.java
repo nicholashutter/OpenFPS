@@ -337,4 +337,129 @@ class GdxWindowPortTest
             assertThat(port.state()).isEqualTo(GdxWindowPort.State.NEW);
         }
     }
+
+    @Nested
+    @DisplayName("match-hook re-attach while the loop is running")
+    class MatchHookReentrancy
+    {
+        @Test
+        @DisplayName("attachMatchGate does not throw when the loop is running — it forwards to the listener")
+        void shouldNotThrowOnAttachMatchGate()
+        {
+            // Regression test for the IllegalStateException the user hit on
+            // a no-args run + menu pick: the click handler ran
+            // bindAndAttachMap which called window.attachMatchGate while
+            // the frame loop was running. The fix is to make the four
+            // runtime attach methods re-entrant safe by forwarding to the
+            // listener. The window's field is also updated so a future
+            // runFrameLoop sees the latest.
+            final GdxWindowPort port = new GdxWindowPort();
+
+            // The user reported the exception is thrown by the loop
+            // running guard, so we exercise the "loop is running" path
+            // by reflection (the State field is private).
+            try
+            {
+                final java.lang.reflect.Field stateField =
+                    GdxWindowPort.class.getDeclaredField("state");
+
+                stateField.setAccessible(true);
+
+                stateField.set(port, GdxWindowPort.State.RUNNING);
+            }
+            catch (final ReflectiveOperationException e)
+            {
+                throw new RuntimeException("test setup failed", e);
+            }
+
+            // No exception expected — the method forwards to the
+            // (still-null) listener and returns normally.
+            port.attachMatchGate(playing -> { });
+
+            // The window's own field is updated so any future
+            // runFrameLoop sees the latest.
+            assertThat(port.matchGate()).isNotNull();
+        }
+
+        @Test
+        @DisplayName("attachMatchResult is re-entrant safe")
+        void shouldNotThrowOnAttachMatchResult()
+        {
+            final GdxWindowPort port = new GdxWindowPort();
+
+            setStateRunning(port);
+
+            port.attachMatchResult(() -> null);
+
+            assertThat(port.matchResult()).isNotNull();
+        }
+
+        @Test
+        @DisplayName("attachMatchRestart is re-entrant safe")
+        void shouldNotThrowOnAttachMatchRestart()
+        {
+            final GdxWindowPort port = new GdxWindowPort();
+
+            setStateRunning(port);
+
+            port.attachMatchRestart(() -> { });
+
+            assertThat(port.matchRestart()).isNotNull();
+        }
+
+        @Test
+        @DisplayName("attachMatchStatus is re-entrant safe")
+        void shouldNotThrowOnAttachMatchStatus()
+        {
+            final GdxWindowPort port = new GdxWindowPort();
+
+            setStateRunning(port);
+
+            port.attachMatchStatus(() -> null, 60);
+
+            assertThat(port.matchStatus()).isNotNull();
+        }
+
+        @Test
+        @DisplayName("detachMatchHooks still nulls the window's fields")
+        void shouldClearFieldsOnDetach()
+        {
+            final GdxWindowPort port = new GdxWindowPort();
+
+            port.attachMatchGate(playing -> { });
+
+            port.attachMatchResult(() -> null);
+
+            port.attachMatchRestart(() -> { });
+
+            port.attachMatchStatus(() -> null, 60);
+
+            port.detachMatchHooks();
+
+            assertThat(port.matchGate()).isNull();
+
+            assertThat(port.matchResult()).isNull();
+
+            assertThat(port.matchRestart()).isNull();
+
+            assertThat(port.matchStatus()).isNull();
+        }
+
+        private void setStateRunning(final GdxWindowPort port)
+        {
+            try
+            {
+                final java.lang.reflect.Field stateField =
+                    GdxWindowPort.class.getDeclaredField("state");
+
+                stateField.setAccessible(true);
+
+                stateField.set(port, GdxWindowPort.State.RUNNING);
+            }
+            catch (final ReflectiveOperationException e)
+            {
+                throw new RuntimeException("test setup failed", e);
+            }
+        }
+    }
 }
