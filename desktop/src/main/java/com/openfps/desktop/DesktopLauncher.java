@@ -162,6 +162,16 @@ public final class DesktopLauncher
      */
     public static void main(final String[] args)
     {
+        // Install the SLF4J-to-log-bus bridge before the first log call.
+        // Every existing LOG.info / LOG.warn site stays as-is, but its
+        // event is now also published to the engine's main bus for any
+        // consumer subscribed there (a file writer, a debug overlay,
+        // anything else). Idempotent: a re-install is a no-op, so the
+        // engine subsystem and the desktop launcher can both call it.
+        com.openfps.engine.log.LogbackBridgeBootstrap.install();
+
+        com.openfps.engine.log.LogBusFactory.startDrainTask();
+
         final FrameRate rate;
 
         try

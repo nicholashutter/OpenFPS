@@ -7,6 +7,15 @@
         </encoder>
     </appender>
 
+    <!--
+        The engine's own log bus is wired programmatically by
+        LogbackBridgeBootstrap from EngineMain and the tools' main
+        entry points. STDOUT stays as the only XML-configured appender
+        so the existing console output is unchanged; the bus appender
+        is added at runtime once the engine has the bus it wants to
+        publish to.
+    -->
+
     <!-- Per-subsystem log levels. Tweak here to debug a specific area. -->
     <logger name="com.openfps.engine.core" level="INFO"/>
     <logger name="com.openfps.engine.hal" level="INFO"/>

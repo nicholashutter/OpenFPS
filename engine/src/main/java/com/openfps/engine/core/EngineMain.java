@@ -86,6 +86,16 @@ public final class EngineMain
      */
     public static void main(final String[] args)
     {
+        // Install the SLF4J-to-log-bus bridge before the first log
+        // call, so every line below is also visible to any consumer
+        // subscribed to the engine's main bus (a file writer, a debug
+        // overlay, anything else). Idempotent: a second install is a
+        // no-op, so the launcher can call install() again to be sure
+        // the bridge is in place.
+        com.openfps.engine.log.LogbackBridgeBootstrap.install();
+
+        com.openfps.engine.log.LogBusFactory.startDrainTask();
+
         LOG.info("OpenFPS engine booting...");
 
         final FrameRate rate;
