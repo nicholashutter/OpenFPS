@@ -12,6 +12,9 @@ import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.openfps.engine.gameplay.MatchMode;
 import com.openfps.engine.gameplay.MatchStatus;
 import com.openfps.engine.gameplay.MatchSummary;
@@ -118,6 +121,14 @@ public final class GdxFrameLoopListener implements ApplicationListener
 
     /** Nanoseconds in a second, for turning libGDX's frame delta into a sample. */
     private static final float NANOS_PER_SECOND = 1_000_000_000.0f;
+
+    /**
+     * The frame loop's own logger. Logs flow through the slf4j bridge
+     * into the engine's main log bus, so a player with a debug overlay
+     * subscribed to the bus sees the map-loading flow alongside the
+     * engine's own logs.
+     */
+    private static final Logger LOG = LoggerFactory.getLogger(GdxFrameLoopListener.class);
 
     /** The engine's side of the frame loop. */
     private final I_FrameCallback callback;
@@ -848,15 +859,22 @@ public final class GdxFrameLoopListener implements ApplicationListener
     {
         if (mapId == null || mapId.isBlank())
         {
+            LOG.warn("onMapPicked: blank map id ignored");
+
             return;
         }
 
         if (uiState.mode() == MatchMode.MULTIPLAYER)
         {
+            LOG.info("Map picked: id={} mode=MULTIPLAYER -> opening lobby", mapId);
+
             uiState.openLobby();
         }
         else
         {
+            LOG.info("Map picked: id={} mode={} -> opening loading screen", mapId,
+                uiState.mode());
+
             uiState.openLoading();
         }
     }
@@ -951,14 +969,28 @@ public final class GdxFrameLoopListener implements ApplicationListener
 
             if (loading == null)
             {
+                // onReady advances the state machine to PLAYING once the
+                // loading screen's auto-start timer fires. For the shipped
+                // maps the .ofm is already in the classpath, so this is
+                // a UX delay rather than a real wait; the same hook will
+                // fire when a real map loader finishes its background
+                // read.
+                LOG.info("Building LoadingScreen for map: id={} displayName={} thumbnail={}",
+                    entry.id(), entry.displayName(), entry.thumbnailPath());
+
                 loading = new LoadingScreen(entry.displayName(),
-                    entry.thumbnailPath(), uiState::returnFromLoading);
+                    entry.thumbnailPath(),
+                    () -> uiState.startGame(uiState.mode()),
+                    uiState::returnFromLoading);
 
                 loading.resize(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
             }
 
             if (lobby == null && uiState.mode() == MatchMode.MULTIPLAYER)
             {
+                LOG.info("Building LobbyScreen for map: id={} displayName={}", entry.id(),
+                    entry.displayName());
+
                 lobby = new LobbyScreen(entry.displayName(), uiState.mode(),
                     entry.thumbnailPath(), uiState::openLoading,
                     uiState::openLoading, uiState::returnToMapBrowser);
@@ -1142,6 +1174,8 @@ public final class GdxFrameLoopListener implements ApplicationListener
     // front would be the same invisible-button bug one screen over.
     private void applyMenuInput(final UiState state)
     {
+        LOG.info("UI state -> {}", state);
+
         if (menu != null && state.drawsMenu())
         {
             menu.attachInputProcessor();

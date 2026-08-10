@@ -69,6 +69,16 @@ public final class LoadingScreen
     /** Clear space left under the Back key. */
     private static final float BOTTOM_MARGIN = 28.0f;
 
+    /**
+     * How long the loading screen waits before auto-transitioning
+     * to the game. Long enough for a player to read the map name
+     * and feel the screen arrive; short enough that the screen is
+     * not a wait. The actual map swap is instant for the shipped
+     * maps (the .ofm is already in the classpath), so this is
+     * primarily a UX delay.
+     */
+    public static final float AUTO_START_SECONDS = 1.5f;
+
     /** Button width in pixels. */
     private static final float BUTTON_WIDTH = 280.0f;
 
@@ -114,17 +124,25 @@ public final class LoadingScreen
     /** The way back to the map browser, in case the engine hangs. */
     private final BlockButton backButton;
 
+    /** Run when the loading screen's auto-start timer fires. */
+    private final Runnable onReady;
+
+    /** Seconds the screen has been on glass. Drives the auto-start. */
+    private float elapsedSeconds;
+
     /**
      * Builds the loading screen.
      *
      * @param displayName the map's display name; must not be blank
      * @param thumbnailPath the classpath-relative path to the map's
      *     thumbnail PNG; must not be blank
+     * @param onReady run when the screen has been on glass long enough
+     *     and the engine is ready to enter the world; must not be null
      * @param onBack run when the player clicks BACK; must not be null
      * @throws IllegalArgumentException if any argument is null or blank
      */
     public LoadingScreen(final String displayName, final String thumbnailPath,
-        final Runnable onBack)
+        final Runnable onReady, final Runnable onBack)
     {
         if (displayName == null || displayName.isBlank())
         {
@@ -136,10 +154,17 @@ public final class LoadingScreen
             throw new IllegalArgumentException("thumbnailPath must not be blank");
         }
 
+        if (onReady == null)
+        {
+            throw new IllegalArgumentException("onReady must not be null");
+        }
+
         if (onBack == null)
         {
             throw new IllegalArgumentException("onBack must not be null");
         }
+
+        this.onReady = onReady;
 
         this.white = whitePixelTexture();
 
@@ -203,6 +228,20 @@ public final class LoadingScreen
         stage.act(deltaSeconds);
 
         stage.draw();
+
+        // Auto-start after AUTO_START_SECONDS. The actual map swap is
+        // instant for the shipped maps, so this is a UX delay rather
+        // than a load progress; once a real loader is in place the
+        // same callback can be wired to the loader's "ready" event
+        // and the timer can be removed.
+        elapsedSeconds += deltaSeconds;
+
+        if (elapsedSeconds >= AUTO_START_SECONDS)
+        {
+            elapsedSeconds = AUTO_START_SECONDS;
+
+            onReady.run();
+        }
     }
 
     /**
