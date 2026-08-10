@@ -215,27 +215,54 @@ public final class DesktopLauncher
 
         final String bootMapId = mapArg(args);
 
+        // The demo is no longer the default for a no-args run. The
+        // previous version keyed off "no --map=" — which is also
+        // the menu-driven run's signature — and built the demo as a
+        // side effect, hardcoding the demo as the default for every
+        // no-args run. The menu flow then picked a real map, but
+        // the demo was still what the renderer was bound to, and
+        // the user saw the demo instead of the picked map. The
+        // demo is now opt-in: it is built only when --model= is
+        // explicitly given. A no-args run is a menu-driven run,
+        // and the menu is the first thing the player sees; a
+        // --map= run boots directly into that map (with or
+        // without --start-in-game); a --model= run draws that
+        // single model.
+        final boolean hasExplicitModel = explicitModel != null && !explicitModel.isEmpty();
+
+        final boolean hasBootMap = bootMapId != null && !bootMapId.isEmpty();
+
+        if (hasExplicitModel && hasBootMap)
+        {
+            LOG.warn("--map={} and --model={} are both given; --model= takes precedence"
+                + " (draws that one model) — drop --model= for menu-driven map loading",
+                bootMapId, explicitModel);
+        }
+
+        if (hasBootMap)
+        {
+            LOG.info("--map={} given — the map is the world; the demo is not built", bootMapId);
+        }
+        else if (hasExplicitModel)
+        {
+            LOG.info("--model={} given — drawing that one model; the menu is the first thing", explicitModel);
+        }
+        else
+        {
+            LOG.info("No --map= and no --model= — the menu is the first thing the player sees");
+        }
+
+        // Built BEFORE the window opens, on purpose: missing assets
+        // should report and exit at a console, not behind a black
+        // GLFW window the user then has to close to read the
+        // reason. Only built when the user actually wants the demo
+        // room; otherwise the renderer is left scene-less and the
+        // menu is the first thing.
         final DemoScene demo;
 
         try
         {
-            // The demo is built only when the launcher's user actually
-            // wants it. A menu-driven run (no --map= and no --model=)
-            // skips the demo entirely, and the map runtime starts
-            // empty: the menu is the first thing the player sees. A
-            // boot with --map= still works (preserving
-            // --start-in-game --map=ID) and the demo is not built
-            // either, because the map is the world the player wants.
-            if (bootMapId == null || bootMapId.isEmpty())
-            {
-                demo = buildDemo(explicitModel, assetsArg(args));
-            }
-            else
-            {
-                LOG.info("--map={} given — demo will not be built; the map is the world", bootMapId);
-
-                demo = null;
-            }
+            demo = buildDemoIfRequested(explicitModel, assetsArg(args));
         }
         catch (final DemoAssetException e)
         {
@@ -366,7 +393,7 @@ public final class DesktopLauncher
 
             attachMatchStatus(window, gameplay[0], rate);
         }
-        else if (bootMapId != null && !bootMapId.isEmpty())
+        else if (hasBootMap)
         {
             // Boot with --map=ID: build the map now, then run the
             // same wiring the menu path will use. After bootstrap,
@@ -377,13 +404,37 @@ public final class DesktopLauncher
 
             bindAndAttachMap(window, hal, mapRuntime, rate);
         }
+        else if (hasExplicitModel)
+        {
+            // --model= given: draw that one model. The renderer is
+            // bound directly to the .ofm; the menu is the first
+            // thing the user sees, the model is what the menu is
+            // over (same shape as the original --model= path). The
+            // map runtime is empty; a menu pick swaps to a map.
+            bindWorld(renderer, null, explicitModel);
+
+            bindAndAttachMap(window, hal, mapRuntime, rate);
+
+            window.setLoadMapCallback(id ->
+            {
+                final MapSpec loaded = mapRuntime.loadMap(id);
+
+                if (loaded == null)
+                {
+                    LOG.error("Map pick '{}' did not load — staying in the menu", id);
+
+                    return;
+                }
+
+                bindAndAttachMap(window, hal, mapRuntime, rate);
+            });
+        }
         else
         {
-            // No --map= and no demo. The runtime starts empty, the
-            // menu is the first thing. The match gate is wired to
-            // the runtime's current port, so when the player picks
-            // a map and the loadMapCallback fires, the new port
-            // gets setMatchLive'd through the same gate.
+            // No --map= and no --model=. The runtime starts empty,
+            // the menu is the first thing, and no scene is bound
+            // to the renderer. A menu pick builds the map; a
+            // return-to-menu tears it down.
             bindAndAttachMap(window, hal, mapRuntime, rate);
 
             // The picker's hook: when the menu fires, this is the
@@ -594,23 +645,56 @@ public final class DesktopLauncher
     }
 
     /**
-     * Loads and assembles the demo world, or nothing when a single model was
-     * named explicitly.
+     * Returns the demo world when the launcher was asked to build
+     * one, or null otherwise.
+     *
+     * <p>The previous version of the launcher built the demo room
+     * by default for any no-{@code --map=} run, which made the
+     * demo the implicit "first thing" the user saw and broke the
+     * menu-driven map load (the user picked a map; the demo was
+     * still what the renderer was bound to). The demo room is
+     * now opt-in: this method returns null unless the caller
+     * explicitly asks for it. A future "Try the demo" menu
+     * option can call {@code DemoScene.build} directly without
+     * going through this method, and the demo room is still
+     * available as a {@link DemoScene} for tests and one-off
+     * tooling.</p>
      *
      * @param explicitModel the {@code --model=} argument, or null
-     * @param assetRoot where the demo's models live
-     * @return the assembled demo, or null when {@code --model=} was given
-     * @throws DemoAssetException if the demo has no geometry to stand on
+     * @param assetRoot where the demo's models live; currently
+     *     unused but kept on the signature for the future
+     *     "Try the demo" menu option that will need it
+     * @return null; the demo room is no longer the default
+     * @throws DemoAssetException never thrown by this method;
+     *     kept on the signature so a future caller can build
+     *     the demo room and surface the same failure mode
      */
-    private static DemoScene buildDemo(final String explicitModel, final String assetRoot)
+    static DemoScene buildDemoIfRequested(final String explicitModel, final String assetRoot)
     {
         if (explicitModel != null && !explicitModel.isEmpty())
         {
-            LOG.info("--model given — drawing that one model instead of the demo room");
-
-            return null;
+            LOG.info("--model={} given — drawing that one model; the demo room is not built",
+                explicitModel);
+        }
+        else
+        {
+            LOG.info("No --map= and no --model= — the menu is the first thing; the demo room is not built");
         }
 
+        return null;
+    }
+
+    /**
+     * Builds the demo room from the assets directory. Kept for
+     * tests and the future "Try the demo" menu option; the
+     * launcher's main path no longer calls it.
+     *
+     * @param assetRoot where the demo's models live
+     * @return the assembled demo, never null
+     * @throws DemoAssetException if the demo has no geometry to stand on
+     */
+    private static DemoScene buildDemoRoom(final String assetRoot)
+    {
         return DemoScene.build(DemoModels.load(Path.of(assetRoot)));
     }
 

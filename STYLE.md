@@ -934,6 +934,69 @@ every return-to-menu-and-forward bounce; the payoff is the renderer
 goes back to a real "no world" state and the engine's `Match` is
 fresh on every entry.
 
+### 14.7 The demo room is opt-in, not the default
+
+`DesktopLauncher` no longer builds the demo room for any
+no-`--map=` run. The boot decision is keyed off `--model=`:
+`--model=path` draws that one model via
+`bindWorld(renderer, null, explicitModel)`, `--map=ID` builds
+that map, and a no-args run leaves the renderer scene-less so
+the menu is the first thing the player sees. The previous
+"no `--map=` builds the demo" coupling made the demo the
+implicit first thing and broke the menu-driven map load:
+the user picked a map, but the demo was still what the
+renderer was bound to, and the user saw the demo forever.
+
+The demo room is still available as a `DemoScene` for tests
+and the future "Try the demo" menu option, but the
+launcher no longer builds it. `buildDemoIfRequested` always
+returns `null`; the boot path's three branches handle the
+three policies explicitly:
+
+| Args | Boot branch |
+|---|---|
+| `--model=path` | `bindWorld(renderer, null, explicitModel)` draws the model. Menu is the first thing; a menu pick swaps to a map. |
+| `--map=ID` | `mapRuntime.loadMap(ID)` builds the spec, scene, port, binds the renderer. `--start-in-game` skips the menu. |
+| no args | Renderer is left scene-less. The menu is the first thing. A menu pick loads a real map through the `loadMapCallback`. |
+
+`DesktopLauncherBootTest` pins the policy. Future
+refactors that touch the boot path are expected to keep
+the policy intact.
+
+### 14.8 Subsystem state-change observer &mdash; the only seam
+
+Every `Subsystem` state transition (UNINITIALIZED &rarr; READY,
+READY &rarr; SHUTDOWN, &rarr; ERROR) is published as a
+`SubsystemStateChangeEvent` to the observer list the
+`SubsystemRegistry` holds. The observer list is the only
+seam between the engine's state machine and anything that
+wants to know about it &mdash; the log bus, a debug overlay,
+a file writer.
+
+- `I_SubsystemObserver` is a single-method interface
+  (`onStateChange(event)`). Observers run on whichever
+  thread the transition fired on and must be thread-safe.
+- `Subsystem.transitionTo` is the only place state moves;
+  the volatile write is a single instruction, observer
+  exceptions are caught and logged, a misbehaving observer
+  cannot fail the state machine.
+- `SubsystemRegistry.registerObserver(observer)` wires the
+  observer to every currently-registered subsystem AND to
+  every subsystem registered afterwards. A late observer
+  is not retroactively fired; that is the contract.
+- `SubsystemStateLogger` (in `engine.log`) is the bridge
+  from the engine's state machine to the log bus. It
+  publishes every event on the matching subsystem channel
+  shaped like every other engine log line. The resource
+  subsystem (W_) has no dedicated channel and lands on
+  `engine.core`; the mapping is one line in
+  `SubsystemStateLogger.channelFor`.
+
+A future "alert on a subsystem in ERROR for too long"
+seam hooks a new observer into the registry. No change to
+the subsystems themselves is required &mdash; the observer
+list is the single point of contact.
+
 ---
 
 *This style guide is a living document. Changes require a PR with rationale and Checkstyle config update.*
