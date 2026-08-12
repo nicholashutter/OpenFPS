@@ -174,6 +174,13 @@ public final class DesktopLauncher
 
         com.openfps.engine.log.LogBusFactory.startDrainTask();
 
+        // Install the on-disk log sink so every engine log line
+        // also lands in logs/openfps-<timestamp>.log next to
+        // settings.gradle.kts. The install is a no-op when
+        // -Dopenfps.log.file=off or OPENFPS_LOG_FILE=off is set;
+        // see LogSinkPaths for the resolution rules.
+        com.openfps.engine.log.LogBusFactory.installDefaultFileSink();
+
         final FrameRate rate;
 
         try

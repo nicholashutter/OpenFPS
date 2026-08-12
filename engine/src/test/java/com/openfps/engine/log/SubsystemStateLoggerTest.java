@@ -137,7 +137,6 @@ class SubsystemStateLoggerTest
         logger.onStateChange(new SubsystemStateChangeEvent(SubsystemId.R_,
             SubsystemState.UNINITIALIZED, SubsystemState.READY, 0L, null));
 
-        // Drain task: pull from each subsystem bus into main.
         // The factory's drain task is normally started by the
         // launcher; here we just call subsystem.publish from
         // each side, then check that the main bus has them.
@@ -147,6 +146,24 @@ class SubsystemStateLoggerTest
         assertThat(LogBusFactory.subsystem("engine.gameplay").recent(10)).hasSize(1);
 
         assertThat(LogBusFactory.subsystem("engine.render").recent(10)).hasSize(1);
+
+        // Additionally verify that subsystem publishes are
+        // visible on the main bus (SubsystemLogBus forwards
+        // synchronously, so the event is on main even without
+        // the drain task).
+        final boolean mainHasGameplay = LogBusFactory.main().recent(500).stream()
+            .anyMatch(e -> "engine.gameplay".equals(e.source()));
+
+        final boolean mainHasRender = LogBusFactory.main().recent(500).stream()
+            .anyMatch(e -> "engine.render".equals(e.source()));
+
+        assertThat(mainHasGameplay)
+            .as("gameplay event must reach the main bus via SubsystemLogBus forward")
+            .isTrue();
+
+        assertThat(mainHasRender)
+            .as("render event must reach the main bus via SubsystemLogBus forward")
+            .isTrue();
     }
 
     /**

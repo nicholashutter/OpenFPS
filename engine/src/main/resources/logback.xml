@@ -14,6 +14,15 @@
         so the existing console output is unchanged; the bus appender
         is added at runtime once the engine has the bus it wants to
         publish to.
+
+        The file sink (LogFileSink) is ALSO wired programmatically
+        from EngineMain.main() and DesktopLauncher.main() — it
+        subscribes to the bus and writes a rotating
+        logs/openfps-<timestamp>.log next to settings.gradle.kts.
+        See engine/log/README.md for the resolution policy
+        (openfps.log.file / OPENFPS_LOG_FILE / walked-up default).
+        -Dopenfps.log.file=off disables the sink without affecting
+        this STDOUT appender.
     -->
 
     <!-- Per-subsystem log levels. Tweak here to debug a specific area. -->

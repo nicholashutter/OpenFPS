@@ -211,6 +211,12 @@ public final class EngineSession
             // already shut down — fine
         }
 
+        // Close the file sink AFTER everything else has had a
+        // chance to log a final line: a clean shutdown that
+        // misses its tail on disk is a regression worth fixing,
+        // and the close() blocks briefly to flush.
+        com.openfps.engine.log.LogBusFactory.closeFileSink();
+
         LOG.info("OpenFPS engine shut down cleanly.");
     }
 

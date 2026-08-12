@@ -3,6 +3,11 @@
 build/
 bin/
 
+# Logs: covers both the engine's rotating on-disk sink at
+# <projectRoot>/logs/openfps-*.log and any stray application logs.
+# Path resolution lives in engine/src/main/java/com/openfps/engine/log/LogSinkPaths.java
+# (`-Dopenfps.log.file` and `OPENFPS_LOG_FILE` both override it).
+
 # Eclipse / VS Code / IntelliJ
 *.class
 *.jar
@@ -60,6 +65,16 @@ assets/models/
 # directory; left untracked-but-unignored this is ~120 MB one `git add -A` away
 # from entering history.
 .claude/
+
+# Python build artefacts from the build-time converter scripts
+# (tools/config/_builder_to_json.py and friends). Never on a runtime
+# classpath; never the deliverable.
+__pycache__/
+
+# Build-time audit logs from the :tools:build*Map tasks and the
+# config-driven MapGenMain. Per-run detail plus a rolling aggregate.
+# Created by BuildAudit.beginRun(); never the deliverable.
+tools/build/logs/
 
 # Android / Mobile
 # Machine-local SDK path. settings.gradle.kts reads this (or ANDROID_HOME) to

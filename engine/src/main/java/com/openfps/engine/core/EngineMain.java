@@ -96,6 +96,14 @@ public final class EngineMain
 
         com.openfps.engine.log.LogBusFactory.startDrainTask();
 
+        // Install the on-disk log sink after the bridge is in
+        // place: SLF4J → bridge → bus → file sink. The install
+        // is a no-op when -Dopenfps.log.file=off / OPENFPS_LOG_FILE=off
+        // is set, so a developer who does not want a file can
+        // turn it off without changing code. The path resolves
+        // against the project root by default; see LogSinkPaths.
+        com.openfps.engine.log.LogBusFactory.installDefaultFileSink();
+
         LOG.info("OpenFPS engine booting...");
 
         final FrameRate rate;

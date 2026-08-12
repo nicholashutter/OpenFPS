@@ -45,6 +45,12 @@ import ch.qos.logback.core.AppenderBase;
  */
 public final class Slf4jLogBusBridge extends AppenderBase<ILoggingEvent>
 {
+    /** Common Java package prefix on every engine class; stripped
+     *  before matching against {@link LogBusFactory#allSubsystems()}
+     *  keys so {@code com.openfps.engine.core.EngineMain} lands on
+     *  the {@code engine.core} source. */
+    private static final String LOGGER_PREFIX = "com.openfps.";
+
     /** The log bus every event is published to. Never null. */
     private final I_LogBus bus;
 
@@ -164,14 +170,28 @@ public final class Slf4jLogBusBridge extends AppenderBase<ILoggingEvent>
             return "external";
         }
 
-        // The engine uses a fixed set of subsystem names; pick the
-        // longest matching prefix so "engine.gameplay.match" still
-        // maps to "engine.gameplay" and not to some shorter prefix.
+        // SLF4J logger names are fully-qualified Java packages:
+        // "com.openfps.engine.core.EngineMain". The engine's
+        // subsystem names are the package suffix:
+        // "engine.core", "engine.hal". Strip the project's
+        // "com.openfps." prefix and pick the longest matching
+        // subsystem name; everything else is "external".
+        final String stripped;
+
+        if (logger.startsWith(LOGGER_PREFIX))
+        {
+            stripped = logger.substring(LOGGER_PREFIX.length());
+        }
+        else
+        {
+            stripped = logger;
+        }
+
         String best = "external";
 
         for (final String candidate : LogBusFactory.allSubsystems().keySet())
         {
-            if (logger.startsWith(candidate) && candidate.length() > best.length())
+            if (stripped.startsWith(candidate) && candidate.length() > best.length())
             {
                 best = candidate;
             }

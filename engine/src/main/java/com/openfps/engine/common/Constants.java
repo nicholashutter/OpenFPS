@@ -93,4 +93,23 @@ public final class Constants
 
     /** Entity type sentinel for empty slots. */
     public static final int ENTITY_EMPTY = 0;
+
+    // ---- Log file sink (engine.log.LogFileSink) ----
+    //
+    // The sink is wired automatically by EngineMain / DesktopLauncher
+    // unless -Dopenfps.log.file=off (or OPENFPS_LOG_FILE=off) is set.
+    // Defaults land in <projectRoot>/logs/openfps-<timestamp>.log and
+    // rotate when the file exceeds LOG_FILE_ROTATE_BYTES. Three
+    // previous files are kept. The internal event queue is bounded;
+    // LOG_FILE_QUEUE_CAPACITY is its slot count.
+
+    /** Rotation size in bytes (10 MB). */
+    public static final int LOG_FILE_ROTATE_BYTES = 10 * 1024 * 1024;
+
+    /** Number of rotated files to keep alongside the current one. */
+    public static final int LOG_FILE_KEEP_FILES = 3;
+
+    /** Internal queue capacity. Bounds memory between the bus's
+     *  publish path and the file writer; drops on overflow. */
+    public static final int LOG_FILE_QUEUE_CAPACITY = 4096;
 }

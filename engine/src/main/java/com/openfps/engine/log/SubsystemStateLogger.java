@@ -45,31 +45,10 @@ public final class SubsystemStateLogger implements I_SubsystemObserver
      * dedicated log bus. {@code engine.core} is the engine
      * bootstrap channel and is the natural place for
      * uncategorised events. The resource subsystem lands here
-     * today; the mapping is one-line if a dedicated channel is
-     * wanted later.
+     * today; the mapping is one-line in {@link #channelFor} if
+     * a dedicated channel is wanted later.
      */
     private static final String DEFAULT_CHANNEL = "engine.core";
-
-    /**
-     * Maps a {@link SubsystemId} to the log-bus channel name
-     * the event should be published to. The map is kept here
-     * rather than on the enum itself because the engine
-     * subsystem package has no dependency on the log package;
-     * the direction of the dependency is the other way, and
-     * adding {@code core.subsystem -> log} would invert it.
-     */
-    private static final String CHANNEL_BY_ID = buildChannelById();
-
-    private static String buildChannelById()
-    {
-        // SubsystemId -> log bus channel. The resource subsystem
-        // (W_) currently has no dedicated channel and lands on
-        // engine.core by way of the default branch in
-        // channelFor. The remaining 7 ids are listed for the
-        // reader's benefit; a future dedicated channel for W_
-        // would land here.
-        return null;
-    }
 
     /**
      * Returns the log-bus channel for a given subsystem id.

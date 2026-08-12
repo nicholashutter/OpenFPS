@@ -66,11 +66,37 @@ public interface I_LogBus
      * Returns the most recent events, newest first. Used by on-demand
      * consumers like a debug overlay that polls rather than streams.
      *
+     * <p>{@code recent} does NOT remove the events from the bus;
+     * a subsequent call returns the same set. Consumers that need
+     * to consume-and-clear (the {@link LogBusFactory} drain task)
+     * must use {@link #drain} instead.</p>
+     *
      * @param max the maximum number of events to return; must be positive
      * @return a snapshot list, never null, possibly empty
      * @throws IllegalArgumentException if {@code max} is not positive
      */
     List<LogEvent> recent(int max);
+
+    /**
+     * Removes and returns every buffered event, oldest first.
+     *
+     * <p>This is the consume-and-clear counterpart to {@link #recent}.
+     * A drain task uses it to take ownership of every event the
+     * bus has accumulated since the last drain and forward them
+     * elsewhere (the main bus, a remote sink). Re-implementing the
+     * drain via {@code recent} is wrong: {@code recent} never
+     * removes, so the drain loop ends up republishing the same
+     * events on every tick and the file sink (or any other
+     * subscriber) receives thousands of duplicates.</p>
+     *
+     * <p>Live subscribers are still notified through {@link #publish}
+     * the moment each event arrives; {@code drain} does not skip
+     * them. The two channels are independent.</p>
+     *
+     * @return every buffered event, oldest first; never null,
+     *     possibly empty. The bus's ring is empty after the call.
+     */
+    List<LogEvent> drain();
 
     /**
      * Returns the number of events this bus has dropped because its

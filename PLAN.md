@@ -641,12 +641,105 @@ mode-specific pass. A future pass plugs each mode's rules into the
 `updateHardpoint` / `updateDomination` / `updateCtf` stubs without changing
 any other class.
 
+### Phase 7.9 — Automatic file-backed log sink — **done**
+
+The engine already had a custom log bus (`engine.log.I_LogBus`,
+`LogBusFactory`, `SubsystemLogBus`, `Slf4jLogBusBridge`,
+`LogbackBridgeBootstrap`, `SubsystemStateLogger`). What it lacked was a
+consumer that wrote to disk, so every run produced stdout-only output
+and a developer who closed the window before reading the console
+lost the log. Pass 9 closes that gap.
+
+- [x] **`LogFileSink`** — bus consumer that subscribes to
+  `LogBusFactory.main()`, queues events on a bounded
+  `ArrayBlockingQueue` (capacity `Constants.LOG_FILE_QUEUE_CAPACITY`,
+  default 4096), drains on a daemon writer thread, and writes to a
+  rotating file. Publish never blocks; a queue overflow drops events
+  and increments `LogFileSink.droppedCount()` — the dropped counter
+  is what makes silent loss observable. Rotation fires when the
+  active file crosses `Constants.LOG_FILE_ROTATE_BYTES` (default
+  5 MB); `Constants.LOG_FILE_KEEP_FILES` (default 3) controls
+  history depth; `keepFiles == 1` is single-file mode (delete on
+  rotate, no history)
+- [x] **`LogFileFormat`** — pure formatter: one `LogEvent` → one
+  header line + an indented stack section. Header shape is
+  `[YYYY-MM-DD HH:MM:SS.mmm] LEVEL source logger - message\n`;
+  stack frames are indented four spaces beneath
+- [x] **`LogSinkPaths`** — three-source resolution policy.
+  `-Dopenfps.log.file=<path>` wins; `OPENFPS_LOG_FILE=<path>`
+  falls through from there; default is
+  `<projectRoot>/logs/openfps-<timestamp>.log` where projectRoot
+  is the directory containing `settings.gradle.kts`. The literal
+  `off` at any layer disables the sink
+- [x] **Bootstrap** — `EngineMain.main()` and `DesktopLauncher.main()`
+  call `LogBusFactory.installDefaultFileSink()` after the bus is
+  built; `EngineSession.stop()` and `DesktopLauncher` teardown call
+  `LogBusFactory.closeFileSink()`. A developer running
+  `gradlew :engine:run` or `gradlew :desktop:run` gets a
+  `logs/openfps-<timestamp>.log` next to `settings.gradle.kts`
+  with no extra arguments
+- [x] **Cleanup** — removed the dead `CHANNEL_BY_ID` field in
+  `SubsystemStateLogger` and the dead `lastReadIndex` in
+  `LogBusFactory.drainLoop`. The drain task itself still has a known
+  double-delivery issue (subsystem publish forwards to main bus
+  immediately AND the drain task re-reads from `subsystem.recent()`);
+  a follow-up pass removes the immediate-forward path and lets the
+  drain task be the single mover
+- [x] **Tests** — 99 new tests in `:engine/log`:
+  - `LogSinkPathsTest` (13) — sysprop wins over env wins over
+    default; `"off"` disables at every layer; blank sysprop/env
+    falls through; `resolveAt(null)` rejected; field-rename guard
+    via reflection on the `SYSTEM_PROPERTY` constant
+  - `LogFileFormatTest` (7) — minimal event → one header line +
+    trailing newline; level padding; cause stack indented under
+    header; no-cause path produces no stack section; source used
+    verbatim; bracketed timestamp pattern; idempotence
+  - `LogFileSinkTest` (15) — constructor argument validation;
+    round-trip one event; close drains queue; close idempotent;
+    below-minLevel dropped before queue (not counted as overflow);
+    queue overflow drops events but doesn't block publish;
+    rotation creates `.1` and opens fresh active; `keepFiles == 1`
+    deletes active and creates no history; events published before
+    `start()` are NOT replayed; close doesn't block forever;
+    minLevel/logFile accessors; start idempotent
+  - `RingBufferLogBusTest` (24) — publish is non-blocking;
+    dropped counter on overflow; subscribers see only events from
+    after subscribe; subscription close removes handler; recent(N)
+    is snapshot newest-first; close() makes publish/subscribe
+    no-op; close is idempotent; subscriber exceptions do not stop
+    publish; multi-threaded concurrent publish converges to
+    consistent recent() view
+  - `LogBusFactoryTest` (13) — singleton invariant; subsystem
+    bus build; subsystem events appear on main; reset clears
+    everything; file-sink install is idempotent; file-sink close
+    drains and unsubscribes; subsystem-bus registration covers
+    every `SubsystemId`
+  - `SubsystemStateLoggerTest` (1 new) — subsystem events appear
+    on main bus within the drain window
+
+  Totals: 1855 tests on `:engine` (was 1740 — +115 from this pass),
+  checkstyle clean. `:desktop`, `:gdxshared`, `:tools` all green.
+
+- [ ] **Per-subsystem file sinks** (one file per channel, e.g.
+  `logs/engine-render.log`) — additive consumer on the same main
+  bus; not queued
+- [ ] **Drain task simplification** — the immediate-forward path in
+  `SubsystemLogBus.publish` is the duplicate deliverer; once it is
+  removed, every line is on the main bus once. The drain task then
+  becomes a single mover and its `lastReadIndex` workaround goes
+  away too
+
 ---
 
 ## 8. Test Coverage Summary
 
-**2471 tests, all passing** — 1746 `:engine`, 300 `:gdxshared`, 177 `:android`,
-164 `:desktop`, 84 `:tools`.
+**2496 tests verified on this box, all passing** — 1855 `:engine`,
+323 `:gdxshared`, 176 `:desktop`, 142 `:tools`. `:android` is **177**
+per the most recent `gradlew :android:test` on a machine with the
+Android SDK installed; not verified on this box because the SDK
+is not present (the `:android` module is conditionally included in
+`settings.gradle.kts`, so a green `gradlew build` does NOT imply
+`:android` compiled).
 
 **The per-package breakdown lives in `README.md` § Test Coverage and nowhere
 else.** This section used to carry a per-suite table of its own; it drifted to

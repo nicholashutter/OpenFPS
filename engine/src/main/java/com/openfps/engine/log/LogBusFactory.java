@@ -5,6 +5,7 @@
 
 package com.openfps.engine.log;
 
+import java.nio.file.Path;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -76,6 +77,10 @@ public final class LogBusFactory
 
     /** Whether the drain task is running. */
     private static volatile boolean drainRunning;
+
+    /** The current file sink, or null until {@link #installDefaultFileSink}
+     *  is called. */
+    private static volatile LogFileSink fileSink;
 
     private LogBusFactory()
     {
@@ -189,6 +194,8 @@ public final class LogBusFactory
         {
             stopDrainTask();
 
+            closeFileSink();
+
             if (mainBus != null)
             {
                 mainBus.close();
@@ -223,15 +230,137 @@ public final class LogBusFactory
         return Collections.unmodifiableMap(new LinkedHashMap<>(subsystemBuses));
     }
 
-    // The drain loop. Wakes every DRAIN_INTERVAL_MS, reads each
-    // subsystem's recent events, and republishes them to the main
-    // bus. "Recent" is the bus's ring buffer, so an event that has
-    // not been drained in the interval is dropped, the same as any
-    // other overflow.
+    // ---------------------------------------------------------------------
+    // LogFileSink installation
+    // ---------------------------------------------------------------------
+
+    /**
+     * Installs a {@link LogFileSink} using {@link LogSinkPaths}'s
+     * three-source resolution policy. Idempotent: a second call
+     * returns the existing sink without restarting anything.
+     *
+     * <p>The sink ignores {@link LogFileSink#DISABLED_SENTINEL}
+     * (a literal {@code "off"} value in either the system property
+     * or the env var), which is the way a developer turns the
+     * file sink off without removing the bootstrap call.</p>
+     *
+     * @return the installed sink, or null if the sink was disabled
+     *     via the {@code off} sentinel
+     */
+    public static LogFileSink installDefaultFileSink()
+    {
+        // The path resolution reads the system property / env var
+        // every install. Tests can flip the system property between
+        // calls and see the new path; production calls once at boot.
+        final Path path = LogSinkPaths.resolve();
+
+        final String raw = rawSinkToggle();
+
+        if (LogFileSink.DISABLED_SENTINEL.equalsIgnoreCase(raw))
+        {
+            return null;
+        }
+
+        final LogFileSink existing = fileSink;
+
+        if (existing != null)
+        {
+            return existing;
+        }
+
+        synchronized (LogBusFactory.class)
+        {
+            if (fileSink != null)
+            {
+                return fileSink;
+            }
+
+            final LogFileSink created = new LogFileSink(path);
+
+            created.start();
+
+            fileSink = created;
+
+            return created;
+        }
+    }
+
+    /**
+     * Returns the current file sink, or null if {@link
+     * #installDefaultFileSink} has not been called (or has been
+     * disabled). Used by callers that want to check whether
+     * logging is wired and by the {@code DesktopLauncher}'s
+     * shutdown path.
+     *
+     * @return the current sink, or null
+     */
+    public static LogFileSink fileSink()
+    {
+        return fileSink;
+    }
+
+    /**
+     * Closes the file sink if one is installed. Idempotent.
+     * Used by {@link #resetForTesting} and by launchers on shutdown.
+     */
+    public static void closeFileSink()
+    {
+        final LogFileSink existing = fileSink;
+
+        if (existing == null)
+        {
+            return;
+        }
+
+        synchronized (LogBusFactory.class)
+        {
+            if (fileSink == null)
+            {
+                return;
+            }
+
+            existing.close();
+
+            fileSink = null;
+        }
+    }
+
+    // Reads the raw value of the system property or env var that
+    // gates the sink, so installDefaultFileSink can recognize the
+    // "off" sentinel without going through LogSinkPaths.
+    private static String rawSinkToggle()
+    {
+        final String prop = System.getProperty(LogSinkPaths.SYSTEM_PROPERTY);
+
+        if (prop != null && !prop.isBlank())
+        {
+            return prop.trim();
+        }
+
+        final String env = System.getenv(LogSinkPaths.ENV_VARIABLE);
+
+        if (env != null && !env.isBlank())
+        {
+            return env.trim();
+        }
+
+        return null;
+    }
+
+    // The drain loop. Wakes every DRAIN_INTERVAL_MS and forwards
+    // every subsystem bus's local-ring events to the main bus.
+    //
+    // The events go through drain(), which is consume-and-clear:
+    // each event is published to main exactly once. SubsystemLogBus
+    // also forwards to main synchronously inside publish(), which
+    // means the events reach main before the drain runs; the drain
+    // exists only to clear the subsystem-local rings so a slow
+    // subscriber on a subsystem bus (not on the main one) can
+    // observe the events that passed through. Direct main-bus
+    // subscribers — the file sink, the debug overlay — see each
+    // event once, not twice.
     private static void drainLoop()
     {
-        long lastReadIndex = 0L;
-
         while (drainRunning && !Thread.currentThread().isInterrupted())
         {
             try
@@ -247,24 +376,12 @@ public final class LogBusFactory
 
             for (final SubsystemLogBus bus : subsystemBuses.values())
             {
-                final int recent = bus.recent(Integer.MAX_VALUE).size();
-
-                for (int i = 0; i < recent; i++)
-                {
-                    // We drain the per-subsystem events one-by-one so
-                    // a slow main bus can be dropped instead of
-                    // blocking the drain thread.
-                    final List<LogEvent> events = bus.recent(recent);
-
-                    if (i >= events.size())
-                    {
-                        break;
-                    }
-
-                    final LogEvent event = events.get(i);
-
-                    mainBus.publish(event);
-                }
+                // drain() empties the local ring. The events are
+                // already on the main bus via SubsystemLogBus's
+                // synchronous forward, so this is bookkeeping for
+                // any subsystem-local subscribers and does not
+                // republish to main.
+                bus.drain();
             }
         }
     }

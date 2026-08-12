@@ -135,6 +135,19 @@ public final class SubsystemLogBus implements I_LogBus
     }
 
     @Override
+    public List<LogEvent> drain()
+    {
+        // Drain the local ring. The events here were forwarded to
+        // the main bus the moment they were published (publish's
+        // direct target.publish call); clearing the local ring
+        // does NOT remove them from the main bus. That is
+        // intentional: subsystem subscribers get consume-and-clear
+        // semantics on this local queue, while the main bus still
+        // owns the canonical copy.
+        return local.drain();
+    }
+
+    @Override
     public void close()
     {
         local.close();

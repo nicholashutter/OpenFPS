@@ -217,6 +217,50 @@ public final class RingBufferLogBus implements I_LogBus
     }
 
     @Override
+    public List<LogEvent> drain()
+    {
+        final List<LogEvent> out = new ArrayList<>(size);
+
+        lock.lock();
+
+        try
+        {
+            // Walk the ring from oldest to newest and clear as we
+            // go. The walk starts at the position that holds the
+            // oldest entry: when the buffer is full that is the
+            // write index (it has just been overwritten); when the
+            // buffer is not full, it is index 0.
+            final int start;
+
+            if (size < capacity)
+            {
+                start = 0;
+            }
+            else
+            {
+                start = writeIndex;
+            }
+
+            for (int i = 0; i < size; i++)
+            {
+                out.add(buffer[(start + i) % capacity]);
+
+                buffer[(start + i) % capacity] = null;
+            }
+
+            size = 0;
+
+            writeIndex = 0;
+        }
+        finally
+        {
+            lock.unlock();
+        }
+
+        return out;
+    }
+
+    @Override
     public void close()
     {
         closed = true;

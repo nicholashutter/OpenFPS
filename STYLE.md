@@ -519,6 +519,55 @@ LOG.error("Subsystem {} init() failed", id, e);   // exception last, no {} for i
 and Log4j used directly. Everything goes through the SLF4J facade so the
 backend stays swappable (Logback on desktop, an Android binding in Phase 3+).
 
+### 8.1 The engine's own log bus
+
+SLF4J is the **producer** side. Every log line, no matter where it
+originates, flows through the engine's own log bus
+(`engine.log.I_LogBus`) before any consumer (file sink, debug overlay,
+future telemetry) sees it. The bus is the join point; it owns the
+"every consumer sees the same shape in the same order" rule.
+
+- **Producers** call SLF4J as shown above. The `Slf4jLogBusBridge`
+  appender wires SLF4J events into the bus automatically — no
+  per-class bus calls needed for normal logging.
+- **Subsystem state changes** flow through `SubsystemStateLogger` so
+  a `READY → ERROR` transition lands on the bus just like any other
+  log line.
+- **Consumers** subscribe to `LogBusFactory.main()`. The shipped
+  consumer is `LogFileSink`; the debug overlay subscribes the same
+  way. A future remote-shipping sink would also subscribe here. **Do
+  not** add a new SLF4J appender to capture events — add a bus
+  consumer.
+- **No direct `LogEvent` construction** outside the bridge and the
+  state-change observer. Tests that need to inject an event use the
+  public six-arg `LogEvent` constructor.
+
+### 8.2 File sink — `LogFileSink` / `LogFileFormat` / `LogSinkPaths`
+
+The file sink is wired automatically by `EngineMain.main()` and
+`DesktopLauncher.main()`; a developer running `gradlew :engine:run` or
+`gradlew :desktop:run` gets a `logs/openfps-<timestamp>.log` next to
+`settings.gradle.kts` with no extra arguments. See
+`engine/src/main/java/com/openfps/engine/log/README.md` for the full
+spec; the rules a code reviewer needs to know:
+
+- The sink is async: publish → bounded queue → daemon writer. The
+  publish path never blocks on disk I/O. A burst that overflows the
+  queue drops events; `LogFileSink.droppedCount()` is the way silent
+  loss becomes observable.
+- All sink knobs (`LOG_FILE_ROTATE_BYTES`, `LOG_FILE_KEEP_FILES`,
+  `LOG_FILE_QUEUE_CAPACITY`) live in `Constants`. No magic numbers in
+  `LogFileSink`.
+- Disabling the sink: `-Dopenfps.log.file=off` or
+  `OPENFPS_LOG_FILE=off`. The console log is unaffected.
+- `LogFileSink` is the **only** non-`Runnable`-implementing
+  non-`Subsystem` thread owner in engine code. AGENTS.md's "no
+  `new Thread(...)` for event handling; use `WorkerPool`" rule has
+  the same exception as `LogBusFactory.startDrainTask()`'s drain
+  thread: the file sink must keep draining its own queue even when
+  the engine is shutting down and the worker pool is itself
+  draining.
+
 ---
 
 ## 9. Threading
