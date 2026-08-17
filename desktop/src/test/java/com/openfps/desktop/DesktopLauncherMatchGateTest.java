@@ -268,6 +268,12 @@ class DesktopLauncherMatchGateTest
 
     private static MapRuntime newRuntime()
     {
+        // The match-gate tests only exercise the gate, not the populated
+        // scene. The 6-arg MapRuntime constructor (delegates to the 7-arg
+        // with models=null) is the right one here; the 7-arg constructor
+        // does not validate non-null because the demo path needs null
+        // to mean "no kit, level-only path". The null-safe behaviour is
+        // exactly what makes this test cheap to write.
         return new MapRuntime(renderer(), scriptedInput(), config(), Team.RED, 0,
             new DelegatingGameplayPort());
     }

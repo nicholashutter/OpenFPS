@@ -95,7 +95,7 @@ class DesktopLauncherLoadMapCallbackTest
             .isEqualTo("foundry");
 
         // The match gate the wiring installs must be present on the
-        // window — that is the point of calling bindAndAttachMap
+        // window - that is the point of calling bindAndAttachMap
         // from this path. Without the gate, a return-to-menu would
         // not tear the new map down cleanly.
         assertThat(window.matchGate())
@@ -136,6 +136,12 @@ class DesktopLauncherLoadMapCallbackTest
 
     private static MapRuntime newRuntime()
     {
+        // The 6-arg constructor delegates to the 7-arg with models=null.
+        // The 7-arg constructor does not validate non-null on models
+        // because the demo path (the only other caller) genuinely
+        // needs null to mean "no kit, level-only path". The match-gate
+        // tests only exercise the gate, not the populated scene, so
+        // null is the right value here.
         return new MapRuntime(renderer(), scriptedInput(), config(), Team.RED, 0,
             new DelegatingGameplayPort());
     }

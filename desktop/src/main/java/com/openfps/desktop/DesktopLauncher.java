@@ -281,6 +281,32 @@ public final class DesktopLauncher
             return;
         }
 
+        // The map runtime's populated scene path (MapScene.build(spec, models))
+        // needs the kit, the bot characters, the bot carbine and the player's
+        // viewmodel. Without these, a --map= boot or any menu pick lands the
+        // player on the level .ofm with no walls, no arms, no viewmodel and
+        // no bots - the level-only scene has 1 world instance and 0 view
+        // instances, which is exactly the broken state the user reports.
+        // The 7-arg MapRuntime constructor takes a non-null DemoModels; the
+        // 6-arg constructor is the headless-test path that the smoke tests
+        // use and is not the right one for a windowed run.
+        final String assetRoot = assetsArg(args);
+
+        final com.openfps.engine.demo.DemoModels mapModels;
+
+        try
+        {
+            mapModels = com.openfps.engine.demo.DemoModels.load(java.nio.file.Path.of(assetRoot));
+        }
+        catch (final com.openfps.engine.demo.DemoAssetException e)
+        {
+            LOG.error("Cannot start the map-mode runtime: {}", e.getMessage());
+
+            System.exit(EXIT_NO_ASSETS);
+
+            return;
+        }
+
         if (startInGameArg(args))
         {
             System.setProperty(GdxFrameLoopListener.START_IN_GAME_PROPERTY, "true");
@@ -377,7 +403,7 @@ public final class DesktopLauncher
         // port the engine ticks — the only place the four come
         // together.
         mapRuntime = new MapRuntime(renderer, hal.getInputPort(), config, playerTeam,
-            mapSpawnIndexFor(netArgs.localSpawnId(), playerTeam), delegatingPort);
+            mapSpawnIndexFor(netArgs.localSpawnId(), playerTeam), delegatingPort, mapModels);
 
         window.attachRenderer(renderer);
 
