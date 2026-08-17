@@ -186,6 +186,25 @@ public final class MapGameplayPort implements I_GameplayPort
     private final float[] muzzleScratch = new float[3];
 
     /**
+     * Reusable 6-float buffer for the per-shot player fire path.
+     *
+     * <p>Eye at offset 0, aim at offset 3. Written by
+     * {@link PlayerController#eyePositionInto} and
+     * {@link PlayerController#forwardVectorInto} on every shot; the
+     * hitscan reads the eye, the visual tracer reads the aim.</p>
+     */
+    private final float[] playerFireScratch = new float[6];
+
+    /**
+     * Reusable 3-float buffer for the player's outgoing tracer origin.
+     *
+     * <p>Written by {@link DemoScene#playerMuzzle} on every shot; the
+     * visual tracer spawns at the viewmodel's barrel tip, not the eye, so
+     * the bolt visibly leaves the gun rather than the camera.</p>
+     */
+    private final float[] playerMuzzleScratch = new float[3];
+
+    /**
      * Reusable 16-float buffer for the per-tic bot publish path.
      *
      * <p>One body is in flight at a time (the publish loop iterates
@@ -663,6 +682,21 @@ public final class MapGameplayPort implements I_GameplayPort
      * elapsed. Mirrors the demo port's behaviour: hitscan against the
      * match's living bots, no per-tic allocation beyond the BotShotLog
      * Match owns internally.
+     *
+     * <p><b>The aim direction is the controller's canonical
+     * {@link PlayerController#forwardVectorInto} — not the negated version
+     * the original port inlined.</b> The earlier sign flip on sinPitch and
+     * cosYaw made the projectile fly away from where the crosshair sat
+     * (toward the camera, not toward the target). The hitscan and the
+     * tracer now both read the same vector and so point at the same thing
+     * the player sees.</p>
+     *
+     * <p><b>The tracer is spawned at the viewmodel's barrel tip, not the
+     * eye.</b> Same eye as the hitscan origin keeps the simulation aligned
+     * with what the player sees; moving the tracer out to the muzzle keeps
+     * the visible bolt attached to the gun. The eye → muzzle offset is
+     * small but obvious on screen: a tracer that materialises in front of
+     * the camera is visibly not a tracer that left the gun.</p>
      */
     private void fireIfRequested(final int ticIndex, final InputState input)
     {
@@ -682,29 +716,20 @@ public final class MapGameplayPort implements I_GameplayPort
 
         final float eyeZ = controller.positionZ();
 
-        final float yaw = controller.yawRadians();
+        // Canonical forward vector, in the same six floats the demo port
+        // uses (eyeAimScratch[0..2]=eye, eyeAimScratch[3..5]=aim). Reusing
+        // the scratch shape keeps the per-shot work below one
+        // pre-allocated buffer and avoids the prior inlined math that
+        // flipped the sign on sinPitch and cosYaw.
+        controller.eyePositionInto(playerFireScratch, 0);
 
-        final float pitch = controller.pitchRadians();
+        controller.forwardVectorInto(playerFireScratch, 3);
 
-        // Aim unit vector from yaw/pitch: standard yaw rotation around y,
-        // pitch tilt around x. Kept here rather than in PlayerController
-        // because the demo port does the same and the existing
-        // Hitscan/raycast path is internal to DemoGameplayPort; this first
-        // pass reuses the same trig to keep the visual tracer pipeline
-        // honest. A future pass extracts a small Aim helper.
-        final float cosPitch = (float) StrictMath.cos(pitch);
+        final float aimX = playerFireScratch[3];
 
-        final float sinPitch = (float) StrictMath.sin(pitch);
+        final float aimY = playerFireScratch[4];
 
-        final float cosYaw = (float) StrictMath.cos(yaw);
-
-        final float sinYaw = (float) StrictMath.sin(yaw);
-
-        final float aimX = cosPitch * sinYaw;
-
-        final float aimY = -sinPitch;
-
-        final float aimZ = -cosPitch * cosYaw;
+        final float aimZ = playerFireScratch[5];
 
         match.firePlayerShot(eyeX, eyeY, eyeZ, aimX, aimY, aimZ);
 
@@ -713,10 +738,14 @@ public final class MapGameplayPort implements I_GameplayPort
         // the map port was missing it, so the player's hitscan
         // registered on the match side but never appeared on screen
         // — the gun visibly did nothing. Same fire call, just an
-        // outgoing-tracer publish alongside it.
+        // outgoing-tracer publish alongside it. The spawn point is the
+        // viewmodel's barrel tip in world space, not the eye.
         if (effects != null)
         {
-            effects.spawn(eyeX, eyeY, eyeZ, aimX, aimY, aimZ);
+            DemoScene.playerMuzzle(controller, playerMuzzleScratch, 0);
+
+            effects.spawn(playerMuzzleScratch[0], playerMuzzleScratch[1], playerMuzzleScratch[2],
+                aimX, aimY, aimZ);
         }
 
         lastFireTic = ticIndex;
