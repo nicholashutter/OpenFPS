@@ -1,0 +1,483 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenFPS Map Generator — How It Works</title>
+<style>
+  :root {
+    --fg: #1a1a1a;
+    --fg-dim: #555;
+    --bg: #fdfdfb;
+    --bg-card: #ffffff;
+    --bg-soft: #f5f3ee;
+    --accent: #b34a00;
+    --accent-soft: #fbe8d6;
+    --rule: #d8d2c4;
+    --code-bg: #1e1e1e;
+    --code-fg: #e6e2d3;
+    --link: #1a5fb4;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.55;
+  }
+  .page {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 40px 28px 80px;
+  }
+  header.hero {
+    border-bottom: 1px solid var(--rule);
+    padding-bottom: 24px;
+    margin-bottom: 36px;
+  }
+  header.hero .eyebrow {
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+  header.hero h1 {
+    font-size: 36px;
+    line-height: 1.15;
+    margin: 0 0 12px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  header.hero p {
+    color: var(--fg-dim);
+    font-size: 18px;
+    margin: 0;
+    max-width: 70ch;
+  }
+  h2 {
+    font-size: 24px;
+    line-height: 1.2;
+    margin: 48px 0 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--rule);
+    font-weight: 600;
+  }
+  h3 {
+    font-size: 18px;
+    line-height: 1.25;
+    margin: 28px 0 10px;
+    font-weight: 600;
+  }
+  p, ul, ol {
+    margin: 0 0 16px;
+  }
+  ul, ol { padding-left: 22px; }
+  li { margin: 4px 0; }
+  a { color: var(--link); }
+  code {
+    font-family: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    font-size: 0.9em;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: var(--bg-soft);
+  }
+  pre {
+    background: var(--code-bg);
+    color: var(--code-fg);
+    padding: 16px 18px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 13px;
+    line-height: 1.5;
+    margin: 0 0 20px;
+  }
+  pre code {
+    background: transparent;
+    padding: 0;
+    color: inherit;
+    font-size: inherit;
+  }
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 20px 22px;
+    margin: 0 0 24px;
+  }
+  .card h3 {
+    margin-top: 0;
+  }
+  .card p:last-child { margin-bottom: 0; }
+  .callout {
+    background: var(--accent-soft);
+    border-left: 4px solid var(--accent);
+    padding: 14px 18px;
+    border-radius: 0 4px 4px 0;
+    margin: 0 0 22px;
+    font-size: 15px;
+  }
+  .callout p:last-child { margin-bottom: 0; }
+  .grid-2 {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 18px;
+    margin: 0 0 24px;
+  }
+  @media (max-width: 700px) {
+    .grid-2 { grid-template-columns: 1fr; }
+    header.hero h1 { font-size: 28px; }
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0 0 22px;
+    font-size: 14px;
+  }
+  th, td {
+    text-align: left;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+  }
+  th { font-weight: 600; color: var(--fg-dim); }
+  td code { font-size: 12.5px; }
+  .toc {
+    background: var(--bg-soft);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 16px 22px;
+    margin: 0 0 36px;
+    font-size: 14.5px;
+  }
+  .toc h3 { margin-top: 0; font-size: 14px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--fg-dim); }
+  .toc ol { padding-left: 20px; margin: 0; }
+  .toc li { margin: 2px 0; }
+  .toc a { text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .flow {
+    font-family: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    font-size: 13px;
+    background: var(--code-bg);
+    color: var(--code-fg);
+    padding: 16px 18px;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin: 0 0 22px;
+    white-space: pre;
+    line-height: 1.6;
+  }
+  .arrow { color: var(--accent); font-weight: 700; }
+  footer.meta {
+    margin-top: 64px;
+    padding-top: 18px;
+    border-top: 1px solid var(--rule);
+    color: var(--fg-dim);
+    font-size: 13px;
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+<header class="hero">
+  <div class="eyebrow">OpenFPS &middot; build-time tool</div>
+  <h1>The Map Generator</h1>
+  <p>How <code>tools/src/main/java/com/openfps/tools/mapgen/</code> turns a JSON config into a runnable <code>.ofm</code> map &mdash; and how to add a new primitive type without touching the generator itself.</p>
+</header>
+
+<nav class="toc">
+  <h3>Contents</h3>
+  <ol>
+    <li><a href="#why">Why a generator</a></li>
+    <li><a href="#architecture">Architecture at a glance</a></li>
+    <li><a href="#lifecycle">The lifecycle, step by step</a></li>
+    <li><a href="#config">Config schema</a></li>
+    <li><a href="#primitives">Built-in primitives: Box and Sign</a></li>
+    <li><a href="#swatches">Kenney swatches</a></li>
+    <li><a href="#usage">Using the generator</a></li>
+    <li><a href="#extending">Extending: adding a new primitive type</a></li>
+    <li><a href="#allocation">Allocation profile</a></li>
+    <li><a href="#files">File map</a></li>
+  </ol>
+</nav>
+
+<h2 id="why">Why a generator</h2>
+
+<p>Before the generator, every new map meant a new <code>XxxMapBuilder.java</code> in <code>tools/</code> &mdash; 200 to 500 lines of near-duplicate code per map. The thirteen hand-written builders (cornerstone, overpass, tripoint, refinery, foundry, &hellip;) all open a <code>ModelBuilder</code>, walk a fixed list of boxes, and write a <code>.ofm</code>. The only thing that varies is which boxes, where, and which swatch they sample.</p>
+
+<p>The generator collapses that to <em>write a JSON, run a Gradle task</em>. A map is a config file: a flat list of primitives (boxes, signs), each with a position, a size, a submesh group, and a Kenney swatch. The generator parses the config, walks the primitives, and produces the <code>.ofm</code>. Two configs with the same bytes produce byte-identical output &mdash; the property that makes "checked-in, diff-friendly, reviewable in a PR" the right workflow.</p>
+
+<div class="callout">
+  <p><strong>Why a separate tool?</strong> Maps are <em>data</em>, not code. A 320-unit floor with 19 walls and 6 landmark buildings is a 25-line list of primitives, not a 400-line class. The generator is the seam that lets maps live as data while the engine still treats them as opaque <code>.ofm</code> bytes.</p>
+</div>
+
+<h2 id="architecture">Architecture at a glance</h2>
+
+<p>The generator is a single Gradle subproject, a single package, nine files:</p>
+
+<div class="flow">tools/src/main/java/com/openfps/tools/mapgen/
+&boxbox;  MapGenConfig.java      &mdash; the parsed, validated config
+&boxbox;  JsonConfigParser.java   &mdash; JSON &rarr; MapGenConfig
+&boxbox;  Primitive.java         &mdash; the interface every shape implements
+&boxbox;  PrimitiveFactory.java  &mdash; type-name &rarr; PrimitiveBuilder registry
+&boxbox;  Box.java               &mdash; the closed axis-aligned solid
+&boxbox;  Sign.java              &mdash; the flat plane (vertical or horizontal)
+&boxbox;  KenneySwatch.java      &mdash; the named swatch enum
+&boxbox;  MapGenerator.java      &mdash; walks a config, produces .ofm bytes
+&boxbox;  MapGenMain.java        &mdash; CLI entry point for the Gradle task</div>
+
+<p>The package has <strong>one</strong> entry point (the <code>MapGenMain</code> CLI), <strong>one</strong> type registry (the <code>PrimitiveFactory</code>), and <strong>one</strong> runtime (the <code>MapGenerator</code>). The config schema, the primitive vocabulary and the swatch catalogue are all data, not control flow.</p>
+
+<h2 id="lifecycle">The lifecycle, step by step</h2>
+
+<p>A config file travels through five steps to become a runnable map:</p>
+
+<div class="flow">1. JSON file  &rarr;  2. JsonConfigParser  &rarr;  3. MapGenConfig
+                          &darr;
+              4. PrimitiveFactory  &rarr;  5. List&lt;Primitive&gt;
+                                              &darr;
+                              6. MapGenerator  &rarr;  7. byte[] (the .ofm)</div>
+
+<ol>
+  <li><strong>Read the file</strong>. The CLI opens the path, slurps the bytes, and hands them to Gson.</li>
+  <li><strong>Parse the JSON</strong>. <code>JsonConfigParser</code> walks the object graph: top-level fields, then the <code>primitives</code> array, then each primitive's <code>type</code> field.</li>
+  <li><strong>Validate</strong>. <code>MapGenConfig</code>'s constructor checks every field &mdash; <code>id</code> non-blank, <code>textureEdge</code> a positive power of two, <code>primitives</code> non-empty. Each primitive's <code>validate()</code> runs once, after construction, so a malformed object fails at parse time, not vertex-append time.</li>
+  <li><strong>Build primitives</strong>. For every primitive object, the factory looks up the <code>type</code> string in its registry and calls the registered builder. Two built-in types: <code>box</code> and <code>sign</code>.</li>
+  <li><strong>Generate</strong>. The generator groups primitives by <code>(submesh, texture)</code> pair, opens one submesh per group, calls each primitive's <code>addTo(builder, textureIndex)</code> in order, and serialises the model to <code>byte[]</code>.</li>
+  <li><strong>Write the file</strong>. The CLI writes the bytes to <code>engine/src/main/resources/maps/&lt;id&gt;/level.ofm</code>, which the engine's <code>MapScene</code> already knows how to load.</li>
+</ol>
+
+<h2 id="config">Config schema</h2>
+
+<p>One JSON object, top-down. Required fields are non-blank; optional fields have defaults.</p>
+
+<table>
+  <thead>
+    <tr><th>Field</th><th>Type</th><th>Required</th><th>Notes</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>id</code></td><td>string</td><td>yes</td><td>Stable map identifier &mdash; the <code>--map=id</code> string. Must be non-blank.</td></tr>
+    <tr><td><code>displayName</code></td><td>string</td><td>yes</td><td>Menu-visible name. Must be non-blank.</td></tr>
+    <tr><td><code>setting</code></td><td>string</td><td>no</td><td><code>URBAN_WARZONE</code> / <code>INDUSTRIAL_COMPLEX</code> / <code>DESERT_RAVINE</code> / <code>ARCTIC_STATION</code>. Documentation; the generator does not consume it.</td></tr>
+    <tr><td><code>mode</code></td><td>string</td><td>no</td><td><code>TDM</code> / <code>HARDPOINT</code> / <code>DOMINATION</code> / <code>CTF</code>. Same: documentation only.</td></tr>
+    <tr><td><code>textureEdge</code></td><td>int</td><td>yes</td><td>Kenney tile edge in texels. Must be a positive power of two (32, 64, 128, &hellip;).</td></tr>
+    <tr><td><code>worldUnitsPerTile</code></td><td>float</td><td>yes</td><td>How many world units one texture repeat spans. Must be positive. Typically 8.0.</td></tr>
+    <tr><td><code>primitives</code></td><td>array</td><td>yes</td><td>Ordered list of shape objects. Must be non-empty.</td></tr>
+  </tbody>
+</table>
+
+<h3>Primitive object</h3>
+
+<p>Every primitive has a <code>type</code> field and a body that depends on the type. Two types are built in:</p>
+
+<table>
+  <thead>
+    <tr><th>Type</th><th>Body</th><th>Emits</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>box</code></td>
+      <td>
+        <code>x, y, z</code> (min corner, floats, required)<br>
+        <code>sx, sy, sz</code> (extents, positive floats, required)<br>
+        <code>submesh</code> (int, default <code>1</code> = wall)<br>
+        <code>texture</code> (string, default <code>wall</code>)
+      </td>
+      <td>12 triangles, 6 faces, two per face. UVs grow with world position so neighbouring boxes tile seamlessly.</td>
+    </tr>
+    <tr>
+      <td><code>sign</code></td>
+      <td>
+        <code>cx, cy, cz</code> (centre, floats, required)<br>
+        <code>w, h</code> (width and height, positive floats, required)<br>
+        <code>yaw</code> (degrees, default 0)<br>
+        <code>vertical</code> (bool, default <code>true</code>)<br>
+        <code>submesh</code> (int, default <code>1</code> = wall)<br>
+        <code>texture</code> (string, default <code>wall</code>)
+      </td>
+      <td>2 triangles, single face. Two orientations: vertical (xz plane, normal +z rotated by <code>yaw</code>) for banners; horizontal (xy plane, normal +y) for ground decals and ceiling panels.</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <p><strong>Submesh convention</strong>: 0 = floor, 1 = wall, 2 = accent. The submesh index is a design knob, not a property of the type &mdash; a future "ceiling" box can sit in submesh 1 without changing the type registry.</p>
+</div>
+
+<h3>Full example: the POC sample config</h3>
+
+<p>The included <code>tools/config/maps/sample-cornerstone.json</code> produces a 320&times;320 urban three-lane map: a floor slab, four perimeter walls, two interior walls with cut-throughs, four landmark buildings, six crates, six accent red posts. 25 primitives, ~300 triangles, 4 submeshes, smoke-tests clean.</p>
+
+<pre><code>{
+  "id": "sample-cornerstone",
+  "displayName": "Sample Cornerstone (config-driven)",
+  "setting": "URBAN_WARZONE",
+  "mode": "TDM",
+  "textureEdge": 64,
+  "worldUnitsPerTile": 8.0,
+  "primitives": [
+    { "type": "box", "x": -160.0, "y": -4.0, "z": -160.0,
+      "sx": 320.0, "sy": 4.0, "sz": 320.0,
+      "submesh": 0, "texture": "floor" },
+    { "type": "box", "x": -160.0, "y": 0.0, "z": -160.0,
+      "sx": 320.0, "sy": 96.0, "sz": 6.0,
+      "submesh": 1, "texture": "wall" },
+    { "type": "box", "x": 72.0, "y": 0.0, "z": 100.0,
+      "sx": 16.0, "sy": 56.0, "sz": 16.0,
+      "submesh": 1, "texture": "crate" }
+    // ... 22 more primitives
+  ]
+}</code></pre>
+
+<p>Run the generator on this config and the result is a 105 KB <code>.ofm</code> at <code>engine/src/main/resources/maps/sample-cornerstone/level.ofm</code>. The engine's <code>--map=sample-cornerstone</code> smoke test loads it, runs 120 tics, and shuts down cleanly.</p>
+
+<h2 id="primitives">Built-in primitives: Box and Sign</h2>
+
+<h3>Box</h3>
+
+<p>The single most common primitive in any COD-style map. A floor slab, a perimeter wall, a landmark building, a crate &mdash; they're all boxes with a texture and a placement. Twelve triangles, six faces, two per face, wound counter-clockwise as seen from outside. UVs grow with the world position so a 320-unit floor reads as one big tiled surface rather than as a mosaic of 64-pixel squares.</p>
+
+<p>The <code>Box</code> class is the seam the parser hands a finished value to. Code that builds a box from raw numbers uses the constructor; code that reads a config uses <code>Box.fromJson</code>. Both produce the same triangles.</p>
+
+<h3>Sign</h3>
+
+<p>A flat plane. Two triangles, no depth, no thickness. Useful for ceiling lights, ground decals, suspended banners, and the one-sided surfaces a hand-built map would model as a stretched rectangle of paper. A <code>Box</code> is too much for these &mdash; twelve triangles where two are enough, and the wasted faces are visible from below the decal or behind the banner.</p>
+
+<p>A sign is anchored at its centre, with a <code>w</code> along the local x axis and an <code>h</code> along the local y axis. The plane is rotated about the world y axis by <code>yaw</code> and is then either vertical (default, the natural orientation for a wall) or horizontal (for a ground decal or a ceiling panel).</p>
+
+<p>Two real orientations, not a general normal vector. A general normal would let callers specify things the renderer would then have to reason about (backface cull, which side is "front") and would invite near-vertical planes that read as flickering slivers. Two orientations, each with a well-defined normal, sidesteps that.</p>
+
+<h2 id="swatches">Kenney swatches</h2>
+
+<p>The <code>texture</code> field on a primitive is a name, not bytes. The generator resolves the name through a <code>KenneySwatch</code> enum to the right swatch coordinates in the Kenney Prototype Kit's <code>colormap.png</code>. If the Kenney atlas isn't staged, the generator falls back to a procedural tile per swatch, so a fresh clone still produces a runnable <code>.ofm</code>.</p>
+
+<table>
+  <thead>
+    <tr><th>Name</th><th>Use</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>floor</code></td><td>Floors, large horizontal surfaces</td></tr>
+    <tr><td><code>wall</code></td><td>Walls, vertical surfaces (the default)</td></tr>
+    <tr><td><code>accent</code></td><td>Trim, streetlights, decorative geometry</td></tr>
+    <tr><td><code>accentRed</code></td><td>Red accents &mdash; flag poles, side markers</td></tr>
+    <tr><td><code>accentOrange</code></td><td>Orange accents &mdash; warning strips, signposts</td></tr>
+    <tr><td><code>crate</code></td><td>Wooden crates, deployable cover</td></tr>
+    <tr><td><code>column</code></td><td>Vertical columns, pillars, distillation towers</td></tr>
+  </tbody>
+</table>
+
+<p>The names are registered by <code>KenneySwatch.registerBuiltins(factory)</code> at factory construction time. New swatches are added by adding a name to the registry &mdash; no schema change required.</p>
+
+<h2 id="usage">Using the generator</h2>
+
+<h3>Gradle task</h3>
+
+<p>The mapgen CLI is wired into <code>tools/build.gradle.kts</code> as <code>:tools:buildMapFromConfig</code>:</p>
+
+<pre><code>.\gradlew.bat :tools:buildMapFromConfig ^
+  -Pconfig=tools\config\maps\sample-cornerstone.json ^
+  -PmapId=sample-cornerstone</code></pre>
+
+<p>The task reads the config, runs the generator, and writes the <code>.ofm</code> to <code>engine/src/main/resources/maps/&lt;mapId&gt;/level.ofm</code>. The engine's <code>MapLibrary</code> already knows how to load any <code>level.ofm</code> from that path, so a fresh config-driven map is runnable with one command:</p>
+
+<pre><code>.\gradlew.bat :engine:run --args="--headless --map=&lt;mapId&gt; --fps=60"</code></pre>
+
+<h3>CLI</h3>
+
+<p>The same code is reachable as a standalone CLI for ad-hoc runs:</p>
+
+<pre><code>java -cp tools/build/libs/tools-*.jar ^
+  com.openfps.tools.mapgen.MapGenMain ^
+  --config=tools\config\maps\sample-cornerstone.json ^
+  --map-id=sample-cornerstone</code></pre>
+
+<p>The CLI prints one log line per swatch (loaded from atlas or procedural) and one line confirming the <code>.ofm</code> bytes were written. Errors are loud: a malformed config fails the build at parse time, not at vertex-append time.</p>
+
+<h2 id="extending">Extending: adding a new primitive type</h2>
+
+<p>Adding a new shape is a three-step change in one place: the new class, one registration call, and the JSON schema grows by one <code>type</code> string. The generator never grows a switch and the parser never grows a new keyword outside the registry.</p>
+
+<h3>Step 1 &mdash; Implement <code>Primitive</code></h3>
+
+<p>Write a new class implementing the <code>Primitive</code> interface:</p>
+
+<pre><code>public final class Ramp implements Primitive
+{
+    // ... fields ...
+
+    public static Ramp fromJson(final JsonObject obj, final float worldUnitsPerTile)
+    {
+        // parse JSON, validate, return
+    }
+
+    @Override public String type() { return "ramp"; }
+    @Override public int submesh() { return ...; }
+    @Override public String texture() { return ...; }
+    @Override public void addTo(final ModelBuilder b, final int texIdx) { ... }
+    @Override public void validate() { ... }
+}</code></pre>
+
+<h3>Step 2 &mdash; Register it</h3>
+
+<p>One line in <code>PrimitiveFactory.createDefault</code>:</p>
+
+<pre><code>factory.registerType("ramp", (obj, wup) -&gt; Ramp.fromJson(obj, wup));</code></pre>
+
+<h3>Step 3 &mdash; Use it</h3>
+
+<p>The <code>type</code> string is now valid in any config:</p>
+
+<pre><code>{ "type": "ramp", "x": 0, "y": 0, "z": 0,
+  "length": 32, "width": 16, "height": 24,
+  "submesh": 1, "texture": "wall" }</code></pre>
+
+<p>That's the whole extension. The factory, the generator, the parser, the CLI, the Gradle task &mdash; all unchanged. The schema grows by one <code>type</code> string; the rest of the system picks it up automatically.</p>
+
+<div class="callout">
+  <p><strong>Why no auto-discovery?</strong> Classpath scanning would couple the generator's behaviour to whatever happens to be on the classpath at build time. A Gradle dependency added in a different module silently changing how maps are parsed is a debugging session nobody wants. The explicit registry is read in one place at one moment.</p>
+</div>
+
+<h2 id="allocation">Allocation profile</h2>
+
+<p>The generator itself allocates:</p>
+
+<ul>
+  <li>One <code>LinkedHashMap</code> for the submesh groups &mdash; O(primitives), paid once per map.</li>
+  <li>One <code>HashMap</code> for the swatch cache &mdash; O(unique swatches), paid once per map.</li>
+</ul>
+
+<p>No per-primitive allocation happens inside the loop beyond the <code>ModelBuilder</code>'s growable arrays, which is the same allocation profile the existing hand-written builders have. The output <code>.ofm</code> is the entire budget: no scratch files, no intermediate buffers, no temporary models.</p>
+
+<h2 id="files">File map</h2>
+
+<table>
+  <thead>
+    <tr><th>Path</th><th>Purpose</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>tools/src/main/java/com/openfps/tools/mapgen/MapGenConfig.java</code></td><td>Parsed, validated config &mdash; the value the generator consumes</td></tr>
+    <tr><td><code>tools/src/main/java/com/openfps/tools/mapgen/JsonConfigParser.java</code></td><td>JSON &rarr; <code>MapGenConfig</code></td></tr>
+    <tr><td><code>tools/src/main/java/com/openfps/tools/mapgen/Primitive.java</code></td><td>The interface every shape implements</td></tr>
+    <tr><td><code>tools/src/main/java/com/openfps/tools/mapgen/PrimitiveFactory.java</code></td><td>Registry of type-name &rarr; <code>PrimitiveBuilder</code></td></tr>
+    <tr><td><code>tools/src/main/java/com/openfps/tools/mapgen/Box.java</code></td><td>The closed axis-aligned solid</td></tr>
+    <tr><td><code>tools/src/main/java/com/openfps/tools/mapgen/Sign.java</code></td><td>The flat plane</td></tr>
+    <tr><td><code>tools/src/main/java/com/openfps/tools/mapgen/KenneySwatch.java</code></td><td>The named swatch enum</td></tr>
+    <tr><td><code>tools/src/main/java/com/openfps/tools/mapgen/MapGenerator.java</code></td><td>Walks a config, produces <code>.ofm</code> bytes</td></tr>
+    <tr><td><code>tools/src/main/java/com/openfps/tools/mapgen/MapGenMain.java</code></td><td>CLI entry point for the Gradle task</td></tr>
+    <tr><td><code>tools/src/test/java/com/openfps/tools/mapgen/</code></td><td>32 unit tests covering parser, factory, Box, Sign, generator, end-to-end</td></tr>
+    <tr><td><code>tools/config/maps/sample-cornerstone.json</code></td><td>POC config &mdash; produces a runnable 3-lane COD-style map</td></tr>
+    <tr><td><code>tools/build.gradle.kts</code></td><td>The <code>:tools:buildMapFromConfig</code> task</td></tr>
+  </tbody>
+</table>
+
+<footer class="meta">
+  <p>Generated as part of the OpenFPS 16-map library rollout. Last verified: the POC config (<code>sample-cornerstone</code>) smoke-tests at 60 Hz for 120 tics, exit code 0, build green, Checkstyle clean. To regenerate this page, the doc is plain HTML &mdash; no build step required; edit and refresh.</p>
+</footer>
+
+</div>
+</body>
+</html>
