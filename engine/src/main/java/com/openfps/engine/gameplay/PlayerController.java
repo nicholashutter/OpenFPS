@@ -840,6 +840,25 @@ public final class PlayerController
         return axis;
     }
 
+    // Bounds-checks a caller-owned 3-float buffer for the *Into position/
+    // vector helpers. Same shape as the Mat4.copyRowMajorInto check - the
+    // cost of one branch on the hot path is cheaper than letting a future
+    // call site pass a too-small array and find out three writes later.
+    private static void checkOut3(final float[] out, final int outOffset, final String op)
+    {
+        if (out == null)
+        {
+            throw new IllegalArgumentException(op + ": out must not be null");
+        }
+
+        if (outOffset < 0 || out.length - outOffset < 3)
+        {
+            throw new IllegalArgumentException(op
+                + ": out needs at least 3 floats from offset " + outOffset
+                + ", got " + (out.length - outOffset));
+        }
+    }
+
     /** Returns the feet position, world x. */
     public float positionX()
     {
@@ -911,6 +930,31 @@ public final class PlayerController
     }
 
     /**
+     * Writes the feet position into a caller-owned 3-float buffer.
+     *
+     * <p>The hot-path companion to {@link #feetPosition()}. The caller
+     * hands in a reusable {@code float[3]} scratch and an offset; this
+     * method writes {@code (x, y, z)} and returns. No {@link Vec3} is
+     * allocated, which is what the per-shot publish path needs (see
+     * {@code DemoGameplayPort.fireIfRequested}).</p>
+     *
+     * @param out at least 3 floats to receive the values
+     * @param outOffset index of the first of the 3 floats to write
+     * @throws IllegalArgumentException if {@code out} is null or has fewer
+     *     than 3 floats from {@code outOffset} onward
+     */
+    public void feetPositionInto(final float[] out, final int outOffset)
+    {
+        checkOut3(out, outOffset, "feetPositionInto");
+
+        out[outOffset] = positionX;
+
+        out[outOffset + 1] = positionY;
+
+        out[outOffset + 2] = positionZ;
+    }
+
+    /**
      * Returns the eye position — the feet position raised by
      * {@link #EYE_HEIGHT_UNITS}.
      *
@@ -922,6 +966,30 @@ public final class PlayerController
     public Vec3 eyePosition()
     {
         return new Vec3(positionX, positionY + EYE_HEIGHT_UNITS, positionZ);
+    }
+
+    /**
+     * Writes the eye position into a caller-owned 3-float buffer.
+     *
+     * <p>The hot-path companion to {@link #eyePosition()}. The caller hands
+     * in a reusable {@code float[3]} scratch and an offset; this method
+     * writes {@code (x, y + EYE_HEIGHT_UNITS, z)} and returns. No
+     * {@link Vec3} is allocated.</p>
+     *
+     * @param out at least 3 floats to receive the values
+     * @param outOffset index of the first of the 3 floats to write
+     * @throws IllegalArgumentException if {@code out} is null or has fewer
+     *     than 3 floats from {@code outOffset} onward
+     */
+    public void eyePositionInto(final float[] out, final int outOffset)
+    {
+        checkOut3(out, outOffset, "eyePositionInto");
+
+        out[outOffset] = positionX;
+
+        out[outOffset + 1] = positionY + EYE_HEIGHT_UNITS;
+
+        out[outOffset + 2] = positionZ;
     }
 
     /** Returns the heading in radians, always in {@code [0, 2pi)}. */
@@ -961,6 +1029,44 @@ public final class PlayerController
         final float cosYaw = (float) StrictMath.cos(yawRadians);
 
         return new Vec3(cosPitch * sinYaw, sinPitch, cosPitch * cosYaw);
+    }
+
+    /**
+     * Writes the unit forward vector into a caller-owned 3-float buffer.
+     *
+     * <p>The hot-path companion to {@link #forwardVector()}. The caller hands
+     * in a reusable {@code float[3]} scratch and an offset; this method
+     * writes the same three components and returns. No {@link Vec3} is
+     * allocated.</p>
+     *
+     * <p>Same maths as {@link #forwardVector()} - the yaw-around-y,
+     * pitch-tilt-around-x convention. Kept here rather than duplicated at
+     * the call site because the camera shares this exact definition of
+     * "forward", and the two places must agree or the player's hitscan
+     * resolves one ray and the camera renders another.</p>
+     *
+     * @param out at least 3 floats to receive the values
+     * @param outOffset index of the first of the 3 floats to write
+     * @throws IllegalArgumentException if {@code out} is null or has fewer
+     *     than 3 floats from {@code outOffset} onward
+     */
+    public void forwardVectorInto(final float[] out, final int outOffset)
+    {
+        checkOut3(out, outOffset, "forwardVectorInto");
+
+        final float cosPitch = (float) StrictMath.cos(pitchRadians);
+
+        final float sinPitch = (float) StrictMath.sin(pitchRadians);
+
+        final float sinYaw = (float) StrictMath.sin(yawRadians);
+
+        final float cosYaw = (float) StrictMath.cos(yawRadians);
+
+        out[outOffset] = cosPitch * sinYaw;
+
+        out[outOffset + 1] = sinPitch;
+
+        out[outOffset + 2] = cosPitch * cosYaw;
     }
 
     /**

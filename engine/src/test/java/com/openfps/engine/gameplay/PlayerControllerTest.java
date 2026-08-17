@@ -1969,6 +1969,169 @@ class PlayerControllerTest
         }
     }
 
+    /**
+     * The {@code *Into} accessors - the per-tic hot path that avoids
+     * the per-shot {@link Vec3} allocation the {@code eyePosition()} /
+     * {@code forwardVector()} methods still pay.
+     *
+     * <p>Pair-tests against the {@link Vec3}-returning methods would be
+     * sufficient, but the bounds checks on the buffer are tested in
+     * isolation too: they are the only place a future caller can pass a
+     * too-small array and the cost of one branch on the hot path is
+     * cheaper than finding out three writes later.</p>
+     */
+    @Nested
+    @DisplayName("scratch accessors — *Into methods that write into a caller-owned buffer")
+    class ScratchAccessors
+    {
+        @Test
+        @DisplayName("eyePositionInto writes the same three values as eyePosition, with EYE_HEIGHT added to y")
+        void eyePositionIntoMatchesEyePosition()
+        {
+            final PlayerController player = new PlayerController(3.0f, 20.0f, -8.0f, 0.0f, 0.0f);
+
+            final Vec3 expected = player.eyePosition();
+
+            final float[] out = new float[3];
+
+            player.eyePositionInto(out, 0);
+
+            assertThat(out[0]).isEqualTo(expected.x());
+
+            assertThat(out[1]).isEqualTo(expected.y());
+
+            assertThat(out[2]).isEqualTo(expected.z());
+        }
+
+        @Test
+        @DisplayName("eyePositionInto honours a non-zero offset, leaving the prefix untouched")
+        void eyePositionIntoHonoursOffset()
+        {
+            final PlayerController player = new PlayerController(3.0f, 20.0f, -8.0f, 0.0f, 0.0f);
+
+            final float[] out = new float[6];
+
+            out[0] = 99.0f;
+
+            out[1] = 99.0f;
+
+            out[2] = 99.0f;
+
+            player.eyePositionInto(out, 3);
+
+            assertThat(out[0]).isEqualTo(99.0f);
+
+            assertThat(out[1]).isEqualTo(99.0f);
+
+            assertThat(out[2]).isEqualTo(99.0f);
+
+            final Vec3 expected = player.eyePosition();
+
+            assertThat(out[3]).isEqualTo(expected.x());
+
+            assertThat(out[4]).isEqualTo(expected.y());
+
+            assertThat(out[5]).isEqualTo(expected.z());
+        }
+
+        @Test
+        @DisplayName("feetPositionInto writes the three coordinates without raising to eye height")
+        void feetPositionIntoWritesFeet()
+        {
+            final PlayerController player = new PlayerController(3.0f, 20.0f, -8.0f, 0.0f, 0.0f);
+
+            final float[] out = new float[3];
+
+            player.feetPositionInto(out, 0);
+
+            assertThat(out[0]).isEqualTo(3.0f);
+
+            assertThat(out[1]).isEqualTo(20.0f);
+
+            assertThat(out[2]).isEqualTo(-8.0f);
+        }
+
+        @Test
+        @DisplayName("forwardVectorInto writes the same three values as forwardVector")
+        void forwardVectorIntoMatchesForwardVector()
+        {
+            final PlayerController player = facing(0.0f);
+
+            final Vec3 expected = player.forwardVector();
+
+            final float[] out = new float[3];
+
+            player.forwardVectorInto(out, 0);
+
+            assertThat(out[0]).isCloseTo(expected.x(), within(EPSILON));
+
+            assertThat(out[1]).isCloseTo(expected.y(), within(EPSILON));
+
+            assertThat(out[2]).isCloseTo(expected.z(), within(EPSILON));
+        }
+
+        @Test
+        @DisplayName("forwardVectorInto writes a unit-length vector for any yaw and pitch")
+        void forwardVectorIntoIsUnitLength()
+        {
+            final PlayerController player = new PlayerController(0.0f, 0.0f, 0.0f, 1.7f, 0.4f);
+
+            final float[] out = new float[3];
+
+            player.forwardVectorInto(out, 0);
+
+            final float length = (float) Math.sqrt(out[0] * out[0] + out[1] * out[1] + out[2] * out[2]);
+
+            assertThat(length).isCloseTo(1.0f, within(1.0e-5f));
+        }
+
+        @Test
+        @DisplayName("a null buffer is rejected rather than crashing three writes later")
+        void nullBufferIsRejected()
+        {
+            final PlayerController player = new PlayerController(0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+
+            assertThatThrownBy(() -> player.eyePositionInto(null, 0))
+                .isInstanceOf(IllegalArgumentException.class);
+
+            assertThatThrownBy(() -> player.feetPositionInto(null, 0))
+                .isInstanceOf(IllegalArgumentException.class);
+
+            assertThatThrownBy(() -> player.forwardVectorInto(null, 0))
+                .isInstanceOf(IllegalArgumentException.class);
+        }
+
+        @Test
+        @DisplayName("a too-small buffer is rejected rather than overflowing")
+        void tooSmallBufferIsRejected()
+        {
+            final PlayerController player = new PlayerController(0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+
+            final float[] tooSmall = new float[2];
+
+            assertThatThrownBy(() -> player.eyePositionInto(tooSmall, 0))
+                .isInstanceOf(IllegalArgumentException.class);
+
+            assertThatThrownBy(() -> player.feetPositionInto(tooSmall, 0))
+                .isInstanceOf(IllegalArgumentException.class);
+
+            assertThatThrownBy(() -> player.forwardVectorInto(tooSmall, 0))
+                .isInstanceOf(IllegalArgumentException.class);
+        }
+
+        @Test
+        @DisplayName("a negative offset is rejected")
+        void negativeOffsetIsRejected()
+        {
+            final PlayerController player = new PlayerController(0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+
+            final float[] out = new float[6];
+
+            assertThatThrownBy(() -> player.eyePositionInto(out, -1))
+                .isInstanceOf(IllegalArgumentException.class);
+        }
+    }
+
     @Nested
     @DisplayName("determinism")
     class Determinism
