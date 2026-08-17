@@ -1276,4 +1276,207 @@ final class DemoSceneTest
             }
         }
     }
+
+    /**
+     * The player-side muzzle helper, mirrored from
+     * {@link DemoScene#botMuzzle}. The aim point the visible tracer
+     * spawns from has to be the viewmodel's barrel tip in world space,
+     * not the eye, or the bolt visibly comes from the camera rather
+     * than the gun.
+     */
+    @Nested
+    @DisplayName("playerMuzzle — the player's viewmodel barrel tip in world space")
+    class PlayerMuzzle
+    {
+        /**
+         * Tolerance for the muzzle-position assertions. The viewmodel
+         * constants are exact, so the muzzle at yaw=0, pitch=0 collapses
+         * to a closed form. 1e-4f is plenty to catch a sign flip or a
+         * wrong basis vector without flaking on strictfp rounding.
+         */
+        private static final float MUZZLE_EPSILON = 1.0e-4f;
+
+        @Test
+        @DisplayName("at yaw=0, pitch=0 the muzzle sits in front of the eye, below it, and to the player's right")
+        void muzzleAtDefaultAim()
+        {
+            // Default PlayerController faces world +z, so the viewmodel's
+            // view-space +z (which is the gun barrel direction after the
+            // 174-degree carry) maps to world +z. The view-space +x (to
+            // the right of the camera) maps to world -x, because the
+            // Camera basis the PlayerController hands out is the one
+            // Camera.create builds and the test below pins that.
+            final PlayerController player = new PlayerController(0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+
+            final float[] out = new float[3];
+
+            DemoScene.playerMuzzle(player, out, 0);
+
+            // Gun barrel in view space at yaw=0, pitch=0:
+            //   view_x = WEAPON_VIEW_RIGHT - sin(174 deg) * 0.86 * WEAPON_VIEW_SCALE
+            //   view_y = WEAPON_VIEW_DOWN
+            //   view_z = WEAPON_VIEW_FORWARD - cos(174 deg) * 0.86 * WEAPON_VIEW_SCALE
+            // Transformed to world (right = -x, up = +y, forward = +z):
+            //   world_x = -view_x = -0.92 + 0.105 * 0.86 * 1.9
+            //   world_y = eyeY + view_y = EYE_HEIGHT + (-0.38)
+            //   world_z = view_z = 1.85 - (-0.995) * 0.86 * 1.9
+            //                              = 1.85 + 1.625
+            final float expectedX = -DemoScene.WEAPON_VIEW_RIGHT
+                + (float) StrictMath.sin(Math.toRadians(DemoScene.WEAPON_VIEW_YAW_DEGREES))
+                * DemoScene.WEAPON_BARREL_LENGTH_MODEL_UNITS * DemoScene.WEAPON_VIEW_SCALE;
+
+            final float expectedY = PlayerController.EYE_HEIGHT_UNITS + DemoScene.WEAPON_VIEW_DOWN;
+
+            final float expectedZ = DemoScene.WEAPON_VIEW_FORWARD
+                - (float) StrictMath.cos(Math.toRadians(DemoScene.WEAPON_VIEW_YAW_DEGREES))
+                * DemoScene.WEAPON_BARREL_LENGTH_MODEL_UNITS * DemoScene.WEAPON_VIEW_SCALE;
+
+            assertThat(out[0]).isCloseTo(expectedX, within(MUZZLE_EPSILON));
+
+            assertThat(out[1]).isCloseTo(expectedY, within(MUZZLE_EPSILON));
+
+            assertThat(out[2]).isCloseTo(expectedZ, within(MUZZLE_EPSILON));
+
+            // Sanity: the muzzle is in front of the player (z > 0), a
+            // EYE_HEIGHT worth above the floor, and a few units to the
+            // side. None of these is exact — a hand-wavy "out the gun"
+            // check.
+            assertThat(out[2]).as("the muzzle is forward of the eye").isPositive();
+
+            assertThat(out[1]).as("the muzzle is above the floor").isGreaterThan(0.0f);
+        }
+
+        @Test
+        @DisplayName("turning 90 degrees to the right rotates the muzzle around the eye in world space")
+        void muzzleRotatesWithYaw()
+        {
+            final PlayerController facing0 =
+                new PlayerController(10.0f, 0.0f, 20.0f, 0.0f, 0.0f);
+
+            final PlayerController facingPi2 =
+                new PlayerController(10.0f, 0.0f, 20.0f, (float) (Math.PI / 2.0), 0.0f);
+
+            final float[] out0 = new float[3];
+
+            DemoScene.playerMuzzle(facing0, out0, 0);
+
+            final float[] outPi2 = new float[3];
+
+            DemoScene.playerMuzzle(facingPi2, outPi2, 0);
+
+            // Eye is unchanged between the two players (same position,
+            // same EYE_HEIGHT); the offset rotates. The yaw=0 offset is
+            // (deltaX, deltaY, deltaZ) — the muzzle minus the eye — and
+            // at yaw=pi/2 the same offset is (-deltaZ, deltaY, -deltaX)
+            // by a +90 rotation about +y. Assert the structural
+            // identity rather than the exact rotation: same length, and
+            // the vertical component (muzzle.y - eye.y) is the only one
+            // the camera basis does not touch.
+            final float dx0 = out0[0] - 10.0f;
+
+            final float dy0 = out0[1] - (0.0f + PlayerController.EYE_HEIGHT_UNITS);
+
+            final float dz0 = out0[2] - 20.0f;
+
+            final float dx1 = outPi2[0] - 10.0f;
+
+            final float dy1 = outPi2[1] - (0.0f + PlayerController.EYE_HEIGHT_UNITS);
+
+            final float dz1 = outPi2[2] - 20.0f;
+
+            final float len0 = (float) Math.sqrt(dx0 * dx0 + dy0 * dy0 + dz0 * dz0);
+
+            final float len1 = (float) Math.sqrt(dx1 * dx1 + dy1 * dy1 + dz1 * dz1);
+
+            assertThat(len1)
+                .as("the muzzle offset's length is the same after a yaw rotation")
+                .isCloseTo(len0, within(MUZZLE_EPSILON));
+
+            assertThat(dy1)
+                .as("a pure yaw does not change the muzzle's drop below the eye")
+                .isCloseTo(dy0, within(MUZZLE_EPSILON));
+        }
+
+        @Test
+        @DisplayName("pitching up lifts the muzzle in world space")
+        void muzzleChangesWithPitch()
+        {
+            final PlayerController flat =
+                new PlayerController(0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+
+            final PlayerController pitched =
+                new PlayerController(0.0f, 0.0f, 0.0f, 0.0f, 0.5f);
+
+            final float[] outFlat = new float[3];
+
+            DemoScene.playerMuzzle(flat, outFlat, 0);
+
+            final float[] outPitched = new float[3];
+
+            DemoScene.playerMuzzle(pitched, outPitched, 0);
+
+            // Pitching up moves the camera basis's "up" component, so
+            // the muzzle's world y rises. A flat assertion (no trig
+            // expansion) is enough — the bar is "pitch changes the
+            // muzzle's vertical position in world space", not "by how
+            // much".
+            assertThat(outPitched[1])
+                .as("pitching up lifts the muzzle in world y")
+                .isGreaterThan(outFlat[1]);
+        }
+
+        @Test
+        @DisplayName("a null buffer is rejected")
+        void rejectsNullBuffer()
+        {
+            final PlayerController player = new PlayerController(0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+
+            assertThatThrownBy(() -> DemoScene.playerMuzzle(player, null, 0))
+                .isInstanceOf(IllegalArgumentException.class);
+        }
+
+        @Test
+        @DisplayName("a too-small buffer is rejected")
+        void rejectsTooSmallBuffer()
+        {
+            final PlayerController player = new PlayerController(0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+
+            final float[] tooSmall = new float[2];
+
+            assertThatThrownBy(() -> DemoScene.playerMuzzle(player, tooSmall, 0))
+                .isInstanceOf(IllegalArgumentException.class);
+        }
+
+        @Test
+        @DisplayName("a non-zero offset is honoured, prefix left untouched")
+        void honoursOffset()
+        {
+            final PlayerController player = new PlayerController(0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+
+            final float[] out = new float[6];
+
+            out[0] = 99.0f;
+
+            out[1] = 99.0f;
+
+            out[2] = 99.0f;
+
+            DemoScene.playerMuzzle(player, out, 3);
+
+            assertThat(out[0]).isEqualTo(99.0f);
+
+            assertThat(out[1]).isEqualTo(99.0f);
+
+            assertThat(out[2]).isEqualTo(99.0f);
+
+            // The written block is at offsets 3..5. The values are
+            // asserted for finiteness rather than for the exact number;
+            // a closed-form comparison lives in muzzleAtDefaultAim.
+            assertThat(out[3]).isFinite();
+
+            assertThat(out[4]).isFinite();
+
+            assertThat(out[5]).isFinite();
+        }
+    }
 }

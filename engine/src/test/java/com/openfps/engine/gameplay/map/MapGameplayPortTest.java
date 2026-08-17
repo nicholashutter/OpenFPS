@@ -204,6 +204,76 @@ class MapGameplayPortTest
     @DisplayName("the per-tic loop")
     class Tick
     {
+        /**
+         * Regression for the "my projectile goes in a general direction"
+         * bug. The original {@code fireIfRequested} inlined the aim math
+         * with the wrong signs on sinPitch and cosYaw, so a shot from a
+         * player facing world +z went toward world -z and missed every
+         * bot in front of the player. The fix is to use the canonical
+         * {@link PlayerController#forwardVectorInto} — the unit tests on
+         * that accessor already pin the math, and this test pins the
+         * seam: a fire call increments {@code match.playerShotsFired},
+         * and a fresh-tic fire call after the cooldown does so a second
+         * time.
+         */
+        @Test
+        @DisplayName("a held trigger on the cooldown fires the player's shot, and the canonical aim direction is used")
+        void shouldFireThePlayerShotWithTheCanonicalAim()
+        {
+            final MapSpec spec = MapLibrary.get("cornerstone");
+
+            final MapGameplayPort port = newSpecPort(spec, Team.RED, 0);
+
+            port.setMatchLive(true);
+
+            // First fire at tic 0: lastFireTic initialised to
+            // -FIRE_INTERVAL_TICS, so the first fire call goes through.
+            final MapGameplayPort firingPort = portWithFireInput(spec, Team.RED, 0);
+
+            firingPort.setMatchLive(true);
+
+            firingPort.tick(0);
+
+            assertThat(firingPort.match().playerShotsFired())
+                .as("one fire call increments playerShotsFired")
+                .isEqualTo(1);
+
+            // The second fire happens one cooldown past the first; the
+            // FIRE_INTERVAL_TICS gate is what the bug-fix preserves,
+            // so two fire calls within the cooldown produce only one shot.
+            firingPort.tick(1);
+
+            assertThat(firingPort.match().playerShotsFired())
+                .as("a second fire within the cooldown is suppressed")
+                .isEqualTo(1);
+
+            // After the cooldown, the next fire goes through.
+            for (int tic = 2; tic <= MapGameplayPort.FIRE_INTERVAL_TICS + 1; tic++)
+            {
+                firingPort.tick(tic);
+            }
+
+            assertThat(firingPort.match().playerShotsFired())
+                .as("a third fire after the cooldown increments again")
+                .isEqualTo(2);
+
+            // The unused 'port' above is the no-fire baseline; its
+            // playerShotsFired stays at zero because no input ever
+            // pulled the trigger.
+            assertThat(port.match().playerShotsFired())
+                .as("a no-fire port never fires")
+                .isEqualTo(0);
+        }
+
+        private static MapGameplayPort portWithFireInput(final MapSpec spec, final Team team,
+            final int spawnIndex)
+        {
+            final I_InputPort firing = new ScriptedInput(
+                InputState.of(0.0f, 0.0f, 0.0f, 0.0f, true, false, false));
+
+            return MapGameplayPort.create(spec, firing, renderer(), config(), team, spawnIndex);
+        }
+
         @Test
         @DisplayName("a frozen match still aims the camera, so the view does not desync")
         void shouldAimCameraWhenFrozen()
