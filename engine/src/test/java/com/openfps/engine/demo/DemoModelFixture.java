@@ -24,7 +24,7 @@ import java.nio.file.Path;
  * least one triangle — and nothing these tests assert depends on the geometry
  * being anything in particular.</p>
  */
-final class DemoModelFixture
+public final class DemoModelFixture
 {
     /** File magic, {@code 'O'}, {@code 'F'}, {@code 'M'}, {@code 'D'} little-endian. */
     private static final int MAGIC = 0x444D464F;
@@ -52,7 +52,7 @@ final class DemoModelFixture
      * @param path where to write
      * @throws IOException if the file cannot be written
      */
-    static void write(final Path path) throws IOException
+    public static void write(final Path path) throws IOException
     {
         if (path.getParent() != null)
         {
@@ -67,7 +67,7 @@ final class DemoModelFixture
      *
      * @return the {@code .ofm} bytes
      */
-    static byte[] quad()
+    public static byte[] quad()
     {
         final int[] vertices =
         {

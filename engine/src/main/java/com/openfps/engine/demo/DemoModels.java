@@ -126,6 +126,20 @@ public final class DemoModels
     };
 
     /**
+     * Optional kit pieces, in the order {@link #loadOptionalKitExtras} assigns them.
+     *
+     * <p>These are pieces the demo can use to dress up a level but does not
+     * require: a missing file is a {@code null} slot, not an error, because a
+     * partial staging of the kit (or a classpath-only source on Android) is a
+     * valid install. The names mirror the upstream Kenney {@code .glb} files in
+     * {@code assets/gltf/level/}.</p>
+     */
+    static final String[] OPTIONAL_KIT_FILES =
+    {
+        "wall-corner.ofm", "crate-color.ofm", "wall-window-medium.ofm",
+    };
+
+    /**
      * The character models the bots wear — seven visibly different people from
      * the Kenney Blocky Characters pack, one per opponent.
      *
@@ -146,7 +160,7 @@ public final class DemoModels
      * because the pack is authored in loose families and adjacent letters tend
      * to share a palette.</p>
      */
-    private static final String[] CHARACTER_FILES =
+    public static final String[] CHARACTER_FILES =
     {
         "character-a.ofm", "character-d.ofm", "character-h.ofm", "character-k.ofm",
         "character-n.ofm", "character-q.ofm", "character-r.ofm",
@@ -160,6 +174,9 @@ public final class DemoModels
     private final ModelFormat crate;
     private final ModelFormat stairs;
     private final ModelFormat slope;
+    private final ModelFormat wallCorner;
+    private final ModelFormat crateColor;
+    private final ModelFormat wallWindow;
     private final ModelFormat room;
     private final ModelFormat weapon;
     private final ModelFormat botWeapon;
@@ -168,10 +185,15 @@ public final class DemoModels
 
     // Takes ownership of an already-validated set. One of `floor` (kit) and
     // `room` (fallback) is non-null and the other is null; `source` says which.
+    // `optionalKitExtras` follows the same rule: null when the kit itself was
+    // not loaded (the fallback path), otherwise an array of length
+    // OPTIONAL_KIT_FILES.length with nulls for any pieces that were not
+    // staged. The fallback path passes null because a generated greybox room
+    // has no use for a wall-corner, and the accessors all return null.
     private DemoModels(final Source modelSource, final ModelFormat[] kit,
-        final ModelFormat fallbackRoom, final ModelFormat viewmodel,
-        final ModelFormat opponentWeapon, final boolean opponentWeaponIsReal,
-        final ModelFormat[] people)
+        final ModelFormat[] optionalKitExtras, final ModelFormat fallbackRoom,
+        final ModelFormat viewmodel, final ModelFormat opponentWeapon,
+        final boolean opponentWeaponIsReal, final ModelFormat[] people)
     {
         this.source = modelSource;
 
@@ -184,6 +206,23 @@ public final class DemoModels
         this.realBotWeapon = opponentWeaponIsReal;
 
         this.characters = people;
+
+        if (optionalKitExtras == null)
+        {
+            this.wallCorner = null;
+
+            this.crateColor = null;
+
+            this.wallWindow = null;
+        }
+        else
+        {
+            this.wallCorner = optionalKitExtras[0];
+
+            this.crateColor = optionalKitExtras[1];
+
+            this.wallWindow = optionalKitExtras[2];
+        }
 
         if (kit == null)
         {
@@ -279,7 +318,8 @@ public final class DemoModels
             LOG.info("Demo level: REAL Kenney Prototype Kit, {} pieces from {}",
                 KIT_FILES.length, source.describe(LEVEL_DIRECTORY));
 
-            return new DemoModels(Source.KENNEY_KIT, loadKit(source), null, viewmodel,
+            return new DemoModels(Source.KENNEY_KIT, loadKit(source),
+                loadOptionalKitExtras(source), null, viewmodel,
                 opponentWeapon, realCarbine, people);
         }
 
@@ -297,8 +337,8 @@ public final class DemoModels
             + " intended demo run: {}", source.describe(FALLBACK_MODEL), missing.size(),
             String.join(", ", missing), REGENERATE_COMMAND);
 
-        return new DemoModels(Source.GENERATED_ROOM, null, read(source, FALLBACK_MODEL),
-            viewmodel, opponentWeapon, realCarbine, people);
+        return new DemoModels(Source.GENERATED_ROOM, null, null,
+            read(source, FALLBACK_MODEL), viewmodel, opponentWeapon, realCarbine, people);
     }
 
     // Where the bots' carbine lives under a source. One definition, because
@@ -451,6 +491,32 @@ public final class DemoModels
         return kit;
     }
 
+    // Each optional kit piece, or null when the source does not have it.
+    //
+    // Missing files are NOT an error here. The optional kit exists because a
+    // partial staging is a valid install — one of the three pieces could have
+    // been left out by whoever ran the importer, and a classpath-only source
+    // (Android, a packaged demo jar) may have any subset. The return value is
+    // always the full OPTIONAL_KIT_FILES.length array; each slot is either the
+    // loaded model or null, never absent. That contract is what the
+    // constructor relies on when it assigns the three fields by index.
+    private static ModelFormat[] loadOptionalKitExtras(final ModelSource source)
+    {
+        final ModelFormat[] optional = new ModelFormat[OPTIONAL_KIT_FILES.length];
+
+        for (int index = 0; index < OPTIONAL_KIT_FILES.length; index++)
+        {
+            final String path = LEVEL_DIRECTORY + "/" + OPTIONAL_KIT_FILES[index];
+
+            if (source.has(path))
+            {
+                optional[index] = read(source, path);
+            }
+        }
+
+        return optional;
+    }
+
     // One model, with the location in the failure message. A file that exists
     // but does not parse is a real error and is never downgraded to the
     // fallback: silently substituting greybox for a corrupt asset would hide
@@ -555,6 +621,47 @@ public final class DemoModels
     public ModelFormat slope()
     {
         return slope;
+    }
+
+    /**
+     * Returns the 90-degree corner wall, or null when it was not staged.
+     *
+     * <p>Part of the optional kit (see {@link #OPTIONAL_KIT_FILES}). A
+     * partial staging is a valid install, so callers must check rather than
+     * assume the slot is populated — same survivable-null contract as
+     * {@link #weapon()}.</p>
+     *
+     * @return the corner wall model, or null
+     */
+    public ModelFormat wallCorner()
+    {
+        return wallCorner;
+    }
+
+    /**
+     * Returns the coloured crate, or null when it was not staged.
+     *
+     * <p>Part of the optional kit. Different from {@link #crate()} (the plain
+     * brown one) only in texture; same model-space footprint.</p>
+     *
+     * @return the coloured crate model, or null
+     */
+    public ModelFormat crateColor()
+    {
+        return crateColor;
+    }
+
+    /**
+     * Returns the medium wall with a window, or null when it was not staged.
+     *
+     * <p>Part of the optional kit. A wall with a glass pane, used to give the
+     * player something to look through rather than at.</p>
+     *
+     * @return the windowed wall model, or null
+     */
+    public ModelFormat wallWindow()
+    {
+        return wallWindow;
     }
 
     /**

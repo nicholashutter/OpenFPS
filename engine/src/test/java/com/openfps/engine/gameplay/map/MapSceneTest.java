@@ -8,6 +8,8 @@ package com.openfps.engine.gameplay.map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.openfps.engine.demo.DemoModelFixture;
+import com.openfps.engine.demo.DemoModels;
 import com.openfps.engine.gameplay.MatchMode;
 import com.openfps.engine.render.adapter.Scene;
 
@@ -15,7 +17,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
+import java.nio.file.Path;
 import java.util.List;
 
 /**
@@ -104,6 +109,116 @@ class MapSceneTest
         void shouldRejectNullSpec()
         {
             assertThatThrownBy(() -> MapScene.build(null))
+                .isInstanceOf(IllegalArgumentException.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("construction with demo models")
+    class Populated
+    {
+        @Test
+        @DisplayName("the 2-arg build stages the kit, the bots, the arms, and the effect pool")
+        void shouldPopulateSceneWithKitBotsAndEffects(@TempDir final Path root) throws IOException
+        {
+            // Stage a complete kit + weapon + carbine + character, the
+            // smallest set the kit composer needs to do its work.
+            // DemoModelFixture writes a valid two-triangle model;
+            // nothing in this test inspects the geometry, only the
+            // staging.
+            final String[] kit =
+            {
+                "floor-square.ofm", "wall.ofm", "wall-doorway.ofm", "column.ofm",
+                "crate.ofm", "stairs.ofm", "shape-slope.ofm",
+            };
+
+            for (final String piece : kit)
+            {
+                DemoModelFixture.write(root.resolve(DemoModels.LEVEL_DIRECTORY).resolve(piece));
+            }
+
+            DemoModelFixture.write(root.resolve(DemoModels.WEAPON_DIRECTORY)
+                .resolve(DemoModels.WEAPON_MODEL));
+
+            DemoModelFixture.write(root.resolve(DemoModels.WEAPON_DIRECTORY)
+                .resolve(DemoModels.BOT_WEAPON_MODEL));
+
+            for (final String person : DemoModels.CHARACTER_FILES)
+            {
+                DemoModelFixture.write(root.resolve(DemoModels.CHARACTER_DIRECTORY).resolve(person));
+            }
+
+            final DemoModels models = DemoModels.load(root);
+
+            assertThat(models.isRealArt())
+                .as("test fixture must produce KENNEY_KIT, otherwise the kit composer has nothing to stage")
+                .isTrue();
+
+            final MapSpec spec = MapLibrary.get("cornerstone");
+
+            final MapScene mapScene = MapScene.build(spec, models);
+
+            // Scene is more than the level alone — the level-only path
+            // returns 1 world instance, the populated path adds the kit
+            // (5x5 floor = 25 tiles + 25 ceiling + 4 walls per side x 3
+            // courses x 5 tiles = 60 wall tiles + 4 columns + 6 crates
+            // = 144+ instances just for the kit, plus the 12 bots and 12
+            // weapons on top).
+            assertThat(mapScene.scene().worldInstanceCount())
+                .as("the populated path must stage the kit + bots + weapons + arms + effect pool")
+                .isGreaterThan(50);
+
+            // The corner-stone spec has 12 bot waypoints, so we expect 12
+            // bot instances and 12 weapon instances, each with a valid
+            // scene-instance index (>= 0; the NO_INSTANCE sentinel is
+            // -1).
+            assertThat(mapScene.botInstanceIndex(0))
+                .as("first bot must be staged with a real scene instance")
+                .isGreaterThanOrEqualTo(0);
+
+            assertThat(mapScene.botInstanceIndex(11))
+                .as("twelfth bot (the kit composer stages one per waypoint)")
+                .isGreaterThanOrEqualTo(0);
+
+            assertThat(mapScene.botWeaponInstanceIndex(0))
+                .as("first bot's carbine must be staged with a real scene instance")
+                .isGreaterThanOrEqualTo(0);
+
+            // The effect pool, the local body, and the level physics
+            // are all populated when the 2-arg path is taken.
+            assertThat(mapScene.effects())
+                .as("the populated path must include the shared effect pool")
+                .isNotNull();
+
+            assertThat(mapScene.localBody())
+                .as("the populated path must include the local player's first-person arms")
+                .isNotNull();
+
+            assertThat(mapScene.levelPhysics())
+                .as("the populated path must include the level's collision world")
+                .isNotNull();
+
+            // The level .ofm has its own collision boxes; the kit
+            // composer adds 4 walls + 4 columns on top. So the total
+            // is "more than 8" (the kit's contribution alone).
+            assertThat(mapScene.levelPhysics().solidCount())
+                .as("level + kit walls + kit columns must produce solid boxes")
+                .isGreaterThan(8);
+        }
+
+        @Test
+        @DisplayName("a null models is rejected (loud failure, not a silent no-op)")
+        void shouldRejectNullModels()
+        {
+            // The previous version of this overload was a silent
+            // no-op delegation to the 1-arg path. That was the bug:
+            // a caller passing null got a level-only scene with no
+            // kit, no bots, no arms, no viewmodel, no effects. The
+            // contract now is that the populated path either runs to
+            // completion or throws — no silent fall-through.
+            final MapSpec spec = MapLibrary.get("cornerstone");
+
+            assertThatThrownBy(() -> MapScene.build(spec, null))
                 .isInstanceOf(IllegalArgumentException.class);
         }
     }

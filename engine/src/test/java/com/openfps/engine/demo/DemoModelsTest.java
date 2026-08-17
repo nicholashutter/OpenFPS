@@ -231,6 +231,86 @@ final class DemoModelsTest
     }
 
     /**
+     * Optional kit pieces: the corner wall, the coloured crate, and
+     * the windowed wall.
+     *
+     * <p>None of these are required for a complete install — a
+     * missing optional file is a {@code null} slot, not a build
+     * error — but the {@code MapScene} kit composer uses them when
+     * they are present, and the contract that "present means
+     * non-null" / "absent means null" is what that wiring depends
+     * on.</p>
+     */
+    @Nested
+    @DisplayName("with optional kit pieces")
+    final class OptionalKitPieces
+    {
+        @Test
+        @DisplayName("every optional slot is null when the required kit is staged but no optional files are")
+        void absentOptionalPiecesAreNull(@TempDir final Path root) throws IOException
+        {
+            // The required kit is staged; the three optional files
+            // are not. The loader must still report KENNEY_KIT (the
+            // optional pieces are not part of "the kit is complete"),
+            // and every optional accessor must return null.
+            writeKit(root);
+
+            writeWeapon(root);
+
+            final DemoModels models = DemoModels.load(root);
+
+            assertThat(models.source()).isEqualTo(DemoModels.Source.KENNEY_KIT);
+
+            assertThat(models.wallCorner())
+                .as("wallCorner() must be null when wall-corner.ofm is not staged")
+                .isNull();
+
+            assertThat(models.crateColor())
+                .as("crateColor() must be null when crate-color.ofm is not staged")
+                .isNull();
+
+            assertThat(models.wallWindow())
+                .as("wallWindow() must be null when wall-window-medium.ofm is not staged")
+                .isNull();
+        }
+
+        @Test
+        @DisplayName("every optional slot is populated when the three files are staged alongside the kit")
+        void presentOptionalPiecesAreLoaded(@TempDir final Path root) throws IOException
+        {
+            writeKit(root);
+
+            writeWeapon(root);
+
+            // The optional pieces are NOT part of the required kit
+            // file list, so a partial required kit would still be
+            // enough to make the loader reach the optional stage.
+            // We stage all three optional files at the on-disk
+            // names declared by DemoModels.
+            for (final String name : DemoModels.OPTIONAL_KIT_FILES)
+            {
+                DemoModelFixture.write(root.resolve(DemoModels.LEVEL_DIRECTORY).resolve(name));
+            }
+
+            final DemoModels models = DemoModels.load(root);
+
+            assertThat(models.source()).isEqualTo(DemoModels.Source.KENNEY_KIT);
+
+            assertThat(models.wallCorner())
+                .as("wallCorner() must be non-null when wall-corner.ofm is staged")
+                .isNotNull();
+
+            assertThat(models.crateColor())
+                .as("crateColor() must be non-null when crate-color.ofm is staged")
+                .isNotNull();
+
+            assertThat(models.wallWindow())
+                .as("wallWindow() must be non-null when wall-window-medium.ofm is staged")
+                .isNotNull();
+        }
+    }
+
+    /**
      * A {@link ModelSource} backed by a map, which is what an APK looks like
      * from here: entries addressed by name, no filesystem path, nothing to
      * resolve. If the loader works against this it will work against Android's
