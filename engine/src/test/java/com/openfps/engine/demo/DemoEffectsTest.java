@@ -146,7 +146,7 @@ final class DemoEffectsTest
         @DisplayName("every vertex is the same distance from the origin — it is a sphere")
         void everyVertexIsOnTheSphere()
         {
-            // A box has corners at sqrt(3)/2 times its face distance and that is
+            // A box has corners at sqrt(3) / 2 times its face distance and that is
             // precisely why it reads as a box. Nothing on this model may be
             // further out in one direction than another.
             final ModelFormat cloud = DemoEffects.sphere(DemoEffects.smokeColour());

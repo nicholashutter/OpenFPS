@@ -541,6 +541,81 @@ public final class PhysicsWorld
         }
 
         /**
+         * Walks a model's submeshes and adds one Aabb per submesh,
+         * the same derivation the kit composer used. The level
+         * .ofm's vertices already sit in their final world positions,
+         * so a box built from the submesh's vertex extremes is
+         * bit-identical to a hand-authored one.
+         *
+         * <p>Submeshes whose vertices collapse to a point or a line
+         * (a degenerate footprint) are skipped — they would not
+         * block movement and they would not be informative. The
+         * same rule the kit composer's {@code addFromModel} used.</p>
+         *
+         * @param model the model whose submeshes become collision boxes
+         * @return this builder, for chaining
+         */
+        public Builder addFromModel(final com.openfps.engine.render.adapter.ModelFormat model)
+        {
+            if (model == null)
+            {
+                throw new IllegalArgumentException("model must not be null");
+            }
+
+            for (int submesh = 0; submesh < model.submeshCount(); submesh++)
+            {
+                final int firstIndex = model.submeshFirstIndex(submesh);
+
+                final int indexCount = model.submeshIndexCount(submesh);
+
+                if (indexCount <= 0)
+                {
+                    continue;
+                }
+
+                float minX = Float.POSITIVE_INFINITY;
+                float minZ = Float.POSITIVE_INFINITY;
+                float maxX = Float.NEGATIVE_INFINITY;
+                float maxZ = Float.NEGATIVE_INFINITY;
+
+                for (int i = 0; i < indexCount; i++)
+                {
+                    final int vi = model.indices()[firstIndex + i];
+
+                    final float x = model.positionX(vi);
+                    final float z = model.positionZ(vi);
+
+                    if (x < minX)
+                    {
+                        minX = x;
+                    }
+
+                    if (x > maxX)
+                    {
+                        maxX = x;
+                    }
+
+                    if (z < minZ)
+                    {
+                        minZ = z;
+                    }
+
+                    if (z > maxZ)
+                    {
+                        maxZ = z;
+                    }
+                }
+
+                if (minX < maxX && minZ < maxZ)
+                {
+                    addBox(minX, minZ, maxX, maxZ);
+                }
+            }
+
+            return this;
+        }
+
+        /**
          * Builds the immutable world.
          *
          * @return a world holding exactly the boxes added, never null

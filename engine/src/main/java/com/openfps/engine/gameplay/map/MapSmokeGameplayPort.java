@@ -148,7 +148,7 @@ public final class MapSmokeGameplayPort implements I_GameplayPort
         // them.
         match.tick(ticIndex, 0.0f, 0.0f, 0.0f);
 
-        if (ticIndex == 0 || ticIndex == MAX_TICS - 1)
+        if (ticIndex == 0 || ticIndex == 119 || ticIndex == MAX_TICS - 1)
         {
             LOG.info("Tic {}: match state = {}, player health = {}, bots alive = {}/{}",
                 ticIndex, match.state(), match.playerHealth(), match.livingBots(),
