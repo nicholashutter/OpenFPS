@@ -187,6 +187,18 @@ public final class DemoScene
     public static final float WEAPON_VIEW_DOWN = -0.38f;
 
     /**
+     * How long the viewmodel's barrel is, in the gun model's own units.
+     *
+     * <p>Used by {@link #playerMuzzle} to put the outgoing tracer at the
+     * barrel tip rather than at the eye, so the visible bolt is attached
+     * to the gun. 0.86 matches {@code blaster-p.ofm}'s actual barrel length
+     * and is the same constant the bot muzzle uses for the same reason.
+     * A future gun swap would update both at once; for now, the demo ships
+     * one weapon, and that weapon is the carbine.</p>
+     */
+    public static final float WEAPON_BARREL_LENGTH_MODEL_UNITS = 0.86f;
+
+    /**
      * The instance index meaning "there is no such instance in this scene".
      *
      * <p>Negative, so it can never collide with a real index — those are
@@ -1158,6 +1170,114 @@ public final class DemoScene
         out[1] = bot.positionY() + BOT_WEAPON_HEIGHT_UNITS;
 
         out[2] = originZ + BOT_WEAPON_MUZZLE_UNITS * (float) StrictMath.cos(barrel);
+    }
+
+    /**
+     * Writes the world position of the end of the player's viewmodel barrel.
+     *
+     * <p>Mirror of {@link #botMuzzle(Bot, float[])} for the player. The
+     * viewmodel is in view space (the same
+     * {@link #WEAPON_VIEW_RIGHT}/{@link #WEAPON_VIEW_DOWN}/{@link #WEAPON_VIEW_FORWARD}
+     * offset, rotated by {@link #WEAPON_VIEW_YAW_DEGREES} and scaled by
+     * {@link #WEAPON_VIEW_SCALE}), so the muzzle in world space is the
+     * view-space muzzle translated by the camera basis onto the eye.</p>
+     *
+     * <p><b>Same shape as {@code botMuzzle}: a 3-float buffer, no
+     * allocation.</b> The player fires only on a held trigger, so this is
+     * a cold path in practice, but the cold path is the one the per-tic
+     * test fixtures exercise and the one the demo's effects publish
+     * follows, so the no-alloc contract holds there too.</p>
+     *
+     * @param player the player whose viewmodel barrel to locate; must not be null
+     * @param out at least 3 floats to receive the world x, y, z
+     * @param outOffset index of the first of the 3 floats to write
+     * @throws IllegalArgumentException if {@code out} is null or has fewer
+     *     than 3 floats from {@code outOffset} onward
+     */
+    public static void playerMuzzle(final PlayerController player, final float[] out,
+        final int outOffset)
+    {
+        if (out == null)
+        {
+            throw new IllegalArgumentException("playerMuzzle: out must not be null");
+        }
+
+        if (out.length - outOffset < 3)
+        {
+            throw new IllegalArgumentException("playerMuzzle: out needs at least 3 floats from offset "
+                + outOffset + ", got " + (out.length - outOffset));
+        }
+
+        final float yaw = player.yawRadians();
+
+        final float pitch = player.pitchRadians();
+
+        final float cosPitch = (float) StrictMath.cos(pitch);
+
+        final float sinPitch = (float) StrictMath.sin(pitch);
+
+        final float cosYaw = (float) StrictMath.cos(yaw);
+
+        final float sinYaw = (float) StrictMath.sin(yaw);
+
+        // Camera basis in world space, the same one Camera.create builds.
+        // forward = (cosPitch*sinYaw, sinPitch, cosPitch*cosYaw); right is
+        // forward x up; up is right x forward. The closed-form expressions
+        // for right and up are below; they collapse to the expected
+        // canonical axes at yaw=0, pitch=0 (right = -x, up = +y, forward = +z).
+        final float fx = cosPitch * sinYaw;
+
+        final float fy = sinPitch;
+
+        final float fz = cosPitch * cosYaw;
+
+        final float rx = -cosPitch * cosYaw;
+
+        final float ry = 0.0f;
+
+        final float rz = cosPitch * sinYaw;
+
+        // up = right x forward.
+        final float ux = ry * fz - rz * fy;
+
+        final float uy = rz * fx - rx * fz;
+
+        final float uz = rx * fy - ry * fx;
+
+        // View-space muzzle: gun origin in view space, plus the barrel
+        // offset in the gun's local -z direction rotated into view space by
+        // the gun's WEAPON_VIEW_YAW_DEGREES. The gun's local -z is the
+        // muzzle, verified by the same Blaster Kit convention the bot
+        // muzzle uses; view-space rotation by yaw_weapon of a unit -z
+        // gives (-sin(yaw_weapon), 0, -cos(yaw_weapon)) (scaled by
+        // WEAPON_VIEW_SCALE), so the muzzle in view space is at
+        //   gun_view + barrel_model * WEAPON_VIEW_SCALE * (-sin, 0, -cos).
+        final float yawWeapon = radians(WEAPON_VIEW_YAW_DEGREES);
+
+        final float sinYawWeapon = (float) StrictMath.sin(yawWeapon);
+
+        final float cosYawWeapon = (float) StrictMath.cos(yawWeapon);
+
+        final float barrelView = WEAPON_BARREL_LENGTH_MODEL_UNITS * WEAPON_VIEW_SCALE;
+
+        final float viewX = WEAPON_VIEW_RIGHT - sinYawWeapon * barrelView;
+
+        final float viewY = WEAPON_VIEW_DOWN;
+
+        final float viewZ = WEAPON_VIEW_FORWARD - cosYawWeapon * barrelView;
+
+        // World-space muzzle: eye + view_x * right + view_y * up + view_z * forward.
+        final float eyeX = player.positionX();
+
+        final float eyeY = player.positionY() + PlayerController.EYE_HEIGHT_UNITS;
+
+        final float eyeZ = player.positionZ();
+
+        out[outOffset] = eyeX + viewX * rx + viewY * ux + viewZ * fx;
+
+        out[outOffset + 1] = eyeY + viewX * ry + viewY * uy + viewZ * fy;
+
+        out[outOffset + 2] = eyeZ + viewX * rz + viewY * uz + viewZ * fz;
     }
 
     // The room the demo is actually meant to show: floor, walls, props.

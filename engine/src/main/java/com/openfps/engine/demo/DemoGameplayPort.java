@@ -879,28 +879,30 @@ public final class DemoGameplayPort implements I_GameplayPort
         // the sound to finish would cost eleven tics per shot at 60 Hz.
         audio.play(fireSound());
 
-        // Two Vec3 allocations per SHOT, not per tic, in the original form.
-        // The new *Into accessors read straight into a 6-float scratch, so
-        // a shot allocates nothing beyond the scratch the class already
-        // owns. The alternative was to recompute the view basis from yaw
-        // and pitch, duplicating the one piece of maths this engine has
-        // already had wrong once (the mirrored basis, commit 1776548).
-        // Reusing the accessors the camera also uses keeps a single
-        // definition of "forward".
+        // The hitscan starts at the eye, with the canonical forward
+        // direction. Reusing the *Into accessors keeps the per-shot
+        // allocations at zero (eyeAimScratch is the class's preallocated
+        // 6-float buffer) and keeps a single definition of "forward" in
+        // line with the camera's own basis.
         controller.eyePositionInto(eyeAimScratch, 0);
 
         controller.forwardVectorInto(eyeAimScratch, 3);
 
-        // The visible shot, from the same eye and the same ray the hitscan uses
-        // — one definition of where a shot comes from and which way it goes, so
-        // the tracer cannot drift away from what was actually resolved.
+        // The visible shot's origin is the viewmodel's barrel tip, not
+        // the eye. A tracer that materialises in front of the camera is
+        // visibly not a tracer that left the gun, and the offset from
+        // eye to muzzle is the whole of "the bolt is attached to the
+        // weapon". Direction stays the canonical forward vector so the
+        // tracer and the hitscan agree on where the shot is going.
         //
         // Spawned BEFORE the hit is resolved and unconditionally: a miss throws
         // exactly as much light and smoke as a hit, and a tracer that only
         // appeared when you connected would be an aimbot's tell.
         if (effects != null)
         {
-            effects.spawn(eyeAimScratch[0], eyeAimScratch[1], eyeAimScratch[2],
+            DemoScene.playerMuzzle(controller, muzzleScratch, 0);
+
+            effects.spawn(muzzleScratch[0], muzzleScratch[1], muzzleScratch[2],
                 eyeAimScratch[3], eyeAimScratch[4], eyeAimScratch[5]);
         }
 
