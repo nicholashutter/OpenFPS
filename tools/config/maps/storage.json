@@ -1,0 +1,186 @@
+{
+  "id": "storage",
+  "displayName": "Storage",
+  "setting": "INDUSTRIAL_COMPLEX",
+  "mode": "CTF",
+  "textureEdge": 64,
+  "worldUnitsPerTile": 8.0,
+  "primitives": [
+    {
+      "type": "box",
+      "x": -160.0,
+      "y": -4.0,
+      "z": -160.0,
+      "sx": 320.0,
+      "sy": 4.0,
+      "sz": 320.0,
+      "submesh": 0,
+      "texture": "floor"
+    },
+    {
+      "type": "box",
+      "x": -160.0,
+      "y": 0.0,
+      "z": -166.0,
+      "sx": 320.0,
+      "sy": 80.0,
+      "sz": 6.0,
+      "submesh": 1,
+      "texture": "wall"
+    },
+    {
+      "type": "box",
+      "x": -160.0,
+      "y": 0.0,
+      "z": 160.0,
+      "sx": 320.0,
+      "sy": 80.0,
+      "sz": 6.0,
+      "submesh": 1,
+      "texture": "wall"
+    },
+    {
+      "type": "box",
+      "x": -166.0,
+      "y": 0.0,
+      "z": -160.0,
+      "sx": 6.0,
+      "sy": 80.0,
+      "sz": 320.0,
+      "submesh": 1,
+      "texture": "wall"
+    },
+    {
+      "type": "box",
+      "x": 160.0,
+      "y": 0.0,
+      "z": -160.0,
+      "sx": 6.0,
+      "sy": 80.0,
+      "sz": 320.0,
+      "submesh": 1,
+      "texture": "wall"
+    },
+    {
+      "type": "box",
+      "x": 0.0,
+      "y": 0.0,
+      "z": 0.0,
+      "sx": 64.0,
+      "sy": 32.0,
+      "sz": 64.0,
+      "submesh": 1,
+      "texture": "wall"
+    },
+    {
+      "type": "box",
+      "x": 256.0,
+      "y": 0.0,
+      "z": 256.0,
+      "sx": 64.0,
+      "sy": 32.0,
+      "sz": 64.0,
+      "submesh": 1,
+      "texture": "wall"
+    },
+    {
+      "type": "box",
+      "x": -116.0,
+      "y": 0.0,
+      "z": 120.0,
+      "sx": 32.0,
+      "sy": 32.0,
+      "sz": 32.0,
+      "submesh": 1,
+      "texture": "wall"
+    },
+    {
+      "type": "box",
+      "x": -52.0,
+      "y": 0.0,
+      "z": 120.0,
+      "sx": 32.0,
+      "sy": 32.0,
+      "sz": 32.0,
+      "submesh": 1,
+      "texture": "wall"
+    },
+    {
+      "type": "box",
+      "x": 12.0,
+      "y": 0.0,
+      "z": 120.0,
+      "sx": 32.0,
+      "sy": 32.0,
+      "sz": 32.0,
+      "submesh": 1,
+      "texture": "wall"
+    },
+    {
+      "type": "box",
+      "x": 76.0,
+      "y": 0.0,
+      "z": 120.0,
+      "sx": 32.0,
+      "sy": 32.0,
+      "sz": 32.0,
+      "submesh": 1,
+      "texture": "wall"
+    },
+    {
+      "type": "box",
+      "x": -116.0,
+      "y": 0.0,
+      "z": 168.0,
+      "sx": 32.0,
+      "sy": 32.0,
+      "sz": 32.0,
+      "submesh": 1,
+      "texture": "wall"
+    },
+    {
+      "type": "box",
+      "x": -52.0,
+      "y": 0.0,
+      "z": 168.0,
+      "sx": 32.0,
+      "sy": 32.0,
+      "sz": 32.0,
+      "submesh": 1,
+      "texture": "wall"
+    },
+    {
+      "type": "box",
+      "x": 12.0,
+      "y": 0.0,
+      "z": 168.0,
+      "sx": 32.0,
+      "sy": 32.0,
+      "sz": 32.0,
+      "submesh": 1,
+      "texture": "wall"
+    },
+    {
+      "type": "box",
+      "x": 76.0,
+      "y": 0.0,
+      "z": 168.0,
+      "sx": 32.0,
+      "sy": 32.0,
+      "sz": 32.0,
+      "submesh": 1,
+      "texture": "wall"
+    },
+    {
+      "type": "box",
+      "x": -8.0,
+      "y": 64.0,
+      "z": 0.0,
+      "sx": 16.0,
+      "sy": 8.0,
+      "sz": 320.0,
+      "submesh": 1,
+      "texture": "wall"
+    }
+  ]
+}

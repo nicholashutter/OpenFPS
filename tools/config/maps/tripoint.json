@@ -1,0 +1,241 @@
+{
+  "id": "tripoint",
+  "displayName": "Tripoint",
+  "setting": "URBAN_WARZONE",
+  "mode": "DOMINATION",
+  "textureEdge": 64,
+  "worldUnitsPerTile": 8.0,
+  "primitives": [
+    {
+      "type": "box",
+      "x": -160.0,
+      "y": -4.0,
+      "z": -160.0,
+      "sx": 320.0,
+      "sy": 4.0,
+      "sz": 320.0,
+      "submesh": 0,
+      "texture": "floor"
+    },
+    {
+      "type": "box",
+      "x": 144.0,
+      "y": 0.0,
+      "z": 48.0,
+      "sx": 32.0,
+      "sy": 2.0,
+      "sz": 152.0,
+      "submesh": 0,
+      "texture": "floor"
+    },
+    {
+      "type": "box",
+      "x": 200.0,
+      "y": 0.0,
+      "z": 144.0,
+      "sx": 64.0,
+      "sy": 2.0,
+      "sz": 56.0,
+      "submesh": 0,
+      "texture": "floor"
+    },
+    {
+      "type": "box",
+      "x": 56.0,
+      "y": 0.0,
+      "z": 144.0,
+      "sx": 64.0,
+      "sy": 2.0,
+      "sz": 56.0,
+      "submesh": 0,
+      "texture": "floor"
+    },
+    {
+      "type": "box",
+      "x": 120.0,
+      "y": 0.0,
+      "z": 140.0,
+      "sx": 80.0,
+      "sy": 4.0,
+      "sz": 80.0,
+      "submesh": 0,
+      "texture": "floor"
+    },
+    {
+      "type": "box",
+      "x": -160.0,
+      "y": 0.0,
+      "z": -166.0,
+      "sx": 320.0,
+      "sy": 32.0,
+      "sz": 6.0,
+      "submesh": 1,
+      "texture": "wall"
+    },
+    {
+      "type": "box",
+      "x": -160.0,
+      "y": 0.0,
+      "z": 160.0,
+      "sx": 320.0,
+      "sy": 32.0,
+      "sz": 6.0,
+      "submesh": 1,
+      "texture": "wall"
+    },
+    {
+      "type": "box",
+      "x": -166.0,
+      "y": 0.0,
+      "z": -160.0,
+      "sx": 6.0,
+      "sy": 32.0,
+      "sz": 320.0,
+      "submesh": 1,
+      "texture": "wall"
+    },
+    {
+      "type": "box",
+      "x": 160.0,
+      "y": 0.0,
+      "z": -160.0,
+      "sx": 6.0,
+      "sy": 32.0,
+      "sz": 320.0,
+      "submesh": 1,
+      "texture": "wall"
+    },
+    {
+      "type": "box",
+      "x": 80.0,
+      "y": 0.0,
+      "z": 196.0,
+      "sx": 60.0,
+      "sy": 24.0,
+      "sz": 8.0,
+      "submesh": 1,
+      "texture": "wall"
+    },
+    {
+      "type": "box",
+      "x": 180.0,
+      "y": 0.0,
+      "z": 196.0,
+      "sx": 60.0,
+      "sy": 24.0,
+      "sz": 8.0,
+      "submesh": 1,
+      "texture": "wall"
+    },
+    {
+      "type": "box",
+      "x": 156.0,
+      "y": 0.0,
+      "z": 44.0,
+      "sx": 8.0,
+      "sy": 16.0,
+      "sz": 8.0,
+      "submesh": 1,
+      "texture": "wall"
+    },
+    {
+      "type": "box",
+      "x": 236.0,
+      "y": 0.0,
+      "z": 236.0,
+      "sx": 8.0,
+      "sy": 16.0,
+      "sz": 8.0,
+      "submesh": 1,
+      "texture": "wall"
+    },
+    {
+      "type": "box",
+      "x": 76.0,
+      "y": 0.0,
+      "z": 236.0,
+      "sx": 8.0,
+      "sy": 16.0,
+      "sz": 8.0,
+      "submesh": 1,
+      "texture": "wall"
+    },
+    {
+      "type": "box",
+      "x": 104.0,
+      "y": 0.0,
+      "z": 124.0,
+      "sx": 8.0,
+      "sy": 32.0,
+      "sz": 8.0,
+      "submesh": 1,
+      "texture": "wall"
+    },
+    {
+      "type": "box",
+      "x": 208.0,
+      "y": 0.0,
+      "z": 124.0,
+      "sx": 8.0,
+      "sy": 32.0,
+      "sz": 8.0,
+      "submesh": 1,
+      "texture": "wall"
+    },
+    {
+      "type": "box",
+      "x": 104.0,
+      "y": 0.0,
+      "z": 228.0,
+      "sx": 8.0,
+      "sy": 32.0,
+      "sz": 8.0,
+      "submesh": 1,
+      "texture": "wall"
+    },
+    {
+      "type": "box",
+      "x": 208.0,
+      "y": 0.0,
+      "z": 228.0,
+      "sx": 8.0,
+      "sy": 32.0,
+      "sz": 8.0,
+      "submesh": 1,
+      "texture": "wall"
+    },
+    {
+      "type": "box",
+      "x": 159.0,
+      "y": 16.0,
+      "z": 47.0,
+      "sx": 2.0,
+      "sy": 8.0,
+      "sz": 2.0,
+      "submesh": 2,
+      "texture": "accent"
+    },
+    {
+      "type": "box",
+      "x": 239.0,
+      "y": 16.0,
+      "z": 239.0,
+      "sx": 2.0,
+      "sy": 8.0,
+      "sz": 2.0,
+      "submesh": 2,
+      "texture": "accent"
+    },
+    {
+      "type": "box",
+      "x": 79.0,
+      "y": 16.0,
+      "z": 239.0,
+      "sx": 2.0,
+      "sy": 8.0,
+      "sz": 2.0,
+      "submesh": 2,
+      "texture": "accent"
+    }
+  ]
+}
