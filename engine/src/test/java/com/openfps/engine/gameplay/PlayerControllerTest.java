@@ -1838,6 +1838,138 @@ class PlayerControllerTest
     }
 
     @Nested
+    @DisplayName("collision world — the seam the map runtime uses to inject per-scene physics")
+    class CollisionWorld
+    {
+        @Test
+        @DisplayName("a fresh controller starts on the open world, so the demo and --model= paths collide with nothing")
+        void shouldDefaultToTheOpenWorldWhenConstructed()
+        {
+            // The 5-arg constructor leaves the world at OPEN; the 0-arg form
+            // chains to it. A controller built for the demo or for a
+            // camera-only --model= run should walk through walls exactly as
+            // the pre-collision build did, and OPEN is the world that gives
+            // back every move unchanged.
+            final PlayerController player = new PlayerController();
+
+            assertThat(player.world()).isSameAs(PhysicsWorld.OPEN);
+
+            // And the open world really is a no-op on a move: one second of
+            // walking forward at yaw 0 advances z by the move speed, with
+            // no clipping from a phantom solid.
+            player.update(move(1.0f, 0.0f), ONE_SECOND);
+
+            assertThat(player.positionZ()).isCloseTo(SPEED, within(EPSILON));
+        }
+
+        @Test
+        @DisplayName("setCollisionWorld replaces the world consulted by every later update")
+        void shouldReplaceTheWorldWhenSet()
+        {
+            // The seam: a controller built with the default 5-arg form
+            // (no collision) is given a real world between construction
+            // and the first update, and the world() getter reflects it.
+            final PlayerController player = new PlayerController();
+
+            final PhysicsWorld custom = PhysicsWorld.builder(
+                PhysicsWorld.PLAYER_HALF_WIDTH_UNITS)
+                .addBox(50.0f, -100.0f, 100.0f, 100.0f)
+                .build();
+
+            player.setCollisionWorld(custom);
+
+            assertThat(player.world()).isSameAs(custom);
+        }
+
+        @Test
+        @DisplayName("setCollisionWorld rejects null, so a port that forgot to inject a world is loud")
+        void shouldRejectANullWorldWhenSet()
+        {
+            final PlayerController player = new PlayerController();
+
+            assertThatThrownBy(() -> player.setCollisionWorld(null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("collisionWorld");
+
+            // The world stays where it was: the failed call must not
+            // silently drop the player onto OPEN.
+            assertThat(player.world()).isSameAs(PhysicsWorld.OPEN);
+        }
+
+        @Test
+        @DisplayName("a controller with a wall in front of it cannot pass through it")
+        void shouldStopAtAWallWhenSet()
+        {
+            // Player at the origin, facing +z (yaw 0, forward axis +1),
+            // wall on the +z side at z = 50..100, body half-width 16
+            // (PLAYER_HALF_WIDTH_UNITS). The south face of the wall is
+            // at z=50; the contact plane is 50 - 16 = 34. A sustained
+            // forward run ends with the player standing against the
+            // wall at exactly z=34, the same float the slide returned.
+            //
+            // addBox(minX, minZ, maxX, maxZ): the wall spans the full
+            // x range so the player cannot route around it.
+            final PhysicsWorld world = PhysicsWorld.builder(
+                PhysicsWorld.PLAYER_HALF_WIDTH_UNITS)
+                .addBox(-100.0f, 50.0f, 100.0f, 100.0f)
+                .build();
+
+            final PlayerController blocked = facing(0.0f);
+
+            blocked.setCollisionWorld(world);
+
+            // One second of forward input is enough to overshoot the
+            // unclipped distance (256 units) by 5x, so the slide has
+            // every chance to fire.
+            blocked.update(move(1.0f, 0.0f), ONE_SECOND);
+
+            // Contact plane for the south face of a wall at z=50, body
+            // half-width 16: 50 - 16 = 34. Exact, not approximate:
+            // "stops at the contact plane" is the contract PhysicsWorld
+            // promises and the whole of this fix.
+            assertThat(blocked.positionZ()).isEqualTo(34.0f);
+        }
+
+        @Test
+        @DisplayName("a controller slides along a wall, instead of stopping dead against it")
+        void shouldSlideAlongAWallWhenDiagonallyApproaching()
+        {
+            // Player at origin, wall on the +x side at x = 50..100
+            // (a north-south barrier), body half-width 16. The slide
+            // is x-then-z, so a forward-left diagonal at yaw 0
+            // moves the player in +x (left at yaw 0 is the +x
+            // direction) and +z. The wall blocks the +x component
+            // and the +z component survives. Without sliding the
+            // controller would refuse the whole move and end the
+            // tic where it started; the assertion below fails for
+            // the "stuck" case and passes for the "slid" case.
+            final PhysicsWorld world = PhysicsWorld.builder(
+                PhysicsWorld.PLAYER_HALF_WIDTH_UNITS)
+                .addBox(50.0f, -200.0f, 100.0f, 200.0f)
+                .build();
+
+            final PlayerController player = facing(0.0f);
+
+            player.setCollisionWorld(world);
+
+            // Forward + left at yaw 0: blocks on x, free on z. The
+            // free component survives, so z advances by the diagonal
+            // step. The diagonal clamp divides step by sqrt(2), so
+            // the per-axis contribution is SPEED / sqrt(2) * dt;
+            // with dt=ONE_SECOND the unclipped per-axis step is
+            // SPEED / sqrt(2).
+            player.update(move(1.0f, -1.0f), ONE_SECOND);
+
+            // z advances: the wall is to the +x side, not the +z side.
+            assertThat(player.positionZ()).isCloseTo(SPEED / (float) StrictMath.sqrt(2.0),
+                within(EPSILON));
+
+            // x is clipped: standing against the inner face of the wall.
+            assertThat(player.positionX()).isEqualTo(50.0f - PhysicsWorld.PLAYER_HALF_WIDTH_UNITS);
+        }
+    }
+
+    @Nested
     @DisplayName("determinism")
     class Determinism
     {

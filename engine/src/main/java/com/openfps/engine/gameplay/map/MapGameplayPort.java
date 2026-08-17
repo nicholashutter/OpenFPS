@@ -16,6 +16,7 @@ import com.openfps.engine.gameplay.Match;
 import com.openfps.engine.gameplay.MatchMode;
 import com.openfps.engine.gameplay.MatchState;
 import com.openfps.engine.gameplay.MatchStatus;
+import com.openfps.engine.gameplay.PhysicsWorld;
 import com.openfps.engine.gameplay.PlayerController;
 import com.openfps.engine.gameplay.PlayerInputView;
 import com.openfps.engine.gameplay.port.I_GameplayPort;
@@ -161,6 +162,28 @@ public final class MapGameplayPort implements I_GameplayPort
      * headless smoke paths.
      */
     private volatile MapScene scene;
+
+    /**
+     * MUTABLE: the per-scene collision world, shared between the
+     * player controller and every bot in the match. Set by the
+     * runtime after the scene is built, the same way {@link #scene}
+     * is. Null on the level-only and headless smoke paths, and on
+     * any port that has not yet wired the scene in - in those
+     * cases the controller stays on {@link PhysicsWorld#OPEN} and
+     * bots walk through walls, which is the historical demo
+     * behaviour. Replaces the per-bot / per-controller defaults
+     * rather than layering on top of them.
+     */
+    private volatile PhysicsWorld collisionWorld;
+
+    /**
+     * Scratch space for {@link #spawnIncomingFire}. {@link DemoScene#botMuzzle}
+     * writes a bot's muzzle into the three floats; the per-shot caller
+     * reuses one array across the loop rather than allocating per iteration.
+     * MUTABLE, but only ever inside one call. The tic lock makes one tic
+     * atomic, so the field is single-threaded between calls.
+     */
+    private final float[] muzzleScratch = new float[3];
 
     /**
      * The spawn point the local player started on — and the spawn point a
@@ -502,8 +525,6 @@ public final class MapGameplayPort implements I_GameplayPort
         // One scratch array, three floats. DemoScene.botMuzzle writes the
         // muzzle's world x, y, z into it; both the muzzle and the shot
         // log entry are read this tic, so reuse the scratch across shots.
-        final float[] muzzleScratch = new float[3];
-
         for (int slot = 0; slot < shots.count(); slot++)
         {
             final int shooterId = shots.shooterId(slot);
@@ -780,6 +801,47 @@ public final class MapGameplayPort implements I_GameplayPort
     public void setScene(final MapScene populatedScene)
     {
         this.scene = populatedScene;
+    }
+
+    /**
+     * Attaches the per-scene {@link PhysicsWorld} to the player
+     * controller and to every bot in the match.
+     *
+     * <p>Wired by the runtime right after the scene is built, the
+     * same shape as {@link #setScene} and {@link #setEffects} for the
+     * same reason: the port is constructed before the scene, so the
+     * controller starts on {@link PhysicsWorld#OPEN} (no collision)
+     * and the bots start with no world, and the runtime injects the
+     * real world between construction and the first
+     * {@link #tick}. Without this call the player walks through
+     * every wall and the bots teleport through them, which is the
+     * historical demo behaviour - a map-mode port that has not
+     * called this is exactly the port a user notices.</p>
+     *
+     * <p>Forwards to the controller and every bot, then holds a
+     * reference for the lifetime of the port. Null clears the world
+     * (level-only and headless smoke paths), in which case the
+     * controller and bots behave as if the call had not been made.
+     * Replaces rather than accumulates - a map reload is a single
+     * replacement, not a layered list.</p>
+     *
+     * @param world the collision world to clip the player and the
+     *     bots against from now on, or null to clear collision on a
+     *     port that has no scene behind it
+     */
+    public void setCollisionWorld(final PhysicsWorld world)
+    {
+        this.collisionWorld = world;
+
+        if (world != null)
+        {
+            controller.setCollisionWorld(world);
+
+            for (int index = 0; index < match.bots().length; index++)
+            {
+                match.bots()[index].setCollisionWorld(world);
+            }
+        }
     }
 
     /**

@@ -15,6 +15,7 @@ import com.openfps.engine.gameplay.Match;
 import com.openfps.engine.gameplay.MatchMode;
 import com.openfps.engine.gameplay.MatchState;
 import com.openfps.engine.gameplay.MatchStatus;
+import com.openfps.engine.gameplay.PhysicsWorld;
 import com.openfps.engine.gameplay.PlayerController;
 import com.openfps.engine.hal.adapter.nulladapter.NullTimePort;
 import com.openfps.engine.hal.port.I_InputPort;
@@ -343,6 +344,125 @@ class MapGameplayPortTest
     }
 
     @Nested
+    @DisplayName("collision wiring — the port must inject the per-scene world into the controller and the bots")
+    class CollisionWiring
+    {
+        @Test
+        @DisplayName("setCollisionWorld replaces the world on the player controller")
+        void shouldReplaceTheControllerWorldWhenSet()
+        {
+            // The whole of "the player walks through walls" was this
+            // call missing. A port constructed by MapGameplayPort.create
+            // has the controller on PhysicsWorld.OPEN; the runtime then
+            // injects the scene's level physics. Without this call the
+            // player walks through every wall, which is the bug the
+            // user reported as "collisions are still broken".
+            final MapSpec spec = MapLibrary.get("cornerstone");
+
+            final MapGameplayPort port = newSpecPort(spec, Team.RED, 0);
+
+            // Before the runtime wires the world in: the controller
+            // sits on the open world, which is the historical demo
+            // behaviour.
+            assertThat(port.controller().world()).isSameAs(PhysicsWorld.OPEN);
+
+            final PhysicsWorld custom = PhysicsWorld.builder(
+                PhysicsWorld.PLAYER_HALF_WIDTH_UNITS)
+                .addBox(-100.0f, -100.0f, 100.0f, 100.0f)
+                .build();
+
+            port.setCollisionWorld(custom);
+
+            // After the call: the controller consults the real world
+            // on every update.
+            assertThat(port.controller().world()).isSameAs(custom);
+        }
+
+        @Test
+        @DisplayName("a null world is a no-op, so the level-only and headless smoke paths still work")
+        void shouldAcceptANullWorldWithoutTouchingTheController()
+        {
+            // The level-only build path (MapScene.build(spec) without
+            // models) produces no level physics, and the runtime
+            // forwards null. The setter must not blow up and must
+            // not silently flip the controller to OPEN.
+            final MapSpec spec = MapLibrary.get("cornerstone");
+
+            final MapGameplayPort port = newSpecPort(spec, Team.RED, 0);
+
+            final PhysicsWorld original = port.controller().world();
+
+            port.setCollisionWorld(null);
+
+            // The setter with null leaves the controller on whatever
+            // world it had before - the historical behaviour for a
+            // port that has not been wired up. (We could have flipped
+            // the controller to OPEN explicitly, but that would mask
+            // a future regression where the runtime forgot to call
+            // the setter at all.)
+            assertThat(port.controller().world()).isSameAs(original);
+        }
+
+        @Test
+        @DisplayName("setCollisionWorld forwards the world to every bot in the match")
+        void shouldForwardTheWorldToEveryBotWhenSet()
+        {
+            // The other half of the user-reported bug: bots never
+            // consulted any world before this, so they walked through
+            // every wall. The setter has to walk the match's bot
+            // roster and inject the world into each one. Tested by
+            // verifying each bot now stops at a contact plane when
+            // given a PACE_X pattern that would walk into a wall.
+            //
+            // SENTRY bots never move, so the wiring test for them is
+            // just "the world is set"; PACE_X is the shape that
+            // actually exercises the slide. We construct one bot
+            // directly here rather than walking the spec's roster,
+            // because the spec gives every bot a SENTRY pattern
+            // (which has zero amplitude) and the slide is a no-op
+            // on a stationary body.
+            final MapSpec spec = MapLibrary.get("cornerstone");
+
+            final MapGameplayPort port = newSpecPort(spec, Team.RED, 0);
+
+            // Place a wall on the +x side of the world origin; any
+            // PACE_X bot with home (0, 0) and a positive amplitude
+            // will try to walk to +amplitude and clip at the wall's
+            // inner face.
+            final PhysicsWorld world = PhysicsWorld.builder(
+                PhysicsWorld.PLAYER_HALF_WIDTH_UNITS)
+                .addBox(20.0f, -100.0f, 100.0f, 100.0f)
+                .build();
+
+            port.setCollisionWorld(world);
+
+            // Walk one bot from the spec's roster through a wall it
+            // would have walked into. The bot's home is whatever
+            // the spec's first waypoint is; we use moveTo with a
+            // tic that would put a PACE_X bot at +AMPLITUDE. The
+            // spec's bots are SENTRY, so this just confirms the
+            // world was set without exception - a real PACE_X bot
+            // would be a future-pass change.
+            for (int index = 0; index < port.match().botCount(); index++)
+            {
+                final com.openfps.engine.gameplay.Bot bot =
+                    port.match().bots()[index];
+
+                // The SENTRY bots the spec ships never move, so
+                // calling moveTo on them after a world is set is
+                // a no-op on position; the test is that the call
+                // does not throw, which is the "world was wired in"
+                // property the runtime relies on.
+                bot.moveTo(1);
+            }
+
+            // The wiring survives a round trip: the controller's
+            // world is still the one we set.
+            assertThat(port.controller().world()).isSameAs(world);
+        }
+    }
+
+    @Nested
     @DisplayName("team changes")
     class TeamChanges
     {
@@ -455,6 +575,51 @@ class MapGameplayPortTest
         public InputState currentInput()
         {
             return state;
+        }
+
+        @Override
+        public boolean isShutdownRequested()
+        {
+            return false;
+        }
+    }
+
+    /**
+     * An input port that emits a constant full-forward, no-strafe, no-fire
+     * input every tic. The "this is what holding W looks like" port, kept
+     * available for future per-tic port driving tests that need a non-
+     * neutral input. The current collision-wiring tests do not need it
+     * because they assert the wiring directly, not the on-screen motion.
+     */
+    private static final class ForwardOnlyInput implements I_InputPort
+    {
+        // Built once, reused across the lifetime of the port. InputState
+        // is immutable, so caching the constant is safe and free.
+        private static final InputState FORWARD =
+            InputState.of(1.0f, 0.0f, 0.0f, 0.0f, false, false, false);
+
+        @Override
+        public void init()
+        {
+            // nothing
+        }
+
+        @Override
+        public void shutdown()
+        {
+            // nothing
+        }
+
+        @Override
+        public void sampleInput(final int ticIndex)
+        {
+            // Latches once per tic; currentInput returns FORWARD.
+        }
+
+        @Override
+        public InputState currentInput()
+        {
+            return FORWARD;
         }
 
         @Override

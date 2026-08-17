@@ -217,6 +217,17 @@ public final class MapRuntime
         // first publish already has bot instances to address.
         newPort.setScene(newScene);
 
+        // Wire the scene's collision world into the player controller and
+        // every bot. The port is built before the scene in this seam, so
+        // the controller starts on PhysicsWorld.OPEN and the bots start
+        // uncollided; without this call the player walks through every
+        // wall and the bots teleport through them, which is the user-
+        // visible "collisions are broken" symptom. Set after setScene so
+        // the controller is the same instance the rest of the port
+        // already holds, and after setEffects so the order matches the
+        // demo port's attachment order.
+        newPort.setCollisionWorld(newScene.levelPhysics());
+
         // The match gate is the contract that freezes the port when the
         // menu is in front and unfreezes it when the player enters the
         // world, but the gate fires on UI state CHANGES — a fresh

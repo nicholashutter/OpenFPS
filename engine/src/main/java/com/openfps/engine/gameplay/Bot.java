@@ -177,6 +177,24 @@ public final class Bot
     private boolean hasSeenPlayer;
 
     /**
+     * The solid geometry this bot's per-tic route move is clipped against,
+     * or null for no collision. Set by the map-mode port after the bot is
+     * constructed and the scene's {@link PhysicsWorld} is built.
+     *
+     * <p><b>MUTABLE:</b> the port is built before the scene in the map
+     * runtime, so the bot is constructed without a world and the runtime
+     * injects the real one between construction and the first
+     * {@link #moveTo}. Null means "no collision" - a demo path, a
+     * headless smoke test, or any port that has not wired the scene's
+     * world in. {@code match.tick} calls {@link #moveTo} under the same
+     * lock that guards the bots' other mutable state, and the collision
+     * world is replaced only outside that lock, so a single tic sees one
+     * world - which is what makes the clip deterministic for two peers
+     * running the same tic.</p>
+     */
+    private PhysicsWorld world;
+
+    /**
      * Creates a bot on a route, with no team assignment.
      *
      * <p>Equivalent to {@link #Bot(int, float, float, float, BotPattern, float,
@@ -334,6 +352,33 @@ public final class Bot
     }
 
     /**
+     * Replaces the solid geometry this bot is clipped against.
+     *
+     * <p>The seam that lets a {@code MapRuntime} wire the per-scene
+     * {@link PhysicsWorld} into a bot that was constructed without one.
+     * Called from the map-mode port after the scene is built and before
+     * the first tic of the round, the same shape as
+     * {@link PlayerController#setCollisionWorld} for the same reason: the
+     * port is built before the scene in the runtime, so the bot starts
+     * uncollided, and the runtime injects the real world between
+     * construction and the first {@link #moveTo}.</p>
+     *
+     * <p>Null clears the world: a port that has no scene behind it (the
+     * demo, the headless smoke path) hands null here, and {@link #moveTo}
+     * skips the clip. A non-null world is held by reference and read
+     * every tic; the world is immutable, so sharing it across bots and
+     * the player is safe and allocation-free.</p>
+     *
+     * @param collisionWorld the world to clip against from now on, or
+     *     null to clear collision. Pass null for the headless smoke
+     *     path; pass a real world for any map the bot is on
+     */
+    public void setCollisionWorld(final PhysicsWorld collisionWorld)
+    {
+        this.world = collisionWorld;
+    }
+
+    /**
      * Puts this bot where its route says it should be at a given tic.
      *
      * <p>Absolute, not incremental: the answer depends on {@code ticIndex} and
@@ -342,7 +387,7 @@ public final class Bot
      * more than it looks like it should.</p>
      *
      * <p>Dead bots stop moving. They stay where they fell, which is what makes a
-     * kill legible — a body that carried on walking its patrol would be
+     * kill legible - a body that carried on walking its patrol would be
      * indistinguishable from one that was never hit.</p>
      *
      * @param ticIndex the tic to place this bot at
@@ -356,9 +401,45 @@ public final class Bot
 
         final float phase = phaseAt(ticIndex);
 
-        this.positionX = homeX + pattern.offsetX(phase, amplitudeUnits);
+        float desiredX = homeX + pattern.offsetX(phase, amplitudeUnits);
 
-        this.positionZ = homeZ + pattern.offsetZ(phase, amplitudeUnits);
+        float desiredZ = homeZ + pattern.offsetZ(phase, amplitudeUnits);
+
+        // Clip the desired move through the scene's collision world when
+        // one has been attached. The bot's half-width is the player's, so a
+        // PhysicsWorld built for the player clips bots the same way: the
+        // bot cannot pass through a wall it would have to walk around.
+        //
+        // The clip is the same shape PlayerController.applyMove uses (x
+        // first, then z from the clipped x), and that order is the one
+        // PhysicsWorld's own Javadoc pins as the only one that holds an
+        // inside corner. The slide is a pure function of (currentX,
+        // currentZ, delta) so two peers running the same tic with the
+        // same world land on the same clipped position, which is the
+        // lockstep requirement.
+        //
+        // Skipped on a null world - the demo, the headless smoke path, and
+        // any port that has not yet injected a scene. A SENTRY bot
+        // (amplitude 0) computes desired == home, so the delta is zero
+        // and slideX / slideZ early-return feetX / feetZ unchanged.
+        if (world != null)
+        {
+            final float deltaX = desiredX - this.positionX;
+
+            final float deltaZ = desiredZ - this.positionZ;
+
+            final float clippedX = world.slideX(this.positionX, this.positionZ, deltaX);
+
+            final float clippedZ = world.slideZ(clippedX, this.positionZ, deltaZ);
+
+            desiredX = clippedX;
+
+            desiredZ = clippedZ;
+        }
+
+        this.positionX = desiredX;
+
+        this.positionZ = desiredZ;
     }
 
     /**

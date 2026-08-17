@@ -835,6 +835,162 @@ class BotTest
     }
 
     @Nested
+    @DisplayName("collision world — bots now walk around walls, not through them")
+    class CollisionWorld
+    {
+        @Test
+        @DisplayName("a fresh bot walks its route unchanged, so the demo and smoke paths still work")
+        void shouldWalkTheRouteUnchangedWhenNoWorldIsSet()
+        {
+            // The whole of the pre-collision behaviour: a bot with a null
+            // world teleports to its pattern's position every tic, the
+            // same way it has done since the kit was wired in. A future
+            // refactor that forgets the null guard would either NPE here
+            // (best case) or skip the slide and silently pass through
+            // walls (worst case); the test fails on both.
+            final Bot pacer = new Bot(2, 0.0f, 0.0f, 0.0f, BotPattern.PACE_X,
+                AMPLITUDE, PERIOD, 0);
+
+            final float unclipped = pacer.positionX();
+
+            pacer.moveTo(PERIOD / 4);
+
+            // PACE_X at PERIOD/4 lands at +AMPLITUDE (the first peak of
+            // the sine). A null world means the slide is skipped, so
+            // the bot reaches the unclipped amplitude.
+            assertThat(pacer.positionX()).isCloseTo(AMPLITUDE, within(EPSILON));
+
+            assertThat(pacer.positionX()).isNotEqualTo(unclipped);
+        }
+
+        @Test
+        @DisplayName("a SENTRY bot keeps its home when a world is set, so spawns inside walls do not teleport")
+        void shouldStayAtHomeWhenSentryIsInsideAWall()
+        {
+            // SENTRY bots have amplitude 0, so every moveTo asks for the
+            // home point exactly. The desired position is the home, the
+            // current position is the home, the delta is zero, and the
+            // slide's early-return leaves the bot where it was. This is
+            // the contract the kit composer's SENTRY spawns depend on
+            // (every shipped map spawns its bots as SENTRY on the
+            // waypoint): the bot is at the waypoint after a moveTo,
+            // regardless of whether the waypoint is in a wall.
+            final PhysicsWorld world = PhysicsWorld.builder(
+                PhysicsWorld.PLAYER_HALF_WIDTH_UNITS)
+                .addBox(-100.0f, -100.0f, 100.0f, 100.0f)
+                .build();
+
+            final Bot sentry = new Bot(2, 10.0f, 0.0f, 10.0f, BotPattern.SENTRY,
+                0.0f, PERIOD, 0);
+
+            // The constructor already placed the bot at its home
+            // (10, 10). Now give it a wall that covers the whole room
+            // and re-run moveTo - the bot must stay where it is.
+            sentry.setCollisionWorld(world);
+
+            sentry.moveTo(1);
+
+            assertThat(sentry.positionX()).isEqualTo(10.0f);
+
+            assertThat(sentry.positionZ()).isEqualTo(10.0f);
+        }
+
+        @Test
+        @DisplayName("a PACE_X bot that would walk into a wall is stopped at the contact plane")
+        void shouldStopAtAWallWhenPacingIntoIt()
+        {
+            // Bot at the world origin, PACE_X, AMPLITUDE = 50, PERIOD.
+            // At PERIOD/4 the pattern asks for x = +50; a wall at
+            // x = 20..100 is in the way. slideX clips to the contact
+            // plane: 20 - 16 = 4. Pinned exact, not approximate: "stops
+            // at the contact plane" is the whole of the world is
+            // supposed to do.
+            final PhysicsWorld world = PhysicsWorld.builder(
+                PhysicsWorld.PLAYER_HALF_WIDTH_UNITS)
+                .addBox(20.0f, -100.0f, 100.0f, 100.0f)
+                .build();
+
+            final Bot pacer = new Bot(2, 0.0f, 0.0f, 0.0f, BotPattern.PACE_X,
+                50.0f, PERIOD, 0);
+
+            pacer.setCollisionWorld(world);
+
+            pacer.moveTo(PERIOD / 4);
+
+            // The wall's west face is at x=20, contact plane is
+            // x = 20 - 16 = 4. The bot wanted x=+50, the slide said 4.
+            assertThat(pacer.positionX()).isEqualTo(4.0f);
+        }
+
+        @Test
+        @DisplayName("a PACE_X bot well short of a wall reaches its full amplitude, unclipped")
+        void shouldAllowPaceXToReachAmplitudeWhenNoWallIsInTheWay()
+        {
+            // Same shape as the wall case, but the wall is far enough
+            // away that the bot reaches its full amplitude. Pinned to
+            // the unclipped result so a future slide regression that
+            // always returns home would fail this and pass the wall
+            // test - one for "slides when needed", one for "doesn't
+            // slide when not needed".
+            final PhysicsWorld world = PhysicsWorld.builder(
+                PhysicsWorld.PLAYER_HALF_WIDTH_UNITS)
+                .addBox(200.0f, -100.0f, 300.0f, 100.0f)
+                .build();
+
+            final Bot pacer = new Bot(2, 0.0f, 0.0f, 0.0f, BotPattern.PACE_X,
+                10.0f, PERIOD, 0);
+
+            pacer.setCollisionWorld(world);
+
+            pacer.moveTo(PERIOD / 4);
+
+            // The wall is at x=200+, well past the bot's x=+10 peak.
+            assertThat(pacer.positionX()).isEqualTo(10.0f);
+        }
+
+        @Test
+        @DisplayName("setting a null world restores the old route-as-written behaviour")
+        void shouldRestoreTheUnclippedRouteWhenWorldIsCleared()
+        {
+            // The seam the headless smoke path relies on: a bot built
+            // before the world is set, then given one, then given null
+            // back, walks the original route again. The moveTo's null
+            // guard must not retain a stale reference.
+            //
+            // Geometry: PACE_X with AMPLITUDE=100, PERIOD=120. Wall on
+            // the +x side (x=50..100, z=-100..100). At PERIOD/4 the
+            // pattern asks for x=+100; the slide clips to the contact
+            // plane at minX - halfWidth = 50 - 16 = 34. After clearing
+            // the world and moving to PERIOD*3/4 (phase 3*pi/2, sin
+            // = -1) the bot reaches the unclipped x = -AMPLITUDE = -100.
+            final Bot pacer = new Bot(2, 0.0f, 0.0f, 0.0f, BotPattern.PACE_X,
+                AMPLITUDE, PERIOD, 0);
+
+            pacer.setCollisionWorld(PhysicsWorld.builder(
+                PhysicsWorld.PLAYER_HALF_WIDTH_UNITS)
+                .addBox(50.0f, -100.0f, 100.0f, 100.0f)
+                .build());
+
+            // Clipped: the wall on the +x side stops the bot at the
+            // west face of the wall, with the contact plane at
+            // minX - halfWidth = 50 - 16 = 34.
+            pacer.moveTo(PERIOD / 4);
+
+            assertThat(pacer.positionX()).isEqualTo(50.0f - PhysicsWorld.PLAYER_HALF_WIDTH_UNITS);
+
+            // Now clear the world; the next moveTo must skip the slide
+            // and the bot reaches the full pattern amplitude.
+            pacer.setCollisionWorld(null);
+
+            // PERIOD * 3 / 4 = 3*pi/2 phase, sin(3*pi/2) = -1, so
+            // x = -AMPLITUDE.
+            pacer.moveTo(PERIOD * 3 / 4);
+
+            assertThat(pacer.positionX()).isCloseTo(-AMPLITUDE, within(EPSILON));
+        }
+    }
+
+    @Nested
     @DisplayName("determinism")
     class Determinism
     {

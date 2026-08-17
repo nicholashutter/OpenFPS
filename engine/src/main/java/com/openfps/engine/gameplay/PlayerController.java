@@ -350,12 +350,21 @@ public final class PlayerController
     /**
      * What the ground move is clipped against. Never null.
      *
-     * <p>Final, and the only collaborator this class has. It is immutable and
-     * stateless once built, so it changes none of the determinism arguments
-     * above — two peers holding the same world and the same state compute the
-     * same clipped step, bit for bit.</p>
+     * <p>The only collaborator this class has. It is immutable and stateless once
+     * built, so it changes none of the determinism arguments above — two peers
+     * holding the same world and the same state compute the same clipped step,
+     * bit for bit.</p>
+     *
+     * <p><b>MUTABLE:</b> constructed {@code final}, then replaced once via
+     * {@link #setCollisionWorld} when a map runtime injects the per-scene
+     * {@link PhysicsWorld} after the controller is built. The default
+     * constructor path leaves it at {@link PhysicsWorld#OPEN} (no collision),
+     * which is what the camera-only and {@code --model=} paths want. A
+     * replacement is single-threaded and happens before the first
+     * {@link #update}, so the determinism claim above still holds: every tic
+     * reads the same world that every other tic will read.</p>
      */
-    private final PhysicsWorld world;
+    private PhysicsWorld world;
 
     /**
      * Creates a controller standing at the world origin, facing world +z, level,
@@ -860,6 +869,39 @@ public final class PlayerController
     public PhysicsWorld world()
     {
         return world;
+    }
+
+    /**
+     * Replaces the solid geometry this player is clipped against.
+     *
+     * <p>The seam that lets a {@code MapRuntime} wire the per-scene
+     * {@link PhysicsWorld} into a controller that was constructed with the
+     * default {@link PhysicsWorld#OPEN} (no collision). Used by the map-mode
+     * port: the controller is built before the scene is, so the player
+     * starts uncollided, and the runtime injects the real world between
+     * construction and the first {@link #update}.</p>
+     *
+     * <p>Intended to be called once, before the first {@link #update}, on
+     * the thread that drives the tick. Replaces rather than accumulates —
+     * a map reload is a single replacement, not a list. Null is rejected
+     * because a port that forgot to call this is exactly the port the
+     * player would notice walking through walls, and a silent null would
+     * make the bug invisible.</p>
+     *
+     * @param collisionWorld the world to clip against from now on; must
+     *     not be null. Pass {@link PhysicsWorld#OPEN} to clear collision
+     *     on a port that has no scene behind it
+     * @throws IllegalArgumentException if {@code collisionWorld} is null
+     */
+    public void setCollisionWorld(final PhysicsWorld collisionWorld)
+    {
+        if (collisionWorld == null)
+        {
+            throw new IllegalArgumentException(
+                "collisionWorld must not be null; use PhysicsWorld.OPEN for no collision");
+        }
+
+        this.world = collisionWorld;
     }
 
     /** Returns the feet position as a vector. */
