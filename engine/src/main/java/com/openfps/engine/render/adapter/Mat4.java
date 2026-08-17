@@ -40,7 +40,12 @@ public final class Mat4
     private final float[] m;
 
     // Takes ownership of an array the caller has already finished with.
-    private Mat4(final float[] owned)
+    //
+    // Package-private so the renderer's per-instance override slots can wrap
+    // a shared 16-float backing array without copying it. The wrapper's
+    // m is the same reference as the caller's array, so a write to either
+    // is visible to both — the whole point of the slot's no-alloc update.
+    Mat4(final float[] owned)
     {
         this.m = owned;
     }
@@ -222,5 +227,68 @@ public final class Mat4
         }
 
         return text.append("\n}").toString();
+    }
+
+    /**
+     * Tests whether another object holds the same 16 elements in the same order.
+     *
+     * <p>Value equality. Two matrices are equal iff each of the 16 row-major
+     * floats is bit-identical — {@code Float.floatToRawIntBits}, not a tolerance,
+     * because the matrices here are built from the same arithmetic every tic
+     * and a "near enough" comparison would mask real divergence.</p>
+     *
+     * <p>The package-private {@code Mat4(float[])} constructor aliases the
+     * caller's array, so two {@link Mat4}s over the same backing array are
+     * equal by this definition; that is the property that lets tests compare
+     * a renderer's per-instance override slot against
+     * {@link com.openfps.engine.demo.DemoEffects#HIDDEN} by value, which is
+     * what the no-allocation rewrite of the per-tic publish path depends on.</p>
+     */
+    @Override
+    public boolean equals(final Object other)
+    {
+        if (this == other)
+        {
+            return true;
+        }
+
+        if (!(other instanceof Mat4))
+        {
+            return false;
+        }
+
+        final Mat4 rhs = (Mat4) other;
+
+        for (int i = 0; i < ELEMENTS; i++)
+        {
+            if (Float.floatToRawIntBits(m[i]) != Float.floatToRawIntBits(rhs.m[i]))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Returns a hash consistent with {@link #equals}.
+     *
+     * <p>Built from the same 16 floats as equals, so two matrices that compare
+     * equal produce the same hash, as the {@link Object#hashCode} contract
+     * requires. The cost is one xor-fold over 16 ints; this class does not
+     * use {@code Mat4} as a hash key, so the cost is paid only when a test
+     * asks for it.</p>
+     */
+    @Override
+    public int hashCode()
+    {
+        int hash = 1;
+
+        for (int i = 0; i < ELEMENTS; i++)
+        {
+            hash = 31 * hash + Float.floatToRawIntBits(m[i]);
+        }
+
+        return hash;
     }
 }

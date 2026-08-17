@@ -186,6 +186,20 @@ public final class MapGameplayPort implements I_GameplayPort
     private final float[] muzzleScratch = new float[3];
 
     /**
+     * Reusable 16-float buffer for the per-tic bot publish path.
+     *
+     * <p>One body is in flight at a time (the publish loop iterates
+     * and the renderer copies from this scratch into its per-instance
+     * storage), so the scratch is sized for one body, not for
+     * {@code roster.length}. Eliminates the per-tic {@code Mat4}
+     * allocation {@code DemoScene.botPlacement} and
+     * {@code .botWeaponPlacement} would otherwise produce; see
+     * {@code docs/MEMORY.md} item 2 and {@code docs/PERFORMANCE_AUDIT.md}
+     * § 6.1.</p>
+     */
+    private final float[] botScratch = new float[16];
+
+    /**
      * The spawn point the local player started on — and the spawn point a
      * death returns them to. Captured at construction so the respawn
      * never has to re-look-up a team spawn.
@@ -614,6 +628,12 @@ public final class MapGameplayPort implements I_GameplayPort
 
         final Bot[] roster = match.bots();
 
+        // One reusable 16-float scratch for the per-tic publish.
+        // Filled by DemoScene.botPlacementInto / .botWeaponPlacementInto,
+        // copied into the renderer's per-instance storage by the
+        // row-major setWorldTransform overload, never reallocated.
+        final float[] scratch = botScratch;
+
         for (int index = 0; index < roster.length; index++)
         {
             final int bodyInstance = scene.botInstanceIndex(index);
@@ -623,14 +643,17 @@ public final class MapGameplayPort implements I_GameplayPort
                 continue;
             }
 
-            renderer.setWorldTransform(bodyInstance, com.openfps.engine.demo.DemoScene.botPlacement(roster[index]));
+            com.openfps.engine.demo.DemoScene.botPlacementInto(roster[index], scratch, 0);
+
+            renderer.setWorldTransform(bodyInstance, scratch, 0);
 
             final int weaponInstance = scene.botWeaponInstanceIndex(index);
 
             if (weaponInstance != MapScene.NO_INSTANCE)
             {
-                renderer.setWorldTransform(weaponInstance,
-                    com.openfps.engine.demo.DemoScene.botWeaponPlacement(roster[index]));
+                com.openfps.engine.demo.DemoScene.botWeaponPlacementInto(roster[index], scratch, 0);
+
+                renderer.setWorldTransform(weaponInstance, scratch, 0);
             }
         }
     }

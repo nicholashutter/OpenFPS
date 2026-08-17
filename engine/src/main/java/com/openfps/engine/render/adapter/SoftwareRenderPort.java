@@ -516,10 +516,10 @@ public final class SoftwareRenderPort implements I_RenderPort
      * Per-instance placement overrides, or null when the scene has none.
      *
      * <p>MUTABLE: the array is allocated by {@link #setScene}, and individual
-     * slots are replaced by {@link #setWorldTransform} from the game loop
-     * thread while the render workers read them. A slot holds null until
-     * something moves that instance, and {@link #packVisibleWorld} falls back to the
-     * {@link Scene}'s own transform for every null.</p>
+     * slot rows are overwritten by {@link #setWorldTransform} from the game
+     * loop thread while the render workers read them. A slot is null until
+     * something moves that instance, and {@link #packVisibleWorld} falls back
+     * to the {@link Scene}'s own transform for every null.</p>
      *
      * <p><b>This is how anything moves.</b> {@link Scene} is immutable and that
      * is load-bearing — it is what makes rendering one allocate nothing and what
@@ -529,6 +529,19 @@ public final class SoftwareRenderPort implements I_RenderPort
      * one instance's placement. Rebuilding costs a full {@code bindScene}:
      * texture table, stream offsets, entity ids, buffer sizing, all of it, for a
      * 295-instance room in which four bodies moved.</p>
+     *
+     * <p><b>The slot is a {@link Slot}, not a raw {@code float[]}.</b> The
+     * slot holds a 16-float row-major backing array and a wrapped {@link Mat4}
+     * that aliases it - one allocation per moving body per scene lifetime, not
+     * one per tic. The fast path
+     * ({@link #setWorldTransform(int, float[], int)}) writes through the
+     * backing array; the slower path
+     * ({@link #setWorldTransform(int, Mat4)}) writes through the wrapper.
+     * Callers that need a {@link Mat4} read it via
+     * {@link #worldTransformOverride(int)} and get the cached wrapper; the
+     * pack step on the per-tic hot path reads the 16 floats directly via
+     * {@link #worldTransformOverrideInto(int, float[], int)} and skips the
+     * wrapper entirely.</p>
      *
      * <p><b>The race is real and is deliberately tolerated.</b> A reference store
      * into an array slot cannot tear, so a worker reads either the previous
@@ -540,7 +553,38 @@ public final class SoftwareRenderPort implements I_RenderPort
      * rendering, which is a far worse trade for a frame of latency on a
      * patrolling body.</p>
      */
-    private volatile Mat4[] worldOverrides;
+    private volatile Slot[] worldOverrides;
+
+    /**
+     * One per-moving-body per-scene override slot. Holds a 16-float
+     * row-major backing array and a wrapped {@link Mat4} that aliases it.
+     *
+     * <p>One allocation per slot per scene lifetime, not per tic: a
+     * {@code setWorldTransform} call updates the backing array (or, for
+     * the {@code Mat4} overload, copies into the same array) without
+     * replacing the slot. The wrapper's identity is therefore stable
+     * for the slot's lifetime, which is the property the demo's "is this
+     * effect hidden" check relies on.</p>
+     */
+    private static final class Slot
+    {
+        /** Row-major 16 floats, aliased by {@link #wrapper} via shared backing. */
+        final float[] raw = new float[Mat4.ELEMENTS];
+
+        /**
+         * Wraps {@link #raw} without copying it. The wrapper's
+         * {@code m} array is the same reference as {@code raw}, so a
+         * write to either is visible to both. Constructed in the
+         * field initialiser so the wrapper is always live by the
+         * time a caller reads {@link SoftwareRenderPort#worldTransformOverride}.
+         */
+        final Mat4 wrapper;
+
+        Slot()
+        {
+            this.wrapper = new Mat4(raw);
+        }
+    }
 
     /**
      * The opaque world instances the frustum cull kept this frame, in scene
@@ -593,6 +637,21 @@ public final class SoftwareRenderPort implements I_RenderPort
      * on the frame thread only.</p>
      */
     private final float[] cullTransform = new float[Camera.WORLD_TO_CLIP_FLOATS];
+
+    /**
+     * Per-call scratch for the row-major 16-float placement read in the
+     * pack path.
+     *
+     * <p>The pack step reads the override (or the scene's transform) into
+     * this 16-float buffer, then concatenates it into the per-instance
+     * packed-transform slot via the row-major {@code packModelToClip}
+     * overload. A single instance is in flight at a time, so the scratch
+     * is sized for one, not for {@code worldInstanceCount()} — and since
+     * the per-tic memory budget is small, the win is the 16-float
+     * pre-allocation, not the reuse, though it does mean the read can
+     * also be expressed as one function call.</p>
+     */
+    private final float[] placementScratch = new float[Mat4.ELEMENTS];
 
     /** The same for the view pass, packed view-to-clip. MUTABLE: rewritten per frame. */
     private volatile float[] viewTransforms;
@@ -1049,7 +1108,7 @@ public final class SoftwareRenderPort implements I_RenderPort
      */
     public void setWorldTransform(final int instanceIndex, final Mat4 modelToWorld)
     {
-        final Mat4[] slots = worldOverrides;
+        final Slot[] slots = worldOverrides;
 
         if (slots == null)
         {
@@ -1062,7 +1121,105 @@ public final class SoftwareRenderPort implements I_RenderPort
                 + " is outside 0.." + (slots.length - 1));
         }
 
-        slots[instanceIndex] = modelToWorld;
+        final Slot slot = slots[instanceIndex];
+
+        if (slot == null)
+        {
+            // First write into this slot: copy the 16 floats out of the
+            // immutable Mat4 the caller handed us into a fresh port-owned
+            // array and wrap it. Subsequent writes reuse the same slot.
+            final Slot fresh = new Slot();
+
+            modelToWorld.copyRowMajorInto(fresh.raw, 0);
+
+            slots[instanceIndex] = fresh;
+        }
+        else
+        {
+            // Update the existing slot's backing array in place. The
+            // wrapper's identity is preserved, which is the property
+            // callers (and tests) that pointer-compare against
+            // DemoEffects.HIDDEN rely on.
+            modelToWorld.copyRowMajorInto(slot.raw, 0);
+        }
+    }
+
+    /**
+     * Sets one instance's placement from a caller-owned {@code float[16]}.
+     *
+     * <p>The hot-path overload. The caller reuses a single 16-float scratch
+     * across every body it has to move per tic — the renderer copies the
+     * values into its own per-slot storage, the scratch is overwritten by the
+     * next call, and no {@link Mat4} wrapper is allocated on the path.
+     * Eliminates the 24-alloc-per-tic pressure the 16-map library was
+     * putting on the young gen (12 bots * 2 placements; see
+     * {@code docs/MEMORY.md} item 2).</p>
+     *
+     * <p>The 16-float layout is row-major, identical to what
+     * {@link Mat4#copyRowMajorInto(float[], int)} writes and to what
+     * {@link Mat4#ofRowMajor(float[])} reads, so a scratch the caller
+     * built with the same row-major convention can be passed in directly.
+     * The copy is the only allocation the call can produce, and the copy
+     * reuses an already-allocated slot for the steady-state case.</p>
+     *
+     * @param instanceIndex which world instance to move, in the order
+     *     {@link Scene} holds them
+     * @param values at least 16 floats holding the new placement in
+     *     row-major order; must not be null
+     * @param offset index of the first of the 16 floats to read
+     * @throws IllegalStateException if no scene is bound
+     * @throws IllegalArgumentException if values is null, length &lt; 16,
+     *     or offset is negative
+     * @throws IndexOutOfBoundsException if the index is not a world
+     *     instance
+     */
+    public void setWorldTransform(final int instanceIndex, final float[] values,
+        final int offset)
+    {
+        if (values == null)
+        {
+            throw new IllegalArgumentException("values must not be null");
+        }
+
+        if (values.length - offset < Mat4.ELEMENTS)
+        {
+            throw new IllegalArgumentException(
+                "values needs at least " + Mat4.ELEMENTS
+                    + " floats from offset " + offset + ", got " + (values.length - offset));
+        }
+
+        final Slot[] slots = worldOverrides;
+
+        if (slots == null)
+        {
+            throw new IllegalStateException("setWorldTransform() before setScene()");
+        }
+
+        if (instanceIndex < 0 || instanceIndex >= slots.length)
+        {
+            throw new IndexOutOfBoundsException("world instance " + instanceIndex
+                + " is outside 0.." + (slots.length - 1));
+        }
+
+        final Slot slot = slots[instanceIndex];
+
+        if (slot == null)
+        {
+            // First write: copy the 16 floats out of the caller's scratch
+            // into a fresh port-owned array and wrap it. This is the one
+            // allocation the fast path can produce, and it happens once
+            // per moving body per scene lifetime, not once per tic.
+            final Slot fresh = new Slot();
+
+            System.arraycopy(values, offset, fresh.raw, 0, Mat4.ELEMENTS);
+
+            slots[instanceIndex] = fresh;
+        }
+        else
+        {
+            // Update the existing slot's backing array in place.
+            System.arraycopy(values, offset, slot.raw, 0, Mat4.ELEMENTS);
+        }
     }
 
     /**
@@ -1075,14 +1232,90 @@ public final class SoftwareRenderPort implements I_RenderPort
      */
     public Mat4 worldTransformOverride(final int instanceIndex)
     {
-        final Mat4[] slots = worldOverrides;
+        final Slot[] slots = worldOverrides;
 
         if (slots == null)
         {
             throw new IllegalStateException("worldTransformOverride() before setScene()");
         }
 
-        return slots[instanceIndex];
+        if (instanceIndex < 0 || instanceIndex >= slots.length)
+        {
+            throw new IndexOutOfBoundsException("world instance " + instanceIndex
+                + " is outside 0.." + (slots.length - 1));
+        }
+
+        final Slot slot = slots[instanceIndex];
+
+        if (slot == null)
+        {
+            return null;
+        }
+
+        return slot.wrapper;
+    }
+
+    /**
+     * Copies one instance's override into a caller-owned {@code float[16]}.
+     *
+     * <p>The companion to {@link #setWorldTransform(int, float[], int)}.
+     * The renderer does the pack path's read without ever wrapping the
+     * 16 floats in a {@link Mat4}; callers that need to inspect the
+     * override outside the pack path get the same fast shape. The copy
+     * is unconditional — a null slot writes a zero matrix into the
+     * output, which is what every pack path expects from the scene
+     * fallback transform.</p>
+     *
+     * @param instanceIndex which world instance to read
+     * @param out at least 16 floats to receive the row-major values
+     * @param outOffset index of the first of the 16 floats to write
+     * @throws IllegalStateException if no scene is bound
+     * @throws IndexOutOfBoundsException if the index is not a world
+     *     instance
+     */
+    public void worldTransformOverrideInto(final int instanceIndex, final float[] out,
+        final int outOffset)
+    {
+        final Slot[] slots = worldOverrides;
+
+        if (slots == null)
+        {
+            throw new IllegalStateException(
+                "worldTransformOverrideInto() before setScene()");
+        }
+
+        if (instanceIndex < 0 || instanceIndex >= slots.length)
+        {
+            throw new IndexOutOfBoundsException("world instance " + instanceIndex
+                + " is outside 0.." + (slots.length - 1));
+        }
+
+        final Slot slot = slots[instanceIndex];
+
+        if (slot == null)
+        {
+            // No override set yet: zero-fill so the caller can read 16
+            // defined floats regardless. The pack path uses this as a
+            // signal to fall back to the scene's own transform, but a
+            // generic "copy into" cannot encode that distinction, so we
+            // write identity and let the caller decide.
+            for (int index = 0; index < Mat4.ELEMENTS; index++)
+            {
+                out[outOffset + index] = 0.0f;
+            }
+
+            out[outOffset + 0] = 1.0f;
+
+            out[outOffset + 5] = 1.0f;
+
+            out[outOffset + 10] = 1.0f;
+
+            out[outOffset + 15] = 1.0f;
+        }
+        else
+        {
+            System.arraycopy(slot.raw, 0, out, outOffset, Mat4.ELEMENTS);
+        }
     }
 
     // Prepares each instance's derived tables and grows the geometry buffers if
@@ -1120,7 +1353,7 @@ public final class SoftwareRenderPort implements I_RenderPort
         // One slot per instance, all null: a scene starts entirely static and
         // pays nothing for the override path until something is actually moved.
         // Indexed by SCENE index, not by pass position — see worldSceneIndex.
-        this.worldOverrides = new Mat4[newScene.worldInstanceCount()];
+        this.worldOverrides = new Slot[newScene.worldInstanceCount()];
 
         this.viewTransforms = new float[hand.length * Camera.WORLD_TO_CLIP_FLOATS];
 
@@ -1873,13 +2106,16 @@ public final class SoftwareRenderPort implements I_RenderPort
 
         final int[] keptIds = visibleWorldIds;
 
-        final Mat4[] moved = worldOverrides;
+        final Slot[] moved = worldOverrides;
 
         // The pass position and the scene index are the same number only for an
         // entirely opaque scene; the override table is addressed by the latter.
         final int[] sceneOf = worldSceneIndex;
 
         final float near = view.near();
+
+        // MUTABLE local — the row-major source the pack reads.
+        final float[] scratch = placementScratch;
 
         starts[0] = 0;
 
@@ -1890,7 +2126,13 @@ public final class SoftwareRenderPort implements I_RenderPort
         {
             final int at = count * Camera.WORLD_TO_CLIP_FLOATS;
 
-            view.packModelToClip(placementOf(current, moved, sceneOf[index]), slots, at);
+            // Two-step: read the 16 floats into the reusable scratch, then
+            // concatenate them into the packed slot. Same shape
+            // drawTranslucentRun uses; inlined here because the visible
+            // pass has its own loop.
+            placementOf(current, moved, sceneOf[index], scratch, 0);
+
+            view.packModelToClip(scratch, 0, slots, at);
 
             final Instance instance = all[index];
 
@@ -1914,28 +2156,87 @@ public final class SoftwareRenderPort implements I_RenderPort
         return count;
     }
 
-    // Where one world instance actually is this frame: its override if something
-    // has moved it, otherwise the placement the immutable Scene was built with.
-    private static Mat4 placementOf(final Scene current, final Mat4[] moved, final int index)
+    /**
+     * The override slot for one world instance, or null when nothing has moved
+     * it (or when there is no override table at all).
+     *
+     * <p>Extracted from the two placement helpers so the null-table guard is
+     * not a ternary on every call; Checkstyle's no-inline-conditional rule
+     * covers project code, and the table can legitimately be null before the
+     * first frame has finished publishing.</p>
+     */
+    private static Slot slotFor(final Slot[] moved, final int index)
     {
-        if (moved != null && moved[index] != null)
+        if (moved == null)
         {
-            return moved[index];
+            return null;
         }
 
-        return current.worldTransform(index);
+        return moved[index];
+    }
+
+    // Where one world instance actually is this frame: its override if something
+    // has moved it, otherwise the placement the immutable Scene was built with.
+    //
+    // Writes 16 row-major floats into {@code out[outOffset..outOffset+16]}. The
+    // caller is the pack step, which concatenates the 16 floats into the
+    // camera's packed world-to-clip transform on the same call. Two helpers
+    // (one for the override path, one for the scene-fallback path) keep the
+    // storage choice invisible to the pack loop.
+    private static void placementOf(final Scene current, final Slot[] moved,
+        final int index, final float[] out, final int outOffset)
+    {
+        final Slot slot = slotFor(moved, index);
+
+        if (slot != null)
+        {
+            System.arraycopy(slot.raw, 0, out, outOffset, Mat4.ELEMENTS);
+        }
+        else
+        {
+            current.worldTransformInto(index, out, outOffset);
+        }
+    }
+
+    // Reads the 16 raw floats for one instance (override if set, scene
+    // transform otherwise) into a reusable scratch, and returns the same
+    // scratch. The sort path then reads the translation column from the
+    // scratch directly: floats[3] = tx, floats[7] = ty, floats[11] = tz.
+    // Returning the scratch means the sort code does not need a second
+    // temporary, and the read stays one function call per instance.
+    private static float[] placementOfRaw(final Scene current, final Slot[] moved,
+        final int index, final float[] scratch)
+    {
+        final Slot slot = slotFor(moved, index);
+
+        if (slot != null)
+        {
+            System.arraycopy(slot.raw, 0, scratch, 0, Mat4.ELEMENTS);
+        }
+        else
+        {
+            current.worldTransformInto(index, scratch, 0);
+        }
+
+        return scratch;
     }
 
     // The same for the viewmodel, which is already in view space and therefore
-    // takes the projection alone.
+    // takes the projection alone. Reads row-major floats directly from the
+    // scene to avoid a Mat4 wrapper on the per-frame path; the viewmodel
+    // count is small (a handful of entries) but the same shape is used by
+    // the view pass so a single reusable scratch suffices.
     private void packView(final Scene current, final Camera view, final int count)
     {
         final float[] slots = viewTransforms;
 
+        final float[] scratch = placementScratch;
+
         for (int index = 0; index < count; index++)
         {
-            view.packViewToClip(current.viewTransform(index), slots,
-                index * Camera.WORLD_TO_CLIP_FLOATS);
+            current.viewTransformInto(index, scratch, 0);
+
+            view.packViewToClip(scratch, 0, slots, index * Camera.WORLD_TO_CLIP_FLOATS);
         }
     }
 
@@ -2109,7 +2410,7 @@ public final class SoftwareRenderPort implements I_RenderPort
     // frame reproducible when two puffs sit at the same distance.
     private int sortBackToFront(final Scene current, final Camera view, final int[] indices)
     {
-        final Mat4[] moved = worldOverrides;
+        final Slot[] moved = worldOverrides;
 
         final Vec3 eye = view.eye();
 
@@ -2121,7 +2422,9 @@ public final class SoftwareRenderPort implements I_RenderPort
 
         final Instance[] all = translucentInstances;
 
-        final float[] scratch = cullTransform;
+        final float[] rawScratch = placementScratch;
+
+        final float[] clipScratch = cullTransform;
 
         final float near = view.near();
 
@@ -2130,20 +2433,26 @@ public final class SoftwareRenderPort implements I_RenderPort
 
         for (int slot = 0; slot < indices.length; slot++)
         {
-            final Mat4 placement = placementOf(current, moved, indices[slot]);
+            final float[] raw = placementOfRaw(current, moved, indices[slot], rawScratch);
 
-            view.packModelToClip(placement, scratch, 0);
+            view.packModelToClip(raw, 0, clipScratch, 0);
 
-            if (InstanceCull.isOutsideFrustum(scratch, 0, near, all[slot].bounds, 0))
+            if (InstanceCull.isOutsideFrustum(clipScratch, 0, near, all[slot].bounds, 0))
             {
                 continue;
             }
 
-            final float dx = placement.get(0, Mat4.ORDER - 1) - eye.x();
+            // The translation column of a row-major Mat4 lives at index
+            // (row * 4 + 3): tx = raw[3], ty = raw[7], tz = raw[11].
+            // Reading the raw floats skips the (row, col) indirect call
+            // and keeps the per-instance work to four primitives. The pack
+            // call above wrote into `clipScratch`, not `raw`, so the raw
+            // translation is still the model-to-world translation.
+            final float dx = raw[3] - eye.x();
 
-            final float dy = placement.get(1, Mat4.ORDER - 1) - eye.y();
+            final float dy = raw[7] - eye.y();
 
-            final float dz = placement.get(2, Mat4.ORDER - 1) - eye.z();
+            final float dz = raw[11] - eye.z();
 
             depths[slot] = dx * forward.x() + dy * forward.y() + dz * forward.z();
 
@@ -2195,7 +2504,9 @@ public final class SoftwareRenderPort implements I_RenderPort
 
         final int[] order = translucentOrder;
 
-        final Mat4[] moved = worldOverrides;
+        final Slot[] moved = worldOverrides;
+
+        final float[] scratch = placementScratch;
 
         final int count = to - from;
 
@@ -2209,8 +2520,14 @@ public final class SoftwareRenderPort implements I_RenderPort
 
             starts[slot + 1] = starts[slot] + pass[slot].model.triangleCount();
 
-            view.packModelToClip(placementOf(current, moved, indices[which]), slots,
-                slot * Camera.WORLD_TO_CLIP_FLOATS);
+            // Two-step: read the 16 floats into the reusable scratch, then
+            // concatenate them into the packed transform. The scratch
+            // doubles as the model's own row-major values, so the
+            // concatenation overload reads from a float[16] without ever
+            // touching a Mat4.
+            placementOf(current, moved, indices[which], scratch, 0);
+
+            view.packModelToClip(scratch, 0, slots, slot * Camera.WORLD_TO_CLIP_FLOATS);
         }
 
         return renderPass(pass, count, starts, slots, null, blendedRenderers[coverage],

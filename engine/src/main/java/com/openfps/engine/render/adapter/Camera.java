@@ -356,6 +356,37 @@ public final class Camera
         packConcatenatedRow(worldToClip, ROW_W, modelToWorld, dest, destOffset + ROW_W);
     }
 
+    /**
+     * Concatenates an instance's row-major 16-float model-to-world transform
+     * into this camera's packed world-to-clip transform.
+     *
+     * <p>Companion to {@link #packModelToClip(Mat4, float[], int)} for the
+     * per-tic hot path. The caller hands in a 16-float scratch that already
+     * holds the placement (typically written by a placement helper that
+     * does not wrap the values in a {@link Mat4}); this method reads the
+     * 16 floats directly and skips the {@code Mat4.get(row, col)} indirect
+     * call. The result is the same packed transform the wrapped overload
+     * produces.</p>
+     *
+     * @param modelToWorld at least 16 floats in row-major order
+     * @param modelOffset index of the first of the 16 floats to read
+     * @param dest the destination buffer
+     * @param destOffset index of the first of {@link #WORLD_TO_CLIP_FLOATS}
+     *     floats to write
+     */
+    public void packModelToClip(final float[] modelToWorld, final int modelOffset,
+        final float[] dest, final int destOffset)
+    {
+        packConcatenatedRow(worldToClip, ROW_X, modelToWorld, modelOffset, dest,
+            destOffset + ROW_X);
+
+        packConcatenatedRow(worldToClip, ROW_Y, modelToWorld, modelOffset, dest,
+            destOffset + ROW_Y);
+
+        packConcatenatedRow(worldToClip, ROW_W, modelToWorld, modelOffset, dest,
+            destOffset + ROW_W);
+    }
+
     // One row of (packed 3x4) . (Mat4), as four dot products against the
     // matrix's columns.
     private static void packConcatenatedRow(final float[] packed, final int row,
@@ -369,6 +400,26 @@ public final class Camera
             for (int k = 0; k < Mat4.ORDER; k++)
             {
                 sum += packed[row + k] * rhs.get(k, column);
+            }
+
+            dest[destOffset + column] = sum;
+        }
+    }
+
+    // Same row multiply, reading the right-hand matrix from a raw 16-float
+    // array instead of a Mat4. The matrix is laid out row-major, so the
+    // (k, column) element lives at k * Mat4.ORDER + column.
+    private static void packConcatenatedRow(final float[] packed, final int row,
+        final float[] rhs, final int rhsOffset, final float[] dest, final int destOffset)
+    {
+        for (int column = 0; column < Mat4.ORDER; column++)
+        {
+            // MUTABLE local — accumulator for one dot product.
+            float sum = 0.0f;
+
+            for (int k = 0; k < Mat4.ORDER; k++)
+            {
+                sum += packed[row + k] * rhs[rhsOffset + k * Mat4.ORDER + column];
             }
 
             dest[destOffset + column] = sum;
@@ -405,6 +456,31 @@ public final class Camera
         packScaledRow(modelToView, 2, 1.0f, dest, destOffset + ROW_W);
     }
 
+    /**
+     * Packs a viewmodel from a raw 16-float row-major transform.
+     *
+     * <p>Companion to {@link #packViewToClip(Mat4, float[], int)} for the
+     * hot path. The viewmodel stays welded to the eye, so the camera's
+     * frustum is the only thing the matrix needs scaled by. See
+     * {@link #packModelToClip(float[], int, float[], int)} for the
+     * row-major convention.</p>
+     *
+     * @param modelToView at least 16 floats in row-major order
+     * @param modelOffset index of the first of the 16 floats to read
+     * @param dest the destination buffer
+     * @param destOffset index of the first of {@link #WORLD_TO_CLIP_FLOATS}
+     *     floats to write
+     */
+    public void packViewToClip(final float[] modelToView, final int modelOffset,
+        final float[] dest, final int destOffset)
+    {
+        packScaledRow(modelToView, 0, modelOffset, scaleX, dest, destOffset + ROW_X);
+
+        packScaledRow(modelToView, 1, modelOffset, scaleY, dest, destOffset + ROW_Y);
+
+        packScaledRow(modelToView, 2, modelOffset, 1.0f, dest, destOffset + ROW_W);
+    }
+
     // One row of the source matrix, multiplied by its projection scale.
     private static void packScaledRow(final Mat4 source, final int row, final float scale,
         final float[] dest, final int destOffset)
@@ -412,6 +488,19 @@ public final class Camera
         for (int column = 0; column < Mat4.ORDER; column++)
         {
             dest[destOffset + column] = source.get(row, column) * scale;
+        }
+    }
+
+    // Same as the Mat4 overload, but reading the source from a raw 16-float
+    // row-major array. The (row, column) element lives at row * 4 + column.
+    private static void packScaledRow(final float[] source, final int row, final int sourceOffset,
+        final float scale, final float[] dest, final int destOffset)
+    {
+        final int base = sourceOffset + row * Mat4.ORDER;
+
+        for (int column = 0; column < Mat4.ORDER; column++)
+        {
+            dest[destOffset + column] = source[base + column] * scale;
         }
     }
 

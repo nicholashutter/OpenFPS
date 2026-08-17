@@ -1140,7 +1140,7 @@ final class DemoEffectsTest
                     {
                         assertThat(fixture.puffOverride(0, stage))
                             .as("stage %d must be hidden at tic %d", stage, tic)
-                            .isSameAs(DemoEffects.HIDDEN);
+                            .isEqualTo(DemoEffects.HIDDEN);
                     }
                 }
             }
@@ -1165,7 +1165,7 @@ final class DemoEffectsTest
 
             for (int slot = 0; slot < DemoEffects.MAX_TRACERS; slot++)
             {
-                assertThat(fixture.tracerOverride(slot)).isSameAs(DemoEffects.HIDDEN);
+                assertThat(fixture.tracerOverride(slot)).isEqualTo(DemoEffects.HIDDEN);
             }
 
             for (int slot = 0; slot < DemoEffects.MAX_PUFFS; slot++)
@@ -1173,7 +1173,7 @@ final class DemoEffectsTest
                 for (int stage = 0; stage < DemoEffects.PUFF_STAGES; stage++)
                 {
                     assertThat(fixture.puffOverride(slot, stage))
-                        .isSameAs(DemoEffects.HIDDEN);
+                        .isEqualTo(DemoEffects.HIDDEN);
                 }
             }
         }
@@ -1280,11 +1280,11 @@ final class DemoEffectsTest
                 fixture.tic();
             }
 
-            assertThat(fixture.tracerOverride(0)).isSameAs(DemoEffects.HIDDEN);
+            assertThat(fixture.tracerOverride(0)).isEqualTo(DemoEffects.HIDDEN);
 
             for (int stage = 0; stage < DemoEffects.PUFF_STAGES; stage++)
             {
-                assertThat(fixture.puffOverride(0, stage)).isSameAs(DemoEffects.HIDDEN);
+                assertThat(fixture.puffOverride(0, stage)).isEqualTo(DemoEffects.HIDDEN);
             }
         }
     }

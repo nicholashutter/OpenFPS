@@ -228,6 +228,26 @@ public final class Scene
     }
 
     /**
+     * Copies one world instance's model-to-world transform into a
+     * caller-supplied buffer in row-major order.
+     *
+     * <p>The hot-path read for the per-tic pack step. The caller hands in a
+     * reusable scratch of 16 floats; this method writes into it and returns,
+     * with no allocation. The {@link #worldTransform} accessor is kept for
+     * the cold paths (tests, diagnostics) that want a {@link Mat4} value;
+     * the pack path uses this one.</p>
+     *
+     * @param index instance index in {@code [0, worldInstanceCount())}
+     * @param out at least 16 floats to receive the row-major values
+     * @param outOffset index of the first of the 16 floats to write
+     * @throws IndexOutOfBoundsException if the index is out of range
+     */
+    public void worldTransformInto(final int index, final float[] out, final int outOffset)
+    {
+        world[index].transform.copyRowMajorInto(out, outOffset);
+    }
+
+    /**
      * Returns one world instance's entity id, or {@link #UNTAGGED}.
      *
      * <p>Opaque and positive when tagged. It is not an index into anything and
@@ -330,6 +350,20 @@ public final class Scene
     public Mat4 viewTransform(final int index)
     {
         return view[index].transform;
+    }
+
+    /**
+     * Copies one view instance's model-to-view transform into a
+     * caller-supplied buffer in row-major order. Companion to
+     * {@link #worldTransformInto}; see that method for the rationale.
+     *
+     * @param index instance index in {@code [0, viewInstanceCount())}
+     * @param out at least 16 floats to receive the row-major values
+     * @param outOffset index of the first of the 16 floats to write
+     */
+    public void viewTransformInto(final int index, final float[] out, final int outOffset)
+    {
+        view[index].transform.copyRowMajorInto(out, outOffset);
     }
 
     /** Returns the total instance count across both passes. */

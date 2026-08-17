@@ -279,6 +279,34 @@ public final class DemoGameplayPort implements I_GameplayPort
     private final float[] muzzleScratch = new float[3];
 
     /**
+     * Reusable 3-float buffer for the per-shot eye/aim publish path.
+     *
+     * <p>One shot is in flight at a time (the fire branch is not re-entrant
+     * and the scratch is read before the next call), so the buffer is sized
+     * for one shot, not for {@code match.botCount()}. Eliminates the two
+     * {@link Vec3}s {@code PlayerController.eyePosition} and
+     * {@code .forwardVector} would otherwise produce per shot; see
+     * {@code docs/PERFORMANCE_AUDIT.md} § 6.4. Eye at offset 0, aim at
+     * offset 3 - a single contiguous 6-float buffer is simpler than two
+     * separate ones and lets the per-shot work share one reference.</p>
+     */
+    private final float[] eyeAimScratch = new float[6];
+
+    /**
+     * Reusable 16-float buffer for the per-tic bot publish path.
+     *
+     * <p>One body is in flight at a time (the publish loop iterates
+     * and the renderer copies from this scratch into its per-instance
+     * storage), so the scratch is sized for one body, not for
+     * {@code match.botCount()}. Eliminates the per-tic {@code Mat4}
+     * allocation {@code DemoScene.botPlacement} and
+     * {@code .botWeaponPlacement} would otherwise produce; see
+     * {@code docs/MEMORY.md} item 2 and {@code docs/PERFORMANCE_AUDIT.md}
+     * § 6.1.</p>
+     */
+    private final float[] botScratch = new float[16];
+
+    /**
      * How much of the room's fire is allowed to be heard. Never null.
      *
      * <p>Seven opponents on seven independent cadences will ask for a noise far
@@ -851,14 +879,17 @@ public final class DemoGameplayPort implements I_GameplayPort
         // the sound to finish would cost eleven tics per shot at 60 Hz.
         audio.play(fireSound());
 
-        // Two Vec3 allocations per SHOT, not per tic. The alternative is to
-        // recompute the view basis here from yaw and pitch, duplicating the
-        // one piece of maths in this engine that has already been wrong once
-        // (the mirrored basis, commit 1776548). Reusing the accessor that the
-        // camera also uses keeps a single definition of "forward".
-        final Vec3 eye = controller.eyePosition();
+        // Two Vec3 allocations per SHOT, not per tic, in the original form.
+        // The new *Into accessors read straight into a 6-float scratch, so
+        // a shot allocates nothing beyond the scratch the class already
+        // owns. The alternative was to recompute the view basis from yaw
+        // and pitch, duplicating the one piece of maths this engine has
+        // already had wrong once (the mirrored basis, commit 1776548).
+        // Reusing the accessors the camera also uses keeps a single
+        // definition of "forward".
+        controller.eyePositionInto(eyeAimScratch, 0);
 
-        final Vec3 aim = controller.forwardVector();
+        controller.forwardVectorInto(eyeAimScratch, 3);
 
         // The visible shot, from the same eye and the same ray the hitscan uses
         // — one definition of where a shot comes from and which way it goes, so
@@ -869,11 +900,12 @@ public final class DemoGameplayPort implements I_GameplayPort
         // appeared when you connected would be an aimbot's tell.
         if (effects != null)
         {
-            effects.spawn(eye.x(), eye.y(), eye.z(), aim.x(), aim.y(), aim.z());
+            effects.spawn(eyeAimScratch[0], eyeAimScratch[1], eyeAimScratch[2],
+                eyeAimScratch[3], eyeAimScratch[4], eyeAimScratch[5]);
         }
 
-        final int struck = match.firePlayerShot(eye.x(), eye.y(), eye.z(),
-            aim.x(), aim.y(), aim.z());
+        final int struck = match.firePlayerShot(eyeAimScratch[0], eyeAimScratch[1],
+            eyeAimScratch[2], eyeAimScratch[3], eyeAimScratch[4], eyeAimScratch[5]);
 
         // IMMEDIATELY after the shot resolves, because the award is a consequence
         // of it: the streak is completed inside firePlayerShot and the flag is
@@ -1217,10 +1249,18 @@ public final class DemoGameplayPort implements I_GameplayPort
 
         final Bot[] roster = match.bots();
 
+        // One reusable 16-float scratch for the per-tic publish.
+        // Filled by DemoScene.botPlacementInto, copied into the
+        // renderer's per-instance storage by the row-major
+        // setWorldTransform overload, never reallocated. Same shape
+        // as the publish path in MapGameplayPort.
+        final float[] scratch = botScratch;
+
         for (int index = 0; index < roster.length; index++)
         {
-            renderer.setWorldTransform(botInstances[index],
-                DemoScene.botPlacement(roster[index]));
+            DemoScene.botPlacementInto(roster[index], scratch, 0);
+
+            renderer.setWorldTransform(botInstances[index], scratch, 0);
 
             publishBotWeapon(index, roster[index]);
         }
@@ -1249,7 +1289,14 @@ public final class DemoGameplayPort implements I_GameplayPort
             return;
         }
 
-        renderer.setWorldTransform(instance, DemoScene.botWeaponPlacement(bot));
+        // Same scratch the body publish used. Reusing across the
+        // body+weapon pair in a single iteration is safe because
+        // the renderer copies into its own per-instance storage
+        // before the next call lands; the publish loop in this
+        // class is single-threaded.
+        DemoScene.botWeaponPlacementInto(bot, botScratch, 0);
+
+        renderer.setWorldTransform(instance, botScratch, 0);
     }
 
     /**

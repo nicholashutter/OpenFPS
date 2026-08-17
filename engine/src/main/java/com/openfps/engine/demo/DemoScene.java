@@ -935,6 +935,35 @@ public final class DemoScene
     }
 
     /**
+     * Fills a caller-owned 16-float buffer with the same placement
+     * {@link #botPlacement(Bot)} returns as a {@link Mat4}.
+     *
+     * <p>Companion to {@link #placementInto(float, float, float, float, float, float[], int)}
+     * for the per-tic bot publish path. The caller hands in a reusable
+     * scratch and the bot's body coordinates; this method writes the 16
+     * floats and returns. No allocation, no {@link Mat4} wrapper.</p>
+     *
+     * @param bot the bot to place; must not be null
+     * @param out at least 16 floats to receive the row-major values
+     * @param outOffset index of the first of the 16 floats to write
+     */
+    public static void botPlacementInto(final Bot bot, final float[] out, final int outOffset)
+    {
+        if (!bot.isAlive())
+        {
+            // HIDDEN is a single degenerate transform; reading its 16
+            // floats into the scratch makes the caller-side pack code
+            // shape identical to the alive case.
+            DemoEffects.HIDDEN.copyRowMajorInto(out, outOffset);
+        }
+        else
+        {
+            placementInto(bot.positionX(), bot.positionY(), bot.positionZ(),
+                bot.yawRadians(), CHARACTER_WORLD_SCALE, out, outOffset);
+        }
+    }
+
+    /**
      * Returns the placement transform for one bot's weapon this tic.
      *
      * <p>Public and called every tic from outside, exactly as
@@ -978,6 +1007,32 @@ public final class DemoScene
     }
 
     /**
+     * Fills a caller-owned 16-float buffer with the same placement
+     * {@link #botWeaponPlacement(Bot)} returns as a {@link Mat4}.
+     *
+     * <p>Companion to {@link #botPlacementInto(Bot, float[], int)} for the
+     * per-tic bot weapon publish path. Same shape: caller-owned scratch,
+     * no allocation, no {@link Mat4} wrapper.</p>
+     *
+     * @param bot the bot holding the weapon; must not be null
+     * @param out at least 16 floats to receive the row-major values
+     * @param outOffset index of the first of the 16 floats to write
+     */
+    public static void botWeaponPlacementInto(final Bot bot, final float[] out,
+        final int outOffset)
+    {
+        if (!bot.isAlive())
+        {
+            DemoEffects.HIDDEN.copyRowMajorInto(out, outOffset);
+        }
+        else
+        {
+            heldWeaponPlacementInto(bot.positionX(), bot.positionY(), bot.positionZ(),
+                bot.yawRadians(), out, outOffset);
+        }
+    }
+
+    /**
      * Returns the placement transform for a carbine held by whoever is standing
      * at a given placement.
      *
@@ -1015,6 +1070,40 @@ public final class DemoScene
 
         return placement(x, feetY + BOT_WEAPON_HEIGHT_UNITS, z,
             yawRadians + radians(BOT_WEAPON_YAW_DEGREES), BOT_WEAPON_WORLD_SCALE);
+    }
+
+    /**
+     * Fills a caller-owned 16-float buffer with the same placement
+     * {@link #heldWeaponPlacement(float, float, float, float)} returns as a
+     * {@link Mat4}.
+     *
+     * <p>Companion to {@link #placementInto(float, float, float, float, float, float[], int)}
+     * for the per-tic weapon publish path. Same shape: caller-owned
+     * scratch, no allocation, no {@link Mat4} wrapper.</p>
+     *
+     * @param feetX the bot's feet x
+     * @param feetY the bot's feet y
+     * @param feetZ the bot's feet z
+     * @param yawRadians the bot's yaw
+     * @param out at least 16 floats to receive the row-major values
+     * @param outOffset index of the first of the 16 floats to write
+     */
+    public static void heldWeaponPlacementInto(final float feetX, final float feetY,
+        final float feetZ, final float yawRadians, final float[] out, final int outOffset)
+    {
+        final float sinYaw = (float) StrictMath.sin(yawRadians);
+
+        final float cosYaw = (float) StrictMath.cos(yawRadians);
+
+        final float x = feetX
+            + BOT_WEAPON_FORWARD_UNITS * sinYaw - BOT_WEAPON_RIGHT_UNITS * cosYaw;
+
+        final float z = feetZ
+            + BOT_WEAPON_FORWARD_UNITS * cosYaw + BOT_WEAPON_RIGHT_UNITS * sinYaw;
+
+        placementInto(x, feetY + BOT_WEAPON_HEIGHT_UNITS, z,
+            yawRadians + radians(BOT_WEAPON_YAW_DEGREES), BOT_WEAPON_WORLD_SCALE,
+            out, outOffset);
     }
 
     /**
@@ -1438,6 +1527,78 @@ public final class DemoScene
             -sin, 0.0f, cos, z,
             0.0f, 0.0f, 0.0f, 1.0f,
         });
+    }
+
+    /**
+     * Fills a caller-owned 16-float buffer with the same placement
+     * {@link #placement(float, float, float, float, float)} returns as a
+     * {@link Mat4}.
+     *
+     * <p>The hot-path overload. The caller hands in a reusable
+     * {@code float[Mat4.ELEMENTS]} scratch and an offset; this method writes
+     * the 16 row-major floats into it and returns, with no allocation. The
+     * pack step then concatenates the 16 floats into the camera's packed
+     * world-to-clip transform via the row-major {@code packModelToClip}
+     * overload. The {@link Mat4}-returning method is kept for the cold
+     * paths (tests, diagnostics) that want a value object.</p>
+     *
+     * <p>Layout is identical to the literal the {@code placement} overload
+     * builds, and the same row-major convention {@link Mat4#ofRowMajor}
+     * reads, so the two paths produce the same packed transform.</p>
+     *
+     * @param x world (or view) x translation
+     * @param y world (or view) y translation
+     * @param z world (or view) z translation
+     * @param yawRadians rotation about +y, in radians
+     * @param scale uniform scale; must be positive
+     * @param out at least 16 floats to receive the row-major values
+     * @param outOffset index of the first of the 16 floats to write
+     * @throws IllegalArgumentException if scale is not positive
+     */
+    public static void placementInto(final float x, final float y, final float z,
+        final float yawRadians, final float scale, final float[] out, final int outOffset)
+    {
+        if (!(scale > 0.0f))
+        {
+            throw new IllegalArgumentException(
+                "scale must be positive, or the instance is mirrored or collapsed, got " + scale);
+        }
+
+        final float sin = (float) StrictMath.sin(yawRadians) * scale;
+
+        final float cos = (float) StrictMath.cos(yawRadians) * scale;
+
+        out[outOffset] = cos;
+
+        out[outOffset + 1] = 0.0f;
+
+        out[outOffset + 2] = sin;
+
+        out[outOffset + 3] = x;
+
+        out[outOffset + 4] = 0.0f;
+
+        out[outOffset + 5] = scale;
+
+        out[outOffset + 6] = 0.0f;
+
+        out[outOffset + 7] = y;
+
+        out[outOffset + 8] = -sin;
+
+        out[outOffset + 9] = 0.0f;
+
+        out[outOffset + 10] = cos;
+
+        out[outOffset + 11] = z;
+
+        out[outOffset + 12] = 0.0f;
+
+        out[outOffset + 13] = 0.0f;
+
+        out[outOffset + 14] = 0.0f;
+
+        out[outOffset + 15] = 1.0f;
     }
 
     /**
