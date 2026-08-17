@@ -6,6 +6,7 @@
 package com.openfps.engine.gameplay.map;
 
 import com.openfps.engine.core.GameConfig;
+import com.openfps.engine.demo.DemoModels;
 import com.openfps.engine.gameplay.adapter.NullGameplayPort;
 import com.openfps.engine.gameplay.port.DelegatingGameplayPort;
 import com.openfps.engine.hal.port.I_InputPort;
@@ -52,6 +53,7 @@ public final class MapRuntime
     private final Team playerTeam;
     private final int spawnIndex;
     private final DelegatingGameplayPort port;
+    private final DemoModels models;
 
     private MapSpec spec;
     private MapScene scene;
@@ -73,6 +75,38 @@ public final class MapRuntime
     public MapRuntime(final SoftwareRenderPort renderer, final I_InputPort input,
         final GameConfig config, final Team playerTeam, final int spawnIndex,
         final DelegatingGameplayPort port)
+    {
+        this(renderer, input, config, playerTeam, spawnIndex, port, null);
+    }
+
+    /**
+     * Builds a runtime that will load maps against the given renderer,
+     * the engine's input port, and a pre-loaded {@code DemoModels}.
+     *
+     * <p>The {@code models} parameter is what makes the map look like
+     * a room: the Kenney kit (floor, ceiling, perimeter walls, columns,
+     * crates), the bot characters + weapons, the local player's
+     * first-person arms, the held viewmodel, and the tracer/smoke
+     * effect pool. Without it, the 1-arg {@link MapScene#build} path
+     * is taken and the player ends up on a bare level with no walls
+     * and no bots — the NPE-causing path the menu pick used to take.</p>
+     *
+     * @param renderer the renderer that will draw the map; must not be null
+     * @param input the engine's input port; must not be null
+     * @param config the running game config; must not be null
+     * @param playerTeam the team the local player is on; must not be null
+     * @param spawnIndex the index into the team's spawn list, or -1 for
+     *     the first spawn of any team (the single-player case)
+     * @param port the swappable port the engine is ticking; must not be
+     *     null
+     * @param models the loaded Kenney kit + characters + weapons, or
+     *     null to fall back to the level-only build (the headless
+     *     smoke path that does not need the kit)
+     */
+    public MapRuntime(final SoftwareRenderPort renderer, final I_InputPort input,
+        final GameConfig config, final Team playerTeam, final int spawnIndex,
+        final DelegatingGameplayPort port,
+        final com.openfps.engine.demo.DemoModels models)
     {
         if (renderer == null)
         {
@@ -110,6 +144,8 @@ public final class MapRuntime
         this.spawnIndex = spawnIndex;
 
         this.port = port;
+
+        this.models = models;
     }
 
     /**
@@ -147,10 +183,38 @@ public final class MapRuntime
             return null;
         }
 
-        final MapScene newScene = MapScene.build(newSpec);
+        final MapScene newScene;
+
+        if (models != null)
+        {
+            newScene = MapScene.build(newSpec, models);
+        }
+        else
+        {
+            // Headless smoke path: no kit, no bots, no viewmodel. The
+            // per-tic loop runs against the level-only scene, which is
+            // what the smoke tests need to assert "bots alive, no
+            // damage" without dragging in the visual machinery.
+            newScene = MapScene.build(newSpec);
+        }
 
         final MapGameplayPort newPort = MapGameplayPort.create(newSpec, input, renderer, config,
             playerTeam, spawnIndex);
+
+        // The match gate is the contract that freezes the port when the
+        // menu is in front and unfreezes it when the player enters the
+        // world, but the gate fires on UI state CHANGES — a fresh
+        // loadMap that lands on a port that is already "playing" still
+        // needs an explicit flip, because there is no state change to
+        // observe. Without this, a load followed by an immediate
+        // LOADING -> PLAYING transition would race: the new port is
+        // built with matchLive=false, the gate hook is re-attached to
+        // the same UI state, and the gate's "we were already in this
+        // state" guard (see DesktopLauncher.createMatchGate) suppresses
+        // its own flip. Setting matchLive=true here makes the port live
+        // unconditionally, and the gate hook is only ever asked to
+        // freeze it again when the player returns to the menu.
+        newPort.setMatchLive(true);
 
         renderer.setScene(newScene.scene());
 
@@ -164,9 +228,11 @@ public final class MapRuntime
 
         this.mapPort = newPort;
 
-        LOG.info("MapRuntime.loadMap: id={} mode={} ({}x{}); bound scene with {} instances",
+        LOG.info("MapRuntime.loadMap: id={} mode={} ({}x{}); bound scene with {} instances"
+            + " — match live={}",
             newSpec.id(), newSpec.mode(), newSpec.dimensions().width(),
-            newSpec.dimensions().depth(), newScene.scene().worldInstanceCount());
+            newSpec.dimensions().depth(), newScene.scene().worldInstanceCount(),
+            newPort.isMatchLive());
 
         return newSpec;
     }

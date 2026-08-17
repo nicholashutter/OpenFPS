@@ -479,6 +479,56 @@ class MapGameplayPortTest
         assertThat(port.match().botCount()).isEqualTo(Match.DEFAULT_BOT_COUNT);
     }
 
+    /**
+     * The port must keep ticking past the old 600-tic headless cap. The
+     * cap was a test bound that the user-facing port had inherited; the
+     * user's symptom of "I can't move" was the whole port early-returning
+     * at 10 seconds (600 tics at 60 Hz). The cap belongs on the smoke
+     * test port (which is documented to be a headless bound), not on
+     * the port a real player is driving.
+     */
+    @Test
+    @DisplayName("tick keeps running past the old 600-tic cap, so the player is not frozen at 10s")
+    void shouldTickPastTheOldMaxTicsCap()
+    {
+        final MapSpec spec = MapLibrary.get("cornerstone");
+
+        final MapGameplayPort port = newSpecPort(spec, Team.RED, 0);
+
+        port.setMatchLive(true);
+
+        // A tic well past the old cap. With the cap still in place this
+        // tick would early-return without doing anything; without the
+        // cap the match ticks, the bots act, the player takes damage,
+        // and the port can still report a sensible state at the end.
+        final int probeTic = 1200;
+
+        final int healthBefore = port.match().playerHealth();
+
+        for (int tic = 600; tic <= probeTic; tic++)
+        {
+            port.tick(tic);
+        }
+
+        final int healthAfter = port.match().playerHealth();
+
+        // Two claims, either of which would fail with the old cap:
+        //   (a) the port did not throw, and the match state is still
+        //       computable at tic 1200;
+        //   (b) the player has actually taken damage from the bot
+        //       roster, which can only happen if the match ticked past
+        //       600 (the bots fire on the per-tic loop, which is gated
+        //       by the same early-return the cap was on).
+        assertThat(port.match().state())
+            .as("the match must still be computable at tic %d", probeTic)
+            .isNotNull();
+
+        assertThat(healthAfter)
+            .as("the player must have taken damage by tic %d (health before: %d) — bots only fire when the match ticks",
+                probeTic, healthBefore)
+            .isLessThan(healthBefore);
+    }
+
     /** The port forwards the player's controller, so callers can read state without locks. */
     @Test
     @DisplayName("the port exposes the player's controller, for the post-tic read path")

@@ -10,6 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 
 import com.openfps.engine.core.EngineMain;
 import com.openfps.engine.core.EngineSession;
@@ -422,19 +423,7 @@ public final class DesktopLauncher
 
             bindAndAttachMap(window, hal, mapRuntime, rate);
 
-            window.setLoadMapCallback(id ->
-            {
-                final MapSpec loaded = mapRuntime.loadMap(id);
-
-                if (loaded == null)
-                {
-                    LOG.error("Map pick '{}' did not load — staying in the menu", id);
-
-                    return;
-                }
-
-                bindAndAttachMap(window, hal, mapRuntime, rate);
-            });
+            window.setLoadMapCallback(loadMapCallback(window, hal, mapRuntime, rate));
         }
         else
         {
@@ -449,20 +438,11 @@ public final class DesktopLauncher
             // hooks (match gate, result, status, restart) against
             // the new port. Done before openLoading, so by the
             // time the loading screen's onReady fires startGame,
-            // the gate is in place and the new port is live.
-            window.setLoadMapCallback(id ->
-            {
-                final MapSpec loaded = mapRuntime.loadMap(id);
-
-                if (loaded == null)
-                {
-                    LOG.error("Map pick '{}' did not load — staying in the menu", id);
-
-                    return;
-                }
-
-                bindAndAttachMap(window, hal, mapRuntime, rate);
-            });
+            // the gate is in place and the new port is live. The
+            // contract — good id re-attaches the match gate, bad id
+            // leaves the window alone — is pinned by
+            // DesktopLauncherLoadMapCallbackTest.
+            window.setLoadMapCallback(loadMapCallback(window, hal, mapRuntime, rate));
         }
 
         attachDebugSettings(window, debug);
@@ -584,6 +564,174 @@ public final class DesktopLauncher
     }
 
     /**
+     * Builds the load-map consumer the menu's pick screen drives.
+     *
+     * <p>The window's match gate and the map-selection screen are
+     * wired separately; the menu pick fires this consumer with the
+     * chosen id. A good id causes the runtime to swap to that map
+     * and the match hooks to be re-attached. A bad id is logged and
+     * left alone — no hooks are re-attached, and the menu state
+     * machine carries the user to a "could not load" path the menu
+     * knows how to render. The runtime's previous map is released by
+     * the time the bad id is reported, because
+     * {@link MapRuntime#loadMap} unloads before it tries to build.</p>
+     *
+     * <p>Extracted to a factory so a unit test can pin the
+     * "a good id re-attaches the match gate, a bad id leaves the
+     * window alone" contract. The August 2026 bug was the
+     * {@code --map=} boot path forgetting to call
+     * {@code setLoadMapCallback} at all; pinning this contract is
+     * what stops that regression from sneaking back in.</p>
+     *
+     * @param window the window whose match hooks the wiring touches;
+     *     must not be null
+     * @param hal the platform HAL the audio port comes from; may be
+     *     null, because the bad-id branch returns before
+     *     {@code hal} is dereferenced
+     * @param runtime the map runtime to drive; must not be null
+     * @param rate the configured frame rate; must not be null
+     * @return a consumer the menu pick screen drives; never null
+     */
+    public static Consumer<String> loadMapCallback(final GdxWindowPort window,
+        final GdxAdapterFactory hal, final MapRuntime runtime, final FrameRate rate)
+    {
+        if (window == null)
+        {
+            throw new IllegalArgumentException("window must not be null");
+        }
+
+        if (runtime == null)
+        {
+            throw new IllegalArgumentException("runtime must not be null");
+        }
+
+        if (rate == null)
+        {
+            throw new IllegalArgumentException("rate must not be null");
+        }
+
+        return id ->
+        {
+            if (id == null)
+            {
+                throw new IllegalArgumentException("id must not be null");
+            }
+
+            final MapSpec loaded = runtime.loadMap(id);
+
+            if (loaded == null)
+            {
+                LOG.error("Map pick '{}' did not load — staying in the menu", id);
+
+                return;
+            }
+
+            bindAndAttachMap(window, hal, runtime, rate);
+        };
+    }
+
+    /**
+     * Builds the match-gate consumer the window's listener drives.
+     *
+     * <p>The window's match-gate hook fires every time the UI's
+     * {@code isPlaying()} state changes &mdash; <b>and once on attach</b>
+     * with whatever {@code isPlaying()} reports at that instant. The bug
+     * the original wiring had: on a fresh menu pick the user is on the
+     * LOADING screen, {@code isPlaying()} is {@code false}, and the
+     * pre-fix lambda treated that initial {@code false} as a
+     * return-to-menu and tore the freshly loaded map down at 0 tics.
+     * The user clicked a map, the map built, the map was torn down, the
+     * user landed back at the menu &mdash; the visible symptom was "the
+     * game crashes when I click a map" but really "the map never
+     * reaches PLAYING".</p>
+     *
+     * <p>The fix is the {@code wasPlaying} closure variable: the
+     * teardown only fires on a real {@code true -> false} transition,
+     * never on the initial {@code false} nor on a {@code false -> false}
+     * burst (which the render loop produces when the listener sits on
+     * LOADING for a few frames) nor on a {@code true -> true} burst
+     * (which the render loop produces during PLAYING). The contract:</p>
+     *
+     * <ul>
+     *   <li>no map loaded &rarr; every fire is a no-op (no port to
+     *       freeze, no map to tear down);</li>
+     *   <li>initial {@code false} on a fresh load &rarr; observed,
+     *       remembered, no teardown;</li>
+     *   <li>{@code false -> true} &rarr; freeze released, no teardown;</li>
+     *   <li>{@code true -> false} &rarr; freeze re-applied AND the
+     *       {@code onReturnToMenu} callback fires (the production
+     *       callback is the log + {@code runtime.unload()} +
+     *       {@code window.detachMatchHooks()} triple);</li>
+     *   <li>{@code true -> true} or {@code false -> false} &rarr; no
+     *       teardown, no callback.</li>
+     * </ul>
+     *
+     * <p>The port is read through the runtime on every fire, so a later
+     * {@code runtime.loadMap} that swaps the port is picked up by the
+     * next gate fire without re-wiring. That is the same shape
+     * {@link #attachMatchGateMap} uses for the map side.</p>
+     *
+     * @param runtime the map runtime to drive; must not be null
+     * @param onReturnToMenu the action to take on a real
+     *     {@code true -> false} transition with a map loaded; must not
+     *     be null. Production wires this to the log + unload + detach
+     *     triple.
+     * @return a consumer the window's match-gate fires; never null
+     */
+    public static Consumer<Boolean> createMatchGate(final MapRuntime runtime,
+        final Runnable onReturnToMenu)
+    {
+        if (runtime == null)
+        {
+            throw new IllegalArgumentException("runtime must not be null");
+        }
+
+        if (onReturnToMenu == null)
+        {
+            throw new IllegalArgumentException("onReturnToMenu must not be null");
+        }
+
+        // MUTABLE: tracked across gate fires. The bug was that the
+        // initial fire (with `false` while the listener sat on the
+        // loading screen) was treated as a transition. Initial state
+        // is `false` because the listener is not yet playing, so the
+        // first observed `false` is an observation, not a transition.
+        final boolean[] wasPlaying = {false};
+
+        return playing ->
+        {
+            if (playing == null)
+            {
+                throw new IllegalArgumentException("playing must not be null");
+            }
+
+            final com.openfps.engine.gameplay.map.MapGameplayPort livePort = runtime.mapPort();
+
+            if (livePort != null)
+            {
+                livePort.setMatchLive(playing.booleanValue());
+            }
+
+            // A real return-to-menu: we were playing, we are no longer
+            // playing, and a map is still loaded. Anything else is an
+            // observation we should remember but not act on.
+            if (!playing.booleanValue() && wasPlaying[0] && runtime.hasMap())
+            {
+                onReturnToMenu.run();
+
+                wasPlaying[0] = false;
+
+                return;
+            }
+
+            if (playing.booleanValue())
+            {
+                wasPlaying[0] = true;
+            }
+        };
+    }
+
+    /**
      * Wires every match-related UI hook the window has against the
      * runtime's current port. Called both at boot (after a {@code --map=}
      * build) and on every menu pick (after {@code MapRuntime.loadMap}),
@@ -594,7 +742,10 @@ public final class DesktopLauncher
      * {@code mapRuntime.loadMap} that swaps the port is picked up by
      * the next gate fire. The {@code false} branch additionally calls
      * {@code mapRuntime.unload} and {@code window.detachMatchHooks}, so
-     * a return-to-menu tears the map down cleanly.</p>
+     * a return-to-menu tears the map down cleanly. The match-gate
+     * teardown rule is owned by {@link #createMatchGate} so a unit
+     * test can pin the {@code wasPlaying} contract that the old
+     * inline lambda got wrong.</p>
      *
      * @param window the window that owns the match hooks
      * @param hal the platform HAL the audio port comes from
@@ -614,30 +765,21 @@ public final class DesktopLauncher
         }
 
         // The match gate is the seam that freezes/unfreezes the match
-        // when the menu is in front. It always reads the current port
-        // through the runtime, so a swap on the next loadMap lands
-        // without a separate re-wiring. The false branch also tears
-        // down the map, which is the "return-to-menu" path the user
-        // asked for: the .ofm is released, the renderer goes back to
-        // empty, and the window's hooks detach.
-        window.attachMatchGate(playing ->
+        // when the menu is in front, and the seam that tears the map
+        // down on a return-to-menu. The factory owns the wasPlaying
+        // contract; the inline callback here owns the production side
+        // effects (log, runtime.unload, window.detachMatchHooks).
+        window.attachMatchGate(createMatchGate(runtime, () ->
         {
-            final com.openfps.engine.gameplay.map.MapGameplayPort livePort = runtime.mapPort();
-
-            if (livePort != null)
-            {
-                livePort.setMatchLive(playing.booleanValue());
-            }
-
-            if (!playing.booleanValue() && runtime.hasMap())
+            if (runtime.hasMap())
             {
                 LOG.info("Returning to menu: tearing down map '{}'", runtime.spec().id());
-
-                runtime.unload();
-
-                window.detachMatchHooks();
             }
-        });
+
+            runtime.unload();
+
+            window.detachMatchHooks();
+        }));
 
         attachAudioMap(hal, currentPort);
 
@@ -703,27 +845,6 @@ public final class DesktopLauncher
     private static DemoScene buildDemoRoom(final String assetRoot)
     {
         return DemoScene.build(DemoModels.load(Path.of(assetRoot)));
-    }
-
-    /**
-     * Builds a {@link com.openfps.engine.gameplay.map.MapScene} for the
-     * given map id.
-     *
-     * <p>The map id is looked up through {@code MapLibrary}; an unknown
-     * id is logged at WARN and falls back to the shipped cornerstone
-     * map so the launcher's "the window must not crash" invariant is
-     * preserved. The fallback is the same shape the headless
-     * {@code --map=} path uses ({@code MapSmokeGameplayPort}).</p>
-     *
-     * @param mapId the id from {@code --map=}; must not be null
-     * @return the built map scene, never null
-     */
-    private static com.openfps.engine.gameplay.map.MapScene buildMapScene(final String mapId)
-    {
-        final com.openfps.engine.gameplay.map.MapSpec spec =
-            com.openfps.engine.gameplay.map.MapLoader.loadOrFallback(mapId);
-
-        return com.openfps.engine.gameplay.map.MapScene.build(spec);
     }
 
     // The demo's per-tic loop, or the do-nothing port when a single model was
@@ -1433,7 +1554,7 @@ public final class DesktopLauncher
      * <p>When non-null, the launcher builds a {@link
      * com.openfps.engine.gameplay.map.MapScene} for the id and uses
      * that as the rendered world. The legacy demo scene is bypassed
-     * — see {@link #buildMapScene(String)} and {@link #bindMapWorld}.</p>
+     * — see {@link MapRuntime#loadMap} and {@link #bindMapWorld}.</p>
      *
      * @param args the CLI arguments, may be null
      * @return the map id, or null

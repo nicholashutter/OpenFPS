@@ -167,6 +167,28 @@ class MapRuntimeTest
 
             assertThat(runtime.hasMap()).isFalse();
         }
+
+        @Test
+        @DisplayName("after loadMap, the new port is live — the match runs as soon as the engine ticks")
+        void shouldMakePortLiveAfterLoadMap()
+        {
+            // The match-gate hook on the window is the seam that freezes
+            // the port while the menu is in front, but it only fires on
+            // UI state CHANGES. A loadMap that lands while the UI is
+            // already in PLAYING (the --start-in-game case, or a fresh
+            // pick that transitions straight to PLAYING) has no state
+            // change to observe, so the gate would leave the new port
+            // frozen and the player could not shoot or see bots act.
+            // MapRuntime.loadMap defends against that by calling
+            // setMatchLive(true) itself; this test pins the contract.
+            final MapRuntime runtime = newRuntime();
+
+            runtime.loadMap("cornerstone");
+
+            assertThat(runtime.mapPort().isMatchLive())
+                .as("a freshly loaded map must be live — the gate hook only fires on transitions, not on initial state")
+                .isTrue();
+        }
     }
 
     @Nested

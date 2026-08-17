@@ -91,9 +91,6 @@ public final class MapGameplayPort implements I_GameplayPort
     /** Tics between shots — the player's rate of fire. Mirrors the demo port. */
     public static final int FIRE_INTERVAL_TICS = 12;
 
-    /** How many tics the match runs before giving up. Headless test bound. */
-    public static final int MAX_TICS = 600;
-
     /** The spec this port is running. */
     private final MapSpec spec;
 
@@ -321,11 +318,6 @@ public final class MapGameplayPort implements I_GameplayPort
     @Override
     public void tick(final int ticIndex)
     {
-        if (ticIndex >= MAX_TICS)
-        {
-            return;
-        }
-
         tickLock.lock();
 
         try
