@@ -927,7 +927,15 @@ public final class MapScene
 
             final int entityId = Match.FIRST_BOT_ENTITY_ID + index;
 
-            final Bot bot = new Bot(entityId, wp.x(), 0.0f, wp.z(), BotPattern.SENTRY, 0.0f, 60,
+            // Bot's Y must come from the waypoint, not be hard-coded to
+            // zero. The simulation's botsFromSpec uses wp.y() and the
+            // hitbox is built from that; the visual was hard-coded to
+            // 0.0f here, so for any map with gantries or raised paths
+            // (foundry at y=64, mesa at y=32, etc.) the visible body
+            // sat on the floor while the hitbox floated 32-64 units
+            // above it. Shots at the visible body missed the hitbox
+            // every time and the bots appeared invulnerable.
+            final Bot bot = new Bot(entityId, wp.x(), wp.y(), wp.z(), BotPattern.SENTRY, 0.0f, 60,
                 index);
 
             final ModelFormat character = people[index % people.length];

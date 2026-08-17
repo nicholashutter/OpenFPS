@@ -209,6 +209,14 @@ public final class MapRuntime
         // publish".
         newPort.setEffects(newScene.effects());
 
+        // Attach the populated scene itself so the per-tic publish step
+        // can move each bot's world instance to wherever the simulation
+        // says it is. The two seams (effect pool, scene) are set in the
+        // same order as the demo port sets them: pool first so the first
+        // tic already has incoming-fire visuals, scene second so the
+        // first publish already has bot instances to address.
+        newPort.setScene(newScene);
+
         // The match gate is the contract that freezes the port when the
         // menu is in front and unfreezes it when the player enters the
         // world, but the gate fires on UI state CHANGES — a fresh

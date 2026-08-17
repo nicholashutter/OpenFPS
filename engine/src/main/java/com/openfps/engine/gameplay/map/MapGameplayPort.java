@@ -154,6 +154,15 @@ public final class MapGameplayPort implements I_GameplayPort
     private volatile DemoEffects effects;
 
     /**
+     * MUTABLE: the populated scene, held so the per-tic publish step
+     * can move each bot's world instance to wherever the simulation
+     * says it is. Set by the runtime after the scene is built, the
+     * same way {@link #effects} is. Null on the level-only and
+     * headless smoke paths.
+     */
+    private volatile MapScene scene;
+
+    /**
      * The spawn point the local player started on — and the spawn point a
      * death returns them to. Captured at construction so the respawn
      * never has to re-look-up a team spawn.
@@ -414,6 +423,17 @@ public final class MapGameplayPort implements I_GameplayPort
             tickLock.unlock();
         }
 
+        // Move each bot's world instance to wherever the simulation
+        // says it is. The scene's transform was set ONCE at build
+        // time, which is right for the build-time position (a SENTRY
+        // bot that never moves stays at the waypoint) but wrong for
+        // any pattern that actually moves; and even for SENTRY the
+        // publish is the seam that hides a dead body (DemoScene returns
+        // the degenerate HIDDEN transform when isAlive() is false) and
+        // the seam that would let a future ORBIT or PACE_X pattern
+        // work without another port-side change.
+        publishBotPlacements();
+
         // Publish the per-tic effect placements outside the lock so the
         // renderer's internal frame lock is held for the minimum time. The
         // demo port publishes in the same place.
@@ -526,6 +546,72 @@ public final class MapGameplayPort implements I_GameplayPort
         }
 
         return null;
+    }
+
+    /**
+     * Puts each bot's world instance at the simulation's current
+     * position, and the weapon the bot is holding at the same
+     * transform {@code DemoScene.botWeaponPlacement} produces.
+     *
+     * <p>This is the seam between simulation and rendering for the map
+     * mode. The build-time transform was set in
+     * {@link MapScene#addBotInstances} and is right for the build-time
+     * position - a SENTRY bot that never moves stays at the waypoint -
+     * but two things still need this per-tic publish:</p>
+     *
+     * <ol>
+     *   <li><b>Death visibility.</b> {@code DemoScene.botPlacement} returns
+     *       the degenerate {@link com.openfps.engine.demo.DemoEffects#HIDDEN}
+     *       transform when {@code isAlive()} is false. A dead body is
+     *       hidden by an override on the renderer, not by anything in
+     *       the simulation - the only place the un-hide can happen is
+     *       here, on a future tic's publish.</li>
+     *   <li><b>Future movement patterns.</b> ORBIT, PACE_X and any
+     *       pattern the spec authors add later would move the bot
+     *       in {@code match.tick} and the visual needs to follow.
+     *       Without this publish the visual would freeze at the
+     *       waypoint while the simulation walked away.</li>
+     * </ol>
+     *
+     * <p>Mirrors {@code DemoGameplayPort.publishBotPlacements}; the
+     * shape is the same, the indices come from the populated scene
+     * instead of an instance field, and the publish is null-safe
+     * the same way the demo port's is.</p>
+     */
+    private void publishBotPlacements()
+    {
+        if (scene == null || renderer.scene() == null || match == null)
+        {
+            // No scene yet, or the renderer is unbound. The game loop
+            // publishes tics from the moment it starts, and on desktop
+            // that is BEFORE the launcher has called setScene - the
+            // renderer has no instance table to address, so there is
+            // nothing to move and setWorldTransform would throw. Same
+            // window, the same reason, as the demo port's publish.
+            return;
+        }
+
+        final Bot[] roster = match.bots();
+
+        for (int index = 0; index < roster.length; index++)
+        {
+            final int bodyInstance = scene.botInstanceIndex(index);
+
+            if (bodyInstance == MapScene.NO_INSTANCE)
+            {
+                continue;
+            }
+
+            renderer.setWorldTransform(bodyInstance, com.openfps.engine.demo.DemoScene.botPlacement(roster[index]));
+
+            final int weaponInstance = scene.botWeaponInstanceIndex(index);
+
+            if (weaponInstance != MapScene.NO_INSTANCE)
+            {
+                renderer.setWorldTransform(weaponInstance,
+                    com.openfps.engine.demo.DemoScene.botWeaponPlacement(roster[index]));
+            }
+        }
     }
 
     /**
@@ -679,6 +765,21 @@ public final class MapGameplayPort implements I_GameplayPort
     public void setEffects(final DemoEffects sceneEffects)
     {
         this.effects = sceneEffects;
+    }
+
+    /**
+     * Attaches the populated scene so the per-tic publish step can
+     * move each bot's world instance to wherever the simulation says
+     * it is. Set by the runtime right after the scene is built and
+     * the effect pool is attached, before the delegating swap.
+     *
+     * <p>Null clears the scene: the level-only and headless smoke
+     * paths have no scene, and the publish step handles that as
+     * "skip the publish".</p>
+     */
+    public void setScene(final MapScene populatedScene)
+    {
+        this.scene = populatedScene;
     }
 
     /**
