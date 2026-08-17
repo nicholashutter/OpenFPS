@@ -669,9 +669,19 @@ public final class MapScene
 
                 final float z = tileCentre(tilesPerSide, alongZ);
 
-                builder.addWorldInstance(tile, placement(x, 0.0f, z, 0.0f, KIT_WORLD_SCALE));
+                // Kit floor is 1 unit BELOW y=0 so it does not z-fight the
+                // level .ofm's own floor (which the level author placed at
+                // y=0). The renderer's z-buffer is single-precision and the
+                // depth difference between two co-planar faces is below its
+                // epsilon, so even a small offset is enough to win the
+                // depth test consistently. The visual cost is one Kenney
+                // grid unit of headroom under the floor, which is hidden
+                // by the perimeter walls anyway.
+                builder.addWorldInstance(tile, placement(x, -1.0f, z, 0.0f, KIT_WORLD_SCALE));
 
-                builder.addWorldInstance(tile, invertedPlacement(x, KIT_CEILING_UNITS, z,
+                // Kit ceiling is 1 unit ABOVE the level .ofm ceiling for
+                // the same reason.
+                builder.addWorldInstance(tile, invertedPlacement(x, KIT_CEILING_UNITS + 1.0f, z,
                     KIT_WORLD_SCALE));
             }
         }

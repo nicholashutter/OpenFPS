@@ -578,6 +578,17 @@ public final class MapGameplayPort implements I_GameplayPort
 
         match.firePlayerShot(eyeX, eyeY, eyeZ, aimX, aimY, aimZ);
 
+        // Publish an outgoing tracer the player can SEE leave the gun.
+        // The demo port does this (see DemoGameplayPort.fireIfRequested);
+        // the map port was missing it, so the player's hitscan
+        // registered on the match side but never appeared on screen
+        // — the gun visibly did nothing. Same fire call, just an
+        // outgoing-tracer publish alongside it.
+        if (effects != null)
+        {
+            effects.spawn(eyeX, eyeY, eyeZ, aimX, aimY, aimZ);
+        }
+
         lastFireTic = ticIndex;
     }
 
