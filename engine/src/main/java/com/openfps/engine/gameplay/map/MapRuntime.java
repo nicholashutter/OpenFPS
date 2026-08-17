@@ -201,6 +201,14 @@ public final class MapRuntime
         final MapGameplayPort newPort = MapGameplayPort.create(newSpec, input, renderer, config,
             playerTeam, spawnIndex);
 
+        // Attach the populated scene's effect pool so the port can publish
+        // the bots' incoming fire as visible tracers. Without this the
+        // bots fire hitscan-only and the player takes damage with no
+        // on-screen cause, which reads as unfair. Null on the level-only
+        // and headless smoke paths - the port handles that as "skip the
+        // publish".
+        newPort.setEffects(newScene.effects());
+
         // The match gate is the contract that freezes the port when the
         // menu is in front and unfreezes it when the player enters the
         // world, but the gate fires on UI state CHANGES — a fresh

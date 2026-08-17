@@ -5,9 +5,12 @@
 
 package com.openfps.engine.gameplay.map;
 
+import com.openfps.engine.demo.DemoEffects;
+import com.openfps.engine.demo.DemoScene;
 import com.openfps.engine.gameplay.Bot;
 import com.openfps.engine.gameplay.BotPattern;
 import com.openfps.engine.gameplay.BotRng;
+import com.openfps.engine.gameplay.BotShotLog;
 import com.openfps.engine.gameplay.BotSkill;
 import com.openfps.engine.gameplay.Match;
 import com.openfps.engine.gameplay.MatchMode;
@@ -138,6 +141,17 @@ public final class MapGameplayPort implements I_GameplayPort
      * {@code MENU -> PLAYING}.
      */
     private volatile boolean matchLive;
+
+    /**
+     * MUTABLE: the shared tracer / smoke / flash effect pool the
+     * populated {@link MapScene} staged. Set by the runtime after the
+     * scene is built, before the port is swapped in. Null is the
+     * level-only and headless smoke path - the same shape
+     * {@code DemoGameplayPort} accepts, because the effect pool is
+     * what the bots' incoming fire is published into and a level-only
+     * scene has no visual feedback to give the player.
+     */
+    private volatile DemoEffects effects;
 
     /**
      * The spawn point the local player started on — and the spawn point a
@@ -379,11 +393,33 @@ public final class MapGameplayPort implements I_GameplayPort
 
             exchangeNetwork(ticIndex, inputPort.currentInput());
 
+            // Publish visual feedback for the bots' shots that just landed
+            // this tic, and advance any in-flight tracers / puffs. The
+            // match is hitscan (a shot that connects is decided in
+            // match.tick), so the visual is the only feedback the player
+            // gets for where the bolt came from and where it went. Without
+            // this, the player takes damage with no on-screen cause and
+            // reads the bots as unfair.
+            spawnIncomingFire(ticIndex);
+
+            if (effects != null)
+            {
+                effects.advance();
+            }
+
             ticsApplied = ticsApplied + 1;
         }
         finally
         {
             tickLock.unlock();
+        }
+
+        // Publish the per-tic effect placements outside the lock so the
+        // renderer's internal frame lock is held for the minimum time. The
+        // demo port publishes in the same place.
+        if (effects != null)
+        {
+            effects.publish(renderer);
         }
 
         if (match.state() != reportedState)
@@ -412,6 +448,84 @@ public final class MapGameplayPort implements I_GameplayPort
         }
 
         renderer.setCamera(controller.camera((float) width / (float) height));
+    }
+
+    /**
+     * Publishes one incoming-fire tracer per shot the match decided this
+     * tic. Mirrors {@code DemoGameplayPort.spawnIncomingFire}.
+     *
+     * <p>The match records each hitscan as it lands (or as it misses, the
+     * same shot log either way) with the shooter's muzzle and the ray it
+     * used. Spawning a tracer from those two points gives the player a
+     * bolt that both leaves the bot's gun and ends where the shot
+     * actually went - the cross-section of a hit and the path of a
+     * miss are different things, and getting either wrong is worse
+     * than no bolt at all.</p>
+     *
+     * <p>Skipped on a null effect pool (the level-only and headless
+     * smoke paths have no scene to draw into).</p>
+     */
+    private void spawnIncomingFire(final int ticIndex)
+    {
+        if (effects == null)
+        {
+            return;
+        }
+
+        final BotShotLog shots = match.shotsThisTic();
+
+        if (shots.count() == 0)
+        {
+            return;
+        }
+
+        // One scratch array, three floats. DemoScene.botMuzzle writes the
+        // muzzle's world x, y, z into it; both the muzzle and the shot
+        // log entry are read this tic, so reuse the scratch across shots.
+        final float[] muzzleScratch = new float[3];
+
+        for (int slot = 0; slot < shots.count(); slot++)
+        {
+            final int shooterId = shots.shooterId(slot);
+
+            final Bot shooter = findBot(shooterId);
+
+            if (shooter == null)
+            {
+                continue;
+            }
+
+            // The muzzle is where the effect STARTS; the log's origin
+            // and direction are the ray the hitscan actually used, and
+            // both are needed - spawnIncoming reconciles them so the
+            // bolt leaves the gun AND arrives where the shot went.
+            // A bolt that did one but not the other is either floating
+            // out of a chest or lying about the damage.
+            DemoScene.botMuzzle(shooter, muzzleScratch);
+
+            effects.spawnIncoming(muzzleScratch[0], muzzleScratch[1], muzzleScratch[2],
+                shots.originX(slot), shots.originY(slot), shots.originZ(slot),
+                shots.directionX(slot), shots.directionY(slot), shots.directionZ(slot),
+                shots.rangeUnits(slot));
+        }
+    }
+
+    /**
+     * Linear scan for a bot by entity id. The match is small (one bot
+     * per waypoint, capped at {@link Match#DEFAULT_BOT_COUNT}), so a
+     * loop is cheaper than a hash and never grows.
+     */
+    private Bot findBot(final int entityId)
+    {
+        for (final Bot b : match.bots())
+        {
+            if (b.entityId() == entityId)
+            {
+                return b;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -539,6 +653,21 @@ public final class MapGameplayPort implements I_GameplayPort
         }
 
         this.matchLive = live;
+    }
+
+    /**
+     * Attaches the effect pool the populated scene staged. The runtime
+     * calls this right after the port is created, before the delegating
+     * swap, so the first tic of the new port already has incoming-fire
+     * visuals to publish.
+     *
+     * <p>Null clears the pool: the level-only and headless smoke paths
+     * have no scene to draw into, and the port handles a null pool
+     * the same way the demo port does - skip the publish.</p>
+     */
+    public void setEffects(final DemoEffects sceneEffects)
+    {
+        this.effects = sceneEffects;
     }
 
     /**
