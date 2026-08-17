@@ -85,7 +85,7 @@
         <module name="AvoidNestedBlocks"/>
 
         <!-- Coding -->
-        <!-- STYLE.md § 5.5 — the ternary operator is banned outright -->
+        <!-- STYLE.md § 5.5 - the ternary operator is banned outright -->
         <module name="AvoidInlineConditionals"/>
         <module name="EmptyStatement"/>
         <module name="EqualsHashCode"/>
@@ -96,6 +96,23 @@
         <module name="SimplifyBooleanReturn"/>
         <module name="FallThrough"/>
         <module name="MultipleVariableDeclarations"/>
+        <!-- STYLE.md § 3.5 - `final` on every parameter of every method with
+             a body. Abstract and interface method signatures are excluded
+             because Checkstyle's RedundantModifier rule already rejects
+             `final` on them (the language makes it implicit). -->
+        <module name="FinalParameters">
+            <property name="tokens"
+                value="METHOD_DEF,CTOR_DEF,LITERAL_CATCH"/>
+        </module>
+        <!-- STYLE.md § 1.3 - no wildcard imports. Static imports of constants
+             are allowed (JLS Constants) and explicitly permitted by the rule;
+             the rest - including the AssertJ static star the tests rely on
+             for `assertThat` - is excluded via a SuppressWarnings annotation
+             on the import. Checkstyle picks the annotation up via the
+             SuppressWarningsFilter at the top of this file. -->
+        <module name="AvoidStarImport">
+            <property name="allowStaticMemberImports" value="true"/>
+        </module>
 
         <!-- Class Design -->
         <module name="FinalClass"/>
