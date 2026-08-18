@@ -40,6 +40,7 @@ import com.openfps.engine.net.NetSession;
 import com.openfps.engine.hal.adapter.HalBackend;
 import com.openfps.engine.hal.port.I_InputPort;
 import com.openfps.engine.hal.port.I_TimePort;
+import com.openfps.engine.hal.port.PlayerSettings;
 import com.openfps.engine.render.adapter.SoftwareRenderPort;
 import com.openfps.engine.render.port.I_RenderPort;
 import com.openfps.engine.render.port.I_RenderPortFactory;
@@ -108,6 +109,22 @@ public final class DesktopLauncher
 
     /** CLI prefix naming the model root the demo scene loads from. */
     public static final String ASSETS_ARG = "--assets=";
+
+    /**
+     * CLI prefix naming the player settings file. The launcher reads the file
+     * at startup, parses it with {@link PlayerSettings#fromSpec}, and hands
+     * the result to the input port. The file's grammar is documented on
+     * {@link PlayerSettings#toSpec}.
+     */
+    public static final String SETTINGS_ARG = "--settings=";
+
+    /**
+     * Default location of the player settings file, relative to the user's
+     * home directory. Used when {@code --settings=} is not given AND the
+     * file exists. Missing file is not an error — the launcher falls back to
+     * {@link PlayerSettings#defaults()} so a fresh install still runs.
+     */
+    public static final String DEFAULT_SETTINGS_FILENAME = ".openfps" + java.io.File.separator + "settings.txt";
 
     /** Where the demo looks for its models when {@code --assets=} is not given. */
     public static final String DEFAULT_ASSET_ROOT = "assets/models";
@@ -343,6 +360,17 @@ public final class DesktopLauncher
         // input path cares, because a mouse delta is a displacement that has
         // already happened.
         hal.inputPort().setTicRate(rate.fps());
+
+        // Player settings — the rebind table, mouse sensitivity, and
+        // invert-Y flag — live in a text file the launcher reads at
+        // startup. The file's grammar is documented on
+        // PlayerSettings.toSpec; a missing file falls back to defaults
+        // rather than aborting the run, because a fresh install has no
+        // file to read and the player's first run should not be a
+        // crash.
+        final PlayerSettings settings = loadPlayerSettings(args);
+
+        hal.inputPort().bindSettings(settings);
 
         // The player's team on a multiplayer map is derived from the net
         // id (one peer per team, alternating), so the player on a 1-arg
@@ -1588,6 +1616,82 @@ public final class DesktopLauncher
     public static String mapArg(final String[] args)
     {
         return valueOf(args, MAP_ARG);
+    }
+
+    /**
+     * Returns the {@code --settings=} argument, or null if none was given.
+     *
+     * @param args the CLI arguments, may be null
+     * @return the explicit settings path, or null when the launcher should
+     *     fall back to the default location
+     */
+    public static String settingsArg(final String[] args)
+    {
+        return valueOf(args, SETTINGS_ARG);
+    }
+
+    /**
+     * Loads the player's settings from disk and applies them to the input
+     * port. The lookup order is: explicit {@code --settings=}, then the
+     * default at {@code ~/.openfps/settings.txt}; either may be absent,
+     * in which case the launcher uses {@link PlayerSettings#defaults()}.
+     *
+     * <p>A malformed settings file is a hard error — the player typed it,
+     * the launcher has no way to know what they meant, and silently
+     * ignoring a typo is the kind of UI a player curses at.</p>
+     *
+     * @param args the CLI arguments, may be null
+     * @return the loaded settings, never null
+     */
+    static PlayerSettings loadPlayerSettings(final String[] args)
+    {
+        final String explicit = settingsArg(args);
+
+        if (explicit != null)
+        {
+            final Path path = Path.of(explicit);
+
+            if (Files.exists(path))
+            {
+                return readSettingsFrom(path);
+            }
+
+            LOG.warn("Settings file {} does not exist - using defaults", path);
+
+            return PlayerSettings.defaults();
+        }
+
+        final String home = System.getProperty("user.home");
+
+        if (home == null || home.isEmpty())
+        {
+            return PlayerSettings.defaults();
+        }
+
+        final Path defaultPath = Path.of(home, DEFAULT_SETTINGS_FILENAME);
+
+        if (!Files.exists(defaultPath))
+        {
+            return PlayerSettings.defaults();
+        }
+
+        return readSettingsFrom(defaultPath);
+    }
+
+    private static PlayerSettings readSettingsFrom(final Path path)
+    {
+        try
+        {
+            final String text = Files.readString(path);
+
+            return PlayerSettings.fromSpec(text);
+        }
+        catch (final IOException ex)
+        {
+            // Hard fail: the file exists, the player meant something, and a
+            // silent default would erase the symptom rather than the cause.
+            throw new IllegalStateException("Could not read settings file " + path, ex);
+        }
     }
 
     // The value of the first argument carrying a given prefix, or null.

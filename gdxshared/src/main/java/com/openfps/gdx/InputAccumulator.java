@@ -183,8 +183,18 @@ public final class InputAccumulator
      */
     public static final float DEFAULT_TIC_SECONDS = 1.0f / 60.0f;
 
-    /** Radians of view rotation per pixel of mouse motion. Fixed at construction. */
-    private final float radiansPerPixel;
+    /**
+     * Radians of view rotation per pixel of mouse motion.
+     *
+     * <p>MUTABLE: set once by the constructor, replaced by
+     * {@link #setRadiansPerPixel(float)} when a settings screen, a loaded
+     * profile or a rebind to a different device wants a different feel. The
+     * value is read exactly once per {@link #latch}, on the game loop thread;
+     * a concurrent writer is fine because {@code float} writes are atomic and
+     * a single one-tic blur of the old and new value is invisible to the
+     * player.</p>
+     */
+    private float radiansPerPixel;
 
     /** Summed horizontal mouse pixels since the last latch. MUTABLE: drained by {@link #latch}. */
     private final AtomicInteger yawPixels = new AtomicInteger();
@@ -696,6 +706,35 @@ public final class InputAccumulator
     public float radiansPerPixel()
     {
         return radiansPerPixel;
+    }
+
+    /**
+     * Replaces the mouse sensitivity.
+     *
+     * <p>The programmatic half of a "mouse sensitivity" option. A settings
+     * screen reads {@code PlayerSettings.mouseSensitivityRadiansPerPixel()}
+     * and feeds it here; the next {@link #latch} scales accumulated pixels by
+     * the new value.</p>
+     *
+     * <p>The same validity rule as the constructor — finite and positive — so
+     * a zero or NaN handed in by a UI bug fails loudly rather than freezing
+     * the camera.</p>
+     *
+     * @param newRadiansPerPixel the new sensitivity in radians of view
+     *     rotation per pixel of mouse motion; must be finite and positive
+     * @throws IllegalArgumentException if {@code newRadiansPerPixel} is not
+     *     finite and positive
+     */
+    public void setRadiansPerPixel(final float newRadiansPerPixel)
+    {
+        if (!(newRadiansPerPixel > 0.0f)
+            || Float.isInfinite(newRadiansPerPixel))
+        {
+            throw new IllegalArgumentException(
+                "sensitivity must be finite and positive, got " + newRadiansPerPixel);
+        }
+
+        this.radiansPerPixel = newRadiansPerPixel;
     }
 
     /**

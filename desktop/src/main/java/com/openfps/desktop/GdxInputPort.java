@@ -13,6 +13,7 @@ import com.openfps.engine.hal.port.GameAction;
 import com.openfps.engine.hal.port.I_InputPort;
 import com.openfps.engine.hal.port.InputBinding;
 import com.openfps.engine.hal.port.InputState;
+import com.openfps.engine.hal.port.PlayerSettings;
 import com.openfps.gdx.InputAccumulator;
 import com.openfps.gdx.UiState;
 import com.openfps.gdx.UiStateMachine;
@@ -420,6 +421,40 @@ public final class GdxInputPort implements I_InputPort
         }
 
         this.bindings = actionBindings;
+    }
+
+    /**
+     * Replaces every rebindable preference at once.
+     *
+     * <p>The convenience a settings UI or a loaded profile wants: one call
+     * swaps in the bindings table, the mouse sensitivity and the invert-Y
+     * flag, all in the order that matters. Splitting it into three setters
+     * would have meant the same three calls in every settings handler, and a
+     * chance to forget one. {@link PlayerSettings} is the data class that
+     * carries the three values from wherever the file was read to the port
+     * that needs them.</p>
+     *
+     * <p>Takes effect on the next {@link #pollDevice()} for the bindings and
+     * on the next {@link InputAccumulator#latch()} for the sensitivity and
+     * invert flag — never mid-tic, so a player cannot see a half-applied
+     * state.</p>
+     *
+     * @param settings the rebind table, sensitivity and invert flag; must
+     *     not be null
+     * @throws IllegalArgumentException if {@code settings} is null
+     */
+    public void bindSettings(final PlayerSettings settings)
+    {
+        if (settings == null)
+        {
+            throw new IllegalArgumentException("settings must not be null");
+        }
+
+        bindActions(settings.bindings());
+
+        accumulator.setRadiansPerPixel(settings.mouseSensitivityRadiansPerPixel());
+
+        accumulator.setInvertPitch(settings.invertY());
     }
 
     /** Returns the control scheme this port polls against. Never null. */

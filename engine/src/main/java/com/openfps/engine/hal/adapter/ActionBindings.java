@@ -11,7 +11,7 @@ import com.openfps.engine.hal.port.GameAction;
 import com.openfps.engine.hal.port.InputBinding;
 
 /**
- * A_ The controls table: which physical controls trigger which
+ * The controls table: which physical controls trigger which
  * {@link GameAction}.
  *
  * <p>One instance is the whole of a player's control scheme. Platform input
@@ -244,5 +244,42 @@ public final class ActionBindings
         }
 
         return text.append('}').toString();
+    }
+
+    @Override
+    public boolean equals(final Object other)
+    {
+        if (this == other)
+        {
+            return true;
+        }
+
+        if (!(other instanceof ActionBindings that))
+        {
+            return false;
+        }
+
+        for (final GameAction action : GameAction.values())
+        {
+            if (!Arrays.equals(bindingsFor(action), that.bindingsFor(action)))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    @Override
+    public int hashCode()
+    {
+        int hash = 1;
+
+        for (final GameAction action : GameAction.values())
+        {
+            hash = 31 * hash + Arrays.hashCode(bindingsFor(action));
+        }
+
+        return hash;
     }
 }
