@@ -95,6 +95,51 @@ public final class MapGameplayPort implements I_GameplayPort
     /** Tics between shots — the player's rate of fire. Mirrors the demo port. */
     public static final int FIRE_INTERVAL_TICS = 12;
 
+    /**
+     * Movement patterns the spec bots cycle through, in order.
+     *
+     * <p>Three patterns so a room of twelve bots does not move in
+     * unison. Each pattern shows up at least four times before the
+     * cycle repeats, which is the spread the demo's
+     * {@code BOT_PATTERNS} settled on after the "they move like a
+     * single machine" feedback.</p>
+     */
+    private static final BotPattern[] SPEC_BOT_PATTERNS =
+    {
+        BotPattern.PACE_X,
+        BotPattern.PACE_Z,
+        BotPattern.ORBIT,
+    };
+
+    /**
+     * Amplitudes for each spec bot pattern, paired with {@link
+     * #SPEC_BOT_PATTERNS}.
+     *
+     * <p>Small enough to keep a route inside most rooms: a 40-unit
+     * pace reaches at most 40 units from the waypoint, well inside
+     * the inner-wall inner face of the 320x320 ships. ORBIT is
+     * tighter at 30 because the circle reads larger than the same
+     * radius on a line.</p>
+     */
+    private static final float[] SPEC_BOT_AMPLITUDES =
+    {
+        40.0f, 40.0f, 30.0f,
+    };
+
+    /**
+     * Tics for one full circuit of each spec bot pattern, paired
+     * with {@link #SPEC_BOT_PATTERNS}.
+     *
+     * <p>Six to eight seconds, deliberately not a common multiple.
+     * The shortest is ORBIT at 360 tics; PACE_X and PACE_Z are 420
+     * tics. The whole room never reaches its extremes on the same
+     * tic.</p>
+     */
+    private static final int[] SPEC_BOT_PERIODS =
+    {
+        420, 420, 360,
+    };
+
     /** The spec this port is running. */
     private final MapSpec spec;
 
@@ -983,8 +1028,21 @@ public final class MapGameplayPort implements I_GameplayPort
         {
             final Waypoint wp = spec.botWaypoints().get(index);
 
+            // Spec bots move while they shoot, by design — see Match's
+            // botShotConnects for the part that makes the moving position
+            // the shot origin. The pattern cycles through PACE_X /
+            // PACE_Z / ORBIT so a room of twelve bots does not pulse in
+            // unison, and the amplitude is small enough that a route does
+            // not run a body through a wall before the collision clip
+            // gets a chance to refuse the move.
+            final BotPattern pattern = SPEC_BOT_PATTERNS[index % SPEC_BOT_PATTERNS.length];
+
+            final float amplitude = SPEC_BOT_AMPLITUDES[index % SPEC_BOT_AMPLITUDES.length];
+
+            final int period = SPEC_BOT_PERIODS[index % SPEC_BOT_PERIODS.length];
+
             bots[index] = new Bot(Match.FIRST_BOT_ENTITY_ID + index, wp.x(), wp.y(), wp.z(),
-                BotPattern.SENTRY, 0.0f, 60, index);
+                pattern, amplitude, period, index);
         }
 
         return bots;

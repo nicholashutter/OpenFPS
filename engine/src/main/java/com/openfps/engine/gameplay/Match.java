@@ -2361,9 +2361,17 @@ public final class Match
             return false;
         }
 
-        final float toX = shooter.rememberedPlayerX() - shooter.positionX();
+        // Aim at where the player is RIGHT NOW, not the bot's stale memory.
+        // The memory lags the player by a reaction tic or more, which would
+        // make every moving bot a guaranteed miss; the parameter the
+        // gameplay port hands in is the player's actual feet position, and
+        // using it is what "lines up the projectile with the player's
+        // movement" means in practice. The bot still aims from its own
+        // current (moving) position, so the projectile's origin tracks
+        // the bot's route and the aim tracks the player's.
+        final float toX = playerFeetX - shooter.positionX();
 
-        final float toZ = shooter.rememberedPlayerZ() - shooter.positionZ();
+        final float toZ = playerFeetZ - shooter.positionZ();
 
         final float groundDistanceSquared = toX * toX + toZ * toZ;
 
@@ -2374,18 +2382,18 @@ public final class Match
 
         if (groundDistanceSquared == 0.0f)
         {
-            // Standing exactly where it thinks the player is. There is no
-            // direction to shoot in, and atan2(0, 0) would answer zero — which
-            // is a real heading and would therefore be a lie.
+            // Standing exactly where the player is. There is no direction to
+            // shoot in, and atan2(0, 0) would answer zero — which is a real
+            // heading and would therefore be a lie.
             return false;
         }
 
-        // The shot is aimed LEVEL, at where the bot last thought the player
-        // stood. Nothing about the player's height is remembered and nothing
-        // needs to be: the room's floor is flat, every eye is at the same 41
-        // units, and a level shot from one eye toward another passes through the
-        // chest of a 56-unit body. Modelling the vertical would be modelling a
-        // constant.
+        // The shot is aimed LEVEL, at where the player is right now.
+        // Nothing about the player's height is remembered and nothing needs
+        // to be: the room's floor is flat, every eye is at the same 41
+        // units, and a level shot from one eye toward another passes
+        // through the chest of a 56-unit body. Modelling the vertical
+        // would be modelling a constant.
         final int id = shooter.entityId();
 
         final float aimYaw = shotYaw(shooter, ticIndex, toX, toZ)
@@ -2405,6 +2413,41 @@ public final class Match
         final float dirY = (float) StrictMath.sin(aimPitch);
 
         final float dirZ = cosPitch * (float) StrictMath.cos(aimYaw);
+
+        // Wall test. A bot behind a wall that can see the player (a thin
+        // rail, a half-height partition, anything the sightline reaches but
+        // a body cannot cross) is the case the "pay attention to
+        // collisions" requirement is for: a hitscan alone would arrive at
+        // the player on the other side, and that is the failure mode. The
+        // 2D world raycast is the same shape PhysicsWorld.slideX/Z use for
+        // movement, and the comparison is the 2D ground distance to the
+        // player: a wall in the way at less than the player's distance
+        // blocks the shot. Skipped on a null world (the demo, the headless
+        // smoke path) so a test that has not wired a scene still fires.
+        final PhysicsWorld world = shooter.world();
+
+        if (world != null)
+        {
+            final float groundDistance = (float) StrictMath.sqrt(groundDistanceSquared);
+
+            final float invDistance = 1.0f / groundDistance;
+
+            final float aimX2D = toX * invDistance;
+
+            final float aimZ2D = toZ * invDistance;
+
+            final float wallDistance = world.raycastDistance(shooter.positionX(), shooter.positionZ(),
+                aimX2D, aimZ2D);
+
+            if (wallDistance < groundDistance)
+            {
+                // The bot's hit attempt is over; the scatter shot was a
+                // bolt drawn from the muzzle and it stopped at a wall. No
+                // record past this point is meaningful, and the visible
+                // bolt has already been queued above.
+                return false;
+            }
+        }
 
         // Written down HERE — after the scatter, before the trace, and whatever
         // the trace decides. After the scatter because a bolt drawn down the

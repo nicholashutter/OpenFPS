@@ -394,6 +394,63 @@ class MatchTest
         }
 
         @Test
+        @DisplayName("a wall between the bot and the player blocks the shot")
+        void shouldBlockTheShotWhenAWallStandsInTheWay()
+        {
+            // Shooter at z = 300, player at the origin, wall at z = 100..101
+            // running across the full room width on the X axis. The
+            // PhysicsWorld is the same one a body would be clipped against
+            // for movement, so the raycast blocks at the wall's near face.
+            final Bot shooter = sentryAt(2, 300.0f);
+
+            shooter.setCollisionWorld(PhysicsWorld.builder(PhysicsWorld.PLAYER_HALF_WIDTH_UNITS)
+                .addBox(-1000.0f, 100.0f, 1000.0f, 101.0f)
+                .build());
+
+            final Match match = marksmanMatch(shooter);
+
+            tick(match, 0);
+
+            assertThat(match.botShotsFired())
+                .as("the bot still pulled the trigger")
+                .isEqualTo(1);
+
+            assertThat(match.botShotsLanded())
+                .as("the wall is between the bot and the player — the shot must not connect")
+                .isEqualTo(0);
+
+            assertThat(match.playerHealth())
+                .as("a blocked shot does not deal damage")
+                .isEqualTo(Match.PLAYER_MAX_HEALTH);
+        }
+
+        @Test
+        @DisplayName("a wall behind the player does not block a shot at the player")
+        void shouldNotBlockTheShotWhenTheWallIsBehindThePlayer()
+        {
+            // Shooter at z = 300, player at z = 200, wall at z = 100. The wall
+            // is further from the shooter than the player is, so the wall
+            // does not block the shot at the player.
+            final Bot shooter = sentryAt(2, 300.0f);
+
+            shooter.setCollisionWorld(PhysicsWorld.builder(PhysicsWorld.PLAYER_HALF_WIDTH_UNITS)
+                .addBox(-1000.0f, 100.0f, 1000.0f, 101.0f)
+                .build());
+
+            final Match match = new Match(new Bot[] {shooter}, new BotRng(), BotSkill.MARKSMAN,
+                Match.UNLIMITED_DEATHS);
+
+            // Player at z = 200 — the same side of the wall as the bot.
+            final int damage = match.tick(0, PLAYER_X, PLAYER_Y, 200.0f);
+
+            assertThat(damage).isEqualTo(Match.BOT_SHOT_DAMAGE);
+
+            assertThat(match.botShotsLanded())
+                .as("the wall is past the player from the shooter's point of view")
+                .isEqualTo(1);
+        }
+
+        @Test
         @DisplayName("the blocking bot takes no damage — there is no friendly fire")
         void shouldNotHurtTheBlockerWhenABotShootsThroughIt()
         {

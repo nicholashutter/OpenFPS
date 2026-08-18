@@ -766,6 +766,27 @@ public final class Bot
     }
 
     /**
+     * Returns the collision world this bot is clipped against, or
+     * null for no collision.
+     *
+     * <p>Exposed so the match layer can raycast a bot's shot
+     * through the same world the bot's own movement is clipped
+     * against — a wall in the way of one is a wall in the way of
+     * the other, and using a different world would let a shot
+     * land where a body could not have walked. See
+     * {@link Match#botShotConnects} for the caller.</p>
+     *
+     * @return the {@link PhysicsWorld} this bot is clipped against,
+     *     or null when none has been attached (the demo, the
+     *     headless smoke path, and any port that has not yet
+     *     injected a scene)
+     */
+    public PhysicsWorld world()
+    {
+        return world;
+    }
+
+    /**
      * Returns the player position this bot is working from, world x.
      *
      * <p>Exposed because it is the whole of the reaction model, and because a

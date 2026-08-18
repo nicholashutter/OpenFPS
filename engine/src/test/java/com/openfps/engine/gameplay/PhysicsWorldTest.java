@@ -753,6 +753,120 @@ class PhysicsWorldTest
     }
 
     @Nested
+    @DisplayName("raycasting a shot through the world")
+    class Raycasting
+    {
+        /** A world with one wall running along z at x = 100. */
+        private PhysicsWorld oneWall()
+        {
+            return PhysicsWorld.builder(HALF)
+                .addBox(100.0f, -200.0f, 101.0f, 200.0f)
+                .build();
+        }
+
+        @Test
+        void shouldReportInfinityWhenNoSolidIsInTheRay()
+        {
+            // A ray heading straight along +z from the world origin: the wall
+            // is at x = 100, so the ray never crosses it.
+            final PhysicsWorld world = oneWall();
+
+            final float distance = world.raycastDistance(0.0f, 0.0f, 0.0f, 1.0f);
+
+            assertThat(distance).isEqualTo(Float.POSITIVE_INFINITY);
+        }
+
+        @Test
+        void shouldReportTheDistanceToTheFirstWallHit()
+        {
+            // Ray from (0, 0) along +x. The wall is stored at x = 100..101
+            // (the box is NOT Minkowski-expanded in raycast, because a ray
+            // is a 0-width line and would never touch the inflated face).
+            // The hit distance is the wall's near face: 100.
+            final PhysicsWorld world = oneWall();
+
+            final float distance = world.raycastDistance(0.0f, 0.0f, 1.0f, 0.0f);
+
+            assertThat(distance).isCloseTo(100.0f, within(EPSILON));
+        }
+
+        @Test
+        void shouldReportZeroWhenTheOriginIsInsideASolid()
+        {
+            // Origin inside the wall: 0-length ray, no direction needed in
+            // any meaningful sense. The wall is at x = 100..101 (1u thick),
+            // so x = 100.5 is inside.
+            final PhysicsWorld world = oneWall();
+
+            final float distance = world.raycastDistance(100.5f, 0.0f, 1.0f, 0.0f);
+
+            assertThat(distance).isEqualTo(0.0f);
+        }
+
+        @Test
+        void shouldTreatADirectionWithAZeroComponentAsParallel()
+        {
+            // A ray that runs alongside the wall (parallel to z) at the
+            // wall's y. The wall is on x in [100, 101] in the inflated
+            // world; the ray stays at x = 50, never crosses it. A naive
+            // implementation that divided by zero would NaN out and
+            // silently report a hit.
+            final PhysicsWorld world = oneWall();
+
+            final float distance = world.raycastDistance(50.0f, 0.0f, 0.0f, 1.0f);
+
+            assertThat(distance).isEqualTo(Float.POSITIVE_INFINITY);
+        }
+
+        @Test
+        void shouldPickTheNearestOfTwoWalls()
+        {
+            // Two walls, both along z. The closer one is the answer even
+            // though the ray would hit the further one too.
+            final PhysicsWorld world = PhysicsWorld.builder(HALF)
+                .addBox(200.0f, -200.0f, 201.0f, 200.0f)
+                .addBox(100.0f, -200.0f, 101.0f, 200.0f)
+                .build();
+
+            final float distance = world.raycastDistance(0.0f, 0.0f, 1.0f, 0.0f);
+
+            assertThat(distance).isCloseTo(100.0f, within(EPSILON));
+        }
+
+        @Test
+        void shouldDiagonalAcrossACorner()
+        {
+            // A box at [100, 200] x [100, 200]. Ray from the origin along
+            // (1, 1) normalised. The ray enters the box at its (100, 100)
+            // corner, distance 100 * sqrt(2).
+            final PhysicsWorld world = PhysicsWorld.builder(HALF)
+                .addBox(100.0f, 100.0f, 200.0f, 200.0f)
+                .build();
+
+            final float invSqrt2 = (float) (1.0 / Math.sqrt(2.0));
+
+            final float distance = world.raycastDistance(0.0f, 0.0f, invSqrt2, invSqrt2);
+
+            final float expected = 100.0f * (float) Math.sqrt(2.0);
+
+            assertThat(distance).isCloseTo(expected, within(EPSILON));
+        }
+
+        @Test
+        void shouldRejectNonFiniteInputs()
+        {
+            final PhysicsWorld world = oneWall();
+
+            assertThatThrownBy(() -> world.raycastDistance(Float.NaN, 0.0f, 1.0f, 0.0f))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("finite");
+
+            assertThatThrownBy(() -> world.raycastDistance(0.0f, 0.0f, Float.POSITIVE_INFINITY, 0.0f))
+                .isInstanceOf(IllegalArgumentException.class);
+        }
+    }
+
+    @Nested
     @DisplayName("determinism")
     class Determinism
     {

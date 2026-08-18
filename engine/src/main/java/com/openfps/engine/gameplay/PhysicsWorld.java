@@ -395,6 +395,179 @@ public final class PhysicsWorld
         return false;
     }
 
+    /**
+     * Returns the distance along a ray to the first solid wall, or
+     * {@link Float#POSITIVE_INFINITY} when the ray hits nothing.
+     *
+     * <p>The 2D slab test over the same boxes {@link #slideX} and
+     * {@link #slideZ} push bodies around. Each solid is the original
+     * wall already inflated by {@link #halfWidth()}, which is what the
+     * test expects: the ray is treated as a body of the same half-width
+     * sweeping through the world, and the inflated boxes are the same
+     * obstacles a body would have to slide around.</p>
+     *
+     * <p>Used by the bot AI to block shots at a wall rather than
+     * letting a hitscan arrive at a target on the other side. A
+     * 2D test is the right shape for this game because every wall is
+     * a vertical prism from the floor to a height a body cannot
+     * shoot over; the Y axis does not need its own pass.</p>
+     *
+     * <p>Boundaries are inclusive. A ray that grazes a wall counts
+     * as a hit, which is the choice {@link Hitscan} makes and what
+     * a target practice game expects: a shot that scrapes the corner
+     * of a wall is a hit, not a magic miss.</p>
+     *
+     * <p>NaN is rejected, and the validation is the same as
+     * {@link Hitscan}: a zero direction component means the ray is
+     * <i>parallel</i> to that face of the slab, and the slab test
+     * becomes a containment test rather than a divide that could
+     * yield {@code 0 * Infinity}. The result is finite for any
+     * inputs a caller should hand in.</p>
+     *
+     * @param originX ray origin, world x; must be finite
+     * @param originZ ray origin, world z; must be finite
+     * @param directionX ray direction, world x; must be finite. A
+     *     zero component is treated as "parallel to the slab planes
+     *     on that axis", never as "the ray is degenerate"
+     * @param directionZ ray direction, world z; must be finite.
+     *     Same parallel-handling rule as {@code directionX}
+     * @return the distance to the first wall hit, in the same units
+     *     the direction is measured in. A ray that misses every
+     *     solid returns {@link Float#POSITIVE_INFINITY}. A ray
+     *     whose origin is inside a solid returns 0
+     * @throws IllegalArgumentException if any input is not finite
+     */
+    public float raycastDistance(final float originX, final float originZ,
+        final float directionX, final float directionZ)
+    {
+        if (!Float.isFinite(originX) || !Float.isFinite(originZ)
+            || !Float.isFinite(directionX) || !Float.isFinite(directionZ))
+        {
+            throw new IllegalArgumentException("ray origin and direction must be finite, got ("
+                + originX + ", " + originZ + ") -> (" + directionX + ", " + directionZ + ")");
+        }
+
+        float nearest = Float.POSITIVE_INFINITY;
+
+        for (int base = 0; base < solids.length; base += SOLID_STRIDE)
+        {
+            final float minX = solids[base];
+
+            final float minZ = solids[base + 1];
+
+            final float maxX = solids[base + 2];
+
+            final float maxZ = solids[base + 3];
+
+            // The 2D slab test. Inclusive: a ray that grazes a face
+            // counts. The parallel branch is the same idea as
+            // Hitscan.entryDistance: division by zero is never
+            // performed, and containment in the parallel pair is the
+            // honest answer when the ray runs alongside a face.
+            float enter = 0.0f;
+
+            float exit = Float.POSITIVE_INFINITY;
+
+            if (directionX == 0.0f)
+            {
+                if (originX < minX || originX > maxX)
+                {
+                    continue;
+                }
+            }
+            else
+            {
+                final float invDirX = 1.0f / directionX;
+
+                final float tMinX = (minX - originX) * invDirX;
+
+                final float tMaxX = (maxX - originX) * invDirX;
+
+                final float tEnterX;
+
+                final float tExitX;
+
+                if (tMinX < tMaxX)
+                {
+                    tEnterX = tMinX;
+
+                    tExitX = tMaxX;
+                }
+                else
+                {
+                    tEnterX = tMaxX;
+
+                    tExitX = tMinX;
+                }
+
+                if (tEnterX > enter)
+                {
+                    enter = tEnterX;
+                }
+
+                if (tExitX < exit)
+                {
+                    exit = tExitX;
+                }
+            }
+
+            if (directionZ == 0.0f)
+            {
+                if (originZ < minZ || originZ > maxZ)
+                {
+                    continue;
+                }
+            }
+            else
+            {
+                final float invDirZ = 1.0f / directionZ;
+
+                final float tMinZ = (minZ - originZ) * invDirZ;
+
+                final float tMaxZ = (maxZ - originZ) * invDirZ;
+
+                final float tEnterZ;
+
+                final float tExitZ;
+
+                if (tMinZ < tMaxZ)
+                {
+                    tEnterZ = tMinZ;
+
+                    tExitZ = tMaxZ;
+                }
+                else
+                {
+                    tEnterZ = tMaxZ;
+
+                    tExitZ = tMinZ;
+                }
+
+                if (tEnterZ > enter)
+                {
+                    enter = tEnterZ;
+                }
+
+                if (tExitZ < exit)
+                {
+                    exit = tExitZ;
+                }
+            }
+
+            if (enter > exit)
+            {
+                continue;
+            }
+
+            if (enter < nearest)
+            {
+                nearest = enter;
+            }
+        }
+
+        return nearest;
+    }
+
     // Whether a body centre at `coordinate` overlaps a solid spanning [min, max]
     // on that axis, once the solid is widened by the body's half-width — the
     // Minkowski expansion that turns a box-versus-box test into a point test.
