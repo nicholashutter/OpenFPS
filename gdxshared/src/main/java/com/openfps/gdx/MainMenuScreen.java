@@ -159,6 +159,8 @@ public final class MainMenuScreen
                 pixel, font, BUTTON_FONT_SCALE, actions::onMultiplayer),
             new BlockButton("SETTINGS", MenuPalette.NEUTRAL_FACE, MenuPalette.NEUTRAL_SHADE,
                 pixel, font, BUTTON_FONT_SCALE, actions::onSettings),
+            new BlockButton("CONTROLS", MenuPalette.NEUTRAL_FACE, MenuPalette.NEUTRAL_SHADE,
+                pixel, font, BUTTON_FONT_SCALE, actions::onControls),
             new BlockButton("QUIT", MenuPalette.QUIT_FACE, MenuPalette.QUIT_SHADE,
                 pixel, font, BUTTON_FONT_SCALE, actions::onQuit),
         };

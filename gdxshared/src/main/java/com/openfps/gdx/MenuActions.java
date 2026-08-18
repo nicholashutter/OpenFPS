@@ -33,6 +33,20 @@ public interface MenuActions
     void onSettings();
 
     /**
+     * Invoked when the user activates "Controls" — opens the rebind
+     * screen where every action can be remapped.
+     *
+     * <p>A separate method rather than a parameter on
+     * {@link #onSettings()} because the rebind screen has its own
+     * state ({@link UiState#CONTROLS}) and its own callback, the
+     * way a settings screen does, and folding it into onSettings
+     * would force every implementor to know which one the player
+     * wanted. Two methods, one button each, is the signature that
+     * stays readable.</p>
+     */
+    void onControls();
+
+    /**
      * Invoked when the user activates "Select Map" — opens a screen that lists
      * the registered maps and lets the player pick one.
      *

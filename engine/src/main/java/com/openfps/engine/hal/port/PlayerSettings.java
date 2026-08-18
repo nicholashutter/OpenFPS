@@ -132,15 +132,39 @@ public final class PlayerSettings
     }
 
     /**
-     * Returns the engine defaults: no bindings, the
-     * {@linkplain #DEFAULT_SENSITIVITY_RADIANS_PER_PIXEL default sensitivity},
-     * non-inverted look. A launcher uses this when no settings file
-     * exists, and tests use it as the starting point of a "draft" they
-     * then {@code with*}-edit.
+     * Returns the engine defaults for a given platform.
+     *
+     * <p>The supplied bindings are the platform's "what a fresh install
+     * should have" — {@code DesktopBindings.defaults()} on the desktop
+     * launcher, the equivalent touch scheme on Android. The settings
+     * file is then a <i>replacement</i> for these defaults: a launcher
+     * calls {@code defaults(platformBindings)} when no file exists, and
+     * the result of {@link #fromSpec(String)} when one does. The file
+     * is the full state — there is no merge between file bindings and
+     * platform defaults — which is the contract a settings UI can
+     * show without surprise: what you save is exactly what you get
+     * back.</p>
+     *
+     * <p>Sensitivity defaults to
+     * {@link #DEFAULT_SENSITIVITY_RADIANS_PER_PIXEL} and the invert
+     * flag to false. A settings UI {@code with*}-edits from this
+     * starting point.</p>
+     *
+     * @param platformBindings the platform's default rebind table; must
+     *     not be null
+     * @return a fresh settings with the platform's bindings, the
+     *     engine-default sensitivity, and non-inverted look
+     * @throws IllegalArgumentException if {@code platformBindings} is
+     *     null
      */
-    public static PlayerSettings defaults()
+    public static PlayerSettings defaults(final ActionBindings platformBindings)
     {
-        return new PlayerSettings(NO_BINDINGS, DEFAULT_SENSITIVITY_RADIANS_PER_PIXEL, false);
+        if (platformBindings == null)
+        {
+            throw new IllegalArgumentException("platformBindings must not be null");
+        }
+
+        return new PlayerSettings(platformBindings, DEFAULT_SENSITIVITY_RADIANS_PER_PIXEL, false);
     }
 
     /** Returns the rebind table. Never null. */

@@ -75,6 +75,12 @@ public final class DefaultMenuActions implements MenuActions
     }
 
     @Override
+    public void onControls()
+    {
+        LOG.info("Menu: Controls selected — opening the rebind screen");
+    }
+
+    @Override
     public void onMapSelection()
     {
         // The frame loop listener's StartGameTransition wrapper is the seam

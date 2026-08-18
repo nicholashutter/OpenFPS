@@ -144,7 +144,22 @@ public enum UiState
      *
      * <p>The cursor is free, because the screen has a button on it.</p>
      */
-    GAME_OVER;
+    GAME_OVER,
+
+    /**
+     * The controls rebind screen is on screen and owns the pointer.
+     *
+     * <p>The screen lists every
+     * {@link com.openfps.engine.hal.port.GameAction} and its current
+     * physical bindings, with a click-to-rebind affordance for each
+     * one. The "press a key to bind" mode temporarily captures the
+     * next key or mouse press; the screen returns to its idle view on
+     * every change and on Back. Reached from the menu and the
+     * settings screen; returns to the menu. Same as {@link #SETTINGS}
+     * in every respect a consumer cares about, and a separate state
+     * only because a different screen is on the glass.</p>
+     */
+    CONTROLS;
 
     /**
      * Returns whether this state is allowed to hand over to {@code target}.
@@ -170,6 +185,8 @@ public enum UiState
             case PLAYING:
                 return target == MENU || target == GAME_OVER;
             case SETTINGS:
+                return target == MENU || target == CONTROLS;
+            case CONTROLS:
                 return target == MENU;
             case MODE_SELECT:
                 return target == MENU || target == MAP_SELECT;
@@ -211,6 +228,17 @@ public enum UiState
     public boolean drawsSettings()
     {
         return this == SETTINGS;
+    }
+
+    /**
+     * Returns true while the controls rebind screen should be drawn and fed
+     * input events.
+     *
+     * @return true in {@link #CONTROLS} only
+     */
+    public boolean drawsControls()
+    {
+        return this == CONTROLS;
     }
 
     /**

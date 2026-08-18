@@ -18,9 +18,12 @@ import org.slf4j.LoggerFactory;
 import com.openfps.engine.gameplay.MatchMode;
 import com.openfps.engine.gameplay.MatchStatus;
 import com.openfps.engine.gameplay.MatchSummary;
+import com.openfps.engine.hal.adapter.ActionBindings;
 import com.openfps.engine.hal.port.I_FrameCallback;
+import com.openfps.engine.hal.port.PlayerSettings;
 import com.openfps.gdx.AccessibilitySettings;
 import com.openfps.gdx.BootScreen;
+import com.openfps.gdx.ControlsScreen;
 import com.openfps.gdx.DebugOverlay;
 import com.openfps.gdx.DebugSettings;
 import com.openfps.gdx.DefaultMenuActions;
@@ -365,6 +368,34 @@ public final class GdxFrameLoopListener implements ApplicationListener
     private Consumer<String> loadMapCallback;
 
     /**
+     * The live player settings; mutated by the rebind screen and
+     * pushed through the input port. MUTABLE: set once by
+     * {@link #attachPlayerSettings}; null until then, and the
+     * rebind screen is then hidden behind its menu.
+     */
+    private PlayerSettings playerSettings;
+
+    /**
+     * Where the rebind screen sends a Save click. MUTABLE: set
+     * once by {@link #attachPlayerSettings}; null disables Save
+     * without disabling the screen.
+     */
+    private Consumer<PlayerSettings> settingsSaver;
+
+    /**
+     * The rebind screen.
+     *
+     * <p>MUTABLE: built lazily on the first frame the player
+     * enters {@link UiState#CONTROLS}, released in
+     * {@link #dispose()}. Lazy because the screen takes a
+     * {@link PlayerSettings} that does not exist before
+     * {@link #attachPlayerSettings} runs, and a window that
+     * has no settings wired is one that should not show the
+     * screen at all.</p>
+     */
+    private ControlsScreen controls;
+
+    /**
      * Creates the bridge with no world presentation — menu only.
      *
      * @param callback the engine callback to forward lifecycle to; must not
@@ -704,6 +735,40 @@ public final class GdxFrameLoopListener implements ApplicationListener
     public void setLoadMapCallback(final Consumer<String> callback)
     {
         this.loadMapCallback = callback;
+    }
+
+    /**
+     * Hands the rebind screen the live settings and the save sink.
+     *
+     * <p>The settings object is the working copy: the screen
+     * mutates it on every rebind, the listener pushes the
+     * mutated copy through the input port and back. The save
+     * sink is called when the player clicks Save in the rebind
+     * screen; the launcher owns the file path, the screen owns
+     * the data, and this is the seam between them.</p>
+     *
+     * <p>Called once before the loop starts. The settings object
+     * is held by reference, not copied: the rebind screen sees
+     * the same object the rest of the engine does, and any
+     * external code that wants to seed it before launch can do
+     * so by mutating before the call.</p>
+     *
+     * @param settings the live settings; must not be null
+     * @param saveSink called when the player clicks Save; the
+     *     listener writes the file. May be null to disable the
+     *     Save button, but then the rebind is session-only.
+     */
+    public void attachPlayerSettings(final PlayerSettings settings,
+        final Consumer<PlayerSettings> saveSink)
+    {
+        if (settings == null)
+        {
+            throw new IllegalArgumentException("settings must not be null");
+        }
+
+        this.playerSettings = settings;
+
+        this.settingsSaver = saveSink;
     }
 
     /**
@@ -1047,6 +1112,18 @@ public final class GdxFrameLoopListener implements ApplicationListener
             return;
         }
 
+        if (current.drawsControls())
+        {
+            ensureControlsBuilt();
+
+            if (controls != null)
+            {
+                controls.render(deltaSeconds);
+            }
+
+            return;
+        }
+
         if (modeSelect != null && current.drawsModeSelect())
         {
             modeSelect.render(deltaSeconds);
@@ -1165,6 +1242,66 @@ public final class GdxFrameLoopListener implements ApplicationListener
         }
 
         return mapEntries.get(0);
+    }
+
+    // Builds the rebind screen the first frame the player enters
+    // CONTROLS, and only then. Lazy because the screen takes a
+    // PlayerSettings that does not exist until
+    // attachPlayerSettings has been called, and a window that has
+    // no settings wired is one that should not show the screen
+    // at all.
+    private void ensureControlsBuilt()
+    {
+        if (controls != null)
+        {
+            return;
+        }
+
+        if (playerSettings == null)
+        {
+            // The launcher never called attachPlayerSettings. The
+            // CONTROLS state is still legal, but the screen would
+            // have nothing to edit; drawWorld skips it on this
+            // branch.
+            return;
+        }
+
+        LOG.info("Building ControlsScreen");
+
+        controls = new ControlsScreen(playerSettings, DesktopBindings.defaults(),
+            new ControlsScreen.Listener()
+            {
+                @Override
+                public void onSettingsChanged(final PlayerSettings updated)
+                {
+                    // A rebind or reset - push through the input port
+                    // so the change is live without waiting for Save.
+                    if (inputPort != null)
+                    {
+                        inputPort.bindSettings(updated);
+                    }
+                }
+
+                @Override
+                public void onSaveRequested(final PlayerSettings updated)
+                {
+                    // Save button. Mirror the live change first so
+                    // the file and the port agree, then hand the
+                    // payload to the launcher's file sink.
+                    if (inputPort != null)
+                    {
+                        inputPort.bindSettings(updated);
+                    }
+
+                    if (settingsSaver != null)
+                    {
+                        settingsSaver.accept(updated);
+                    }
+                }
+            },
+            uiState::returnToMenu);
+
+        controls.resize(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
     }
 
     // The world, plus the frame counter if it has been asked for.
@@ -1336,6 +1473,13 @@ public final class GdxFrameLoopListener implements ApplicationListener
             return;
         }
 
+        if (controls != null && state.drawsControls())
+        {
+            controls.attachInputProcessor();
+
+            return;
+        }
+
         if (modeSelect != null && state.drawsModeSelect())
         {
             modeSelect.attachInputProcessor();
@@ -1419,6 +1563,11 @@ public final class GdxFrameLoopListener implements ApplicationListener
             settings.resize(width, height);
         }
 
+        if (controls != null)
+        {
+            controls.resize(width, height);
+        }
+
         if (gameOver != null)
         {
             gameOver.resize(width, height);
@@ -1474,6 +1623,15 @@ public final class GdxFrameLoopListener implements ApplicationListener
             settings.dispose();
 
             settings = null;
+        }
+
+        if (controls != null)
+        {
+            controls.detachInputProcessor();
+
+            controls.dispose();
+
+            controls = null;
         }
 
         if (mapSelect != null)
@@ -1599,6 +1757,14 @@ public final class GdxFrameLoopListener implements ApplicationListener
             delegate.onSettings();
 
             uiState.openSettings();
+        }
+
+        @Override
+        public void onControls()
+        {
+            delegate.onControls();
+
+            uiState.openControls();
         }
 
         @Override

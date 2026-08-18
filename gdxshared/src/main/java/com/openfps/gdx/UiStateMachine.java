@@ -203,6 +203,20 @@ public final class UiStateMachine
     }
 
     /**
+     * Opens the controls rebind screen from the menu: {@code MENU -> CONTROLS}.
+     *
+     * <p>Symmetric to {@link #openSettings}: a transition from the menu
+     * to a full screen the menu owns, returning only to the menu when
+     * the player presses Back.</p>
+     *
+     * @throws IllegalStateException if the menu is not the screen in front
+     */
+    public void openControls()
+    {
+        transitionTo(UiState.CONTROLS);
+    }
+
+    /**
      * Opens the map picker from the menu: {@code MENU -> MAP_SELECT}.
      *
      * <p>Symmetric to {@link #openSettings}: a transition from the menu to

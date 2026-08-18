@@ -34,6 +34,7 @@ import com.openfps.gdx.AccessibilitySettings;
 import com.openfps.gdx.DebugSettings;
 import com.openfps.gdx.MapSelection;
 import com.openfps.gdx.MapSelectionScreen;
+import com.openfps.engine.hal.adapter.ActionBindings;
 import com.openfps.engine.hal.adapter.AdapterFactorySelector;
 import com.openfps.engine.hal.adapter.desktop.DesktopDatagramPort;
 import com.openfps.engine.net.NetSession;
@@ -371,6 +372,15 @@ public final class DesktopLauncher
         final PlayerSettings settings = loadPlayerSettings(args);
 
         hal.inputPort().bindSettings(settings);
+
+        // Hand the rebind screen the same object the input port
+        // now reads from, and a sink that writes the same file
+        // loadPlayerSettings would have read. The screen mutates
+        // the settings in place on every rebind; the input port
+        // and the file see the change on Save. Without this wire
+        // the menu's "Controls" entry would draw a screen that
+        // has no idea what the engine's bindings are.
+        window.attachPlayerSettings(settings, savePlayerSettingsSink(args));
 
         // The player's team on a multiplayer map is derived from the net
         // id (one peer per team, alternating), so the player on a 1-arg
@@ -1645,6 +1655,8 @@ public final class DesktopLauncher
      */
     static PlayerSettings loadPlayerSettings(final String[] args)
     {
+        final ActionBindings platformDefaults = DesktopBindings.defaults();
+
         final String explicit = settingsArg(args);
 
         if (explicit != null)
@@ -1656,23 +1668,23 @@ public final class DesktopLauncher
                 return readSettingsFrom(path);
             }
 
-            LOG.warn("Settings file {} does not exist - using defaults", path);
+            LOG.warn("Settings file {} does not exist - using platform defaults", path);
 
-            return PlayerSettings.defaults();
+            return PlayerSettings.defaults(platformDefaults);
         }
 
         final String home = System.getProperty("user.home");
 
         if (home == null || home.isEmpty())
         {
-            return PlayerSettings.defaults();
+            return PlayerSettings.defaults(platformDefaults);
         }
 
         final Path defaultPath = Path.of(home, DEFAULT_SETTINGS_FILENAME);
 
         if (!Files.exists(defaultPath))
         {
-            return PlayerSettings.defaults();
+            return PlayerSettings.defaults(platformDefaults);
         }
 
         return readSettingsFrom(defaultPath);
@@ -1692,6 +1704,75 @@ public final class DesktopLauncher
             // silent default would erase the symptom rather than the cause.
             throw new IllegalStateException("Could not read settings file " + path, ex);
         }
+    }
+
+    /**
+     * Returns the path the rebind screen's Save button should write
+     * to.
+     *
+     * <p>Symmetric to {@link #loadPlayerSettings(String[])}: the
+     * explicit {@code --settings=} argument wins, otherwise the
+     * default at {@code ~/.openfps/settings.txt}. A launcher that
+     * was started with no file path will write to the default
+     * location, which is what a player on a fresh install wants —
+     * the file their next launch should read from.</p>
+     *
+     * @param args the CLI arguments, may be null
+     * @return the path to write to, never null
+     */
+    public static Path settingsSavePath(final String[] args)
+    {
+        final String explicit = settingsArg(args);
+
+        if (explicit != null)
+        {
+            return Path.of(explicit);
+        }
+
+        final String home = System.getProperty("user.home");
+
+        if (home == null || home.isEmpty())
+        {
+            return Path.of(DEFAULT_SETTINGS_FILENAME);
+        }
+
+        return Path.of(home, DEFAULT_SETTINGS_FILENAME);
+    }
+
+    /**
+     * Returns a sink the rebind screen calls on Save. The sink
+     * resolves the save path from the CLI arguments and writes
+     * the settings file there. Errors are logged and swallowed:
+     * a player who hits Save and the file fails to write is back
+     * where they started, not staring at a crash dialog.
+     *
+     * @param args the CLI arguments the launcher was started with
+     * @return a sink that writes the settings file when called
+     */
+    static Consumer<PlayerSettings> savePlayerSettingsSink(final String[] args)
+    {
+        return updated ->
+        {
+            final Path path = settingsSavePath(args);
+
+            try
+            {
+                final Path parent = path.getParent();
+
+                if (parent != null)
+                {
+                    Files.createDirectories(parent);
+                }
+
+                Files.writeString(path, updated.toSpec());
+
+                LOG.info("Settings saved to {}", path);
+            }
+            catch (final IOException ex)
+            {
+                LOG.error("Could not write settings file {}: {}", path, ex.getMessage());
+            }
+        };
     }
 
     // The value of the first argument carrying a given prefix, or null.

@@ -14,6 +14,7 @@ import com.openfps.engine.gameplay.MatchStatus;
 import com.openfps.engine.gameplay.MatchSummary;
 import com.openfps.engine.hal.port.I_FrameCallback;
 import com.openfps.engine.hal.port.I_WindowPort;
+import com.openfps.engine.hal.port.PlayerSettings;
 import com.openfps.engine.render.adapter.SoftwareRenderPort;
 import com.openfps.gdx.AccessibilitySettings;
 import com.openfps.gdx.DebugSettings;
@@ -169,6 +170,26 @@ public final class GdxWindowPort implements I_WindowPort
     private volatile Consumer<String> loadMapCallback;
 
     /**
+     * The live player settings, forwarded to the listener.
+     *
+     * <p>MUTABLE: set by {@link #attachPlayerSettings} before
+     * {@link #runFrameLoop}. The settings object is held by
+     * reference; the rebind screen mutates it in place and the
+     * save sink is the only path back to disk. Null leaves the
+     * rebind screen hidden behind its menu.</p>
+     */
+    private volatile PlayerSettings playerSettings;
+
+    /**
+     * The save sink the rebind screen's Save button pushes through.
+     *
+     * <p>MUTABLE: set by {@link #attachPlayerSettings} alongside
+     * the settings object. Null disables Save on the rebind
+     * screen but leaves the rest usable.</p>
+     */
+    private volatile Consumer<PlayerSettings> settingsSaver;
+
+    /**
      * The listener the frame loop created. Stored so the window
      * can forward {@link #detachMatchHooks} calls to it; null
      * before {@link #runFrameLoop} has set it and after the loop
@@ -291,6 +312,8 @@ public final class GdxWindowPort implements I_WindowPort
             builtListener.attachMatchStatus(matchStatus, matchTicsPerSecond);
 
             builtListener.setLoadMapCallback(loadMapCallback);
+
+            builtListener.attachPlayerSettings(playerSettings, settingsSaver);
 
             this.listener = builtListener;
 
@@ -542,6 +565,33 @@ public final class GdxWindowPort implements I_WindowPort
         }
 
         this.loadMapCallback = callback;
+    }
+
+    /**
+     * Hands the rebind screen the live settings and the save sink.
+     *
+     * <p>Forwarded to the listener when the frame loop is created,
+     * so the launcher calls this exactly once before
+     * {@link #runFrameLoop}. See
+     * {@link GdxFrameLoopListener#attachPlayerSettings} for what
+     * the screen does with the values.</p>
+     *
+     * @param settings the live settings; null hides the rebind screen
+     * @param saveSink called when the player clicks Save; null
+     *     disables Save but leaves the rest usable
+     */
+    public void attachPlayerSettings(final PlayerSettings settings,
+        final Consumer<PlayerSettings> saveSink)
+    {
+        if (state == State.RUNNING)
+        {
+            throw new IllegalStateException(
+                "attachPlayerSettings() while the frame loop is running");
+        }
+
+        this.playerSettings = settings;
+
+        this.settingsSaver = saveSink;
     }
 
     /**

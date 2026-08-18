@@ -27,7 +27,7 @@ final class PlayerSettingsTest
         @Test
         void shouldStartAtDefaultSensitivityAndNonInverted()
         {
-            final PlayerSettings settings = PlayerSettings.defaults();
+            final PlayerSettings settings = PlayerSettings.defaults(new ActionBindings());
 
             assertThat(settings.mouseSensitivityRadiansPerPixel())
                 .isEqualTo(PlayerSettings.DEFAULT_SENSITIVITY_RADIANS_PER_PIXEL);
@@ -38,7 +38,7 @@ final class PlayerSettingsTest
         @Test
         void shouldStartWithNoBindings()
         {
-            final PlayerSettings settings = PlayerSettings.defaults();
+            final PlayerSettings settings = PlayerSettings.defaults(new ActionBindings());
 
             for (final GameAction action : GameAction.values())
             {
@@ -46,6 +46,27 @@ final class PlayerSettingsTest
                     .as("default for %s is unbound", action)
                     .isFalse();
             }
+        }
+
+        @Test
+        void shouldRejectNullPlatformBindings()
+        {
+            assertThatThrownBy(() -> PlayerSettings.defaults(null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("platformBindings");
+        }
+
+        @Test
+        void shouldUseTheSuppliedPlatformBindingsAsItsOwn()
+        {
+            final ActionBindings platform = new ActionBindings().bind(
+                GameAction.FIRE, InputBinding.key(42));
+
+            final PlayerSettings settings = PlayerSettings.defaults(platform);
+
+            assertThat(settings.bindings()).isEqualTo(platform);
+
+            assertThat(settings.bindings().isBound(GameAction.FIRE)).isTrue();
         }
     }
 
@@ -119,7 +140,7 @@ final class PlayerSettingsTest
         @Test
         void shouldReturnFreshInstanceOnWithBindings()
         {
-            final PlayerSettings original = PlayerSettings.defaults();
+            final PlayerSettings original = PlayerSettings.defaults(new ActionBindings());
 
             final ActionBindings rebound = new ActionBindings().bind(
                 GameAction.FIRE, InputBinding.key(42));
@@ -136,7 +157,7 @@ final class PlayerSettingsTest
         @Test
         void shouldReturnFreshInstanceOnWithSensitivity()
         {
-            final PlayerSettings original = PlayerSettings.defaults();
+            final PlayerSettings original = PlayerSettings.defaults(new ActionBindings());
 
             final PlayerSettings updated = original.withSensitivity(0.01f);
 
@@ -153,24 +174,24 @@ final class PlayerSettingsTest
         {
             // The with* setters route through the constructor; loud failure
             // is the contract rather than a silent clamp.
-            assertThatThrownBy(() -> PlayerSettings.defaults().withSensitivity(0.5f))
+            assertThatThrownBy(() -> PlayerSettings.defaults(new ActionBindings()).withSensitivity(0.5f))
                 .isInstanceOf(IllegalArgumentException.class);
         }
 
         @Test
         void shouldFlipInvertYAtWithSetter()
         {
-            final PlayerSettings flipped = PlayerSettings.defaults().withInvertY(true);
+            final PlayerSettings flipped = PlayerSettings.defaults(new ActionBindings()).withInvertY(true);
 
             assertThat(flipped.invertY()).isTrue();
 
-            assertThat(PlayerSettings.defaults().invertY()).isFalse();
+            assertThat(PlayerSettings.defaults(new ActionBindings()).invertY()).isFalse();
         }
 
         @Test
         void shouldRejectNullBindingsAtWithSetter()
         {
-            assertThatThrownBy(() -> PlayerSettings.defaults().withBindings(null))
+            assertThatThrownBy(() -> PlayerSettings.defaults(new ActionBindings()).withBindings(null))
                 .isInstanceOf(IllegalArgumentException.class);
         }
     }
@@ -181,7 +202,7 @@ final class PlayerSettingsTest
         @Test
         void shouldRoundTripDefaultsThroughText()
         {
-            final PlayerSettings original = PlayerSettings.defaults();
+            final PlayerSettings original = PlayerSettings.defaults(new ActionBindings());
 
             final String spec = original.toSpec();
 
@@ -193,7 +214,7 @@ final class PlayerSettingsTest
         @Test
         void shouldRoundTripInvertYThroughText()
         {
-            final PlayerSettings original = PlayerSettings.defaults().withInvertY(true);
+            final PlayerSettings original = PlayerSettings.defaults(new ActionBindings()).withInvertY(true);
 
             final PlayerSettings parsed = PlayerSettings.fromSpec(original.toSpec());
 
@@ -203,7 +224,7 @@ final class PlayerSettingsTest
         @Test
         void shouldRoundTripCustomSensitivityThroughText()
         {
-            final PlayerSettings original = PlayerSettings.defaults().withSensitivity(0.012f);
+            final PlayerSettings original = PlayerSettings.defaults(new ActionBindings()).withSensitivity(0.012f);
 
             final PlayerSettings parsed = PlayerSettings.fromSpec(original.toSpec());
 
@@ -216,7 +237,7 @@ final class PlayerSettingsTest
             final ActionBindings bound = new ActionBindings().bind(
                 GameAction.FIRE, InputBinding.key(42));
 
-            final PlayerSettings original = PlayerSettings.defaults().withBindings(bound);
+            final PlayerSettings original = PlayerSettings.defaults(new ActionBindings()).withBindings(bound);
 
             final PlayerSettings parsed = PlayerSettings.fromSpec(original.toSpec());
 
@@ -239,7 +260,7 @@ final class PlayerSettingsTest
                 InputBinding.key(42),
                 InputBinding.mouseButton(0));
 
-            final PlayerSettings original = PlayerSettings.defaults().withBindings(bound);
+            final PlayerSettings original = PlayerSettings.defaults(new ActionBindings()).withBindings(bound);
 
             final PlayerSettings parsed = PlayerSettings.fromSpec(original.toSpec());
 
@@ -264,7 +285,7 @@ final class PlayerSettingsTest
             final ActionBindings bound = new ActionBindings().bind(
                 GameAction.FIRE, InputBinding.gamepadButton(7));
 
-            final PlayerSettings original = PlayerSettings.defaults().withBindings(bound);
+            final PlayerSettings original = PlayerSettings.defaults(new ActionBindings()).withBindings(bound);
 
             final PlayerSettings parsed = PlayerSettings.fromSpec(original.toSpec());
 
@@ -286,7 +307,7 @@ final class PlayerSettingsTest
         {
             final PlayerSettings parsed = PlayerSettings.fromSpec("");
 
-            assertThat(parsed).isEqualTo(PlayerSettings.defaults());
+            assertThat(parsed).isEqualTo(PlayerSettings.defaults(new ActionBindings()));
         }
 
         @Test
@@ -410,7 +431,7 @@ final class PlayerSettingsTest
         @Test
         void shouldBeEqualToItself()
         {
-            final PlayerSettings s = PlayerSettings.defaults();
+            final PlayerSettings s = PlayerSettings.defaults(new ActionBindings());
 
             assertThat(s).isEqualTo(s);
 
@@ -420,13 +441,13 @@ final class PlayerSettingsTest
         @Test
         void shouldNotBeEqualToADifferentType()
         {
-            assertThat(PlayerSettings.defaults().equals("not a settings")).isFalse();
+            assertThat(PlayerSettings.defaults(new ActionBindings()).equals("not a settings")).isFalse();
         }
 
         @Test
         void shouldNotBeEqualWhenSensitivityDiffers()
         {
-            final PlayerSettings a = PlayerSettings.defaults();
+            final PlayerSettings a = PlayerSettings.defaults(new ActionBindings());
 
             final PlayerSettings b = a.withSensitivity(0.01f);
 
@@ -436,7 +457,7 @@ final class PlayerSettingsTest
         @Test
         void shouldNotBeEqualWhenInvertYDiffers()
         {
-            final PlayerSettings a = PlayerSettings.defaults();
+            final PlayerSettings a = PlayerSettings.defaults(new ActionBindings());
 
             final PlayerSettings b = a.withInvertY(true);
 
@@ -446,7 +467,7 @@ final class PlayerSettingsTest
         @Test
         void shouldNotBeEqualWhenBindingsDiffer()
         {
-            final PlayerSettings a = PlayerSettings.defaults();
+            final PlayerSettings a = PlayerSettings.defaults(new ActionBindings());
 
             final PlayerSettings b = a.withBindings(
                 new ActionBindings().bind(GameAction.FIRE, InputBinding.key(1)));
