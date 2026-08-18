@@ -17,6 +17,8 @@ import com.openfps.engine.render.adapter.Scene;
 import com.openfps.engine.render.adapter.SoftwareRenderPort;
 import com.openfps.engine.render.adapter.Vec3;
 
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -84,6 +86,24 @@ final class DemoSmokeInMotionTest
 
     /** Half-edge of the backdrop quad, comfortably wider than the frustum there. */
     private static final float WALL_HALF = 400.0f;
+
+    /**
+     * This test counts smoke pixels. The class is the integration
+     * test for the smoke path that {@code DemoEffects.SMOKE_ENABLED}
+     * gates, so every test in it runs with the flag on and resets
+     * to false afterwards.
+     */
+    @BeforeEach
+    void enableSmokeForTests()
+    {
+        DemoEffects.SMOKE_ENABLED = true;
+    }
+
+    @AfterEach
+    void resetSmoke()
+    {
+        DemoEffects.SMOKE_ENABLED = false;
+    }
 
     /** Corners in a quad. */
     private static final int QUAD_CORNERS = 4;

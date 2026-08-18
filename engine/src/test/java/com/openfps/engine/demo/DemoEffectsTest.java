@@ -17,6 +17,8 @@ import com.openfps.engine.render.adapter.Rgba;
 import com.openfps.engine.render.adapter.Scene;
 import com.openfps.engine.render.adapter.SoftwareRenderPort;
 
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -79,6 +81,26 @@ final class DemoEffectsTest
 
     /** Surface size for the port; nothing looks at the pixels here. */
     private static final int SURFACE = 32;
+
+    /**
+     * The smoke tests need puffs to exist. Production leaves
+     * {@link DemoEffects#SMOKE_ENABLED} at its default of false; every
+     * test in this class runs with it true and resets to false in
+     * {@link #resetSmoke()}, so a smoke regression in
+     * {@code spawnPuff} shows up here even though no shipped
+     * gameplay path would have triggered it.
+     */
+    @BeforeEach
+    void enableSmokeForTests()
+    {
+        DemoEffects.SMOKE_ENABLED = true;
+    }
+
+    @AfterEach
+    void resetSmoke()
+    {
+        DemoEffects.SMOKE_ENABLED = false;
+    }
 
     /** A scene holding nothing but one effect pool, and the pool that drives it. */
     private static final class Fixture
@@ -1151,6 +1173,43 @@ final class DemoEffectsTest
     @DisplayName("what the renderer is told")
     final class Published
     {
+        /**
+         * The smoke-disabled contract: a shot under
+         * {@code SMOKE_ENABLED = false} still spawns a flash and a
+         * tracer, but no puffs. The flash is the visible proof of
+         * the shot; the tracer is the bolt; the puff is the
+         * expensive part the flag is gating.
+         */
+        @Test
+        @DisplayName("SMOKE_ENABLED = false: a shot still spawns a flash and a tracer, but no puff")
+        void shotWithoutSmoke()
+        {
+            // Override the class-wide @BeforeEach for this one test:
+            // production leaves SMOKE_ENABLED false and that is the
+            // path the user's report calls out as needing to be the
+            // cheap one.
+            DemoEffects.SMOKE_ENABLED = false;
+
+            try
+            {
+                final Fixture fixture = new Fixture();
+
+                fixture.fire();
+
+                assertThat(fixture.effects.liveOutgoingTracerCount())
+                    .as("tracer fires regardless of SMOKE_ENABLED")
+                    .isEqualTo(1);
+
+                assertThat(fixture.effects.liveOutgoingPuffCount())
+                    .as("puff is gated on SMOKE_ENABLED")
+                    .isZero();
+            }
+            finally
+            {
+                DemoEffects.SMOKE_ENABLED = true;
+            }
+        }
+
         @Test
         @DisplayName("the first publish hides the whole pool, before anything is fired")
         void firstPublishHidesEverything()

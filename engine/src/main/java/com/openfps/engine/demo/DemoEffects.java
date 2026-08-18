@@ -102,6 +102,28 @@ import com.openfps.engine.render.adapter.SoftwareRenderPort;
  */
 public final class DemoEffects
 {
+    /**
+     * Smoke-puff generation is off by default while the implementation is
+     * being reworked. Set to {@code true} to bring the puffs back.
+     *
+     * <p>Non-final so a test that exercises the puff path can flip it
+     * on for the duration of one test. The smoke tests do exactly
+     * that — without the flag, a regression in {@code spawnPuff}
+     * would be invisible because nothing would ever call it. Production
+     * code leaves it alone.</p>
+     *
+     * <p>The puff instances are still pre-allocated in the scene (the
+     * pool shape is fixed at build time, so removing the pool would
+     * also remove the call sites that depend on its size), but with
+     * the flag off every spawn call returns without touching the
+     * pool and every existing puff ages out within
+     * {@link #PUFF_LIFE_TICS} tics. The per-tic pressure on the
+     * back-to-front sort — the part the sort's own comment identifies
+     * as "the largest single barrier saving in the demo scene" —
+     * disappears entirely once the existing puffs have died.</p>
+     */
+    public static boolean SMOKE_ENABLED = false;
+
     /** Tracers of the PLAYER'S that can be in the air at once. */
     public static final int MAX_TRACERS = 3;
 
@@ -1257,6 +1279,13 @@ public final class DemoEffects
     public void spawn(final float eyeX, final float eyeY, final float eyeZ,
         final float aimX, final float aimY, final float aimZ)
     {
+        // Compute the muzzle once. Both the flash and the tracer want
+        // to start at the muzzle — the tracer visibly leaves the gun,
+        // and the flash sits where the player is looking — so the
+        // muzzle is computed before either of them. The puff, when
+        // SMOKE_ENABLED is true, also wants the muzzle, but is gated
+        // further down so the muzzle math is only paid for by code
+        // that uses it.
         final float[] right = acrossScratch;
 
         crossWithReference(aimX, aimY, aimZ, right);
@@ -1268,13 +1297,20 @@ public final class DemoEffects
 
         final float muzzleZ = eyeZ + aimZ * MUZZLE_FORWARD_UNITS + right[2] * MUZZLE_RIGHT_UNITS;
 
-        final int slot = claimPlayerTracer();
+        spawnFlash(claimPlayerFlash(), muzzleX, muzzleY, muzzleZ);
 
-        spawnTracer(slot, muzzleX, muzzleY, muzzleZ, aimX, aimY, aimZ, TRACER_LIFE_TICS);
+        spawnTracer(claimPlayerTracer(), muzzleX, muzzleY, muzzleZ, aimX, aimY, aimZ, TRACER_LIFE_TICS);
+
+        if (!SMOKE_ENABLED)
+        {
+            // The puff pool would only hide what we never spawned; the
+            // tracer is the visible proof of the shot for now. See
+            // the SMOKE_ENABLED Javadoc for why this is a flag rather
+            // than a permanent change.
+            return;
+        }
 
         spawnPuff(claimPlayerPuff(), muzzleX, muzzleY, muzzleZ, aimX, aimY, aimZ, right);
-
-        spawnFlash(claimPlayerFlash(), muzzleX, muzzleY, muzzleZ);
     }
 
     /**
@@ -1324,6 +1360,9 @@ public final class DemoEffects
         final float originX, final float originY, final float originZ,
         final float dirX, final float dirY, final float dirZ, final float rangeUnits)
     {
+        // Compute the flight direction before claiming any slot. The
+        // flash and the tracer both use it, and the puff does too when
+        // SMOKE_ENABLED is true.
         final float[] flight = acrossScratch;
 
         flight[0] = dirX;
@@ -1349,10 +1388,20 @@ public final class DemoEffects
 
         final float alongZ = flight[2];
 
+        // Flash and tracer first; both are independent of SMOKE_ENABLED.
+        spawnFlash(claimIncomingFlash(), muzzleX, muzzleY, muzzleZ);
+
         final int slot = claimIncomingTracer();
 
         spawnTracer(slot, muzzleX, muzzleY, muzzleZ, alongX, alongY, alongZ,
             incomingLifeFor(rangeUnits));
+
+        if (!SMOKE_ENABLED)
+        {
+            // See the SMOKE_ENABLED Javadoc for why this is a flag
+            // rather than a permanent change.
+            return;
+        }
 
         // The lobe basis is rebuilt from the flight direction, reusing the scratch
         // the convergence above has now finished with. spawnPuff copies what it
@@ -1363,8 +1412,6 @@ public final class DemoEffects
 
         spawnPuff(claimIncomingPuff(), muzzleX, muzzleY, muzzleZ, alongX, alongY, alongZ,
             across);
-
-        spawnFlash(claimIncomingFlash(), muzzleX, muzzleY, muzzleZ);
     }
 
     // The next slot in the player's half of the tracer pool.
@@ -1622,6 +1669,10 @@ public final class DemoEffects
                 continue;
             }
 
+            // Existing puffs keep aging out even when SMOKE_ENABLED is
+            // off, so a flag flip mid-match leaves no on-screen
+            // debris. New puffs are not spawned when the flag is
+            // off — see spawn() and spawnIncoming().
             puffPosition[slot * AXES + 1] += puffRiseOf(slot);
 
             puffAge[slot]++;
@@ -1686,6 +1737,10 @@ public final class DemoEffects
 
         for (int slot = 0; slot < PUFF_SLOTS; slot++)
         {
+            // publishPuff hides a slot whose puff just died and shows a
+            // slot whose puff is alive. With SMOKE_ENABLED off, no new
+            // puffs are born, so the hide branch runs at most once per
+            // slot and the rest of the loop is a no-op.
             publishPuff(renderer, slot);
         }
 
