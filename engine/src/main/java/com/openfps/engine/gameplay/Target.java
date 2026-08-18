@@ -13,21 +13,27 @@ package com.openfps.engine.gameplay;
  * stand-in for the entity's real geometry — see {@link Hitscan} for what that
  * costs and for the per-triangle upgrade path.</p>
  *
- * <h2>Immutable, and allocated off the firing path</h2>
+ * <h2>Mutability, and the firing path</h2>
  *
- * <p>Every field is {@code final} and every value is a primitive, so a target
- * can be built once when an entity spawns and shared freely across threads.
- * That is the whole reason this type exists rather than the box being passed as
- * six loose floats: {@code STYLE.md} § 13.4 bans allocation on a per-tic path,
- * and {@link Hitscan#fire} allocates nothing, so the boxes have to be built
- * <i>somewhere else</i>. Build them at spawn, or rebuild one when an entity
- * moves, but never inside the shot.</p>
+ * <p>The fields are mutable on purpose. {@code STYLE.md} § 13.4 bans
+ * allocation on a per-tic path, and {@link Hitscan#fire} allocates nothing,
+ * so the boxes have to be <i>reused</i> rather than recreated. The intended
+ * pattern is: a caller — typically {@link Match} — pre-allocates one
+ * {@code Target} slot per entity that can move, and a {@code Target[]} big
+ * enough to hold every target in the scene; both are filled in place by
+ * {@link #write(int, float, float, float, float, float, float)} (or the
+ * derived {@link #aroundFeetInto(Target, int, float, float, float, float,
+ * float)}) each tic. The validation is the same as the constructor, so a
+ * NaN corner still fails loudly rather than poisoning the slab arithmetic
+ * in a way that is very hard to trace back from a "shots sometimes miss"
+ * bug report.</p>
  *
- * <p>Bounds are validated at construction rather than at every shot. A box with
- * a NaN or infinite corner would poison the slab arithmetic in a way that is
- * very hard to trace back from a "shots sometimes miss" bug report, and the
- * whole point of doing this check once is that the firing path can then assume
- * its inputs are finite and never has to test for NaN.</p>
+ * <p>Why mutable, not a pool: a pool would need to know which slot is
+ * "free" between calls, and a recycled slot is the same object every shot
+ * — the per-entity position is what changes, not the slot identity. A
+ * mutable slot is the smaller surface; a pool would only be a smaller
+ * surface if the slot count varied, and the engine's per-tic path knows
+ * how many targets it has before the loop starts.</p>
  *
  * <h2>Entity ids</h2>
  *
@@ -46,26 +52,35 @@ public final class Target
      */
     public static final int MIN_ENTITY_ID = 1;
 
-    /** Opaque, strictly positive entity id. Never an array index. */
-    private final int entityId;
+    /**
+     * Opaque, strictly positive entity id. Never an array index.
+     *
+     * <p>MUTABLE: rewritten by {@link #write} when the slot is reused.
+     * Immutable-by-default does not survive the firing path's need to
+     * rebuild a box in place every tic; the field is the seam, and the
+     * constructor's validation is the only safety net.</p>
+     */
+    private int entityId;
 
-    /** Lower corner, world x. */
-    private final float minX;
+    /**
+     * Lower corner, world x. MUTABLE: see {@link #entityId} for why.
+     */
+    private float minX;
 
-    /** Lower corner, world y. */
-    private final float minY;
+    /** Lower corner, world y. MUTABLE. */
+    private float minY;
 
-    /** Lower corner, world z. */
-    private final float minZ;
+    /** Lower corner, world z. MUTABLE. */
+    private float minZ;
 
-    /** Upper corner, world x. */
-    private final float maxX;
+    /** Upper corner, world x. MUTABLE. */
+    private float maxX;
 
-    /** Upper corner, world y. */
-    private final float maxY;
+    /** Upper corner, world y. MUTABLE. */
+    private float maxY;
 
-    /** Upper corner, world z. */
-    private final float maxZ;
+    /** Upper corner, world z. MUTABLE. */
+    private float maxZ;
 
     /**
      * Creates a target from an explicit box.
@@ -171,6 +186,120 @@ public final class Target
         }
 
         return new Target(entityId,
+            feetX - radius, feetY, feetZ - radius,
+            feetX + radius, feetY + height, feetZ + radius);
+    }
+
+    /**
+     * Writes a new bounding box into an existing slot, re-validating every
+     * field as the constructor would. The hot-path companion to
+     * {@link #aroundFeet(int, float, float, float, float, float)} and the
+     * reason the fields are mutable.
+     *
+     * <p>Bounds are validated at the rewrite rather than at every read so
+     * that a NaN corner fails immediately at the call site that produced
+     * it, rather than three frames later inside a slab test that has no
+     * idea where the box came from. The cost of six {@code requireFinite}
+     * calls and three ordered comparisons is one float per slot per tic,
+     * which is cheaper than a {@code new Target} and the GC pressure that
+     * comes with it.</p>
+     *
+     * @param newEntityId the owning entity's id; must be at least
+     *     {@link #MIN_ENTITY_ID}
+     * @param newMinX lower corner, world x
+     * @param newMinY lower corner, world y
+     * @param newMinZ lower corner, world z
+     * @param newMaxX upper corner, world x; must be at least {@code newMinX}
+     * @param newMaxY upper corner, world y; must be at least {@code newMinY}
+     * @param newMaxZ upper corner, world z; must be at least {@code newMinZ}
+     * @throws IllegalArgumentException if the id, any corner, or any
+     *     min/max relationship is out of range
+     */
+    void write(final int newEntityId,
+        final float newMinX, final float newMinY, final float newMinZ,
+        final float newMaxX, final float newMaxY, final float newMaxZ)
+    {
+        if (newEntityId < MIN_ENTITY_ID)
+        {
+            throw new IllegalArgumentException(
+                "entityId must be at least " + MIN_ENTITY_ID + ", got " + newEntityId);
+        }
+
+        requireFinite("boxMinX", newMinX);
+
+        requireFinite("boxMinY", newMinY);
+
+        requireFinite("boxMinZ", newMinZ);
+
+        requireFinite("boxMaxX", newMaxX);
+
+        requireFinite("boxMaxY", newMaxY);
+
+        requireFinite("boxMaxZ", newMaxZ);
+
+        requireOrdered("x", newMinX, newMaxX);
+
+        requireOrdered("y", newMinY, newMaxY);
+
+        requireOrdered("z", newMinZ, newMaxZ);
+
+        this.entityId = newEntityId;
+
+        this.minX = newMinX;
+
+        this.minY = newMinY;
+
+        this.minZ = newMinZ;
+
+        this.maxX = newMaxX;
+
+        this.maxY = newMaxY;
+
+        this.maxZ = newMaxZ;
+    }
+
+    /**
+     * Writes the standing-body box around the given feet into an existing
+     * slot. Hot-path companion to {@link #aroundFeet(int, float, float,
+     * float, float, float)}, paired with the same radius/height parameters.
+     *
+     * <p>The {@code slot} is mutated in place. No allocation. Re-validation
+     * follows the same rules as the constructor — see {@link #write(int,
+     * float, float, float, float, float, float)}.</p>
+     *
+     * @param slot the target to write into; must not be null
+     * @param entityId the owning entity's id; must be at least
+     *     {@link #MIN_ENTITY_ID}
+     * @param feetX feet position, world x
+     * @param feetY feet position, world y
+     * @param feetZ feet position, world z
+     * @param radius half-width of the box on both horizontal axes; must be
+     *     finite and non-negative
+     * @param height extent of the box above the feet; must be finite and
+     *     non-negative
+     */
+    public static void aroundFeetInto(final Target slot, final int entityId,
+        final float feetX, final float feetY, final float feetZ,
+        final float radius, final float height)
+    {
+        if (slot == null)
+        {
+            throw new IllegalArgumentException("slot must not be null");
+        }
+
+        if (!(radius >= 0.0f))
+        {
+            throw new IllegalArgumentException(
+                "radius must be non-negative and a number, got " + radius);
+        }
+
+        if (!(height >= 0.0f))
+        {
+            throw new IllegalArgumentException(
+                "height must be non-negative and a number, got " + height);
+        }
+
+        slot.write(entityId,
             feetX - radius, feetY, feetZ - radius,
             feetX + radius, feetY + height, feetZ + radius);
     }

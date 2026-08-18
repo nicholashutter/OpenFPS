@@ -375,6 +375,47 @@ public final class Match
     /** Reused across every shot in the match, so firing allocates no result. */
     private final HitResult hit = new HitResult();
 
+    /**
+     * Pre-allocated buffer for the per-shot target scene.
+     *
+     * <p>{@link #populateShotSceneFor} and {@link #botShotConnects} rewrite
+     * the populated prefix in place each call. The size is {@code bots.length
+     * + 1} — one slot for the player plus one per potential bot — so no
+     * call ever grows it. The actual population is tracked by
+     * {@link #shotSceneCount}.</p>
+     */
+    private final Target[] shotSceneScratch;
+
+    /**
+     * Pre-allocated buffer for the player's outgoing shot.
+     *
+     * <p>Reused by {@link #populateLivingBotTargets} each call. The size
+     * is {@code bots.length} — the worst case is every bot alive — and
+     * the actual population is tracked by {@link #livingSceneCount}.</p>
+     */
+    private final Target[] livingSceneScratch;
+
+    /**
+     * How many of {@link #shotSceneScratch} are populated for the current
+     * shot. Written by {@link #populateShotSceneFor}, read by the caller's
+     * {@link Hitscan#fire}.
+     */
+    private int shotSceneCount;
+
+    /**
+     * How many of {@link #livingSceneScratch} are populated for the current
+     * player shot. Written by {@link #populateLivingBotTargets}, read by
+     * the caller's {@link Hitscan#fire}.
+     */
+    private int livingSceneCount;
+
+    /**
+     * Pre-allocated buffer for {@link #teamScores()} so the scoreboard
+     * read costs the same per tic whether the renderer asks once or a
+     * frame.
+     */
+    private final int[] teamScoreScratch;
+
     /** Where every random decision comes from. Never null, immutable. */
     private final BotRng rng;
 
@@ -722,6 +763,27 @@ public final class Match
         }
 
         this.bots = opponents.clone();
+
+        // Pre-allocated hot-path scratch. Sized for the worst case (every
+        // bot alive) so the firing loop never has to grow a buffer. The
+        // per-call count is in {@link #shotSceneCount} / {@link
+        // #livingSceneCount}, which the caller passes to {@link Hitscan#fire}
+        // — the array length is the capacity, not the population.
+        this.shotSceneScratch = new Target[bots.length + 1];
+
+        for (int index = 0; index < shotSceneScratch.length; index++)
+        {
+            shotSceneScratch[index] = new Target(1, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+        }
+
+        this.livingSceneScratch = new Target[bots.length];
+
+        for (int index = 0; index < livingSceneScratch.length; index++)
+        {
+            livingSceneScratch[index] = new Target(1, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+        }
+
+        this.teamScoreScratch = new int[2];
 
         this.rng = generator;
 
@@ -1593,14 +1655,14 @@ public final class Match
     {
         this.playerShotsFired = playerShotsFired + 1;
 
-        final Target[] living = livingBotTargets();
+        populateLivingBotTargets();
 
-        if (living.length == 0)
+        if (livingSceneCount == 0)
         {
             return NO_HIT;
         }
 
-        if (!Hitscan.fire(eyeX, eyeY, eyeZ, aimX, aimY, aimZ, living, living.length, hit))
+        if (!Hitscan.fire(eyeX, eyeY, eyeZ, aimX, aimY, aimZ, livingSceneScratch, livingSceneCount, hit))
         {
             return NO_HIT;
         }
@@ -2031,11 +2093,12 @@ public final class Match
      */
     public int[] teamScores()
     {
-        final int[] out = new int[2];
+        final int[] out = teamScoreScratch;
 
         if (mapSpec == null)
         {
             out[0] = botsKilled;
+            out[1] = 0;
 
             return out;
         }
@@ -2359,10 +2422,10 @@ public final class Match
         shots.record(id, shooter.positionX(), shooter.eyeY(), shooter.positionZ(),
             dirX, dirY, dirZ, (float) StrictMath.sqrt(groundDistanceSquared));
 
-        final Target[] scene = shotSceneFor(shooter, playerFeetX, playerFeetY, playerFeetZ);
+        populateShotSceneFor(shooter, playerFeetX, playerFeetY, playerFeetZ);
 
         if (!Hitscan.fire(shooter.positionX(), shooter.eyeY(), shooter.positionZ(),
-            dirX, dirY, dirZ, scene, scene.length, hit))
+            dirX, dirY, dirZ, shotSceneScratch, shotSceneCount, hit))
         {
             return false;
         }
@@ -2398,25 +2461,20 @@ public final class Match
     }
 
     // The player's box plus every living bot except the shooter, for a bot's
-    // outgoing shot. Allocated per shot, which is a few times a second — see the
-    // class Javadoc on why that is the allowed placement rather than per tic.
-    private Target[] shotSceneFor(final Bot shooter, final float playerFeetX,
+    // outgoing shot. Fills {@link #shotSceneScratch} in place and writes
+    // the populated length into {@link #shotSceneCount} so the caller can
+    // pass it to {@link Hitscan#fire} as the count parameter rather than
+    // the array's capacity.
+    //
+    // Allocation-free on the hot path: the player's slot is rewritten via
+    // {@link Target#aroundFeetInto} because the player moves every tic,
+    // and every bot slot is overwritten with the bot's own pre-allocated
+    // {@link Bot#hitbox()} on each call.
+    private void populateShotSceneFor(final Bot shooter, final float playerFeetX,
         final float playerFeetY, final float playerFeetZ)
     {
-        int count = 1;
-
-        for (int index = 0; index < bots.length; index++)
-        {
-            if (bots[index] != shooter && bots[index].isAlive())
-            {
-                count++;
-            }
-        }
-
-        final Target[] scene = new Target[count];
-
-        scene[0] = Target.aroundFeet(PLAYER_ENTITY_ID, playerFeetX, playerFeetY, playerFeetZ,
-            Bot.RADIUS_UNITS, Bot.HEIGHT_UNITS);
+        Target.aroundFeetInto(shotSceneScratch[0], PLAYER_ENTITY_ID, playerFeetX, playerFeetY,
+            playerFeetZ, Bot.RADIUS_UNITS, Bot.HEIGHT_UNITS);
 
         int next = 1;
 
@@ -2424,35 +2482,43 @@ public final class Match
         {
             if (bots[index] != shooter && bots[index].isAlive())
             {
-                scene[next] = bots[index].hitbox();
+                // Copy the bot's pre-allocated hitbox into the scratch slot
+                // because Hitscan is told only the populated prefix — the
+                // scratch's tail must not contain stale references that
+                // would extend the trace beyond the intended targets.
+                final Target box = bots[index].hitbox();
+
+                shotSceneScratch[next].write(box.entityId(), box.minX(), box.minY(), box.minZ(),
+                    box.maxX(), box.maxY(), box.maxZ());
 
                 next++;
             }
         }
 
-        return scene;
+        shotSceneCount = next;
     }
 
-    // Hitboxes for every living bot, for the player's outgoing shot.
-    private Target[] livingBotTargets()
+    // Hitboxes for every living bot, for the player's outgoing shot. Fills
+    // {@link #livingSceneScratch} in place and writes the populated length
+    // into {@link #livingSceneCount}.
+    private void populateLivingBotTargets()
     {
-        final int alive = livingBots();
-
-        final Target[] boxes = new Target[alive];
-
         int next = 0;
 
         for (int index = 0; index < bots.length; index++)
         {
             if (bots[index].isAlive())
             {
-                boxes[next] = bots[index].hitbox();
+                final Target box = bots[index].hitbox();
+
+                livingSceneScratch[next].write(box.entityId(), box.minX(), box.minY(), box.minZ(),
+                    box.maxX(), box.maxY(), box.maxZ());
 
                 next++;
             }
         }
 
-        return boxes;
+        livingSceneCount = next;
     }
 
     /** Returns a debug rendering of the score and state. */
