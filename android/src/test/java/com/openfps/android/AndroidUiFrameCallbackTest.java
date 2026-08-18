@@ -75,6 +75,12 @@ class AndroidUiFrameCallbackTest
         }
 
         @Override
+        public void onControls()
+        {
+            calls.add("controls");
+        }
+
+        @Override
         public void onMapSelection()
         {
             calls.add("mapSelection");
