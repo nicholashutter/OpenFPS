@@ -20,6 +20,7 @@ import com.openfps.engine.gameplay.MatchStatus;
 import com.openfps.engine.gameplay.MatchSummary;
 import com.openfps.engine.hal.port.I_FrameCallback;
 import com.openfps.gdx.AccessibilitySettings;
+import com.openfps.gdx.BootScreen;
 import com.openfps.gdx.DebugOverlay;
 import com.openfps.gdx.DebugSettings;
 import com.openfps.gdx.DefaultMenuActions;
@@ -206,6 +207,30 @@ public final class GdxFrameLoopListener implements ApplicationListener
      * MUTABLE: built in {@link #create()}, released in {@link #dispose()}.
      */
     private MapSelectionScreen mapSelect;
+
+    /**
+     * The brief screen that runs between window-up and the main menu
+     * becoming interactive.
+     *
+     * <p>MUTABLE: built in {@link #create()}, released in
+     * {@link #dispose()}. The listener draws the boot screen instead of
+     * the regular UI while {@link #bootScreenElapsed} is below
+     * {@link BootScreen#DEFAULT_HOLD_SECONDS}; on the first frame past
+     * the threshold the screen is disposed and the normal draw path
+     * takes over. See {@link #drawWorld(float)} for the ordering and
+     * the class Javadoc for why the hold exists at all.</p>
+     */
+    private BootScreen bootScreen;
+
+    /**
+     * Wall-clock seconds the boot screen has been on glass.
+     *
+     * <p>MUTABLE: accumulated in {@link #drawWorld(float)} and reset to
+     * a non-positive sentinel on the frame the boot screen releases.
+     * Compared against {@link BootScreen#DEFAULT_HOLD_SECONDS} each
+     * frame to drive the transition.</p>
+     */
+    private float bootScreenElapsed;
 
     /**
      * The loading screen. Shown between map pick and game start so the
@@ -779,6 +804,19 @@ public final class GdxFrameLoopListener implements ApplicationListener
         // thread — see WindowIcon.
         WindowIcon.apply();
 
+        // The boot screen is built first so it can be on glass for the
+        // brief moment the engine's static-allocation pre-warm needs.
+        // drawWorld checks bootScreenElapsed against
+        // BootScreen.DEFAULT_HOLD_SECONDS and disposes the screen on the
+        // first frame past the threshold; the regular menu takes over
+        // without any state-machine transition because the player never
+        // had a chance to interact.
+        bootScreen = new BootScreen();
+
+        bootScreen.resize(width, height);
+
+        bootScreenElapsed = 0.0f;
+
         menu = new MainMenuScreen(actions);
 
         menu.layoutFor(width, height);
@@ -964,6 +1002,32 @@ public final class GdxFrameLoopListener implements ApplicationListener
     // Exactly one screen draws, and it draws the whole window.
     private void drawWorld(final float deltaSeconds)
     {
+        // Boot screen is the whole window, until its hold time elapses.
+        // Drawn first so a black frame cannot sneak through between
+        // window-up and the menu being ready. The disposal happens here
+        // too, on the same frame the regular UI is allowed to draw for
+        // the first time — which is what keeps the GL resources from
+        // outliving their window.
+        if (bootScreen != null)
+        {
+            bootScreenElapsed += deltaSeconds;
+
+            if (bootScreenElapsed >= BootScreen.DEFAULT_HOLD_SECONDS)
+            {
+                bootScreen.dispose();
+
+                bootScreen = null;
+
+                bootScreenElapsed = 0.0f;
+            }
+            else
+            {
+                bootScreen.render(deltaSeconds);
+
+                return;
+            }
+        }
+
         final UiState current = uiState.state();
 
         if (menu != null && current.drawsMenu())
@@ -1340,6 +1404,11 @@ public final class GdxFrameLoopListener implements ApplicationListener
     @Override
     public void resize(final int width, final int height)
     {
+        if (bootScreen != null)
+        {
+            bootScreen.resize(width, height);
+        }
+
         if (menu != null)
         {
             menu.resize(width, height);
@@ -1378,6 +1447,15 @@ public final class GdxFrameLoopListener implements ApplicationListener
     @Override
     public void dispose()
     {
+        // Boot screen is not a click target, so it never had the input
+        // processor — a plain dispose is enough.
+        if (bootScreen != null)
+        {
+            bootScreen.dispose();
+
+            bootScreen = null;
+        }
+
         if (menu != null)
         {
             // Give the processor back before the stage goes: leaving a disposed
