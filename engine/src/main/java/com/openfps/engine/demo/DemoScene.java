@@ -404,6 +404,33 @@ public final class DemoScene
         PLAYER_HEIGHT_UNITS / CHARACTER_MODEL_HEIGHT;
 
     /**
+     * The model-space Y of a bot's feet, in the character pack's own units —
+     * <b>0.0</b>.
+     *
+     * <p>Kenney's Blocky Character pack puts the local origin at the bottom
+     * centre of the body: the model's AABB is {@code minY=0} to
+     * {@code maxY=2.70} (and the actual visible vertices span {@code [0, 1.9]}).
+     * {@link #botPlacement} applies the placement matrix to a vertex with
+     * {@code y=0}, so that vertex lands at world {@code y = bot.positionY()}.
+     * A bot standing on the floor has {@code positionY() == 0} and the visible
+     * feet are at world {@code y=0}, which is the same plane the kit floor
+     * tiles are placed at — so the body sits on the floor rather than
+     * floating above it or sinking into it.</p>
+     *
+     * <p><b>Documented as a constant, not read from the model, on purpose.</b>
+     * The AABB header is set by the converter and is one source of truth; the
+     * visible vertex range is a different source of truth. The placement code
+     * needs to know which one is "where the feet actually are" and the answer
+     * is "the local origin of the mesh" — a property the pack has by
+     * convention, not a property a future re-export of the pack would be free
+     * to change. Re-exporting the pack with a different origin convention
+     * would break this constant; the right fix in that case is a one-line edit
+     * here plus a glance at {@code DemoSceneTest}, not a hunt across the
+     * rendering pipeline.</p>
+     */
+    public static final float CHARACTER_FEET_LOCAL_Y = 0.0f;
+
+    /**
      * Scale from the bots' blaster model to world units — the same number as
      * {@link #CHARACTER_WORLD_SCALE}, and <b>that is a finding rather than a
      * shortcut</b>.

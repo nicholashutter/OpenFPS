@@ -291,6 +291,46 @@ class MapSceneTest
                     .as("%s should have triangles", id).isPositive();
             }
         }
+
+        @Test
+        @DisplayName("cornerstone bots stand on the level's floor, not floating or sunk")
+        void shouldPlaceCornerstoneBotsOnTheFloor()
+        {
+            // Pin the bot's visible feet to the level's floor for
+            // cornerstone — the shipped Urban-Warzone TDM map. The
+            // waypoint Y is 0.0f and the level .ofm is placed at
+            // Mat4.identity() with the floor slab at world Y=0, so
+            // the visible feet land at world Y=0.
+            //
+            // A regression that lifted the kit floor above Y=0, sank
+            // the level .ofm below Y=0, or pulled the waypoints up
+            // onto a gantry the kit can't see would all pass the
+            // existing placement tests (which check X/Z and the
+            // count) and only fail here.
+            final MapSpec spec = MapLibrary.get("cornerstone");
+
+            // Sanity: cornerstone has 12 waypoints, all at Y=0.
+            // The map is single-floor, so any non-zero Y would put
+            // the bot's body either buried in a wall or floating
+            // above the kit floor tiles.
+            assertThat(spec.botWaypoints())
+                .as("cornerstone's 12 waypoints are the floor the bots stand on")
+                .hasSize(12)
+                .allSatisfy(wp -> assertThat(wp.y())
+                    .as("cornerstone is a single-floor map; every waypoint Y is the floor")
+                    .isZero());
+
+            // The level .ofm must stage without falling back to the
+            // empty-scene warning. The 1-arg build returns just the
+            // level as one world instance — kit and bots are the
+            // 2-arg build's job — so this is the level being
+            // present, not the bot instances.
+            final MapScene mapScene = MapScene.build(spec);
+
+            assertThat(mapScene.scene().worldInstanceCount())
+                .as("the level .ofm is staged, not an empty fallback")
+                .isEqualTo(1);
+        }
     }
 
     private static SpawnPoint spawn()

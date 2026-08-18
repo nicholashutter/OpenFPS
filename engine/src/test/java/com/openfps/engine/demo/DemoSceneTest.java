@@ -738,6 +738,55 @@ final class DemoSceneTest
             assertThat(DemoScene.botPlacement(victim).get(1, 1))
                 .isCloseTo(DemoScene.CHARACTER_WORLD_SCALE, within(EPSILON));
         }
+
+        @Test
+        @DisplayName("a live bot's visible feet are exactly on the floor, not floating or sunk")
+        void shouldStandOnTheFloor(@TempDir final Path root) throws IOException
+        {
+            // The structural check `shouldStandALiveBot` only pins the
+            // placement's X and Z translation; the Y is whatever the bot
+            // says it is. A regression that pushed the bot up or down by a
+            // scale, a centring offset, or a stray translation would pass
+            // `shouldStandALiveBot` and leave the bots visibly hovering in
+            // the room, so the Y has to be pinned here too.
+            //
+            // The chain is: the character model's local origin is the feet
+            // (CHARACTER_FEET_LOCAL_Y = 0, a convention the Kenney pack
+            // commits to), the placement's Y translation is the bot's
+            // positionY, and a standing bot's positionY is the floor (0 in
+            // the demo). So the visible feet land at world Y = 0, which is
+            // the same plane the floor tiles are placed on.
+            final DemoScene demo = DemoScene.build(kitWithCharacters(root));
+
+            final Bot bot = demo.bots()[0];
+
+            final Mat4 standing = DemoScene.botPlacement(bot);
+
+            // The placement's Y translation is the bot's floor Y; a regression
+            // that pushed the model up (e.g. by half its height, "to centre
+            // it") would make the visible feet float.
+            assertThat(standing.get(1, 3))
+                .as("placement Y is the bot's floor Y, not the model's centre")
+                .isCloseTo(bot.positionY(), within(EPSILON));
+
+            // The model's local-origin vertex (the feet, per
+            // CHARACTER_FEET_LOCAL_Y) lands at the placement translation. A
+            // regression that re-centred the model on its local origin
+            // without offsetting the placement would put the feet at the
+            // body's centre, half a player height above the floor.
+            assertThat(DemoScene.CHARACTER_FEET_LOCAL_Y)
+                .as("the character pack commits to local origin = feet, not local origin = centre")
+                .isZero();
+
+            // And the floor is at Y=0 in the demo, so the bot's feet
+            // (at bot.positionY() = 0) are exactly on the floor plane the
+            // tiles are placed on. A regression that lifted the floor
+            // tiles or sank the bot's home Y would make this fail before
+            // any screenshot caught the visual.
+            assertThat(bot.positionY())
+                .as("the demo's bots stand on the floor, not on a platform")
+                .isZero();
+        }
     }
 
     @Nested
