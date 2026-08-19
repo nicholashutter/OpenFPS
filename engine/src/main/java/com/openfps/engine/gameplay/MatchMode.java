@@ -75,7 +75,18 @@ public enum MatchMode
      * own base; score per capture; the round ends at the capture limit or the
      * time limit.
      */
-    CTF;
+    CTF,
+
+    /**
+     * Area Rules. 2026-08: the pickup-sandbox mode. Players start
+     * with the blaster and pick up weapons (shotgun, rocket
+     * launcher) by walking over them; the spec declares the
+     * pickup positions and the mode carries no further
+     * structure. The mode is a container for the rules - the
+     * scoring and win condition live in
+     * {@link com.openfps.engine.gameplay.map.MapMarkers.AreaRules}.
+     */
+    AREA_RULES;
 
     /**
      * Returns whether this is one of the four real multiplayer rule sets.
@@ -93,7 +104,7 @@ public enum MatchMode
     {
         return switch (this)
         {
-            case TDM, HARDPOINT, DOMINATION, CTF -> true;
+            case TDM, HARDPOINT, DOMINATION, CTF, AREA_RULES -> true;
             case SINGLE_PLAYER, MULTIPLAYER -> false;
         };
     }

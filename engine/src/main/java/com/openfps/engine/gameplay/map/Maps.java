@@ -6,6 +6,8 @@
 package com.openfps.engine.gameplay.map;
 
 import com.openfps.engine.gameplay.MatchMode;
+import com.openfps.engine.gameplay.Pickup;
+import com.openfps.engine.gameplay.Weapon;
 
 import java.util.List;
 
@@ -2464,6 +2466,126 @@ public final class Maps
             List.of(),
             new MapAssets(
                 "engine/src/main/resources/maps/coldfront/level.ofm",
+                "assets/models/weapon/blaster-b.ofm",
+                null
+            )
+        );
+    }
+
+    // ----- Area Rules (AREA_RULES) -------------------------------------
+
+    /**
+     * The seventeenth shipped map. Area Rules, the 2026-08
+     * pickup-sandbox mode. A 1600 x 1600 playable area (smaller
+     * than the other settings because the mode is about the
+     * pickups, not the geometry), with eight bot waypoints
+     * arranged in a ring, and three weapon pickups: one rocket
+     * launcher hidden under the level .ofm's centerpiece (the
+     * "use it or lose it" weapon, one per map), and two shotguns
+     * in the diagonals so the player has to move to find them.
+     *
+     * <p>The level .ofm is the same cornerstone as the TDM
+     * cornerstone, treated as a centerpiece in the middle of
+     * the 1600 x 1600 spec. The kit composer's perimeter wall,
+     * ceiling, columns, crates, and the new structural scenery
+     * (L-walls, T-walls, stepped covers, low half-walls) fill
+     * the rest of the playable area. The pickups are placed in
+     * spots the player cannot see from the spawn - one in the
+     * centre under the level geometry (the rocket) and two in
+     * the diagonals where a player who has cleared the centre
+     * will eventually walk.</p>
+     *
+     * <p>Distinct from the other modes in feel: there is no
+     * scoring, no win condition, no team. The match is "kill
+     * the bots" and the only failure is running out of ammo
+     * (the bot DPS outpaces the blaster's damage at range).
+     * The pickups are the affordance, and the rocket launcher
+     * is the kill switch.</p>
+     *
+     * @return the Area Rules map spec
+     */
+    public static MapSpec areaRules()
+    {
+        return new MapSpec(
+            // ---- identity
+            "area-rules",
+            "Area Rules",
+            // ---- visual setting: the URBAN_WARZONE kit
+            // doubles as the area-rules kit because the
+            // mode is more about the pickups than the
+            // setting. The kit composer's geometry fills
+            // the playable area.
+            MapSetting.URBAN_WARZONE,
+            // ---- mode
+            MatchMode.AREA_RULES,
+            // ---- dimensions: 1600 x 1600. Smaller than
+            // the other maps because the mode is about
+            // pickups, not geometry.
+            new MapDimensions(1600.0f, 1600.0f, 192.0f),
+            // ---- lanes
+            List.of(
+                new Lane("lane_a", LaneAxis.NORTH_SOUTH, List.of(
+                    new Chokepoint("cp_a_n", "North", 0.0f, -640.0f),
+                    new Chokepoint("cp_a_c", "Centre", 0.0f, 0.0f),
+                    new Chokepoint("cp_a_s", "South", 0.0f, 640.0f)
+                )),
+                new Lane("lane_b", LaneAxis.NORTH_SOUTH, List.of(
+                    new Chokepoint("cp_b_n", "North", 480.0f, -640.0f),
+                    new Chokepoint("cp_b_c", "Centre", 480.0f, 0.0f),
+                    new Chokepoint("cp_b_s", "South", 480.0f, 640.0f)
+                )),
+                new Lane("lane_c", LaneAxis.NORTH_SOUTH, List.of(
+                    new Chokepoint("cp_c_n", "North", -480.0f, -640.0f),
+                    new Chokepoint("cp_c_c", "Centre", -480.0f, 0.0f),
+                    new Chokepoint("cp_c_s", "South", -480.0f, 640.0f)
+                ))
+            ),
+            // ---- spawn points: 3 per team, on each
+            // team's half of the playable area.
+            List.of(
+                new SpawnPoint("red_a", Team.RED, -640.0f, 0.0f, -640.0f, 0.0f),
+                new SpawnPoint("red_b", Team.RED, -640.0f, 0.0f, 0.0f, (float) (Math.PI * 0.5)),
+                new SpawnPoint("red_c", Team.RED, -640.0f, 0.0f, 640.0f, 0.0f),
+                new SpawnPoint("blue_a", Team.BLUE, 640.0f, 0.0f, -640.0f, (float) Math.PI),
+                new SpawnPoint("blue_b", Team.BLUE, 640.0f, 0.0f, 0.0f, (float) (-Math.PI * 0.5)),
+                new SpawnPoint("blue_c", Team.BLUE, 640.0f, 0.0f, 640.0f, (float) Math.PI)
+            ),
+            // ---- bot waypoints: 8 bots in a ring, the
+            // same PACE_X / PACE_Z / ORBIT cycle the other
+            // maps use.
+            List.of(
+                new Waypoint("wp_0", 0.0f, 0.0f, -640.0f),
+                new Waypoint("wp_1", 0.0f, 0.0f, 0.0f),
+                new Waypoint("wp_2", 0.0f, 0.0f, 640.0f),
+                new Waypoint("wp_3", 480.0f, 0.0f, -480.0f),
+                new Waypoint("wp_4", 480.0f, 0.0f, 480.0f),
+                new Waypoint("wp_5", -480.0f, 0.0f, -480.0f),
+                new Waypoint("wp_6", -480.0f, 0.0f, 480.0f),
+                new Waypoint("wp_7", 0.0f, 0.0f, 320.0f)
+            ),
+            // ---- markers: area-rules has no extra
+            // structure beyond the pickups it carries.
+            MapMarkers.AreaRules.INSTANCE,
+            // ---- pickups: two shotguns in the diagonals
+            // and one rocket launcher in the centre. The
+            // rocket is "hidden" under the level .ofm
+            // centerpiece (the player walks into the
+            // centre to find it); the shotguns are in
+            // the corners so the player has to move.
+            //   shotgun_sw at (-720, 0, -720)
+            //   shotgun_se at (720, 0, 720)
+            //   rocket_centre at (0, 0, 0) - the
+            //     "use it or lose it" weapon, one per map.
+            List.of(
+                new Pickup(Weapon.SHOTGUN, -720.0f, 0.0f, -720.0f),
+                new Pickup(Weapon.SHOTGUN, 720.0f, 0.0f, 720.0f),
+                new Pickup(Weapon.ROCKET_LAUNCHER, 0.0f, 0.0f, 0.0f)
+            ),
+            // ---- asset paths: the cornerstone level .ofm
+            // is the centerpiece, and the demo's blaster
+            // is the held weapon.
+            new MapAssets(
+                "engine/src/main/resources/maps/cornerstone/level.ofm",
                 "assets/models/weapon/blaster-b.ofm",
                 null
             )

@@ -65,6 +65,32 @@ public final class Weapon
         "rocket", "Rocket Launcher", FireMode.PROJECTILE, 200, 1);
 
     /**
+     * The splash radius for a rocket impact, in world units.
+     * A bot within this radius of the impact point takes
+     * splash damage, with linear falloff from the impact
+     * point out to the radius. 320 world units is 20 m,
+     * which is "the room you are in" rather than "the
+     * map" - a rocket into a doorway is a problem for
+     * everyone in the corridor, not a problem for the
+     * bot on the other side of the wall.
+     */
+    public static final float ROCKET_SPLASH_RADIUS_UNITS = 320.0f;
+
+    /**
+     * The splash damage at the impact point (the centre of
+     * the blast). 200 is well past any bot's health
+     * (Bot.MAX_HEALTH = 100), so a bot at the impact point
+     * dies; a bot halfway out from the centre takes 100,
+     * also lethal; a bot at the radius takes 0 (the
+     * falloff is linear). The falloff rule is in
+     * {@code Match.fireRocket} and is the one that makes
+     * "shoot a rocket at a doorway the bot is behind"
+     * a good idea and "shoot a rocket at your own feet"
+     * a bad one.
+     */
+    public static final int ROCKET_SPLASH_DAMAGE_CENTER = 200;
+
+    /**
      * How many pellets one shotgun blast spreads across.
      * Five reads as a shotgun (a single hitscan reads as a
      * rifle), and a 5-pellet fan covers a useful cross-section

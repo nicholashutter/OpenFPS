@@ -171,6 +171,8 @@ public final class MapSpec
             throw new IllegalArgumentException("pickups must not be null");
         }
 
+        validateAtMostOneRocket(pickups);
+
         if (assets == null)
         {
             throw new IllegalArgumentException("assets must not be null");
@@ -389,6 +391,7 @@ public final class MapSpec
             case HARDPOINT -> markers instanceof MapMarkers.Hardpoint;
             case DOMINATION -> markers instanceof MapMarkers.Domination;
             case CTF -> markers instanceof MapMarkers.CaptureTheFlag;
+            case AREA_RULES -> markers instanceof MapMarkers.AreaRules;
             // SINGLE_PLAYER and MULTIPLAYER are not real modes and never
             // appear on a MapSpec; the enum's other entries are reserved
             // for the existing single-player / multiplayer distinction.
@@ -399,6 +402,40 @@ public final class MapSpec
         {
             throw new IllegalArgumentException("markers " + markers.getClass().getSimpleName()
                 + " does not match mode " + mode);
+        }
+    }
+
+    /**
+     * Refuses a spec that declares more than one rocket launcher
+     * pickup. The rocket launcher is the "use it or lose it"
+     * weapon the user asked for, and "only ever one on a map"
+     * is the rule - a second rocket launcher is either a
+     * map-author mistake or a deliberate denial of the
+     * rarity, and the right answer in both cases is to fail
+     * the spec at construction time rather than ship a map
+     * that breaks the contract.
+     *
+     * @param pickups the spec's pickup list; must not be null
+     * @throws IllegalArgumentException if two or more
+     *     {@link com.openfps.engine.gameplay.Weapon#ROCKET_LAUNCHER}
+     *     pickups appear
+     */
+    private static void validateAtMostOneRocket(final List<Pickup> pickups)
+    {
+        int rockets = 0;
+
+        for (final Pickup p : pickups)
+        {
+            if (p.weapon() == com.openfps.engine.gameplay.Weapon.ROCKET_LAUNCHER)
+            {
+                rockets = rockets + 1;
+
+                if (rockets > 1)
+                {
+                    throw new IllegalArgumentException(
+                        "a map may carry at most one rocket launcher; got " + rockets);
+                }
+            }
         }
     }
 }

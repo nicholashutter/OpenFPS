@@ -204,6 +204,16 @@ public final class MapLibrary
         register(Maps.stronghold());
 
         register(Maps.coldfront());
+
+        // 2026-08: the area-rules sandbox. The seventeenth
+        // shipped map, sitting outside the 4x4 setting/mode
+        // grid because the mode is not a real rule set, and
+        // not paired with three sibling maps because the
+        // mode carries no setting-specific structure. One
+        // map, registered on its own, is the right shape
+        // for the "kill the bots with the pickups the map
+        // gives you" mode.
+        register(Maps.areaRules());
     }
 
     /**

@@ -22,7 +22,7 @@ import java.util.List;
  */
 public sealed interface MapMarkers
     permits MapMarkers.TeamDeathmatch, MapMarkers.Hardpoint, MapMarkers.Domination,
-        MapMarkers.CaptureTheFlag
+        MapMarkers.CaptureTheFlag, MapMarkers.AreaRules
 {
     /**
      * A TDM map carries no mode-specific markers. The marker exists so a
@@ -274,6 +274,31 @@ public sealed interface MapMarkers
             {
                 throw new IllegalArgumentException("radius must be positive, got " + radius);
             }
+        }
+    }
+
+    /**
+     * 2026-08: the markers for an area-rules map. Area Rules
+     * carries no zone, flag, or base - the mode is the
+     * container for the pickup rules, and the markers are
+     * the "no extra structure" singleton (the same shape
+     * TDM uses). The spec carries the pickup positions in
+     * its {@code pickups()} list, and the match layer
+     * reads those for the weapon-spawn lifecycle.
+     *
+     * <p>The class is the marker type for the sealed
+     * interface rather than a record because the singleton
+     * pattern (one canonical instance per JVM) is the
+     * same shape the TDM marker uses, and reusing the
+     * shape keeps the match layer's pattern-match clean.</p>
+     */
+    final class AreaRules implements MapMarkers
+    {
+        /** The one and only instance; area-rules markers are mode-wide identical. */
+        public static final AreaRules INSTANCE = new AreaRules();
+
+        private AreaRules()
+        {
         }
     }
 }

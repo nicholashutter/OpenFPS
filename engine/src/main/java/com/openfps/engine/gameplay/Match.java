@@ -1708,7 +1708,12 @@ public final class Match
             return fireShotgun(eyeX, eyeY, eyeZ, aimX, aimY, aimZ);
         }
 
-        // Blaster (and the rocket until the projectile path lands).
+        if (weapon.fireMode() == Weapon.FireMode.PROJECTILE)
+        {
+            return fireRocket(eyeX, eyeY, eyeZ, aimX, aimY, aimZ);
+        }
+
+        // Blaster.
         this.playerShotsFired = playerShotsFired + 1;
 
         populateLivingBotTargets();
@@ -1909,6 +1914,164 @@ public final class Match
         }
 
         return firstHit;
+    }
+
+    /**
+     * Fires one rocket: a single hitscan with splash damage at
+     * the impact point.
+     *
+     * <p>2026-08: the rocket launcher's fire path. The rocket
+     * is conceptually a projectile, but for the lockstep
+     * claim (every peer computes the same answer) the
+     * implementation is a fast hitscan with splash. The bolt
+     * flies the length of the playable area in one tic; the
+     * damage lands on the bot the ray hit (one-shot kill,
+     * since {@link Weapon#ROCKET_LAUNCHER}'s damage is
+     * above any bot's health) and on every other bot within
+     * {@link Weapon#ROCKET_SPLASH_RADIUS_UNITS} of the
+     * impact point, with linear falloff from
+     * {@link Weapon#ROCKET_SPLASH_DAMAGE_CENTER} at the
+     * centre to 0 at the radius.
+     *
+     * <p>The splash is a 2D circle on the XZ plane at the
+     * impact's Y, not a 3D sphere. A rocket exploding at
+     * the foot of a multi-storey level is a problem for
+     * the bot in the same storey, not the bot two floors
+     * up - the Y of the impact is the Y of the bot that
+     * was hit, and a bot whose Y is well above or below
+     * the impact's Y is far enough away to be outside the
+     * splash in any meaningful sense. The 2D circle
+     * captures the "same room" feel the splash is meant
+     * to have.</p>
+     *
+     * <p>Returns the entity id of the directly-hit bot, or
+     * {@link #NO_HIT} when the rocket flew into empty
+     * space. The match state ({@code botsKilled},
+     * {@code killStreak}, etc.) is updated for the
+     * direct hit and for every splash kill.</p>
+     */
+    private int fireRocket(final float eyeX, final float eyeY, final float eyeZ,
+        final float aimX, final float aimY, final float aimZ)
+    {
+        this.playerShotsFired = playerShotsFired + 1;
+
+        populateLivingBotTargets();
+
+        if (livingSceneCount == 0)
+        {
+            return NO_HIT;
+        }
+
+        if (!Hitscan.fire(eyeX, eyeY, eyeZ, aimX, aimY, aimZ, livingSceneScratch, livingSceneCount, hit))
+        {
+            return NO_HIT;
+        }
+
+        this.playerShotsHit = playerShotsHit + 1;
+
+        final int struck = hit.entityId();
+
+        final Bot directVictim = byId(struck);
+
+        // Direct hit: the rocket's base damage, which is well
+        // past any bot's health and so one-shot-kills. The
+        // call to victim.damage() also marks the bot as
+        // dead, so the splash loop below skips it (the
+        // direct-hit kill is what the player's UI shows).
+        if (directVictim != null)
+        {
+            if (directVictim.damage(Weapon.ROCKET_LAUNCHER.damage()))
+            {
+                this.botsKilled = botsKilled + 1;
+
+                countTowardTheStreak();
+            }
+        }
+
+        // Splash: every living bot within the splash radius
+        // of the impact point, with linear damage falloff
+        // from the centre to the radius. A bot at the
+        // impact point takes the centre damage; a bot at
+        // the radius takes 0; a bot in between takes the
+        // linear interpolation. Bots in the damage roll
+        // (that take damage() returns true for) count
+        // toward the kill streak and the botsKilled
+        // counter.
+        final float impactX = eyeX + aimX * hit.distance();
+
+        final float impactY = eyeY + aimY * hit.distance();
+
+        final float impactZ = eyeZ + aimZ * hit.distance();
+
+        final float splashRadius = Weapon.ROCKET_SPLASH_RADIUS_UNITS;
+
+        final float splashRadiusSq = splashRadius * splashRadius;
+
+        for (int i = 0; i < bots.length; i++)
+        {
+            final Bot b = bots[i];
+
+            if (!b.isAlive())
+            {
+                continue;
+            }
+
+            if (b.entityId() == struck)
+            {
+                // The direct-hit victim already had its
+                // damage applied above; the splash loop
+                // would re-hit it, and a bot should not
+                // take damage twice from one rocket.
+                continue;
+            }
+
+            final float dx = b.positionX() - impactX;
+            final float dz = b.positionZ() - impactZ;
+
+            final float distSq = dx * dx + dz * dz;
+
+            if (distSq > splashRadiusSq)
+            {
+                continue;
+            }
+
+            // The Y check uses the impact's Y, not the
+            // bot's. A bot that is much higher or much
+            // lower than the impact is far enough in 3D
+            // that the splash should not catch them.
+            final float dy = b.positionY() - impactY;
+
+            if (dy * dy > splashRadiusSq)
+            {
+                continue;
+            }
+
+            // Linear falloff: damage = centre * (1 - dist / radius).
+            // The exact form keeps the centre damage at the
+            // impact and 0 at the radius, and the same
+            // shape on every peer (no random source in the
+            // path).
+            final float dist = (float) StrictMath.sqrt(distSq);
+
+            final float falloff = 1.0f - (dist / splashRadius);
+
+            final int splashDamage =
+                (int) (Weapon.ROCKET_SPLASH_DAMAGE_CENTER * falloff);
+
+            if (splashDamage <= 0)
+            {
+                continue;
+            }
+
+            if (b.damage(splashDamage))
+            {
+                this.botsKilled = botsKilled + 1;
+
+                countTowardTheStreak();
+            }
+        }
+
+        return struck;
     }
 
     // One kill on the streak, and the award if that was the third.
