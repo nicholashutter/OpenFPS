@@ -474,13 +474,19 @@ final class DemoSceneTest
     final class Bots
     {
         @Test
-        @DisplayName("places exactly Match.DEFAULT_BOT_COUNT opponents, one per character model")
+        @DisplayName("places exactly seven opponents, one per character model")
         void shouldPlaceTheFullRosterWhenAllArtIsStaged(@TempDir final Path root)
             throws IOException
         {
+            // 2026-08: the demo continues to use seven bots (its own
+            // BOT_ROUTE_CENTRES constant is the source of truth for the
+            // 20m room). The map mode uses however many waypoints the
+            // spec has (21-30), but the demo room cannot host 30 bodies.
+            // The pin is the demo's own roster size, not the global
+            // Match.DEFAULT_BOT_COUNT, which is 32 for the map mode.
             final DemoScene demo = DemoScene.build(kitWithCharacters(root));
 
-            assertThat(demo.botCount()).isEqualTo(Match.DEFAULT_BOT_COUNT);
+            assertThat(demo.botCount()).isEqualTo(7);
 
             assertThat(demo.newMatch().state()).isEqualTo(MatchState.IN_PROGRESS);
         }

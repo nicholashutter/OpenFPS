@@ -785,12 +785,17 @@ class MatchTest
     class Roster
     {
         @Test
-        @DisplayName("is seven, and the whole roster is beatable in a bounded number of shots")
+        @DisplayName("is enough for a map room, and the whole roster is beatable in a bounded number of shots")
         void shouldClearSevenBotsInTwentyOneShots()
         {
-            assertThat(Match.DEFAULT_BOT_COUNT).isEqualTo(7);
+            // 2026-08: Match.DEFAULT_BOT_COUNT was raised from 7 to 32
+            // (the largest spec waypoint count plus headroom). The
+            // demo's own room still holds 7 bots, so this test pins
+            // 7 explicitly - the assertion is about the demo's room,
+            // not the map mode's roster size.
+            final int rosterSize = 7;
 
-            final Bot[] roster = new Bot[Match.DEFAULT_BOT_COUNT];
+            final Bot[] roster = new Bot[rosterSize];
 
             for (int index = 0; index < roster.length; index++)
             {
@@ -805,14 +810,14 @@ class MatchTest
             final int shotsToKill =
                 (Bot.MAX_HEALTH + Match.PLAYER_SHOT_DAMAGE - 1) / Match.PLAYER_SHOT_DAMAGE;
 
-            for (int shot = 0; shot < shotsToKill * Match.DEFAULT_BOT_COUNT; shot++)
+            for (int shot = 0; shot < shotsToKill * rosterSize; shot++)
             {
                 shootAhead(match);
             }
 
             assertThat(match.state()).isEqualTo(MatchState.WON);
 
-            assertThat(match.botsKilled()).isEqualTo(Match.DEFAULT_BOT_COUNT);
+            assertThat(match.botsKilled()).isEqualTo(rosterSize);
 
             assertThat(match.playerShotsFired()).isEqualTo(21);
         }
@@ -1191,7 +1196,11 @@ class MatchTest
             // The room is the demo's own arrangement in spirit: seven bots spread
             // between 100 and 400 units, all in line of sight, player motionless
             // in the open. That is the worst case a player can put themselves in.
-            final Bot[] roster = new Bot[Match.DEFAULT_BOT_COUNT];
+            // 2026-08: pinned to 7 explicitly (the demo's count), not the new
+            // Match.DEFAULT_BOT_COUNT = 32 (the map mode's roster size).
+            final int rosterSize = 7;
+
+            final Bot[] roster = new Bot[rosterSize];
 
             for (int index = 0; index < roster.length; index++)
             {
@@ -1237,7 +1246,11 @@ class MatchTest
             // goes quiet — the noise is what tells the player they are in a fight.
             // The old cadence produced a shot somewhere in the room every 21 tics;
             // BotSkill.DUMB is tuned to land near that.
-            final Bot[] roster = new Bot[Match.DEFAULT_BOT_COUNT];
+            // 2026-08: pinned to 7 explicitly (the demo's count), not the new
+            // Match.DEFAULT_BOT_COUNT = 32.
+            final int rosterSize = 7;
+
+            final Bot[] roster = new Bot[rosterSize];
 
             for (int index = 0; index < roster.length; index++)
             {

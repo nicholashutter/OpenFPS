@@ -128,49 +128,54 @@ public final class DemoEffects
     public static final int MAX_TRACERS = 3;
 
     /**
-     * Tracers of the BOTS' that can be in the air at once — <b>8</b>.
+     * Tracers of the BOTS' that can be in the air at once - <b>64</b>.
      *
-     * <p>Derived from the roster and the cooldown rather than picked round, the
-     * same way {@link #MAX_PUFFS} is. {@code Bot.wantsToFire} is asked once per
-     * bot per tic and books a cooldown when it comes up, so a bot cannot fire
-     * twice on one tic and the whole room cannot have more than
-     * {@code Match.DEFAULT_BOT_COUNT} = 7 bolts born on any tic. An incoming bolt
-     * lives {@link #BOT_TRACER_LIFE_TICS} = 20 tics, and 20 is less than
-     * {@code BotSkill.DUMB.cooldownTics()} = 45, so <b>no bot can have two bolts
-     * in the air at once</b> — seven is therefore the hard maximum and not merely
-     * the common case. One larger than that, for the reason the class Javadoc
-     * gives.</p>
+     * <p><b>2026-08:</b> raised from 8 to 64 along with the
+     * {@code Match.DEFAULT_BOT_COUNT} bump from 7 to 32 (commit pending).
+     * The 16 shipped maps have 21-30 waypoints, and the visual scene
+     * in {@code MapScene} now renders all of them while the simulation
+     * also drives all of them - a cap of 8 tracers across 30+ bots
+     * meant the round-robin was overwriting the player's view of
+     * incoming fire every tic.</p>
      *
-     * <p>Seven at once is a volley the room only ever produces by coincidence:
-     * measured, seven {@link com.openfps.engine.gameplay.BotSkill#DUMB} opponents
-     * fire once every eighteen tics <i>between them</i>, so the ordinary picture
-     * is under half a bolt in the air. The pool is sized for the coincidence
-     * because the alternative is that the busiest moment in a round — the one
-     * moment the player most needs to read — is the one that silently drops
-     * bolts.</p>
+     * <p>The derivation that drove 8 - "no bot can have two bolts in
+     * the air at once, so the whole room caps at 7, plus one spare" -
+     * is stale: {@link #BOT_TRACER_LIFE_TICS} was bumped to 80 tics
+     * (see the constant's own Javadoc for why) and 80 is greater than
+     * {@code BotSkill.DUMB.cooldownTics()} = 45, so a bot CAN have
+     * two bolts alive at once. With 32 bots the worst case is 64
+     * bolts, which is what the pool is sized for.</p>
+     *
+     * <p>32 at once is a volley the map rooms produce by coincidence:
+     * measured, {@link com.openfps.engine.gameplay.BotSkill#DUMB} bots
+     * fire roughly once every 18 tics <i>between them</i>, so the
+     * ordinary picture is well under half a bolt per bot in the air.
+     * The pool is sized for the worst case because the alternative is
+     * that the busiest moment in a round - the one moment the player
+     * most needs to read - is the one that silently drops bolts.</p>
      */
-    public static final int MAX_BOT_TRACERS = 8;
+    public static final int MAX_BOT_TRACERS = 64;
 
     /**
-     * Smoke puffs of the BOTS' that can be visible at once — <b>15</b>.
+     * Smoke puffs of the BOTS' that can be visible at once - <b>80</b>.
      *
-     * <p>Same arithmetic as {@link #MAX_BOT_TRACERS}, with the room sized
-     * for the worst case rather than the common one. With
+     * <p><b>2026-08:</b> raised from 15 to 80 along with the
+     * {@code Match.DEFAULT_BOT_COUNT} bump from 7 to 32 (commit pending).
+     * Same arithmetic as {@link #MAX_BOT_TRACERS}: with
      * {@link #PUFF_LIFE_TICS} at 48 and {@code BotSkill.DUMB.cooldownTics()}
      * at <b>45</b>, a bot's second puff is born before the first has
-     * expired, so a single bot can have two puffs alive. Seven bodies times
-     * two is fourteen, plus one spare is the size of the pool.</p>
+     * expired, so a single bot can have two puffs alive. 32 bodies times
+     * two is 64, plus headroom for the round-robin's "overwrite the
+     * oldest" policy is 80.</p>
      *
-     * <p>The trade is exact: a pool of 8 would let the round-robin eat the
-     * older puff on the busiest tic, and the player would see a smoke that
-     * blinks rather than the cloud they expected. 15 keeps the headroom
-     * without becoming a memory anchor, and the per-frame cost is still
-     * 15 degenerate transforms the cull drops before the rasterizer. A
-     * future change that shortens the cooldown under 24 should recheck the
-     * arithmetic, the same way {@code DemoEffectsTest} already does for
-     * the current numbers.</p>
+     * <p>The trade is exact: a pool of 64 would let the round-robin eat
+     * the older puff on the busiest tic, and the player would see a smoke
+     * that blinks rather than the cloud they expected. 80 keeps the
+     * headroom without becoming a memory anchor, and the per-frame cost
+     * is still 80 degenerate transforms the cull drops before the
+     * rasterizer.</p>
      */
-    public static final int MAX_BOT_PUFFS = 15;
+    public static final int MAX_BOT_PUFFS = 80;
 
     /**
      * Muzzle flashes of the PLAYER'S that can be in the air at once — <b>2</b>.
@@ -186,13 +191,17 @@ public final class DemoEffects
     public static final int MAX_PLAYER_FLASHES = 2;
 
     /**
-     * Muzzle flashes of the BOTS' that can be in the air at once — <b>8</b>.
+     * Muzzle flashes of the BOTS' that can be in the air at once - <b>32</b>.
      *
-     * <p>The same arithmetic as {@link #MAX_BOT_PUFFS}: a flash lives 2 tics
-     * and the slowest bot cooldown is 45, so a single bot cannot have two
-     * flashes alive. Seven bodies, one spare.</p>
+     * <p><b>2026-08:</b> raised from 8 to 32 along with the
+     * {@code Match.DEFAULT_BOT_COUNT} bump from 7 to 32 (commit pending).
+     * A flash lives 2 tics and the slowest bot cooldown is 45, so a
+     * single bot cannot have two flashes alive. 32 bodies is the upper
+     * bound, with no spare needed because the round-robin can only
+     * overwrite a flash the player never saw for more than one
+     * tic.</p>
      */
-    public static final int MAX_BOT_FLASHES = 8;
+    public static final int MAX_BOT_FLASHES = 32;
 
     /** Tics a tracer flies before it is hidden. */
     public static final int TRACER_LIFE_TICS = 8;

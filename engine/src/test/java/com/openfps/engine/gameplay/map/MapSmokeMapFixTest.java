@@ -69,12 +69,16 @@ class MapSmokeMapFixTest
         // The player is at (0,0,0) in the smoke test (no input, no
         // movement), so they sit at the world origin the whole time.
         // A bot that died in 120 tics did so without the player ever
-        // firing — which only happens when a bot starts in a wall.
+        // firing - which only happens when a bot starts in a wall.
+        // 2026-08: the simulation now drives all of the spec's waypoints
+        // (cornerstone has 28), so the alive count is the waypoint
+        // count, not Match.DEFAULT_BOT_COUNT = 32 (the cap used to be
+        // the smaller of the two).
         assertThat(match.livingBots())
             .as("bots alive at tic %d for map %s (player never fired,"
                 + " a death here is a spawn-in-wall or fall-through-floor bug)",
                 MAX_TICS, mapId)
-            .isEqualTo(Match.DEFAULT_BOT_COUNT);
+            .isEqualTo(spec.botWaypoints().size());
 
         assertThat(match.playerHealth())
             .as("player health at tic %d for map %s (the bots fire; some"

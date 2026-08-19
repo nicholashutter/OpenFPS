@@ -108,8 +108,13 @@ final class BotFireVoicesTest
             // A limiter that shaped the AVERAGE would be changing the demo's
             // balance from the audio layer. DUMB produces a shot every 18 tics
             // across the seven of them, so the gate must be well inside that.
+            // 2026-08: pinned to 7 (the demo's count) rather than the new
+            // Match.DEFAULT_BOT_COUNT = 32. The map mode's 30-bot room
+            // produces a shot every ~2 tics; the audio cap is a per-voice
+            // gate, not a per-room one, so this assertion is about the
+            // demo, where the 7-of-them rate is the meaningful number.
             final int roomInterval =
-                BotSkill.DUMB.meanShotIntervalTics() / Match.DEFAULT_BOT_COUNT;
+                BotSkill.DUMB.meanShotIntervalTics() / 7;
 
             assertThat(BotFireVoices.MIN_INTERVAL_TICS)
                 .as("the cap is tighter than the room's own rate of fire")

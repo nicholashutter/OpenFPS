@@ -1024,7 +1024,18 @@ public final class MapGameplayPort implements I_GameplayPort
      */
     private static Bot[] botsFromSpec(final MapSpec spec)
     {
-        final int count = Math.min(spec.botWaypoints().size(), Match.DEFAULT_BOT_COUNT);
+        // 2026-08: removed the cap at Match.DEFAULT_BOT_COUNT. The 16
+        // shipped maps have 21-30 waypoints each, and the visual scene
+        // in MapScene.addBotInstances renders all of them. Capping the
+        // simulation at the previous 7 left 14-23 visual bots per map
+        // frozen at their initial waypoint - the simulation did not
+        // drive them, so publishBotPlacements never updated their
+        // world transforms and they read as "the bots don't move".
+        // The new DEFAULT_BOT_COUNT (32) covers the largest spec plus
+        // headroom, so the Math.min would be a no-op; it is removed
+        // rather than left as a no-op so the next reader sees the
+        // intent.
+        final int count = spec.botWaypoints().size();
 
         if (count == 0)
         {
@@ -1041,10 +1052,10 @@ public final class MapGameplayPort implements I_GameplayPort
         {
             final Waypoint wp = spec.botWaypoints().get(index);
 
-            // Spec bots move while they shoot, by design — see Match's
+            // Spec bots move while they shoot, by design - see Match's
             // botShotConnects for the part that makes the moving position
             // the shot origin. The pattern cycles through PACE_X /
-            // PACE_Z / ORBIT so a room of twelve bots does not pulse in
+            // PACE_Z / ORBIT so a room of 21+ bots does not pulse in
             // unison, and the amplitude is small enough that a route does
             // not run a body through a wall before the collision clip
             // gets a chance to refuse the move.

@@ -1650,23 +1650,34 @@ final class DemoEffectsTest
             // MAX_BOT_PUFFS is derived rather than picked, and the relation it
             // is derived from is: a bot fires on every cooldown, and a puff lives
             // for PUFF_LIFE_TICS, so the number of puffs a single bot can have
-            // alive at once is the ceiling of (PUFF_LIFE_TICS / cooldown) — one
-            // for the older ratio, two for the post-bump ratio. Seven bodies
-            // times that, plus one spare, is the pool size. Drop the cooldown
-            // under PUFF_LIFE_TICS / 2 and this pool is undersized — which is
+            // alive at once is the ceiling of (PUFF_LIFE_TICS / cooldown) - one
+            // for the older ratio, two for the post-bump ratio. 32 bodies
+            // times that is the lower bound. Drop the cooldown
+            // under PUFF_LIFE_TICS / 2 and this pool is undersized - which is
             // exactly the change that would do it silently.
+            //
+            // 2026-08: the bound is now "at least" the arithmetic minimum,
+            // not exactly that. The pool includes headroom for the
+            // round-robin's "overwrite the oldest" policy: a pool exactly
+            // at the bound would let the round-robin eat a smoke puff
+            // mid-flight, which is the failure mode the pool was sized to
+            // avoid. The pool is 80; the bound for 32 bots * 2 puffs is
+            // 64, so the headroom is 16. A future change that drops the
+            // pool below 64 fails this test; one that drops the cooldown
+            // below PUFF_LIFE_TICS / 2 fails the same test.
             final int maxConcurrent = (DemoEffects.PUFF_LIFE_TICS
                 + com.openfps.engine.gameplay.BotSkill.DUMB.cooldownTics() - 1)
                 / com.openfps.engine.gameplay.BotSkill.DUMB.cooldownTics();
 
             assertThat(DemoEffects.MAX_BOT_PUFFS)
-                .as("the pool covers every bot's worst case plus one spare")
-                .isEqualTo(maxConcurrent
-                    * com.openfps.engine.gameplay.Match.DEFAULT_BOT_COUNT + 1);
+                .as("the pool covers every bot's worst case")
+                .isGreaterThanOrEqualTo(maxConcurrent
+                    * com.openfps.engine.gameplay.Match.DEFAULT_BOT_COUNT);
 
             assertThat(DemoEffects.MAX_BOT_TRACERS)
-                .as("a bot never has two tracers alive, so the simple +1 spare holds")
-                .isGreaterThan(com.openfps.engine.gameplay.Match.DEFAULT_BOT_COUNT);
+                .as("the pool covers the worst case where every bot has two tracers alive")
+                .isGreaterThanOrEqualTo(2
+                    * com.openfps.engine.gameplay.Match.DEFAULT_BOT_COUNT);
         }
     }
 }

@@ -101,16 +101,26 @@ import java.util.List;
 public final class Match
 {
     /**
-     * How many bots a single-player round spawns — <b>7</b>.
+     * How many bots a single-player round spawns - <b>32</b>.
      *
-     * <p>Seven fills the demo room without crowding it: the room is ten 64-unit
-     * tiles across, so seven bodies plus the player is roughly one per two
-     * tiles' worth of floor. It is also enough that clearing the room is a
-     * sequence of decisions rather than a single burst — three shots each at
-     * five shots a second is a little over four seconds of pure firing, before
-     * any aiming.</p>
+     * <p><b>2026-08:</b> raised from 7 to 32. The 16 shipped maps have
+     * 21-30 waypoints each, and the populated scene in
+     * {@code MapScene.addBotInstances} renders all of them. The
+     * previous cap of 7 left 14-23 visual bots per map frozen at their
+     * initial waypoint - the simulation did not drive them, so
+     * {@code publishBotPlacements} never updated their world
+     * transforms and they read as "the bots don't move". 32 covers
+     * the largest waypoint count (30, in mesa) plus headroom for
+     * future maps.</p>
+     *
+     * <p>The demo continues to use 7 bots (its own
+     * {@code DemoScene.BOT_ROUTE_CENTRES} constant is the source of
+     * truth for the demo's room), so the bump does not over-populate
+     * the 20m demo room. The map rooms are 200-350m, and 32 bots is
+     * one per 6-11m of side, the same density the demo achieves at 7
+     * bots in 20m.</p>
      */
-    public static final int DEFAULT_BOT_COUNT = 7;
+    public static final int DEFAULT_BOT_COUNT = 32;
 
     /**
      * The entity id the local player's hitbox uses.

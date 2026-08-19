@@ -63,7 +63,7 @@ class MapSmokeIndustrialHardpointTest
             .as("bots alive at tic %d for map %s (a death here is a"
                 + " spawn-in-wall or fall-through-floor bug)",
                 MAX_TICS, mapId)
-            .isEqualTo(Match.DEFAULT_BOT_COUNT);
+            .isEqualTo(spec.botWaypoints().size());
 
         assertThat(match.state())
             .as("match state at tic %d for map %s", MAX_TICS, mapId)

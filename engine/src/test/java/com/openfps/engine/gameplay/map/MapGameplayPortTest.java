@@ -701,17 +701,21 @@ class MapGameplayPortTest
 
     /** Spot-check the bot count the port builds from the spec. */
     @Test
-    @DisplayName("the bot roster is the spec's waypoints, capped at DEFAULT_BOT_COUNT")
+    @DisplayName("the bot roster is the spec's waypoints, no cap")
     void shouldBuildRosterFromSpecWaypoints()
     {
         final MapSpec spec = MapLibrary.get("cornerstone");
 
         final MapGameplayPort port = newSpecPort(spec, Team.RED, 0);
 
-        // cornerstone has 8 waypoints; DEFAULT_BOT_COUNT is 7.
-        assertThat(spec.botWaypoints()).hasSizeGreaterThan(Match.DEFAULT_BOT_COUNT);
-
-        assertThat(port.match().botCount()).isEqualTo(Match.DEFAULT_BOT_COUNT);
+        // 2026-08: the cap at Match.DEFAULT_BOT_COUNT was removed. The 16
+        // shipped maps have 21-30 waypoints each, and the visual scene in
+        // MapScene.addBotInstances renders all of them - capping the
+        // simulation at the previous 7 left 14-23 visual bots per map
+        // frozen at their initial waypoint. The simulation now drives
+        // all the visual bots, so publishBotPlacements updates every
+        // body.
+        assertThat(port.match().botCount()).isEqualTo(spec.botWaypoints().size());
     }
 
     /**
