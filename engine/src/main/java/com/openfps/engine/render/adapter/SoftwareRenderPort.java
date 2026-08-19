@@ -446,6 +446,36 @@ public final class SoftwareRenderPort implements I_RenderPort
      */
     private volatile boolean outlineEnabled = true;
 
+    /**
+     * When true, the outline pass marks <b>every</b> tagged entity in the
+     * frame (excluding the player, who would otherwise outline their own
+     * arms), rather than just the one under the crosshair.
+     *
+     * <p>Off by default: the "aimed-entity-only" path is the demo's
+     * affordance for "this is what you are pointing at", and a mark on
+     * all seven opponents at once reads as a status the opponents are
+     * in, not as the player's aim. The map mode wants the latter off
+     * <i>and</i> the former off, and wants a different mark on instead:
+     * "this is an enemy, and you can see them even when you are not
+     * pointing at them". The map mode is the only consumer that flips
+     * this true.</p>
+     *
+     * <p>MUTABLE: set once at wiring time, read on the render thread.
+     * Volatile because those are different threads.</p>
+     */
+    private volatile boolean outlineAllEnemies;
+
+    /**
+     * The id the outline pass skips in {@link #outlineAllEnemies} mode.
+     * Set to the player entity id at wiring time, so the player's own
+     * arms are not outlined by the all-enemies pass. Untouched in the
+     * aimed-entity mode, which has nothing to exclude.
+     *
+     * <p>MUTABLE: set once at wiring time, read on the render thread.
+     * Volatile because those are different threads.</p>
+     */
+    private volatile int outlineExcludedEntityId = Scene.UNTAGGED;
+
     private final int chunkCount;
     private final Rasterizer.CullMode cullMode;
 
@@ -1971,14 +2001,31 @@ public final class SoftwareRenderPort implements I_RenderPort
         // them. OutlinePass's Javadoc explains why fusing it into the raster
         // pass would break the worker-count invariant.
         //
-        // Skipped outright when the crosshair is on nothing, which is most of
-        // the time: the pass reads every visible pixel's id, and there is no
-        // point scanning the frame to mark an entity that is not there.
-        if (tagged != null && outlineEnabled && aimedEntityId != Scene.UNTAGGED)
+        // Two dispatch paths:
+        //   - aimed-entity (default): outline the one entity under the
+        //     crosshair. Skipped when nothing is there, which is most of
+        //     the time: the pass reads every visible pixel's id, and
+        //     there is no point scanning the frame to mark an entity
+        //     that is not there.
+        //   - all-enemies: outline every tagged entity except the
+        //     excluded id (the player's own arms). The "aimed" sample
+        //     is not consulted at all in this mode, so the pass runs
+        //     even when the crosshair is on empty sky.
+        if (tagged != null && outlineEnabled
+            && (outlineAllEnemies || aimedEntityId != Scene.UNTAGGED))
         {
             this.parallelPasses = parallelPasses + 1L;
 
-            outlinePass.draw(framebuffer, workers, aimedEntityId);
+            if (outlineAllEnemies)
+            {
+                outlinePass.setExcludedEntityId(outlineExcludedEntityId);
+
+                outlinePass.draw(framebuffer, workers);
+            }
+            else
+            {
+                outlinePass.draw(framebuffer, workers, aimedEntityId);
+            }
         }
 
         // Translucent instances, back to front, over the finished opaque world.
@@ -3084,6 +3131,45 @@ public final class SoftwareRenderPort implements I_RenderPort
     public void setOutlineEnabled(final boolean enabled)
     {
         this.outlineEnabled = enabled;
+    }
+
+    /**
+     * Switches the outline pass from "the entity under the crosshair" to
+     * "every tagged entity except the one the caller hands to
+     * {@link #setOutlineExcludedEntityId}".
+     *
+     * <p>Off by default: the aimed-entity mark is the demo's affordance
+     * for the player's aim, and the map mode's "red outline on every
+     * enemy" is a different affordance that needs a different switch.
+     * The map mode is the only consumer that flips this true.</p>
+     *
+     * <p>Safe to flip between frames: it is two volatile reads on the
+     * render thread, and the id buffer is produced either way, so
+     * nothing else in the frame changes shape when it moves.</p>
+     *
+     * @param allEnemies true to mark every enemy; false to mark only the
+     *     entity under the crosshair
+     */
+    public void setOutlineAllEnemies(final boolean allEnemies)
+    {
+        this.outlineAllEnemies = allEnemies;
+    }
+
+    /**
+     * Sets the entity id the all-enemies outline pass skips. The map
+     * mode calls this with the player's id at wiring time, so the
+     * player's own arms are not outlined by the all-enemies pass.
+     *
+     * <p>Has no effect in aimed-entity mode: that path names a single
+     * subject and there is nothing to exclude. {@link Scene#UNTAGGED}
+     * (the default) means "skip nothing" and is what the demo wants
+     * when it is not in all-enemies mode.</p>
+     *
+     * @param entityId the id to skip, or {@link Scene#UNTAGGED} for none
+     */
+    public void setOutlineExcludedEntityId(final int entityId)
+    {
+        this.outlineExcludedEntityId = entityId;
     }
 
     /**

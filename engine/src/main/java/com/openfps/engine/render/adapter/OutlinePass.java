@@ -394,6 +394,25 @@ public final class OutlinePass
     private volatile int subject = EVERY_TAGGED_ENTITY;
 
     /**
+     * Entity id to skip in {@link #EVERY_TAGGED_ENTITY} mode, or
+     * {@link Scene#UNTAGGED} to skip nothing. MUTABLE: rebound by
+     * {@link #setExcludedEntityId} before any tile job reads it.
+     *
+     * <p>Needed by the "outline every enemy" mode the map mode uses: the
+     * player is itself a tagged entity (its arms carry the player entity
+     * id, so the outline pass can mark them too), but "outline every
+     * enemy" must mean <i>enemies</i> and not the player's own hands.
+     * The pass therefore lets the caller pick the one id to skip, and the
+     * caller picks the player's id.</p>
+     *
+     * <p>Has no effect in the single-subject mode: if the caller named a
+     * specific entity, they already know which one they meant and there
+     * is nothing to exclude. The field is read only when
+     * {@code subject == EVERY_TAGGED_ENTITY}.</p>
+     */
+    private volatile int excludedEntityId = Scene.UNTAGGED;
+
+    /**
      * Creates an outline pass with the default thickness and colour.
      */
     public OutlinePass()
@@ -574,6 +593,38 @@ public final class OutlinePass
         return subject;
     }
 
+    /**
+     * Sets the entity id to skip in {@link #EVERY_TAGGED_ENTITY} mode, or
+     * {@link Scene#UNTAGGED} (the default) to skip nothing.
+     *
+     * <p>The map mode's "outline every enemy" path sets the player's
+     * entity id here, so the player's arms are not outlined by their own
+     * pass. The exclusion is read once per tile at the top of the inner
+     * loop, not per pixel, so the per-pixel cost is unchanged.</p>
+     *
+     * <p>Has no effect in single-subject mode: if the caller named a
+     * specific entity, there is nothing to exclude. The field is read
+     * only when {@code subject == EVERY_TAGGED_ENTITY}, which the
+     * single-subject path is not.</p>
+     *
+     * @param entityId the id to skip, or {@link Scene#UNTAGGED} for none
+     */
+    public void setExcludedEntityId(final int entityId)
+    {
+        this.excludedEntityId = entityId;
+    }
+
+    /**
+     * Returns the id the last {@link #setExcludedEntityId} set, or
+     * {@link Scene#UNTAGGED} when no exclusion is in effect.
+     *
+     * @return the currently excluded entity id
+     */
+    public int excludedEntityId()
+    {
+        return excludedEntityId;
+    }
+
     /** Returns a debug rendering of this pass's configuration. */
     @Override
     public String toString()
@@ -631,11 +682,25 @@ public final class OutlinePass
                     continue;
                 }
 
+                // "Outline every enemy" mode: the player is itself a
+                // tagged entity (its arms carry the player id) and would
+                // be outlined by the everything-mode path. The caller
+                // hands the player id through setExcludedEntityId, the
+                // field is read once per tile at the top of the loop, and
+                // the per-pixel cost stays at one int compare - the
+                // excluded id is its own skip rule, not a per-pixel
+                // search.
+                if (everything && id == excludedEntityId
+                    && excludedEntityId != Scene.UNTAGGED)
+                {
+                    continue;
+                }
+
                 if (!everything && id != marked)
                 {
                     // Someone else's body. It still counts as "different" to
                     // the subject's own edge test below, so the seam between
-                    // two touching opponents is still found — it is simply
+                    // two touching opponents is still found - it is simply
                     // drawn on the subject's side of the boundary only.
                     continue;
                 }

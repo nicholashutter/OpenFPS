@@ -290,6 +290,82 @@ final class OutlinePassTest
             assertThat(pass.subjectEntityId()).isEqualTo(OutlinePass.EVERY_TAGGED_ENTITY);
         }
 
+        @Test
+        @DisplayName("the excluded id is skipped in EVERY_TAGGED_ENTITY mode, others still mark")
+        void shouldSkipTheExcludedEntityInAllMode()
+        {
+            // 2026-08: the map mode's "outline every enemy" path uses
+            // this skip. Two boxes, one tagged with the id we will
+            // exclude and one with an id we will not; the pass should
+            // mark the second and not the first.
+            final OutlinePass pass = defaultPass();
+
+            assertThat(pass.excludedEntityId())
+                .as("the default is UNTAGGED — the demo's reference path skips nothing")
+                .isEqualTo(Scene.UNTAGGED);
+
+            pass.setExcludedEntityId(ID_A);
+
+            assertThat(pass.excludedEntityId())
+                .as("the setter round-trips before draw so the wiring is observable")
+                .isEqualTo(ID_A);
+
+            final Framebuffer fb = frame();
+
+            box(fb, BOX_MIN_X, BOX_MIN_Y, BOX_MAX_X, BOX_MAX_Y, ID_A);
+
+            box(fb, PAIR_SPLIT_X + 1, BOX_MIN_Y, PAIR_MAX_X, BOX_MAX_Y, ID_B);
+
+            pass.draw(fb, null);
+
+            // The excluded box (left) has no paint anywhere in its
+            // footprint; the other box (right) is outlined at its
+            // silhouette and interior creases.
+            assertThat(painted(fb, BOX_MIN_X, MID_Y))
+                .as("the excluded box's left silhouette is not painted")
+                .isFalse();
+
+            assertThat(painted(fb, BOX_MAX_X, MID_Y))
+                .as("the excluded box's right silhouette is not painted")
+                .isFalse();
+
+            assertThat(painted(fb, (BOX_MIN_X + BOX_MAX_X) / 2, MID_Y))
+                .as("the excluded box's interior is not painted")
+                .isFalse();
+
+            assertThat(painted(fb, PAIR_SPLIT_X + 1, MID_Y))
+                .as("the non-excluded box's silhouette is painted")
+                .isTrue();
+
+            assertThat(painted(fb, PAIR_MAX_X, MID_Y))
+                .as("the non-excluded box's right silhouette is painted")
+                .isTrue();
+
+            // Clearing the exclusion flips the pass back to the
+            // "everything is marked" behaviour the demo's reference
+            // path uses, and the previously-skipped box now contributes
+            // its edges. The pixel diff is the visible mark on the
+            // excluded body; the assertion is that the diff is not
+            // empty, which is what proves the pass reached it.
+            pass.setExcludedEntityId(Scene.UNTAGGED);
+
+            final Framebuffer none = frame();
+
+            box(none, BOX_MIN_X, BOX_MIN_Y, BOX_MAX_X, BOX_MAX_Y, ID_A);
+
+            box(none, PAIR_SPLIT_X + 1, BOX_MIN_Y, PAIR_MAX_X, BOX_MAX_Y, ID_B);
+
+            pass.draw(none, null);
+
+            assertThat(painted(none, BOX_MIN_X, MID_Y))
+                .as("with the exclusion cleared, the first box is marked again")
+                .isTrue();
+
+            assertThat(none.colorBuffer())
+                .as("the cleared-exclusion frame differs from the excluded one")
+                .isNotEqualTo(fb.colorBuffer());
+        }
+
         // Whether the pass painted anywhere in the visible rectangle.
         private boolean anyPainted(final Framebuffer fb)
         {

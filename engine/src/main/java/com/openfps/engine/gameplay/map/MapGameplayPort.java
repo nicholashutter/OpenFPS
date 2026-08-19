@@ -380,6 +380,19 @@ public final class MapGameplayPort implements I_GameplayPort
         this.spawnYaw = spawn.yawRadians();
 
         this.spawnPitch = 0.0f;
+
+        // 2026-08: the map mode's affordance is "red outline on every
+        // enemy, not just the one under the crosshair". The demo's
+        // aimed-entity mark reads as "this is what you are pointing at"
+        // and is the wrong signal on a 200m map where the player
+        // needs to see opponents that are not yet under the crosshair.
+        // We flip the renderer's outline pass into the all-enemies
+        // mode and exclude the player entity so the player's own
+        // arms are not outlined. Wired here rather than in init()
+        // because the renderer is final and the wiring is one-time.
+        this.renderer.setOutlineAllEnemies(true);
+
+        this.renderer.setOutlineExcludedEntityId(Match.PLAYER_ENTITY_ID);
     }
 
     /**
