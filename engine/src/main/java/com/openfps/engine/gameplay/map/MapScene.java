@@ -988,6 +988,133 @@ public final class MapScene
             builder.addWorldInstance(crate,
                 placement(pos[0], 0.0f, pos[1], 0.0f, KIT_WORLD_SCALE));
         }
+
+        // ---- Structural covers: L-walls, T-walls, stepped cover, and
+        // ---- low half-walls. 2026-08: the previous scenery (lane
+        // ---- walls, columns, scatter) was a flat ring of single
+        // ---- boxes, which the player kept reading as "flat boxes
+        // ---- with no geometry". The kit's 1x1x1 crate is large
+        // ---- enough to compose into a few useful shapes, and the
+        // ---- shapes (L, T, step, low) are the same vocabulary a
+        // ---- Call of Duty map uses for chokepoint and corner
+        // ---- cover. Each shape is a small list of crate
+        // ---- placements rather than a single one, so the per-shape
+        // ---- footprint is 1-3 crates and the visual reads as
+        // ---- structure rather than as a single box on the floor.
+        //
+        // Positions are scaled with `s` like the rest of the
+        // scenery, and live in the open ground between the level
+        // .ofm centerpiece and the perimeter wall - the same band
+        // the other scenery occupies.
+
+        // ---- L-walls: two crates meeting at a 90-degree corner.
+        // ---- Placed at four positions well inside the playable
+        // ---- area, off the lane centres (which the lane walls
+        // ---- already claim) and off the column corners.
+        for (final float[] lCorner : new float[][]
+            {
+                {-160.0f * s,  -32.0f * s},
+                { 160.0f * s,  -32.0f * s},
+                {-160.0f * s,   32.0f * s},
+                { 160.0f * s,   32.0f * s},
+            })
+        {
+            // The L's two legs, each one crate deep. The shared
+            // corner sits at the (lCorner) position; the legs reach
+            // out along ±x and ±z from there. Each leg is two
+            // crates long so the L reads as a corner the player can
+            // actually crouch behind, not as a single box.
+            builder.addWorldInstance(crate,
+                placement(lCorner[0], 0.0f, lCorner[1], 0.0f, KIT_WORLD_SCALE));
+
+            builder.addWorldInstance(crate,
+                placement(lCorner[0] + KIT_WORLD_SCALE, 0.0f, lCorner[1], 0.0f,
+                    KIT_WORLD_SCALE));
+
+            builder.addWorldInstance(crate,
+                placement(lCorner[0], 0.0f, lCorner[1] + KIT_WORLD_SCALE, 0.0f,
+                    KIT_WORLD_SCALE));
+        }
+
+        // ---- T-walls: three crates meeting at a T-junction, with
+        // ---- one crate as the stem and two as the crossbar. The
+        // ---- crossbar reads as a chokepoint the player can flank
+        // ---- either side of. Placed at four positions rotated 90
+        // ---- degrees between them so the four T's are not the
+        // ---- same shape repeated.
+        for (final float[] tPos : new float[][]
+            {
+                { -64.0f * s,  160.0f * s},
+                {  64.0f * s, -160.0f * s},
+                { -64.0f * s, -160.0f * s},
+                {  64.0f * s,  160.0f * s},
+            })
+        {
+            // T with stem pointing along +z, crossbar along x
+            // (the first T). The other three rotate 90 / 180 / 270
+            // by swapping which direction the legs reach.
+            builder.addWorldInstance(crate,
+                placement(tPos[0], 0.0f, tPos[1], 0.0f, KIT_WORLD_SCALE));
+
+            builder.addWorldInstance(crate,
+                placement(tPos[0] - KIT_WORLD_SCALE, 0.0f, tPos[1], 0.0f,
+                    KIT_WORLD_SCALE));
+
+            builder.addWorldInstance(crate,
+                placement(tPos[0] + KIT_WORLD_SCALE, 0.0f, tPos[1], 0.0f,
+                    KIT_WORLD_SCALE));
+
+            builder.addWorldInstance(crate,
+                placement(tPos[0], 0.0f, tPos[1] + KIT_WORLD_SCALE, 0.0f,
+                    KIT_WORLD_SCALE));
+        }
+
+        // ---- Stepped cover: a two-crate stair, one crate on the
+        // ---- floor and one crate half-height on top of it. Reads
+        // as a step the player can vault or crouch behind, and
+        // gives the bot's collision clip a non-flat surface to
+        // walk along. Six placements well inside the playable
+        // area, two per side of the centre line.
+        for (final float[] stepPos : new float[][]
+            {
+                {-128.0f * s,   80.0f * s},
+                { 128.0f * s,   80.0f * s},
+                {-128.0f * s,  -80.0f * s},
+                { 128.0f * s,  -80.0f * s},
+                {   0.0f,      160.0f * s},
+                {   0.0f,     -160.0f * s},
+            })
+        {
+            builder.addWorldInstance(crate,
+                placement(stepPos[0], 0.0f, stepPos[1], 0.0f, KIT_WORLD_SCALE));
+
+            builder.addWorldInstance(crate,
+                placement(stepPos[0], KIT_WORLD_SCALE * 0.5f, stepPos[1], 0.0f,
+                    KIT_WORLD_SCALE));
+        }
+
+        // ---- Low half-walls: single crates at half scale, the
+        // ---- "crouch behind this" cover. Six placements around
+        // ---- the inner perimeter, well clear of the full-cover
+        // ---- columns at the quarter positions.
+        for (final float[] lowPos : new float[][]
+            {
+                {   0.0f,      128.0f * s},
+                {   0.0f,     -128.0f * s},
+                { 128.0f * s,    0.0f},
+                {-128.0f * s,    0.0f},
+                {  72.0f * s,   72.0f * s},
+                { -72.0f * s,  -72.0f * s},
+            })
+        {
+            // Half scale on the Y axis only would need a non-uniform
+            // scale; the placement() helper takes a uniform scale,
+            // so the half-wall is half-scale on every axis. The
+            // visual reads as a small box, which is what "low cover"
+            // is.
+            builder.addWorldInstance(crate,
+                placement(lowPos[0], 0.0f, lowPos[1], 0.0f, KIT_WORLD_SCALE * 0.5f));
+        }
     }
 
     /**

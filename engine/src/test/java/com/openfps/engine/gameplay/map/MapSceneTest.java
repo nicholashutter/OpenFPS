@@ -158,15 +158,18 @@ class MapSceneTest
 
             final MapScene mapScene = MapScene.build(spec, models);
 
-            // Scene is more than the level alone — the level-only path
+            // Scene is more than the level alone - the level-only path
             // returns 1 world instance, the populated path adds the kit
-            // (5x5 floor = 25 tiles + 25 ceiling + 4 walls per side x 3
-            // courses x 5 tiles = 60 wall tiles + 4 columns + 6 crates
-            // = 144+ instances just for the kit, plus the 12 bots and 12
-            // weapons on top).
+            // (5x5 floor = 25 tiles + 25 ceiling + 4 walls per side x 4
+            // courses x 5 tiles = 80 wall tiles + 4 columns + 6 crates
+            // = 165+ instances just for the kit, plus the structural
+            // scenery: 4 L-walls (3 crates each), 4 T-walls (4 each),
+            // 6 stepped covers (2 each), 6 low half-walls (1 each) = 46
+            // more. Then the 12 bots, 12 weapons, the arms, the
+            // viewmodel and the effect pool on top).
             assertThat(mapScene.scene().worldInstanceCount())
-                .as("the populated path must stage the kit + bots + weapons + arms + effect pool")
-                .isGreaterThan(50);
+                .as("the populated path must stage the kit + structural scenery + bots + weapons + arms + effect pool")
+                .isGreaterThan(200);
 
             // The corner-stone spec has 12 bot waypoints, so we expect 12
             // bot instances and 12 weapon instances, each with a valid
