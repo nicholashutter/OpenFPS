@@ -20,6 +20,7 @@ import com.openfps.engine.gameplay.PhysicsWorld;
 import com.openfps.engine.gameplay.Pickup;
 import com.openfps.engine.gameplay.PlayerController;
 import com.openfps.engine.gameplay.PlayerInputView;
+import com.openfps.engine.gameplay.Weapon;
 import com.openfps.engine.gameplay.port.I_GameplayPort;
 import com.openfps.engine.hal.port.I_InputPort;
 import com.openfps.engine.hal.port.InputState;
@@ -973,13 +974,24 @@ public final class MapGameplayPort implements I_GameplayPort
 
         final float aimZ = playerFireScratch[5];
 
-        match.firePlayerShot(eyeX, eyeY, eyeZ, aimX, aimY, aimZ);
+        // 2026-08: the current weapon drives the fire path. The
+        // blaster is the single hitscan the demo and the map
+        // port always used; the shotgun is a fan of pellets
+        // with one-shot-kill damage at point-blank range. The
+        // match consumes one round from the inventory after
+        // every trigger pull, so a limited-ammo weapon spends
+        // its budget the way the pickup promised.
+        final Weapon currentWeapon = controller.currentWeapon();
+
+        match.firePlayerShot(eyeX, eyeY, eyeZ, aimX, aimY, aimZ, currentWeapon);
+
+        controller.inventory().consume(currentWeapon);
 
         // Publish an outgoing tracer the player can SEE leave the gun.
         // The demo port does this (see DemoGameplayPort.fireIfRequested);
         // the map port was missing it, so the player's hitscan
         // registered on the match side but never appeared on screen
-        // — the gun visibly did nothing. Same fire call, just an
+        // - the gun visibly did nothing. Same fire call, just an
         // outgoing-tracer publish alongside it. The spawn point is the
         // viewmodel's barrel tip in world space, not the eye.
         if (effects != null)

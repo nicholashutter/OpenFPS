@@ -1672,6 +1672,43 @@ public final class Match
     public int firePlayerShot(final float eyeX, final float eyeY, final float eyeZ,
         final float aimX, final float aimY, final float aimZ)
     {
+        return firePlayerShot(eyeX, eyeY, eyeZ, aimX, aimY, aimZ, Weapon.BLASTER);
+    }
+
+    /**
+     * Fires one trigger pull. 2026-08: weapon-aware dispatch. The
+     * {@link Weapon#BLASTER} is a single hitscan with the
+     * standard blaster damage; the {@link Weapon#SHOTGUN} is a
+     * cone of pellets each with their own hitscan, doing
+     * "infinite" damage (a one-shot kill) at close range and
+     * the blaster's far-range damage at long range. The
+     * {@link Weapon#ROCKET_LAUNCHER} is a single projectile,
+     * which lands in a follow-up commit; until then it fires
+     * like the blaster.
+     *
+     * <p>Returns the entity id of the first hit (which is the
+     * closest pellet, for the shotgun, or the single hitscan's
+     * hit, for the blaster). The match state ({@code botsKilled}
+     * etc.) is updated for every pellet that lands.</p>
+     *
+     * @param eyeX the shot origin, world x - the player's eye
+     * @param eyeY the shot origin, world y
+     * @param eyeZ the shot origin, world z
+     * @param aimX the central aim direction, world x; need not be unit length
+     * @param aimY the central aim direction, world y
+     * @param aimZ the central aim direction, world z
+     * @param weapon the weapon the player is firing
+     * @return the id of the bot hit, or {@link #NO_HIT} when the shot missed
+     */
+    public int firePlayerShot(final float eyeX, final float eyeY, final float eyeZ,
+        final float aimX, final float aimY, final float aimZ, final Weapon weapon)
+    {
+        if (weapon.fireMode() == Weapon.FireMode.CONE)
+        {
+            return fireShotgun(eyeX, eyeY, eyeZ, aimX, aimY, aimZ);
+        }
+
+        // Blaster (and the rocket until the projectile path lands).
         this.playerShotsFired = playerShotsFired + 1;
 
         populateLivingBotTargets();
@@ -1703,6 +1740,175 @@ public final class Match
         }
 
         return struck;
+    }
+
+    /**
+     * Fires one shotgun blast: a horizontal fan of pellets, each
+     * a separate hitscan. The fan is centred on the player's
+     * central aim, so pointing the crosshair at a target puts
+     * that target in the densest part of the spread.
+     *
+     * <p>The "infinite damage at close range" rule: a pellet
+     * that lands within {@link Weapon#SHOTGUN_CLOSE_RANGE_UNITS}
+     * does {@link Weapon#SHOTGUN_CLOSE_DAMAGE}, which is enough
+     * to kill a bot with full health in one hit. A pellet that
+     * lands beyond that range does
+     * {@link Weapon#SHOTGUN_FAR_DAMAGE}, half the blaster's
+     * shot damage, because each pellet is only one of seven and
+     * the bot's health is the same as the blaster would have
+     * hit. The damage split is the one that makes "aim with the
+     * crosshair at point-blank" a kill and "aim from across the
+     * room" a tickle.</p>
+     *
+     * <p>The pellet count is fixed at
+     * {@link Weapon#SHOTGUN_PELLETS}; the spread is fixed at
+     * {@link Weapon#SHOTGUN_SPREAD_RADIANS}. A deterministic
+     * fan (not a random scatter) is the right call for the
+     * lockstep claim: the same aim produces the same pellet
+     * hits on every peer, with no random source in the path.</p>
+     */
+    private int fireShotgun(final float eyeX, final float eyeY, final float eyeZ,
+        final float aimX, final float aimY, final float aimZ)
+    {
+        this.playerShotsFired = playerShotsFired + 1;
+
+        populateLivingBotTargets();
+
+        if (livingSceneCount == 0)
+        {
+            return NO_HIT;
+        }
+
+        // Normalize the central aim once. Hitscan.fire rejects
+        // anything that is not unit length, and the pellets are
+        // unit-length rotations of this vector. StrictMath, not
+        // Math - the deterministic lockstep test in BotRngTest
+        // asserts that Match is free of java.lang.Math, and the
+        // squared-length + StrictMath.sqrt keeps the same shape.
+        final double aimLenSq = (double) aimX * aimX + (double) aimY * aimY + (double) aimZ * aimZ;
+
+        if (aimLenSq < 1.0e-12)
+        {
+            return NO_HIT;
+        }
+
+        final float aimLen = (float) StrictMath.sqrt(aimLenSq);
+
+        if (aimLen < 1.0e-6f)
+        {
+            return NO_HIT;
+        }
+
+        final float ax = aimX / aimLen;
+        final float ay = aimY / aimLen;
+        final float az = aimZ / aimLen;
+
+        // Pre-allocate one scratch for every pellet's rotated
+        // aim. Reusing the muzzle scratch is the cheap move
+        // because muzzleScratch is a 3-float buffer that no
+        // other path in the shotgun frame reads.
+        final int pellets = Weapon.SHOTGUN_PELLETS;
+
+        final float spread = Weapon.SHOTGUN_SPREAD_RADIANS;
+
+        // The pellets' yaw offsets in radians. 5 pellets across
+        // [-2, -1, 0, 1, 2] multiples of the spread step; the
+        // centre pellet is the zero offset and reads as a
+        // normal hitscan.
+        //   offsetIndex = -2: -2 * spreadStep
+        //   offsetIndex = -1: -1 * spreadStep
+        //   offsetIndex =  0:  0 (the central aim)
+        //   offsetIndex =  1: +1 * spreadStep
+        //   offsetIndex =  2: +2 * spreadStep
+        // where spreadStep = spread * 2 / (pellets - 1) so the
+        // outermost pellets land at +/- spread.
+        final float spreadStep;
+
+        if (pellets > 1)
+        {
+            spreadStep = (spread * 2.0f) / (pellets - 1);
+        }
+        else
+        {
+            spreadStep = 0.0f;
+        }
+
+        int firstHit = NO_HIT;
+
+        float firstHitDistance = Float.POSITIVE_INFINITY;
+
+        for (int p = 0; p < pellets; p++)
+        {
+            final int offsetIndex = p - (pellets / 2);
+
+            final float da = offsetIndex * spreadStep;
+
+            final float cosDa = (float) StrictMath.cos(da);
+
+            final float sinDa = (float) StrictMath.sin(da);
+
+            // Yaw rotation around world +y. The aim's y is
+            // preserved; the x and z rotate. This is a 2D
+            // spread (no vertical fan), which reads as a
+            // sawed-off rather than a vertical-pattern shotgun,
+            // and avoids the basis-vector math a 3D spread
+            // would need.
+            final float pelletAimX = ax * cosDa + az * sinDa;
+
+            final float pelletAimY = ay;
+
+            final float pelletAimZ = -ax * sinDa + az * cosDa;
+
+            if (!Hitscan.fire(eyeX, eyeY, eyeZ, pelletAimX, pelletAimY, pelletAimZ,
+                livingSceneScratch, livingSceneCount, hit))
+            {
+                continue;
+            }
+
+            this.playerShotsHit = playerShotsHit + 1;
+
+            final int struck = hit.entityId();
+
+            final Bot victim = byId(struck);
+
+            // The damage rule: a pellet that lands within
+            // SHOTGUN_CLOSE_RANGE_UNITS does the close-range
+            // damage (one-shot kill); a pellet beyond that
+            // does the far-range damage. The hit's distance()
+            // is the same units the threshold is in.
+            final boolean close = hit.distance() <= Weapon.SHOTGUN_CLOSE_RANGE_UNITS;
+
+            final int pelletDamage;
+
+            if (close)
+            {
+                pelletDamage = Weapon.SHOTGUN_CLOSE_DAMAGE;
+            }
+            else
+            {
+                pelletDamage = Weapon.SHOTGUN_FAR_DAMAGE;
+            }
+
+            if (victim != null && victim.damage(pelletDamage))
+            {
+                this.botsKilled = botsKilled + 1;
+
+                countTowardTheStreak();
+            }
+
+            // Track the closest hit across the fan so the
+            // return value (the entity id) is the
+            // nearest-struck bot, which is the same shape the
+            // blaster's single hitscan returns.
+            if (hit.distance() < firstHitDistance)
+            {
+                firstHit = struck;
+
+                firstHitDistance = hit.distance();
+            }
+        }
+
+        return firstHit;
     }
 
     // One kill on the streak, and the award if that was the third.

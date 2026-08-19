@@ -64,6 +64,58 @@ public final class Weapon
     public static final Weapon ROCKET_LAUNCHER = new Weapon(
         "rocket", "Rocket Launcher", FireMode.PROJECTILE, 200, 1);
 
+    /**
+     * How many pellets one shotgun blast spreads across.
+     * Five reads as a shotgun (a single hitscan reads as a
+     * rifle), and a 5-pellet fan covers a useful cross-section
+     * at point-blank without being noisy.
+     */
+    public static final int SHOTGUN_PELLETS = 5;
+
+    /**
+     * Half-width of the shotgun's pellet fan, in radians. A
+     * 0.15 rad (~8.6 degrees) total spread is what a sawed-off
+     * shotgun has at the muzzle; a tighter choke would make the
+     * shotgun feel like a rifle, and a wider choke would make
+     * the pellets miss anything but the broad side of a barn.
+     */
+    public static final float SHOTGUN_SPREAD_RADIANS = 0.15f;
+
+    /**
+     * Maximum hit distance, in world units, at which a
+     * shotgun pellet does its close-range damage. A pellet
+     * within this range is a one-shot kill against a
+     * full-health bot; beyond it, the pellet does the
+     * far-range damage and may take several shots to drop
+     * the same target. 256 world units is 16 m, which is
+     * "across a small room" rather than "across the map",
+     * so the close-range rule is what a player standing
+     * in the same tile as a bot experiences.
+     */
+    public static final float SHOTGUN_CLOSE_RANGE_UNITS = 256.0f;
+
+    /**
+     * The damage a close-range pellet does. Pinned to a
+     * number higher than any bot's health, so a single
+     * pellet kills in one hit. {@link #Bot#MAX_HEALTH}
+     * is 100 and the blaster does {@code PLAYER_SHOT_DAMAGE
+     * = 34}, so 1000 is well past both.
+     */
+    public static final int SHOTGUN_CLOSE_DAMAGE = 1000;
+
+    /**
+     * The damage a long-range pellet does. Half the blaster's
+     * shot damage, because the long-range pellet is one of
+     * seven and the bot's health is the same as the blaster
+     * would have hit. A player who lands most of a
+     * point-blank blast gets the close-range number; a
+     * player who lands one of seven pellets at the back of
+     * the room gets this. The damage split is the one that
+     * makes "aim with the crosshair at point-blank" a kill
+     * and "aim from across the room" a tickle.
+     */
+    public static final int SHOTGUN_FAR_DAMAGE = 17;
+
     private final String id;
     private final String displayName;
     private final FireMode fireMode;

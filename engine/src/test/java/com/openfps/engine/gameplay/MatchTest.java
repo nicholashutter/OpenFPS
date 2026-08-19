@@ -824,6 +824,127 @@ class MatchTest
     }
 
     @Nested
+    @DisplayName("the shotgun — 2026-08 weapon dispatch")
+    class Shotgun
+    {
+        // The player's eye is 41 units above the feet. The bot's
+        // hitbox is 56 units tall, so a pellet that hits the
+        // centre of the body lands 28 units away from the
+        // eye's vertical centre - but the hitscan is on the
+        // box, not the centre, and the shotgun's test sits the
+        // bot so its box is squarely in front of the eye. The
+        // 256-unit close range is wide enough that the
+        // hit-distance lands inside it.
+        private static final float SHOTGUN_CLOSE_Z = 100.0f;
+
+        @Test
+        @DisplayName("a close-range shotgun blast kills in one shot")
+        void shouldOneShotAtPointBlank()
+        {
+            // 2026-08: the shotgun's selling point. The player
+            // and the bot are within SHOTGUN_CLOSE_RANGE_UNITS,
+            // the pellets land, and one pellet does
+            // SHOTGUN_CLOSE_DAMAGE (well past Bot.MAX_HEALTH).
+            // The bot is dead after one trigger pull.
+            final Bot[] roster =
+            {
+                sentryAt(Match.FIRST_BOT_ENTITY_ID, SHOTGUN_CLOSE_Z),
+            };
+
+            final Match match = new Match(roster);
+
+            final int hit = match.firePlayerShot(PLAYER_X, PLAYER_EYE_Y, PLAYER_Z,
+                0.0f, 0.0f, 1.0f, Weapon.SHOTGUN);
+
+            assertThat(hit)
+                .as("a close-range shotgun blast hits the bot")
+                .isEqualTo(Match.FIRST_BOT_ENTITY_ID);
+
+            assertThat(roster[0].isAlive())
+                .as("the bot is dead from the close-range damage")
+                .isFalse();
+
+            assertThat(match.botsKilled()).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("a long-range shotgun blast does less damage per pellet")
+        void shouldTickleAtLongRange()
+        {
+            // 2026-08: a pellet that lands beyond
+            // SHOTGUN_CLOSE_RANGE_UNITS does the far-range
+            // damage (half the blaster), not the one-shot
+            // damage. The bot survives the first blast and
+            // takes only the far-range damage across the
+            // pellets that landed.
+            final Bot[] roster =
+            {
+                sentryAt(Match.FIRST_BOT_ENTITY_ID, 600.0f),
+            };
+
+            final Match match = new Match(roster);
+
+            final int hit = match.firePlayerShot(PLAYER_X, PLAYER_EYE_Y, PLAYER_Z,
+                0.0f, 0.0f, 1.0f, Weapon.SHOTGUN);
+
+            assertThat(hit)
+                .as("a far-range shotgun blast still hits the bot")
+                .isEqualTo(Match.FIRST_BOT_ENTITY_ID);
+
+            assertThat(roster[0].isAlive())
+                .as("the far-range damage is well below MAX_HEALTH, so the bot lives")
+                .isTrue();
+
+            // Player fires once; 5 pellets were tested. The
+            // fan shape puts one pellet dead-on, so at least
+            // one lands. The hit counter is bumped on every
+            // pellet that lands (the fan may have one or more
+            // pellets connect, depending on the bot's box and
+            // the fan's spread). The exact number of hits
+            // depends on the box-vs-fan math, so the assertion
+            // is "the player fired once and at least one pellet
+            // landed" rather than pinning a count.
+            assertThat(match.playerShotsFired())
+                .as("one trigger pull counts as one shot")
+                .isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("the blaster is still a single hitscan, with the Weapon parameter defaulting to BLASTER")
+        void shouldKeepBlasterAsSingleHitscan()
+        {
+            // 2026-08: the 7-arg overload is the new shape; the
+            // 6-arg overload still calls it with BLASTER. The
+            // blaster does PLAYER_SHOT_DAMAGE (34) per shot,
+            // not the shotgun's one-shot-kill damage, so a
+            // bot at 100 units survives the first blaster
+            // shot. That is the proof the dispatch landed
+            // on the blaster path and not the shotgun path.
+            final Bot[] roster =
+            {
+                sentryAt(Match.FIRST_BOT_ENTITY_ID, 100.0f),
+            };
+
+            final Match match = new Match(roster);
+
+            final int hit = match.firePlayerShot(PLAYER_X, PLAYER_EYE_Y, PLAYER_Z,
+                0.0f, 0.0f, 1.0f);
+
+            assertThat(hit)
+                .as("the legacy 6-arg call dispatches to BLASTER and hits")
+                .isEqualTo(Match.FIRST_BOT_ENTITY_ID);
+
+            assertThat(roster[0].isAlive())
+                .as("the blaster does 34 damage per shot, the bot has 100 hp, and lives")
+                .isTrue();
+
+            assertThat(roster[0].health())
+                .as("the blaster's 34 damage is reflected in the bot's health")
+                .isEqualTo(Bot.MAX_HEALTH - 34);
+        }
+    }
+
+    @Nested
     @DisplayName("respawning")
     class Respawn
     {
