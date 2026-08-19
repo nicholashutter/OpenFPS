@@ -115,29 +115,42 @@ public final class MapGameplayPort implements I_GameplayPort
      * Amplitudes for each spec bot pattern, paired with {@link
      * #SPEC_BOT_PATTERNS}.
      *
-     * <p>Small enough to keep a route inside most rooms: a 40-unit
-     * pace reaches at most 40 units from the waypoint, well inside
-     * the inner-wall inner face of the 320x320 ships. ORBIT is
-     * tighter at 30 because the circle reads larger than the same
-     * radius on a line.</p>
+     * <p><b>2026-08 scaling:</b> the 16 maps were re-sized to
+     * 3200-5600 (200-350m square) in commits 15f00cb / c419c58 /
+     * 7675496 / ec7be2e. The original 40-unit / 30-unit amplitudes
+     * were correct for the 320 x 320 ships — a bot's pace covered
+     * 12% of a side — but the same numbers on a 4000-unit side are
+     * 1% and the bots appeared stationary. The new amplitudes are
+     * tied to the new grid spacing: 900 for PACE_X (a full column
+     * step, so a PACE_X bot traces the length of one grid row)
+     * and 300 for PACE_Z (a single row spacing on the 4000-5600
+     * grids). ORBIT at 900 is a 1800-unit diameter circle, the
+     * largest that does not put a bot on a column. PACE_Z stays
+     * smaller than PACE_X because the grid's row spacing
+     * (450-600) is much tighter than its col spacing (3600).</p>
      */
     private static final float[] SPEC_BOT_AMPLITUDES =
     {
-        40.0f, 40.0f, 30.0f,
+        900.0f, 300.0f, 900.0f,
     };
 
     /**
      * Tics for one full circuit of each spec bot pattern, paired
      * with {@link #SPEC_BOT_PATTERNS}.
      *
-     * <p>Six to eight seconds, deliberately not a common multiple.
-     * The shortest is ORBIT at 360 tics; PACE_X and PACE_Z are 420
-     * tics. The whole room never reaches its extremes on the same
-     * tic.</p>
+     * <p>Twelve to fifteen seconds at 60 Hz, deliberately not a
+     * common multiple. The 900-unit PACE_X (1800-unit slide) and
+     * 900-unit ORBIT (1800-unit diameter) need a longer period to
+     * stay under the player's 256-unit-per-second sprint speed; a
+     * 600-tic period at 1800 units of reach works out to 180 units
+     * per second, which is slow enough to chase but fast enough to
+     * dodge. PACE_Z at 720 tics covers 600 units at 50 units per
+     * second, which reads as "patrolling" rather than "fleeing".
+     * The whole room never reaches its extremes on the same tic.</p>
      */
     private static final int[] SPEC_BOT_PERIODS =
     {
-        420, 420, 360,
+        600, 720, 600,
     };
 
     /** The spec this port is running. */

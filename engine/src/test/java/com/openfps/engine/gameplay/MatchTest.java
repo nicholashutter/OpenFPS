@@ -513,26 +513,27 @@ class MatchTest
         @DisplayName("bots move before they shoot, so fire comes from where the body is")
         void shouldShootFromThePostMoveePositionWhenABotIsPatrolling()
         {
-            // A bot pacing along x, a quarter period in, is 400 units to the side
-            // of its home point — from which the player is out of range even
-            // though the home point is not. If the shot were resolved before the
-            // move it would come from the home point and land.
-            final float reach = Match.BOT_RANGE_UNITS - 50.0f;
+            // A bot pacing along x, a quarter period in, is 1500 units to the
+            // side of its home point — from which the player is out of range
+            // (post-2026-08 BOT_RANGE_UNITS bump to 2048) even though the home
+            // point is not. If the shot were resolved before the move it would
+            // come from the home point and land.
+            final float reach = Match.BOT_RANGE_UNITS - 100.0f;
 
             final Bot pacer = new Bot(2, 0.0f, 0.0f, reach, BotPattern.PACE_X,
-                400.0f, 4, 0);
+                1500.0f, 4, 0);
 
             final Match match = marksmanMatch(pacer);
 
             // At its home point — where the constructor placed it, and where it
-            // still is when tick() is entered — the player is 462 units away and
-            // comfortably in range. A quarter period later it is 400 units to
-            // the side and 611 units away, which is out of range.
+            // still is when tick() is entered — the player is 1948 units away
+            // and comfortably in range. A quarter period later it is 1500 units
+            // to the side and 2461 units away, which is out of range.
             assertThat(pacer.positionX()).isEqualTo(0.0f);
 
             tick(match, 1);
 
-            assertThat(pacer.positionX()).isGreaterThan(300.0f);
+            assertThat(pacer.positionX()).isGreaterThan(1200.0f);
 
             // So a shot resolved from the PRE-move position would have landed.
             // Return fire coming from where a body used to be is exactly the

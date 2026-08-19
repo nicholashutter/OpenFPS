@@ -69,7 +69,7 @@ class MatchCtfTest
         @DisplayName("both flags start at home, no captures, no carrier")
         void shouldStartWithFlagsAtHome()
         {
-            final Match match = ctfMatch(List.of(redBotAt(1000.0f, 1000.0f, 0)));
+            final Match match = ctfMatch(List.of(redBotAt(0.0f, 5000.0f, 0)));
 
             assertThat(match.ctfRedFlagCarrier()).isNull();
 
@@ -91,7 +91,7 @@ class MatchCtfTest
         @DisplayName("a RED player on BLUE's flag picks it up")
         void shouldPickUpForRed()
         {
-            final Match match = ctfMatch(List.of(redBotAt(1000.0f, 1000.0f, 0)));
+            final Match match = ctfMatch(List.of(redBotAt(0.0f, 5000.0f, 0)));
 
             match.setPlayerTeam(Team.RED);
 
@@ -107,7 +107,7 @@ class MatchCtfTest
         @DisplayName("a BLUE player on RED's flag picks it up")
         void shouldPickUpForBlue()
         {
-            final Match match = ctfMatch(List.of(redBotAt(1000.0f, 1000.0f, 0)));
+            final Match match = ctfMatch(List.of(redBotAt(0.0f, 5000.0f, 0)));
 
             match.setPlayerTeam(Team.BLUE);
 
@@ -123,7 +123,7 @@ class MatchCtfTest
         @DisplayName("a NEUTRAL player does not pick up either flag")
         void shouldNotPickUpForNeutral()
         {
-            final Match match = ctfMatch(List.of(redBotAt(1000.0f, 1000.0f, 0)));
+            final Match match = ctfMatch(List.of(redBotAt(0.0f, 5000.0f, 0)));
 
             // playerTeam defaults to NEUTRAL.
             // Player at BLUE's flag; nothing should happen.
@@ -138,7 +138,7 @@ class MatchCtfTest
         @DisplayName("a player on their own flag does not pick it up")
         void shouldNotPickUpOwnFlag()
         {
-            final Match match = ctfMatch(List.of(redBotAt(1000.0f, 1000.0f, 0)));
+            final Match match = ctfMatch(List.of(redBotAt(0.0f, 5000.0f, 0)));
 
             match.setPlayerTeam(Team.RED);
 
@@ -157,7 +157,7 @@ class MatchCtfTest
         @DisplayName("a carrier touching the enemy base again does not double-pickup")
         void shouldNotDoublePickup()
         {
-            final Match match = ctfMatch(List.of(redBotAt(1000.0f, 1000.0f, 0)));
+            final Match match = ctfMatch(List.of(redBotAt(0.0f, 5000.0f, 0)));
 
             match.setPlayerTeam(Team.RED);
 
@@ -193,7 +193,7 @@ class MatchCtfTest
                 200.0f, 0.0f, 200.0f, 0.0f, 32.0f);
 
             final MatchSpecHolder holder = ctfMatchWithBases(redBaseNoCapture, blueBase,
-                List.of(redBotAt(1000.0f, 1000.0f, 0)));
+                List.of(redBotAt(0.0f, 5000.0f, 0)));
 
             final Match match = holder.match;
 
@@ -220,7 +220,7 @@ class MatchCtfTest
         @DisplayName("a carrier on the capture point scores a capture and returns the flag")
         void shouldCaptureOnCapturePoint()
         {
-            final Match match = ctfMatch(List.of(redBotAt(1000.0f, 1000.0f, 0)));
+            final Match match = ctfMatch(List.of(redBotAt(0.0f, 5000.0f, 0)));
 
             match.setPlayerTeam(Team.RED);
 
@@ -245,7 +245,7 @@ class MatchCtfTest
             // RED base at origin, BLUE base at (200, 0, 0), but
             // the carrier is at (100, 0, 0) — in neither base
             // radius.
-            final Match match = ctfMatch(List.of(redBotAt(1000.0f, 1000.0f, 0)));
+            final Match match = ctfMatch(List.of(redBotAt(0.0f, 5000.0f, 0)));
 
             match.setPlayerTeam(Team.RED);
 
@@ -320,7 +320,7 @@ class MatchCtfTest
         @DisplayName("three captures accumulate on the per-team count")
         void shouldAccumulateCaptures()
         {
-            final Match match = ctfMatch(List.of(redBotAt(1000.0f, 1000.0f, 0)));
+            final Match match = ctfMatch(List.of(redBotAt(0.0f, 5000.0f, 0)));
 
             match.setPlayerTeam(Team.RED);
 
@@ -345,7 +345,7 @@ class MatchCtfTest
         @DisplayName("RED and BLUE captures accumulate independently")
         void shouldScorePerTeam()
         {
-            final Match match = ctfMatch(List.of(redBotAt(1000.0f, 1000.0f, 0)));
+            final Match match = ctfMatch(List.of(redBotAt(0.0f, 5000.0f, 0)));
 
             // Two RED captures, then switch sides and one BLUE
             // capture. The match's playerTeam is the player's
@@ -386,7 +386,7 @@ class MatchCtfTest
         @DisplayName("a CTF spec returns the per-team capture counts")
         void shouldReturnPerTeamCaptures()
         {
-            final Match match = ctfMatch(List.of(redBotAt(1000.0f, 1000.0f, 0)));
+            final Match match = ctfMatch(List.of(redBotAt(0.0f, 5000.0f, 0)));
 
             match.setPlayerTeam(Team.RED);
 
@@ -420,7 +420,7 @@ class MatchCtfTest
         @DisplayName("four captures: match is still IN_PROGRESS")
         void shouldStillBeInProgressAtFourCaptures()
         {
-            final Match match = ctfMatch(List.of(redBotAt(1000.0f, 1000.0f, 0)));
+            final Match match = ctfMatch(List.of(redBotAt(0.0f, 5000.0f, 0)));
 
             match.setPlayerTeam(Team.RED);
 
@@ -445,7 +445,7 @@ class MatchCtfTest
         @DisplayName("five captures: match is WON")
         void shouldBeWonAtFiveCaptures()
         {
-            final Match match = ctfMatch(List.of(redBotAt(1000.0f, 1000.0f, 0)));
+            final Match match = ctfMatch(List.of(redBotAt(0.0f, 5000.0f, 0)));
 
             match.setPlayerTeam(Team.RED);
 
@@ -475,7 +475,7 @@ class MatchCtfTest
         @DisplayName("reset clears the CTF carriers, scores, and elapsed tics")
         void shouldResetCtfState()
         {
-            final Match match = ctfMatch(List.of(redBotAt(1000.0f, 1000.0f, 0)));
+            final Match match = ctfMatch(List.of(redBotAt(0.0f, 5000.0f, 0)));
 
             match.setPlayerTeam(Team.RED);
 
@@ -606,3 +606,9 @@ class MatchCtfTest
         );
     }
 }
+
+
+
+
+
+

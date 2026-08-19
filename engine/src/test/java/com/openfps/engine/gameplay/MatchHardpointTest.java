@@ -68,7 +68,7 @@ class MatchHardpointTest
         {
             // A single RED bot, placed far from any zone, so the
             // resolve sees "no bodies in the active zone".
-            final Match match = hardpointMatch(List.of(redBotAt(1000.0f, 1000.0f, 0)));
+            final Match match = hardpointMatch(List.of(redBotAt(3000.0f, 3000.0f, 0)));
 
             match.setPlayerTeam(Team.RED);
 
@@ -87,7 +87,7 @@ class MatchHardpointTest
             // is plural — sanity against an off-by-one in the loop.
             final Match match = hardpointMatch(List.of(
                 redBotAt(0.0f, 0.0f, 0),
-                redBotAt(1000.0f, 1000.0f, 1)
+                redBotAt(3000.0f, 3000.0f, 1)
             ));
 
             match.setPlayerTeam(Team.BLUE);
@@ -106,7 +106,7 @@ class MatchHardpointTest
         {
             final Match match = hardpointMatch(List.of(
                 blueBotAt(0.0f, 0.0f, 0),
-                redBotAt(1000.0f, 1000.0f, 1)
+                redBotAt(3000.0f, 3000.0f, 1)
             ));
 
             match.setPlayerTeam(Team.RED);
@@ -145,7 +145,7 @@ class MatchHardpointTest
         {
             // One RED bot far from the zone, so the match is not
             // WON. The player is the only body in zone_a.
-            final Match match = hardpointMatch(List.of(redBotAt(1000.0f, 1000.0f, 0)));
+            final Match match = hardpointMatch(List.of(redBotAt(3000.0f, 3000.0f, 0)));
 
             match.setPlayerTeam(Team.RED);
 
@@ -166,7 +166,7 @@ class MatchHardpointTest
             // holder is NEUTRAL.
             final Match match = hardpointMatch(List.of(
                 neutralBotAt(0.0f, 0.0f, 0),
-                redBotAt(1000.0f, 1000.0f, 1)
+                redBotAt(3000.0f, 3000.0f, 1)
             ));
 
             match.setPlayerTeam(Team.RED);
@@ -191,14 +191,14 @@ class MatchHardpointTest
             // alive if the in-zone bot dies.
             final Match match = hardpointMatch(List.of(
                 redBotAt(0.0f, 0.0f, 0),
-                redBotAt(1000.0f, 1000.0f, 1)
+                redBotAt(3000.0f, 3000.0f, 1)
             ));
 
             match.setPlayerTeam(Team.NEUTRAL);
 
             for (int tic = 0; tic < 10; tic++)
             {
-                match.tick(tic, 1000.0f, 0.0f, 0.0f);
+                match.tick(tic, 3000.0f, 0.0f, 0.0f);
             }
 
             assertThat(match.teamScores()).containsExactly(10, 0);
@@ -215,9 +215,9 @@ class MatchHardpointTest
             // breakdown.
             final Bot redInZone = redBotAt(0.0f, 0.0f, 0);
 
-            final Bot redFar = redBotAt(1000.0f, 1000.0f, 1);
+            final Bot redFar = redBotAt(3000.0f, 3000.0f, 1);
 
-            final Bot blueFar = blueBotAt(1000.0f, 1000.0f, 2);
+            final Bot blueFar = blueBotAt(3000.0f, 3000.0f, 2);
 
             final Match match = hardpointMatch(List.of(redInZone, redFar, blueFar));
 
@@ -225,7 +225,7 @@ class MatchHardpointTest
 
             for (int tic = 0; tic < 30; tic++)
             {
-                match.tick(tic, 1000.0f, 0.0f, 0.0f);
+                match.tick(tic, 3000.0f, 0.0f, 0.0f);
             }
 
             assertThat(match.teamScores()).containsExactly(30, 0);
@@ -240,7 +240,7 @@ class MatchHardpointTest
         @DisplayName("the active zone starts at index 0")
         void shouldStartAtZoneZero()
         {
-            final Match match = hardpointMatch(List.of(redBotAt(1000.0f, 1000.0f, 0)));
+            final Match match = hardpointMatch(List.of(redBotAt(3000.0f, 3000.0f, 0)));
 
             assertThat(match.hardpointActiveZoneIndex()).isEqualTo(0);
         }
@@ -249,11 +249,11 @@ class MatchHardpointTest
         @DisplayName("the active zone rotates after rotationTics tics")
         void shouldRotateAfterThreshold()
         {
-            final Match match = hardpointMatch(List.of(redBotAt(1000.0f, 1000.0f, 0)));
+            final Match match = hardpointMatch(List.of(redBotAt(3000.0f, 3000.0f, 0)));
 
             for (int tic = 0; tic < ROTATION_TICS; tic++)
             {
-                match.tick(tic, 1000.0f, 0.0f, 0.0f);
+                match.tick(tic, 3000.0f, 0.0f, 0.0f);
             }
 
             // After exactly ROTATION_TICS tics, the counter is at
@@ -266,13 +266,13 @@ class MatchHardpointTest
         @DisplayName("the active zone wraps through all three indices")
         void shouldRotateThroughAllZones()
         {
-            final Match match = hardpointMatch(List.of(redBotAt(1000.0f, 1000.0f, 0)));
+            final Match match = hardpointMatch(List.of(redBotAt(3000.0f, 3000.0f, 0)));
 
             // Drive (3 * ROTATION_TICS) tics; the index visits 0, 1,
             // 2, and wraps back to 0.
             for (int tic = 0; tic < 3 * ROTATION_TICS; tic++)
             {
-                match.tick(tic, 1000.0f, 0.0f, 0.0f);
+                match.tick(tic, 3000.0f, 0.0f, 0.0f);
             }
 
             assertThat(match.hardpointActiveZoneIndex()).isEqualTo(0);
@@ -293,7 +293,7 @@ class MatchHardpointTest
 
             for (int tic = 0; tic < 5; tic++)
             {
-                match.tick(tic, 1000.0f, 0.0f, 0.0f);
+                match.tick(tic, 3000.0f, 0.0f, 0.0f);
             }
 
             final int[] scores = match.teamScores();
@@ -316,7 +316,7 @@ class MatchHardpointTest
         {
             final Match match = hardpointMatch(List.of(
                 redBotAt(0.0f, 0.0f, 0),
-                redBotAt(1000.0f, 1000.0f, 1)
+                redBotAt(3000.0f, 3000.0f, 1)
             ));
 
             match.setPlayerTeam(Team.RED);
@@ -408,3 +408,6 @@ class MatchHardpointTest
         );
     }
 }
+
+
+

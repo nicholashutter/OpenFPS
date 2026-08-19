@@ -224,20 +224,29 @@ public final class Match
     public static final int BOT_SHOT_DAMAGE = 20;
 
     /**
-     * How far a bot can shoot, in world units — <b>512</b>.
+     * How far a bot can shoot, in world units — <b>2048</b>.
      *
-     * <p>The demo room is 640 units across, so this is a little over three
-     * quarters of its diagonal reach: a bot on the far side of the room cannot
-     * plink at a player who has not come to find it. Without a range limit the
-     * whole room engages the player from the first tic, and there is no reason
-     * to advance.</p>
+     * <p>The demo room is 640 units across, so the original 512 was a little over
+     * three quarters of its diagonal reach: a bot on the far side of the room
+     * could not plink at a player who had not come to find it. Without a range
+     * limit the whole room engages the player from the first tic, and there is
+     * no reason to advance.</p>
+     *
+     * <p>The 16 shipped maps were re-sized to MW2-Rust / BO6 large-map
+     * proportions in 2026-08 (commits 15f00cb / c419c58 / 7675496 /
+     * ec7be2e). The 3200-5600 world-unit playable areas put the
+     * 512-unit limit on roughly a tenth of a side — most bots were out of
+     * range of the player from any sensible spawn. 2048 covers the full
+     * diagonal of the smallest map (3200 x 3200) and ~70% of the
+     * largest (5600 x 5600), which is what "this bot will shoot you if it
+     * has line of sight" means on a real-size map.</p>
      *
      * <p>Measured against the position the bot <b>remembers</b> the player at,
      * not the real one, because everything else about a bot's shot is. A bot
      * whose range check used current information and whose aim used stale
      * information would be a hybrid nobody could reason about.</p>
      */
-    public static final float BOT_RANGE_UNITS = 512.0f;
+    public static final float BOT_RANGE_UNITS = 2048.0f;
 
     /**
      * Tics between the player dying and standing up again — <b>120</b>, two

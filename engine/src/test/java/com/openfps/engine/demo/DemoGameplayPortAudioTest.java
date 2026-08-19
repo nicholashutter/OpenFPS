@@ -139,8 +139,8 @@ final class DemoGameplayPortAudioTest
     }
 
     /**
-     * Distance to the nearest bot on the reward fixture's firing range — 600, past
-     * {@code Match.BOT_RANGE_UNITS}.
+     * Distance to the nearest bot on the reward fixture's firing range — 3000, well
+     * past {@code Match.BOT_RANGE_UNITS}.
      *
      * <p>The reward takes three kills and hundreds of tics to reach, and a room
      * that could shoot back would let the player die in the middle of that — which
@@ -148,7 +148,7 @@ final class DemoGameplayPortAudioTest
      * dice. The player's own hitscan has no range limit, so the queue is still
      * shootable from here.</p>
      */
-    private static final float OUT_OF_REACH_DISTANCE = 600.0f;
+    private static final float OUT_OF_REACH_DISTANCE = 3000.0f;
 
     /** A queue of bots straight down +z, none of which can shoot back. */
     private static Match firingRange(final int count)

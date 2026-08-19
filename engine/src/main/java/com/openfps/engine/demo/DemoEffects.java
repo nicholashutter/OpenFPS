@@ -288,21 +288,35 @@ public final class DemoEffects
     public static final float TRACER_SPEED_UNITS = 60.0f;
 
     /**
-     * Tics an INCOMING tracer flies before it is hidden — <b>20</b>.
+     * Tics an INCOMING tracer flies before it is hidden — <b>80</b>.
      *
-     * <p>Two and a half times {@link #TRACER_LIFE_TICS}, and it has to be: an
-     * outgoing bolt and an incoming one have opposite problems. The player's
-     * recedes, so it is at its most visible on the tic it is born and the only
-     * question is how long it stays interesting. An incoming bolt is a dot at the
-     * far wall that grows as it arrives, so <b>the whole of its life is
-     * approach</b>, and the flight has to be long enough to watch.</p>
+     * <p><b>2026-08:</b> raised from 20 to 80 along with the
+     * {@code Match.BOT_RANGE_UNITS} bump from 512 to 2048 (commits
+     * 15f00cb / c419c58 / 7675496 / ec7be2e scaled the 16 maps from
+     * 20m to 200-350m). The original 20 was picked against the
+     * original 32 x 20 = 640-unit reach, which was 25% past the
+     * 512-unit range; the new 80 keeps the 32 x 80 = 2560-unit
+     * reach 25% past the 2048-unit range. The 10x of TRACER_LIFE_TICS
+     * falls out of the 4x range bump, not a deliberate design choice
+     * — an incoming bolt's life is dominated by "how long does it
+     * take to reach the eye", and the eye is further away now.</p>
+     *
+     * <p>Two and a half times {@link #TRACER_LIFE_TICS} in the demo's
+     * 320x320 room has to become ten times the outgoing life in the
+     * 3200-5600 map rooms, and it has to be: an outgoing bolt and an
+     * incoming one have opposite problems. The player's recedes, so
+     * it is at its most visible on the tic it is born and the only
+     * question is how long it stays interesting. An incoming bolt is
+     * a dot at the far wall that grows as it arrives, so <b>the whole
+     * of its life is approach</b>, and the flight has to be long
+     * enough to watch.</p>
      *
      * <p>With {@link #BOT_TRACER_SPEED_UNITS} this is what puts it on screen for a
      * length of time proportional to how far away the shooter is — which is what a
      * real projectile does, and is the property that lets a player tell a distant
      * threat from a close one without counting anything.</p>
      */
-    public static final int BOT_TRACER_LIFE_TICS = 20;
+    public static final int BOT_TRACER_LIFE_TICS = 80;
 
     /**
      * How far short of where the shot ended an incoming bolt stops being drawn,
@@ -367,20 +381,35 @@ public final class DemoEffects
      * it. It would have passed every test in this file, because every one of them
      * asks where the bolt is and none of them asks how long it is there.</p>
      *
-     * <p>32 with a 20-tic life reaches 640 units — still past the far end of the
-     * engagement envelope, so the original constraint is met with 25% to spare —
-     * while giving the flight a duration that scales with the range:</p>
+     * <p>32 with the original 20-tic life reached 640 units — past the far
+     * end of the original 512-unit engagement envelope with 25% to spare —
+     * while giving the flight a duration that scales with the range. The
+     * 2026-08 map resize pushed the engagement envelope to 2048 units, so
+     * the life was bumped to 80 tics for a 2560-unit reach — 25% past the
+     * new range — and the duration-vs-range table the demo-era comment
+     * lists now reads:</p>
      *
      * <pre>
      *   shooter at   time on screen
      *     100 u       3 tics    50 ms
      *     250 u       8 tics   130 ms
      *     400 u      13 tics   210 ms
-     *     500 u      16 tics   260 ms
+     *    1000 u      31 tics   520 ms
+     *    2000 u      63 tics  1050 ms
      * </pre>
      *
-     * <p>1,920 units a second is still seven and a half times the player's own
-     * speed, which is what keeps it reading as fired rather than thrown.</p>
+     * <p><b>2026-08:</b> the bot's range was bumped from 512 to 2048
+     * world units (commits 15f00cb / c419c58 / 7675496 / ec7be2e
+     * scaled the 16 maps from 20m to 200-350m), so the bolt's
+     * reach (speed x life) must scale with it. The speed stays at
+     * 32 units a tic (so a 250-unit shot is on screen for 7-8
+     * tics, what a player reads as a flight) and the life was
+     * bumped from 20 to 80 tics, for a 2560-unit reach — 25% past
+     * the new range.</p>
+     *
+     * <p>1,920 units a second is seven and a half times the player's
+     * own speed, which is what keeps it reading as fired rather
+     * than thrown.</p>
      */
     public static final float BOT_TRACER_SPEED_UNITS = 32.0f;
 

@@ -131,16 +131,19 @@ public final class MapScene
     public static final float KIT_WALL_HALF_THICKNESS_UNITS = 6.4f;
 
     /**
-     * Stacked wall courses, floor to ceiling — <b>3</b> for the
+     * Stacked wall courses, floor to ceiling — <b>4</b> for the
      * map mode (the demo uses 2; the map mode adds a third so the
      * windowed room reads taller and the middle course can host
-     * the wall-window alternation).
+     * the wall-window alternation; 2026-08 took it from 3 to 4
+     * because the 16 maps were re-sized from 320 x 320 (20m
+     * square) to 3200-5600 (200-350m square) and a 192-unit
+     * (12m) ceiling was a crawlspace in a 200m room).
      */
-    public static final int KIT_WALL_COURSES = 3;
+    public static final int KIT_WALL_COURSES = 4;
 
     /**
      * Height of the ceiling above the floor, in world units.
-     * <b>192</b> ({@link #KIT_WALL_COURSES} * {@link #KIT_WORLD_SCALE}).
+     * <b>256</b> ({@link #KIT_WALL_COURSES} * {@link #KIT_WORLD_SCALE}).
      */
     public static final float KIT_CEILING_UNITS = KIT_WALL_COURSES * KIT_WORLD_SCALE;
 
@@ -620,9 +623,9 @@ public final class MapScene
 
     /**
      * The kit a single map assembles: the floor and ceiling tiles, the
-     * perimeter wall ring, the four columns, and six perimeter crates.
-     * Each piece is added in order; each is a no-op if its model is
-     * null (e.g. a partially-staged pack).
+     * perimeter wall ring, the four columns, the six perimeter crates,
+     * and the procedural scenery. Each piece is added in order; each
+     * is a no-op if its model is null (e.g. a partially-staged pack).
      */
     private static void addLevelKit(final Scene.Builder builder, final MapSpec spec,
         final DemoModels models)
@@ -632,6 +635,8 @@ public final class MapScene
         addPerimeterRing(builder, spec, models);
 
         addColumnsAndCrates(builder, spec, models);
+
+        addScenery(builder, spec, models);
     }
 
     /**
@@ -866,6 +871,122 @@ public final class MapScene
             builder.addWorldInstance(useCrate,
                 placement(placements[i], placements[i + 1], placements[i + 2], 0.0f,
                     KIT_WORLD_SCALE));
+        }
+    }
+
+    /**
+     * Procedural scenery: low walls, stacked crate columns, ramps, and
+     * scatter cover placed across the playable area to break up the
+     * open ground and give bots and the player somewhere to hide.
+     *
+     * <p><b>Why this exists:</b> the 16 shipped maps were re-sized from
+     * 320 x 320 (20m square) to 3200-5600 (200-350m square) in
+     * commits 15f00cb / c419c58 / 7675496 / ec7be2e. The kit composer's
+     * six perimeter crates and four corner columns are correct for a
+     * 320 x 320 room but are four-to-five small boxes in a 200m room;
+     * the playable area between the perimeter wall and the level
+     * .ofm centerpiece reads as flat open ground with no cover. This
+     * composer fills that gap procedurally: the placements scale with
+     * the spec's dimensions, so a 3200 and a 5600 map get the same
+     * density of cover objects, and the positions are written to leave
+     * the lane centres clear so they do not block movement on any
+     * map.</p>
+     *
+     * <p>What gets added: six low walls (two-crate stacks at the
+     * three lane centres), four crate columns (three-crate stacks at
+     * the four quarter positions), and a scatter ring of twelve single
+     * crates around the playable area. The result is "indoor /
+     * courtyard" geometry for an URBAN/INDUSTRIAL/ARCTIC map rather
+     * than "empty courtyard with a perimeter wall and four props".</p>
+     */
+    private static void addScenery(final Scene.Builder builder, final MapSpec spec,
+        final DemoModels models)
+    {
+        final ModelFormat crate = models.crate();
+
+        if (crate == null)
+        {
+            return;
+        }
+
+        final float half = halfRoomOf(spec);
+
+        // Scale the placements with the spec. The 320 x 320 reference
+        // numbers were the "demo room" coords; multiplying by half/160
+        // maps them to the larger playable area while preserving the
+        // same relative density.
+        final float s = half / 160.0f;
+
+        // ---- Low lane walls: two-crate stacks at the three lane
+        // ---- centres. These break sightlines down each lane and give
+        // ---- the player / bot a crouch-behind position without being
+        // ---- a full wall.
+        final float[][] laneWalls =
+        {
+            // (x, z) for each lane A/B/C
+            { 0.0f, -128.0f * s },
+            { 0.0f, 0.0f },
+            { 0.0f, 128.0f * s },
+        };
+
+        for (final float[] pos : laneWalls)
+        {
+            builder.addWorldInstance(crate,
+                placement(pos[0], 0.0f, pos[1], 0.0f, KIT_WORLD_SCALE));
+
+            builder.addWorldInstance(crate,
+                placement(pos[0], KIT_WORLD_SCALE * 0.5f, pos[1], 0.0f, KIT_WORLD_SCALE));
+        }
+
+        // ---- Stacked crate columns at the four quarter positions.
+        // ---- Three crates high — 96 world units (~6m), tall enough
+        // ---- to peek over but short enough to walk around. The
+        // ---- positions are off the lane centres (which are at x=0
+        // ---- for the three lane rows) so they do not block a bot
+        // ---- walking a PACE_X pattern along a lane.
+        final float[][] columnCorners =
+        {
+            { -96.0f * s,  -96.0f * s },
+            {  96.0f * s,  -96.0f * s },
+            { -96.0f * s,   96.0f * s },
+            {  96.0f * s,   96.0f * s },
+        };
+
+        for (final float[] pos : columnCorners)
+        {
+            for (int h = 0; h < 3; h++)
+            {
+                final float y = h * KIT_WORLD_SCALE * 0.5f;
+
+                builder.addWorldInstance(crate,
+                    placement(pos[0], y, pos[1], 0.0f, KIT_WORLD_SCALE));
+            }
+        }
+
+        // ---- Scattered cover ring: 12 single crates at the edge of
+        // ---- the playable area, well clear of the perimeter crates
+        // ---- and the kit columns. Each entry is (x, z); the y is
+        // ---- always 0.
+        final float[][] scatterRing =
+        {
+            { -200.0f * s,  -48.0f * s },
+            { -152.0f * s,  -64.0f * s },
+            { -104.0f * s,  -32.0f * s },
+            {  -48.0f * s,  -56.0f * s },
+            {   48.0f * s,  -48.0f * s },
+            {  104.0f * s,  -72.0f * s },
+            {  160.0f * s,  -40.0f * s },
+            {  200.0f * s,   32.0f * s },
+            {  144.0f * s,   56.0f * s },
+            {   72.0f * s,   72.0f * s },
+            {    0.0f,      64.0f * s },
+            {  -64.0f * s,   56.0f * s },
+        };
+
+        for (final float[] pos : scatterRing)
+        {
+            builder.addWorldInstance(crate,
+                placement(pos[0], 0.0f, pos[1], 0.0f, KIT_WORLD_SCALE));
         }
     }
 

@@ -55,7 +55,7 @@ class MatchDominationTest
         @DisplayName("all flags start NEUTRAL")
         void shouldStartNeutral()
         {
-            final Match match = dominationMatch(List.of(redBotAt(1000.0f, 1000.0f, 0)));
+            final Match match = dominationMatch(List.of(redBotAt(3000.0f, 3000.0f, 0)));
 
             assertThat(match.dominationFlagOwner(0)).isEqualTo(Team.NEUTRAL);
 
@@ -70,7 +70,7 @@ class MatchDominationTest
         {
             final Match match = dominationMatch(List.of(
                 redBotAt(0.0f, 0.0f, 0),
-                redBotAt(1000.0f, 1000.0f, 1)
+                redBotAt(3000.0f, 3000.0f, 1)
             ));
 
             match.setPlayerTeam(Team.BLUE);
@@ -88,7 +88,7 @@ class MatchDominationTest
         {
             final Match match = dominationMatch(List.of(
                 blueBotAt(40.0f, 0.0f, 0),
-                redBotAt(1000.0f, 1000.0f, 1)
+                redBotAt(3000.0f, 3000.0f, 1)
             ));
 
             match.setPlayerTeam(Team.RED);
@@ -121,7 +121,7 @@ class MatchDominationTest
         @DisplayName("an empty flag: owner stays at its current value (NEUTRAL)")
         void shouldStayNeutralWhenEmpty()
         {
-            final Match match = dominationMatch(List.of(redBotAt(1000.0f, 1000.0f, 0)));
+            final Match match = dominationMatch(List.of(redBotAt(3000.0f, 3000.0f, 0)));
 
             match.setPlayerTeam(Team.RED);
 
@@ -138,7 +138,7 @@ class MatchDominationTest
             // RED bot in flag A, far away from any flag.
             final Match match = dominationMatch(List.of(
                 redBotAt(0.0f, 0.0f, 0),
-                redBotAt(1000.0f, 1000.0f, 1)
+                redBotAt(3000.0f, 3000.0f, 1)
             ));
 
             match.setPlayerTeam(Team.NEUTRAL);
@@ -163,7 +163,7 @@ class MatchDominationTest
             // side, so the flag stays NEUTRAL.
             final Match match = dominationMatch(List.of(
                 neutralBotAt(0.0f, 0.0f, 0),
-                redBotAt(1000.0f, 1000.0f, 1)
+                redBotAt(3000.0f, 3000.0f, 1)
             ));
 
             match.setPlayerTeam(Team.RED);
@@ -185,14 +185,14 @@ class MatchDominationTest
             // RED bot in flag A's radius; player is far away.
             final Match match = dominationMatch(List.of(
                 redBotAt(0.0f, 0.0f, 0),
-                redBotAt(1000.0f, 1000.0f, 1)
+                redBotAt(3000.0f, 3000.0f, 1)
             ));
 
             match.setPlayerTeam(Team.NEUTRAL);
 
             for (int tic = 0; tic < 10; tic++)
             {
-                match.tick(tic, 1000.0f, 0.0f, 0.0f);
+                match.tick(tic, 3000.0f, 0.0f, 0.0f);
             }
 
             // Flag A held for 10 tics → red +10; flag B and C
@@ -208,14 +208,14 @@ class MatchDominationTest
             // holding it). No bot in flag B or C's radius.
             final Match match = dominationMatch(List.of(
                 redBotAt(0.0f, 0.0f, 0),
-                redBotAt(1000.0f, 1000.0f, 1)
+                redBotAt(3000.0f, 3000.0f, 1)
             ));
 
             match.setPlayerTeam(Team.NEUTRAL);
 
             for (int tic = 0; tic < 5; tic++)
             {
-                match.tick(tic, 1000.0f, 0.0f, 0.0f);
+                match.tick(tic, 3000.0f, 0.0f, 0.0f);
             }
 
             // Only flag A is held, so only red scores 5.
@@ -237,7 +237,7 @@ class MatchDominationTest
 
             for (int tic = 0; tic < 10; tic++)
             {
-                match.tick(tic, 1000.0f, 0.0f, 0.0f);
+                match.tick(tic, 3000.0f, 0.0f, 0.0f);
             }
 
             assertThat(match.teamScores()).containsExactly(0, 0);
@@ -254,14 +254,14 @@ class MatchDominationTest
         {
             final Match match = dominationMatch(List.of(
                 redBotAt(0.0f, 0.0f, 0),
-                redBotAt(1000.0f, 1000.0f, 1)
+                redBotAt(3000.0f, 3000.0f, 1)
             ));
 
             match.setPlayerTeam(Team.NEUTRAL);
 
             for (int tic = 0; tic < 7; tic++)
             {
-                match.tick(tic, 1000.0f, 0.0f, 0.0f);
+                match.tick(tic, 3000.0f, 0.0f, 0.0f);
             }
 
             final int[] scores = match.teamScores();
@@ -284,7 +284,7 @@ class MatchDominationTest
         {
             final Match match = dominationMatch(List.of(
                 redBotAt(0.0f, 0.0f, 0),
-                redBotAt(1000.0f, 1000.0f, 1)
+                redBotAt(3000.0f, 3000.0f, 1)
             ));
 
             match.setPlayerTeam(Team.RED);
@@ -322,7 +322,7 @@ class MatchDominationTest
         @DisplayName("dominationFlagOwner rejects an out-of-range index")
         void shouldRejectBadIndex()
         {
-            final Match match = dominationMatch(List.of(redBotAt(1000.0f, 1000.0f, 0)));
+            final Match match = dominationMatch(List.of(redBotAt(3000.0f, 3000.0f, 0)));
 
             assertThatThrownBy(() -> match.dominationFlagOwner(-1))
                 .isInstanceOf(IllegalArgumentException.class);
@@ -389,3 +389,6 @@ class MatchDominationTest
         );
     }
 }
+
+
+
