@@ -37,9 +37,12 @@ public final class Maps
     // ----- Cornerstone (Urban Warzone × TDM) --------------------------------
 
     /**
-     * The first shipped map. Urban Warzone, TDM, 6v6 sizing, three-lane
-     * COD layout. The full design spec — the ASCII map, the callouts, the
-     * lane routes, the spawn rationale — is in
+     * The first shipped map. Urban Warzone, TDM, MW2-Rust / BO6 large-map
+     * sizing (3200 x 3200 world units, MAP_SCALE = 16 → 200 m square),
+     * three-lane COD layout. The level .ofm is the original 320 x 320
+     * kit composition, left untouched and treated as a centerpiece in
+     * the middle of the larger spec. The full design spec — the ASCII
+     * map, the callouts, the lane routes, the spawn rationale — is in
      * {@code docs/maps/urban-warzone/01-cornerstone.md}.
      *
      * @return the Cornerstone map spec
@@ -52,77 +55,113 @@ public final class Maps
             "Cornerstone",
             MapSetting.URBAN_WARZONE,
             MatchMode.TDM,
-            // ---- playable area: 320 x 320, 128 high (one MAX_OPEN_HEIGHT floor)
-            new MapDimensions(320.0f, 320.0f, 128.0f),
-            // ---- three lanes A/B/C, each with chokepoints in travel order.
-            // All x/z are in the kit's coordinate system (centered at origin,
-            // playable area is -160 to 160 in both axes). The map is the
-            // first Pass-2 spec and was originally authored in 0..320 to
-            // match the menu thumbnails; that origin was off by half the
-            // playable width against the level .ofm and the kit composer
-            // (both centered), and was translated here so the spawns,
-            // chokepoints and waypoints line up with the kit's walls,
-            // columns, and the level mesh.
+            // ---- playable area: 3200 x 3200, 128 high (one
+            // MAX_OPEN_HEIGHT floor). All x/z in the spec are
+            // scaled by 10 from the original 320 x 320 spec; the
+            // level .ofm remains a 320 x 320 centerpiece.
+            new MapDimensions(3200.0f, 3200.0f, 128.0f),
+            // ---- three lanes A/B/C, each with five chokepoints in
+            // travel order. The original three chokepoints per
+            // lane are scaled by 10; two new chokepoints per lane
+            // are added at intermediate z rows so a 5-chokepoint
+            // lane (15 total) names the full north-to-south run.
+            // Chokepoint labels (Cafe, Plaza, Library, Bridge,
+            // Market, Atrium, Storefront, Alley) are preserved on
+            // the originals; the additions use new labels.
             List.of(
                 new Lane("lane_a", LaneAxis.NORTH_SOUTH, List.of(
-                    new Chokepoint("cp_a1", "Cafe", -96.0f, -136.0f),
-                    new Chokepoint("cp_a2", "Plaza", -32.0f, -80.0f),
-                    new Chokepoint("cp_a3", "Library", 32.0f, -136.0f)
+                    new Chokepoint("cp_a1", "Cafe", -960.0f, -1360.0f),
+                    new Chokepoint("cp_a2", "Plaza", -320.0f, -800.0f),
+                    new Chokepoint("cp_a3", "Library", 320.0f, -1360.0f),
+                    new Chokepoint("cp_a4", "Cafe Mid", -640.0f, 0.0f),
+                    new Chokepoint("cp_a5", "Plaza S", -640.0f, 800.0f)
                 )),
                 new Lane("lane_b", LaneAxis.NORTH_SOUTH, List.of(
-                    new Chokepoint("cp_b1", "Bridge", -96.0f, 0.0f),
+                    new Chokepoint("cp_b1", "Bridge", -960.0f, 0.0f),
                     new Chokepoint("cp_b2", "Market", 0.0f, 0.0f),
-                    new Chokepoint("cp_b3", "Atrium", 96.0f, 0.0f)
+                    new Chokepoint("cp_b3", "Atrium", 960.0f, 0.0f),
+                    new Chokepoint("cp_b4", "Bridge N", 0.0f, -800.0f),
+                    new Chokepoint("cp_b5", "Bridge S", 320.0f, 800.0f)
                 )),
                 new Lane("lane_c", LaneAxis.NORTH_SOUTH, List.of(
-                    new Chokepoint("cp_c1", "Storefront", -96.0f, 136.0f),
-                    new Chokepoint("cp_c2", "Alley", 0.0f, 80.0f),
-                    new Chokepoint("cp_c3", "Plaza", 96.0f, 136.0f)
+                    new Chokepoint("cp_c1", "Storefront", -960.0f, 1360.0f),
+                    new Chokepoint("cp_c2", "Alley", 0.0f, 800.0f),
+                    new Chokepoint("cp_c3", "Plaza", 960.0f, 1360.0f),
+                    new Chokepoint("cp_c4", "Storefront Mid", 640.0f, 0.0f),
+                    new Chokepoint("cp_c5", "Plaza Mid", -320.0f, 800.0f)
                 ))
             ),
-            // ---- six spawn points: three per team, on the west and east
-            // edges of each team's half. Facings point inward, slightly
+            // ---- six spawn points: three per team, on the west and
+            // east edges of each team's half. X offsets are scaled
+            // by 10 to -1280 / +1280; the spawns sit well clear of
+            // the level .ofm's 320 x 320 kit walls (which are at
+            // +-153.6 in the original 320 system, 1536 in the
+            // scaled 3200 system). Facings point inward, slightly
             // off-axis, so a spawner faces the lane without looking
-            // directly down it. The X offsets (-128 and +128) give the
-            // 16-unit-radius body 9.6 units of clearance from the inner
-            // face of the kit wall (which sits at +-153.6); the original
-            // 16/304 pairing put the body half-inside the wall.
+            // directly down it. Y stays at 0.
             List.of(
-                new SpawnPoint("red_alpha", Team.RED, -128.0f, 0.0f, -96.0f,
+                new SpawnPoint("red_alpha", Team.RED, -1280.0f, 0.0f, -960.0f,
                     toRadians(90.0f)),
-                new SpawnPoint("red_bravo", Team.RED, -128.0f, 0.0f, -32.0f,
+                new SpawnPoint("red_bravo", Team.RED, -1280.0f, 0.0f, -320.0f,
                     toRadians(80.0f)),
-                new SpawnPoint("red_charlie", Team.RED, -128.0f, 0.0f, 32.0f,
+                new SpawnPoint("red_charlie", Team.RED, -1280.0f, 0.0f, 320.0f,
                     toRadians(100.0f)),
-                new SpawnPoint("blue_alpha", Team.BLUE, 128.0f, 0.0f, -32.0f,
+                new SpawnPoint("blue_alpha", Team.BLUE, 1280.0f, 0.0f, -320.0f,
                     toRadians(270.0f)),
-                new SpawnPoint("blue_bravo", Team.BLUE, 128.0f, 0.0f, 32.0f,
+                new SpawnPoint("blue_bravo", Team.BLUE, 1280.0f, 0.0f, 320.0f,
                     toRadians(260.0f)),
-                new SpawnPoint("blue_charlie", Team.BLUE, 128.0f, 0.0f, 96.0f,
+                new SpawnPoint("blue_charlie", Team.BLUE, 1280.0f, 0.0f, 960.0f,
                     toRadians(280.0f))
             ),
-            // ---- bot waypoints: a closed loop covering lanes A, B and C,
-            // touched in order. A bot at waypoint i moves toward waypoint
-            // i+1, wrapping at the end. All waypoints sit 16 units off the
-            // kit's four column centers (the columns anchor at +-80, +-80)
-            // so the bot is not standing inside a column.
+            // ---- bot waypoints: 28 total (12 originals scaled by
+            // 10 + 16 new), a closed loop visited in id order with
+            // wrap. The 12 originals are the original 320-system
+            // positions multiplied by 10 and sit on the 5 inner
+            // z rows (z = -1360, -800, 0, 800, 1360) inside the
+            // original kit column ranges. The 16 new waypoints
+            // are on 4 outer z rows (z = -1200, -400, 400, 1200)
+            // with x = -1280, -640, 640, 1280 — past the kit
+            // column x range ([-112, -48] / [48, 112] in the
+            // 320 system) and well clear of the level .ofm's
+            // walls. All waypoints at y = 0 (kit floor); the
+            // level .ofm is a 320 x 320 flat plate, so the
+            // higher y values from a multi-floor kit do not
+            // apply.
             List.of(
-                new Waypoint("wp_0", -80.0f, 0.0f, -136.0f),
-                new Waypoint("wp_1", 0.0f, 0.0f, -136.0f),
-                new Waypoint("wp_2", 32.0f, 0.0f, -80.0f),
+                new Waypoint("wp_0", -800.0f, 0.0f, -1360.0f),
+                new Waypoint("wp_1", 0.0f, 0.0f, -1360.0f),
+                new Waypoint("wp_2", 320.0f, 0.0f, -800.0f),
                 new Waypoint("wp_3", 0.0f, 0.0f, 0.0f),
-                new Waypoint("wp_4", 96.0f, 0.0f, 0.0f),
-                new Waypoint("wp_5", 32.0f, 0.0f, 80.0f),
-                new Waypoint("wp_6", 0.0f, 0.0f, 136.0f),
-                new Waypoint("wp_7", -80.0f, 0.0f, 136.0f),
-                new Waypoint("wp_8", 96.0f, 0.0f, -80.0f),
-                new Waypoint("wp_9", 96.0f, 0.0f, 80.0f),
-                new Waypoint("wp_10", -96.0f, 0.0f, 80.0f),
-                new Waypoint("wp_11", -96.0f, 0.0f, -80.0f)
+                new Waypoint("wp_4", 960.0f, 0.0f, 0.0f),
+                new Waypoint("wp_5", 320.0f, 0.0f, 800.0f),
+                new Waypoint("wp_6", 0.0f, 0.0f, 1360.0f),
+                new Waypoint("wp_7", -800.0f, 0.0f, 1360.0f),
+                new Waypoint("wp_8", 960.0f, 0.0f, -800.0f),
+                new Waypoint("wp_9", 960.0f, 0.0f, 800.0f),
+                new Waypoint("wp_10", -960.0f, 0.0f, 800.0f),
+                new Waypoint("wp_11", -960.0f, 0.0f, -800.0f),
+                new Waypoint("wp_12", -1280.0f, 0.0f, -1200.0f),
+                new Waypoint("wp_13", -640.0f, 0.0f, -1200.0f),
+                new Waypoint("wp_14", 640.0f, 0.0f, -1200.0f),
+                new Waypoint("wp_15", 1280.0f, 0.0f, -1200.0f),
+                new Waypoint("wp_16", -1280.0f, 0.0f, -400.0f),
+                new Waypoint("wp_17", -640.0f, 0.0f, -400.0f),
+                new Waypoint("wp_18", 640.0f, 0.0f, -400.0f),
+                new Waypoint("wp_19", 1280.0f, 0.0f, -400.0f),
+                new Waypoint("wp_20", -1280.0f, 0.0f, 400.0f),
+                new Waypoint("wp_21", -640.0f, 0.0f, 400.0f),
+                new Waypoint("wp_22", 640.0f, 0.0f, 400.0f),
+                new Waypoint("wp_23", 1280.0f, 0.0f, 400.0f),
+                new Waypoint("wp_24", -1280.0f, 0.0f, 1200.0f),
+                new Waypoint("wp_25", -640.0f, 0.0f, 1200.0f),
+                new Waypoint("wp_26", 640.0f, 0.0f, 1200.0f),
+                new Waypoint("wp_27", 1280.0f, 0.0f, 1200.0f)
             ),
             // ---- TDM markers: the empty singleton
             MapMarkers.TeamDeathmatch.INSTANCE,
-            // ---- asset paths
+            // ---- asset paths (level .ofm unchanged; the 320 x 320
+            // mesh is the centerpiece in the middle of the 3200
+            // x 3200 spec).
             new MapAssets(
                 "engine/src/main/resources/maps/cornerstone/level.ofm",
                 "assets/models/weapon/blaster-b.ofm",
@@ -134,13 +173,14 @@ public final class Maps
     // ----- Overpass (Urban Warzone × Hardpoint) ----------------------------
 
     /**
-     * The fifth shipped map. Urban Warzone, Hardpoint, 6v6 sizing. A
-     * highway interchange at street level: two parallel elevated
-     * overpasses running east-west with a service road between them,
-     * and a control building anchoring the south. The full design
-     * spec — the ASCII map, the callouts, the lane structure, the
-     * three hardpoint zones, and the spawn rationale — is in
-     * {@code docs/maps/urban-warzone/02-hp-overpass.md}.
+     * The fifth shipped map. Urban Warzone, Hardpoint, MW2-Rust /
+     * BO6 large-map sizing (4000 x 4000 world units, MAP_SCALE = 16
+     * → 250 m square). A highway interchange at street level: two
+     * parallel elevated overpasses running east-west with a service
+     * road between them, and a control building anchoring the south.
+     * The full design spec — the ASCII map, the callouts, the lane
+     * structure, the three hardpoint zones, and the spawn rationale
+     * — is in {@code docs/maps/urban-warzone/02-hp-overpass.md}.
      *
      * <p>Distinct from {@link #cornerstone} in feel: this is not a
      * three-lane map in the COD sense. The two overpasses are the
@@ -149,6 +189,12 @@ public final class Maps
      * the chokepoint that decides the third rotation. Three
      * hardpoint zones rotate: Overpass S, Overpass N, then the
      * control building.</p>
+     *
+     * <p>The level .ofm is the original 320 x 320 composition with
+     * the overpasses at y = 64 — left untouched and treated as a
+     * centerpiece. The 12.5x spec surrounds it on all sides; the
+     * y = 64 waypoints on the overpasses stay raised so a bot that
+     * walks onto an overpass still walks on the overpass.</p>
      *
      * @return the Overpass map spec
      */
@@ -160,89 +206,133 @@ public final class Maps
             "Overpass",
             MapSetting.URBAN_WARZONE,
             MatchMode.HARDPOINT,
-            // ---- playable area: 320 x 320, 128 high (the overpass
-            // decks sit at y=64 with the control building at y=80)
-            new MapDimensions(320.0f, 320.0f, 128.0f),
+            // ---- playable area: 4000 x 4000, 128 high (the
+            // overpass decks sit at y=64 with the control building
+            // at y=80; the y values are preserved on the originals
+            // and replicated on the new waypoints that sit on the
+            // overpasses). All x/z in the spec are scaled by 12.5
+            // from the original 320 x 320 spec; the level .ofm
+            // remains a 320 x 320 centerpiece.
+            new MapDimensions(4000.0f, 4000.0f, 128.0f),
             // ---- three lanes A/B/C, even though the map is not a
             // three-lane COD layout — the LaneAxis is EAST_WEST
-            // because the overpasses run that way. Coordinates are
-            // in the kit's origin-centred system (see cornerstone
-            // for why the original 0..320 origin was wrong).
+            // because the overpasses run that way. The original
+            // three chokepoints per lane are scaled by 12.5; two
+            // new chokepoints per lane are added at the W and E
+            // quarters (x = +-900) so a 5-chokepoint lane (15
+            // total) names the full west-to-east run on each of
+            // the two overpasses and the service road. Chokepoint
+            // labels (Overpass N/S, Service Road) are preserved on
+            // the originals; the additions use the "W Mid" / "E
+            // Mid" suffix.
             List.of(
                 new Lane("lane_a", LaneAxis.EAST_WEST, List.of(
-                    new Chokepoint("cp_a1", "Overpass N West", -144.0f, -120.0f),
-                    new Chokepoint("cp_a2", "Overpass N Centre", 0.0f, -120.0f),
-                    new Chokepoint("cp_a3", "Overpass N East", 144.0f, -120.0f)
+                    new Chokepoint("cp_a1", "Overpass N West", -1800.0f, -1500.0f),
+                    new Chokepoint("cp_a2", "Overpass N Centre", 0.0f, -1500.0f),
+                    new Chokepoint("cp_a3", "Overpass N East", 1800.0f, -1500.0f),
+                    new Chokepoint("cp_a4", "Overpass N W Mid", -900.0f, -1500.0f),
+                    new Chokepoint("cp_a5", "Overpass N E Mid", 900.0f, -1500.0f)
                 )),
                 new Lane("lane_b", LaneAxis.EAST_WEST, List.of(
-                    new Chokepoint("cp_b1", "Service Road West", -144.0f, 0.0f),
+                    new Chokepoint("cp_b1", "Service Road West", -1800.0f, 0.0f),
                     new Chokepoint("cp_b2", "Service Road Centre", 0.0f, 0.0f),
-                    new Chokepoint("cp_b3", "Service Road East", 144.0f, 0.0f)
+                    new Chokepoint("cp_b3", "Service Road East", 1800.0f, 0.0f),
+                    new Chokepoint("cp_b4", "Service Road W Mid", -900.0f, 0.0f),
+                    new Chokepoint("cp_b5", "Service Road E Mid", 900.0f, 0.0f)
                 )),
                 new Lane("lane_c", LaneAxis.EAST_WEST, List.of(
-                    new Chokepoint("cp_c1", "Overpass S West", -144.0f, 80.0f),
-                    new Chokepoint("cp_c2", "Overpass S Centre", 0.0f, 80.0f),
-                    new Chokepoint("cp_c3", "Overpass S East", 144.0f, 80.0f)
+                    new Chokepoint("cp_c1", "Overpass S West", -1800.0f, 1000.0f),
+                    new Chokepoint("cp_c2", "Overpass S Centre", 0.0f, 1000.0f),
+                    new Chokepoint("cp_c3", "Overpass S East", 1800.0f, 1000.0f),
+                    new Chokepoint("cp_c4", "Overpass S W Mid", -900.0f, 1000.0f),
+                    new Chokepoint("cp_c5", "Overpass S E Mid", 900.0f, 1000.0f)
                 ))
             ),
             // ---- six spawn points: three per team on the west and
             // east edges, facings aimed at the ramps. Spawn x is
-            // +-128 so the 16-unit-radius body has 9.6 units of
-            // clearance from the wall's inner face.
+            // +-1600 (scaled 12.5 from 128), well clear of the
+            // level .ofm's 320 x 320 walls (at +-153.6 in the
+            // 320 system, 1920 in the 12.5x spec). Y stays at 0.
             List.of(
-                new SpawnPoint("red_alpha", Team.RED, -128.0f, 0.0f, -96.0f,
+                new SpawnPoint("red_alpha", Team.RED, -1600.0f, 0.0f, -1200.0f,
                     toRadians(90.0f)),
-                new SpawnPoint("red_bravo", Team.RED, -128.0f, 0.0f, -64.0f,
+                new SpawnPoint("red_bravo", Team.RED, -1600.0f, 0.0f, -800.0f,
                     toRadians(80.0f)),
-                new SpawnPoint("red_charlie", Team.RED, -128.0f, 0.0f, -32.0f,
+                new SpawnPoint("red_charlie", Team.RED, -1600.0f, 0.0f, -400.0f,
                     toRadians(100.0f)),
-                new SpawnPoint("blue_alpha", Team.BLUE, 128.0f, 0.0f, 32.0f,
+                new SpawnPoint("blue_alpha", Team.BLUE, 1600.0f, 0.0f, 400.0f,
                     toRadians(270.0f)),
-                new SpawnPoint("blue_bravo", Team.BLUE, 128.0f, 0.0f, 64.0f,
+                new SpawnPoint("blue_bravo", Team.BLUE, 1600.0f, 0.0f, 800.0f,
                     toRadians(260.0f)),
-                new SpawnPoint("blue_charlie", Team.BLUE, 128.0f, 0.0f, 96.0f,
+                new SpawnPoint("blue_charlie", Team.BLUE, 1600.0f, 0.0f, 1200.0f,
                     toRadians(280.0f))
             ),
-            // ---- twelve bot waypoints: a closed loop visiting both
-            // overpasses, the service road, the ramps, and the area
-            // north of the control building in turn. The loop is
-            // ordered; a bot at waypoint i moves toward waypoint
-            // i+1, wrapping at the end. wp_2 and wp_7 sit on the
-            // east/west ramp feet at x = +-128 (clear of the wall)
-            // — the original 304/16 pairing put both ramp feet
-            // half-inside the wall. wp_10 and wp_11 sit on the
-            // service road north of the control building (Z=130,
-            // 26 units short of the building's Z=156 face) so the
-            // closed loop visits both sides of the south end. The
-            // count is twelve rather than six because the smoke
-            // test asserts Match.DEFAULT_BOT_COUNT = 7 alive, and
-            // MapSmokeGameplayPort.botsFromSpec() creates exactly
-            // min(spec.botWaypoints().size(), DEFAULT_BOT_COUNT)
-            // sentries — the previous six gave six alive, the
-            // missing seventh failed the test from tic 0.
+            // ---- 28 bot waypoints (12 originals scaled by 12.5
+            // + 16 new), a closed loop visited in id order with
+            // wrap. The y=64 originals (overpass gantries) stay
+            // at y=64; the y=0 originals (ground/service road)
+            // stay at y=0. Of the 16 new waypoints, 8 sit on the
+            // overpasses at y=64 (4 on each overpass, at the
+            // extreme west/east ends and at the inner quarter
+            // x positions), and 8 sit on the ground at y=0 (4
+            // along the service road north and south, and 4
+            // around the control building). The new y=64
+            // waypoints are at z=-1500 (north overpass) and
+            // z=1000 (south overpass), matching the originals'
+            // overpass z rows. The new y=0 waypoints are at
+            // z=-500, 500, 1500, and 1800 (4 rows past the
+            // original service-road and control-building z
+            // positions), keeping the waypoints outside the
+            // level .ofm and inside the 4000 x 4000 spec.
             List.of(
-                new Waypoint("wp_0", 0.0f, 64.0f, 80.0f),
-                new Waypoint("wp_1", 32.0f, 64.0f, 60.0f),
-                new Waypoint("wp_2", 96.0f, 64.0f, 80.0f),
-                new Waypoint("wp_3", 128.0f, 0.0f, 0.0f),
-                new Waypoint("wp_4", 96.0f, 0.0f, -60.0f),
-                new Waypoint("wp_5", 0.0f, 64.0f, -120.0f),
-                new Waypoint("wp_6", -96.0f, 64.0f, -120.0f),
-                new Waypoint("wp_7", -128.0f, 0.0f, 0.0f),
-                new Waypoint("wp_8", -96.0f, 0.0f, 60.0f),
-                new Waypoint("wp_9", -32.0f, 0.0f, 60.0f),
-                new Waypoint("wp_10", 96.0f, 0.0f, 130.0f),
-                new Waypoint("wp_11", -96.0f, 0.0f, 130.0f)
+                new Waypoint("wp_0", 0.0f, 64.0f, 1000.0f),
+                new Waypoint("wp_1", 400.0f, 64.0f, 750.0f),
+                new Waypoint("wp_2", 1200.0f, 64.0f, 1000.0f),
+                new Waypoint("wp_3", 1600.0f, 0.0f, 0.0f),
+                new Waypoint("wp_4", 1200.0f, 0.0f, -750.0f),
+                new Waypoint("wp_5", 0.0f, 64.0f, -1500.0f),
+                new Waypoint("wp_6", -1200.0f, 64.0f, -1500.0f),
+                new Waypoint("wp_7", -1600.0f, 0.0f, 0.0f),
+                new Waypoint("wp_8", -1200.0f, 0.0f, 750.0f),
+                new Waypoint("wp_9", -400.0f, 0.0f, 750.0f),
+                new Waypoint("wp_10", 1200.0f, 0.0f, 1625.0f),
+                new Waypoint("wp_11", -1200.0f, 0.0f, 1625.0f),
+                new Waypoint("wp_12", -1800.0f, 64.0f, -1500.0f),
+                new Waypoint("wp_13", -600.0f, 64.0f, -1500.0f),
+                new Waypoint("wp_14", 600.0f, 64.0f, -1500.0f),
+                new Waypoint("wp_15", 1800.0f, 64.0f, -1500.0f),
+                new Waypoint("wp_16", -1800.0f, 64.0f, 1000.0f),
+                new Waypoint("wp_17", -600.0f, 64.0f, 1000.0f),
+                new Waypoint("wp_18", 600.0f, 64.0f, 1000.0f),
+                new Waypoint("wp_19", 1800.0f, 64.0f, 1000.0f),
+                new Waypoint("wp_20", -1800.0f, 0.0f, -500.0f),
+                new Waypoint("wp_21", 1800.0f, 0.0f, -500.0f),
+                new Waypoint("wp_22", -1800.0f, 0.0f, 500.0f),
+                new Waypoint("wp_23", 1800.0f, 0.0f, 500.0f),
+                new Waypoint("wp_24", -1800.0f, 0.0f, 1500.0f),
+                new Waypoint("wp_25", 0.0f, 0.0f, 1500.0f),
+                new Waypoint("wp_26", 1800.0f, 0.0f, 1500.0f),
+                new Waypoint("wp_27", 0.0f, 0.0f, 1800.0f)
             ),
             // ---- Hardpoint markers: three zones, 1800-tic (30s)
             // rotation, 1 point per tic. Activation order B, A, C.
+            // The x/z coords are scaled by 12.5 from the original
+            // 320-system positions; the radius (48) is the
+            // Hardpoint capture radius in world units and is left
+            // unchanged per the "scale X/Z only" rule. The zone
+            // callouts (Overpass N, Overpass S, Control Building)
+            // and ids (hp_a, hp_b, hp_c) are preserved.
             new MapMarkers.Hardpoint(List.of(
-                new MapMarkers.HardpointZone("hp_a", "Overpass N", 0.0f, -120.0f, 48.0f),
-                new MapMarkers.HardpointZone("hp_b", "Overpass S", 0.0f, 80.0f, 48.0f),
-                new MapMarkers.HardpointZone("hp_c", "Control Building", 0.0f, 136.0f,
-                    48.0f)
+                new MapMarkers.HardpointZone("hp_a", "Overpass N", 0.0f, -1500.0f,
+                    48.0f),
+                new MapMarkers.HardpointZone("hp_b", "Overpass S", 0.0f, 1000.0f,
+                    48.0f),
+                new MapMarkers.HardpointZone("hp_c", "Control Building", 0.0f,
+                    1700.0f, 48.0f)
             ), 1800, 1),
-            // ---- asset paths
+            // ---- asset paths (level .ofm unchanged; the 320 x 320
+            // mesh is the centerpiece in the middle of the 4000
+            // x 4000 spec).
             new MapAssets(
                 "engine/src/main/resources/maps/overpass/level.ofm",
                 "assets/models/weapon/blaster-b.ofm",
@@ -254,17 +344,23 @@ public final class Maps
     // ----- Tripoint (Urban Warzone × Domination) ----------------------------
 
     /**
-     * The sixth shipped map. Urban Warzone, Domination, 6v6 sizing. A
-     * three-way intersection at street level: a roundabout in the
-     * centre and three approach streets (north, south-east,
-     * south-west) leading to the three flags. The full design spec is
-     * in {@code docs/maps/urban-warzone/03-dom-tripoint.md}.
+     * The sixth shipped map. Urban Warzone, Domination, MW2-Rust /
+     * BO6 large-map sizing (4800 x 4800 world units, MAP_SCALE = 16
+     * → 300 m square). A three-way intersection at street level: a
+     * roundabout in the centre and three approach streets (north,
+     * south-east, south-west) leading to the three flags. The full
+     * design spec is in {@code docs/maps/urban-warzone/03-dom-tripoint.md}.
      *
      * <p>Distinct from {@link #cornerstone} in feel: the play is
      * "centre → flag", not "flag → flag". The roundabout is the
      * contested ground; the three flags are the rewards. A team that
      * captures two flags at once earns double the score; capturing
      * all three is the lockout.</p>
+     *
+     * <p>The level .ofm is the original 320 x 320 composition — left
+     * untouched and treated as a centerpiece. The 15x spec surrounds
+     * it on all sides; the 16 new waypoints fill the 4 outer z rows
+     * that the 320 x 320 level .ofm does not reach.</p>
      *
      * @return the Tripoint map spec
      */
@@ -276,104 +372,118 @@ public final class Maps
             "Tripoint",
             MapSetting.URBAN_WARZONE,
             MatchMode.DOMINATION,
-            // ---- playable area: 320 x 320, 96 high (the flags sit
-            // on a 4-unit kerb with 16-unit stands; the perimeter
-            // walls are 32-tall)
-            new MapDimensions(320.0f, 320.0f, 96.0f),
+            // ---- playable area: 4800 x 4800, 96 high. All x/z
+            // in the spec are scaled by 15 from the original 320
+            // x 320 spec; the level .ofm remains a 320 x 320
+            // centerpiece.
+            new MapDimensions(4800.0f, 4800.0f, 96.0f),
             // ---- three approach streets, encoded as lanes A/B/C.
-            // The axis is whatever the player reads; the chokepoints
-            // sit at the centre and at each flag. Coordinates are
-            // in the kit's origin-centred system (see cornerstone
-            // for why the original 0..320 origin was wrong). The
-            // previous 0..320 origin put cp_b1..cp_b3 and cp_c1..cp_c3
-            // at x=200/220/240 and x=120/100/80, all past the kit's
-            // west/east inner wall faces at x=+/-153.6, and the
-            // chokepoint labels rendered off-screen.
+            // The original three chokepoints per lane are scaled
+            // by 15; two new chokepoints per lane are added
+            // (one mid-arm midpoint, one at the far end) so a
+            // 5-chokepoint lane (15 total) names the full
+            // approach from the roundabout to the flag. Chokepoint
+            // labels (Roundabout, Approach, FLAG A, FLAG C SE,
+            // FLAG C SW) are preserved on the originals; the
+            // additions use the "Mid" / "Far" suffix.
             List.of(
                 new Lane("lane_a", LaneAxis.NORTH_SOUTH, List.of(
                     new Chokepoint("cp_a1", "Roundabout", 0.0f, 0.0f),
-                    new Chokepoint("cp_a2", "Approach N Centre", 0.0f, -60.0f),
-                    new Chokepoint("cp_a3", "FLAG A", 0.0f, -112.0f)
+                    new Chokepoint("cp_a2", "Approach N Centre", 0.0f, -900.0f),
+                    new Chokepoint("cp_a3", "FLAG A", 0.0f, -1680.0f),
+                    new Chokepoint("cp_a4", "Approach N W", -600.0f, -1200.0f),
+                    new Chokepoint("cp_a5", "Approach N E", 600.0f, -1800.0f)
                 )),
                 new Lane("lane_b", LaneAxis.NORTH_SOUTH, List.of(
-                    new Chokepoint("cp_b1", "Roundabout East", 40.0f, 0.0f),
-                    new Chokepoint("cp_b2", "Approach SE Centre", 60.0f, 40.0f),
-                    new Chokepoint("cp_b3", "FLAG C SE", 80.0f, 80.0f)
+                    new Chokepoint("cp_b1", "Roundabout East", 600.0f, 0.0f),
+                    new Chokepoint("cp_b2", "Approach SE Centre", 900.0f, 600.0f),
+                    new Chokepoint("cp_b3", "FLAG C SE", 1200.0f, 1200.0f),
+                    new Chokepoint("cp_b4", "Approach SE Mid", 400.0f, 400.0f),
+                    new Chokepoint("cp_b5", "Approach SE Far", 1500.0f, 1500.0f)
                 )),
                 new Lane("lane_c", LaneAxis.NORTH_SOUTH, List.of(
-                    new Chokepoint("cp_c1", "Roundabout West", -40.0f, 0.0f),
-                    new Chokepoint("cp_c2", "Approach SW Centre", -60.0f, 40.0f),
-                    new Chokepoint("cp_c3", "FLAG C SW", -80.0f, 80.0f)
+                    new Chokepoint("cp_c1", "Roundabout West", -600.0f, 0.0f),
+                    new Chokepoint("cp_c2", "Approach SW Centre", -900.0f, 600.0f),
+                    new Chokepoint("cp_c3", "FLAG C SW", -1200.0f, 1200.0f),
+                    new Chokepoint("cp_c4", "Approach SW Mid", -400.0f, 400.0f),
+                    new Chokepoint("cp_c5", "Approach SW Far", -1500.0f, 1500.0f)
                 ))
             ),
             // ---- six spawn points: three per team on the west and
             // east edges, facings aimed at the south-east and
-            // south-west approach streets respectively. The
-            // previous x=16 / x=304 sat 137 units past the inner
-            // wall faces (x=+/-153.6), unreachable; the new x=-144
-            // and x=+144 give the 16-unit half-width body 9.6
-            // units of clearance from the wall.
+            // south-west approach streets respectively. Spawn x
+            // is +-2160 (scaled 15 from 144), well clear of the
+            // level .ofm's 320 x 320 walls (at +-153.6 in the 320
+            // system, 2304 in the 15x spec). Y stays at 0.
             List.of(
-                new SpawnPoint("red_alpha", Team.RED, -144.0f, 0.0f, -64.0f,
+                new SpawnPoint("red_alpha", Team.RED, -2160.0f, 0.0f, -960.0f,
                     toRadians(80.0f)),
-                new SpawnPoint("red_bravo", Team.RED, -144.0f, 0.0f, -32.0f,
+                new SpawnPoint("red_bravo", Team.RED, -2160.0f, 0.0f, -480.0f,
                     toRadians(90.0f)),
-                new SpawnPoint("red_charlie", Team.RED, -144.0f, 0.0f, 0.0f,
+                new SpawnPoint("red_charlie", Team.RED, -2160.0f, 0.0f, 0.0f,
                     toRadians(100.0f)),
-                new SpawnPoint("blue_alpha", Team.BLUE, 144.0f, 0.0f, 0.0f,
+                new SpawnPoint("blue_alpha", Team.BLUE, 2160.0f, 0.0f, 0.0f,
                     toRadians(280.0f)),
-                new SpawnPoint("blue_bravo", Team.BLUE, 144.0f, 0.0f, 32.0f,
+                new SpawnPoint("blue_bravo", Team.BLUE, 2160.0f, 0.0f, 480.0f,
                     toRadians(270.0f)),
-                new SpawnPoint("blue_charlie", Team.BLUE, 144.0f, 0.0f, 64.0f,
+                new SpawnPoint("blue_charlie", Team.BLUE, 2160.0f, 0.0f, 960.0f,
                     toRadians(260.0f))
             ),
-            // ---- twelve bot waypoints: a closed loop covering the
-            // three approach arms, the roundabout, and the back-alley
-            // cut-through. The previous 6 waypoints produced
-            // {@code min(6, DEFAULT_BOT_COUNT) == 6} bots, one short
-            // of {@link Match#DEFAULT_BOT_COUNT} (7), so the smoke
-            // test's "every bot alive" assertion failed with
-            // {@code expected 7, was 6}. The new 12 waypoints yield
-            // {@code min(12, 7) == 7} bots, matching the
-            // DEFAULT_BOT_COUNT. The additional 6 (wp_2, wp_4,
-            // wp_6, wp_7, wp_9, wp_11) are mid-arm midpoints so a
-            // wander bot has a destination every ~20 units and
-            // never has to walk the full length of an arm to
-            // change rooms.
-            //
-            // The waypoint x/z values stay inside the kit's
-            // playable area (x in [-149.6, +149.6], z in
-            // [-149.6, +149.6]) and clear of the kit's four columns
-            // at (+/-80, +/-80) (32-unit half-extent, so x=+/-80
-            // sits in [+/-48, +/-112] on the column x range). The
-            // previous wp_3 at x=240 sat 86 units past the inner
-            // east wall face (x=153.6), unreachable; the new wp_5
-            // and wp_6 sit at x=64, inside the playable area and
-            // outside the column x range.
+            // ---- 28 bot waypoints (12 originals scaled by 15
+            // + 16 new), a closed loop visited in id order with
+            // wrap. The 12 originals are the original 320-system
+            // positions multiplied by 15 and form the inner
+            // triangle of N approach, SE approach, SW approach,
+            // and roundabout. The 16 new waypoints are on 4 outer
+            // z rows (z = -1800, -400, 400, 1800) with x =
+            // -1800, -600, 600, 1800 — past the level .ofm's kit
+            // column x range and well clear of the level .ofm
+            // walls. All waypoints at y = 0 (kit floor).
             List.of(
-                new Waypoint("wp_0", 0.0f, 0.0f, -112.0f),
-                new Waypoint("wp_1", 0.0f, 0.0f, -80.0f),
-                new Waypoint("wp_2", 0.0f, 0.0f, -40.0f),
+                new Waypoint("wp_0", 0.0f, 0.0f, -1680.0f),
+                new Waypoint("wp_1", 0.0f, 0.0f, -1200.0f),
+                new Waypoint("wp_2", 0.0f, 0.0f, -600.0f),
                 new Waypoint("wp_3", 0.0f, 0.0f, 0.0f),
-                new Waypoint("wp_4", 32.0f, 0.0f, 0.0f),
-                new Waypoint("wp_5", 64.0f, 0.0f, 16.0f),
-                new Waypoint("wp_6", 64.0f, 0.0f, 32.0f),
-                new Waypoint("wp_7", 16.0f, 0.0f, 64.0f),
-                new Waypoint("wp_8", 0.0f, 0.0f, 80.0f),
-                new Waypoint("wp_9", -32.0f, 0.0f, 64.0f),
-                new Waypoint("wp_10", -64.0f, 0.0f, 32.0f),
-                new Waypoint("wp_11", -64.0f, 0.0f, 16.0f)
+                new Waypoint("wp_4", 480.0f, 0.0f, 0.0f),
+                new Waypoint("wp_5", 960.0f, 0.0f, 240.0f),
+                new Waypoint("wp_6", 960.0f, 0.0f, 480.0f),
+                new Waypoint("wp_7", 240.0f, 0.0f, 960.0f),
+                new Waypoint("wp_8", 0.0f, 0.0f, 1200.0f),
+                new Waypoint("wp_9", -480.0f, 0.0f, 960.0f),
+                new Waypoint("wp_10", -960.0f, 0.0f, 480.0f),
+                new Waypoint("wp_11", -960.0f, 0.0f, 240.0f),
+                new Waypoint("wp_12", -1800.0f, 0.0f, -1800.0f),
+                new Waypoint("wp_13", -600.0f, 0.0f, -1800.0f),
+                new Waypoint("wp_14", 600.0f, 0.0f, -1800.0f),
+                new Waypoint("wp_15", 1800.0f, 0.0f, -1800.0f),
+                new Waypoint("wp_16", -1200.0f, 0.0f, -400.0f),
+                new Waypoint("wp_17", -400.0f, 0.0f, -400.0f),
+                new Waypoint("wp_18", 400.0f, 0.0f, -400.0f),
+                new Waypoint("wp_19", 1200.0f, 0.0f, -400.0f),
+                new Waypoint("wp_20", -1200.0f, 0.0f, 400.0f),
+                new Waypoint("wp_21", -400.0f, 0.0f, 400.0f),
+                new Waypoint("wp_22", 400.0f, 0.0f, 400.0f),
+                new Waypoint("wp_23", 1200.0f, 0.0f, 400.0f),
+                new Waypoint("wp_24", -1800.0f, 0.0f, 1800.0f),
+                new Waypoint("wp_25", -600.0f, 0.0f, 1800.0f),
+                new Waypoint("wp_26", 600.0f, 0.0f, 1800.0f),
+                new Waypoint("wp_27", 1800.0f, 0.0f, 1800.0f)
             ),
-            // ---- Domination markers: three flags, A, B, C. B is
-            // the larger radius — the roundabout is the contested
-            // ground and the capture zone is wider than the
-            // per-flag stands.
+            // ---- Domination markers: three flags, A, B, C. B
+            // is the larger radius — the roundabout is the
+            // contested ground and the capture zone is wider
+            // than the per-flag stands. The flag x/z coords
+            // are scaled by 15; the radii (32 / 48) are the
+            // capture radii in world units and are left
+            // unchanged per the "scale X/Z only" rule.
             new MapMarkers.Domination(List.of(
-                new MapMarkers.Flag("flag_a", "FLAG A", 0.0f, -112.0f, 32.0f),
+                new MapMarkers.Flag("flag_a", "FLAG A", 0.0f, -1680.0f, 32.0f),
                 new MapMarkers.Flag("flag_b", "FLAG B", 0.0f, 0.0f, 48.0f),
-                new MapMarkers.Flag("flag_c", "FLAG C", -80.0f, 80.0f, 32.0f)
+                new MapMarkers.Flag("flag_c", "FLAG C", -1200.0f, 1200.0f, 32.0f)
             )),
-            // ---- asset paths
+            // ---- asset paths (level .ofm unchanged; the 320 x 320
+            // mesh is the centerpiece in the middle of the 4800
+            // x 4800 spec).
             new MapAssets(
                 "engine/src/main/resources/maps/tripoint/level.ofm",
                 "assets/models/weapon/blaster-b.ofm",
@@ -385,11 +495,12 @@ public final class Maps
     // ----- Extraction (Urban Warzone × CTF) --------------------------------
 
     /**
-     * The seventh shipped map. Urban Warzone, CTF, 6v6 sizing. A
-     * mid-sized urban block split by a long boulevard. Each team's
-     * base sits at one end of the boulevard, with the flag in a small
-     * structure inside the base. The full design spec is in
-     * {@code docs/maps/urban-warzone/04-ctf-extraction.md}.
+     * The seventh shipped map. Urban Warzone, CTF, MW2-Rust / BO6
+     * large-map sizing (5600 x 5600 world units, MAP_SCALE = 16 →
+     * 350 m square). A mid-sized urban block split by a long
+     * boulevard. Each team's base sits at one end of the boulevard,
+     * with the flag in a small structure inside the base. The full
+     * design spec is in {@code docs/maps/urban-warzone/04-ctf-extraction.md}.
      *
      * <p>Distinct from {@link #cornerstone} in feel: the play is
      * "carry the flag down the boulevard" with the flanking lanes as
@@ -397,6 +508,12 @@ public final class Maps
      * they leave their own base until they reach the enemy capture
      * point — a long, open sightline, with the cover walls in lanes
      * A and C the only off-axis cover a defender can use.</p>
+     *
+     * <p>The level .ofm is the original 320 x 320 composition — left
+     * untouched and treated as a centerpiece. The 17.5x spec
+     * surrounds it on all sides; the red base sits in the SW corner
+     * of the spec and the blue base in the NE corner, with the long
+     * boulevard between them.</p>
      *
      * @return the Extraction map spec
      */
@@ -408,105 +525,121 @@ public final class Maps
             "Extraction",
             MapSetting.URBAN_WARZONE,
             MatchMode.CTF,
-            // ---- playable area: 320 x 320, 96 high (the bases are
-            // 4-tall platforms with a 24-tall flagpole; the cover
-            // walls are 48-tall)
-            new MapDimensions(320.0f, 320.0f, 96.0f),
-            // ---- three lanes A/B/C, mirroring Cornerstone but with
-            // the role of each lane shifted: B is now the boulevard
-            // (the long sightline), A and C are the flanking
-            // cover-wall lanes. All x/z are in the kit's coordinate
-            // system (centered at origin, playable area is -160 to
-            // 160 in both axes). The previous 0..320 origin was off
-            // by half the playable width against the level .ofm and
-            // the kit composer (both centered); the coordinates were
-            // translated by -160 on each axis to line the spawns,
-            // chokepoints, waypoints and CTF bases up with the
-            // kit's walls, columns, and the level mesh.
+            // ---- playable area: 5600 x 5600, 96 high (the bases
+            // are 4-tall platforms with a 24-tall flagpole; the
+            // cover walls are 48-tall). All x/z in the spec are
+            // scaled by 17.5 from the original 320 x 320 spec; the
+            // level .ofm remains a 320 x 320 centerpiece.
+            new MapDimensions(5600.0f, 5600.0f, 96.0f),
+            // ---- three lanes A/B/C, mirroring Cornerstone but
+            // with the role of each lane shifted: B is now the
+            // boulevard (the long sightline), A and C are the
+            // flanking cover-wall lanes. The original three
+            // chokepoints per lane are scaled by 17.5; two new
+            // chokepoints per lane are added (one at the inner
+            // midpoint, one at the far end) so a 5-chokepoint
+            // lane (15 total) names the full NW-to-NE or W-to-E
+            // or SW-to-SE run. Chokepoint labels (Red Base,
+            // Cover Wall, Boulevard, Blue Base) are preserved on
+            // the originals; the additions use the "Mid" /
+            // "Center" suffix.
             List.of(
                 new Lane("lane_a", LaneAxis.NORTH_SOUTH, List.of(
-                    new Chokepoint("cp_a1", "Red Base", -128.0f, -128.0f),
-                    new Chokepoint("cp_a2", "Cover Wall NW", -96.0f, -96.0f),
-                    new Chokepoint("cp_a3", "Cover Wall NE", 96.0f, -96.0f)
+                    new Chokepoint("cp_a1", "Red Base", -2240.0f, -2240.0f),
+                    new Chokepoint("cp_a2", "Cover Wall NW", -1680.0f, -1680.0f),
+                    new Chokepoint("cp_a3", "Cover Wall NE", 1680.0f, -1680.0f),
+                    new Chokepoint("cp_a4", "Cover Wall N Mid", 0.0f, -1680.0f),
+                    new Chokepoint("cp_a5", "Cover Wall N Center", 0.0f, -800.0f)
                 )),
                 new Lane("lane_b", LaneAxis.NORTH_SOUTH, List.of(
-                    new Chokepoint("cp_b1", "Boulevard West", -128.0f, 0.0f),
+                    new Chokepoint("cp_b1", "Boulevard West", -2240.0f, 0.0f),
                     new Chokepoint("cp_b2", "Boulevard Centre", 0.0f, 0.0f),
-                    new Chokepoint("cp_b3", "Boulevard East", 128.0f, 0.0f)
+                    new Chokepoint("cp_b3", "Boulevard East", 2240.0f, 0.0f),
+                    new Chokepoint("cp_b4", "Boulevard W Mid", -1120.0f, 0.0f),
+                    new Chokepoint("cp_b5", "Boulevard E Mid", 1120.0f, 0.0f)
                 )),
                 new Lane("lane_c", LaneAxis.NORTH_SOUTH, List.of(
-                    new Chokepoint("cp_c1", "Cover Wall SW", -96.0f, 96.0f),
-                    new Chokepoint("cp_c2", "Cover Wall SE", 96.0f, 96.0f),
-                    new Chokepoint("cp_c3", "Blue Base", 128.0f, 128.0f)
+                    new Chokepoint("cp_c1", "Cover Wall SW", -1680.0f, 1680.0f),
+                    new Chokepoint("cp_c2", "Cover Wall SE", 1680.0f, 1680.0f),
+                    new Chokepoint("cp_c3", "Blue Base", 2240.0f, 2240.0f),
+                    new Chokepoint("cp_c4", "Cover Wall S Mid", 0.0f, 1680.0f),
+                    new Chokepoint("cp_c5", "Cover Wall S Center", 0.0f, 800.0f)
                 ))
             ),
-            // ---- six spawn points: three per team on the west and
-            // east edges of the playable area (x = +/-128, 9.6 units
-            // clear of the inner wall faces at x = +/-153.6). The
-            // 16-unit-radius body has 9.6 units of clearance from
-            // the inner face of the kit wall, matching Cornerstone's
-            // spawn convention. The previous x=16 / x=304 placements
-            // (which translate to x=-144 / x=+144 in the new system)
-            // put the body half-inside the wall — the wall is 12.8
-            // thick, the playable area is -160..160, and -144 sits
-            // 6.4 units past the wall's inner face at -153.6.
+            // ---- six spawn points: three per team on the west
+            // and east edges of the playable area. Spawn x is
+            // +-2240 (scaled 17.5 from 128), well clear of the
+            // level .ofm's 320 x 320 walls (at +-153.6 in the
+            // 320 system, 2688 in the 17.5x spec). Y stays at 0.
             List.of(
-                new SpawnPoint("red_alpha", Team.RED, -128.0f, 0.0f, -128.0f,
+                new SpawnPoint("red_alpha", Team.RED, -2240.0f, 0.0f, -2240.0f,
                     toRadians(45.0f)),
-                new SpawnPoint("red_bravo", Team.RED, -128.0f, 0.0f, -96.0f,
+                new SpawnPoint("red_bravo", Team.RED, -2240.0f, 0.0f, -1680.0f,
                     toRadians(60.0f)),
-                new SpawnPoint("red_charlie", Team.RED, -128.0f, 0.0f, -64.0f,
+                new SpawnPoint("red_charlie", Team.RED, -2240.0f, 0.0f, -1120.0f,
                     toRadians(80.0f)),
-                new SpawnPoint("blue_alpha", Team.BLUE, 128.0f, 0.0f, 64.0f,
+                new SpawnPoint("blue_alpha", Team.BLUE, 2240.0f, 0.0f, 1120.0f,
                     toRadians(225.0f)),
-                new SpawnPoint("blue_bravo", Team.BLUE, 128.0f, 0.0f, 96.0f,
+                new SpawnPoint("blue_bravo", Team.BLUE, 2240.0f, 0.0f, 1680.0f,
                     toRadians(240.0f)),
-                new SpawnPoint("blue_charlie", Team.BLUE, 128.0f, 0.0f, 128.0f,
+                new SpawnPoint("blue_charlie", Team.BLUE, 2240.0f, 0.0f, 2240.0f,
                     toRadians(260.0f))
             ),
-            // ---- twelve bot waypoints: a 3x4 closed-loop grid
-            // covering the boulevard, the two cover-wall lanes, and
-            // the four corners. The grid spacing is 80-128 units,
-            // well past the ~80-unit firing range the bots would
-            // otherwise use to shoot each other across the map.
-            // The previous six waypoints sat at x=16/304 (old
-            // system), which translate to x=-144/+144 — 6.4 units
-            // inside the kit wall — and at x=96/224, which translate
-            // to x=-64/+64, inside the kit's column x-range with
-            // 16-unit body margin. Bumping to twelve and spacing
-            // the waypoints on a regular grid avoids both failure
-            // modes: no waypoint is inside a wall or column, and
-            // no two waypoints are within firing range. The
-            // additional benefit of going past six is that the
-            // smoke test's per-waypoint bot roster (one bot per
-            // waypoint, capped at Match.DEFAULT_BOT_COUNT = 7) now
-            // gets all seven bots instead of six.
+            // ---- 28 bot waypoints (12 originals scaled by 17.5
+            // + 16 new), a closed loop visited in id order with
+            // wrap. The 12 originals are the original 320-system
+            // positions multiplied by 17.5 and form a 3 x 4 grid
+            // on the 3 boulevard z rows (z = -2240, 0, 2240).
+            // The 16 new waypoints are on 4 inner z rows
+            // (z = -1600, -800, 800, 1600) with x = -1600, -800,
+            // 800, 1600 — past the level .ofm's kit column x
+            // range and well clear of the level .ofm walls. All
+            // waypoints at y = 0 (kit floor).
             List.of(
-                new Waypoint("wp_0", -128.0f, 0.0f, -128.0f),
-                new Waypoint("wp_1", -40.0f, 0.0f, -128.0f),
-                new Waypoint("wp_2", 40.0f, 0.0f, -128.0f),
-                new Waypoint("wp_3", 128.0f, 0.0f, -128.0f),
-                new Waypoint("wp_4", -128.0f, 0.0f, 0.0f),
-                new Waypoint("wp_5", -40.0f, 0.0f, 0.0f),
-                new Waypoint("wp_6", 40.0f, 0.0f, 0.0f),
-                new Waypoint("wp_7", 128.0f, 0.0f, 0.0f),
-                new Waypoint("wp_8", -128.0f, 0.0f, 128.0f),
-                new Waypoint("wp_9", -40.0f, 0.0f, 128.0f),
-                new Waypoint("wp_10", 40.0f, 0.0f, 128.0f),
-                new Waypoint("wp_11", 128.0f, 0.0f, 128.0f)
+                new Waypoint("wp_0", -2240.0f, 0.0f, -2240.0f),
+                new Waypoint("wp_1", -700.0f, 0.0f, -2240.0f),
+                new Waypoint("wp_2", 700.0f, 0.0f, -2240.0f),
+                new Waypoint("wp_3", 2240.0f, 0.0f, -2240.0f),
+                new Waypoint("wp_4", -2240.0f, 0.0f, 0.0f),
+                new Waypoint("wp_5", -700.0f, 0.0f, 0.0f),
+                new Waypoint("wp_6", 700.0f, 0.0f, 0.0f),
+                new Waypoint("wp_7", 2240.0f, 0.0f, 0.0f),
+                new Waypoint("wp_8", -2240.0f, 0.0f, 2240.0f),
+                new Waypoint("wp_9", -700.0f, 0.0f, 2240.0f),
+                new Waypoint("wp_10", 700.0f, 0.0f, 2240.0f),
+                new Waypoint("wp_11", 2240.0f, 0.0f, 2240.0f),
+                new Waypoint("wp_12", -1600.0f, 0.0f, -1600.0f),
+                new Waypoint("wp_13", -800.0f, 0.0f, -1600.0f),
+                new Waypoint("wp_14", 800.0f, 0.0f, -1600.0f),
+                new Waypoint("wp_15", 1600.0f, 0.0f, -1600.0f),
+                new Waypoint("wp_16", -1600.0f, 0.0f, -800.0f),
+                new Waypoint("wp_17", -800.0f, 0.0f, -800.0f),
+                new Waypoint("wp_18", 800.0f, 0.0f, -800.0f),
+                new Waypoint("wp_19", 1600.0f, 0.0f, -800.0f),
+                new Waypoint("wp_20", -1600.0f, 0.0f, 800.0f),
+                new Waypoint("wp_21", -800.0f, 0.0f, 800.0f),
+                new Waypoint("wp_22", 800.0f, 0.0f, 800.0f),
+                new Waypoint("wp_23", 1600.0f, 0.0f, 800.0f),
+                new Waypoint("wp_24", -1600.0f, 0.0f, 1600.0f),
+                new Waypoint("wp_25", -800.0f, 0.0f, 1600.0f),
+                new Waypoint("wp_26", 800.0f, 0.0f, 1600.0f),
+                new Waypoint("wp_27", 1600.0f, 0.0f, 1600.0f)
             ),
             // ---- CTF markers: red's base and blue's base. The
             // flag and the capture point are at the same spot in
-            // each base (the spec's "red's flag is also red's
-            // capture point" rule). Both bases sit at the corners
-            // of the playable area in the kit's origin-centred
-            // system (-160..160), translated from the old 0..320
-            // system by subtracting 160 on each axis.
+            // each base. Both bases sit at the corners of the
+            // playable area in the 17.5x spec; the radius (32)
+            // is the capture radius in world units and is left
+            // unchanged per the "scale X/Z only" rule.
             new MapMarkers.CaptureTheFlag(
-                new MapMarkers.Base(Team.RED, -128.0f, -128.0f, -128.0f, -128.0f, 32.0f),
-                new MapMarkers.Base(Team.BLUE, 128.0f, 128.0f, 128.0f, 128.0f, 32.0f)
+                new MapMarkers.Base(Team.RED, -2240.0f, -2240.0f, -2240.0f,
+                    -2240.0f, 32.0f),
+                new MapMarkers.Base(Team.BLUE, 2240.0f, 2240.0f, 2240.0f,
+                    2240.0f, 32.0f)
             ),
-            // ---- asset paths
+            // ---- asset paths (level .ofm unchanged; the 320 x 320
+            // mesh is the centerpiece in the middle of the 5600
+            // x 5600 spec).
             new MapAssets(
                 "engine/src/main/resources/maps/extraction/level.ofm",
                 "assets/models/weapon/blaster-b.ofm",
