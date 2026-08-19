@@ -309,13 +309,18 @@ class MapSceneTest
             // count) and only fail here.
             final MapSpec spec = MapLibrary.get("cornerstone");
 
-            // Sanity: cornerstone has 12 waypoints, all at Y=0.
+            // Sanity: cornerstone has 28 waypoints, all at Y=0.
             // The map is single-floor, so any non-zero Y would put
             // the bot's body either buried in a wall or floating
-            // above the kit floor tiles.
+            // above the kit floor tiles. The 28-waypoint count
+            // (12 original 320-system waypoints scaled by 10, plus
+            // 16 new outer-ring waypoints) is the scaled-cornerstone
+            // shape — the level .ofm is still 320 x 320 but the
+            // spec data spreads across the 3200 x 3200 playable
+            // area as a centerpiece layout.
             assertThat(spec.botWaypoints())
-                .as("cornerstone's 12 waypoints are the floor the bots stand on")
-                .hasSize(12)
+                .as("cornerstone's 28 waypoints are the floor the bots stand on")
+                .hasSize(28)
                 .allSatisfy(wp -> assertThat(wp.y())
                     .as("cornerstone is a single-floor map; every waypoint Y is the floor")
                     .isZero());

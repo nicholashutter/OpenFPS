@@ -773,8 +773,13 @@ public final class Maps
             "Crossroads",
             MapSetting.DESERT_RAVINE,
             MatchMode.TDM,
-            // ---- playable area: 320 x 320, 96 high (desert buildings are lower)
-            new MapDimensions(320.0f, 320.0f, 96.0f),
+            // ---- playable area: 3200 x 3200, 128 high (desert town
+            // scaled to 200m; 16 world units per metre). The level
+            // .ofm and the kit (columns at +/-80, walls at +/-160)
+            // are centerpieces in the middle of the playable area;
+            // the data (spawns, waypoints, chokepoints) is spread
+            // across the full 3200 x 3200 playable extent.
+            new MapDimensions(3200.0f, 3200.0f, 128.0f),
             // ---- three lanes A/B/C, each with chokepoints in travel
             // order. Chokepoints sit on three rows that fit inside the
             // kit's playable area: the previous z=160 row put the
@@ -784,68 +789,70 @@ public final class Maps
             // the south wall outer face, unreachable.
             List.of(
                 new Lane("lane_a", LaneAxis.NORTH_SOUTH, List.of(
-                    new Chokepoint("cp_a1", "Shack Row West", -112.0f, -100.0f),
-                    new Chokepoint("cp_a2", "Shack Row Centre", 0.0f, -100.0f),
-                    new Chokepoint("cp_a3", "Shack Row East", 112.0f, -100.0f)
+                    new Chokepoint("cp_a1", "Shack Row Far West", -1500.0f, -1000.0f),
+                    new Chokepoint("cp_a2", "Shack Row West", -750.0f, -1000.0f),
+                    new Chokepoint("cp_a3", "Shack Row Centre", 0.0f, -1000.0f),
+                    new Chokepoint("cp_a4", "Shack Row East", 750.0f, -1000.0f),
+                    new Chokepoint("cp_a5", "Shack Row Far East", 1500.0f, -1000.0f)
                 )),
                 new Lane("lane_b", LaneAxis.NORTH_SOUTH, List.of(
-                    new Chokepoint("cp_b1", "Cafe Corner", -64.0f, 0.0f),
-                    new Chokepoint("cp_b2", "Plaza Centre", 0.0f, 0.0f),
-                    new Chokepoint("cp_b3", "Sheriff's Office", 64.0f, 0.0f)
+                    new Chokepoint("cp_b1", "West Town Gate", -1500.0f, 0.0f),
+                    new Chokepoint("cp_b2", "Cafe Corner", -750.0f, 0.0f),
+                    new Chokepoint("cp_b3", "Plaza Centre", 0.0f, 0.0f),
+                    new Chokepoint("cp_b4", "Sheriff's Office", 750.0f, 0.0f),
+                    new Chokepoint("cp_b5", "East Town Gate", 1500.0f, 0.0f)
                 )),
                 new Lane("lane_c", LaneAxis.NORTH_SOUTH, List.of(
-                    new Chokepoint("cp_c1", "Wells Fargo", -112.0f, 100.0f),
-                    new Chokepoint("cp_c2", "Warehouse Row Centre", 0.0f, 100.0f),
-                    new Chokepoint("cp_c3", "Trading Post", 112.0f, 100.0f)
+                    new Chokepoint("cp_c1", "Wells Fargo Far West", -1500.0f, 1000.0f),
+                    new Chokepoint("cp_c2", "Wells Fargo", -750.0f, 1000.0f),
+                    new Chokepoint("cp_c3", "Warehouse Row Centre", 0.0f, 1000.0f),
+                    new Chokepoint("cp_c4", "Trading Post", 750.0f, 1000.0f),
+                    new Chokepoint("cp_c5", "Trading Post Far East", 1500.0f, 1000.0f)
                 ))
             ),
-            // ---- six spawn points: three per team, on the west and
-            // east edges of the playable area (x = +/-128, 25 units
-            // clear of the inner wall faces at x = +/-153.6). The
-            // 16-unit half-width means the body's nearest edge sits
-            // 9.6 units off the inner wall face — close enough to
-            // the wall that the player feels "in cover", far enough
-            // that the body is not visually clipping the wall. The
-            // previous x=16 / x=304 placements put BLUE past the
-            // east wall outer face (x=304 is 137 units past the
-            // inner face, unreachable from the playable area), and
-            // the z=160 row put spawns on the south wall centre.
             List.of(
-                new SpawnPoint("red_alpha", Team.RED, -128.0f, 0.0f, -80.0f,
+                new SpawnPoint("red_alpha", Team.RED, -1280.0f, 0.0f, -800.0f,
                     toRadians(90.0f)),
-                new SpawnPoint("red_bravo", Team.RED, -128.0f, 0.0f, 0.0f,
+                new SpawnPoint("red_bravo", Team.RED, -1280.0f, 0.0f, 0.0f,
                     toRadians(80.0f)),
-                new SpawnPoint("red_charlie", Team.RED, -128.0f, 0.0f, 80.0f,
+                new SpawnPoint("red_charlie", Team.RED, -1280.0f, 0.0f, 800.0f,
                     toRadians(100.0f)),
-                new SpawnPoint("blue_alpha", Team.BLUE, 128.0f, 0.0f, -80.0f,
+                new SpawnPoint("blue_alpha", Team.BLUE, 1280.0f, 0.0f, -800.0f,
                     toRadians(270.0f)),
-                new SpawnPoint("blue_bravo", Team.BLUE, 128.0f, 0.0f, 0.0f,
+                new SpawnPoint("blue_bravo", Team.BLUE, 1280.0f, 0.0f, 0.0f,
                     toRadians(260.0f)),
-                new SpawnPoint("blue_charlie", Team.BLUE, 128.0f, 0.0f, 80.0f,
+                new SpawnPoint("blue_charlie", Team.BLUE, 1280.0f, 0.0f, 800.0f,
                     toRadians(280.0f))
             ),
-            // ---- bot waypoints: a closed loop visiting three rows
-            // inside the playable area, well clear of the inner
-            // wall faces at z = +/-153.6 and clear of the kit
-            // columns at (+/-80, +/-80) (column AABB is +/-32
-            // around the centre, so waypoints at z=+/-100 with
-            // x=+/-112 sit inside the column corners; the outer
-            // rows are pulled out to z=+/-120 and the outer x
-            // values are pushed past the column x range to +/-128
-            // so no waypoint lands inside a column AABB). The
-            // previous z=160 row put the middle row on the south
-            // wall centre and the z=296 row put the south row 130
-            // units past the wall outer face.
             List.of(
-                new Waypoint("wp_0", -128.0f, 0.0f, -120.0f),
-                new Waypoint("wp_1", 0.0f, 0.0f, -120.0f),
-                new Waypoint("wp_2", 128.0f, 0.0f, -120.0f),
-                new Waypoint("wp_3", -64.0f, 0.0f, 0.0f),
-                new Waypoint("wp_4", 0.0f, 0.0f, 0.0f),
-                new Waypoint("wp_5", 64.0f, 0.0f, 0.0f),
-                new Waypoint("wp_6", -128.0f, 0.0f, 120.0f),
-                new Waypoint("wp_7", 0.0f, 0.0f, 120.0f),
-                new Waypoint("wp_8", 128.0f, 0.0f, 120.0f)
+                new Waypoint("wp_0", -1200.0f, 0.0f, -1500.0f),
+                new Waypoint("wp_1", -800.0f, 0.0f, -1500.0f),
+                new Waypoint("wp_2", -400.0f, 0.0f, -1500.0f),
+                new Waypoint("wp_3", 0.0f, 0.0f, -1500.0f),
+                new Waypoint("wp_4", 400.0f, 0.0f, -1500.0f),
+                new Waypoint("wp_5", 800.0f, 0.0f, -1500.0f),
+                new Waypoint("wp_6", 1200.0f, 0.0f, -1500.0f),
+                new Waypoint("wp_7", 1200.0f, 0.0f, -500.0f),
+                new Waypoint("wp_8", 800.0f, 0.0f, -500.0f),
+                new Waypoint("wp_9", 400.0f, 0.0f, -500.0f),
+                new Waypoint("wp_10", 0.0f, 0.0f, -500.0f),
+                new Waypoint("wp_11", -400.0f, 0.0f, -500.0f),
+                new Waypoint("wp_12", -800.0f, 0.0f, -500.0f),
+                new Waypoint("wp_13", -1200.0f, 0.0f, -500.0f),
+                new Waypoint("wp_14", -1200.0f, 0.0f, 500.0f),
+                new Waypoint("wp_15", -800.0f, 0.0f, 500.0f),
+                new Waypoint("wp_16", -400.0f, 0.0f, 500.0f),
+                new Waypoint("wp_17", 0.0f, 0.0f, 500.0f),
+                new Waypoint("wp_18", 400.0f, 0.0f, 500.0f),
+                new Waypoint("wp_19", 800.0f, 0.0f, 500.0f),
+                new Waypoint("wp_20", 1200.0f, 0.0f, 500.0f),
+                new Waypoint("wp_21", 1200.0f, 0.0f, 1500.0f),
+                new Waypoint("wp_22", 800.0f, 0.0f, 1500.0f),
+                new Waypoint("wp_23", 400.0f, 0.0f, 1500.0f),
+                new Waypoint("wp_24", 0.0f, 0.0f, 1500.0f),
+                new Waypoint("wp_25", -400.0f, 0.0f, 1500.0f),
+                new Waypoint("wp_26", -800.0f, 0.0f, 1500.0f),
+                new Waypoint("wp_27", -1200.0f, 0.0f, 1500.0f)
             ),
             // ---- TDM markers: the empty singleton
             MapMarkers.TeamDeathmatch.INSTANCE,
@@ -1128,9 +1135,13 @@ public final class Maps
             "Mesa",
             MapSetting.DESERT_RAVINE,
             MatchMode.HARDPOINT,
-            // ---- playable area: 320 x 320, 96 high (the mesa top
-            // is at y=32; the cave is at y=0)
-            new MapDimensions(320.0f, 320.0f, 96.0f),
+            // ---- playable area: 4800 x 4800, 128 high (the mesa
+            // top sits at y=30, the cave floor at y=0; 16 world
+            // units per metre gives a 300m map). The level .ofm
+            // and the kit (columns at +/-80, walls at +/-160)
+            // are centerpieces anchored at the origin; the data
+            // spreads across the full 4800 x 4800 playable extent.
+            new MapDimensions(4800.0f, 4800.0f, 128.0f),
             // ---- three lanes A/B/C. Lane A is the desert floor on
             // the south side (the cave approach), lane B is the mesa
             // top (the contested middle), lane C is the desert floor
@@ -1141,80 +1152,77 @@ public final class Maps
             // labels rendered off-screen.
             List.of(
                 new Lane("lane_a", LaneAxis.NORTH_SOUTH, List.of(
-                    new Chokepoint("cp_a1", "Cave S West", -30.0f, 100.0f),
-                    new Chokepoint("cp_a2", "Cave S Centre", 0.0f, 100.0f),
-                    new Chokepoint("cp_a3", "Cave S East", 30.0f, 100.0f)
+                    new Chokepoint("cp_a1", "Cave S Far West", -1500.0f, 1500.0f),
+                    new Chokepoint("cp_a2", "Cave S West", -750.0f, 1500.0f),
+                    new Chokepoint("cp_a3", "Cave S Centre", 0.0f, 1500.0f),
+                    new Chokepoint("cp_a4", "Cave S East", 750.0f, 1500.0f),
+                    new Chokepoint("cp_a5", "Cave S Far East", 1500.0f, 1500.0f)
                 )),
                 new Lane("lane_b", LaneAxis.NORTH_SOUTH, List.of(
-                    new Chokepoint("cp_b1", "Mesa Top S West", 30.0f, 30.0f),
-                    new Chokepoint("cp_b2", "Mesa Top S Centre", 60.0f, 30.0f),
-                    new Chokepoint("cp_b3", "Mesa Top S East", 90.0f, 30.0f)
+                    new Chokepoint("cp_b1", "Mesa Top S Far West", -1500.0f, 450.0f),
+                    new Chokepoint("cp_b2", "Mesa Top S West", -750.0f, 450.0f),
+                    new Chokepoint("cp_b3", "Mesa Top S Centre", 0.0f, 450.0f),
+                    new Chokepoint("cp_b4", "Mesa Top S East", 750.0f, 450.0f),
+                    new Chokepoint("cp_b5", "Mesa Top S Far East", 1500.0f, 450.0f)
                 )),
                 new Lane("lane_c", LaneAxis.NORTH_SOUTH, List.of(
-                    new Chokepoint("cp_c1", "Mesa Top N West", 30.0f, -50.0f),
-                    new Chokepoint("cp_c2", "Mesa Top N Centre", 60.0f, -50.0f),
-                    new Chokepoint("cp_c3", "Mesa Top N East", 90.0f, -50.0f)
+                    new Chokepoint("cp_c1", "Mesa Top N Far West", -1500.0f, -750.0f),
+                    new Chokepoint("cp_c2", "Mesa Top N West", -750.0f, -750.0f),
+                    new Chokepoint("cp_c3", "Mesa Top N Centre", 0.0f, -750.0f),
+                    new Chokepoint("cp_c4", "Mesa Top N East", 750.0f, -750.0f),
+                    new Chokepoint("cp_c5", "Mesa Top N Far East", 1500.0f, -750.0f)
                 ))
             ),
-            // ---- six spawn points: three per team, on the south-west
-            // and north-east edges. Red is on the south (cave
-            // approach, the first rotation); blue is on the north
-            // (mesa-top approach, the third rotation). The
-            // previous z=256/280/304 and x=304 placed every spawn
-            // outside the playable area, so a respawn teleported
-            // the player into the void or behind the south wall.
             List.of(
-                new SpawnPoint("red_alpha", Team.RED, -120.0f, 0.0f, 100.0f,
+                new SpawnPoint("red_alpha", Team.RED, -1800.0f, 0.0f, 1500.0f,
                     toRadians(80.0f)),
-                new SpawnPoint("red_bravo", Team.RED, -120.0f, 0.0f, 120.0f,
+                new SpawnPoint("red_bravo", Team.RED, -1800.0f, 0.0f, 1800.0f,
                     toRadians(90.0f)),
-                new SpawnPoint("red_charlie", Team.RED, -120.0f, 0.0f, 140.0f,
+                new SpawnPoint("red_charlie", Team.RED, -1800.0f, 0.0f, 2100.0f,
                     toRadians(100.0f)),
-                new SpawnPoint("blue_alpha", Team.BLUE, 120.0f, 0.0f, -100.0f,
+                new SpawnPoint("blue_alpha", Team.BLUE, 1800.0f, 0.0f, -1500.0f,
                     toRadians(260.0f)),
-                new SpawnPoint("blue_bravo", Team.BLUE, 120.0f, 0.0f, -120.0f,
+                new SpawnPoint("blue_bravo", Team.BLUE, 1800.0f, 0.0f, -1800.0f,
                     toRadians(270.0f)),
-                new SpawnPoint("blue_charlie", Team.BLUE, 120.0f, 0.0f, -140.0f,
+                new SpawnPoint("blue_charlie", Team.BLUE, 1800.0f, 0.0f, -2100.0f,
                     toRadians(280.0f))
             ),
-            // ---- twelve bot waypoints: a closed loop visiting the
-            // mesa top (y=30, on the level.ofm's raised platform
-            // whose top is at y=30) and the cave floor (y=0, on
-            // the kit's floor at the playable area's edge). Mesa-top
-            // waypoints (y=30) sit inside the level.ofm mesa-top
-            // footprint (x in [16, 144], z in [16, 112]); cave-floor
-            // waypoints (y=0) sit on the kit's floor in the south-
-            // west quadrant. The previous wp_2..wp_8 sat at y=32
-            // (floating 2 above the mesa top) and at z>=160
-            // (outside the playable area), so a bot that walked
-            // there was a headless torso in the void.
             List.of(
-                new Waypoint("wp_0", 30.0f, 30.0f, 30.0f),
-                new Waypoint("wp_1", 130.0f, 30.0f, 30.0f),
-                new Waypoint("wp_2", 130.0f, 30.0f, 100.0f),
-                new Waypoint("wp_3", 30.0f, 30.0f, 100.0f),
-                new Waypoint("wp_4", -30.0f, 0.0f, -100.0f),
-                new Waypoint("wp_5", -30.0f, 0.0f, -50.0f),
-                new Waypoint("wp_6", -30.0f, 0.0f, -30.0f),
-                new Waypoint("wp_7", -100.0f, 0.0f, -30.0f),
-                new Waypoint("wp_8", 30.0f, 0.0f, -50.0f),
-                new Waypoint("wp_9", 130.0f, 0.0f, -50.0f),
-                new Waypoint("wp_10", 30.0f, 0.0f, -100.0f),
-                new Waypoint("wp_11", 130.0f, 0.0f, -100.0f)
+                new Waypoint("wp_0", 300.0f, 30.0f, 600.0f),
+                new Waypoint("wp_1", 1200.0f, 30.0f, 600.0f),
+                new Waypoint("wp_2", 2100.0f, 30.0f, 600.0f),
+                new Waypoint("wp_3", 2100.0f, 30.0f, 1500.0f),
+                new Waypoint("wp_4", 1200.0f, 30.0f, 1500.0f),
+                new Waypoint("wp_5", 300.0f, 30.0f, 1500.0f),
+                new Waypoint("wp_6", -1800.0f, 0.0f, -2100.0f),
+                new Waypoint("wp_7", -1080.0f, 0.0f, -2100.0f),
+                new Waypoint("wp_8", -360.0f, 0.0f, -2100.0f),
+                new Waypoint("wp_9", 360.0f, 0.0f, -2100.0f),
+                new Waypoint("wp_10", 1080.0f, 0.0f, -2100.0f),
+                new Waypoint("wp_11", 1800.0f, 0.0f, -2100.0f),
+                new Waypoint("wp_12", 1800.0f, 0.0f, -700.0f),
+                new Waypoint("wp_13", 1080.0f, 0.0f, -700.0f),
+                new Waypoint("wp_14", 360.0f, 0.0f, -700.0f),
+                new Waypoint("wp_15", -360.0f, 0.0f, -700.0f),
+                new Waypoint("wp_16", -1080.0f, 0.0f, -700.0f),
+                new Waypoint("wp_17", -1800.0f, 0.0f, -700.0f),
+                new Waypoint("wp_18", -1800.0f, 0.0f, 700.0f),
+                new Waypoint("wp_19", -1080.0f, 0.0f, 700.0f),
+                new Waypoint("wp_20", -360.0f, 0.0f, 700.0f),
+                new Waypoint("wp_21", 360.0f, 0.0f, 700.0f),
+                new Waypoint("wp_22", 1080.0f, 0.0f, 700.0f),
+                new Waypoint("wp_23", 1800.0f, 0.0f, 700.0f),
+                new Waypoint("wp_24", 1800.0f, 0.0f, 2100.0f),
+                new Waypoint("wp_25", 1080.0f, 0.0f, 2100.0f),
+                new Waypoint("wp_26", 360.0f, 0.0f, 2100.0f),
+                new Waypoint("wp_27", -360.0f, 0.0f, 2100.0f),
+                new Waypoint("wp_28", -1080.0f, 0.0f, 2100.0f),
+                new Waypoint("wp_29", -1800.0f, 0.0f, 2100.0f)
             ),
-            // ---- Hardpoint markers: three zones, 1800-tic (30s)
-            // rotation, 1 point per tic. Activation order A, B, C
-            // (cave → mesa top S → mesa top N, the round starts in
-            // the cave and ends on the mesa top). The "cave" zone
-            // moved from z=270 (outside the playable area) to z=100
-            // (the playable area's south); the "mesa top" zones
-            // are at the mesa's mid and north thirds, both
-            // y=0 (on the kit floor) at x=60 (the mesa top's
-            // east side, clear of the kit's east column).
             new MapMarkers.Hardpoint(List.of(
-                new MapMarkers.HardpointZone("hp_a", "Cave S", 60.0f, 100.0f, 48.0f),
-                new MapMarkers.HardpointZone("hp_b", "Mesa Top S", 60.0f, 30.0f, 48.0f),
-                new MapMarkers.HardpointZone("hp_c", "Mesa Top N", 60.0f, -50.0f, 48.0f)
+                new MapMarkers.HardpointZone("hp_a", "Cave S", 900.0f, 1500.0f, 720.0f),
+                new MapMarkers.HardpointZone("hp_b", "Mesa Top S", 900.0f, 450.0f, 720.0f),
+                new MapMarkers.HardpointZone("hp_c", "Mesa Top N", 900.0f, -750.0f, 720.0f)
             ), 1800, 1),
             // ---- asset paths
             new MapAssets(
@@ -1536,14 +1544,14 @@ public final class Maps
             "Sandbar",
             MapSetting.DESERT_RAVINE,
             MatchMode.DOMINATION,
-            // ---- playable area: 320 x 320, 96 high. The kit
-            // composer centres the playable area on the origin, so
-            // x and z both span -160 to +160; the inner wall face
-            // sits at +/-153.6. The previous chokepoint and
-            // waypoint z values (64 / 160 / 256) treated z as a
-            // 0..320 range and put the south butte past the kit
-            // south wall.
-            new MapDimensions(320.0f, 320.0f, 96.0f),
+            // ---- playable area: 4000 x 4000, 128 high (a
+            // 250m canyon with three flat-topped buttes; 16
+            // world units per metre). The level .ofm and the
+            // kit (columns at +/-80, walls at +/-160) are
+            // centerpieces anchored at the origin; the data
+            // spreads across the full 4000 x 4000 playable
+            // extent.
+            new MapDimensions(4000.0f, 4000.0f, 128.0f),
             // ---- three lanes A/B/C encoded as the three butte
             // approaches. Lane A is the south approach to FLAG_A,
             // lane B is the central approach to FLAG_B (Butte
@@ -1555,73 +1563,75 @@ public final class Maps
             // face).
             List.of(
                 new Lane("lane_a", LaneAxis.NORTH_SOUTH, List.of(
-                    new Chokepoint("cp_a1", "Butte S Approach West", -112.0f, 96.0f),
-                    new Chokepoint("cp_a2", "Butte S Centre", 0.0f, 96.0f),
-                    new Chokepoint("cp_a3", "Butte S Approach East", 112.0f, 96.0f)
+                    new Chokepoint("cp_a1", "Butte S Approach Far West", -1800.0f, 1200.0f),
+                    new Chokepoint("cp_a2", "Butte S Approach West", -900.0f, 1200.0f),
+                    new Chokepoint("cp_a3", "Butte S Centre", 0.0f, 1200.0f),
+                    new Chokepoint("cp_a4", "Butte S Approach East", 900.0f, 1200.0f),
+                    new Chokepoint("cp_a5", "Butte S Approach Far East", 1800.0f, 1200.0f)
                 )),
                 new Lane("lane_b", LaneAxis.NORTH_SOUTH, List.of(
-                    new Chokepoint("cp_b1", "Butte Centre West", -112.0f, 0.0f),
-                    new Chokepoint("cp_b2", "Riverbed Centre", 0.0f, 0.0f),
-                    new Chokepoint("cp_b3", "Butte Centre East", 112.0f, 0.0f)
+                    new Chokepoint("cp_b1", "Butte Centre Far West", -1800.0f, 0.0f),
+                    new Chokepoint("cp_b2", "Butte Centre West", -900.0f, 0.0f),
+                    new Chokepoint("cp_b3", "Riverbed Centre", 0.0f, 0.0f),
+                    new Chokepoint("cp_b4", "Butte Centre East", 900.0f, 0.0f),
+                    new Chokepoint("cp_b5", "Butte Centre Far East", 1800.0f, 0.0f)
                 )),
                 new Lane("lane_c", LaneAxis.NORTH_SOUTH, List.of(
-                    new Chokepoint("cp_c1", "Butte N Approach West", -112.0f, -96.0f),
-                    new Chokepoint("cp_c2", "Butte N Centre", 0.0f, -96.0f),
-                    new Chokepoint("cp_c3", "Butte N Approach East", 112.0f, -96.0f)
+                    new Chokepoint("cp_c1", "Butte N Approach Far West", -1800.0f, -1200.0f),
+                    new Chokepoint("cp_c2", "Butte N Approach West", -900.0f, -1200.0f),
+                    new Chokepoint("cp_c3", "Butte N Centre", 0.0f, -1200.0f),
+                    new Chokepoint("cp_c4", "Butte N Approach East", 900.0f, -1200.0f),
+                    new Chokepoint("cp_c5", "Butte N Approach Far East", 1800.0f, -1200.0f)
                 ))
             ),
-            // ---- six spawn points: three per team, on the west
-            // and east sides of the central corridor (x = +/-32).
-            // The kit's columns at (+/-80, +/-80) and the
-            // perimeter crates at (+/-80, +/-134.4) and
-            // (+/-134.4, +/-80) block the outer ring; the only
-            // spawn positions free of all of those are the 96x96
-            // central corridor at x and z in (-48, 48). The
-            // previous x=16 / x=304 placements put BLUE 144 units
-            // past the east wall outer face — unreachable — and
-            // the y=32 butte waypoints sat 32 units above the kit
-            // floor (which is flat at y=0).
             List.of(
-                new SpawnPoint("red_alpha", Team.RED, -32.0f, 0.0f, -32.0f,
+                new SpawnPoint("red_alpha", Team.RED, -400.0f, 0.0f, -400.0f,
                     toRadians(80.0f)),
-                new SpawnPoint("red_bravo", Team.RED, -32.0f, 0.0f, 0.0f,
+                new SpawnPoint("red_bravo", Team.RED, -400.0f, 0.0f, 0.0f,
                     toRadians(90.0f)),
-                new SpawnPoint("red_charlie", Team.RED, -32.0f, 0.0f, 32.0f,
+                new SpawnPoint("red_charlie", Team.RED, -400.0f, 0.0f, 400.0f,
                     toRadians(100.0f)),
-                new SpawnPoint("blue_alpha", Team.BLUE, 32.0f, 0.0f, -32.0f,
+                new SpawnPoint("blue_alpha", Team.BLUE, 400.0f, 0.0f, -400.0f,
                     toRadians(260.0f)),
-                new SpawnPoint("blue_bravo", Team.BLUE, 32.0f, 0.0f, 0.0f,
+                new SpawnPoint("blue_bravo", Team.BLUE, 400.0f, 0.0f, 0.0f,
                     toRadians(270.0f)),
-                new SpawnPoint("blue_charlie", Team.BLUE, 32.0f, 0.0f, 32.0f,
+                new SpawnPoint("blue_charlie", Team.BLUE, 400.0f, 0.0f, 400.0f,
                     toRadians(280.0f))
             ),
-            // ---- six bot waypoints: a closed loop on the central
-            // corridor, all at y=0 (the kit floor). The bot's
-            // 16-unit half-width extends the body to x=+/-48, the
-            // boundary of the inner column range, which is what
-            // keeps the patrol inside the playable area.
             List.of(
-                new Waypoint("wp_0", 0.0f, 0.0f, -32.0f),
-                new Waypoint("wp_1", -32.0f, 0.0f, 0.0f),
-                new Waypoint("wp_2", 0.0f, 0.0f, 0.0f),
-                new Waypoint("wp_3", 32.0f, 0.0f, 0.0f),
-                new Waypoint("wp_4", 0.0f, 0.0f, 32.0f),
-                new Waypoint("wp_5", -16.0f, 0.0f, 16.0f)
+                new Waypoint("wp_0", -1500.0f, 0.0f, -1500.0f),
+                new Waypoint("wp_1", -1000.0f, 0.0f, -1500.0f),
+                new Waypoint("wp_2", -500.0f, 0.0f, -1500.0f),
+                new Waypoint("wp_3", 0.0f, 0.0f, -1500.0f),
+                new Waypoint("wp_4", 500.0f, 0.0f, -1500.0f),
+                new Waypoint("wp_5", 1000.0f, 0.0f, -1500.0f),
+                new Waypoint("wp_6", 1500.0f, 0.0f, -1500.0f),
+                new Waypoint("wp_7", 1500.0f, 0.0f, -500.0f),
+                new Waypoint("wp_8", 1000.0f, 0.0f, -500.0f),
+                new Waypoint("wp_9", 500.0f, 0.0f, -500.0f),
+                new Waypoint("wp_10", 0.0f, 0.0f, -500.0f),
+                new Waypoint("wp_11", -500.0f, 0.0f, -500.0f),
+                new Waypoint("wp_12", -1000.0f, 0.0f, -500.0f),
+                new Waypoint("wp_13", -1500.0f, 0.0f, -500.0f),
+                new Waypoint("wp_14", -1500.0f, 0.0f, 500.0f),
+                new Waypoint("wp_15", -1000.0f, 0.0f, 500.0f),
+                new Waypoint("wp_16", -500.0f, 0.0f, 500.0f),
+                new Waypoint("wp_17", 0.0f, 0.0f, 500.0f),
+                new Waypoint("wp_18", 500.0f, 0.0f, 500.0f),
+                new Waypoint("wp_19", 1000.0f, 0.0f, 500.0f),
+                new Waypoint("wp_20", 1500.0f, 0.0f, 500.0f),
+                new Waypoint("wp_21", 1500.0f, 0.0f, 1500.0f),
+                new Waypoint("wp_22", 1000.0f, 0.0f, 1500.0f),
+                new Waypoint("wp_23", 500.0f, 0.0f, 1500.0f),
+                new Waypoint("wp_24", 0.0f, 0.0f, 1500.0f),
+                new Waypoint("wp_25", -500.0f, 0.0f, 1500.0f),
+                new Waypoint("wp_26", -1000.0f, 0.0f, 1500.0f),
+                new Waypoint("wp_27", -1500.0f, 0.0f, 1500.0f)
             ),
-            // ---- Domination markers: three flags, A, B, C. The
-            // flags are centred on the butte rows at z = +/-96, 0
-            // on the centre axis (x=0), so the capture-radius sits
-            // inside the playable area. The y=32 elevation is the
-            // butte top in the level .ofm's geometry; the
-            // capture-radius is intangible, so the bot standing on
-            // the floor at y=0 is still inside it. All start
-            // neutral; the round opens with both teams pushing
-            // toward the centre, contesting FLAG_B (Butte Centre)
-            // first.
             new MapMarkers.Domination(List.of(
-                new MapMarkers.Flag("flag_a", "Butte South", 0.0f, 96.0f, 32.0f),
-                new MapMarkers.Flag("flag_b", "Butte Centre", 0.0f, 0.0f, 32.0f),
-                new MapMarkers.Flag("flag_c", "Butte North", 0.0f, -96.0f, 32.0f)
+                new MapMarkers.Flag("flag_a", "Butte South", 0.0f, 1200.0f, 400.0f),
+                new MapMarkers.Flag("flag_b", "Butte Centre", 0.0f, 0.0f, 400.0f),
+                new MapMarkers.Flag("flag_c", "Butte North", 0.0f, -1200.0f, 400.0f)
             )),
             // ---- asset paths
             new MapAssets(
@@ -1895,11 +1905,14 @@ public final class Maps
             "Stronghold",
             MapSetting.DESERT_RAVINE,
             MatchMode.CTF,
-            // ---- playable area: 320 x 320, 128 high. The kit
-            // composer centres the playable area on the origin, so
-            // x and z both span -160 to +160; the inner wall face
-            // sits at +/-153.6.
-            new MapDimensions(320.0f, 320.0f, 128.0f),
+            // ---- playable area: 4000 x 4000, 128 high (a 250m
+            // sandstone fortress with two gate towers, four corner
+            // towers, and a central courtyard; 16 world units per
+            // metre). The level .ofm and the kit (columns at
+            // +/-80, walls at +/-160) are centerpieces anchored at
+            // the origin; the data spreads across the full
+            // 4000 x 4000 playable extent.
+            new MapDimensions(4000.0f, 4000.0f, 128.0f),
             // ---- three lanes A/B/C, with the courtyard in the
             // middle and the cliff walls in lanes A and C.
             // Chokepoints sit on three rows at z = +/-96, 0
@@ -1908,55 +1921,74 @@ public final class Maps
             // and put the south cliff past the kit south wall.
             List.of(
                 new Lane("lane_a", LaneAxis.NORTH_SOUTH, List.of(
-                    new Chokepoint("cp_a1", "Cliff N West", -128.0f, -96.0f),
-                    new Chokepoint("cp_a2", "Cliff N Centre", 0.0f, -96.0f),
-                    new Chokepoint("cp_a3", "Cliff N East", 128.0f, -96.0f)
+                    new Chokepoint("cp_a1", "Cliff N Far West", -1800.0f, -1200.0f),
+                    new Chokepoint("cp_a2", "Cliff N West", -900.0f, -1200.0f),
+                    new Chokepoint("cp_a3", "Cliff N Centre", 0.0f, -1200.0f),
+                    new Chokepoint("cp_a4", "Cliff N East", 900.0f, -1200.0f),
+                    new Chokepoint("cp_a5", "Cliff N Far East", 1800.0f, -1200.0f)
                 )),
                 new Lane("lane_b", LaneAxis.NORTH_SOUTH, List.of(
-                    new Chokepoint("cp_b1", "West Gate", -128.0f, 0.0f),
-                    new Chokepoint("cp_b2", "Courtyard Fountain", 0.0f, 0.0f),
-                    new Chokepoint("cp_b3", "East Gate", 128.0f, 0.0f)
+                    new Chokepoint("cp_b1", "West Gate Far", -1800.0f, 0.0f),
+                    new Chokepoint("cp_b2", "West Gate", -900.0f, 0.0f),
+                    new Chokepoint("cp_b3", "Courtyard Fountain", 0.0f, 0.0f),
+                    new Chokepoint("cp_b4", "East Gate", 900.0f, 0.0f),
+                    new Chokepoint("cp_b5", "East Gate Far", 1800.0f, 0.0f)
                 )),
                 new Lane("lane_c", LaneAxis.NORTH_SOUTH, List.of(
-                    new Chokepoint("cp_c1", "Cliff S West", -128.0f, 96.0f),
-                    new Chokepoint("cp_c2", "Cliff S Centre", 0.0f, 96.0f),
-                    new Chokepoint("cp_c3", "Cliff S East", 128.0f, 96.0f)
+                    new Chokepoint("cp_c1", "Cliff S Far West", -1800.0f, 1200.0f),
+                    new Chokepoint("cp_c2", "Cliff S West", -900.0f, 1200.0f),
+                    new Chokepoint("cp_c3", "Cliff S Centre", 0.0f, 1200.0f),
+                    new Chokepoint("cp_c4", "Cliff S East", 900.0f, 1200.0f),
+                    new Chokepoint("cp_c5", "Cliff S Far East", 1800.0f, 1200.0f)
                 ))
             ),
-            // ---- six spawn points in the central corridor
-            // (x = +/-32). The kit's columns at (+/-80, +/-80)
-            // and the perimeter crates at (+/-80, +/-134.4) and
-            // (+/-134.4, +/-80) block the outer ring; the only
-            // positions free of all of those are the 96x96
-            // central corridor. The previous x=16 / x=304
-            // placements put BLUE 144 units past the east wall
-            // outer face — unreachable.
             List.of(
-                new SpawnPoint("red_alpha", Team.RED, -32.0f, 0.0f, -32.0f, toRadians(90.0f)),
-                new SpawnPoint("red_bravo", Team.RED, -32.0f, 0.0f, 0.0f, toRadians(80.0f)),
-                new SpawnPoint("red_charlie", Team.RED, -32.0f, 0.0f, 32.0f, toRadians(100.0f)),
-                new SpawnPoint("blue_alpha", Team.BLUE, 32.0f, 0.0f, -32.0f, toRadians(270.0f)),
-                new SpawnPoint("blue_bravo", Team.BLUE, 32.0f, 0.0f, 0.0f, toRadians(260.0f)),
-                new SpawnPoint("blue_charlie", Team.BLUE, 32.0f, 0.0f, 32.0f, toRadians(280.0f))
+                new SpawnPoint("red_alpha", Team.RED, -400.0f, 0.0f, -400.0f,
+                    toRadians(90.0f)),
+                new SpawnPoint("red_bravo", Team.RED, -400.0f, 0.0f, 0.0f,
+                    toRadians(80.0f)),
+                new SpawnPoint("red_charlie", Team.RED, -400.0f, 0.0f, 400.0f,
+                    toRadians(100.0f)),
+                new SpawnPoint("blue_alpha", Team.BLUE, 400.0f, 0.0f, -400.0f,
+                    toRadians(270.0f)),
+                new SpawnPoint("blue_bravo", Team.BLUE, 400.0f, 0.0f, 0.0f,
+                    toRadians(260.0f)),
+                new SpawnPoint("blue_charlie", Team.BLUE, 400.0f, 0.0f, 400.0f,
+                    toRadians(280.0f))
             ),
-            // ---- six bot waypoints in a closed loop on the
-            // central corridor, all at y=0 (the kit floor). The
-            // bot's 16-unit half-width extends the body to
-            // x=+/-48, the boundary of the inner column range.
             List.of(
-                new Waypoint("wp_0", 0.0f, 0.0f, -32.0f),
-                new Waypoint("wp_1", -32.0f, 0.0f, 0.0f),
-                new Waypoint("wp_2", 0.0f, 0.0f, 0.0f),
-                new Waypoint("wp_3", 32.0f, 0.0f, 0.0f),
-                new Waypoint("wp_4", 0.0f, 0.0f, 32.0f),
-                new Waypoint("wp_5", 16.0f, 0.0f, 16.0f)
+                new Waypoint("wp_0", -1500.0f, 0.0f, -1500.0f),
+                new Waypoint("wp_1", -1000.0f, 0.0f, -1500.0f),
+                new Waypoint("wp_2", -500.0f, 0.0f, -1500.0f),
+                new Waypoint("wp_3", 0.0f, 0.0f, -1500.0f),
+                new Waypoint("wp_4", 500.0f, 0.0f, -1500.0f),
+                new Waypoint("wp_5", 1000.0f, 0.0f, -1500.0f),
+                new Waypoint("wp_6", 1500.0f, 0.0f, -1500.0f),
+                new Waypoint("wp_7", 1500.0f, 0.0f, -500.0f),
+                new Waypoint("wp_8", 1000.0f, 0.0f, -500.0f),
+                new Waypoint("wp_9", 500.0f, 0.0f, -500.0f),
+                new Waypoint("wp_10", 0.0f, 0.0f, -500.0f),
+                new Waypoint("wp_11", -500.0f, 0.0f, -500.0f),
+                new Waypoint("wp_12", -1000.0f, 0.0f, -500.0f),
+                new Waypoint("wp_13", -1500.0f, 0.0f, -500.0f),
+                new Waypoint("wp_14", -1500.0f, 0.0f, 500.0f),
+                new Waypoint("wp_15", -1000.0f, 0.0f, 500.0f),
+                new Waypoint("wp_16", -500.0f, 0.0f, 500.0f),
+                new Waypoint("wp_17", 0.0f, 0.0f, 500.0f),
+                new Waypoint("wp_18", 500.0f, 0.0f, 500.0f),
+                new Waypoint("wp_19", 1000.0f, 0.0f, 500.0f),
+                new Waypoint("wp_20", 1500.0f, 0.0f, 500.0f),
+                new Waypoint("wp_21", 1500.0f, 0.0f, 1500.0f),
+                new Waypoint("wp_22", 1000.0f, 0.0f, 1500.0f),
+                new Waypoint("wp_23", 500.0f, 0.0f, 1500.0f),
+                new Waypoint("wp_24", 0.0f, 0.0f, 1500.0f),
+                new Waypoint("wp_25", -500.0f, 0.0f, 1500.0f),
+                new Waypoint("wp_26", -1000.0f, 0.0f, 1500.0f),
+                new Waypoint("wp_27", -1500.0f, 0.0f, 1500.0f)
             ),
-            // ---- CTF markers: red's base (west) and blue's base
-            // (east). The bases are centred on the team gate,
-            // inside the playable area.
             new MapMarkers.CaptureTheFlag(
-                new MapMarkers.Base(Team.RED, -128.0f, -128.0f, -128.0f, -128.0f, 32.0f),
-                new MapMarkers.Base(Team.BLUE, 128.0f, 128.0f, 128.0f, 128.0f, 32.0f)
+                new MapMarkers.Base(Team.RED, -1600.0f, -1600.0f, -1600.0f, -1600.0f, 400.0f),
+                new MapMarkers.Base(Team.BLUE, 1600.0f, 1600.0f, 1600.0f, 1600.0f, 400.0f)
             ),
             // ---- asset paths
             new MapAssets(

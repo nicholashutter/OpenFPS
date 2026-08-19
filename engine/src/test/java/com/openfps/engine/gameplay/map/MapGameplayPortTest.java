@@ -734,34 +734,42 @@ class MapGameplayPortTest
 
         // A tic well past the old cap. With the cap still in place this
         // tick would early-return without doing anything; without the
-        // cap the match ticks, the bots act, the player takes damage,
-        // and the port can still report a sensible state at the end.
+        // cap the match ticks, the bots act, and the port can still
+        // report a sensible state at the end.
         final int probeTic = 1200;
 
-        final int healthBefore = port.match().playerHealth();
+        final int shotsBefore = port.match().botShotsFired();
 
         for (int tic = 600; tic <= probeTic; tic++)
         {
             port.tick(tic);
         }
 
-        final int healthAfter = port.match().playerHealth();
+        final int shotsAfter = port.match().botShotsFired();
 
         // Two claims, either of which would fail with the old cap:
         //   (a) the port did not throw, and the match state is still
         //       computable at tic 1200;
-        //   (b) the player has actually taken damage from the bot
-        //       roster, which can only happen if the match ticked past
-        //       600 (the bots fire on the per-tic loop, which is gated
-        //       by the same early-return the cap was on).
+        //   (b) the bots have actually fired shots, which can only
+        //       happen if the match ticked past 600 (the bots fire on
+        //       the per-tic loop, which is gated by the same early-
+        //       return the cap was on). The previous assertion on
+        //       player health assumed the bots were within firing
+        //       range of the player at the first RED spawn; the
+        //       scaled cornerstone (3200 x 3200) moves the bot
+        //       waypoints well past that range, so the bots observe
+        //       the player but their shots don't land. Counting
+        //       botShotsFired() is the right proxy: it ticks up
+        //       every time a bot pulls the trigger, independent of
+        //       whether the shot connects.
         assertThat(port.match().state())
             .as("the match must still be computable at tic %d", probeTic)
             .isNotNull();
 
-        assertThat(healthAfter)
-            .as("the player must have taken damage by tic %d (health before: %d) — bots only fire when the match ticks",
-                probeTic, healthBefore)
-            .isLessThan(healthBefore);
+        assertThat(shotsAfter)
+            .as("bots must have fired by tic %d (shots before: %d) — bots only fire when the match ticks",
+                probeTic, shotsBefore)
+            .isGreaterThan(shotsBefore);
     }
 
     /** The port forwards the player's controller, so callers can read state without locks. */
