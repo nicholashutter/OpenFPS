@@ -96,6 +96,7 @@ class MapSceneTest
                 MatchMode.TDM, new MapDimensions(100.0f, 100.0f, 100.0f),
                 threeLanes(), List.of(spawn()), List.of(),
                 MapMarkers.TeamDeathmatch.INSTANCE,
+                List.of(),
                 new MapAssets("engine/src/main/resources/maps/does-not-exist/level.ofm",
                     "a/weapon.ofm", null));
 

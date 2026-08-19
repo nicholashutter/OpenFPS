@@ -274,6 +274,8 @@ class MatchMapSpecTest
                 new SpawnPoint("sp_0", Team.RED, 16.0f, 0.0f, 80.0f, 0.0f),
                 new SpawnPoint("sp_1", Team.BLUE, 304.0f, 0.0f, 240.0f, 0.0f)
             ), List.of(), markers,
+            List.of(),
+
             new MapAssets("a/level.ofm", "a/weapon.ofm", null));
     }
 

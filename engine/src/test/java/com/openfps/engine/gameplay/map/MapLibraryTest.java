@@ -571,6 +571,7 @@ class MapLibraryTest
                 MatchMode.TDM, new MapDimensions(100.0f, 100.0f, 100.0f),
                 threeLanes(), List.of(spawn()), List.of(),
                 MapMarkers.TeamDeathmatch.INSTANCE,
+                List.of(),
                 new MapAssets("a/level.ofm", "a/weapon.ofm", null));
 
             MapLibrary.register(spec);
@@ -586,12 +587,14 @@ class MapLibraryTest
                 MatchMode.TDM, new MapDimensions(100.0f, 100.0f, 100.0f),
                 threeLanes(), List.of(spawn()), List.of(),
                 MapMarkers.TeamDeathmatch.INSTANCE,
+                List.of(),
                 new MapAssets("a/level.ofm", "a/weapon.ofm", null));
 
             final MapSpec second = new MapSpec("dup", "Second", MapSetting.URBAN_WARZONE,
                 MatchMode.TDM, new MapDimensions(100.0f, 100.0f, 100.0f),
                 threeLanes(), List.of(spawn()), List.of(),
                 MapMarkers.TeamDeathmatch.INSTANCE,
+                List.of(),
                 new MapAssets("a/level.ofm", "a/weapon.ofm", null));
 
             MapLibrary.register(first);

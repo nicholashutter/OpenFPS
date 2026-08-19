@@ -17,6 +17,7 @@ import com.openfps.engine.gameplay.MatchMode;
 import com.openfps.engine.gameplay.MatchState;
 import com.openfps.engine.gameplay.MatchStatus;
 import com.openfps.engine.gameplay.PhysicsWorld;
+import com.openfps.engine.gameplay.Pickup;
 import com.openfps.engine.gameplay.PlayerController;
 import com.openfps.engine.gameplay.PlayerInputView;
 import com.openfps.engine.gameplay.port.I_GameplayPort;
@@ -29,6 +30,7 @@ import com.openfps.engine.render.adapter.SoftwareRenderPort;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.List;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
@@ -242,6 +244,27 @@ public final class MapGameplayPort implements I_GameplayPort
      * atomic, so the field is single-threaded between calls.
      */
     private final float[] muzzleScratch = new float[3];
+
+    /**
+     * One entry per spec pickup; {@code true} once the player has
+     * walked into the pickup's footprint. The publish step reads
+     * this to decide between the pickup's transform and the
+     * degenerate {@link DemoEffects#HIDDEN}. MUTABLE on the
+     * tic path, so reads and writes happen under
+     * {@link #tickLock}. 2026-08.
+     */
+    private boolean[] pickupCollected;
+
+    /**
+     * One entry per spec pickup, parallel to {@link #pickupCollected}.
+     * Written by the publish step from the spec's pickup
+     * positions; read by the detect step to find the
+     * world-distance the player just walked into. MUTABLE
+     * on the tic path, under {@link #tickLock}. 2026-08.
+     */
+    private float[] pickupXs;
+    private float[] pickupYs;
+    private float[] pickupZs;
 
     /**
      * Reusable 6-float buffer for the per-shot player fire path.
@@ -497,6 +520,13 @@ public final class MapGameplayPort implements I_GameplayPort
 
             fireIfRequested(ticIndex, inputPort.currentInput());
 
+            // 2026-08: pickup detection runs before the match so a
+            // pickup on this tic is in the player's inventory by
+            // the time match.tick reads the current weapon. The
+            // XZ-distance + vertical-reach check is cheap; the
+            // pickup array is small (typically 1-3 entries).
+            detectAndApplyPickups();
+
             final int damage = match.tick(ticIndex, controller.positionX(),
                 controller.positionY(), controller.positionZ());
 
@@ -560,6 +590,11 @@ public final class MapGameplayPort implements I_GameplayPort
         // the seam that would let a future ORBIT or PACE_X pattern
         // work without another port-side change.
         publishBotPlacements();
+
+        // 2026-08: pickups sit where the spec says, or hidden
+        // if the player has collected them. Runs after the bot
+        // publish because both share the botScratch buffer.
+        publishPickupPlacements();
 
         // Publish the per-tic effect placements outside the lock so the
         // renderer's internal frame lock is held for the minimum time. The
@@ -749,6 +784,142 @@ public final class MapGameplayPort implements I_GameplayPort
     }
 
     /**
+     * Picks up any spec pickup the player is currently standing
+     * on, updating the player's {@link Inventory} and flipping
+     * the per-pickup "collected" flag so the publish step hides
+     * the body.
+     *
+     * <p>2026-08: the area-rules pickup system. The check is
+     * per-tic rather than per-trigger-press because the player
+     * does not need a key to pick up a weapon - walking over
+     * it is the input. The hit-radius is
+     * {@link Pickup#PICKUP_RADIUS_UNITS} (one Kenney grid unit,
+     * 4 m) and the vertical reach is
+     * {@link Pickup#PICKUP_VERTICAL_REACH_UNITS} (one and a half
+     * Kenney grid units), so a pickup on a gantry is reachable
+     * from the gantry and not from the ground beneath it.</p>
+     *
+     * <p>Each pickup is consumed only once; the flag stops a
+     * future tic from re-adding the same weapon to the
+     * inventory. The simulator does not need to know about the
+     * pickup - this is a presentation-side system that hands
+     * weapons to the player's inventory.</p>
+     */
+    private void detectAndApplyPickups()
+    {
+        if (scene == null || controller == null)
+        {
+            return;
+        }
+
+        if (pickupCollected == null)
+        {
+            return;
+        }
+
+        final float playerX = controller.positionX();
+
+        final float playerY = controller.positionY();
+
+        final float playerZ = controller.positionZ();
+
+        final float pickupRadius = Pickup.PICKUP_RADIUS_UNITS;
+
+        final float pickupRadiusSq = pickupRadius * pickupRadius;
+
+        final float reachY = Pickup.PICKUP_VERTICAL_REACH_UNITS;
+
+        final float reachYSq = reachY * reachY;
+
+        for (int i = 0; i < pickupCollected.length; i++)
+        {
+            if (pickupCollected[i])
+            {
+                continue;
+            }
+
+            final float dx = playerX - pickupXs[i];
+            final float dz = playerZ - pickupZs[i];
+
+            if (dx * dx + dz * dz > pickupRadiusSq)
+            {
+                continue;
+            }
+
+            final float dy = playerY - pickupYs[i];
+
+            if (dy * dy > reachYSq)
+            {
+                continue;
+            }
+
+            // Player is on the pickup: add the weapon to the
+            // inventory and flag the pickup as collected. The
+            // publish step will see the flag and hide the body
+            // on the next tic.
+            final Pickup pickup = scene.spec().pickups().get(i);
+
+            controller.inventory().add(pickup.weapon());
+
+            pickupCollected[i] = true;
+        }
+    }
+
+    /**
+     * Publishes the per-tic transforms of every spec pickup.
+     *
+     * <p>2026-08: an active pickup shows at its spec position
+     * (the same transform the {@code addPickupInstances} builder
+     * wrote when the scene was built); a collected pickup shows
+     * the degenerate {@link DemoEffects#HIDDEN} so the
+     * instance collapses to a point and the rasterizer culls
+     * it. The publish is null-safe the same way
+     * {@link #publishBotPlacements} is, and the per-tic
+     * scratch is the same 16-float buffer the bot publish
+     * uses (one body in flight at a time, so the reuse is
+     * safe).</p>
+     */
+    private void publishPickupPlacements()
+    {
+        if (scene == null || renderer.scene() == null)
+        {
+            return;
+        }
+
+        if (pickupCollected == null)
+        {
+            return;
+        }
+
+        final float[] initialTransforms = scene.pickupTransforms();
+
+        final float[] scratch = botScratch;
+
+        for (int i = 0; i < pickupCollected.length; i++)
+        {
+            final int instance = scene.pickupInstanceIndex(i);
+
+            if (instance == MapScene.NO_INSTANCE)
+            {
+                continue;
+            }
+
+            if (pickupCollected[i])
+            {
+                DemoEffects.HIDDEN.copyRowMajorInto(scratch, 0);
+
+                renderer.setWorldTransform(instance, scratch, 0);
+            }
+            else
+            {
+                System.arraycopy(initialTransforms, i * 16, scratch, 0, 16);
+
+                renderer.setWorldTransform(instance, scratch, 0);
+            }
+        }
+    }
+
+    /**
      * Fires the player's shot if the trigger is held and the cooldown has
      * elapsed. Mirrors the demo port's behaviour: hitscan against the
      * match's living bots, no per-tic allocation beyond the BotShotLog
@@ -924,6 +1095,33 @@ public final class MapGameplayPort implements I_GameplayPort
     public void setScene(final MapScene populatedScene)
     {
         this.scene = populatedScene;
+
+        // 2026-08: seed the pickup-detection arrays from the
+        // populated scene. Sized once here so the per-tic
+        // detect/publish loops can iterate without bounds
+        // checks. The arrays are MUTABLE on the tic path; the
+        // setScene call is the only place they grow, and the
+        // launcher is single-threaded at this seam.
+        final List<Pickup> pickups = populatedScene.spec().pickups();
+
+        this.pickupCollected = new boolean[pickups.size()];
+
+        this.pickupXs = new float[pickups.size()];
+
+        this.pickupYs = new float[pickups.size()];
+
+        this.pickupZs = new float[pickups.size()];
+
+        for (int i = 0; i < pickups.size(); i++)
+        {
+            final Pickup p = pickups.get(i);
+
+            pickupXs[i] = p.x();
+
+            pickupYs[i] = p.y();
+
+            pickupZs[i] = p.z();
+        }
     }
 
     /**

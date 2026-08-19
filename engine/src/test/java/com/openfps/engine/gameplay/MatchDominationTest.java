@@ -357,6 +357,8 @@ class MatchDominationTest
         final MapSpec spec = new MapSpec("test_dom", "Test DOM", MapSetting.DESERT_RAVINE,
             MatchMode.DOMINATION, new MapDimensions(160.0f, 160.0f, 128.0f),
             threeLanes(), threeSpawns(), List.of(), new MapMarkers.Domination(FLAGS),
+            List.of(),
+
             new MapAssets("a/level.ofm", "a/weapon.ofm", null));
 
         return new Match(roster.toArray(new Bot[0]), new BotRng(), BotSkill.MARKSMAN,

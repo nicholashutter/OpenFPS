@@ -6,6 +6,7 @@
 package com.openfps.engine.gameplay.map;
 
 import com.openfps.engine.gameplay.MatchMode;
+import com.openfps.engine.gameplay.Pickup;
 
 import java.util.List;
 import java.util.Objects;
@@ -68,6 +69,18 @@ public final class MapSpec
     /** Mode-specific positions. Never null; TDM uses the singleton. */
     private final MapMarkers markers;
 
+    /**
+     * Weapon pickups on the map. 2026-08: the area-rules pickup
+     * system. An area-rules map declares one or two shotguns and
+     * (at most) one rocket launcher at specific positions, the
+     * player walks into a pickup's footprint, and the weapon is
+     * added to the player's inventory. Non-area-rules maps carry
+     * an empty list - the player has the blaster and nothing else.
+     *
+     * <p>Never null; an empty list is the no-pickups case.</p>
+     */
+    private final List<Pickup> pickups;
+
     /** Asset paths the renderer needs. */
     private final MapAssets assets;
 
@@ -86,6 +99,8 @@ public final class MapSpec
      * @param botWaypoints the bot waypoints; must not be null (an empty
      *                     list is allowed)
      * @param markers      the mode-specific markers; must not be null
+     * @param pickups      the weapon pickups; must not be null (an empty
+     *                     list is allowed for non-area-rules maps)
      * @param assets       the asset paths; must not be null
      * @throws IllegalArgumentException if any rule above is broken, or if
      *     {@code markers} is not the right subtype for {@code mode}
@@ -93,7 +108,7 @@ public final class MapSpec
     public MapSpec(final String id, final String displayName, final MapSetting setting,
         final MatchMode mode, final MapDimensions dimensions, final List<Lane> lanes,
         final List<SpawnPoint> spawnPoints, final List<Waypoint> botWaypoints,
-        final MapMarkers markers, final MapAssets assets)
+        final MapMarkers markers, final List<Pickup> pickups, final MapAssets assets)
     {
         if (id == null || id.isBlank())
         {
@@ -151,6 +166,11 @@ public final class MapSpec
             throw new IllegalArgumentException("markers must not be null");
         }
 
+        if (pickups == null)
+        {
+            throw new IllegalArgumentException("pickups must not be null");
+        }
+
         if (assets == null)
         {
             throw new IllegalArgumentException("assets must not be null");
@@ -175,6 +195,8 @@ public final class MapSpec
         this.botWaypoints = List.copyOf(botWaypoints);
 
         this.markers = markers;
+
+        this.pickups = List.copyOf(pickups);
 
         this.assets = assets;
     }
@@ -270,6 +292,22 @@ public final class MapSpec
     }
 
     /**
+     * Returns the map's weapon pickups, in declaration order.
+     *
+     * <p>2026-08: the area-rules pickup system. Non-area-rules
+     * maps return an empty list; area-rules maps return one or
+     * two shotguns and at most one rocket launcher. The list is
+     * immutable, so callers cannot mutate the spec through
+     * this accessor.</p>
+     *
+     * @return an immutable list of pickups, never null (may be empty)
+     */
+    public List<Pickup> pickups()
+    {
+        return pickups;
+    }
+
+    /**
      * Returns the map's asset paths.
      *
      * @return the assets, never null
@@ -291,7 +329,8 @@ public final class MapSpec
             + ", mode=" + mode + ", dimensions=" + dimensions
             + ", lanes=" + lanes.size() + ", spawns=" + spawnPoints.size()
             + ", waypoints=" + botWaypoints.size()
-            + ", markers=" + markers.getClass().getSimpleName() + "}";
+            + ", markers=" + markers.getClass().getSimpleName()
+            + ", pickups=" + pickups.size() + "}";
     }
 
     /**

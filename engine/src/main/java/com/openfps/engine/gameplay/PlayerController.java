@@ -367,6 +367,17 @@ public final class PlayerController
     private PhysicsWorld world;
 
     /**
+     * The player's weapon collection. Owned by this controller
+     * and constructed in the controller's constructor; not
+     * final because {@code Match.firePlayerShot} and the renderer
+     * both mutate the current-weapon pointer through it on the
+     * hot path.
+     *
+     * <p>2026-08: added for the area-rules pickup system.</p>
+     */
+    private final Inventory inventory;
+
+    /**
      * Creates a controller standing at the world origin, facing world +z, level,
      * in a world with nothing solid in it.
      */
@@ -438,6 +449,15 @@ public final class PlayerController
         this.pitchRadians = clampPitch(spawnPitchRadians);
 
         this.world = collisionWorld;
+
+        // 2026-08: the pickup system. The inventory owns which
+        // weapons the player carries, the current weapon, and the
+        // ammo for each. Constructed here rather than in a setter
+        // because every player has exactly one inventory and it
+        // exists from the first tic; making it lazy would mean
+        // every accessor has to null-check, and a controller that
+        // never picks anything up still has to fire the blaster.
+        this.inventory = new Inventory();
     }
 
     /**
@@ -875,6 +895,36 @@ public final class PlayerController
     public float positionZ()
     {
         return positionZ;
+    }
+
+    /**
+     * Returns the player's weapon inventory. The inventory owns
+     * which weapons the player carries, the current weapon, and
+     * the ammo count for each. Mutated on the hot path by
+     * {@code Match.firePlayerShot} (consumes ammo) and by the
+     * map-mode pickup detection (adds weapons).
+     *
+     * <p>2026-08: added for the area-rules pickup system.</p>
+     *
+     * @return the inventory, never null
+     */
+    public Inventory inventory()
+    {
+        return inventory;
+    }
+
+    /**
+     * Returns the weapon the player is currently holding. A
+     * convenience over {@code inventory().current()}, repeated
+     * on every fire call.
+     *
+     * <p>2026-08: added for the area-rules pickup system.</p>
+     *
+     * @return the current weapon, never null
+     */
+    public Weapon currentWeapon()
+    {
+        return inventory.current();
     }
 
     /**

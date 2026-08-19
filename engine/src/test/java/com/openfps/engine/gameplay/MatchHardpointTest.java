@@ -376,7 +376,7 @@ class MatchHardpointTest
         final MapSpec spec = new MapSpec("test_hp", "Test HP", MapSetting.INDUSTRIAL_COMPLEX,
             MatchMode.HARDPOINT, new MapDimensions(160.0f, 160.0f, 128.0f),
             threeLanes(), threeSpawns(), List.of(), new MapMarkers.Hardpoint(ZONES,
-                ROTATION_TICS, SCORE_PER_TICK), new MapAssets("a/level.ofm", "a/weapon.ofm", null));
+                ROTATION_TICS, SCORE_PER_TICK), List.of(), new MapAssets("a/level.ofm", "a/weapon.ofm", null));
 
         return new Match(roster.toArray(new Bot[0]), new BotRng(), BotSkill.MARKSMAN,
             Match.UNLIMITED_DEATHS, spec);

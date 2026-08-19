@@ -38,7 +38,7 @@ class MapSpecTest
             final MapSpec spec = new MapSpec("id", "Name", MapSetting.URBAN_WARZONE,
                 MatchMode.TDM, new MapDimensions(100.0f, 100.0f, 100.0f),
                 threeLanes(), List.of(spawn()), List.of(), MapMarkers.TeamDeathmatch.INSTANCE,
-                new MapAssets("a/level.ofm", "a/weapon.ofm", null));
+                List.of(), new MapAssets("a/level.ofm", "a/weapon.ofm", null));
 
             assertThat(spec.id()).isEqualTo("id");
 
@@ -53,7 +53,7 @@ class MapSpecTest
         {
             assertThatThrownBy(() -> new MapSpec(null, "Name", MapSetting.URBAN_WARZONE,
                 MatchMode.TDM, dim(), threeLanes(), List.of(spawn()), List.of(),
-                MapMarkers.TeamDeathmatch.INSTANCE, assets()))
+                MapMarkers.TeamDeathmatch.INSTANCE, List.of(), assets()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("id");
         }
@@ -64,7 +64,7 @@ class MapSpecTest
         {
             assertThatThrownBy(() -> new MapSpec("", "Name", MapSetting.URBAN_WARZONE,
                 MatchMode.TDM, dim(), threeLanes(), List.of(spawn()), List.of(),
-                MapMarkers.TeamDeathmatch.INSTANCE, assets()))
+                MapMarkers.TeamDeathmatch.INSTANCE, List.of(), assets()))
                 .isInstanceOf(IllegalArgumentException.class);
         }
 
@@ -74,7 +74,7 @@ class MapSpecTest
         {
             assertThatThrownBy(() -> new MapSpec("id", "Name", MapSetting.URBAN_WARZONE,
                 MatchMode.TDM, dim(), List.of(), List.of(spawn()), List.of(),
-                MapMarkers.TeamDeathmatch.INSTANCE, assets()))
+                MapMarkers.TeamDeathmatch.INSTANCE, List.of(), assets()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("three lanes");
         }
@@ -85,7 +85,7 @@ class MapSpecTest
         {
             assertThatThrownBy(() -> new MapSpec("id", "Name", MapSetting.URBAN_WARZONE,
                 MatchMode.TDM, dim(), threeLanes(), List.of(), List.of(),
-                MapMarkers.TeamDeathmatch.INSTANCE, assets()))
+                MapMarkers.TeamDeathmatch.INSTANCE, List.of(), assets()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("spawnPoints");
         }
@@ -96,7 +96,7 @@ class MapSpecTest
         {
             assertThatThrownBy(() -> new MapSpec("id", "Name", MapSetting.URBAN_WARZONE,
                 MatchMode.HARDPOINT, dim(), threeLanes(), List.of(spawn()), List.of(),
-                MapMarkers.TeamDeathmatch.INSTANCE, assets()))
+                MapMarkers.TeamDeathmatch.INSTANCE, List.of(), assets()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("does not match mode");
         }
@@ -116,11 +116,13 @@ class MapSpecTest
             // key.
             final MapSpec a = new MapSpec("cornerstone", "First", MapSetting.URBAN_WARZONE,
                 MatchMode.TDM, dim(), threeLanes(), List.of(spawn()), List.of(),
-                MapMarkers.TeamDeathmatch.INSTANCE, assets());
+                MapMarkers.TeamDeathmatch.INSTANCE, List.of(), assets());
 
             final MapSpec b = new MapSpec("cornerstone", "Second", MapSetting.INDUSTRIAL_COMPLEX,
                 MatchMode.TDM, new MapDimensions(50.0f, 50.0f, 50.0f),
                 threeLanes(), List.of(spawn()), List.of(), MapMarkers.TeamDeathmatch.INSTANCE,
+                List.of(),
+
                 assets());
 
             assertThat(a).isEqualTo(b);
@@ -134,11 +136,11 @@ class MapSpecTest
         {
             final MapSpec a = new MapSpec("a", "X", MapSetting.URBAN_WARZONE, MatchMode.TDM,
                 dim(), threeLanes(), List.of(spawn()), List.of(),
-                MapMarkers.TeamDeathmatch.INSTANCE, assets());
+                MapMarkers.TeamDeathmatch.INSTANCE, List.of(), assets());
 
             final MapSpec b = new MapSpec("b", "X", MapSetting.URBAN_WARZONE, MatchMode.TDM,
                 dim(), threeLanes(), List.of(spawn()), List.of(),
-                MapMarkers.TeamDeathmatch.INSTANCE, assets());
+                MapMarkers.TeamDeathmatch.INSTANCE, List.of(), assets());
 
             assertThat(a).isNotEqualTo(b);
         }

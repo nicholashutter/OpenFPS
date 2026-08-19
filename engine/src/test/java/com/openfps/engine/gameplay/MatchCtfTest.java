@@ -560,6 +560,7 @@ class MatchCtfTest
             MatchMode.CTF, new MapDimensions(160.0f, 160.0f, 128.0f),
             threeLanes(), threeSpawns(), List.of(),
             new MapMarkers.CaptureTheFlag(redBase, blueBase),
+            List.of(),
             new MapAssets("a/level.ofm", "a/weapon.ofm", null));
 
         final Match match = new Match(roster.toArray(new Bot[0]), new BotRng(), BotSkill.MARKSMAN,

@@ -7,11 +7,13 @@ package com.openfps.engine.gameplay.map;
 
 import com.openfps.engine.demo.DemoEffects;
 import com.openfps.engine.demo.DemoModels;
+import com.openfps.engine.demo.DemoScene;
 import com.openfps.engine.demo.LocalPlayerBody;
 import com.openfps.engine.gameplay.Bot;
 import com.openfps.engine.gameplay.BotPattern;
 import com.openfps.engine.gameplay.Match;
 import com.openfps.engine.gameplay.PhysicsWorld;
+import com.openfps.engine.gameplay.Pickup;
 import com.openfps.engine.render.adapter.Mat4;
 import com.openfps.engine.render.adapter.ModelFormat;
 import com.openfps.engine.render.adapter.Scene;
@@ -192,16 +194,37 @@ public final class MapScene
     private final LocalPlayerBody body;
     private final PhysicsWorld levelPhysics;
 
+    /**
+     * 2026-08: the weapon pickups on the map, in
+     * {@code spec.pickups()} order. Each entry is the scene
+     * instance index of the pickup's weapon model, or
+     * {@link #NO_INSTANCE} if no weapon model was staged.
+     * The map mode reads this array to publish per-tic
+     * transforms (showing the pickup or hiding it once
+     * collected), and to set the HIDDEN transform on the
+     * instance the player just walked over.
+     */
+    private final int[] pickupIndices;
+
+    /**
+     * 2026-08: the initial transforms of each pickup, so the
+     * per-tic publish does not have to recompute the placement
+     * on every tic. The pickup is rendered at this transform
+     * when active, and replaced with {@link DemoEffects#HIDDEN}
+     * when the player has walked over it.
+     */
+    private final float[] pickupTransforms;
+
     // Level-only ctor (smoke path / fallback).
     private MapScene(final MapSpec spec, final Scene scene)
     {
-        this(spec, scene, new int[0], new int[0], null, null, null);
+        this(spec, scene, new int[0], new int[0], new int[0], new float[0], null, null, null);
     }
 
     // Full ctor (desktop launcher menu pick path).
     private MapScene(final MapSpec spec, final Scene scene, final int[] botIndices,
-        final int[] weaponIndices, final DemoEffects effects, final LocalPlayerBody body,
-        final PhysicsWorld levelPhysics)
+        final int[] weaponIndices, final int[] pickupIndices, final float[] pickupTransforms,
+        final DemoEffects effects, final LocalPlayerBody body, final PhysicsWorld levelPhysics)
     {
         this.spec = spec;
 
@@ -210,6 +233,10 @@ public final class MapScene
         this.botIndices = botIndices;
 
         this.weaponIndices = weaponIndices;
+
+        this.pickupIndices = pickupIndices;
+
+        this.pickupTransforms = pickupTransforms;
 
         this.effects = effects;
 
@@ -342,7 +369,7 @@ public final class MapScene
             builder.addWorldInstance(level, Mat4.identity());
         }
 
-        // Kit + bots + arms + viewmodel + effect pool. The kit
+        // Kit + bots + arms + viewmodel + effect pool + pickups. The kit
         // composer is the suite of addXxx methods below; each is
         // a no-op if its piece of the model set is missing, so a
         // partially-staged pack (e.g. no characters, or no viewmodel)
@@ -355,6 +382,12 @@ public final class MapScene
 
         addBotInstances(builder, spec, models, botIndices, weaponIndices);
 
+        final int[] pickupIndices = new int[spec.pickups().size()];
+
+        final float[] pickupTransforms = new float[pickupIndices.length * 16];
+
+        addPickupInstances(builder, spec, models, pickupIndices, pickupTransforms);
+
         final LocalPlayerBody body = addLocalPlayer(builder, spec, models);
 
         final DemoEffects effects = DemoEffects.addTo(builder);
@@ -363,8 +396,8 @@ public final class MapScene
 
         final Scene scene = builder.build();
 
-        final MapScene result = new MapScene(spec, scene, botIndices, weaponIndices, effects, body,
-            physics);
+        final MapScene result = new MapScene(spec, scene, botIndices, weaponIndices, pickupIndices,
+            pickupTransforms, effects, body, physics);
 
         final int solidCount;
 
@@ -426,6 +459,35 @@ public final class MapScene
         }
 
         return weaponIndices[i];
+    }
+
+    /**
+     * Returns the scene-instance index of the {@code i}-th
+     * pickup's weapon model, or {@link #NO_INSTANCE} if the
+     * pickup has no body (e.g. the weapon model was not staged).
+     * Parallel to the spec's {@code pickups()}. 2026-08.
+     */
+    public int pickupInstanceIndex(final int i)
+    {
+        if (i < 0 || i >= pickupIndices.length)
+        {
+            return NO_INSTANCE;
+        }
+
+        return pickupIndices[i];
+    }
+
+    /**
+     * Returns the initial transform of the {@code i}-th
+     * pickup, as 16 row-major floats at offset {@code i * 16}
+     * in the returned array. The per-tic port publishes this
+     * transform when the pickup is still on the map, and
+     * overwrites it with {@link DemoEffects#HIDDEN} when the
+     * player has picked it up. 2026-08.
+     */
+    public float[] pickupTransforms()
+    {
+        return pickupTransforms;
     }
 
     /**
@@ -1214,6 +1276,68 @@ public final class MapScene
         builder.addWorldInstance(blaster, botWeaponPlacement(bot), bot.entityId());
 
         return at;
+    }
+
+    /**
+     * Stages each spec pickup as a world instance, so the player
+     * can see the weapon floating in the world and walk into it.
+     *
+     * <p>2026-08: the area-rules pickup system. The pickup
+     * uses the bots' blaster model (which is what the bots
+     * themselves hold, and what a fresh pickup looks like in
+     * the world). The pickup is tagged with a unique entity id
+     * (a range above the bots' block) so the outline pass can
+     * mark it or the all-enemies mode can skip it; the
+     * "outline every enemy" feature does not draw on pickups
+     * because the player is meant to walk into them, not shoot
+     * them. The pickup's transform is also written into
+     * {@code pickupTransforms} so the per-tic publish does not
+     * have to recompute the placement on every frame.</p>
+     *
+     * <p>A missing blaster model leaves the index at
+     * {@link #NO_INSTANCE} and skips the transform write;
+     * the publish step sees the sentinel and the pickup is
+     * effectively invisible (the player can still walk into
+     * the position and pick it up - the model is a visual
+     * nicety, not a gate on the inventory update).</p>
+     */
+    private static void addPickupInstances(final Scene.Builder builder, final MapSpec spec,
+        final DemoModels models, final int[] pickupIndices, final float[] pickupTransforms)
+    {
+        final ModelFormat blaster = models.botWeapon();
+
+        final int count = Math.min(spec.pickups().size(), pickupIndices.length);
+
+        for (int index = 0; index < count; index++)
+        {
+            final Pickup pickup = spec.pickups().get(index);
+
+            if (blaster == null)
+            {
+                pickupIndices[index] = NO_INSTANCE;
+                continue;
+            }
+
+            final int entityId = Match.FIRST_BOT_ENTITY_ID + spec.botWaypoints().size() + index;
+
+            // The pickup floats at the spec's Y, oriented so the
+            // barrel points "up" (the model's natural rest
+            // pose). The world scale is the same as a held
+            // weapon so the player reads the size of the thing
+            // they are picking up as a gun they could hold.
+            final float yaw = 0.0f;
+
+            final float scale = DemoScene.BOT_WEAPON_WORLD_SCALE;
+
+            final Mat4 transform = com.openfps.engine.demo.DemoScene.placement(
+                pickup.x(), pickup.y(), pickup.z(), yaw, scale);
+
+            transform.copyRowMajorInto(pickupTransforms, index * 16);
+
+            pickupIndices[index] = builder.worldInstanceCount();
+
+            builder.addWorldInstance(blaster, transform, entityId);
+        }
     }
 
     /**

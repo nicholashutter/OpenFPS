@@ -162,6 +162,7 @@ public final class Maps
             // ---- asset paths (level .ofm unchanged; the 320 x 320
             // mesh is the centerpiece in the middle of the 3200
             // x 3200 spec).
+            List.of(),
             new MapAssets(
                 "engine/src/main/resources/maps/cornerstone/level.ofm",
                 "assets/models/weapon/blaster-b.ofm",
@@ -333,6 +334,7 @@ public final class Maps
             // ---- asset paths (level .ofm unchanged; the 320 x 320
             // mesh is the centerpiece in the middle of the 4000
             // x 4000 spec).
+            List.of(),
             new MapAssets(
                 "engine/src/main/resources/maps/overpass/level.ofm",
                 "assets/models/weapon/blaster-b.ofm",
@@ -484,6 +486,7 @@ public final class Maps
             // ---- asset paths (level .ofm unchanged; the 320 x 320
             // mesh is the centerpiece in the middle of the 4800
             // x 4800 spec).
+            List.of(),
             new MapAssets(
                 "engine/src/main/resources/maps/tripoint/level.ofm",
                 "assets/models/weapon/blaster-b.ofm",
@@ -640,6 +643,7 @@ public final class Maps
             // ---- asset paths (level .ofm unchanged; the 320 x 320
             // mesh is the centerpiece in the middle of the 5600
             // x 5600 spec).
+            List.of(),
             new MapAssets(
                 "engine/src/main/resources/maps/extraction/level.ofm",
                 "assets/models/weapon/blaster-b.ofm",
@@ -790,6 +794,7 @@ public final class Maps
             // ---- asset paths (level .ofm unchanged; the 320 x
             // 320 mesh is the centerpiece in the middle of the
             // 4000 x 4000 spec).
+            List.of(),
             new MapAssets(
                 "engine/src/main/resources/maps/refinery/level.ofm",
                 "assets/models/weapon/blaster-b.ofm",
@@ -905,6 +910,7 @@ public final class Maps
             // ---- TDM markers: the empty singleton
             MapMarkers.TeamDeathmatch.INSTANCE,
             // ---- asset paths
+            List.of(),
             new MapAssets(
                 "engine/src/main/resources/maps/crossroads/level.ofm",
                 "assets/models/weapon/blaster-b.ofm",
@@ -1054,6 +1060,7 @@ public final class Maps
             // 320 mesh is the centerpiece in the middle of the
             // 4000 x 4000 spec, with the bridges at y = 32
             // preserved).
+            List.of(),
             new MapAssets(
                 "engine/src/main/resources/maps/arctic-station/level.ofm",
                 "assets/models/weapon/blaster-b.ofm",
@@ -1236,6 +1243,7 @@ public final class Maps
             // ---- asset paths (level .ofm unchanged; the 320 x
             // 320 mesh is the centerpiece in the middle of the
             // 4800 x 4800 spec).
+            List.of(),
             new MapAssets(
                 "engine/src/main/resources/maps/foundry/level.ofm",
                 "assets/models/weapon/blaster-b.ofm",
@@ -1363,6 +1371,7 @@ public final class Maps
                 new MapMarkers.HardpointZone("hp_c", "Mesa Top N", 900.0f, -750.0f, 720.0f)
             ), 1800, 1),
             // ---- asset paths
+            List.of(),
             new MapAssets(
                 "engine/src/main/resources/maps/mesa/level.ofm",
                 "assets/models/weapon/blaster-b.ofm",
@@ -1536,6 +1545,7 @@ public final class Maps
                     480.0f)
             ), 1800, 1),
             // ---- asset paths
+            List.of(),
             new MapAssets(
                 "engine/src/main/resources/maps/arctic-hp/level.ofm",
                 "assets/models/weapon/blaster-b.ofm",
@@ -1728,6 +1738,7 @@ public final class Maps
             // ---- asset paths (level .ofm unchanged; the 320 x
             // 320 mesh is the centerpiece in the middle of the
             // 5600 x 5600 spec).
+            List.of(),
             new MapAssets(
                 "engine/src/main/resources/maps/pipeline/level.ofm",
                 "assets/models/weapon/blaster-b.ofm",
@@ -1854,6 +1865,7 @@ public final class Maps
                 new MapMarkers.Flag("flag_c", "Butte North", 0.0f, -1200.0f, 400.0f)
             )),
             // ---- asset paths
+            List.of(),
             new MapAssets(
                 "engine/src/main/resources/maps/sandbar/level.ofm",
                 "assets/models/weapon/blaster-b.ofm",
@@ -2034,6 +2046,7 @@ public final class Maps
             // ---- asset paths (level .ofm unchanged; the 320 x
             // 320 mesh is the centerpiece in the middle of the
             // 4000 x 4000 spec, with the floor at y = 4).
+            List.of(),
             new MapAssets(
                 "engine/src/main/resources/maps/arctic-dom/level.ofm",
                 "assets/models/weapon/blaster-b.ofm",
@@ -2196,6 +2209,7 @@ public final class Maps
             // ---- asset paths (level .ofm unchanged; the 320 x
             // 320 mesh is the centerpiece in the middle of the
             // 4800 x 4800 spec).
+            List.of(),
             new MapAssets(
                 "engine/src/main/resources/maps/storage/level.ofm",
                 "assets/models/weapon/blaster-b.ofm",
@@ -2314,6 +2328,7 @@ public final class Maps
                 new MapMarkers.Base(Team.BLUE, 1600.0f, 1600.0f, 1600.0f, 1600.0f, 400.0f)
             ),
             // ---- asset paths
+            List.of(),
             new MapAssets(
                 "engine/src/main/resources/maps/stronghold/level.ofm",
                 "assets/models/weapon/blaster-b.ofm",
@@ -2446,6 +2461,7 @@ public final class Maps
             // ---- asset paths (level .ofm unchanged; the 320 x
             // 320 mesh is the centerpiece in the middle of the
             // 4800 x 4800 spec).
+            List.of(),
             new MapAssets(
                 "engine/src/main/resources/maps/coldfront/level.ofm",
                 "assets/models/weapon/blaster-b.ofm",
