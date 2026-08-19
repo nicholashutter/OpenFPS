@@ -937,85 +937,123 @@ public final class Maps
             "Icebridge",
             MapSetting.ARCTIC_STATION,
             MatchMode.TDM,
-            // ---- playable area: 320 x 320, 128 high (the bridges are
-            // 32-tall with a service building on top)
-            new MapDimensions(320.0f, 320.0f, 128.0f),
-            // ---- three lanes A/B/C, each with chokepoints in travel
-            // order. The lanes follow the bridges: A is the North
-            // Bridge, B is the ravine floor, C is the South Bridge.
-            // The previous z=144 row sat 9.6 units from the south
-            // wall inner face (z=+153.6) — a 16-unit half-extent
-            // chokepoint there overlaps the wall AABB at
-            // z=[153.6, 166.4] — and the z=216 / z=264 chokepoints
-            // were 50 / 98 units past the south wall outer face.
+            // ---- playable area: 4000 x 4000, 128 high (the bridges
+            // are 32-tall with a service building on top). All x/z
+            // in the spec are scaled by 12.5 from the original 320
+            // x 320 spec; the level .ofm remains a 320 x 320
+            // centerpiece. The y=32 bridge decks are part of the
+            // .ofm, not the spec, and stay raised.
+            new MapDimensions(4000.0f, 4000.0f, 128.0f),
+            // ---- three lanes A/B/C, each with five chokepoints in
+            // travel order. The original three chokepoints per
+            // lane are scaled by 12.5; two new "Far" chokepoints
+            // are added at the W and E extremes (x = +-1500) so a
+            // 5-chokepoint lane (15 total) names the full
+            // west-to-east run on each row. Chokepoint labels
+            // (Fuel Depot, North Bridge, Ravine, Snowdrift,
+            // Service Building) are preserved on the originals;
+            // the additions use the "Far W" / "Far E" suffix.
+            // Lane centres are at z=-1250, 0, +1250 (three rows
+            // spanning the 4000-unit depth).
             List.of(
                 new Lane("lane_a", LaneAxis.NORTH_SOUTH, List.of(
-                    new Chokepoint("cp_a1", "Fuel Depot West", -128.0f, -100.0f),
-                    new Chokepoint("cp_a2", "North Bridge Centre", 0.0f, -100.0f),
-                    new Chokepoint("cp_a3", "Fuel Depot East", 128.0f, -100.0f)
+                    new Chokepoint("cp_a1", "Fuel Depot Far W",
+                        -1500.0f, -1250.0f),
+                    new Chokepoint("cp_a2", "Fuel Depot West",
+                        -375.0f, -1250.0f),
+                    new Chokepoint("cp_a3", "North Bridge Centre",
+                        0.0f, -1250.0f),
+                    new Chokepoint("cp_a4", "Fuel Depot East",
+                        375.0f, -1250.0f),
+                    new Chokepoint("cp_a5", "Fuel Depot Far E",
+                        1500.0f, -1250.0f)
                 )),
                 new Lane("lane_b", LaneAxis.NORTH_SOUTH, List.of(
-                    new Chokepoint("cp_b1", "Ravine West", -128.0f, 0.0f),
-                    new Chokepoint("cp_b2", "Snowdrift Mid", 0.0f, 0.0f),
-                    new Chokepoint("cp_b3", "Ravine East", 128.0f, 0.0f)
+                    new Chokepoint("cp_b1", "Ravine Far W",
+                        -1500.0f, 0.0f),
+                    new Chokepoint("cp_b2", "Ravine West",
+                        -375.0f, 0.0f),
+                    new Chokepoint("cp_b3", "Snowdrift Mid",
+                        0.0f, 0.0f),
+                    new Chokepoint("cp_b4", "Ravine East",
+                        375.0f, 0.0f),
+                    new Chokepoint("cp_b5", "Ravine Far E",
+                        1500.0f, 0.0f)
                 )),
                 new Lane("lane_c", LaneAxis.NORTH_SOUTH, List.of(
-                    new Chokepoint("cp_c1", "Service Building West", -64.0f, 100.0f),
-                    new Chokepoint("cp_c2", "Service Building Centre", 0.0f, 100.0f),
-                    new Chokepoint("cp_c3", "Service Building East", 64.0f, 100.0f)
+                    new Chokepoint("cp_c1", "Service Building Far W",
+                        -1500.0f, 1250.0f),
+                    new Chokepoint("cp_c2", "Service Building West",
+                        -375.0f, 1250.0f),
+                    new Chokepoint("cp_c3", "Service Building Centre",
+                        0.0f, 1250.0f),
+                    new Chokepoint("cp_c4", "Service Building East",
+                        375.0f, 1250.0f),
+                    new Chokepoint("cp_c5", "Service Building Far E",
+                        1500.0f, 1250.0f)
                 ))
             ),
-            // ---- six spawn points: three per team, on the west and
-            // east edges of the playable area (x = +/-128, 25 units
-            // clear of the inner wall faces). The 16-unit
-            // half-width means the body's nearest edge sits 9.6
-            // units off the inner wall face. The previous x=16 /
-            // x=304 placements put BLUE past the east wall outer
-            // face (x=304 is 137 units past the inner face,
-            // unreachable), and the z=200/240/280 rows put RED on
-            // or past the south wall.
+            // ---- six spawn points: three per team, on the west
+            // and east edges of the playable area (x = +-1500,
+            // 12.5x from the 6v6 spec's x=+-128). y stays 0;
+            // facings aim inward toward the lane centre. The
+            // bridge waypoints sit at y=32 on the level .ofm, but
+            // the spawns are on the ground so y=0.
             List.of(
-                new SpawnPoint("red_alpha", Team.RED, -128.0f, 0.0f, -100.0f,
+                new SpawnPoint("red_alpha", Team.RED, -1500.0f, 0.0f, -1250.0f,
                     toRadians(90.0f)),
-                new SpawnPoint("red_bravo", Team.RED, -128.0f, 0.0f, -50.0f,
+                new SpawnPoint("red_bravo", Team.RED, -1500.0f, 0.0f, -625.0f,
                     toRadians(80.0f)),
-                new SpawnPoint("red_charlie", Team.RED, -128.0f, 0.0f, 0.0f,
+                new SpawnPoint("red_charlie", Team.RED, -1500.0f, 0.0f, 0.0f,
                     toRadians(100.0f)),
-                new SpawnPoint("blue_alpha", Team.BLUE, 128.0f, 0.0f, 100.0f,
+                new SpawnPoint("blue_alpha", Team.BLUE, 1500.0f, 0.0f, 1250.0f,
                     toRadians(270.0f)),
-                new SpawnPoint("blue_bravo", Team.BLUE, 128.0f, 0.0f, 50.0f,
+                new SpawnPoint("blue_bravo", Team.BLUE, 1500.0f, 0.0f, 625.0f,
                     toRadians(260.0f)),
-                new SpawnPoint("blue_charlie", Team.BLUE, 128.0f, 0.0f, 0.0f,
+                new SpawnPoint("blue_charlie", Team.BLUE, 1500.0f, 0.0f, 0.0f,
                     toRadians(280.0f))
             ),
-            // ---- bot waypoints: a closed loop visiting the North
-            // Bridge (y=32, on top of the bridge deck), the ravine
-            // floor (y=0), and the Service Building (y=32) in
-            // order. The previous z=144 row sat 9.6 units from the
-            // south wall inner face (bot at z=144 with 16-unit
-            // half-width overlaps the wall AABB at z=153.6), and
-            // the z=216 row was unreachable past the wall.
-            //
-            // x=+/-128 is pulled out past the kit column x range
-            // ([48, 112] / [-112, -48]) so the corner waypoints
-            // don't sit inside the column AABBs. z=+/-100 is in
-            // the column z range ([-112, -48] / [48, 112]), so the
-            // x value must be outside [48, 112] / [-112, -48] to
-            // avoid the column — x=+/-128 satisfies that.
+            // ---- 21 bot waypoints: a closed snake through a
+            // 7-col x 3-row grid covering the 4000 x 4000 playable
+            // area. Cols at x = -1800, -1200, -600, 0, 600, 1200,
+            // 1800 (600 unit spacing, well inside the inner wall
+            // at +-1920). Rows at z = -1250 (north bridge, y=32),
+            // 0 (ravine floor, y=0), +1250 (south bridge, y=32);
+            // the Y values match the bridge deck heights in the
+            // level .ofm, so a bot at a bridge waypoint stands
+            // on the deck and a bot at a ravine waypoint stands
+            // on the floor. The snake alternates direction per
+            // row so a bot at waypoint i moves toward waypoint
+            // i+1 without doubling back on itself.
             List.of(
-                new Waypoint("wp_0", -128.0f, 32.0f, -100.0f),
-                new Waypoint("wp_1", 0.0f, 32.0f, -100.0f),
-                new Waypoint("wp_2", 128.0f, 32.0f, -100.0f),
-                new Waypoint("wp_3", -128.0f, 0.0f, 0.0f),
-                new Waypoint("wp_4", 0.0f, 0.0f, 0.0f),
-                new Waypoint("wp_5", 128.0f, 0.0f, 0.0f),
-                new Waypoint("wp_6", -128.0f, 32.0f, 100.0f),
-                new Waypoint("wp_7", 0.0f, 32.0f, 100.0f),
-                new Waypoint("wp_8", 128.0f, 32.0f, 100.0f)
+                new Waypoint("wp_0", -1800.0f, 32.0f, -1250.0f),
+                new Waypoint("wp_1", -1200.0f, 32.0f, -1250.0f),
+                new Waypoint("wp_2", -600.0f, 32.0f, -1250.0f),
+                new Waypoint("wp_3", 0.0f, 32.0f, -1250.0f),
+                new Waypoint("wp_4", 600.0f, 32.0f, -1250.0f),
+                new Waypoint("wp_5", 1200.0f, 32.0f, -1250.0f),
+                new Waypoint("wp_6", 1800.0f, 32.0f, -1250.0f),
+                new Waypoint("wp_7", 1800.0f, 0.0f, 0.0f),
+                new Waypoint("wp_8", 1200.0f, 0.0f, 0.0f),
+                new Waypoint("wp_9", 600.0f, 0.0f, 0.0f),
+                new Waypoint("wp_10", 0.0f, 0.0f, 0.0f),
+                new Waypoint("wp_11", -600.0f, 0.0f, 0.0f),
+                new Waypoint("wp_12", -1200.0f, 0.0f, 0.0f),
+                new Waypoint("wp_13", -1800.0f, 0.0f, 0.0f),
+                new Waypoint("wp_14", -1800.0f, 32.0f, 1250.0f),
+                new Waypoint("wp_15", -1200.0f, 32.0f, 1250.0f),
+                new Waypoint("wp_16", -600.0f, 32.0f, 1250.0f),
+                new Waypoint("wp_17", 0.0f, 32.0f, 1250.0f),
+                new Waypoint("wp_18", 600.0f, 32.0f, 1250.0f),
+                new Waypoint("wp_19", 1200.0f, 32.0f, 1250.0f),
+                new Waypoint("wp_20", 1800.0f, 32.0f, 1250.0f)
             ),
             // ---- TDM markers: the empty singleton
             MapMarkers.TeamDeathmatch.INSTANCE,
-            // ---- asset paths
+            // ---- asset paths (level .ofm unchanged; the 320 x
+            // 320 mesh is the centerpiece in the middle of the
+            // 4000 x 4000 spec, with the bridges at y = 32
+            // preserved).
             new MapAssets(
                 "engine/src/main/resources/maps/arctic-station/level.ofm",
                 "assets/models/weapon/blaster-b.ofm",
@@ -1336,22 +1374,25 @@ public final class Maps
     // ----- Subzero (Arctic Station × Hardpoint) ----------------------------
 
     /**
-     * The tenth shipped map. Arctic Station, Hardpoint, 6v6 sizing. A
-     * small radar-research outpost on a polar ice shelf. Three low
-     * sheet-metal buildings (the Generator Shed, the Operations
-     * Trailer, and the Fuel Depot) are the three Hardpoint zones,
-     * each a small enclosed space with one wide doorway. The
-     * buildings are connected by a system of snow-walled trenches at
-     * floor level, so a player who has dropped into a trench can
-     * rotate between buildings without being shot from above. The
-     * full design spec is in {@code docs/maps/arctic-station/02-hp-arctic.md}.
+     * The tenth shipped map. Arctic Station, Hardpoint, MW2-Rust /
+     * BO6 large-map sizing (4800 x 4800 world units, MAP_SCALE = 16
+     * → 300 m square). A radar-research outpost on a polar ice shelf.
+     * Three low sheet-metal buildings (the Generator Shed, the
+     * Operations Trailer, and the Fuel Depot) are the three
+     * Hardpoint zones, each a small enclosed space with one wide
+     * doorway. The buildings are connected by a system of
+     * snow-walled trenches at floor level, so a player who has
+     * dropped into a trench can rotate between buildings without
+     * being shot from above. The full design spec is in
+     * {@code docs/maps/arctic-station/02-hp-arctic.md}.
      *
-     * <p>Distinct from {@link #overpass} in feel: this is the
-     * smallest of the four Hardpoint maps, three buildings at the
-     * corners of a 96×96 triangle connected by trenches in a Y
-     * pattern. The rotation moves the contested ground east to west
-     * over the course of a round (Generator Shed → Operations
-     * Trailer → Fuel Depot).</p>
+     * <p>Distinct from {@link #foundry} in feel: this is three
+     * buildings at the corners of a much wider triangle, connected
+     * by long trenches in a Y pattern. The rotation moves the
+     * contested ground east to west over the course of a round
+     * (Generator Shed → Operations Trailer → Fuel Depot). All x/z
+     * in the spec are scaled by 15 from the original 320 x 320
+     * spec; the level .ofm remains a 320 x 320 centerpiece.</p>
      *
      * @return the Subzero map spec
      */
@@ -1363,101 +1404,136 @@ public final class Maps
             "Subzero",
             MapSetting.ARCTIC_STATION,
             MatchMode.HARDPOINT,
-            // ---- playable area: 320 x 320, 96 high (the buildings
-            // are short — 32-tall sheet metal — and the trenches
-            // are 8-tall snow walls)
-            new MapDimensions(320.0f, 320.0f, 96.0f),
+            // ---- playable area: 4800 x 4800, 96 high (the
+            // buildings are short — 32-tall sheet metal — and the
+            // trenches are 8-tall snow walls). All x/z in the spec
+            // are scaled by 15 from the original 320 x 320 spec;
+            // the level .ofm remains a 320 x 320 centerpiece.
+            new MapDimensions(4800.0f, 4800.0f, 96.0f),
             // ---- three lanes A/B/C encoded as the three trench
-            // routes plus the open ground. Lane A is the W trench
-            // (Generator Shed → Operations Trailer), lane B is the
-            // open ground at the centre of the triangle, lane C is
-            // the E trench (Operations Trailer → Fuel Depot). The
-            // chokepoint x/z values are clipped to the playable
-            // area so the HUD labels land on the visible map.
+            // routes plus the open ground. The original three
+            // chokepoints per lane are scaled by 15; two new "Far"
+            // chokepoints are added at the W and E extremes (x =
+            // +-1800) so a 5-chokepoint lane (15 total) names the
+            // full west-to-east run on each row. Chokepoint labels
+            // (Generator Shed, W Trench, Operations, Open Ground,
+            // E Trench, Fuel Depot) are preserved on the originals;
+            // the additions use the "Far W" / "Far E" suffix.
+            // Lane centres are at z=-1500, 0, +1500 (three rows
+            // spanning the 4800-unit depth).
             List.of(
                 new Lane("lane_a", LaneAxis.NORTH_SOUTH, List.of(
-                    new Chokepoint("cp_a1", "Generator Shed Doorway", 30.0f, -30.0f),
-                    new Chokepoint("cp_a2", "W Trench Mid", 0.0f, 0.0f),
-                    new Chokepoint("cp_a3", "Operations Doorway", 30.0f, 30.0f)
+                    new Chokepoint("cp_a1", "Generator Shed Far W",
+                        -1800.0f, -1500.0f),
+                    new Chokepoint("cp_a2", "Generator Shed Doorway",
+                        450.0f, -450.0f),
+                    new Chokepoint("cp_a3", "W Trench Mid",
+                        0.0f, 0.0f),
+                    new Chokepoint("cp_a4", "Operations Doorway",
+                        450.0f, 450.0f),
+                    new Chokepoint("cp_a5", "Operations Far E",
+                        1800.0f, 1500.0f)
                 )),
                 new Lane("lane_b", LaneAxis.NORTH_SOUTH, List.of(
-                    new Chokepoint("cp_b1", "W Snow Wall", 0.0f, 30.0f),
-                    new Chokepoint("cp_b2", "Open Ground", 0.0f, 0.0f),
-                    new Chokepoint("cp_b3", "E Snow Wall", 0.0f, -30.0f)
+                    new Chokepoint("cp_b1", "W Snow Wall Far W",
+                        -1800.0f, -1500.0f),
+                    new Chokepoint("cp_b2", "W Snow Wall",
+                        0.0f, 450.0f),
+                    new Chokepoint("cp_b3", "Open Ground",
+                        0.0f, 0.0f),
+                    new Chokepoint("cp_b4", "E Snow Wall",
+                        0.0f, -450.0f),
+                    new Chokepoint("cp_b5", "E Snow Wall Far E",
+                        1800.0f, 1500.0f)
                 )),
                 new Lane("lane_c", LaneAxis.NORTH_SOUTH, List.of(
-                    new Chokepoint("cp_c1", "Operations Doorway E", 30.0f, 30.0f),
-                    new Chokepoint("cp_c2", "E Trench Mid", 0.0f, 0.0f),
-                    new Chokepoint("cp_c3", "Fuel Depot Doorway", 30.0f, -30.0f)
+                    new Chokepoint("cp_c1", "Operations Doorway E Far W",
+                        -1800.0f, 1500.0f),
+                    new Chokepoint("cp_c2", "Operations Doorway E",
+                        450.0f, 450.0f),
+                    new Chokepoint("cp_c3", "E Trench Mid",
+                        0.0f, 0.0f),
+                    new Chokepoint("cp_c4", "Fuel Depot Doorway",
+                        450.0f, -450.0f),
+                    new Chokepoint("cp_c5", "Fuel Depot Far E",
+                        1800.0f, -1500.0f)
                 ))
             ),
-            // ---- six spawn points: three per team, on the west and
-            // east edges, facings aimed at the trench entrances. The
-            // round opens with both teams contesting the W trench
-            // because the Generator Shed is the first rotation.
-            // z is one of -100, 0, 100 (the three playable-area
-            // "rows"); the previous z=64/160/256 had the south
-            // spawn at z=256, well outside the playable area, and
-            // x=304 placed the blue team in the void.
+            // ---- six spawn points: three per team, on the west
+            // and east edges of the playable area (x = +-1800,
+            // 15x from the 6v6 spec's x=+-120). y stays 0;
+            // facings aim inward toward the trench entrances.
             List.of(
-                new SpawnPoint("red_alpha", Team.RED, -120.0f, 0.0f, -100.0f,
+                new SpawnPoint("red_alpha", Team.RED, -1800.0f, 0.0f, -1500.0f,
                     toRadians(90.0f)),
-                new SpawnPoint("red_bravo", Team.RED, -120.0f, 0.0f, 0.0f,
+                new SpawnPoint("red_bravo", Team.RED, -1800.0f, 0.0f, 0.0f,
                     toRadians(90.0f)),
-                new SpawnPoint("red_charlie", Team.RED, -120.0f, 0.0f, 100.0f,
+                new SpawnPoint("red_charlie", Team.RED, -1800.0f, 0.0f, 1500.0f,
                     toRadians(90.0f)),
-                new SpawnPoint("blue_alpha", Team.BLUE, 120.0f, 0.0f, -100.0f,
+                new SpawnPoint("blue_alpha", Team.BLUE, 1800.0f, 0.0f, -1500.0f,
                     toRadians(270.0f)),
-                new SpawnPoint("blue_bravo", Team.BLUE, 120.0f, 0.0f, 0.0f,
+                new SpawnPoint("blue_bravo", Team.BLUE, 1800.0f, 0.0f, 0.0f,
                     toRadians(270.0f)),
-                new SpawnPoint("blue_charlie", Team.BLUE, 120.0f, 0.0f, 100.0f,
+                new SpawnPoint("blue_charlie", Team.BLUE, 1800.0f, 0.0f, 1500.0f,
                     toRadians(270.0f))
             ),
-            // ---- twelve bot waypoints: a 3x4 grid covering the
-            // playable area, spaced 90 units apart in x and z to
-            // keep bots out of each other's firing range. The
-            // previous layout clustered twelve waypoints in the
-            // central 200x200 area, which put 16 waypoint pairs
-            // within the 80-unit firing range — a patrolling bot
-            // at one waypoint would shoot a patrolling bot at a
-            // neighbouring waypoint. The loop snakes through the
-            // grid: row 0 (z=-135) west-to-east, row 1 (z=-45)
-            // east-to-west, row 2 (z=45) west-to-east, row 3
-            // (z=135) east-to-west, then back to row 0. All
-            // waypoints clear the four kit columns at (±80, ±80)
-            // and the six perimeter crates at (±80, ±134.4) and
-            // (±134.4, ±80). Note: the level .ofm's buildings
-            // (Generator Shed, Operations Trailer, Fuel Depot) and
-            // trenches sit at the 0..320 spec coords while the
-            // floor is origin-centred, so the waypoints patrol the
-            // open ground rather than visiting the named features
-            // — fixing that requires regenerating level.ofm.
+            // ---- 27 bot waypoints: a closed snake through a
+            // 3-col x 9-row grid covering the 4800 x 4800 playable
+            // area. Cols at x = -1800, 0, 1800 (1800 unit spacing,
+            // well inside the inner wall at +-2304). Rows at z =
+            // -2000, -1500, -1000, -500, 0, 500, 1000, 1500, 2000
+            // (500 unit spacing, evenly distributed). The snake
+            // alternates direction per row so a bot at waypoint i
+            // moves toward waypoint i+1 without doubling back on
+            // itself. y stays at 0 (kit floor). Note: the level
+            // .ofm's buildings and trenches are 320 x 320 in the
+            // middle of the 4800 x 4800 spec, so the waypoints
+            // patrol the open ground around the centerpiece
+            // rather than visiting the named features - fixing
+            // that requires regenerating level.ofm.
             List.of(
-                new Waypoint("wp_0", -130.0f, 0.0f, -135.0f),
-                new Waypoint("wp_1", 0.0f, 0.0f, -135.0f),
-                new Waypoint("wp_2", 130.0f, 0.0f, -135.0f),
-                new Waypoint("wp_3", 130.0f, 0.0f, -45.0f),
-                new Waypoint("wp_4", 0.0f, 0.0f, -45.0f),
-                new Waypoint("wp_5", -130.0f, 0.0f, -45.0f),
-                new Waypoint("wp_6", -130.0f, 0.0f, 45.0f),
-                new Waypoint("wp_7", 0.0f, 0.0f, 45.0f),
-                new Waypoint("wp_8", 130.0f, 0.0f, 45.0f),
-                new Waypoint("wp_9", 130.0f, 0.0f, 135.0f),
-                new Waypoint("wp_10", 0.0f, 0.0f, 135.0f),
-                new Waypoint("wp_11", -130.0f, 0.0f, 135.0f)
+                new Waypoint("wp_0", -1800.0f, 0.0f, -2000.0f),
+                new Waypoint("wp_1", 0.0f, 0.0f, -2000.0f),
+                new Waypoint("wp_2", 1800.0f, 0.0f, -2000.0f),
+                new Waypoint("wp_3", 1800.0f, 0.0f, -1500.0f),
+                new Waypoint("wp_4", 0.0f, 0.0f, -1500.0f),
+                new Waypoint("wp_5", -1800.0f, 0.0f, -1500.0f),
+                new Waypoint("wp_6", -1800.0f, 0.0f, -1000.0f),
+                new Waypoint("wp_7", 0.0f, 0.0f, -1000.0f),
+                new Waypoint("wp_8", 1800.0f, 0.0f, -1000.0f),
+                new Waypoint("wp_9", 1800.0f, 0.0f, -500.0f),
+                new Waypoint("wp_10", 0.0f, 0.0f, -500.0f),
+                new Waypoint("wp_11", -1800.0f, 0.0f, -500.0f),
+                new Waypoint("wp_12", -1800.0f, 0.0f, 0.0f),
+                new Waypoint("wp_13", 0.0f, 0.0f, 0.0f),
+                new Waypoint("wp_14", 1800.0f, 0.0f, 0.0f),
+                new Waypoint("wp_15", 1800.0f, 0.0f, 500.0f),
+                new Waypoint("wp_16", 0.0f, 0.0f, 500.0f),
+                new Waypoint("wp_17", -1800.0f, 0.0f, 500.0f),
+                new Waypoint("wp_18", -1800.0f, 0.0f, 1000.0f),
+                new Waypoint("wp_19", 0.0f, 0.0f, 1000.0f),
+                new Waypoint("wp_20", 1800.0f, 0.0f, 1000.0f),
+                new Waypoint("wp_21", 1800.0f, 0.0f, 1500.0f),
+                new Waypoint("wp_22", 0.0f, 0.0f, 1500.0f),
+                new Waypoint("wp_23", -1800.0f, 0.0f, 1500.0f),
+                new Waypoint("wp_24", -1800.0f, 0.0f, 2000.0f),
+                new Waypoint("wp_25", 0.0f, 0.0f, 2000.0f),
+                new Waypoint("wp_26", 1800.0f, 0.0f, 2000.0f)
             ),
             // ---- Hardpoint markers: three zones, 1800-tic (30s)
             // rotation, 1 point per tic. Activation order A, B, C
             // (Generator Shed → Operations Trailer → Fuel Depot, the
             // round opens in the north-west building and ends in the
-            // south-west building). All three zones moved into the
-            // playable area; the previous Fuel Depot sat at
-            // z=256 (outside the south wall).
+            // south-west building). All x/z scaled by 15; zone
+            // radius scaled to 480 (15x) so the capture zone is
+            // proportional to the larger map.
             new MapMarkers.Hardpoint(List.of(
-                new MapMarkers.HardpointZone("hp_a", "Generator Shed", 60.0f, -60.0f, 32.0f),
+                new MapMarkers.HardpointZone("hp_a", "Generator Shed", 900.0f, -900.0f,
+                    480.0f),
                 new MapMarkers.HardpointZone("hp_b", "Operations Trailer", 0.0f, 0.0f,
-                    32.0f),
-                new MapMarkers.HardpointZone("hp_c", "Fuel Depot", 60.0f, 100.0f, 32.0f)
+                    480.0f),
+                new MapMarkers.HardpointZone("hp_c", "Fuel Depot", 900.0f, 1500.0f,
+                    480.0f)
             ), 1800, 1),
             // ---- asset paths
             new MapAssets(
@@ -1789,12 +1865,13 @@ public final class Maps
     // ----- Arctic-Dom / Frostline (Arctic Station × Domination) ------------
 
     /**
-     * The thirteenth shipped map. Arctic Station, Domination, 6v6
-     * sizing. A long east-west polar ice road with three flag
-     * platforms spaced 80 units apart along the road (z=80, z=160,
-     * z=240). Each platform is a 16x16 raised ice block with a radar
-     * mast in the centre. The full design spec is in
-     * {@code docs/maps/arctic-station/03-dom-arctic.md}.
+     * The thirteenth shipped map. Arctic Station, Domination,
+     * MW2-Rust sizing (4000 x 4000 world units, MAP_SCALE = 16
+     * → 250 m square). A long east-west polar ice road with three
+     * flag platforms spaced 1200 units apart along the road
+     * (z=-1200, 0, +1200). Each platform is a 16x16 raised ice
+     * block with a radar mast in the centre. The full design
+     * spec is in {@code docs/maps/arctic-station/03-dom-arctic.md}.
      *
      * <p>Distinct from {@link #tripoint} in feel: the contested
      * ground is the ice road (the long east-west feature), not a
@@ -1803,7 +1880,10 @@ public final class Maps
      * contesting FLAG_B (Centre Platform) first, and the winning
      * team rolls out to FLAG_A (South Platform) and FLAG_C (North
      * Platform). The map id is {@code "arctic-dom"}; the display
-     * name is "Frostline" (per the design spec).</p>
+     * name is "Frostline" (per the design spec). All x/z in the
+     * spec are scaled by 12.5 from the original 320 x 320 spec;
+     * the y=4 floor offset is part of the level .ofm and stays
+     * put. The level .ofm remains a 320 x 320 centerpiece.</p>
      *
      * @return the Arctic-Dom (Frostline) map spec
      */
@@ -1815,39 +1895,65 @@ public final class Maps
             "Frostline",
             MapSetting.ARCTIC_STATION,
             MatchMode.DOMINATION,
-            // ---- playable area: 320 x 320, 96 high (the platforms
-            // are 16 tall; the radar masts rise 32 units above the
-            // platform tops; the snow walls are 16 tall)
-            new MapDimensions(320.0f, 320.0f, 96.0f),
+            // ---- playable area: 4000 x 4000, 96 high (the
+            // platforms are 16 tall; the radar masts rise 32
+            // units above the platform tops; the snow walls are
+            // 16 tall). All x/z in the spec are scaled by 12.5
+            // from the original 320 x 320 spec; the level .ofm
+            // remains a 320 x 320 centerpiece.
+            new MapDimensions(4000.0f, 4000.0f, 96.0f),
             // ---- three lanes A/B/C encoded as the three
-            // platform approaches along the ice road. Lane A is
-            // the south approach to FLAG_A, lane B is the central
-            // approach to FLAG_B (the contested middle), lane C is
-            // the north approach to FLAG_C. The previous z=240 row
-            // sat 86 units past the kit south wall inner face
-            // (z=+153.6) — unreachable — and the x=16 / x=304
-            // chokepoints sat 137 units from the respective inner
-            // wall faces, well outside the playable area.
+            // platform approaches along the ice road. The
+            // original three chokepoints per lane are scaled by
+            // 12.5; two new "Far" chokepoints are added at the W
+            // and E extremes (x = +-1500) so a 5-chokepoint lane
+            // (15 total) names the full east-to-west run on each
+            // row. Chokepoint labels (South Platform, Centre
+            // Platform, North Platform) are preserved on the
+            // originals; the additions use the "Far W" / "Far E"
+            // suffix. Lane centres are at z=-1200, 0, +1200
+            // (three platforms spanning the 4000-unit depth).
             List.of(
                 new Lane("lane_a", LaneAxis.EAST_WEST, List.of(
-                    new Chokepoint("cp_a1", "South Platform West", -96.0f, 96.0f),
-                    new Chokepoint("cp_a2", "South Platform Centre", 0.0f, 96.0f),
-                    new Chokepoint("cp_a3", "South Platform East", 96.0f, 96.0f)
+                    new Chokepoint("cp_a1", "South Platform Far W",
+                        -1500.0f, 1200.0f),
+                    new Chokepoint("cp_a2", "South Platform West",
+                        -1200.0f, 1200.0f),
+                    new Chokepoint("cp_a3", "South Platform Centre",
+                        0.0f, 1200.0f),
+                    new Chokepoint("cp_a4", "South Platform East",
+                        1200.0f, 1200.0f),
+                    new Chokepoint("cp_a5", "South Platform Far E",
+                        1500.0f, 1200.0f)
                 )),
                 new Lane("lane_b", LaneAxis.EAST_WEST, List.of(
-                    new Chokepoint("cp_b1", "Centre Platform West", -96.0f, 0.0f),
-                    new Chokepoint("cp_b2", "Centre Platform", 0.0f, 0.0f),
-                    new Chokepoint("cp_b3", "Centre Platform East", 96.0f, 0.0f)
+                    new Chokepoint("cp_b1", "Centre Platform Far W",
+                        -1500.0f, 0.0f),
+                    new Chokepoint("cp_b2", "Centre Platform West",
+                        -1200.0f, 0.0f),
+                    new Chokepoint("cp_b3", "Centre Platform",
+                        0.0f, 0.0f),
+                    new Chokepoint("cp_b4", "Centre Platform East",
+                        1200.0f, 0.0f),
+                    new Chokepoint("cp_b5", "Centre Platform Far E",
+                        1500.0f, 0.0f)
                 )),
                 new Lane("lane_c", LaneAxis.EAST_WEST, List.of(
-                    new Chokepoint("cp_c1", "North Platform West", -96.0f, -96.0f),
-                    new Chokepoint("cp_c2", "North Platform Centre", 0.0f, -96.0f),
-                    new Chokepoint("cp_c3", "North Platform East", 96.0f, -96.0f)
+                    new Chokepoint("cp_c1", "North Platform Far W",
+                        -1500.0f, -1200.0f),
+                    new Chokepoint("cp_c2", "North Platform West",
+                        -1200.0f, -1200.0f),
+                    new Chokepoint("cp_c3", "North Platform Centre",
+                        0.0f, -1200.0f),
+                    new Chokepoint("cp_c4", "North Platform East",
+                        1200.0f, -1200.0f),
+                    new Chokepoint("cp_c5", "North Platform Far E",
+                        1500.0f, -1200.0f)
                 ))
             ),
             // ---- six spawn points: three per team, on the west
-            // and east edges of the playable area (x = +/-128, 25
-            // units clear of the inner wall faces), facings aimed
+            // and east edges of the playable area (x = +-1600,
+            // 12.5x from the 6v6 spec's x=+-128), facings aimed
             // at the centre of the road. RED's spawns are spread
             // along the road so RED can pivot between FLAG_C and
             // FLAG_A.
@@ -1859,52 +1965,56 @@ public final class Maps
             // body in that rectangle is inside it. Standing on the
             // floor top means feet at y=4.
             List.of(
-                new SpawnPoint("red_alpha", Team.RED, -128.0f, 4.0f, -80.0f,
+                new SpawnPoint("red_alpha", Team.RED, -1600.0f, 4.0f, -1000.0f,
                     toRadians(90.0f)),
-                new SpawnPoint("red_bravo", Team.RED, -128.0f, 4.0f, 0.0f,
+                new SpawnPoint("red_bravo", Team.RED, -1600.0f, 4.0f, 0.0f,
                     toRadians(80.0f)),
-                new SpawnPoint("red_charlie", Team.RED, -128.0f, 4.0f, 80.0f,
+                new SpawnPoint("red_charlie", Team.RED, -1600.0f, 4.0f, 1000.0f,
                     toRadians(100.0f)),
-                new SpawnPoint("blue_alpha", Team.BLUE, 128.0f, 4.0f, -80.0f,
+                new SpawnPoint("blue_alpha", Team.BLUE, 1600.0f, 4.0f, -1000.0f,
                     toRadians(270.0f)),
-                new SpawnPoint("blue_bravo", Team.BLUE, 128.0f, 4.0f, 0.0f,
+                new SpawnPoint("blue_bravo", Team.BLUE, 1600.0f, 4.0f, 0.0f,
                     toRadians(260.0f)),
-                new SpawnPoint("blue_charlie", Team.BLUE, 128.0f, 4.0f, 80.0f,
+                new SpawnPoint("blue_charlie", Team.BLUE, 1600.0f, 4.0f, 1000.0f,
                     toRadians(280.0f))
             ),
-            // ---- twelve bot waypoints: a closed loop covering
-            // the three platforms, the road between them, and the
-            // mid-platform floor. The previous waypoints sat at
-            // x=160 (the east wall centre — a 16-unit-half bot at
-            // x=160 sits inside the wall AABB at x=[153.6, 166.4])
-            // and at x=224 (68 units past the east wall outer face,
-            // unreachable). The y=0 waypoints also sat 4 units
-            // inside the floor (see spawn comment above). The new
-            // waypoints sit on the floor (y=4) and well clear of
-            // both walls.
-            //
-            // The kit's four columns at (+/-80, +/-80) with 32-unit
-            // half-extent form 64x64 rectangles centred on the
-            // quarter positions. x=+/-96 sits inside the column x
-            // range and z=+/-48 / z=+/-96 sits inside the column
-            // z range, so previous (-96, 4, +/-48) and
-            // (+/-96, 4, +/-96) waypoints were inside the column
-            // AABBs. The new waypoints use x=0 (centre) and
-            // x=+/-128 (outside the column x range) to keep every
-            // waypoint out of the columns.
+            // ---- 27 bot waypoints: a closed snake through a
+            // 3-col x 9-row grid covering the 4000 x 4000 playable
+            // area. Cols at x = -1800, 0, 1800 (1800 unit spacing,
+            // well inside the inner wall at +-1920). Rows at z =
+            // -1800, -1350, -900, -450, 0, 450, 900, 1350, 1800
+            // (450 unit spacing, evenly distributed). The snake
+            // alternates direction per row so a bot at waypoint i
+            // moves toward waypoint i+1 without doubling back on
+            // itself. y stays at 4 (the level .ofm's floor top).
             List.of(
-                new Waypoint("wp_0", 0.0f, 4.0f, -96.0f),
-                new Waypoint("wp_1", -128.0f, 4.0f, -48.0f),
-                new Waypoint("wp_2", 0.0f, 4.0f, 0.0f),
-                new Waypoint("wp_3", 128.0f, 4.0f, 48.0f),
-                new Waypoint("wp_4", 0.0f, 4.0f, 96.0f),
-                new Waypoint("wp_5", 128.0f, 4.0f, 0.0f),
-                new Waypoint("wp_6", 0.0f, 4.0f, -48.0f),
-                new Waypoint("wp_7", 0.0f, 4.0f, 48.0f),
-                new Waypoint("wp_8", -128.0f, 4.0f, -96.0f),
-                new Waypoint("wp_9", 128.0f, 4.0f, -96.0f),
-                new Waypoint("wp_10", -128.0f, 4.0f, 96.0f),
-                new Waypoint("wp_11", 128.0f, 4.0f, 96.0f)
+                new Waypoint("wp_0", -1800.0f, 4.0f, -1800.0f),
+                new Waypoint("wp_1", 0.0f, 4.0f, -1800.0f),
+                new Waypoint("wp_2", 1800.0f, 4.0f, -1800.0f),
+                new Waypoint("wp_3", 1800.0f, 4.0f, -1350.0f),
+                new Waypoint("wp_4", 0.0f, 4.0f, -1350.0f),
+                new Waypoint("wp_5", -1800.0f, 4.0f, -1350.0f),
+                new Waypoint("wp_6", -1800.0f, 4.0f, -900.0f),
+                new Waypoint("wp_7", 0.0f, 4.0f, -900.0f),
+                new Waypoint("wp_8", 1800.0f, 4.0f, -900.0f),
+                new Waypoint("wp_9", 1800.0f, 4.0f, -450.0f),
+                new Waypoint("wp_10", 0.0f, 4.0f, -450.0f),
+                new Waypoint("wp_11", -1800.0f, 4.0f, -450.0f),
+                new Waypoint("wp_12", -1800.0f, 4.0f, 0.0f),
+                new Waypoint("wp_13", 0.0f, 4.0f, 0.0f),
+                new Waypoint("wp_14", 1800.0f, 4.0f, 0.0f),
+                new Waypoint("wp_15", 1800.0f, 4.0f, 450.0f),
+                new Waypoint("wp_16", 0.0f, 4.0f, 450.0f),
+                new Waypoint("wp_17", -1800.0f, 4.0f, 450.0f),
+                new Waypoint("wp_18", -1800.0f, 4.0f, 900.0f),
+                new Waypoint("wp_19", 0.0f, 4.0f, 900.0f),
+                new Waypoint("wp_20", 1800.0f, 4.0f, 900.0f),
+                new Waypoint("wp_21", 1800.0f, 4.0f, 1350.0f),
+                new Waypoint("wp_22", 0.0f, 4.0f, 1350.0f),
+                new Waypoint("wp_23", -1800.0f, 4.0f, 1350.0f),
+                new Waypoint("wp_24", -1800.0f, 4.0f, 1800.0f),
+                new Waypoint("wp_25", 0.0f, 4.0f, 1800.0f),
+                new Waypoint("wp_26", 1800.0f, 4.0f, 1800.0f)
             ),
             // ---- Domination markers: three flags, A, B, C. The
             // flags sit on the road between the platforms (the
@@ -1913,13 +2023,17 @@ public final class Maps
             // east wall, so a flag at x=160 is unreachable from the
             // playable area). The round opens with both teams
             // pushing toward the centre, contesting FLAG_B
-            // (Centre Platform) first.
+            // (Centre Platform) first. All x/z scaled by 12.5;
+            // flag radius scaled to 400 (12.5x) so the capture
+            // zone is proportional to the larger map.
             new MapMarkers.Domination(List.of(
-                new MapMarkers.Flag("flag_a", "South Platform", 0.0f, 96.0f, 32.0f),
-                new MapMarkers.Flag("flag_b", "Centre Platform", 0.0f, 0.0f, 32.0f),
-                new MapMarkers.Flag("flag_c", "North Platform", 0.0f, -96.0f, 32.0f)
+                new MapMarkers.Flag("flag_a", "South Platform", 0.0f, 1200.0f, 400.0f),
+                new MapMarkers.Flag("flag_b", "Centre Platform", 0.0f, 0.0f, 400.0f),
+                new MapMarkers.Flag("flag_c", "North Platform", 0.0f, -1200.0f, 400.0f)
             )),
-            // ---- asset paths
+            // ---- asset paths (level .ofm unchanged; the 320 x
+            // 320 mesh is the centerpiece in the middle of the
+            // 4000 x 4000 spec, with the floor at y = 4).
             new MapAssets(
                 "engine/src/main/resources/maps/arctic-dom/level.ofm",
                 "assets/models/weapon/blaster-b.ofm",
@@ -2211,16 +2325,19 @@ public final class Maps
     // ----- Coldfront (Arctic Station × CTF) --------------------------------
 
     /**
-     * The twelfth and final shipped map. Arctic Station, CTF, 6v6
-     * sizing. A small polar-research base split across two sides of a
-     * frozen river. The full design spec is in
-     * {@code docs/maps/arctic-station/04-ctf-arctic.md}.
+     * The twelfth and final shipped map. Arctic Station, CTF,
+     * MW2-Rust / BO6 large-map sizing (4800 x 4800 world units,
+     * MAP_SCALE = 16 → 300 m square). A polar-research base split
+     * across two sides of a frozen river. The full design spec is
+     * in {@code docs/maps/arctic-station/04-ctf-arctic.md}.
      *
      * <p>Distinct from {@link #extraction} in feel: the play is
-     * "carry the flag across the frozen river" with the watchtowers as
-     * the natural chokepoints. The river is 96 units wide and unbroken;
-     * the carrier's run is ~256 units long, visible from both watchtowers
-     * the entire way.</p>
+     * "carry the flag across the frozen river" with the watchtowers
+     * as the natural chokepoints. The river is 1440 units wide and
+     * unbroken; the carrier's run is ~3840 units long, visible
+     * from both watchtowers the entire way. All x/z in the spec
+     * are scaled by 15 from the original 320 x 320 spec; the
+     * level .ofm remains a 320 x 320 centerpiece.</p>
      *
      * @return the Coldfront map spec
      */
@@ -2232,72 +2349,103 @@ public final class Maps
             "Coldfront",
             MapSetting.ARCTIC_STATION,
             MatchMode.CTF,
-            // ---- playable area: 320 x 320, 128 high. The kit
+            // ---- playable area: 4800 x 4800, 128 high. The kit
             // composer centres the playable area on the origin, so
-            // x and z both span -160 to +160; the inner wall face
-            // sits at +/-153.6.
-            new MapDimensions(320.0f, 320.0f, 128.0f),
+            // x and z both span -2400 to +2400; the inner wall face
+            // sits at +/-2304.
+            new MapDimensions(4800.0f, 4800.0f, 128.0f),
             // ---- three lanes A/B/C, with the frozen river in the
             // middle. Chokepoints sit inside the playable area.
+            // All x/z scaled by 15 from the original 320 x 320
+            // spec; original labels (Red Service Shed, Red Main
+            // Hut, Red Watchtower, River N/S, Blue Watchtower,
+            // Blue Main Hut, Blue Service Shed) are preserved.
             List.of(
                 new Lane("lane_a", LaneAxis.NORTH_SOUTH, List.of(
-                    new Chokepoint("cp_a1", "Red Service Shed", -64.0f, 120.0f),
-                    new Chokepoint("cp_a2", "Red Main Hut", -96.0f, 160.0f),
-                    new Chokepoint("cp_a3", "Red Watchtower", -32.0f, 160.0f)
+                    new Chokepoint("cp_a1", "Red Service Shed", -960.0f, 1800.0f),
+                    new Chokepoint("cp_a2", "Red Main Hut", -1440.0f, 2400.0f),
+                    new Chokepoint("cp_a3", "Red Watchtower", -480.0f, 2400.0f)
                 )),
                 new Lane("lane_b", LaneAxis.NORTH_SOUTH, List.of(
-                    new Chokepoint("cp_b1", "River N West", -32.0f, 100.0f),
-                    new Chokepoint("cp_b2", "River Centre", 0.0f, 160.0f),
-                    new Chokepoint("cp_b3", "River S East", 32.0f, 220.0f)
+                    new Chokepoint("cp_b1", "River N West", -480.0f, 1500.0f),
+                    new Chokepoint("cp_b2", "River Centre", 0.0f, 2400.0f),
+                    new Chokepoint("cp_b3", "River S East", 480.0f, 3300.0f)
                 )),
                 new Lane("lane_c", LaneAxis.NORTH_SOUTH, List.of(
-                    new Chokepoint("cp_c1", "Blue Watchtower", 32.0f, 160.0f),
-                    new Chokepoint("cp_c2", "Blue Main Hut", 96.0f, 160.0f),
-                    new Chokepoint("cp_c3", "Blue Service Shed", 64.0f, 120.0f)
+                    new Chokepoint("cp_c1", "Blue Watchtower", 480.0f, 2400.0f),
+                    new Chokepoint("cp_c2", "Blue Main Hut", 1440.0f, 2400.0f),
+                    new Chokepoint("cp_c3", "Blue Service Shed", 960.0f, 1800.0f)
                 ))
             ),
             // ---- six spawn points in the central corridor
-            // (x = +/-32). The kit's columns at (+/-80, +/-80)
-            // and the perimeter crates at (+/-80, +/-134.4) and
-            // (+/-134.4, +/-80) block the outer ring; the only
-            // positions free of all of those are the 96x96
-            // central corridor. The previous x=+/-144 placements
-            // sat the body's 16-unit half-width up to x=+/-160 —
-            // coincident with the wall centre, 6.4 units past
-            // the inner wall face.
+            // (x = +/-400, 15x the 6v6 spec's x=+/-32). y stays 0.
+            // The wider corridor gives the larger playable area
+            // some room to push off the spawn without bumping the
+            // walls.
             List.of(
-                new SpawnPoint("red_alpha", Team.RED, -32.0f, 0.0f, -32.0f, toRadians(90.0f)),
-                new SpawnPoint("red_bravo", Team.RED, -32.0f, 0.0f, 0.0f, toRadians(80.0f)),
-                new SpawnPoint("red_charlie", Team.RED, -32.0f, 0.0f, 32.0f, toRadians(100.0f)),
-                new SpawnPoint("blue_alpha", Team.BLUE, 32.0f, 0.0f, -32.0f, toRadians(270.0f)),
-                new SpawnPoint("blue_bravo", Team.BLUE, 32.0f, 0.0f, 0.0f, toRadians(260.0f)),
-                new SpawnPoint("blue_charlie", Team.BLUE, 32.0f, 0.0f, 32.0f, toRadians(280.0f))
+                new SpawnPoint("red_alpha", Team.RED, -400.0f, 0.0f, -400.0f,
+                    toRadians(90.0f)),
+                new SpawnPoint("red_bravo", Team.RED, -400.0f, 0.0f, 0.0f,
+                    toRadians(80.0f)),
+                new SpawnPoint("red_charlie", Team.RED, -400.0f, 0.0f, 400.0f,
+                    toRadians(100.0f)),
+                new SpawnPoint("blue_alpha", Team.BLUE, 400.0f, 0.0f, -400.0f,
+                    toRadians(270.0f)),
+                new SpawnPoint("blue_bravo", Team.BLUE, 400.0f, 0.0f, 0.0f,
+                    toRadians(260.0f)),
+                new SpawnPoint("blue_charlie", Team.BLUE, 400.0f, 0.0f, 400.0f,
+                    toRadians(280.0f))
             ),
-            // ---- six bot waypoints in a closed loop on the
-            // central corridor. The previous z=160 waypoints sat
-            // at the wall center (the kit wall is at z=+/-160
-            // with a 6.4-unit half-thickness, so the inner face
-            // is at z=+/-153.6) and z=100/160 sat on the
-            // columns / crates. All waypoints now sit on the
-            // central corridor at y=0 (the kit floor), with the
-            // bot's 16-unit half-width extending the body to
-            // x=+/-48, the boundary of the inner column range.
+            // ---- 27 bot waypoints: a closed snake through a
+            // 3-col x 9-row grid covering the 4800 x 4800 playable
+            // area. Cols at x = -1800, 0, 1800 (1800 unit spacing,
+            // well inside the inner wall at +-2304). Rows at z =
+            // -2000, -1500, -1000, -500, 0, 500, 1000, 1500, 2000
+            // (500 unit spacing, evenly distributed). The snake
+            // alternates direction per row so a bot at waypoint i
+            // moves toward waypoint i+1 without doubling back on
+            // itself. y stays at 0 (kit floor).
             List.of(
-                new Waypoint("wp_0", -32.0f, 0.0f, 0.0f),
-                new Waypoint("wp_1", -32.0f, 0.0f, 32.0f),
-                new Waypoint("wp_2", 0.0f, 0.0f, -32.0f),
-                new Waypoint("wp_3", 0.0f, 0.0f, 32.0f),
-                new Waypoint("wp_4", 32.0f, 0.0f, 0.0f),
-                new Waypoint("wp_5", 32.0f, 0.0f, -32.0f)
+                new Waypoint("wp_0", -1800.0f, 0.0f, -2000.0f),
+                new Waypoint("wp_1", 0.0f, 0.0f, -2000.0f),
+                new Waypoint("wp_2", 1800.0f, 0.0f, -2000.0f),
+                new Waypoint("wp_3", 1800.0f, 0.0f, -1500.0f),
+                new Waypoint("wp_4", 0.0f, 0.0f, -1500.0f),
+                new Waypoint("wp_5", -1800.0f, 0.0f, -1500.0f),
+                new Waypoint("wp_6", -1800.0f, 0.0f, -1000.0f),
+                new Waypoint("wp_7", 0.0f, 0.0f, -1000.0f),
+                new Waypoint("wp_8", 1800.0f, 0.0f, -1000.0f),
+                new Waypoint("wp_9", 1800.0f, 0.0f, -500.0f),
+                new Waypoint("wp_10", 0.0f, 0.0f, -500.0f),
+                new Waypoint("wp_11", -1800.0f, 0.0f, -500.0f),
+                new Waypoint("wp_12", -1800.0f, 0.0f, 0.0f),
+                new Waypoint("wp_13", 0.0f, 0.0f, 0.0f),
+                new Waypoint("wp_14", 1800.0f, 0.0f, 0.0f),
+                new Waypoint("wp_15", 1800.0f, 0.0f, 500.0f),
+                new Waypoint("wp_16", 0.0f, 0.0f, 500.0f),
+                new Waypoint("wp_17", -1800.0f, 0.0f, 500.0f),
+                new Waypoint("wp_18", -1800.0f, 0.0f, 1000.0f),
+                new Waypoint("wp_19", 0.0f, 0.0f, 1000.0f),
+                new Waypoint("wp_20", 1800.0f, 0.0f, 1000.0f),
+                new Waypoint("wp_21", 1800.0f, 0.0f, 1500.0f),
+                new Waypoint("wp_22", 0.0f, 0.0f, 1500.0f),
+                new Waypoint("wp_23", -1800.0f, 0.0f, 1500.0f),
+                new Waypoint("wp_24", -1800.0f, 0.0f, 2000.0f),
+                new Waypoint("wp_25", 0.0f, 0.0f, 2000.0f),
+                new Waypoint("wp_26", 1800.0f, 0.0f, 2000.0f)
             ),
             // ---- CTF markers: red's base (west) and blue's
             // base (east). The bases are inside the playable
-            // area, inside the compounds.
+            // area, inside the compounds. All x/z scaled by 15.
             new MapMarkers.CaptureTheFlag(
-                new MapMarkers.Base(Team.RED, -128.0f, 160.0f, -128.0f, 160.0f, 32.0f),
-                new MapMarkers.Base(Team.BLUE, 128.0f, 160.0f, 128.0f, 160.0f, 32.0f)
+                new MapMarkers.Base(Team.RED, -1920.0f, 1920.0f, -1920.0f, 1920.0f,
+                    480.0f),
+                new MapMarkers.Base(Team.BLUE, 1920.0f, 1920.0f, 1920.0f, 1920.0f,
+                    480.0f)
             ),
-            // ---- asset paths
+            // ---- asset paths (level .ofm unchanged; the 320 x
+            // 320 mesh is the centerpiece in the middle of the
+            // 4800 x 4800 spec).
             new MapAssets(
                 "engine/src/main/resources/maps/coldfront/level.ofm",
                 "assets/models/weapon/blaster-b.ofm",
