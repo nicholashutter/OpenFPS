@@ -651,16 +651,23 @@ public final class Maps
     // ----- Refinery (Industrial Complex × TDM) -----------------------------
 
     /**
-     * The second shipped map. Industrial Complex, TDM, 6v6 sizing,
-     * three-lane COD layout with multi-level geometry: floor, mid-level
-     * catwalks, and tall tank tops. The full design spec is in
+     * The second shipped map. Industrial Complex, TDM, MW2-Rust /
+     * BO6 large-map sizing (4000 x 4000 world units, MAP_SCALE = 16
+     * → 250 m square), three-lane COD layout with multi-level
+     * geometry: floor, mid-level catwalks, and tall tank tops. The
+     * full design spec is in
      * {@code docs/maps/industrial-complex/01-refinery.md}.
      *
-     * <p>Distinct from {@link #cornerstone} in feel: a refinery, not a
-     * city block. The cover is tanks and catwalks, not buildings and
-     * alleyways. Three tall distillation columns anchor the north end;
-     * a large process hall with internal pipework runs across the
-     * middle; three wide boiler structures anchor the south.</p>
+     * <p>Distinct from {@link #cornerstone} in feel: a refinery, not
+     * a city block. The cover is tanks and catwalks, not buildings
+     * and alleyways. Three tall distillation columns anchor the
+     * north end; a large process hall with internal pipework runs
+     * across the middle; three wide boiler structures anchor the
+     * south. The level .ofm is the original 320 x 320 composition
+     * — left untouched and treated as a centerpiece in the middle
+     * of the larger spec. All x/z in the spec are scaled by 12.5
+     * from the original 320 x 320 spec; the level .ofm remains a
+     * 320 x 320 centerpiece.</p>
      *
      * @return the Refinery map spec
      */
@@ -672,76 +679,117 @@ public final class Maps
             "Refinery",
             MapSetting.INDUSTRIAL_COMPLEX,
             MatchMode.TDM,
-            // ---- playable area: 320 x 320, 128 high (one MAX_OPEN_HEIGHT floor)
-            new MapDimensions(320.0f, 320.0f, 128.0f),
-            // ---- three lanes A/B/C, each with chokepoints in travel
-            // order. The lane centres are z=-100, 0, +100 — three rows
-            // of the refinery that fit the 320x320 playable area. The
-            // previous z=40, 160, 270 had lane C (the "boiler row")
-            // outside the kit's south wall, so the chokepoint labels
-            // rendered off-screen.
+            // ---- playable area: 4000 x 4000, 128 high (one
+            // MAX_OPEN_HEIGHT floor). All x/z in the spec are
+            // scaled by 12.5 from the original 320 x 320 spec;
+            // the level .ofm remains a 320 x 320 centerpiece.
+            new MapDimensions(4000.0f, 4000.0f, 128.0f),
+            // ---- three lanes A/B/C, each with five chokepoints
+            // in travel order. The original three chokepoints
+            // per lane are scaled by 12.5; two new "Far"
+            // chokepoints are added at the W and E extremes
+            // (x = +-1500) so a 5-chokepoint lane (15 total)
+            // names the full west-to-east run on each row.
+            // Chokepoint labels (Distillation Tower, Tank Row,
+            // Process Hall, Control Room, Boiler) are preserved
+            // on the originals; the additions use the
+            // "Far W" / "Far E" suffix. Lane centres are at
+            // z=-1250, 0, +1250 (three rows spanning the
+            // 4000-unit depth).
             List.of(
                 new Lane("lane_a", LaneAxis.NORTH_SOUTH, List.of(
-                    new Chokepoint("cp_a1", "Distillation Tower", -30.0f, -100.0f),
-                    new Chokepoint("cp_a2", "Tank Row", 0.0f, -100.0f),
-                    new Chokepoint("cp_a3", "Tank Row East", 30.0f, -100.0f)
+                    new Chokepoint("cp_a1", "Distillation Tower Far W",
+                        -1500.0f, -1250.0f),
+                    new Chokepoint("cp_a2", "Distillation Tower",
+                        -375.0f, -1250.0f),
+                    new Chokepoint("cp_a3", "Tank Row", 0.0f, -1250.0f),
+                    new Chokepoint("cp_a4", "Tank Row East", 375.0f, -1250.0f),
+                    new Chokepoint("cp_a5", "Distillation Tower Far E",
+                        1500.0f, -1250.0f)
                 )),
                 new Lane("lane_b", LaneAxis.NORTH_SOUTH, List.of(
-                    new Chokepoint("cp_b1", "Process Hall West", -30.0f, 0.0f),
-                    new Chokepoint("cp_b2", "Control Room", 0.0f, 0.0f),
-                    new Chokepoint("cp_b3", "Process Hall East", 30.0f, 0.0f)
+                    new Chokepoint("cp_b1", "Process Hall Far W",
+                        -1500.0f, 0.0f),
+                    new Chokepoint("cp_b2", "Process Hall West",
+                        -375.0f, 0.0f),
+                    new Chokepoint("cp_b3", "Control Room", 0.0f, 0.0f),
+                    new Chokepoint("cp_b4", "Process Hall East", 375.0f, 0.0f),
+                    new Chokepoint("cp_b5", "Process Hall Far E",
+                        1500.0f, 0.0f)
                 )),
                 new Lane("lane_c", LaneAxis.NORTH_SOUTH, List.of(
-                    new Chokepoint("cp_c1", "Boiler West", -30.0f, 100.0f),
-                    new Chokepoint("cp_c2", "Boiler Centre", 0.0f, 100.0f),
-                    new Chokepoint("cp_c3", "Boiler East", 30.0f, 100.0f)
+                    new Chokepoint("cp_c1", "Boiler Far W",
+                        -1500.0f, 1250.0f),
+                    new Chokepoint("cp_c2", "Boiler West",
+                        -375.0f, 1250.0f),
+                    new Chokepoint("cp_c3", "Boiler Centre", 0.0f, 1250.0f),
+                    new Chokepoint("cp_c4", "Boiler East", 375.0f, 1250.0f),
+                    new Chokepoint("cp_c5", "Boiler Far E",
+                        1500.0f, 1250.0f)
                 ))
             ),
-            // ---- six spawn points: three per team, on the west and east
-            // edges of the playable area (x = +/-120, 33 units inside
-            // the kit's west/east perimeter walls). The previous
-            // x=16 / x=304 placed blue outside the kit's playable
-            // area, so a respawn teleported the player into the void.
+            // ---- six spawn points: three per team, on the west
+            // and east edges of the playable area (x = +-1500,
+            // 12.5x from the 6v6 spec's x=+-120). y stays 0;
+            // facings aim inward toward the lane centre.
             List.of(
-                new SpawnPoint("red_alpha", Team.RED, -120.0f, 0.0f, -100.0f,
+                new SpawnPoint("red_alpha", Team.RED, -1500.0f, 0.0f, -1250.0f,
                     toRadians(90.0f)),
-                new SpawnPoint("red_bravo", Team.RED, -120.0f, 0.0f, 0.0f,
+                new SpawnPoint("red_bravo", Team.RED, -1500.0f, 0.0f, 0.0f,
                     toRadians(90.0f)),
-                new SpawnPoint("red_charlie", Team.RED, -120.0f, 0.0f, 100.0f,
+                new SpawnPoint("red_charlie", Team.RED, -1500.0f, 0.0f, 1250.0f,
                     toRadians(90.0f)),
-                new SpawnPoint("blue_alpha", Team.BLUE, 120.0f, 0.0f, -100.0f,
+                new SpawnPoint("blue_alpha", Team.BLUE, 1500.0f, 0.0f, -1250.0f,
                     toRadians(270.0f)),
-                new SpawnPoint("blue_bravo", Team.BLUE, 120.0f, 0.0f, 0.0f,
+                new SpawnPoint("blue_bravo", Team.BLUE, 1500.0f, 0.0f, 0.0f,
                     toRadians(270.0f)),
-                new SpawnPoint("blue_charlie", Team.BLUE, 120.0f, 0.0f, 100.0f,
+                new SpawnPoint("blue_charlie", Team.BLUE, 1500.0f, 0.0f, 1250.0f,
                     toRadians(270.0f))
             ),
-            // ---- bot waypoints: a closed loop visiting the perimeter
-            // midpoints and the deep interior. All waypoints are in
-            // the safe centre band (x in [-100, 100], z in [-100, 100]),
-            // out of the 4 kit columns at (±80, ±80) and the 6
-            // perimeter crates. The previous wp_3..wp_8 sat on the
-            // south wall (z=160) or outside the playable area
-            // (z=270), so a bot that walked to a "boiler row"
-            // waypoint was stuck inside or behind the kit's south
-            // wall.
+            // ---- 27 bot waypoints: a closed snake through a
+            // 3-col x 9-row grid covering the 4000 x 4000
+            // playable area. Cols at x = -1800, 0, 1800 (1800
+            // unit spacing, well inside the inner wall at
+            // +-1920). Rows at z = -1800, -1350, -900, -450, 0,
+            // 450, 900, 1350, 1800 (450 unit spacing, evenly
+            // distributed). The snake alternates direction per
+            // row so a bot at waypoint i moves toward waypoint
+            // i+1 without doubling back on itself. y stays at
+            // 0 (kit floor).
             List.of(
-                new Waypoint("wp_0", 0.0f, 0.0f, -100.0f),
-                new Waypoint("wp_1", 30.0f, 0.0f, -50.0f),
-                new Waypoint("wp_2", 100.0f, 0.0f, 0.0f),
-                new Waypoint("wp_3", 30.0f, 0.0f, 50.0f),
-                new Waypoint("wp_4", 0.0f, 0.0f, 100.0f),
-                new Waypoint("wp_5", -30.0f, 0.0f, 50.0f),
-                new Waypoint("wp_6", -100.0f, 0.0f, 0.0f),
-                new Waypoint("wp_7", -30.0f, 0.0f, -50.0f),
-                new Waypoint("wp_8", 30.0f, 0.0f, 30.0f),
-                new Waypoint("wp_9", -30.0f, 0.0f, 30.0f),
-                new Waypoint("wp_10", -30.0f, 0.0f, -30.0f),
-                new Waypoint("wp_11", 30.0f, 0.0f, -30.0f)
+                new Waypoint("wp_0", -1800.0f, 0.0f, -1800.0f),
+                new Waypoint("wp_1", 0.0f, 0.0f, -1800.0f),
+                new Waypoint("wp_2", 1800.0f, 0.0f, -1800.0f),
+                new Waypoint("wp_3", 1800.0f, 0.0f, -1350.0f),
+                new Waypoint("wp_4", 0.0f, 0.0f, -1350.0f),
+                new Waypoint("wp_5", -1800.0f, 0.0f, -1350.0f),
+                new Waypoint("wp_6", -1800.0f, 0.0f, -900.0f),
+                new Waypoint("wp_7", 0.0f, 0.0f, -900.0f),
+                new Waypoint("wp_8", 1800.0f, 0.0f, -900.0f),
+                new Waypoint("wp_9", 1800.0f, 0.0f, -450.0f),
+                new Waypoint("wp_10", 0.0f, 0.0f, -450.0f),
+                new Waypoint("wp_11", -1800.0f, 0.0f, -450.0f),
+                new Waypoint("wp_12", -1800.0f, 0.0f, 0.0f),
+                new Waypoint("wp_13", 0.0f, 0.0f, 0.0f),
+                new Waypoint("wp_14", 1800.0f, 0.0f, 0.0f),
+                new Waypoint("wp_15", 1800.0f, 0.0f, 450.0f),
+                new Waypoint("wp_16", 0.0f, 0.0f, 450.0f),
+                new Waypoint("wp_17", -1800.0f, 0.0f, 450.0f),
+                new Waypoint("wp_18", -1800.0f, 0.0f, 900.0f),
+                new Waypoint("wp_19", 0.0f, 0.0f, 900.0f),
+                new Waypoint("wp_20", 1800.0f, 0.0f, 900.0f),
+                new Waypoint("wp_21", 1800.0f, 0.0f, 1350.0f),
+                new Waypoint("wp_22", 0.0f, 0.0f, 1350.0f),
+                new Waypoint("wp_23", -1800.0f, 0.0f, 1350.0f),
+                new Waypoint("wp_24", -1800.0f, 0.0f, 1800.0f),
+                new Waypoint("wp_25", 0.0f, 0.0f, 1800.0f),
+                new Waypoint("wp_26", 1800.0f, 0.0f, 1800.0f)
             ),
             // ---- TDM markers: the empty singleton
             MapMarkers.TeamDeathmatch.INSTANCE,
-            // ---- asset paths
+            // ---- asset paths (level .ofm unchanged; the 320 x
+            // 320 mesh is the centerpiece in the middle of the
+            // 4000 x 4000 spec).
             new MapAssets(
                 "engine/src/main/resources/maps/refinery/level.ofm",
                 "assets/models/weapon/blaster-b.ofm",
@@ -979,24 +1027,32 @@ public final class Maps
     // ----- Foundry (Industrial Complex × Hardpoint) -----------------------
 
     /**
-     * The eighth shipped map. Industrial Complex, Hardpoint, 6v6
-     * sizing. A heavy-machinery foundry: three large machine halls
-     * (the cast-metal shop, the assembly floor, and the cooling room)
-     * are the three Hardpoint zones, each a high-walled, low-ceiling
-     * space. Two horizontal mid-level gantries (the casting-gantry at
-     * y=64, z=80 and the foundry spine at z=160) plus a vertical
-     * gantry at x=0 connect the three halls at mid-height. The full
-     * design spec — the ASCII map, the callouts, the lane structure,
-     * the three hardpoint zones, and the spawn rationale — is in
+     * The eighth shipped map. Industrial Complex, Hardpoint,
+     * MW2-Rust / BO6 large-map sizing (4800 x 4800 world units,
+     * MAP_SCALE = 16 → 300 m square). A heavy-machinery foundry:
+     * three large machine halls (the cast-metal shop, the assembly
+     * floor, and the cooling room) are the three Hardpoint zones,
+     * each a high-walled, low-ceiling space. Two horizontal mid-level
+     * gantries (the casting-gantry at y=64, z=80 and the foundry
+     * spine at z=160) plus a vertical gantry at x=0 connect the
+     * three halls at mid-height. The full design spec — the ASCII
+     * map, the callouts, the lane structure, the three hardpoint
+     * zones, and the spawn rationale — is in
      * {@code docs/maps/industrial-complex/02-hp-foundry.md}.
      *
-     * <p>Distinct from {@link #overpass} in feel: this is a three-zone
-     * rotation across three enclosed halls (cast-metal → assembly →
-     * cooling), where Overpass is two open-air overpasses and a
-     * building. Both are 30-second Hardpoint rotations, but the
-     * Foundry's rotation moves the contested ground south to north
-     * over the course of a round; Overpass's rotation moves it east
-     * to west.</p>
+     * <p>Distinct from {@link #overpass} in feel: this is a
+     * three-zone rotation across three enclosed halls (cast-metal →
+     * assembly → cooling), where Overpass is two open-air
+     * overpasses and a building. Both are 30-second Hardpoint
+     * rotations, but the Foundry's rotation moves the contested
+     * ground south to north over the course of a round; Overpass's
+     * rotation moves it east to west. The level .ofm is the
+     * original 320 x 320 composition with the gantries at y = 64 —
+     * left untouched and treated as a centerpiece. All x/z in the
+     * spec are scaled by 15 from the original 320 x 320 spec; the
+     * level .ofm remains a 320 x 320 centerpiece. The y=64
+     * gantries are part of the .ofm, not the spec, and stay
+     * raised.</p>
      *
      * @return the Foundry map spec
      */
@@ -1008,96 +1064,140 @@ public final class Maps
             "Foundry",
             MapSetting.INDUSTRIAL_COMPLEX,
             MatchMode.HARDPOINT,
-            // ---- playable area: 320 x 320, 128 high (the halls are
-            // 64-tall and the gantries sit at y=64)
-            new MapDimensions(320.0f, 320.0f, 128.0f),
-            // ---- three lanes A/B/C encoded as the gantry routes:
-            // A is the casting-gantry, B is the foundry spine (the
-            // contested middle), C is the cooling-gantry. The axis is
-            // east-west because the two horizontal gantries run that
-            // way; the cooling-gantry is the vertical link. The
-            // chokepoint x/z values are clipped to the playable area
-            // (x in [-30, 30], z in [-100, 100]) so the HUD labels
-            // land on the visible map, not in the void.
+            // ---- playable area: 4800 x 4800, 128 high (the
+            // halls are 64-tall and the gantries sit at y=64 in
+            // the .ofm). All x/z in the spec are scaled by 15
+            // from the original 320 x 320 spec; the level .ofm
+            // remains a 320 x 320 centerpiece.
+            new MapDimensions(4800.0f, 4800.0f, 128.0f),
+            // ---- three lanes A/B/C encoded as the gantry
+            // routes: A is the casting-gantry, B is the foundry
+            // spine (the contested middle), C is the
+            // cooling-gantry. The axis is east-west because the
+            // two horizontal gantries run that way; the
+            // cooling-gantry is the vertical link. The original
+            // three chokepoints per lane are scaled by 15; two
+            // new "Far" chokepoints are added at the lane
+            // extremes (x = +-1500 for lane_a/b, z = +-1500 for
+            // lane_c) so a 5-chokepoint lane (15 total) names the
+            // full run on each gantry. Chokepoint labels
+            // (Casting Gantry, Foundry Spine, Cooling Gantry)
+            // are preserved on the originals; the additions use
+            // the "Far W" / "Far E" / "Far S" / "Far N" suffix.
             List.of(
                 new Lane("lane_a", LaneAxis.EAST_WEST, List.of(
-                    new Chokepoint("cp_a1", "Casting Gantry West", -30.0f, -100.0f),
-                    new Chokepoint("cp_a2", "Casting Gantry Centre", 0.0f, -100.0f),
-                    new Chokepoint("cp_a3", "Casting Gantry East", 30.0f, -100.0f)
+                    new Chokepoint("cp_a1", "Casting Gantry Far W",
+                        -1500.0f, -1500.0f),
+                    new Chokepoint("cp_a2", "Casting Gantry West",
+                        -450.0f, -1500.0f),
+                    new Chokepoint("cp_a3", "Casting Gantry Centre",
+                        0.0f, -1500.0f),
+                    new Chokepoint("cp_a4", "Casting Gantry East",
+                        450.0f, -1500.0f),
+                    new Chokepoint("cp_a5", "Casting Gantry Far E",
+                        1500.0f, -1500.0f)
                 )),
                 new Lane("lane_b", LaneAxis.EAST_WEST, List.of(
-                    new Chokepoint("cp_b1", "Foundry Spine West", -30.0f, 0.0f),
-                    new Chokepoint("cp_b2", "Foundry Spine Centre", 0.0f, 0.0f),
-                    new Chokepoint("cp_b3", "Foundry Spine East", 30.0f, 0.0f)
+                    new Chokepoint("cp_b1", "Foundry Spine Far W",
+                        -1500.0f, 0.0f),
+                    new Chokepoint("cp_b2", "Foundry Spine West",
+                        -450.0f, 0.0f),
+                    new Chokepoint("cp_b3", "Foundry Spine Centre",
+                        0.0f, 0.0f),
+                    new Chokepoint("cp_b4", "Foundry Spine East",
+                        450.0f, 0.0f),
+                    new Chokepoint("cp_b5", "Foundry Spine Far E",
+                        1500.0f, 0.0f)
                 )),
                 new Lane("lane_c", LaneAxis.NORTH_SOUTH, List.of(
-                    new Chokepoint("cp_c1", "Cooling Room South", 0.0f, -30.0f),
-                    new Chokepoint("cp_c2", "Cooling Gantry Mid", 0.0f, 0.0f),
-                    new Chokepoint("cp_c3", "Cooling Gantry South", 0.0f, 30.0f)
+                    new Chokepoint("cp_c1", "Cooling Gantry Far S",
+                        0.0f, -1500.0f),
+                    new Chokepoint("cp_c2", "Cooling Room South",
+                        0.0f, -450.0f),
+                    new Chokepoint("cp_c3", "Cooling Gantry Mid",
+                        0.0f, 0.0f),
+                    new Chokepoint("cp_c4", "Cooling Gantry South",
+                        0.0f, 450.0f),
+                    new Chokepoint("cp_c5", "Cooling Gantry Far N",
+                        0.0f, 1500.0f)
                 ))
             ),
-            // ---- six spawn points: three per team, on the west and
-            // east edges of the floor, facings aimed at the foundry
-            // spine (the contested middle). z is one of -40 / 40 /
-            // 100 — three open-floors between the foundry's inner
-            // walls (which sit at z=2, 72, 122, 192, 234, 304); the
-            // previous z=80 / 160 / 240 either sat on a wall or
-            // outside the playable area, so a respawn teleported the
-            // player into a wall or the void.
+            // ---- six spawn points: three per team, on the west
+            // and east edges of the floor, facings aimed at the
+            // foundry spine (the contested middle). z is one of
+            // -600 / 600 / 1500 — three open-floor rows (15x
+            // from the 6v6 spec's z=-40 / 40 / 100). x is
+            // +-1800 (15x from x=+-120). y stays 0.
             List.of(
-                new SpawnPoint("red_alpha", Team.RED, -120.0f, 0.0f, -40.0f,
+                new SpawnPoint("red_alpha", Team.RED, -1800.0f, 0.0f, -600.0f,
                     toRadians(90.0f)),
-                new SpawnPoint("red_bravo", Team.RED, -120.0f, 0.0f, 40.0f,
+                new SpawnPoint("red_bravo", Team.RED, -1800.0f, 0.0f, 600.0f,
                     toRadians(90.0f)),
-                new SpawnPoint("red_charlie", Team.RED, -120.0f, 0.0f, 100.0f,
+                new SpawnPoint("red_charlie", Team.RED, -1800.0f, 0.0f, 1500.0f,
                     toRadians(90.0f)),
-                new SpawnPoint("blue_alpha", Team.BLUE, 120.0f, 0.0f, -40.0f,
+                new SpawnPoint("blue_alpha", Team.BLUE, 1800.0f, 0.0f, -600.0f,
                     toRadians(270.0f)),
-                new SpawnPoint("blue_bravo", Team.BLUE, 120.0f, 0.0f, 40.0f,
+                new SpawnPoint("blue_bravo", Team.BLUE, 1800.0f, 0.0f, 600.0f,
                     toRadians(270.0f)),
-                new SpawnPoint("blue_charlie", Team.BLUE, 120.0f, 0.0f, 100.0f,
+                new SpawnPoint("blue_charlie", Team.BLUE, 1800.0f, 0.0f, 1500.0f,
                     toRadians(270.0f))
             ),
-            // ---- twelve bot waypoints: a closed loop covering the
-            // north platform (z=10 to 40, on the foundry's west half),
-            // the middle platform (z=100 to 140), and the open east
-            // floor. All waypoints sit in corridors that are clear
-            // of the foundry's six inner walls (at z=2, 72, 122, 192,
-            // 234, 304) and the kit's four columns and six perimeter
-            // crates. The previous wp_0, wp_7, wp_8, wp_9 sat at
-            // z=200 or z=270, outside the playable area, so a bot
-            // that walked there was stuck behind the kit's south
-            // wall.
+            // ---- 27 bot waypoints: a closed snake through a
+            // 3-col x 9-row grid covering the 4800 x 4800
+            // playable area. Cols at x = -2160, 0, 2160 (2160
+            // unit spacing, inside the inner wall at +-2320).
+            // Rows at z = -2160, -1620, -1080, -540, 0, 540,
+            // 1080, 1620, 2160 (540 unit spacing). The snake
+            // alternates direction per row. y stays at 0 (kit
+            // floor); the .ofm's gantries at y=64 are visual
+            // and do not change the spec y values.
             List.of(
-                new Waypoint("wp_0", -30.0f, 0.0f, -10.0f),
-                new Waypoint("wp_1", -100.0f, 0.0f, -10.0f),
-                new Waypoint("wp_2", -30.0f, 0.0f, 30.0f),
-                new Waypoint("wp_3", -100.0f, 0.0f, 30.0f),
-                new Waypoint("wp_4", -30.0f, 0.0f, 110.0f),
-                new Waypoint("wp_5", -100.0f, 0.0f, 110.0f),
-                new Waypoint("wp_6", -30.0f, 0.0f, 140.0f),
-                new Waypoint("wp_7", -100.0f, 0.0f, 140.0f),
-                new Waypoint("wp_8", 30.0f, 0.0f, -30.0f),
-                new Waypoint("wp_9", 30.0f, 0.0f, 30.0f),
-                new Waypoint("wp_10", -30.0f, 0.0f, -30.0f),
-                new Waypoint("wp_11", -30.0f, 0.0f, 30.0f)
+                new Waypoint("wp_0", -2160.0f, 0.0f, -2160.0f),
+                new Waypoint("wp_1", 0.0f, 0.0f, -2160.0f),
+                new Waypoint("wp_2", 2160.0f, 0.0f, -2160.0f),
+                new Waypoint("wp_3", 2160.0f, 0.0f, -1620.0f),
+                new Waypoint("wp_4", 0.0f, 0.0f, -1620.0f),
+                new Waypoint("wp_5", -2160.0f, 0.0f, -1620.0f),
+                new Waypoint("wp_6", -2160.0f, 0.0f, -1080.0f),
+                new Waypoint("wp_7", 0.0f, 0.0f, -1080.0f),
+                new Waypoint("wp_8", 2160.0f, 0.0f, -1080.0f),
+                new Waypoint("wp_9", 2160.0f, 0.0f, -540.0f),
+                new Waypoint("wp_10", 0.0f, 0.0f, -540.0f),
+                new Waypoint("wp_11", -2160.0f, 0.0f, -540.0f),
+                new Waypoint("wp_12", -2160.0f, 0.0f, 0.0f),
+                new Waypoint("wp_13", 0.0f, 0.0f, 0.0f),
+                new Waypoint("wp_14", 2160.0f, 0.0f, 0.0f),
+                new Waypoint("wp_15", 2160.0f, 0.0f, 540.0f),
+                new Waypoint("wp_16", 0.0f, 0.0f, 540.0f),
+                new Waypoint("wp_17", -2160.0f, 0.0f, 540.0f),
+                new Waypoint("wp_18", -2160.0f, 0.0f, 1080.0f),
+                new Waypoint("wp_19", 0.0f, 0.0f, 1080.0f),
+                new Waypoint("wp_20", 2160.0f, 0.0f, 1080.0f),
+                new Waypoint("wp_21", 2160.0f, 0.0f, 1620.0f),
+                new Waypoint("wp_22", 0.0f, 0.0f, 1620.0f),
+                new Waypoint("wp_23", -2160.0f, 0.0f, 1620.0f),
+                new Waypoint("wp_24", -2160.0f, 0.0f, 2160.0f),
+                new Waypoint("wp_25", 0.0f, 0.0f, 2160.0f),
+                new Waypoint("wp_26", 2160.0f, 0.0f, 2160.0f)
             ),
             // ---- Hardpoint markers: three zones, 1800-tic (30s)
-            // rotation, 1 point per tic. Activation order A, B, C
-            // (cast-metal → assembly → cooling, the round opens in
-            // the south hall and ends in the north). The zones are
-            // on the foundry's west platforms and the east open
-            // floor — the south "cast-metal" platform sat outside
-            // the playable area, so its zone is now on the middle
-            // platform (the foundry's largest visible west feature).
+            // rotation, 1 point per tic. Activation order A, B,
+            // C (cast-metal → assembly → cooling). Zone x/z
+            // are scaled 15x from the 6v6 spec; zone radius is
+            // scaled 15x as well (48 -> 720) so the capture
+            // footprint keeps the same proportion of the
+            // playable area.
             new MapMarkers.Hardpoint(List.of(
-                new MapMarkers.HardpointZone("hp_a", "Cast-Metal Shop", -60.0f, 128.0f,
-                    48.0f),
-                new MapMarkers.HardpointZone("hp_b", "Assembly Floor", -60.0f, 8.0f,
-                    48.0f),
-                new MapMarkers.HardpointZone("hp_c", "Cooling Room", 60.0f, 0.0f, 48.0f)
+                new MapMarkers.HardpointZone("hp_a", "Cast-Metal Shop",
+                    -900.0f, 1920.0f, 720.0f),
+                new MapMarkers.HardpointZone("hp_b", "Assembly Floor",
+                    -900.0f, 120.0f, 720.0f),
+                new MapMarkers.HardpointZone("hp_c", "Cooling Room",
+                    900.0f, 0.0f, 720.0f)
             ), 1800, 1),
-            // ---- asset paths
+            // ---- asset paths (level .ofm unchanged; the 320 x
+            // 320 mesh is the centerpiece in the middle of the
+            // 4800 x 4800 spec).
             new MapAssets(
                 "engine/src/main/resources/maps/foundry/level.ofm",
                 "assets/models/weapon/blaster-b.ofm",
@@ -1385,24 +1485,30 @@ public final class Maps
     // ----- Pipeline (Industrial Complex × Domination) -----------------------
 
     /**
-     * The eleventh shipped map. Industrial Complex, Domination, 6v6
-     * sizing. A long east-west pipeline pumping station: three
-     * parallel pipelines (z=64, z=160, z=256) running across the
-     * full 320-unit width, with a control valve at the centre of
-     * each pipeline. Three catwalks at y=64 run north-south alongside
-     * each pipeline. Two east-west underpasses at x=-100 and x=+100
-     * cut 64-unit-wide gaps through the pipelines and the catwalks,
-     * so a player can cross the map without being shot by a defender
-     * on the catwalk. The full design spec is in
+     * The eleventh shipped map. Industrial Complex, Domination,
+     * MW2-Rust / BO6 large-map sizing (5600 x 5600 world units,
+     * MAP_SCALE = 16 → 350 m square). A long east-west pipeline
+     * pumping station: three parallel pipelines running across the
+     * full 5600-unit width, with a control valve at the centre of
+     * each pipeline. Three catwalks at y=64 run north-south
+     * alongside each pipeline. Two east-west underpasses at x=-100
+     * and x=+100 cut 64-unit-wide gaps through the pipelines and
+     * the catwalks, so a player can cross the map without being
+     * shot by a defender on the catwalk. The full design spec is in
      * {@code docs/maps/industrial-complex/03-dom-pipeline.md}.
      *
      * <p>Distinct from {@link #tripoint} in feel: this is a long
      * east-west corridor with the contested ground running through
      * the centre, not a three-way intersection. The three flags are
      * the three control valves; the round opens with both teams
-     * pushing toward the centre, contesting FLAG_B (Pipeline Centre)
-     * first, and the winning team rolls out to FLAG_A (Pipeline
-     * South) and FLAG_C (Pipeline North).</p>
+     * pushing toward the centre, contesting FLAG_B (Pipeline
+     * Centre) first, and the winning team rolls out to FLAG_A
+     * (Pipeline South) and FLAG_C (Pipeline North). The level .ofm
+     * is the original 320 x 320 composition — left untouched and
+     * treated as a centerpiece. All x/z in the spec are scaled by
+     * 17.5 from the original 320 x 320 spec; the level .ofm remains
+     * a 320 x 320 centerpiece. Height grows from 96 to 128 to
+     * match the other 12v12 industrial specs.</p>
      *
      * @return the Pipeline map spec
      */
@@ -1414,100 +1520,138 @@ public final class Maps
             "Pipeline",
             MapSetting.INDUSTRIAL_COMPLEX,
             MatchMode.DOMINATION,
-            // ---- playable area: 320 x 320, 96 high (the pipelines
-            // are 16 tall with a 16-tall control valve on top; the
-            // catwalks sit at y=64)
-            new MapDimensions(320.0f, 320.0f, 96.0f),
-            // ---- three lanes A/B/C encoded as the three parallel
-            // pipelines. Lane A is the south pipeline, lane B is the
-            // centre pipeline (the contested middle), lane C is the
-            // north pipeline. The previous z=256 row sat 102 units
-            // past the kit south wall inner face (z=+153.6) —
-            // unreachable — and the x=-100 chokepoints sat 54 units
-            // past the west wall outer face (x=-166.4).
+            // ---- playable area: 5600 x 5600, 128 high (the
+            // pipelines are 16 tall with a 16-tall control valve
+            // on top; the catwalks sit at y=64 in the .ofm).
+            // All x/z in the spec are scaled by 17.5 from the
+            // original 320 x 320 spec; the level .ofm remains a
+            // 320 x 320 centerpiece. Height is normalised to
+            // the 12v12 standard of 128.
+            new MapDimensions(5600.0f, 5600.0f, 128.0f),
+            // ---- three lanes A/B/C encoded as the three
+            // parallel pipelines. Lane A is the south pipeline,
+            // lane B is the centre pipeline (the contested
+            // middle), lane C is the north pipeline. The
+            // original three chokepoints per lane are scaled by
+            // 17.5; two new "Far" chokepoints are added at the
+            // W and E extremes (x = +-2240) so a 5-chokepoint
+            // lane (15 total) names the full west-to-east run
+            // on each pipeline. Chokepoint labels (Pipeline
+            // South / Centre / North West / Centre / East) are
+            // preserved on the originals; the additions use the
+            // "Far W" / "Far E" suffix. Lane centres are at
+            // z=1680, 0, -1680.
             List.of(
                 new Lane("lane_a", LaneAxis.EAST_WEST, List.of(
-                    new Chokepoint("cp_a1", "Pipeline South West", -32.0f, 96.0f),
-                    new Chokepoint("cp_a2", "Pipeline South Centre", 0.0f, 96.0f),
-                    new Chokepoint("cp_a3", "Pipeline South East", 32.0f, 96.0f)
+                    new Chokepoint("cp_a1", "Pipeline South Far W",
+                        -2240.0f, 1680.0f),
+                    new Chokepoint("cp_a2", "Pipeline South West",
+                        -560.0f, 1680.0f),
+                    new Chokepoint("cp_a3", "Pipeline South Centre",
+                        0.0f, 1680.0f),
+                    new Chokepoint("cp_a4", "Pipeline South East",
+                        560.0f, 1680.0f),
+                    new Chokepoint("cp_a5", "Pipeline South Far E",
+                        2240.0f, 1680.0f)
                 )),
                 new Lane("lane_b", LaneAxis.EAST_WEST, List.of(
-                    new Chokepoint("cp_b1", "Pipeline Centre West", -32.0f, 0.0f),
-                    new Chokepoint("cp_b2", "Pipeline Centre", 0.0f, 0.0f),
-                    new Chokepoint("cp_b3", "Pipeline Centre East", 32.0f, 0.0f)
+                    new Chokepoint("cp_b1", "Pipeline Centre Far W",
+                        -2240.0f, 0.0f),
+                    new Chokepoint("cp_b2", "Pipeline Centre West",
+                        -560.0f, 0.0f),
+                    new Chokepoint("cp_b3", "Pipeline Centre",
+                        0.0f, 0.0f),
+                    new Chokepoint("cp_b4", "Pipeline Centre East",
+                        560.0f, 0.0f),
+                    new Chokepoint("cp_b5", "Pipeline Centre Far E",
+                        2240.0f, 0.0f)
                 )),
                 new Lane("lane_c", LaneAxis.EAST_WEST, List.of(
-                    new Chokepoint("cp_c1", "Pipeline North West", -32.0f, -96.0f),
-                    new Chokepoint("cp_c2", "Pipeline North Centre", 0.0f, -96.0f),
-                    new Chokepoint("cp_c3", "Pipeline North East", 32.0f, -96.0f)
+                    new Chokepoint("cp_c1", "Pipeline North Far W",
+                        -2240.0f, -1680.0f),
+                    new Chokepoint("cp_c2", "Pipeline North West",
+                        -560.0f, -1680.0f),
+                    new Chokepoint("cp_c3", "Pipeline North Centre",
+                        0.0f, -1680.0f),
+                    new Chokepoint("cp_c4", "Pipeline North East",
+                        560.0f, -1680.0f),
+                    new Chokepoint("cp_c5", "Pipeline North Far E",
+                        2240.0f, -1680.0f)
                 ))
             ),
-            // ---- six spawn points: three per team, on the west and
-            // east edges of the playable area (x = +/-128, 25 units
-            // clear of the inner wall faces), facings aimed at
-            // Pipeline Centre.
+            // ---- six spawn points: three per team, on the west
+            // and east edges of the playable area (x = +-2240,
+            // 17.5x from the 6v6 spec's x=+-128), facings aimed
+            // at Pipeline Centre. y stays 0.
             List.of(
-                new SpawnPoint("red_alpha", Team.RED, -128.0f, 0.0f, -64.0f,
+                new SpawnPoint("red_alpha", Team.RED, -2240.0f, 0.0f, -1120.0f,
                     toRadians(90.0f)),
-                new SpawnPoint("red_bravo", Team.RED, -128.0f, 0.0f, 0.0f,
+                new SpawnPoint("red_bravo", Team.RED, -2240.0f, 0.0f, 0.0f,
                     toRadians(80.0f)),
-                new SpawnPoint("red_charlie", Team.RED, -128.0f, 0.0f, 64.0f,
+                new SpawnPoint("red_charlie", Team.RED, -2240.0f, 0.0f, 1120.0f,
                     toRadians(100.0f)),
-                new SpawnPoint("blue_alpha", Team.BLUE, 128.0f, 0.0f, -64.0f,
+                new SpawnPoint("blue_alpha", Team.BLUE, 2240.0f, 0.0f, -1120.0f,
                     toRadians(270.0f)),
-                new SpawnPoint("blue_bravo", Team.BLUE, 128.0f, 0.0f, 0.0f,
+                new SpawnPoint("blue_bravo", Team.BLUE, 2240.0f, 0.0f, 0.0f,
                     toRadians(260.0f)),
-                new SpawnPoint("blue_charlie", Team.BLUE, 128.0f, 0.0f, 64.0f,
+                new SpawnPoint("blue_charlie", Team.BLUE, 2240.0f, 0.0f, 1120.0f,
                     toRadians(280.0f))
             ),
-            // ---- twelve bot waypoints: a closed loop covering the
-            // three flag positions, the inter-pipeline floor, and the
-            // south-east and south-west connectors. The four added
-            // waypoints (wp_8..wp_11) are interior points on the
-            // long diagonal legs, so a wander bot has more
-            // destinations to pick from and never has to walk the
-            // full length of a pipeline to change rooms.
-            //
-            // The previous waypoints sat at x=160 (east wall centre,
-            // bot inside wall AABB) and x=200/240 (past the east
-            // wall, unreachable), and at z=160/208/256 (on or past
-            // the south wall, bot inside or past wall AABB). The new
-            // waypoints stay inside the playable area, well clear of
-            // both walls.
-            //
-            // The kit's four columns at (+/-80, +/-80) with 32-unit
-            // half-extent form 64x64 rectangles. x=80 sits in
-            // [48, 112] and z=+/-96 sits in [+/-48, +/-112], so the
-            // previous (+/-80, 0, +/-96) corner waypoints were
-            // inside the column AABBs. The new waypoints use
-            // x=+/-128 (outside the column x range) for the corner
-            // positions, and x=0 (centre) or x=+/-32 (between
-            // centre and the column x boundary) for the mid-floor
-            // connectors.
+            // ---- 27 bot waypoints: a closed snake through a
+            // 3-col x 9-row grid covering the 5600 x 5600
+            // playable area. Cols at x = -2520, 0, 2520 (2520
+            // unit spacing, inside the inner wall at +-2720).
+            // Rows at z = -2520, -1890, -1260, -630, 0, 630,
+            // 1260, 1890, 2520 (630 unit spacing). The snake
+            // alternates direction per row. y stays at 0 (kit
+            // floor).
             List.of(
-                new Waypoint("wp_0", 0.0f, 0.0f, -96.0f),
-                new Waypoint("wp_1", 128.0f, 0.0f, -96.0f),
-                new Waypoint("wp_2", 0.0f, 0.0f, 0.0f),
-                new Waypoint("wp_3", 32.0f, 0.0f, -48.0f),
-                new Waypoint("wp_4", 0.0f, 0.0f, 96.0f),
-                new Waypoint("wp_5", -128.0f, 0.0f, 96.0f),
-                new Waypoint("wp_6", -32.0f, 0.0f, 48.0f),
-                new Waypoint("wp_7", 0.0f, 0.0f, 32.0f),
-                new Waypoint("wp_8", 32.0f, 0.0f, -96.0f),
-                new Waypoint("wp_9", 32.0f, 0.0f, 48.0f),
-                new Waypoint("wp_10", 32.0f, 0.0f, 96.0f),
-                new Waypoint("wp_11", -32.0f, 0.0f, 0.0f)
+                new Waypoint("wp_0", -2520.0f, 0.0f, -2520.0f),
+                new Waypoint("wp_1", 0.0f, 0.0f, -2520.0f),
+                new Waypoint("wp_2", 2520.0f, 0.0f, -2520.0f),
+                new Waypoint("wp_3", 2520.0f, 0.0f, -1890.0f),
+                new Waypoint("wp_4", 0.0f, 0.0f, -1890.0f),
+                new Waypoint("wp_5", -2520.0f, 0.0f, -1890.0f),
+                new Waypoint("wp_6", -2520.0f, 0.0f, -1260.0f),
+                new Waypoint("wp_7", 0.0f, 0.0f, -1260.0f),
+                new Waypoint("wp_8", 2520.0f, 0.0f, -1260.0f),
+                new Waypoint("wp_9", 2520.0f, 0.0f, -630.0f),
+                new Waypoint("wp_10", 0.0f, 0.0f, -630.0f),
+                new Waypoint("wp_11", -2520.0f, 0.0f, -630.0f),
+                new Waypoint("wp_12", -2520.0f, 0.0f, 0.0f),
+                new Waypoint("wp_13", 0.0f, 0.0f, 0.0f),
+                new Waypoint("wp_14", 2520.0f, 0.0f, 0.0f),
+                new Waypoint("wp_15", 2520.0f, 0.0f, 630.0f),
+                new Waypoint("wp_16", 0.0f, 0.0f, 630.0f),
+                new Waypoint("wp_17", -2520.0f, 0.0f, 630.0f),
+                new Waypoint("wp_18", -2520.0f, 0.0f, 1260.0f),
+                new Waypoint("wp_19", 0.0f, 0.0f, 1260.0f),
+                new Waypoint("wp_20", 2520.0f, 0.0f, 1260.0f),
+                new Waypoint("wp_21", 2520.0f, 0.0f, 1890.0f),
+                new Waypoint("wp_22", 0.0f, 0.0f, 1890.0f),
+                new Waypoint("wp_23", -2520.0f, 0.0f, 1890.0f),
+                new Waypoint("wp_24", -2520.0f, 0.0f, 2520.0f),
+                new Waypoint("wp_25", 0.0f, 0.0f, 2520.0f),
+                new Waypoint("wp_26", 2520.0f, 0.0f, 2520.0f)
             ),
-            // ---- Domination markers: three flags, A, B, C. All
-            // start neutral; the round opens with both teams pushing
-            // toward the centre, contesting FLAG_B (Pipeline Centre)
-            // first. Flags sit on the floor between the columns.
+            // ---- Domination markers: three flags, A, B, C.
+            // Flag x/z are scaled 17.5x from the 6v6 spec;
+            // radius is scaled 17.5x as well (32 -> 560) so the
+            // capture footprint keeps the same proportion of
+            // the playable area. All start neutral; the round
+            // opens with both teams pushing toward the centre,
+            // contesting FLAG_B (Pipeline Centre) first.
             new MapMarkers.Domination(List.of(
-                new MapMarkers.Flag("flag_a", "Pipeline South", 0.0f, 96.0f, 32.0f),
-                new MapMarkers.Flag("flag_b", "Pipeline Centre", 0.0f, 0.0f, 32.0f),
-                new MapMarkers.Flag("flag_c", "Pipeline North", 0.0f, -96.0f, 32.0f)
+                new MapMarkers.Flag("flag_a", "Pipeline South",
+                    0.0f, 1680.0f, 560.0f),
+                new MapMarkers.Flag("flag_b", "Pipeline Centre",
+                    0.0f, 0.0f, 560.0f),
+                new MapMarkers.Flag("flag_c", "Pipeline North",
+                    0.0f, -1680.0f, 560.0f)
             )),
-            // ---- asset paths
+            // ---- asset paths (level .ofm unchanged; the 320 x
+            // 320 mesh is the centerpiece in the middle of the
+            // 5600 x 5600 spec).
             new MapAssets(
                 "engine/src/main/resources/maps/pipeline/level.ofm",
                 "assets/models/weapon/blaster-b.ofm",
@@ -1787,17 +1931,24 @@ public final class Maps
     // ----- Storage (Industrial Complex × CTF) -----------------------------
 
     /**
-     * The tenth shipped map. Industrial Complex, CTF, 6v6 sizing. A
-     * chemical storage facility: two warehouse buildings at opposite
-     * ends of the map, each with the team's flag inside, and a maze of
-     * eight storage tanks in the centre. The full design spec is in
+     * The tenth shipped map. Industrial Complex, CTF, MW2-Rust /
+     * BO6 large-map sizing (4800 x 4800 world units, MAP_SCALE = 16
+     * → 300 m square). A chemical storage facility: two warehouse
+     * buildings at opposite ends of the map, each with the team's
+     * flag inside, and a maze of eight storage tanks in the centre.
+     * The full design spec is in
      * {@code docs/maps/industrial-complex/04-ctf-storage.md}.
      *
      * <p>Distinct from {@link #extraction} in feel: the play is
-     * "carry the flag through the tank maze" with the central row of
-     * tanks as the contested centre. The carrier's run is ~280 units
-     * long, broken into three segments: leaving the home warehouse,
-     * crossing the maze, and entering the enemy warehouse.</p>
+     * "carry the flag through the tank maze" with the central row
+     * of tanks as the contested centre. The carrier's run is
+     * ~280 units long (6v6) or ~4200 units long (12v12), broken
+     * into three segments: leaving the home warehouse, crossing
+     * the maze, and entering the enemy warehouse. The level .ofm
+     * is the original 320 x 320 composition — left untouched and
+     * treated as a centerpiece. All x/z in the spec are scaled by
+     * 15 from the original 320 x 320 spec; the level .ofm remains
+     * a 320 x 320 centerpiece.</p>
      *
      * @return the Storage map spec
      */
@@ -1809,70 +1960,128 @@ public final class Maps
             "Storage",
             MapSetting.INDUSTRIAL_COMPLEX,
             MatchMode.CTF,
-            // ---- playable area: 320 x 320, 128 high (the warehouses
-            // are 32-tall, the central catwalk is at y=64). The kit
-            // composer centres the playable area on the origin, so
-            // x and z both span -160 to +160.
-            new MapDimensions(320.0f, 320.0f, 128.0f),
-            // ---- three lanes A/B/C, mirroring Refinery but with
-            // the warehouse anchors on opposite ends. Chokepoints
-            // sit inside the playable area; the previous x=16 /
-            // x=304 placements were 16 from the origin, and the
-            // x=288 warehouse corner / x=304 blue approach sat 144
-            // units past the east wall outer face — unreachable.
+            // ---- playable area: 4800 x 4800, 128 high (the
+            // warehouses are 32-tall, the central catwalk is at
+            // y=64 in the .ofm). All x/z in the spec are scaled
+            // by 15 from the original 320 x 320 spec; the level
+            // .ofm remains a 320 x 320 centerpiece.
+            new MapDimensions(4800.0f, 4800.0f, 128.0f),
+            // ---- three lanes A/B/C, mirroring Refinery but
+            // with the warehouse anchors on opposite ends. The
+            // original three chokepoints per lane are scaled by
+            // 15; two new "Far" chokepoints are added at the
+            // lane extremes to extend each lane to the
+            // playable-area edge. Lane_a runs the west side
+            // (x = -1800), lane_b the central tank row (x =
+            // +-750), lane_c the east side (x = 1800).
             List.of(
                 new Lane("lane_a", LaneAxis.NORTH_SOUTH, List.of(
-                    new Chokepoint("cp_a1", "Red Warehouse", -128.0f, -128.0f),
-                    new Chokepoint("cp_a2", "Red Approach", -128.0f, -80.0f),
-                    new Chokepoint("cp_a3", "Red Approach East", -128.0f, -40.0f)
+                    new Chokepoint("cp_a1", "Red Warehouse Far",
+                        -1800.0f, -2160.0f),
+                    new Chokepoint("cp_a2", "Red Warehouse",
+                        -1800.0f, -1920.0f),
+                    new Chokepoint("cp_a3", "Red Approach",
+                        -1800.0f, -1200.0f),
+                    new Chokepoint("cp_a4", "Red Approach East",
+                        -1800.0f, -600.0f),
+                    new Chokepoint("cp_a5", "Red Approach Far E",
+                        -1800.0f, 0.0f)
                 )),
                 new Lane("lane_b", LaneAxis.NORTH_SOUTH, List.of(
-                    new Chokepoint("cp_b1", "Tank Row N West", -50.0f, -20.0f),
-                    new Chokepoint("cp_b2", "Tank Row N East", 50.0f, -20.0f),
-                    new Chokepoint("cp_b3", "Tank Row S West", -50.0f, 60.0f)
+                    new Chokepoint("cp_b1", "Tank Row N Far",
+                        0.0f, -1500.0f),
+                    new Chokepoint("cp_b2", "Tank Row N West",
+                        -750.0f, -300.0f),
+                    new Chokepoint("cp_b3", "Tank Row N East",
+                        750.0f, -300.0f),
+                    new Chokepoint("cp_b4", "Tank Row S West",
+                        -750.0f, 900.0f),
+                    new Chokepoint("cp_b5", "Tank Row S Far",
+                        0.0f, 1500.0f)
                 )),
                 new Lane("lane_c", LaneAxis.NORTH_SOUTH, List.of(
-                    new Chokepoint("cp_c1", "Tank Row S East", 50.0f, 60.0f),
-                    new Chokepoint("cp_c2", "Blue Approach", 128.0f, 80.0f),
-                    new Chokepoint("cp_c3", "Blue Warehouse", 128.0f, 128.0f)
+                    new Chokepoint("cp_c1", "Blue Approach Far",
+                        1800.0f, 0.0f),
+                    new Chokepoint("cp_c2", "Tank Row S East",
+                        750.0f, 900.0f),
+                    new Chokepoint("cp_c3", "Blue Approach",
+                        1800.0f, 1200.0f),
+                    new Chokepoint("cp_c4", "Blue Warehouse",
+                        1800.0f, 1920.0f),
+                    new Chokepoint("cp_c5", "Blue Warehouse Far",
+                        1800.0f, 2160.0f)
                 ))
             ),
-            // ---- six spawn points in the central corridor
-            // (x = +/-32). The kit's columns at (+/-80, +/-80)
-            // and the perimeter crates at (+/-80, +/-134.4) and
-            // (+/-134.4, +/-80) block the outer ring; the only
-            // positions free of all of those are the 96x96
-            // central corridor. The previous x=16 / x=304
-            // placements put BLUE past the east wall (144 units
-            // past the outer face — unreachable).
+            // ---- six spawn points: three per team in the
+            // central corridor (x = +-480, 15x from the 6v6
+            // spec's x=+-32), spread along z. y stays 0;
+            // facings aim outward toward the lane the team
+            // will attack.
             List.of(
-                new SpawnPoint("red_alpha", Team.RED, -32.0f, 0.0f, -32.0f, toRadians(90.0f)),
-                new SpawnPoint("red_bravo", Team.RED, -32.0f, 0.0f, 0.0f, toRadians(80.0f)),
-                new SpawnPoint("red_charlie", Team.RED, -32.0f, 0.0f, 32.0f, toRadians(100.0f)),
-                new SpawnPoint("blue_alpha", Team.BLUE, 32.0f, 0.0f, -32.0f, toRadians(270.0f)),
-                new SpawnPoint("blue_bravo", Team.BLUE, 32.0f, 0.0f, 0.0f, toRadians(260.0f)),
-                new SpawnPoint("blue_charlie", Team.BLUE, 32.0f, 0.0f, 32.0f, toRadians(280.0f))
+                new SpawnPoint("red_alpha", Team.RED, -480.0f, 0.0f, -480.0f,
+                    toRadians(90.0f)),
+                new SpawnPoint("red_bravo", Team.RED, -480.0f, 0.0f, 0.0f,
+                    toRadians(80.0f)),
+                new SpawnPoint("red_charlie", Team.RED, -480.0f, 0.0f, 480.0f,
+                    toRadians(100.0f)),
+                new SpawnPoint("blue_alpha", Team.BLUE, 480.0f, 0.0f, -480.0f,
+                    toRadians(270.0f)),
+                new SpawnPoint("blue_bravo", Team.BLUE, 480.0f, 0.0f, 0.0f,
+                    toRadians(260.0f)),
+                new SpawnPoint("blue_charlie", Team.BLUE, 480.0f, 0.0f, 480.0f,
+                    toRadians(280.0f))
             ),
-            // ---- six bot waypoints in a closed loop on the
-            // central corridor, all at y=0 (the kit floor). The
-            // bot's 16-unit half-width extends the body to
-            // x=+/-48, the boundary of the inner column range.
+            // ---- 27 bot waypoints: a closed snake through a
+            // 3-col x 9-row grid covering the 4800 x 4800
+            // playable area. Cols at x = -2160, 0, 2160 (2160
+            // unit spacing, inside the inner wall at +-2320).
+            // Rows at z = -2160, -1620, -1080, -540, 0, 540,
+            // 1080, 1620, 2160 (540 unit spacing). The snake
+            // alternates direction per row. y stays at 0 (kit
+            // floor).
             List.of(
-                new Waypoint("wp_0", 0.0f, 0.0f, -32.0f),
-                new Waypoint("wp_1", -32.0f, 0.0f, 0.0f),
-                new Waypoint("wp_2", 0.0f, 0.0f, 0.0f),
-                new Waypoint("wp_3", 32.0f, 0.0f, 0.0f),
-                new Waypoint("wp_4", 0.0f, 0.0f, 32.0f),
-                new Waypoint("wp_5", 16.0f, 0.0f, -16.0f)
+                new Waypoint("wp_0", -2160.0f, 0.0f, -2160.0f),
+                new Waypoint("wp_1", 0.0f, 0.0f, -2160.0f),
+                new Waypoint("wp_2", 2160.0f, 0.0f, -2160.0f),
+                new Waypoint("wp_3", 2160.0f, 0.0f, -1620.0f),
+                new Waypoint("wp_4", 0.0f, 0.0f, -1620.0f),
+                new Waypoint("wp_5", -2160.0f, 0.0f, -1620.0f),
+                new Waypoint("wp_6", -2160.0f, 0.0f, -1080.0f),
+                new Waypoint("wp_7", 0.0f, 0.0f, -1080.0f),
+                new Waypoint("wp_8", 2160.0f, 0.0f, -1080.0f),
+                new Waypoint("wp_9", 2160.0f, 0.0f, -540.0f),
+                new Waypoint("wp_10", 0.0f, 0.0f, -540.0f),
+                new Waypoint("wp_11", -2160.0f, 0.0f, -540.0f),
+                new Waypoint("wp_12", -2160.0f, 0.0f, 0.0f),
+                new Waypoint("wp_13", 0.0f, 0.0f, 0.0f),
+                new Waypoint("wp_14", 2160.0f, 0.0f, 0.0f),
+                new Waypoint("wp_15", 2160.0f, 0.0f, 540.0f),
+                new Waypoint("wp_16", 0.0f, 0.0f, 540.0f),
+                new Waypoint("wp_17", -2160.0f, 0.0f, 540.0f),
+                new Waypoint("wp_18", -2160.0f, 0.0f, 1080.0f),
+                new Waypoint("wp_19", 0.0f, 0.0f, 1080.0f),
+                new Waypoint("wp_20", 2160.0f, 0.0f, 1080.0f),
+                new Waypoint("wp_21", 2160.0f, 0.0f, 1620.0f),
+                new Waypoint("wp_22", 0.0f, 0.0f, 1620.0f),
+                new Waypoint("wp_23", -2160.0f, 0.0f, 1620.0f),
+                new Waypoint("wp_24", -2160.0f, 0.0f, 2160.0f),
+                new Waypoint("wp_25", 0.0f, 0.0f, 2160.0f),
+                new Waypoint("wp_26", 2160.0f, 0.0f, 2160.0f)
             ),
             // ---- CTF markers: red's base (west) and blue's
-            // base (east). The bases are centred on the team
-            // warehouse, well inside the playable area.
+            // base (east). Base flag/capture x/z are scaled
+            // 15x from the 6v6 spec; radius is scaled 15x as
+            // well (32 -> 480) so the capture footprint
+            // keeps the same proportion of the playable area.
             new MapMarkers.CaptureTheFlag(
-                new MapMarkers.Base(Team.RED, -128.0f, -128.0f, -128.0f, -128.0f, 32.0f),
-                new MapMarkers.Base(Team.BLUE, 128.0f, 128.0f, 128.0f, 128.0f, 32.0f)
+                new MapMarkers.Base(Team.RED, -1920.0f, -1920.0f,
+                    -1920.0f, -1920.0f, 480.0f),
+                new MapMarkers.Base(Team.BLUE, 1920.0f, 1920.0f,
+                    1920.0f, 1920.0f, 480.0f)
             ),
-            // ---- asset paths
+            // ---- asset paths (level .ofm unchanged; the 320 x
+            // 320 mesh is the centerpiece in the middle of the
+            // 4800 x 4800 spec).
             new MapAssets(
                 "engine/src/main/resources/maps/storage/level.ofm",
                 "assets/models/weapon/blaster-b.ofm",
