@@ -121,39 +121,59 @@ public final class MapGameplayPort implements I_GameplayPort
      * <p><b>2026-08 scaling:</b> the 16 maps were re-sized to
      * 3200-5600 (200-350m square) in commits 15f00cb / c419c58 /
      * 7675496 / ec7be2e. The original 40-unit / 30-unit amplitudes
-     * were correct for the 320 x 320 ships — a bot's pace covered
-     * 12% of a side — but the same numbers on a 4000-unit side are
+     * were correct for the 320 x 320 ships - a bot's pace covered
+     * 12% of a side - but the same numbers on a 4000-unit side are
      * 1% and the bots appeared stationary. The new amplitudes are
-     * tied to the new grid spacing: 900 for PACE_X (a full column
-     * step, so a PACE_X bot traces the length of one grid row)
-     * and 300 for PACE_Z (a single row spacing on the 4000-5600
-     * grids). ORBIT at 900 is a 1800-unit diameter circle, the
-     * largest that does not put a bot on a column. PACE_Z stays
+     * tied to the new grid spacing: 600 for PACE_X (two-thirds of
+     * a column step, so a PACE_X bot traces a meaningful arc of
+     * its row) and 200 for PACE_Z (a single row spacing on the
+     * 4000-5600 grids). ORBIT at 600 is a 1200-unit diameter
+     * circle, large enough to be obviously an orbit and small
+     * enough to keep the bot near its waypoint. PACE_Z stays
      * smaller than PACE_X because the grid's row spacing
      * (450-600) is much tighter than its col spacing (3600).</p>
+     *
+     * <p><b>2026-08 retune (bots too fast):</b> the previous
+     * 900/300/900 amplitudes at 600/720/600 tics produced peak
+     * speeds of ~9.4 units / tic (1800 / 600 tics at half-extent,
+     * peak velocity = 2 * pi * amplitude / period), which is
+     * visibly faster than a player's walk and reads as a sprint
+     * rather than a patrol. The new 600/200/600 at 1500/1800/1500
+     * tics (see {@link #SPEC_BOT_PERIODS}) caps peak velocity at
+     * ~2.5 units / tic - slow enough to track with the crosshair,
+     * fast enough to dodge if the player ignores them.</p>
      */
     private static final float[] SPEC_BOT_AMPLITUDES =
     {
-        900.0f, 300.0f, 900.0f,
+        600.0f, 200.0f, 600.0f,
     };
 
     /**
      * Tics for one full circuit of each spec bot pattern, paired
      * with {@link #SPEC_BOT_PATTERNS}.
      *
-     * <p>Twelve to fifteen seconds at 60 Hz, deliberately not a
-     * common multiple. The 900-unit PACE_X (1800-unit slide) and
-     * 900-unit ORBIT (1800-unit diameter) need a longer period to
-     * stay under the player's 256-unit-per-second sprint speed; a
-     * 600-tic period at 1800 units of reach works out to 180 units
-     * per second, which is slow enough to chase but fast enough to
-     * dodge. PACE_Z at 720 tics covers 600 units at 50 units per
+     * <p><b>2026-08 retune (bots too fast):</b> the previous
+     * 600/720/600 tics gave PACE_X a peak speed of ~9.4 units/tic
+     * (1800/600 at half-extent with sin()), about three times the
+     * player's walk speed and visibly "running" rather than
+     * patrolling. The new 1500/1800/1500 tics (25-30 seconds per
+     * circuit at 60 Hz) at the new amplitudes cuts peak velocity
+     * to ~2.5 units/tic - slow enough to track, fast enough to
+     * dodge. Deliberately not a common multiple; the whole room
+     * never reaches its extremes on the same tic.</p>
+     *
+     * <p>The 1200-unit PACE_X (2400-unit slide) at 1500 tics
+     * works out to 95 units per second on average, and ~150
+     * units/sec at peak - the same band as a player walking at
+     * full sprint (256 units/sec is the player's hard sprint
+     * cap). PACE_Z at 1800 tics covers 400 units at 13 units per
      * second, which reads as "patrolling" rather than "fleeing".
-     * The whole room never reaches its extremes on the same tic.</p>
+     * ORBIT at 1500 tics covers a 1200-unit diameter circle in
+     * 25 seconds, about 150 units/sec tangential at peak.</p>
      */
     private static final int[] SPEC_BOT_PERIODS =
     {
-        600, 720, 600,
+        1500, 1800, 1500,
     };
 
     /** The spec this port is running. */

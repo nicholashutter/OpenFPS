@@ -11,6 +11,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.openfps.engine.demo.DemoModelFixture;
 import com.openfps.engine.demo.DemoModels;
 import com.openfps.engine.gameplay.MatchMode;
+import com.openfps.engine.render.adapter.ModelFormat;
 import com.openfps.engine.render.adapter.Scene;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -166,11 +167,14 @@ class MapSceneTest
             // = 165+ instances just for the kit, plus the structural
             // scenery: 4 L-walls (3 crates each), 4 T-walls (4 each),
             // 6 stepped covers (2 each), 6 low half-walls (1 each) = 46
-            // more. Then the 12 bots, 12 weapons, the arms, the
-            // viewmodel and the effect pool on top).
+            // more, plus the architectural features: 4 stairs + 2 slopes
+            // + 3 interior walls + 6 additional columns = 15 more. Then
+            // the 12 bots, 12 weapons, the arms, the viewmodel and the
+            // effect pool on top).
             assertThat(mapScene.scene().worldInstanceCount())
-                .as("the populated path must stage the kit + structural scenery + bots + weapons + arms + effect pool")
-                .isGreaterThan(200);
+                .as("the populated path must stage the kit + structural scenery + architectural features"
+                    + " + bots + weapons + arms + effect pool")
+                .isGreaterThan(220);
 
             // The corner-stone spec has 12 bot waypoints, so we expect 12
             // bot instances and 12 weapon instances, each with a valid
@@ -208,6 +212,75 @@ class MapSceneTest
             assertThat(mapScene.levelPhysics().solidCount())
                 .as("level + kit walls + kit columns must produce solid boxes")
                 .isGreaterThan(8);
+        }
+
+        @Test
+        @DisplayName("the architectural features use the kit's real 3D pieces (stairs, slopes, walls, columns)")
+        void shouldStageArchitecturalFeatures(@TempDir final Path root) throws IOException
+        {
+            // Stage a complete kit. The test fixture writes 7
+            // identical two-triangle models, so every kit slot
+            // (floor, wall, doorway, column, crate, stairs,
+            // slope) ends up pointing at the same ModelFormat
+            // reference. That makes the test count "instances of
+            // models.stairs()" rather than "instances of the
+            // distinct stairs model", which is the right shape -
+            // we want the architectural features to be present,
+            // not the geometry to be unique.
+            final String[] kit =
+            {
+                "floor-square.ofm", "wall.ofm", "wall-doorway.ofm", "column.ofm",
+                "crate.ofm", "stairs.ofm", "shape-slope.ofm",
+            };
+
+            for (final String piece : kit)
+            {
+                DemoModelFixture.write(root.resolve(DemoModels.LEVEL_DIRECTORY).resolve(piece));
+            }
+
+            DemoModelFixture.write(root.resolve(DemoModels.WEAPON_DIRECTORY)
+                .resolve(DemoModels.WEAPON_MODEL));
+
+            DemoModelFixture.write(root.resolve(DemoModels.WEAPON_DIRECTORY)
+                .resolve(DemoModels.BOT_WEAPON_MODEL));
+
+            for (final String person : DemoModels.CHARACTER_FILES)
+            {
+                DemoModelFixture.write(root.resolve(DemoModels.CHARACTER_DIRECTORY).resolve(person));
+            }
+
+            final DemoModels models = DemoModels.load(root);
+
+            final MapSpec spec = MapLibrary.get("cornerstone");
+
+            final MapScene mapScene = MapScene.build(spec, models);
+
+            // In the test fixture each kit piece is a distinct
+            // ModelFormat (the seven files all have the same
+            // content, but each load creates a new reference).
+            // The architectural features add: 4 stair runs
+            // (models.stairs()), 2 slope ramps (models.slope()),
+            // 2 interior walls (models.wall()), 1 doorway
+            // (models.doorway()), and 6 additional columns
+            // (models.column()).
+            assertThat(countInstancesOf(mapScene.scene(), models.stairs()))
+                .as("the kit composer must stage 4 stair runs as architectural features")
+                .isEqualTo(4);
+
+            assertThat(countInstancesOf(mapScene.scene(), models.slope()))
+                .as("the kit composer must stage 2 slope ramps as architectural features")
+                .isEqualTo(2);
+
+            assertThat(countInstancesOf(mapScene.scene(), models.doorway()))
+                .as("the kit composer must stage 1 doorway wall as an architectural feature")
+                .isEqualTo(1);
+
+            // 4 corner columns (from addColumnsAndCrates) + 6
+            // additional columns (from addArchitecturalFeatures)
+            // = 10 columns total.
+            assertThat(countInstancesOf(mapScene.scene(), models.column()))
+                .as("the kit composer must stage 4 corner columns + 6 additional columns = 10")
+                .isEqualTo(10);
         }
 
         @Test
@@ -363,5 +436,32 @@ class MapSceneTest
                 new Chokepoint("cp_c2", "C2", 10.0f, 20.0f)
             ))
         );
+    }
+
+    /**
+     * Counts how many world instances in a scene reference the
+     * same {@link ModelFormat} object as a given one. Identity
+     * comparison, not {@code equals}, so two distinct
+     * {@code ModelFormat} instances with the same content do not
+     * match.
+     *
+     * @param scene the scene to inspect; must not be null
+     * @param model the model to look for; must not be null
+     * @return the number of world instances using that exact
+     *     model reference
+     */
+    private static int countInstancesOf(final Scene scene, final ModelFormat model)
+    {
+        int count = 0;
+
+        for (int i = 0; i < scene.worldInstanceCount(); i++)
+        {
+            if (scene.worldModel(i) == model)
+            {
+                count++;
+            }
+        }
+
+        return count;
     }
 }

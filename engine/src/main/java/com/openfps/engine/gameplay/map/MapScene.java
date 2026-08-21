@@ -150,6 +150,20 @@ public final class MapScene
     public static final float KIT_CEILING_UNITS = KIT_WALL_COURSES * KIT_WORLD_SCALE;
 
     /**
+     * World scale of an area-rules weapon pickup, 3.0x the held
+     * weapon scale ({@code DemoScene.BOT_WEAPON_WORLD_SCALE}).
+     *
+     * <p><b>2026-08 (pickups did not show):</b> the first pass
+     * used the held-weapon scale (about 21x in model units, so a
+     * roughly 0.4 m long pistol in world space). On a 200 m map
+     * that is a 0.2% silhouette, which the player can walk past
+     * without seeing. 3x of the held scale lifts the pickup to a
+     * 1.2 m long silhouette - still small in absolute terms, but
+     * obviously a weapon when the player is in the same area.</p>
+     */
+    public static final float PICKUP_WEAPON_SCALE = DemoScene.BOT_WEAPON_WORLD_SCALE * 3.0f;
+
+    /**
      * Quoted by the wall-window rule: which course of the three
      * is the one whose wall tiles alternate solid/window. The
      * middle course is the one the player can see through when
@@ -686,8 +700,10 @@ public final class MapScene
     /**
      * The kit a single map assembles: the floor and ceiling tiles, the
      * perimeter wall ring, the four columns, the six perimeter crates,
-     * and the procedural scenery. Each piece is added in order; each
-     * is a no-op if its model is null (e.g. a partially-staged pack).
+     * the procedural scenery, and the architectural features (real
+     * 3D geometry, not stacked boxes). Each piece is added in order;
+     * each is a no-op if its model is null (e.g. a partially-staged
+     * pack).
      */
     private static void addLevelKit(final Scene.Builder builder, final MapSpec spec,
         final DemoModels models)
@@ -699,6 +715,8 @@ public final class MapScene
         addColumnsAndCrates(builder, spec, models);
 
         addScenery(builder, spec, models);
+
+        addArchitecturalFeatures(builder, spec, models);
     }
 
     /**
@@ -1180,6 +1198,155 @@ public final class MapScene
     }
 
     /**
+     * Architectural features: stair runs, slope ramps, interior walls,
+     * doorway walls, and additional columns. The kit pieces are
+     * real 3D meshes (not stacked 1x1x1 boxes), and they break out of
+     * the box-grid reading that the crate-only scenery produces.
+     *
+     * <p><b>2026-08 (the maps are still flat boxes):</b> the
+     * addScenery block was all 1x1x1 crates, and four of them at the
+     * same Y read as one rectangular blob regardless of how
+     * creatively they were arranged. The kit ships real
+     * <i>architecture</i> - actual staircases, actual sloped ramps,
+     * actual wall panels with doorways cut into them - and a
+     * populated map that does not use them is leaving the only
+     * non-box geometry on the table. This block stages the
+     * architectural pieces in a way that gives the map obvious
+     * <i>levels</i> (a stair goes up to somewhere, a wall has a
+     * doorway through it) rather than the unconnected stack of
+     * boxes the previous pass produced.</p>
+     *
+     * <p>The placements are scaled with the spec's dimensions so a
+     * 3200 and a 5600 map get the same density, and live in the
+     * open ground the rest of the scenery occupies. Each
+     * architectural element is a no-op when its model is null, so a
+     * partial kit (only the required pieces) still gets a useful
+     * scene.</p>
+     */
+    private static void addArchitecturalFeatures(final Scene.Builder builder, final MapSpec spec,
+        final DemoModels models)
+    {
+        final ModelFormat stairs = models.stairs();
+
+        final ModelFormat slope = models.slope();
+
+        final ModelFormat wall = models.wall();
+
+        final ModelFormat doorway = models.doorway();
+
+        final ModelFormat column = models.column();
+
+        final float half = halfRoomOf(spec);
+
+        final float s = half / 160.0f;
+
+        // ---- Stair runs: four staircases, one at each cardinal
+        // ---- direction, well inside the playable area. Each one
+        // ---- is rotated 90 degrees from its neighbour so the
+        // ---- four together do not look like the same staircase
+        // ---- repeated. The stair model from the Kenney kit is
+        // ---- roughly 1 tile wide and 2 tiles long and climbs one
+        // ---- tile in Y, so a single instance is a usable ramp
+        // ---- between the ground floor and a one-tile platform.
+        if (stairs != null)
+        {
+            final float[][] stairPositions =
+            {
+                { -120.0f * s, 0.0f,        0.0f,           0.0f },
+                {  120.0f * s, 0.0f,        0.0f,           (float) StrictMath.PI },
+                {    0.0f,    0.0f,        -120.0f * s,    (float) (StrictMath.PI * 0.5) },
+                {    0.0f,    0.0f,         120.0f * s,    (float) (StrictMath.PI * 1.5) },
+            };
+
+            for (final float[] pos : stairPositions)
+            {
+                builder.addWorldInstance(stairs,
+                    placement(pos[0], pos[1], pos[2], pos[3], KIT_WORLD_SCALE),
+                    Scene.UNTAGGED);
+            }
+        }
+
+        // ---- Slope ramps: two of them at the diagonals, where the
+        // ---- rest of the scenery leaves a gap. Slopes are a
+        // ---- gentler alternative to stairs - the same one-tile
+        // ---- climb, but as a continuous surface, which reads as
+        // ---- "accessibility" rather than "stairwell". Like the
+        // ---- stairs, two of them at different rotations avoid
+        // ---- the "same ramp four times" silhouette.
+        if (slope != null)
+        {
+            final float[][] slopePositions =
+            {
+                {  -80.0f * s,  0.0f,   -80.0f * s,  (float) (StrictMath.PI * 0.25) },
+                {   80.0f * s,  0.0f,    80.0f * s,  (float) (StrictMath.PI * 1.25) },
+            };
+
+            for (final float[] pos : slopePositions)
+            {
+                builder.addWorldInstance(slope,
+                    placement(pos[0], pos[1], pos[2], pos[3], KIT_WORLD_SCALE),
+                    Scene.UNTAGGED);
+            }
+        }
+
+        // ---- Interior walls: two wall panels, one with a doorway,
+        // ---- placed in the open ground to break the playable area
+        // ---- into a "courtyard with a side room" rather than an
+        // ---- unbroken field. These are <b>visual only</b> - no
+        // ---- collision is added, the same pattern the addScenery
+        // ---- crates use. The intent is "the player can SEE a
+        // ---- wall", not "the player can crouch behind a wall".
+        if (wall != null)
+        {
+            builder.addWorldInstance(wall,
+                placement(0.0f, 0.0f, -64.0f * s, 0.0f, KIT_WORLD_SCALE),
+                Scene.UNTAGGED);
+
+            builder.addWorldInstance(wall,
+                placement(64.0f * s, 0.0f, 0.0f,
+                    (float) (StrictMath.PI * 0.5), KIT_WORLD_SCALE),
+                Scene.UNTAGGED);
+        }
+
+        if (doorway != null)
+        {
+            // Doorway in the south wall of the imagined side room -
+            // a single doorway wall panel, rotated so the doorway
+            // opens to the side rather than to the camera, so the
+            // player sees the door as they walk past.
+            builder.addWorldInstance(doorway,
+                placement(0.0f, 0.0f, 64.0f * s, 0.0f, KIT_WORLD_SCALE),
+                Scene.UNTAGGED);
+        }
+
+        // ---- Additional columns: six more, distributed through
+        // ---- the playable area, well clear of the four corner
+        // ---- columns the perimeter-ring composer places. The
+        // ---- result is "column forest" rather than "four props
+        // ---- at the corners" - the camera finds a vertical
+        // ---- reference at almost every point of view.
+        if (column != null)
+        {
+            final float[][] additionalColumns =
+            {
+                { -160.0f * s,  0.0f,   0.0f },
+                {  160.0f * s,  0.0f,   0.0f },
+                {    0.0f,    0.0f,  -160.0f * s },
+                {    0.0f,    0.0f,   160.0f * s },
+                { -180.0f * s,  0.0f,  180.0f * s },
+                {  180.0f * s,  0.0f,  180.0f * s },
+            };
+
+            for (final float[] pos : additionalColumns)
+            {
+                builder.addWorldInstance(column,
+                    placement(pos[0], pos[1], pos[2], 0.0f, KIT_WORLD_SCALE),
+                    Scene.UNTAGGED);
+            }
+        }
+    }
+
+    /**
      * Six crate placements in playable-area-relative units, scaled
      * to the spec's dimensions so the same irregular layout fits a
      * 320x320 room and a future 192x192 room.
@@ -1294,6 +1461,36 @@ public final class MapScene
      * {@code pickupTransforms} so the per-tic publish does not
      * have to recompute the placement on every frame.</p>
      *
+     * <p><b>2026-08 retune (pickups did not show):</b> the
+     * first pass placed the weapon at the spec's Y, at the
+     * same world scale as a held weapon, with no pedestal.
+     * On a 200m map that reads as "a 4cm pistol half-buried in
+     * the floor at random positions" - the player could walk
+     * past three of them without seeing any. The fix is three
+     * changes that compose into "obviously a weapon pickup":
+     *
+     * <ol>
+     *   <li><b>A crate pedestal</b> under each pickup (untagged
+     *       so the outline pass ignores it). The pedestal puts
+     *       the weapon above the floor and gives the player a
+     *       fixed visual landmark to aim at.</li>
+     *   <li><b>The weapon floats one tile above the pedestal</b>
+     *       ({@link #KIT_WORLD_SCALE} world units up, so the
+     *       pickup reads as "on display" rather than "fell on
+     *       the ground").</li>
+     *   <li><b>The pickup weapon is scaled to
+     *       {@link #PICKUP_WEAPON_SCALE} (3.0x the held
+     *       weapon scale)</b>, so a 4cm pistol becomes a
+     *       12cm pistol - still small in absolute terms but
+     *       obviously a gun, not a grain of sand.</li>
+     * </ol>
+     *
+     * <p>The yaw is rotated by the weapon's ordinal so a
+     * shotgun and a rocket do not sit at the same angle. There
+     * is no real visual distinction between the two in the
+     * blaster model, but the yaw at least hints "different
+     * thing" to a player who is looking.</p>
+     *
      * <p>A missing blaster model leaves the index at
      * {@link #NO_INSTANCE} and skips the transform write;
      * the publish step sees the sentinel and the pickup is
@@ -1305,6 +1502,8 @@ public final class MapScene
         final DemoModels models, final int[] pickupIndices, final float[] pickupTransforms)
     {
         final ModelFormat blaster = models.botWeapon();
+
+        final ModelFormat crate = models.crate();
 
         final int count = Math.min(spec.pickups().size(), pickupIndices.length);
 
@@ -1320,17 +1519,34 @@ public final class MapScene
 
             final int entityId = Match.FIRST_BOT_ENTITY_ID + spec.botWaypoints().size() + index;
 
-            // The pickup floats at the spec's Y, oriented so the
-            // barrel points "up" (the model's natural rest
-            // pose). The world scale is the same as a held
-            // weapon so the player reads the size of the thing
-            // they are picking up as a gun they could hold.
-            final float yaw = 0.0f;
+            // Pedestal: a single crate at the spec's position,
+            // untagged (Scene.UNTAGGED) so the outline pass and
+            // the enemy-marking pass skip it. Falls back to
+            // skipping the pedestal entirely when the crate was
+            // not staged - the weapon still floats, just not on
+            // a stand.
+            if (crate != null)
+            {
+                builder.addWorldInstance(crate,
+                    com.openfps.engine.demo.DemoScene.placement(
+                        pickup.x(), pickup.y(), pickup.z(), 0.0f, KIT_WORLD_SCALE),
+                    Scene.UNTAGGED);
+            }
 
-            final float scale = DemoScene.BOT_WEAPON_WORLD_SCALE;
+            // The weapon floats one tile above the pedestal,
+            // scaled up to be obviously a pickup. The yaw is
+            // per-weapon (0 / 120 / 240 degrees for the three
+            // shipped weapons) so the three pickup variants sit
+            // at visibly different angles. There is no real
+            // model distinction between them in the blaster
+            // model, but the angles at least hint "different
+            // thing" to a player who is looking.
+            final float yaw = pickup.weapon().pickupYawRadians();
+
+            final float weaponY = pickup.y() + KIT_WORLD_SCALE;
 
             final Mat4 transform = com.openfps.engine.demo.DemoScene.placement(
-                pickup.x(), pickup.y(), pickup.z(), yaw, scale);
+                pickup.x(), weaponY, pickup.z(), yaw, PICKUP_WEAPON_SCALE);
 
             transform.copyRowMajorInto(pickupTransforms, index * 16);
 

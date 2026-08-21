@@ -213,6 +213,53 @@ public final class Weapon
         return ammoMax > 0;
     }
 
+    /**
+     * Returns a yaw angle, in radians, used when this weapon is
+     * staged as a world pickup.
+     *
+     * <p>The three shipped weapons (blaster, shotgun, rocket
+     * launcher) sit at visibly different angles (0, 120, 240
+     * degrees) so a player looking at a weapon pickup can tell
+     * the three apart at a glance. The values are deterministic
+     * and depend only on the weapon's identity, so two peers
+     * rendering the same map agree on the pickup's pose without
+     * an out-of-band channel.</p>
+     *
+     * <p>The dispatch is by the weapon's ordinal in the static
+     * declarations: blaster = 0, shotgun = 1, rocket launcher = 2.
+     * That is the order the weapons are declared in this file,
+     * not the order they appear in any inventory or HUD.</p>
+     *
+     * @return a yaw in radians in {@code [0, 2*PI)}
+     */
+    public float pickupYawRadians()
+    {
+        final int index;
+
+        if (this == BLASTER)
+        {
+            index = 0;
+        }
+        else if (this == SHOTGUN)
+        {
+            index = 1;
+        }
+        else if (this == ROCKET_LAUNCHER)
+        {
+            index = 2;
+        }
+        else
+        {
+            // A future fourth weapon: 360/3 = 120 degrees per
+            // known slot, fold by modulo. Stays in [0, 2*PI).
+            index = 3;
+        }
+
+        final float slot = (float) (index % 3);
+
+        return slot * ((float) (2.0 * StrictMath.PI / 3.0));
+    }
+
     @Override
     public String toString()
     {

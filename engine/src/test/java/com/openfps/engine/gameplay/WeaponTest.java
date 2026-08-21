@@ -96,4 +96,38 @@ final class WeaponTest
             assertThat(Weapon.BLASTER.hashCode()).isEqualTo(Weapon.BLASTER.id().hashCode());
         }
     }
+
+    @Nested
+    @DisplayName("pickup yaw")
+    class PickupYaw
+    {
+        @Test
+        @DisplayName("the three shipped weapons sit at 0, 120, 240 degrees")
+        void shouldDistributePickupsAcrossThreeSlots()
+        {
+            // The three known weapons land at the three
+            // 120-degree slots. 0 / 2pi/3 / 4pi/3 radians.
+            // The two peers rendering the same map see the
+            // same angles because the dispatch is by identity.
+            final float blaster = Weapon.BLASTER.pickupYawRadians();
+            final float shotgun = Weapon.SHOTGUN.pickupYawRadians();
+            final float rocket = Weapon.ROCKET_LAUNCHER.pickupYawRadians();
+
+            assertThat(blaster).isEqualTo(0.0f);
+            assertThat(shotgun).isEqualTo((float) (2.0 * StrictMath.PI / 3.0));
+            assertThat(rocket).isEqualTo((float) (4.0 * StrictMath.PI / 3.0));
+        }
+
+        @Test
+        @DisplayName("the yaw is deterministic, so two peers agree on the pickup pose")
+        void shouldBeDeterministic()
+        {
+            // Same weapon, called twice, gives the same answer.
+            // The lockstep model depends on this - two peers
+            // rendering the same map must put the pickup at
+            // the same rotation on the same tic.
+            assertThat(Weapon.SHOTGUN.pickupYawRadians())
+                .isEqualTo(Weapon.SHOTGUN.pickupYawRadians());
+        }
+    }
 }
